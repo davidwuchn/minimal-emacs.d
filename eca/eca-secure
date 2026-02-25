@@ -1,0 +1,30 @@
+#!/bin/bash
+# Secure ECA runner - decrypts .authinfo.gpg using GPG key
+# Uses your GPG key (like gptel!), no hardcoded password
+# Usage: eca server, eca chat, etc.
+
+AUTHINFO_GPG="$HOME/.authinfo.gpg"
+
+# Check if encrypted authinfo exists
+if [[ ! -f "$AUTHINFO_GPG" ]]; then
+    echo "Error: $AUTHINFO_GPG not found" >&2
+    echo "Please encrypt your .authinfo file with: gpg -e -r your@email ~/.authinfo" >&2
+    exit 1
+fi
+
+# Create a temporary file securely
+TMP_NETRC=$(mktemp /tmp/netrc.XXXXXX)
+chmod 600 "$TMP_NETRC"
+
+# Setup trap to securely wipe the file when the script exits, crashes, or is killed
+trap 'shred -u "$TMP_NETRC" 2>/dev/null || rm -f "$TMP_NETRC"' EXIT INT TERM HUP
+
+# Decrypt directly to the temporary file (no passphrase needed!)
+if ! gpg -q --batch -d "$AUTHINFO_GPG" > "$TMP_NETRC" 2>/dev/null; then
+    echo "Error: Failed to decrypt. Make sure gpg-agent is running." >&2
+    exit 1
+fi
+
+# Run ECA using the normal config file, but override the netrc path.
+export ECA_NETRC_FILE="$TMP_NETRC"
+"$HOME/.emacs.d/eca/eca" "$@"

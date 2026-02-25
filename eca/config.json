@@ -1,0 +1,200 @@
+{
+  "netrcFile": "${env:ECA_NETRC_FILE}",
+  "defaultModel": "z-ai/glm-4.7",
+  "customTools": {
+    "clj-paren-repair": {
+      "description": "Fix delimiter errors and format clojure files. works for these file extensions: .clj .cljs .cljc .bb .edn",
+      "command": "clj-paren-repair {{filepath}}",
+      "schema": {
+        "properties": {
+          "filepath": {
+            "type": "string",
+            "description": "The full path to the file to repair or format"
+          }
+        },
+        "required": [
+          "filepath"
+        ]
+      }
+    },
+    "clj-nrepl-eval": {
+      "description": "${file:prompts/tools/clj-nrepl-eval.md}",
+      "command": "read -r -d '' CODE << 'EoC' || true\n{{code}}\nEoC\nif [[ '{{repl}}' = 'cljs' ]]; then clj-nrepl-eval -p 9000 \"$CODE\"; else clj-nrepl-eval -p $(cat .nrepl-port) \"$CODE\"; fi",
+      "schema": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "A string of clojure code to evaluate in the application runtime. It will be wrapped in bash heredoc syntax"
+          },
+          "repl": {
+            "type": "string",
+            "description": "Optional: specify repl type: clj | cljs  Default: clj"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      }
+    }
+  },
+  "mcpServers": {
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "env": {}
+    }
+  },
+  "toolCall": {
+    "approval": {
+      "byDefault": "ask",
+      "allow": {
+        "eca": {},
+        "context7": {}
+      }
+    }
+  },
+  "agent": {
+    "code": {
+      "prompts": {
+        "defaultModel": "moonshot/kimi-for-coding",
+        "chat": "${file:prompts/code_agent.md}"
+      }
+    },
+    "plan": {
+      "prompts": {
+        "defaultModel": "openrouter/z-ai/glm-5",
+        "chat": "${file:prompts/plan_agent.md}"
+      }
+    },
+    "reviewer": {
+      "defaultModel": "github-copilot/claude-sonnet-4.6",
+      "toolCall": {
+        "approval": {
+          "byDefault": "allow"
+        }
+      },
+      "prompts": {
+        "chat": "${file:prompts/reviewer.md}"
+      }
+    },
+    "dangerous": {
+      "defaultModel": "deepseek/deepseek-reasoner",
+      "toolCall": {
+        "approval": {
+          "byDefault": "allow"
+        }
+      }
+    }
+  },
+  "rewrite": {
+    "model": "github-copilot/gpt-5.2"
+  },
+  "completion": {
+    "model": "github-copilot/gpt-5-mini"
+  },
+  "prompts": {
+    "chat": "${file:prompts/code_agent.md}",
+    "chatTitle": "${file:prompts/title.md}",
+    "compact": "${file:prompts/compact.md}",
+    "init": "${file:prompts/init.md}",
+    "skillCreate": "${file:prompts/skill_create.md}",
+    "completion": "${file:prompts/inline_completion.md}",
+    "rewrite": "${file:prompts/rewrite.md}",
+    "tools": {
+      "eca__shell_command": "${file:prompts/tools/shell_command.md}",
+      "eca__edit_file": "${file:prompts/tools/edit_file.md}",
+      "eca__write_file": "${file:prompts/tools/write_file.md}",
+      "eca__read_file": "${file:prompts/tools/read_file.md}",
+      "eca__grep": "${file:prompts/tools/grep.md}",
+      "eca__directory_tree": "${file:prompts/tools/directory_tree.md}",
+      "eca__skill": "${file:prompts/tools/skill.md}",
+      "eca__move_file": "${file:prompts/tools/move_file.md}"
+    }
+  },
+  "providers": {
+    "openrouter": {
+      "api": "openai-chat",
+      "url": "https://openrouter.ai/api/v1",
+      "httpClient": {
+        "version": "http-1.1"
+      },
+      "keyRc": "api.openrouter.com",
+      "models": {
+        "anthropic/claude-sonnet-4.6": {},
+        "anthropic/claude-opus-4.6": {},
+        "qwen/qwen3-coder-next": {},
+        "z-ai/glm-5": {},
+        "openai/gpt-5.2-codex": {},
+        "openai/gpt-5.2-pro": {}
+      }
+    },
+    "deepseek": {
+      "api": "openai-chat",
+      "url": "https://api.deepseek.com",
+      "keyRc": "api.deepseek.com",
+      "models": {
+        "deepseek-chat": {},
+        "deepseek-reasoner": {}
+      }
+    },
+    "minimax": {
+      "api": "openai-chat",
+      "url": "https://api.minimaxi.com/v1",
+      "keyRc": "api.minimaxi.com",
+      "models": {
+        "minimax-m2.1": {},
+        "minimax-m2.5": {}
+      }
+    },
+    "moonshot": {
+      "api": "openai-chat",
+      "url": "https://api.kimi.com/coding/v1",
+      "httpClient": {
+        "version": "http-1.1"
+      },
+      "keyRc": "api.kimi.com",
+      "models": {
+        "kimi-k2.5": {
+          "extraPayload": {
+            "reasoning": {
+              "effort": "high"
+            },
+            "thinking": {
+              "type": "enabled"
+            }
+          },
+          "extraHeaders": {
+            "User-Agent": "KimiCLI/1.3"
+          }
+        },
+        "kimi-for-coding": {
+          "extraHeaders": {
+            "User-Agent": "KimiCLI/1.3"
+          }
+        }
+      }
+    },
+    "z-ai": {
+      "api": "openai-chat",
+      "url": "https://open.bigmodel.cn/api/coding/paas/v4",
+      "keyRc": "open.bigmodel.cn",
+      "models": {
+        "glm-4.7": {},
+        "glm-5": {}
+      }
+    },
+    "google": {
+      "api": "openai-chat",
+      "url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "keyRc": "generativelanguage.googleapis.com",
+      "models": {
+        "gemini-3-pro-preview": {},
+        "gemini-3-flash-preview": {}
+      }
+    }
+  }
+}

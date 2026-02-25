@@ -1,0 +1,54 @@
+#!/bin/bash
+# Update encrypted .authinfo file - decrypt, edit, re-encrypt
+# Usage: eca-update-keys [editor]
+
+NETRC_GPG="$HOME/.authinfo.gpg"
+
+# Get GPG key
+GPG_KEY="davidwu@imacpro.taila8bdd.ts.net"
+
+# Check if encrypted authinfo exists
+if [[ ! -f "$NETRC_GPG" ]]; then
+    echo "Error: $NETRC_GPG not found" >&2
+    exit 1
+fi
+
+# Create secure temporary files
+NETRC_PLAIN=$(mktemp /tmp/authinfo.XXXXXX)
+TEMP_GPG=$(mktemp /tmp/authinfo.gpg.XXXXXX)
+chmod 600 "$NETRC_PLAIN" "$TEMP_GPG"
+
+# Setup trap to securely wipe temporary files on exit, crash, or interrupt
+trap 'shred -u "$NETRC_PLAIN" "$TEMP_GPG" 2>/dev/null || rm -f "$NETRC_PLAIN" "$TEMP_GPG"' EXIT INT TERM HUP
+
+echo "Decrypting $NETRC_GPG..."
+if ! gpg --batch -d "$NETRC_GPG" > "$NETRC_PLAIN" 2>/dev/null; then
+    echo "Error: Failed to decrypt $NETRC_GPG" >&2
+    exit 1
+fi
+
+# Open in editor
+EDITOR="${1:-$EDITOR}"
+[[ -z "$EDITOR" ]] && EDITOR="nano"
+
+echo "Opening temporary file in $EDITOR..."
+echo "Format: machine <domain> login <user> password <api-key>"
+echo "Example: machine api.openai.com login user password sk-..."
+echo ""
+$EDITOR "$NETRC_PLAIN"
+
+# Re-encrypt with GPG key
+echo "Re-encrypting..."
+if ! gpg --batch --yes -e -r "$GPG_KEY" -o "$TEMP_GPG" "$NETRC_PLAIN" 2>&1; then
+    echo "Error: Failed to encrypt." >&2
+    exit 1
+fi
+
+# Safely overwrite the real gpg file
+mv "$TEMP_GPG" "$NETRC_GPG"
+chmod 600 "$NETRC_GPG"
+
+echo "✓ Keys updated successfully!"
+echo ""
+echo "Current keys:"
+gpg --batch -d "$NETRC_GPG" 2>/dev/null | awk '{print $2}' | grep -v "^$" | sort -u

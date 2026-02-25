@@ -1,0 +1,42 @@
+#!/bin/bash
+# List all API keys in encrypted .authinfo file
+# Uses GPG key (like gptel!), no hardcoded password
+# Usage: eca-list-keys [--show-secrets]
+
+set -e
+
+AUTHINFO_GPG="$HOME/.authinfo.gpg"
+SHOW_SECRETS="${1:-}"
+
+# Check if encrypted file exists
+if [[ ! -f "$AUTHINFO_GPG" ]]; then
+    echo "Error: $AUTHINFO_GPG not found" >&2
+    exit 1
+fi
+
+echo "Configured API keys:"
+echo ""
+
+if [[ "$SHOW_SECRETS" == "--show-secrets" ]]; then
+    gpg --batch -d "$AUTHINFO_GPG" 2>/dev/null | while read -r line; do
+        if [[ "$line" =~ ^machine\ ([^\ ]+)\ login\ ([^\ ]+)\ password\ (.+)$ ]]; then
+            machine="${BASH_REMATCH[1]}"
+            password="${BASH_REMATCH[3]}"
+            echo "  $machine"
+            echo "    Key: ${password:0:20}... (showing full: $password)"
+        fi
+    done
+else
+    gpg --batch -d "$AUTHINFO_GPG" 2>/dev/null | while read -r line; do
+        if [[ "$line" =~ ^machine\ ([^\ ]+)\ login\ ([^\ ]+)\ password\ (.+)$ ]]; then
+            machine="${BASH_REMATCH[1]}"
+            password="${BASH_REMATCH[3]}"
+            echo "  $machine"
+            echo "    Key: ${password:0:20}... (use --show-secrets to see full key)"
+            echo "    Length: ${#password} characters"
+        fi
+    done
+fi
+
+echo ""
+echo "Total providers: $(gpg --batch -d "$AUTHINFO_GPG" 2>/dev/null | grep -c "^machine")"
