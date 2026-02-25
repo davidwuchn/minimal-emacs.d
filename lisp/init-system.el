@@ -34,6 +34,7 @@
 
 ;; Theme
 (mapc #'disable-theme custom-enabled-themes)
+(require 'modus-themes nil t)
 (load-theme 'modus-vivendi t)
 
 ;; ==============================================================================
