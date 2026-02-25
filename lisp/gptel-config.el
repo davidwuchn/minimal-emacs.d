@@ -1818,7 +1818,7 @@ START and END are the response region positions passed by
              ;; In some buffers/sentinels, `gptel--fsm' may not be bound.
              ;; Never error from a post-response hook.
              (not (condition-case nil
-                      (let* ((fsm (buffer-local-value 'gptel--fsm (current-buffer)))
+                      (let* ((fsm (buffer-local-value 'gptel--fsm-last (current-buffer)))
                              (info (and fsm (gptel-fsm-info fsm))))
                         (plist-get info :error))
                     (error nil))))
@@ -2720,11 +2720,16 @@ If the subagent doesn't return within `my/gptel-agent-task-timeout' seconds,
 CALLBACK is called with a timeout error."
   (let* ((done nil)
          (timer nil)
+         (parent-fsm (buffer-local-value 'gptel--fsm-last (current-buffer)))
+         (origin-buf (current-buffer))
          (wrapped-cb
           (lambda (result)
             (unless done
               (setq done t)
               (when (timerp timer) (cancel-timer timer))
+              (when (buffer-live-p origin-buf)
+                (with-current-buffer origin-buf
+                  (setq-local gptel--fsm-last parent-fsm)))
               (funcall callback result)))))
     (setq timer
           (run-at-time
@@ -2732,6 +2737,11 @@ CALLBACK is called with a timeout error."
            (lambda ()
              (unless done
                (setq done t)
+               (when (buffer-live-p origin-buf)
+                 (with-current-buffer origin-buf
+                   (let ((my/gptel--abort-generation (1+ my/gptel--abort-generation)))
+                     (my/gptel-abort-here))
+                   (setq-local gptel--fsm-last parent-fsm)))
                (funcall callback
                         (format "Error: Agent task \"%s\" (%s) timed out after %ds. \
 Try a simpler prompt or use inline tools instead of delegation."
