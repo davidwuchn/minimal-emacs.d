@@ -25,6 +25,10 @@
 ;; No elpa files are modified.
 
 (with-eval-after-load 'eca-process
+  ;; Force ECA to install binaries in ~/.emacs.d/eca instead of ~/.emacs.d/var/eca
+  (setopt eca-server-install-path (expand-file-name (if (eq system-type 'windows-nt) "eca/eca.exe" "eca/eca")
+                                                    (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory))
+          eca-server-version-file-path (expand-file-name "eca/eca-version" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory)))
 
   ;; 1. Write missing version file & pre-seed version cache
   ;; Prevents string-version-lessp(nil, latest)=t triggering a re-download
