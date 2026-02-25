@@ -1809,8 +1809,9 @@ failure."
 ;; --- FSM Error Recovery ---
 ;; Workaround for gptel FSM getting stuck on JSON parsing errors
 
-(defun my/gptel--recover-fsm-on-error ()
+(defun my/gptel--recover-fsm-on-error (_start _end)
   "Force FSM to DONE state if it has error + STOP but is still cycling.
+START and END are the response positions (ignored).
 This handles the case where malformed JSON leaves FSM in limbo."
   (when (boundp 'gptel--fsm-last)
     (let* ((fsm gptel--fsm-last)
