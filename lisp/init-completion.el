@@ -72,6 +72,20 @@
   (text-mode-ispell-word-completion nil)
   (tab-always-indent 'complete)
   :config
+  ;; Magic slash for file paths: insert candidate and trigger completion again
+  (defun my/corfu-insert-slash ()
+    "Insert a slash or expand the current directory."
+    (interactive)
+    (let ((cand (and (>= corfu--index 0)
+                     (nth corfu--index corfu--candidates))))
+      (if (and cand (string-suffix-p "/" cand))
+          (progn
+            (corfu-insert)
+            ;; Re-trigger completion immediately for the next directory level
+            (run-at-time 0.0 nil #'completion-at-point))
+        (insert "/"))))
+  (define-key corfu-map (kbd "/") #'my/corfu-insert-slash)
+
   (global-corfu-mode))
 
 (use-package cape
