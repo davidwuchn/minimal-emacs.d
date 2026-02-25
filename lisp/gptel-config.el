@@ -1827,6 +1827,16 @@ This advice forces the final transition."
 
 (advice-add 'gptel-curl--stream-cleanup :around #'my/gptel-fix-fsm-stuck-in-type)
 
+;; --- Fix gptel-agent Missing FSM Handlers ---
+;; `gptel-agent` defines its own handlers for background tasks but forgets to
+;; include DONE, ERRS, and ABRT! This causes background agents to hang forever
+;; on errors or completion because the cleanup callback is never called.
+
+(with-eval-after-load 'gptel-agent-tools
+  (add-to-list 'gptel-agent-request--handlers '(DONE . (gptel--handle-post)))
+  (add-to-list 'gptel-agent-request--handlers '(ERRS . (gptel--handle-post)))
+  (add-to-list 'gptel-agent-request--handlers '(ABRT . (gptel--handle-post))))
+
 (defun my/gptel--recover-fsm-on-error (_start _end)
   "Force FSM to DONE state if it has error + STOP but is still cycling.
 START and END are the response positions (ignored).
