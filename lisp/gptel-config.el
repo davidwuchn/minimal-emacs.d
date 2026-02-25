@@ -1827,6 +1827,56 @@ This advice forces the final transition."
 
 (advice-add 'gptel-curl--stream-cleanup :around #'my/gptel-fix-fsm-stuck-in-type)
 
+;; --- Automatic Retry for Transient API Errors ---
+;; Gemini often returns "Malformed JSON" due to API load or payload limits.
+;; This automatically retries the request up to 3 times before failing.
+
+(defvar my/gptel-max-retries 3
+  "Number of times to retry failed gptel requests.")
+
+(defun my/gptel-auto-retry (orig-fn machine &optional new-state)
+  "Intercept FSM transitions to ERRS and retry the request if transient."
+  (unless new-state (setq new-state (gptel--fsm-next machine)))
+  (let* ((info (gptel-fsm-info machine))
+         (error-data (plist-get info :error))
+         (retries (or (plist-get info :retries) 0)))
+    (if (and (eq new-state 'ERRS)
+             (< retries my/gptel-max-retries)
+             (or (and (stringp error-data)
+                      (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error" error-data))
+                 ;; Catch dictionary format errors from OpenCode style backend responses
+                 (and (listp error-data)
+                      (string-match-p "overloaded\\|too many requests\\|rate limit" 
+                                      (downcase (or (plist-get error-data :message) ""))))))
+        (progn
+          (message "gptel: API failed with '%s'. Retrying (%d/%d)..." 
+                   (if (stringp error-data) (string-trim error-data) "Transient API Error")
+                   (1+ retries) my/gptel-max-retries)
+          
+          ;; Clean up partial buffer insertions if any
+          (when-let* ((start-marker (plist-get info :position))
+                      (tracking-marker (plist-get info :tracking-marker))
+                      (buf (marker-buffer tracking-marker)))
+            (when (buffer-live-p buf)
+              (with-current-buffer buf
+                (let ((inhibit-read-only t))
+                  (delete-region start-marker tracking-marker)
+                  (set-marker tracking-marker start-marker)))))
+          
+          ;; Reset FSM state to WAIT to trigger a fresh request
+          (plist-put info :error nil)
+          (plist-put info :status nil)
+          (plist-put info :http-status nil)
+          (plist-put info :retries (1+ retries))
+          
+          ;; Sleep slightly before retry to avoid rapid-fire rate limiting
+          (sleep-for 1.5)
+          
+          (funcall orig-fn machine 'WAIT))
+      (funcall orig-fn machine new-state))))
+
+(advice-add 'gptel--fsm-transition :around #'my/gptel-auto-retry)
+
 ;; --- Fix gptel-agent Missing FSM Handlers ---
 ;; `gptel-agent` defines its own handlers for background tasks but forgets to
 ;; include DONE, ERRS, and ABRT! This causes background agents to hang forever
