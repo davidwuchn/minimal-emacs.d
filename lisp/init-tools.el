@@ -71,5 +71,18 @@
 ;; After they are installed, load the custom configurations
 (with-eval-after-load 'gptel
   (require 'nucleus-config)
-  (require 'gptel-config)
+  (require 'gptel-config))
+
+;; ==============================================================================
+;; EDITOR CODE ASSISTANT (ECA)
+;; ==============================================================================
+
+(use-package eca
+  :ensure t
+  ;; Enable inline ghost-text code completion in programming modes
+  :hook (prog-mode . eca-completion-mode)
+  :custom
+  ;; Delay before triggering inline completion (in seconds)
+  (eca-completion-idle-delay 0.5)
+  :config
   (require 'eca-security))
