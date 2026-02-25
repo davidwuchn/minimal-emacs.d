@@ -1,9 +1,11 @@
 ;;; post-init.el --- User configuration -*- no-byte-compile: t; lexical-binding: t; -*-
 
-;; Add the local lisp directory to Emacs' load path
-(add-to-list 'load-path (expand-file-name "lisp" user-emacs-directory))
+;; Add the local lisp directory to Emacs' load path using the true root directory
+;; (not user-emacs-directory, since we changed that to var/)
+(add-to-list 'load-path (expand-file-name "lisp" minimal-emacs-user-directory))
 
 ;; Load the modular configuration files
+(require 'theme-setting)
 (require 'init-system)
 (require 'init-completion)
 (require 'init-evil)

@@ -331,3 +331,5 @@ Progress is shown live in the *eca-update* buffer."
 (with-eval-after-load 'eca-process
   (run-with-idle-timer my/eca-auto-update-idle-seconds nil
                        #'my/eca--auto-update-maybe))
+
+(provide 'eca-security)

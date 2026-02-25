@@ -32,10 +32,6 @@
     (add-to-list 'exec-path-from-shell-variables var))
   (exec-path-from-shell-initialize))
 
-;; Theme
-(mapc #'disable-theme custom-enabled-themes)
-(require 'modus-themes nil t)
-(load-theme 'modus-vivendi t)
 
 ;; ==============================================================================
 ;; FILE MANAGEMENT, HISTORY & SAFETY
