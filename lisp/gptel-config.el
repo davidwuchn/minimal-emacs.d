@@ -1835,7 +1835,17 @@ This advice forces the final transition."
 (with-eval-after-load 'gptel-agent-tools
   (add-to-list 'gptel-agent-request--handlers '(DONE . (gptel--handle-post)))
   (add-to-list 'gptel-agent-request--handlers '(ERRS . (gptel--handle-post)))
-  (add-to-list 'gptel-agent-request--handlers '(ABRT . (gptel--handle-post))))
+  (add-to-list 'gptel-agent-request--handlers '(ABRT . (gptel--handle-post)))
+  
+  ;; Make agent tasks fail loudly instead of quietly feeding errors to the LLM
+  (advice-add 'gptel-agent--task :around
+              (lambda (orig main-cb agent-type desc prompt)
+                (let ((new-cb (lambda (result)
+                                (if (and (stringp result) (string-match-p "^Error: Task" result))
+                                    ;; Stop the FSM loop by throwing an error directly
+                                    (error "Agent %s failed: %s" agent-type result)
+                                  (funcall main-cb result)))))
+                  (funcall orig new-cb agent-type desc prompt)))))
 
 (defun my/gptel--recover-fsm-on-error (_start _end)
   "Force FSM to DONE state if it has error + STOP but is still cycling.
