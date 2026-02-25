@@ -1806,6 +1806,28 @@ failure."
                   (message "gptel selftest: Edit(patch) FAILED (callback ran after abort)")))
             (ignore-errors (delete-directory dir t)))))))))
 
+;; --- FSM Error Recovery ---
+;; Workaround for gptel FSM getting stuck on JSON parsing errors
+
+(defun my/gptel--recover-fsm-on-error ()
+  "Force FSM to DONE state if it has error + STOP but is still cycling.
+This handles the case where malformed JSON leaves FSM in limbo."
+  (when (boundp 'gptel--fsm-last)
+    (let* ((fsm gptel--fsm-last)
+           (info (and fsm (gptel-fsm-info fsm)))
+           (error-msg (plist-get info :error))
+           (stop-reason (plist-get info :stop-reason)))
+      (when (and error-msg
+                 (eq stop-reason 'STOP)
+                 (not (eq (gptel-fsm-state fsm) 'DONE)))
+        (message "gptel: Recovering FSM from error state: %s" error-msg)
+        ;; Force state to DONE to unstick the UI
+        (setf (gptel-fsm-state fsm) 'DONE)
+        ;; Clear the in-progress indicator
+        (force-mode-line-update t)))))
+
+(add-hook 'gptel-post-response-functions #'my/gptel--recover-fsm-on-error)
+
 ;; --- Prompt Marker After Response ---
 ;; When gptel-agent finishes, add ### marker and position cursor for next prompt
 
