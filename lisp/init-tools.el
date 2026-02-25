@@ -39,7 +39,16 @@
 ;; AI ASSISTANT (gptel + nucleus)
 ;; ==============================================================================
 
-;; Load the custom AI assistant configuration provided in the lisp directory
-(require 'nucleus-config)
-(require 'gptel-config)
-(require 'eca-security)
+;; Ensure the packages are downloaded and installed
+(use-package gptel
+  :ensure t)
+
+(use-package gptel-agent
+  :ensure t
+  :after gptel)
+
+;; After they are installed, load the custom configurations
+(with-eval-after-load 'gptel
+  (require 'nucleus-config)
+  (require 'gptel-config)
+  (require 'eca-security))
