@@ -301,3 +301,63 @@
   :config
   ;; Initialize the default agents (researcher, executor, introspector)
   (gptel-agent-update))
+
+;; ==============================================================================
+;; NAVIGATION & ERGONOMICS (Batch 1)
+;; ==============================================================================
+
+(use-package avy
+  :ensure t
+  :bind (("C-c j" . avy-goto-line)
+         ("C-:"   . avy-goto-char-timer))
+  :custom
+  (avy-timeout-seconds 0.3))
+
+(use-package evil-visualstar
+  :ensure t
+  :after evil
+  :config
+  (global-evil-visualstar-mode))
+
+;; Clear search highlights when pressing ESC (like Vim's :nohlsearch)
+(defun my-evil-force-normal-state ()
+  "Clear search highlights and return to normal state."
+  (interactive)
+  (evil-ex-nohighlight)
+  (evil-force-normal-state))
+
+(with-eval-after-load 'evil
+  (define-key evil-normal-state-map [remap evil-force-normal-state] #'my-evil-force-normal-state))
+
+;; ==============================================================================
+;; GIT & UI (Batch 2)
+;; ==============================================================================
+
+(use-package magit
+  :ensure t
+  :bind (("C-x g" . magit-status)))
+
+(use-package nerd-icons
+  :ensure t)
+
+(use-package doom-modeline
+  :ensure t
+  :after nerd-icons
+  :init (doom-modeline-mode 1))
+
+(use-package nerd-icons-completion
+  :ensure t
+  :after marginalia
+  :config
+  (nerd-icons-completion-mode)
+  (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup))
+
+(use-package nerd-icons-corfu
+  :ensure t
+  :after corfu
+  :config
+  (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+
+(use-package nerd-icons-dired
+  :ensure t
+  :hook (dired-mode . nerd-icons-dired-mode))
