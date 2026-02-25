@@ -36,26 +36,10 @@
   :hook (dired-mode . nerd-icons-dired-mode))
 
 ;; ==============================================================================
-;; AI ASSISTANT (gptel)
+;; AI ASSISTANT (gptel + nucleus)
 ;; ==============================================================================
 
-(use-package gptel
-  :ensure t
-  :commands (gptel gptel-send)
-  :bind (("C-c g" . gptel-send))
-  :init
-  ;; You can set your API key in ~/.authinfo, ~/.netrc, or here (not recommended for public repos)
-  ;; Example for OpenAI:
-  ;; (setq gptel-api-key "your-api-key")
-  ;; Example for Anthropic:
-  ;; (setq-default gptel-backend (gptel-make-anthropic "Claude"
-  ;;                               :key "your-api-key"
-  ;;                               :stream t))
-  )
-
-(use-package gptel-agent
-  :ensure t
-  :after gptel
-  :config
-  ;; Initialize the default agents (researcher, executor, introspector)
-  (gptel-agent-update))
+;; Load the custom AI assistant configuration provided in the lisp directory
+(require 'nucleus-config)
+(require 'gptel-config)
+(require 'eca-security)
