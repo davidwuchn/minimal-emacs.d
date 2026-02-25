@@ -2752,7 +2752,8 @@ CALLBACK is called with a timeout error."
               (when (timerp timer) (cancel-timer timer))
               (when (buffer-live-p origin-buf)
                 (with-current-buffer origin-buf
-                  (setq-local gptel--fsm-last parent-fsm)))
+                  (setq-local gptel--fsm-last parent-fsm))
+                (setq-local gptel--fsm-last parent-fsm))
               (funcall callback result)))))
     (setq timer
           (run-at-time
@@ -2764,7 +2765,8 @@ CALLBACK is called with a timeout error."
                  (with-current-buffer origin-buf
                    (let ((my/gptel--abort-generation (1+ my/gptel--abort-generation)))
                      (my/gptel-abort-here))
-                   (setq-local gptel--fsm-last parent-fsm)))
+                   (setq-local gptel--fsm-last parent-fsm))
+                 (setq-local gptel--fsm-last parent-fsm))
                (funcall callback
                         (format "Error: Agent task \"%s\" (%s) timed out after %ds. \
 Try a simpler prompt or use inline tools instead of delegation."
