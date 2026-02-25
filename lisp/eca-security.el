@@ -39,16 +39,16 @@
   ;;   b) GitHub tags API   (api.github.com/repos/.../releases/latest → tag_name)
   ;;   c) Pinned fallback   (updated manually when a releases changes format)
   ;;
-  ;; The tag_name from GitHub has no "v" prefix (e.g. "0.105.0"); we normalise
-  ;; everything to "vX.Y.Z" to match the format expected by the version file.
+  ;; The tag_name from GitHub has no "v" prefix (e.g. "0.106.0"); we normalise
+  ;; everything to "X.Y.Z" to match the format expected by the version file.
   (defun my/eca--resolve-version ()
-    "Return the current eca version string as \"vX.Y.Z\".
+    "Return the current eca version string as \"X.Y.Z\".
 Tries the installed binary, then the GitHub releases/latest API, then
 falls back to a pinned constant."
     (cl-flet ((parse-semver (raw)
                 (and (stringp raw)
                      (string-match "\\([0-9]+\\.[0-9]+\\.[0-9]+\\)" raw)
-                     (concat "v" (match-string 1 raw)))))
+                     (match-string 1 raw))))
       (or
        ;; (a) installed binary
        (when-let* ((bin (executable-find "eca"))
@@ -64,11 +64,11 @@ falls back to a pinned constant."
                                    (shell-quote-argument curl)
                                    "https://api.github.com/repos/editor-code-assistant/eca/releases/latest"))))
                    ((not (string-blank-p raw)))
-                   ;; tag_name field: "0.105.0" (no v prefix on this repo)
+                   ;; tag_name field: "0.106.0" (no v prefix on this repo)
                    ((string-match "\"tag_name\"\\s-*:\\s-*\"\\([^\"]+\\)\"" raw)))
          (parse-semver (match-string 1 raw)))
        ;; (c) pinned fallback — update when the above two sources change format
-       "v0.105.0")))
+       "0.106.0")))
 
   (let* ((vfile (or (bound-and-true-p eca-server-version-file-path)
                     (expand-file-name "eca/eca-version" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory))))
@@ -127,7 +127,9 @@ fast-download.clj).  Falls back to wget then curl when aria2c is absent."
                                 "--file-allocation=none" ; faster start
                                 "--summary-interval=0"   ; quiet
                                 "--auto-file-renaming=false"
-                                "-o" path url))
+                                "-d" (file-name-directory path)
+                                "-o" (file-name-nondirectory path)
+                                url))
                    (wget  (list wget "-c" "-O" path url))
                    (curl  (list curl "-C" "-" "-L" "-f" "-o" path url))
                    (t (error "No downloader found (aria2c/wget/curl)")))))
