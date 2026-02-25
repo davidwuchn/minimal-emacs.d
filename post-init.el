@@ -5,9 +5,8 @@
 (add-to-list 'load-path (expand-file-name "lisp" minimal-emacs-user-directory))
 
 ;; Load the modular configuration files
-;; (require 'theme-setting)
-;; (require 'init-system)
-;; (require 'init-completion)
-;; (require 'init-evil)
-;; (require 'init-dev)
-;; (require 'init-tools)
+(require 'init-system)
+(require 'init-completion)
+(require 'init-evil)
+(require 'init-dev)
+(require 'init-tools)
