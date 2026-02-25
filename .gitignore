@@ -5,3 +5,13 @@
 !.github/
 !.LICENSE
 *.elc
+!lisp/
+!post-init.el
+!custom.el
+!AGENTS.md
+!MEMENTUM.md
+!PLAN.md
+!STATE.md
+!LEARNING.md
+!CHANGELOG.md
+!assistant/
