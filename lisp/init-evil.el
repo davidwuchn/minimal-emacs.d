@@ -13,6 +13,13 @@
   :ensure t
   :hook (after-init . undo-fu-session-global-mode))
 
+(use-package vundo
+  :ensure t
+  :bind (("C-x u" . vundo))
+  :config
+  (setq vundo-glyph-alist vundo-unicode-symbols)
+  (setq vundo-roll-back-on-quit nil))
+
 (use-package evil
   :ensure t
   :hook (after-init . evil-mode)

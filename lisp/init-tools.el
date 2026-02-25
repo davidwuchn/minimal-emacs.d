@@ -35,6 +35,27 @@
   :ensure t
   :hook (dired-mode . nerd-icons-dired-mode))
 
+(use-package dirvish
+  :ensure t
+  :hook (after-init . dirvish-override-dired-mode)
+  :bind (:map dired-mode-map
+              ("TAB" . dirvish-toggle-subtree)
+              ("SPC" . dirvish-show-history)
+              ("f"   . dirvish-file-info-menu)))
+
+;; ==============================================================================
+;; TERMINAL
+;; ==============================================================================
+
+(use-package eat
+  :ensure t
+  :defer t
+  :custom
+  (eat-term-name "xterm-256color")
+  :config
+  (eat-eshell-mode)
+  (eat-eshell-visual-command-mode))
+
 ;; ==============================================================================
 ;; AI ASSISTANT (gptel + nucleus)
 ;; ==============================================================================

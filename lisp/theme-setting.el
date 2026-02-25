@@ -69,5 +69,16 @@
   (set-face-background 'default "grey15")
   (set-face-attribute 'region nil :background "#666"))
 
-;; No title bar
-(add-to-list 'default-frame-alist '(undecorated . t))
+;; Keep title bar for window dragging (remove undecorated)
+;; (add-to-list 'default-frame-alist '(undecorated . t))
+
+;; Make header-line clickable
+(defvar my-header-line-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [header-line mouse-1] #'mode-line-highlight)
+    (define-key map [header-line mouse-2] #'mode-line-highlight)
+    map)
+  "Keymap for header-line mouse clicks.")
+
+(setq-default header-line-format
+              '(:eval (propertize " " 'local-map my-header-line-map 'mouse-face 'mode-line-highlight)))

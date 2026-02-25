@@ -8,6 +8,14 @@
   :init
   (add-hook 'xref-backend-functions #'dumb-jump-xref-activate 90))
 
+(use-package treesit-auto
+  :ensure t
+  :custom
+  (treesit-auto-install 'prompt)
+  :config
+  (treesit-auto-add-to-auto-mode-alist 'all)
+  (global-treesit-auto-mode))
+
 (use-package apheleia
   :ensure t
   :hook ((prog-mode . apheleia-mode)))

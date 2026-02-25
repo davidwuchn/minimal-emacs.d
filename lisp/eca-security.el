@@ -67,7 +67,7 @@ falls back to a pinned constant."
        "v0.105.0")))
 
   (let* ((vfile (or (bound-and-true-p eca-server-version-file-path)
-                    (expand-file-name "eca/eca-version" user-emacs-directory)))
+                    (expand-file-name "eca/eca-version" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory))))
          (version (my/eca--resolve-version)))
     ;; Write version file if missing so the 'already-installed branch fires.
     (unless (file-exists-p vfile)
@@ -300,7 +300,7 @@ Progress is shown live in the *eca-update* buffer."
   :group 'eca)
 
 (defvar my/eca--last-check-file
-  (expand-file-name "eca/eca-update-check" user-emacs-directory)
+  (expand-file-name "eca/eca-update-check" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory))
   "Timestamp file recording when the last auto-update check ran.")
 
 (defun my/eca--update-check-due-p ()

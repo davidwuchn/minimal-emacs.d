@@ -1619,7 +1619,7 @@ Press n to confirm reviewed (agent continues), q to abort."
          :category "gptel-agent"
          :function (lambda (&optional dir)
                      "List available skills by reading SKILL.md frontmatter."
-                     (let* ((root (expand-file-name (or dir (expand-file-name "assistant/skills" user-emacs-directory))))
+                     (let* ((root (expand-file-name (or dir (expand-file-name "assistant/skills" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory)))))
                             (skill-dirs (when (file-directory-p root)
                                           (seq-filter
                                            (lambda (path)
@@ -1667,7 +1667,7 @@ Press n to confirm reviewed (agent continues), q to abort."
          :category "gptel-agent"
          :function (lambda (skillName userPrompt &optional dir)
                      "Create a new skill directory with SKILL.md based on user prompt."
-                     (let* ((root (expand-file-name (or dir (expand-file-name "assistant/skills" user-emacs-directory))))
+                     (let* ((root (expand-file-name (or dir (expand-file-name "assistant/skills" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory)))))
                             (name (string-trim skillName))
                             (skill-dir (expand-file-name name root))
                             (skill-file (expand-file-name "SKILL.md" skill-dir))
@@ -1715,7 +1715,7 @@ Run this in any buffer (ideally a gptel buffer)."
     (setq-local my/gptel--abort-generation 0)
     (my/gptel--agent-grep-async
      (lambda (_res) (setq called t))
-     "defun" user-emacs-directory "*.el" 0)
+     "defun" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory) "*.el" 0)
     (run-at-time
      0.05 nil
      (lambda ()
@@ -1740,7 +1740,7 @@ is not treated as a failure (it just means the operation completed quickly)."
     (setq-local my/gptel--abort-generation 0)
     (my/gptel--agent-glob-async
      (lambda (_res) (setq called-time (float-time)))
-     "*" user-emacs-directory 6)
+     "*" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory) 6)
     (run-at-time
      0.05 nil
      (lambda ()
@@ -2000,6 +2000,7 @@ OpenRouter-hosted model ids)."
   "Persist WINDOW for MODEL-ID in the cache." 
   (when (and (stringp model-id) (integerp window) (> window 0))
     (puthash model-id window my/gptel--context-window-cache)
+    (make-directory (file-name-directory my/gptel-context-window-cache-file) t)
     (condition-case err
         (with-temp-file my/gptel-context-window-cache-file
           (insert ";; Auto-generated; model context windows cache\n")

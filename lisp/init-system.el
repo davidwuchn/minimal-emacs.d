@@ -82,3 +82,16 @@
 
 (setq auto-save-visited-interval 5)
 (auto-save-visited-mode 1)
+
+;; ==============================================================================
+;; HELP & INTROSPECTION
+;; ==============================================================================
+
+(use-package helpful
+  :ensure t
+  :bind
+  ([remap describe-command] . helpful-command)
+  ([remap describe-function] . helpful-callable)
+  ([remap describe-key] . helpful-key)
+  ([remap describe-variable] . helpful-variable)
+  ([remap describe-symbol] . helpful-symbol))

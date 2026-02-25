@@ -34,12 +34,12 @@
   "Prompt loading helpers for gptel."
   :group 'tools)
 
-(defcustom nucleus-prompts-dir (expand-file-name "assistant/prompts/" user-emacs-directory)
+(defcustom nucleus-prompts-dir (expand-file-name "assistant/prompts/" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory))
   "Directory containing nucleus prompt templates (agents)."
   :type 'directory)
 
 (defcustom nucleus-tool-prompts-dir
-  (expand-file-name "assistant/prompts/tools/" user-emacs-directory)
+  (expand-file-name "assistant/prompts/tools/" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory))
   "Directory containing tool prompt templates."
   :type 'directory)
 
@@ -303,6 +303,9 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
 
 (defun nucleus--register-gptel-directives ()
   "Register nucleus gptel-agent system prompts as gptel directives."
+  ;; Ensure gptel-directives exists before trying to register
+  (unless (boundp 'gptel-directives)
+    (setq gptel-directives '()))
   (when (boundp 'gptel-directives)
     (cl-labels
         ((tool-snippets-for (tool-names)
@@ -502,9 +505,10 @@ gptel-config loads so custom tools and nucleus presets are in place."
 
 (with-eval-after-load 'gptel-agent
   ;; Prefer project-local agents when present, but keep package defaults.
-  (let* ((user-agents (expand-file-name "assistant/agents/" user-emacs-directory))
+  (let* ((base-dir (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory))
+         (user-agents (expand-file-name "assistant/agents/" base-dir))
          (proj-agents (expand-file-name "assistant/agents/" (nucleus--project-root)))
-         (skill-dir (expand-file-name "assistant/skills/" user-emacs-directory))
+         (skill-dir (expand-file-name "assistant/skills/" base-dir))
          (agent-dirs (seq-remove (lambda (dir)
                                    (member dir (list user-agents proj-agents)))
                                  gptel-agent-dirs)))
@@ -683,14 +687,11 @@ At load time, prefer `nucleus-ensure-loaded' instead."
     (add-hook 'gptel-mode-hook #'nucleus--sync-tool-profile)
     (add-hook 'gptel-mode-hook #'nucleus--tool-sanity-check)
 
-    ;; Ensure prompts are loaded, then strip nucleus-internal entries from the
-    ;; interactive directive picker (they are used programmatically via presets).
+    ;; Ensure prompts are loaded.
+    ;; Note: nucleus-internal entries are filtered from the interactive picker
+    ;; by `my/gptel--filter-directive-menu' in gptel-config.el, but the directives
+    ;; must remain in gptel-directives for preset resolution.
     (nucleus-ensure-loaded)
-    (setq gptel-directives
-          (seq-remove (lambda (e) (memq (car e) '(nucleus-gptel-agent nucleus-gptel-plan
-                                                  chatTitle compact init skillCreate
-                                                  completion rewrite Plan Agent)))
-                      gptel-directives))
 
     ;; Register post-preset hook: nucleus-side sanity check + header refresh.
     ;; The defun is at top-level above; only the advice registration is deferred.
