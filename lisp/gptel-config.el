@@ -1841,6 +1841,7 @@ This advice forces the final transition."
   (advice-add 'gptel-agent--task :around
               (lambda (orig main-cb agent-type desc prompt)
                 (let* ((main-buf (current-buffer))
+                       (main-fsm (buffer-local-value 'gptel--fsm-last main-buf))
                        (new-cb (lambda (result)
                                  (if (and (stringp result) (string-match-p "^Error: Task" result))
                                      (progn
@@ -1848,6 +1849,10 @@ This advice forces the final transition."
                                        (when (buffer-live-p main-buf)
                                          (with-current-buffer main-buf
                                            (let ((my/gptel--abort-generation (1+ my/gptel--abort-generation)))
+                                             ;; Force FSM state to ABRT manually since gptel-abort won't find a process
+                                             (when main-fsm
+                                               (setf (gptel-fsm-state main-fsm) 'ABRT)
+                                               (gptel--handle-abort main-fsm))
                                              (my/gptel-abort-here)))))
                                    (funcall main-cb result)))))
                   (funcall orig new-cb agent-type desc prompt)))))
