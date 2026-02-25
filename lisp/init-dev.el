@@ -2,6 +2,14 @@
 
 (provide 'init-dev)
 
+;; Markdown
+(use-package markdown-mode
+  :ensure t
+  :commands (markdown-mode gfm-mode)
+  :mode (("\\.markdown\\'" . markdown-mode)
+         ("\\.md\\'" . markdown-mode)
+         ("README\\.md\\'" . gfm-mode)))
+
 (use-package dumb-jump
   :ensure t
   :commands dumb-jump-xref-activate
