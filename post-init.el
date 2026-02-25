@@ -8,5 +8,6 @@
 (require 'init-system)
 (require 'init-completion)
 (require 'init-evil)
+(require 'no-evil)
 (require 'init-dev)
 (require 'init-tools)
