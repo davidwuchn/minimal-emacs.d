@@ -2,6 +2,9 @@
 
 (provide 'init-system)
 
+;; Load theme and visual customizations
+(require 'theme-setting)
+
 ;; compile-angel: Byte-compile and native-compile Elisp code automatically
 (use-package compile-angel
   :ensure t
