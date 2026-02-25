@@ -1809,6 +1809,24 @@ failure."
 ;; --- FSM Error Recovery ---
 ;; Workaround for gptel FSM getting stuck on JSON parsing errors
 
+(defun my/gptel-fix-fsm-stuck-in-type (orig-fn process status)
+  "Fix gptel streaming FSM getting stuck when curl fails before headers.
+If curl exits before sending HTTP headers, `gptel-curl--stream-filter`
+never transitions the FSM from WAIT to TYPE. Then the cleanup sentinel
+transitions it from WAIT to TYPE, leaving it stuck in TYPE forever.
+This advice forces the final transition."
+  (let* ((fsm (car (alist-get process (bound-and-true-p gptel--request-alist))))
+         (info (and fsm (gptel-fsm-info fsm)))
+         (state-before (and fsm (gptel-fsm-state fsm))))
+    (funcall orig-fn process status)
+    (when (and fsm
+               (eq (gptel-fsm-state fsm) 'TYPE)
+               (not (eq state-before 'TYPE)))
+      (message "gptel: Unsticking FSM from TYPE -> next state (curl failed early)")
+      (gptel--fsm-transition fsm))))
+
+(advice-add 'gptel-curl--stream-cleanup :around #'my/gptel-fix-fsm-stuck-in-type)
+
 (defun my/gptel--recover-fsm-on-error (_start _end)
   "Force FSM to DONE state if it has error + STOP but is still cycling.
 START and END are the response positions (ignored).
