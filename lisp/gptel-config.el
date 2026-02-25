@@ -1841,15 +1841,14 @@ This advice forces the final transition."
   (advice-add 'gptel-agent--task :around
               (lambda (orig main-cb agent-type desc prompt)
                 (let* ((main-buf (current-buffer))
-                       (main-fsm (buffer-local-value 'gptel--fsm-last main-buf))
                        (new-cb (lambda (result)
                                  (if (and (stringp result) (string-match-p "^Error: Task" result))
                                      (progn
                                        (message "gptel-agent error: %s" result)
-                                       (when (and main-fsm (buffer-live-p main-buf))
+                                       (when (buffer-live-p main-buf)
                                          (with-current-buffer main-buf
-                                           (setf (gptel-fsm-state main-fsm) 'ABRT)
-                                           (gptel--handle-abort main-fsm))))
+                                           (let ((my/gptel--abort-generation (1+ my/gptel--abort-generation)))
+                                             (my/gptel-abort-here)))))
                                    (funcall main-cb result)))))
                   (funcall orig new-cb agent-type desc prompt)))))
 
