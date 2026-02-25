@@ -276,3 +276,21 @@
   :ensure nil
   :commands (eglot-ensure eglot-rename eglot-format-buffer)
   :hook ((clojure-mode . eglot-ensure)))
+
+;; ==============================================================================
+;; AI ASSISTANT (gptel)
+;; ==============================================================================
+
+(use-package gptel
+  :ensure t
+  :commands (gptel gptel-send)
+  :bind (("C-c g" . gptel-send))
+  :init
+  ;; You can set your API key in ~/.authinfo, ~/.netrc, or here (not recommended for public repos)
+  ;; Example for OpenAI:
+  ;; (setq gptel-api-key "your-api-key")
+  ;; Example for Anthropic:
+  ;; (setq-default gptel-backend (gptel-make-anthropic "Claude"
+  ;;                               :key "your-api-key"
+  ;;                               :stream t))
+  )
