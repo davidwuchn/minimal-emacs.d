@@ -294,3 +294,10 @@
   ;;                               :key "your-api-key"
   ;;                               :stream t))
   )
+
+(use-package gptel-agent
+  :ensure t
+  :after gptel
+  :config
+  ;; Initialize the default agents (researcher, executor, introspector)
+  (gptel-agent-update))
