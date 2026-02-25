@@ -1840,11 +1840,17 @@ This advice forces the final transition."
   ;; Make agent tasks fail loudly instead of quietly feeding errors to the LLM
   (advice-add 'gptel-agent--task :around
               (lambda (orig main-cb agent-type desc prompt)
-                (let ((new-cb (lambda (result)
-                                (if (and (stringp result) (string-match-p "^Error: Task" result))
-                                    ;; Stop the FSM loop by throwing an error directly
-                                    (error "Agent %s failed: %s" agent-type result)
-                                  (funcall main-cb result)))))
+                (let* ((main-buf (current-buffer))
+                       (main-fsm (buffer-local-value 'gptel--fsm-last main-buf))
+                       (new-cb (lambda (result)
+                                 (if (and (stringp result) (string-match-p "^Error: Task" result))
+                                     (progn
+                                       (message "gptel-agent error: %s" result)
+                                       (when (and main-fsm (buffer-live-p main-buf))
+                                         (with-current-buffer main-buf
+                                           (setf (gptel-fsm-state main-fsm) 'ABRT)
+                                           (gptel--handle-abort main-fsm))))
+                                   (funcall main-cb result)))))
                   (funcall orig new-cb agent-type desc prompt)))))
 
 (defun my/gptel--recover-fsm-on-error (_start _end)
