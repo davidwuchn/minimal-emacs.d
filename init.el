@@ -72,9 +72,6 @@
       (package-install 'use-package)))
    (require 'use-package))
 
-;;; Development tools (LSP, Clojure, etc.)
-(require 'init-dev)
-
 ;;; Minibuffer
 
 (setq enable-recursive-minibuffers t) ; Allow nested minibuffers
