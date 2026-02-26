@@ -203,7 +203,7 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
     "- Argument keys must match exactly; do not invent keys (schemas disallow extras)."
     ""
     "Selection & safety:"
-    "- File operations: use Glob/Grep/Read/Edit/ReplaceBlock/Insert/Write/Mkdir (not Bash)."
+    "- File operations: use Glob/Grep/Read/Edit/Insert/Write/Mkdir (not Bash)."
     "- Bash: use for non-file ops (git, tests/builds, package managers, system inspection)."
     "- For large/risky changes: preview diff first, then apply."
     "- Prefer parallel tool calls when independent; sequence when dependent."
@@ -213,8 +213,6 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
     "- Grep{regex, path, glob?, context_lines?}"
     "- Read{file_path, start_line?, end_line?}"
     "- Edit{path, old_str?, new_str, diff}"
-    "- ReplaceBlock{path, old_str, new_str}"
-    "- list_file_symbols{path}"
     "- Insert{path, line_number, new_str}"
     "- Write{path, filename, content}"
     "- Mkdir{parent, name}"
@@ -256,12 +254,11 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
     "- Skill{skill, args?}"
     "- Agent{subagent_type, description, prompt}"
     "- Eval{expression}"
-    "- list_file_symbols{path}"
     "- find_buffers_and_recent{pattern}"
     "- describe_symbol{sym}"
     ""
     "Disallowed in plan mode (even if known elsewhere):"
-    "- Edit/ReplaceBlock/Insert/Write/Mkdir/ApplyPatch/preview_*"
+    "- Edit/Insert/Write/Mkdir/ApplyPatch/preview_*"
     "</tool_usage_policy>")
    "\n")
   "Compact, schema-faithful tool usage policy for the plan agent.")
@@ -294,7 +291,6 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
     "- Glob{pattern, path?, depth?}"
     "- Grep{regex, path, glob?, context_lines?}"
     "- Read{file_path, start_line?, end_line?}"
-    "- list_file_symbols{path}"
     "- WebSearch{query, count?}"
     "- WebFetch{url}"
     "- YouTube{url}"
@@ -352,12 +348,12 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
                        (assq-delete-all 'Plan gptel-directives))))))))
 
 (defvar nucleus--gptel-agent-core-tools
-  '("Agent" "ApplyPatch" "Bash" "Edit" "ReplaceBlock" "list_file_symbols" "Eval" "Glob" "Grep" "Insert" "Mkdir" "Read" "RunAgent" "Skill" "TodoWrite" "WebFetch" "WebSearch" "Write" "YouTube")
+  '("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep" "Insert" "Mkdir" "Read" "RunAgent" "Skill" "TodoWrite" "WebFetch" "WebSearch" "Write" "YouTube")
   "Core gptel-agent tools to be included in presets by default.")
 
 (defvar nucleus--gptel-plan-readonly-tools
   '("Agent" "Glob" "Grep" "Read" "Skill" "WebFetch" "WebSearch" "YouTube"
-    "list_file_symbols" "find_buffers_and_recent" "describe_symbol" "Eval")
+    "find_buffers_and_recent" "describe_symbol" "Eval")
   "Read-only subset of gptel-agent tools for planning.")
 
 (defvar nucleus--gptel-agent-nucleus-tools
