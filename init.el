@@ -70,7 +70,10 @@
       (unless package-archive-contents
         (package-refresh-contents))
       (package-install 'use-package)))
-  (require 'use-package))
+   (require 'use-package))
+
+;;; Development tools (LSP, Clojure, etc.)
+(require 'init-dev)
 
 ;;; Minibuffer
 
