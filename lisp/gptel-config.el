@@ -957,7 +957,11 @@ results are dropped. COMMAND is run via `bash -c` in `default-directory`."
   (let* ((origin (current-buffer))
          (gen my/gptel--abort-generation)
          (buf (generate-new-buffer " *gptel-agent-bash*"))
-         (done nil))
+         (done nil)
+         ;; Sandbox check: strictly read-only when in Plan mode
+         (is-plan (eq (and (fboundp 'nucleus--effective-preset)
+                           (nucleus--effective-preset))
+                      'gptel-plan)))
     (cl-labels
         ((finish (result)
            (unless done
@@ -971,34 +975,39 @@ results are dropped. COMMAND is run via `bash -c` in `default-directory`."
           (progn
             (unless (and (stringp command) (not (string-empty-p (string-trim command))))
               (error "command is empty"))
-            (let* ((proc
-                    (make-process
-                     :name "gptel-agent-bash"
-                     :buffer buf
-                     :command (list "bash" "-c" command)
-                     :connection-type 'pipe
-                     :noquery t
-                     :sentinel
-                     (lambda (p _event)
-                       (when (memq (process-status p) '(exit signal))
-                         (let* ((status (process-exit-status p))
-                                (out (with-current-buffer buf (buffer-string))))
-                           (finish
-                            (if (= status 0)
-                                (string-trim-right out)
-                              (string-trim-right
-                               (format "Command failed with exit code %d:\nSTDOUT+STDERR:\n%s"
-                                       status out))))))))))
-              (process-put proc 'my/gptel-managed t)
-              (run-at-time
-               my/gptel-bash-timeout nil
-               (lambda (p)
-                 (when (process-live-p p)
-                   (ignore-errors (set-process-filter p #'ignore))
-                   (ignore-errors (set-process-sentinel p #'ignore))
-                   (delete-process p))
-                 (finish (format "Error: Bash timed out after %ss" my/gptel-bash-timeout)))
-               proc)))
+            
+            (if (and is-plan
+                     (string-match "\\(\\`\\|[ \t]\\)\\(rm\\|mv\\|cp\\|wget\\|curl\\|sed\\|tee\\|>\\|>>\\|chmod\\|chown\\|touch\\|mkdir\\)\\([ \t\n]\\|\\'\\)" command))
+                (finish (format "Error: Command rejected by Emacs sandbox. Destructive operations (like '%s') are forbidden in Plan mode. Use read-only commands only." (match-string 2 command)))
+              
+              (let* ((proc
+                      (make-process
+                       :name "gptel-agent-bash"
+                       :buffer buf
+                       :command (list "bash" "-c" command)
+                       :connection-type 'pipe
+                       :noquery t
+                       :sentinel
+                       (lambda (p _event)
+                         (when (memq (process-status p) '(exit signal))
+                           (let* ((status (process-exit-status p))
+                                  (out (with-current-buffer buf (buffer-string))))
+                             (finish
+                              (if (= status 0)
+                                  (string-trim-right out)
+                                (string-trim-right
+                                 (format "Command failed with exit code %d:\nSTDOUT+STDERR:\n%s"
+                                         status out))))))))))
+                (process-put proc 'my/gptel-managed t)
+                (run-at-time
+                 my/gptel-bash-timeout nil
+                 (lambda (p)
+                   (when (process-live-p p)
+                     (ignore-errors (set-process-filter p #'ignore))
+                     (ignore-errors (set-process-sentinel p #'ignore))
+                     (delete-process p))
+                   (finish (format "Error: Bash timed out after %ss" my/gptel-bash-timeout)))
+                 proc))))
         (error (finish (format "Error: %s" (error-message-string err))))))))
 
 (defun my/gptel--agent-grep-async (callback regex path &optional glob context-lines)
