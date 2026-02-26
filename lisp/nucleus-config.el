@@ -346,7 +346,7 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
                 (cons (cons 'Plan plan-sys)
                        (assq-delete-all 'Plan gptel-directives))))))))
 
-(defvar nucleus--gptel-agent-17-tools
+(defvar nucleus--gptel-agent-core-tools
   '("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep" "Insert" "Mkdir" "Read" "RunAgent" "Skill" "TodoWrite" "WebFetch" "WebSearch" "Write" "YouTube")
   "Core gptel-agent tools to be included in presets by default.")
 
@@ -357,11 +357,11 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
 
 (defvar nucleus--gptel-agent-nucleus-tools
   (append
-   nucleus--gptel-agent-17-tools
+   nucleus--gptel-agent-core-tools
    '("preview_file_change" "preview_patch" "list_skills" "load_skill" "create_skill"))
   "Nucleus toolset for gptel-agent.
 
-This is the canonical nucleus agent experience: the 17 core tools plus
+This is the canonical nucleus agent experience: the core tools plus
 preview + skill management helpers.")
 
 (defvar nucleus--gptel-agent-snippet-tools
