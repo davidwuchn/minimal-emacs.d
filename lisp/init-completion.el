@@ -65,9 +65,13 @@
 (use-package corfu
   :ensure t
   :hook ((prog-mode . corfu-mode)
+         (text-mode . corfu-mode)
          (shell-mode . corfu-mode)
          (eshell-mode . corfu-mode))
   :custom
+  (corfu-auto t)
+  (corfu-auto-delay 0.0)
+  (corfu-auto-prefix 1)
   (read-extended-command-predicate #'command-completion-default-include-p)
   (text-mode-ispell-word-completion nil)
   (tab-always-indent 'complete)
@@ -84,9 +88,7 @@
             ;; Re-trigger completion immediately for the next directory level
             (run-at-time 0.0 nil #'completion-at-point))
         (insert "/"))))
-  (define-key corfu-map (kbd "/") #'my/corfu-insert-slash)
-
-  (global-corfu-mode))
+  (define-key corfu-map (kbd "/") #'my/corfu-insert-slash))
 
 (use-package cape
   :ensure t
