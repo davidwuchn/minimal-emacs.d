@@ -1020,9 +1020,17 @@ and a sandbox for Plan mode."
                                   (max-length 50000)
                                   (truncated-out
                                    (if (> (length out) max-length)
-                                       (concat (substring out 0 (/ max-length 2))
-                                               "\n... [Output truncated. Result exceeded 50,000 bytes. Use Grep or Read to see more.] ...\n"
-                                               (substring out (- (/ max-length 2))))
+                                       (let* ((temp-dir (expand-file-name "gptel-agent-temp" (temporary-file-directory)))
+                                              (temp-file (expand-file-name
+                                                          (format "bash-%s-%s.txt"
+                                                                  (format-time-string "%Y%m%d-%H%M%S")
+                                                                  (random 10000))
+                                                          temp-dir)))
+                                         (unless (file-directory-p temp-dir) (make-directory temp-dir t))
+                                         (with-temp-file temp-file (insert out))
+                                         (concat (substring out 0 (/ max-length 2))
+                                                 (format "\n\n... [Output truncated. Result exceeded 50,000 bytes. Full output saved to: %s\nUse Grep to search the full content or Read with offset/limit to view specific sections.] ...\n\n" temp-file)
+                                                 (substring out (- (/ max-length 2)))))
                                      out)))
                              (if timer (cancel-timer timer))
                              (if (= status 0)
