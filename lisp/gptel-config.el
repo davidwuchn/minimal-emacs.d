@@ -949,14 +949,15 @@ interactive commands like git commit."
   :type 'integer
   :group 'my/gptel-interrupt)
 
-(defun my/gptel--agent-bash-async (callback command)
-  "Async replacement for gptel-agent's `Bash' tool with a hard timeout.
+(defvar my/gptel--persistent-bash-process nil
+  "Persistent background bash process for gptel-agent's Bash tool.")
 
-Calls CALLBACK exactly once unless the buffer has been aborted, in which case
-results are dropped. COMMAND is run via `bash -c` in `default-directory`."
+(defun my/gptel--agent-bash-async (callback command)
+  "Async replacement for gptel-agent's `Bash' tool.
+Provides a persistent shell state, STDOUT truncation, dumb terminal,
+and a sandbox for Plan mode."
   (let* ((origin (current-buffer))
          (gen my/gptel--abort-generation)
-         (buf (generate-new-buffer " *gptel-agent-bash*"))
          (done nil)
          ;; Sandbox check: strictly read-only when in Plan mode
          (is-plan (eq (and (fboundp 'nucleus--effective-preset)
@@ -966,7 +967,6 @@ results are dropped. COMMAND is run via `bash -c` in `default-directory`."
         ((finish (result)
            (unless done
              (setq done t)
-             (when (buffer-live-p buf) (kill-buffer buf))
              (when (and (buffer-live-p origin)
                         (with-current-buffer origin
                           (= gen my/gptel--abort-generation)))
@@ -980,34 +980,70 @@ results are dropped. COMMAND is run via `bash -c` in `default-directory`."
                      (string-match "\\(\\`\\|[ \t]\\)\\(rm\\|mv\\|cp\\|wget\\|curl\\|sed\\|tee\\|>\\|>>\\|chmod\\|chown\\|touch\\|mkdir\\)\\([ \t\n]\\|\\'\\)" command))
                 (finish (format "Error: Command rejected by Emacs sandbox. Destructive operations (like '%s') are forbidden in Plan mode. Use read-only commands only." (match-string 2 command)))
               
-              (let* ((proc
-                      (make-process
-                       :name "gptel-agent-bash"
-                       :buffer buf
-                       :command (list "bash" "-c" command)
-                       :connection-type 'pipe
-                       :noquery t
-                       :sentinel
-                       (lambda (p _event)
-                         (when (memq (process-status p) '(exit signal))
-                           (let* ((status (process-exit-status p))
-                                  (out (with-current-buffer buf (buffer-string))))
-                             (finish
-                              (if (= status 0)
-                                  (string-trim-right out)
-                                (string-trim-right
-                                 (format "Command failed with exit code %d:\nSTDOUT+STDERR:\n%s"
-                                         status out))))))))))
-                (process-put proc 'my/gptel-managed t)
-                (run-at-time
-                 my/gptel-bash-timeout nil
-                 (lambda (p)
-                   (when (process-live-p p)
-                     (ignore-errors (set-process-filter p #'ignore))
-                     (ignore-errors (set-process-sentinel p #'ignore))
-                     (delete-process p))
-                   (finish (format "Error: Bash timed out after %ss" my/gptel-bash-timeout)))
-                 proc))))
+              (unless (and my/gptel--persistent-bash-process
+                           (process-live-p my/gptel--persistent-bash-process))
+                (let ((buf (get-buffer-create " *gptel-persistent-bash*")))
+                  (with-current-buffer buf (erase-buffer))
+                  (setq my/gptel--persistent-bash-process
+                        (make-process
+                         :name "gptel-bash"
+                         :buffer buf
+                         :command '("bash" "--norc" "--noprofile")
+                         :connection-type 'pipe
+                         :noquery t))
+                  (process-put my/gptel--persistent-bash-process 'my/gptel-managed t)
+                  ;; Initialize Dumb Terminal variables to prevent interactive hanging
+                  (process-send-string my/gptel--persistent-bash-process
+                                       "export TERM=dumb PAGER=cat GIT_PAGER=cat DEBIAN_FRONTEND=noninteractive PS1=''\n")
+                  (sleep-for 0.1)))
+              
+              (let* ((proc my/gptel--persistent-bash-process)
+                     (buf (process-buffer proc))
+                     (marker (format "gptel_cmd_done_%s" (md5 (number-to-string (random)))))
+                     (timer nil))
+                
+                (with-current-buffer buf
+                  (erase-buffer))
+                
+                (set-process-filter proc
+                 (lambda (p output)
+                   (when (buffer-live-p (process-buffer p))
+                     (with-current-buffer (process-buffer p)
+                       (goto-char (point-max))
+                       (insert output)
+                       (let ((content (buffer-string)))
+                         ;; Regex tolerates potential \r or \n from terminal variations
+                         (when (string-match (format "%s:\\([0-9]+\\)[ \r\n]*\\'" marker) content)
+                           (let* ((status (string-to-number (match-string 1 content)))
+                                  (out (substring content 0 (match-beginning 0)))
+                                  (out (string-trim out))
+                                  (max-length 50000)
+                                  (truncated-out
+                                   (if (> (length out) max-length)
+                                       (concat (substring out 0 (/ max-length 2))
+                                               "\n... [Output truncated. Result exceeded 50,000 bytes. Use Grep or Read to see more.] ...\n"
+                                               (substring out (- (/ max-length 2))))
+                                     out)))
+                             (if timer (cancel-timer timer))
+                             (if (= status 0)
+                                 (finish truncated-out)
+                               (finish (format "Command failed with exit code %d:\nSTDOUT+STDERR:\n%s" status truncated-out))))))))))
+                
+                (setq timer (run-at-time
+                             my/gptel-bash-timeout nil
+                             (lambda (p)
+                               (when (process-live-p p)
+                                 ;; For timeouts, we must kill the hung persistent process
+                                 ;; and force a fresh shell on the next call.
+                                 (ignore-errors (set-process-filter p #'ignore))
+                                 (ignore-errors (set-process-sentinel p #'ignore))
+                                 (delete-process p))
+                               (finish (format "Error: Bash timed out after %ss" my/gptel-bash-timeout)))
+                             proc))
+                
+                ;; Wrap command in {} to catch errors and safely output the exit code marker
+                (process-send-string proc (format "{ %s\n} 2>&1\necho %s:$?\n" command marker))
+                )))
         (error (finish (format "Error: %s" (error-message-string err))))))))
 
 (defun my/gptel--agent-grep-async (callback regex path &optional glob context-lines)
