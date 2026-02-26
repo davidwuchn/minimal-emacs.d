@@ -253,6 +253,7 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
     "- YouTube{url}"
     "- Skill{skill, args?}"
     "- Agent{subagent_type, description, prompt}"
+    "- Bash{command} (READ-ONLY commands only. e.g. ls, git status. Do NOT modify files or system state via Bash)"
     "- Eval{expression}"
     "- find_buffers_and_recent{pattern}"
     "- describe_symbol{sym}"
@@ -352,7 +353,7 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
   "Core gptel-agent tools to be included in presets by default.")
 
 (defvar nucleus--gptel-plan-readonly-tools
-  '("Agent" "Glob" "Grep" "Read" "Skill" "WebFetch" "WebSearch" "YouTube"
+  '("Agent" "Bash" "Glob" "Grep" "Read" "Skill" "WebFetch" "WebSearch" "YouTube"
     "find_buffers_and_recent" "describe_symbol" "Eval")
   "Read-only subset of gptel-agent tools for planning.")
 
