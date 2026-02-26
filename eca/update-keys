@@ -5,7 +5,7 @@
 NETRC_GPG="$HOME/.authinfo.gpg"
 
 # Get GPG key
-GPG_KEY="davidwu@imacpro.taila8bdd.ts.net"
+GPG_KEY="davidwu"
 
 # Check if encrypted authinfo exists
 if [[ ! -f "$NETRC_GPG" ]]; then
