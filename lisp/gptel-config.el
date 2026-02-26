@@ -2111,6 +2111,14 @@ START and END are the response region positions passed by
     :stream t
     :models '(minimax-m2.5 minimax-m2.1)))
 
+(defvar gptel--dashscope
+  (gptel-make-openai "DashScope"
+    :host "coding.dashscope.aliyuncs.com"
+    :endpoint "/v1"
+    :key (lambda () (gptel-api-key-from-auth-source "coding.dashscope.aliyuncs.com" "api"))
+    :stream t
+    :models '(glm-5 MiniMax-M2.5 kimi-k2.5 deepseek-v3.2 qwen3.5-plus)))
+
 (defvar gptel--moonshot
   (gptel-make-openai "Moonshot"
     :host "api.kimi.com"
