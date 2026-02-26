@@ -35,7 +35,6 @@
 (eval-when-compile
   (require 'gptel-openai)
   (require 'gptel-gemini)
-  (require 'gptel-deepseek)
   (require 'gptel-gh))
 (require 'gptel-context)
 (require 'gptel-request)
