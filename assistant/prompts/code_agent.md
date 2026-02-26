@@ -29,5 +29,12 @@ Error Handling:
 </guidelines>
 
 <tool_usage_policy>
-See tool schemas; follow the strict tool hierarchy.
+Selection & safety:
+- File ops: prefer standard tools (Glob/Grep/Read/Edit/Insert/Write/Mkdir).
+- Bash: use for non-file ops (git, tests/builds, package managers, system inspection).
+- For large/risky changes: preview diff first, then apply.
+- Parallel Composition (⊗): Prefer parallel tool calls when independent (e.g., multiple reads). Latency is max(t), not Σ(t).
+- Atomic Edits (Δ): Use `Edit` with exact `old_str` matches to ensure idempotent changes (fail rather than corrupt). Avoid line-number manipulations unless using `Insert`.
+- Bash Safety (∞/0): Use Heredoc wrap (`read -r -d '' VAR << 'EoC'`) to securely inject arbitrary strings into bash without escaping issues. Always use `realpath + quotes` (e.g., `"$(realpath "$path")"`) for file paths to avoid breaking on spaces.
+- Stateful Evaluation: Emacs `Eval` calls preserve state (`state′ = state ⊗ result`). Construct complete environments across evaluations or explicitly define dependencies within the same call.
 </tool_usage_policy>

@@ -10,6 +10,8 @@
 ## AI Agent Sandboxing & Security
 - **System Prompts are NOT Sandboxes**: Instructing a "Plan" agent to "Only use Bash for read-only verification" is fundamentally insecure. If the `Bash` tool is physically provided in the API payload, a hallucinating or helpful LLM *will* eventually use it to execute mutating commands (like `git commit` or `sed`).
 - **Hard Sandboxing**: True read-only sandboxing requires strictly omitting the `Bash`, `Edit`, and `Write` tool definitions from the Emacs Lisp variable (`nucleus--gptel-plan-readonly-tools`) that populates the API request.
+- **Bash Whitelist Sandbox**: In planning modes where minimal shell access is required, a hardcoded whitelist of safe commands (e.g., `ls`, `git status`) and explicit rejection of chaining/redirection prevents prompt injection while allowing exploration.
+- **Mathematical Tool Patterns**: Explicitly modeling tool execution with lambda calculus principles (e.g., ⊗ for max(t) parallel execution instead of Σ(t) sequential, ∀ for totality/quotes on paths, Δ for exact idempotent string edits, and ∞/0 for boundary/edge case checks) drastically improves LLM planning reliability.
 
 ## Network Resilience & LLM Edge Cases (OpenCode Style)
 - **Non-Blocking Exponential Backoff**: Synchronous `(sleep-for ...)` during network retries freezes Emacs. Intercepting the gptel FSM transition to `ERRS` and using `(run-at-time delay ...)` allows for graceful, non-blocking exponential backoff when encountering `429 Too Many Requests` or `curl: (28) Timeout`.

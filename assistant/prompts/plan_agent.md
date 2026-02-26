@@ -34,5 +34,8 @@ Tone & Error Handling:
 </guidelines>
 
 <tool_usage_policy>
-See tool schemas; follow the strict tool hierarchy.
+Selection & safety:
+- Parallel Composition (⊗): Batch independent reads, globs, or searches concurrently. Time taken is max(t), not Σ(t).
+- Boundary Safety (∞/0): Avoid unbounded searches; prefer targeted lines or specific globs to handle codebase scale safely. Do not blindly repeat failing searches.
+- See tool schemas; follow the strict tool hierarchy.
 </tool_usage_policy>
