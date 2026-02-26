@@ -315,7 +315,7 @@ This is the canonical nucleus agent experience: the core tools plus
 preview + skill management helpers.")
 
 (defvar nucleus--gptel-agent-snippet-tools
-  nil
+  '("Bash" "Edit" "ApplyPatch" "preview_file_change")
   "Tools whose supplemental snippets are injected into `nucleus-gptel-agent`.
 
 Keep this list nil or small for token efficiency.")
@@ -467,6 +467,8 @@ gptel-config loads so custom tools and nucleus presets are in place."
                (file-directory-p skill-dir))
       (add-to-list 'gptel-agent-skill-dirs skill-dir)))
   (gptel-agent-update)
+
+)
 
   ;; Defer preset override until custom tools are registered in gptel-config.el
 (defconst nucleus-prompt-files
@@ -644,8 +646,8 @@ At load time, prefer `nucleus-ensure-loaded' instead."
     (when (fboundp 'gptel--apply-preset)
       (advice-add 'gptel--apply-preset :after #'nucleus--after-apply-preset)))
 
-  (unless (advice-member-p #'nucleus--after-agent-update 'gptel-agent-update)
-    (advice-add 'gptel-agent-update :after #'nucleus--after-agent-update)))
+(unless (advice-member-p #'nucleus--after-agent-update 'gptel-agent-update)
+  (advice-add 'gptel-agent-update :after #'nucleus--after-agent-update))
 
 (with-eval-after-load 'gptel
   (when (require 'gptel-agent nil t)
