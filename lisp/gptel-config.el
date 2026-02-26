@@ -1865,9 +1865,10 @@ This advice forces the final transition."
 ;; Gemini often returns "Malformed JSON" due to API load or payload limits.
 ;; This automatically retries the request up to 3 times before failing.
 
-(defcustom my/gptel-max-retries 3
-  "Number of times to retry failed gptel requests."
-  :type 'integer
+(defcustom my/gptel-max-retries nil
+  "Number of times to retry failed gptel requests.
+If nil, retry indefinitely using exponential backoff (capped at 30s)."
+  :type '(choice (const :tag "Infinite" nil) integer)
   :group 'gptel)
 
 (defun my/gptel-auto-retry (orig-fn machine &optional new-state)
@@ -1879,7 +1880,7 @@ Implements OpenCode-style exponential backoff for network/overload errors."
          (http-status (plist-get info :http-status))
          (retries (or (plist-get info :retries) 0)))
     (if (and (eq new-state 'ERRS)
-             (< retries my/gptel-max-retries)
+             (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
              (or (and (stringp error-data)
                       (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
                  (and (numberp http-status) (memq http-status '(408 429 500 502 503 504)))
@@ -1890,10 +1891,15 @@ Implements OpenCode-style exponential backoff for network/overload errors."
         (let* ((base-delay 2.0)
                (factor 2.0)
                (delay (min 30.0 (* base-delay (expt factor retries)))))
-          (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..." 
-                   (if (stringp error-data) (string-trim error-data)
-                     (if http-status (format "HTTP %s" http-status) "Transient API Error"))
-                   (1+ retries) my/gptel-max-retries delay)
+          (if my/gptel-max-retries
+              (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..." 
+                       (if (stringp error-data) (string-trim error-data)
+                         (if http-status (format "HTTP %s" http-status) "Transient API Error"))
+                       (1+ retries) my/gptel-max-retries delay)
+            (message "gptel: API failed with '%s'. Retrying (Attempt %d) in %.1fs..." 
+                     (if (stringp error-data) (string-trim error-data)
+                       (if http-status (format "HTTP %s" http-status) "Transient API Error"))
+                     (1+ retries) delay))
           
           ;; Clean up partial buffer insertions if any
           (when-let* ((start-marker (plist-get info :position))
