@@ -91,10 +91,10 @@
     }
   },
   "rewrite": {
-    "model": "github-copilot/gpt-5.2"
+    "model": "github-copilot/gpt-4.1"
   },
   "completion": {
-    "model": "github-copilot/gpt-5-mini"
+    "model": "github-copilot/gpt-4.1"
   },
   "prompts": {
     "chat": "${file:prompts/code_agent.md}",
