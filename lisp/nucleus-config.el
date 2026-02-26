@@ -198,39 +198,11 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
   (string-join
    (list
     "<tool_usage_policy>"
-    "Tool calls must match the provided JSON schemas exactly:"
-    "- Tool names are case-sensitive."
-    "- Argument keys must match exactly; do not invent keys (schemas disallow extras)."
-    ""
     "Selection & safety:"
-    "- File operations: use Glob/Grep/Read/Edit/Insert/Write/Mkdir (not Bash)."
+    "- File ops: prefer standard tools (Glob/Grep/Read/Edit/Insert/Write/Mkdir)."
     "- Bash: use for non-file ops (git, tests/builds, package managers, system inspection)."
     "- For large/risky changes: preview diff first, then apply."
     "- Prefer parallel tool calls when independent; sequence when dependent."
-    ""
-    "Signatures (keys must match):"
-    "- Glob{pattern, path?, depth?}"
-    "- Grep{regex, path, glob?, context_lines?}"
-    "- Read{file_path, start_line?, end_line?}"
-    "- Edit{path, old_str?, new_str, diff}"
-    "- Insert{path, line_number, new_str}"
-    "- Write{path, filename, content}"
-    "- Mkdir{parent, name}"
-    "- Bash{command}"
-    "- Eval{expression}"
-    "- WebSearch{query, count?}"
-    "- WebFetch{url}"
-    "- YouTube{url}"
-    "- TodoWrite{todos:[{content,status,activeForm}]}"
-    "- Skill{skill, args?}"
-    "- Agent{subagent_type, description, prompt}  (subagent_type in {researcher,introspector})"
-    "- RunAgent{agent-name, description, prompt}"
-    "- ApplyPatch{patch}"
-    "- preview_file_change{path, original?, replacement}  (preview diff only)"
-    "- preview_patch{patch}"
-    "- list_skills{dir?}"
-    "- load_skill{name, dir?}"
-    "- create_skill{skillName, userPrompt, dir?}"
     "</tool_usage_policy>")
    "\n")
   "Compact, schema-faithful tool usage policy for the action agent.")
@@ -239,24 +211,8 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
   (string-join
    (list
     "<tool_usage_policy>"
-    "Tool calls must match the provided JSON schemas exactly:"
-    "- Tool names are case-sensitive."
-    "- Argument keys must match exactly; do not invent keys."
-    ""
     "Read-only planning: prefer Glob/Grep/Read for repo context; use WebSearch/WebFetch/YouTube for external context."
-        "Signatures (keys must match):"
-    "- Glob{pattern, path?, depth?}"
-    "- Grep{regex, path, glob?, context_lines?}"
-    "- Read{file_path, start_line?, end_line?}"
-    "- WebSearch{query, count?}"
-    "- WebFetch{url}"
-    "- YouTube{url}"
-    "- Skill{skill, args?}"
-    "- Agent{subagent_type, description, prompt}"
-    "- Bash{command} (READ-ONLY commands only. e.g. ls, git status. Do NOT modify files or system state via Bash)"
-    "- Eval{expression}"
-    "- find_buffers_and_recent{pattern}"
-    "- describe_symbol{sym}"
+    "- Bash{command}: READ-ONLY commands only (ls, git status). Do NOT modify files or system state via Bash."
     ""
     "Disallowed in plan mode (even if known elsewhere):"
     "- Edit/Insert/Write/Mkdir/ApplyPatch/preview_*"
@@ -268,10 +224,6 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
   (string-join
    (list
     "<tool_usage_policy>"
-    "Tool calls must match the provided JSON schemas exactly:"
-    "- Tool names are case-sensitive."
-    "- Argument keys must match exactly; do not invent keys."
-    ""
     "Introspection-only: prefer completions/discovery tools, then documentation, then source."
     "Use Eval only for small checks and to confirm live values."
     "</tool_usage_policy>")
@@ -282,20 +234,7 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
   (string-join
    (list
     "<tool_usage_policy>"
-    "Tool calls must match the provided JSON schemas exactly:"
-    "- Tool names are case-sensitive."
-    "- Argument keys must match exactly; do not invent keys."
-    ""
     "Read-only research: use Glob/Grep/Read for repo context; WebSearch/WebFetch/YouTube for external context."
-    ""
-    "Signatures (keys must match):"
-    "- Glob{pattern, path?, depth?}"
-    "- Grep{regex, path, glob?, context_lines?}"
-    "- Read{file_path, start_line?, end_line?}"
-    "- WebSearch{query, count?}"
-    "- WebFetch{url}"
-    "- YouTube{url}"
-    "- Skill{skill, args?}"
     "</tool_usage_policy>")
    "\n")
   "Compact tool usage policy for the researcher agent.")
@@ -367,11 +306,10 @@ This is the canonical nucleus agent experience: the core tools plus
 preview + skill management helpers.")
 
 (defvar nucleus--gptel-agent-snippet-tools
-  '("Bash" "Edit" "ApplyPatch" "preview_file_change")
+  nil
   "Tools whose supplemental snippets are injected into `nucleus-gptel-agent`.
 
-Keep this list small for token efficiency. The schema-faithful
-<tool_usage_policy> remains the primary contract; snippets are examples.")
+Keep this list nil or small for token efficiency.")
 
 (defvar nucleus--gptel-agent-action-tools
   nucleus--gptel-agent-nucleus-tools
