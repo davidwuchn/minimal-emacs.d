@@ -977,8 +977,9 @@ and a sandbox for Plan mode."
               (error "command is empty"))
             
             (if (and is-plan
-                     (string-match "\\(\\`\\|[ \t]\\)\\(rm\\|mv\\|cp\\|wget\\|curl\\|sed\\|tee\\|>\\|>>\\|chmod\\|chown\\|touch\\|mkdir\\)\\([ \t\n]\\|\\'\\)" command))
-                (finish (format "Error: Command rejected by Emacs sandbox. Destructive operations (like '%s') are forbidden in Plan mode. Use read-only commands only." (match-string 2 command)))
+                     (or (string-match-p "[;|&]" command)
+                         (not (string-match-p "\\`[ \t]*\\(ls\\|pwd\\|cat\\|grep\\|find\\|git status\\|git diff\\|git log\\|pytest\\|npm test\\|npm run test\\|cargo test\\|go test\\|make test\\)\\b" command))))
+                (finish (format "Error: Command rejected by Emacs Whitelist Sandbox. In Plan mode, you may only use simple, read-only commands (ls, cat, grep, git status, etc.). Shell chaining (; | &) and unapproved scripts are forbidden. Say \"go\" to the user if you need to switch to Execution mode to run this command."))
               
               (unless (and my/gptel--persistent-bash-process
                            (process-live-p my/gptel--persistent-bash-process))
