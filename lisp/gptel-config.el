@@ -1865,8 +1865,10 @@ This advice forces the final transition."
 ;; Gemini often returns "Malformed JSON" due to API load or payload limits.
 ;; This automatically retries the request up to 3 times before failing.
 
-(defvar my/gptel-max-retries 3
-  "Number of times to retry failed gptel requests.")
+(defcustom my/gptel-max-retries 3
+  "Number of times to retry failed gptel requests."
+  :type 'integer
+  :group 'gptel)
 
 (defun my/gptel-auto-retry (orig-fn machine &optional new-state)
   "Intercept FSM transitions to ERRS and retry the request if transient.
