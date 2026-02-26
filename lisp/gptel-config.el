@@ -350,7 +350,7 @@ registered in nucleus-config."
   (when (boundp 'gptel-tool-call-actions-map)
     (define-key gptel-tool-call-actions-map (kbd "C-c C-a") #'my/gptel-tool-confirmation-never)
     (define-key gptel-tool-call-actions-map (kbd "C-c C-A") #'my/gptel-tool-confirmation-auto))
-)
+  )
 
 ;; Fix: gptel-system-prompt transient doesn't preserve the originating buffer.
 ;; When the [Prompt:] header button is clicked, gptel-system-prompt opens a
@@ -373,9 +373,9 @@ Also ensures the system message is applied buffer-locally, not globally."
            (gptel--set-buffer-locally t))
       (with-current-buffer buf
         (gptel--edit-directive 'gptel--system-message
-          :setup #'activate-mark
-          :buffer buf
-          :callback (lambda (_) (call-interactively #'gptel-menu)))))))
+                               :setup #'activate-mark
+                               :buffer buf
+                               :callback (lambda (_) (call-interactively #'gptel-menu)))))))
 
 (defvar my/gptel--transient-origin-buffer nil
   "Buffer that opened the gptel-system-prompt transient.")
@@ -393,7 +393,7 @@ Also ensures the system message is applied buffer-locally, not globally."
   "Around-advice: hide internal nucleus directives from the transient picker."
   (let ((gptel-directives
          (seq-remove (lambda (e) (memq (car e) '(nucleus-gptel-agent nucleus-gptel-plan
-                                                  Plan Agent)))
+                                                                     Plan Agent)))
                      gptel-directives)))
     (funcall orig sym msg external)))
 
@@ -443,25 +443,25 @@ Advances point to the start of the next row."
                   (if (eq action 'metadata)
                       `(metadata
                         (affixation-function .
-                         (lambda (cands)
-                           (mapcar
-                            (lambda (c)
-                              (let* ((full (gethash c gptel--crowdsourced-prompts))
-                                     (preview (truncate-string-to-width
-                                               (replace-regexp-in-string
-                                                "[\n\r]+" " " (or full ""))
-                                               60 nil nil "…")))
-                                (list c ""
-                                      (concat (propertize " " 'display '(space :align-to 36))
-                                              (propertize preview 'face 'completions-annotations)))))
-                            cands))))
+                                             (lambda (cands)
+                                               (mapcar
+                                                (lambda (c)
+                                                  (let* ((full (gethash c gptel--crowdsourced-prompts))
+                                                         (preview (truncate-string-to-width
+                                                                   (replace-regexp-in-string
+                                                                    "[\n\r]+" " " (or full ""))
+                                                                   60 nil nil "…")))
+                                                    (list c ""
+                                                          (concat (propertize " " 'display '(space :align-to 36))
+                                                                  (propertize preview 'face 'completions-annotations)))))
+                                                cands))))
                     (complete-with-action action gptel--crowdsourced-prompts str pred)))
                 nil t)))
           (when-let* ((prompt (gethash choice gptel--crowdsourced-prompts)))
             (gptel--set-with-scope
              'gptel--system-message prompt gptel--set-buffer-locally)
             (gptel--edit-directive 'gptel--system-message
-              :callback (lambda (_) (call-interactively #'gptel-menu)))))
+                                   :callback (lambda (_) (call-interactively #'gptel-menu)))))
       (message "No prompts available.")))
 
   ;; Replace upstream gptel--crowdsourced-prompts with a version that uses
@@ -639,14 +639,14 @@ that turn — the API requires presence, not a non-empty value."
                           (> (length (plist-get msg :tool_calls)) 0)
                           (aref (plist-get msg :tool_calls) 0)))
                  (id (and tc (plist-get tc :id)))
-                  (stored (if id
-                              (alist-get id my/gptel--tool-reasoning-alist
-                                         :absent nil #'equal)
-                            :absent))
-                  (reasoning (if (or (eq stored :absent)
-                                     (and (stringp stored) (string-empty-p stored)))
-                                 :null
-                               stored)))
+                 (stored (if id
+                             (alist-get id my/gptel--tool-reasoning-alist
+                                        :absent nil #'equal)
+                           :absent))
+                 (reasoning (if (or (eq stored :absent)
+                                    (and (stringp stored) (string-empty-p stored)))
+                                :null
+                              stored)))
             (plist-put msg reasoning-key reasoning)))))
     prompts))
 
@@ -885,23 +885,23 @@ request is active."
   ;; process (buffer is typically named " *gptel-curl*" with a leading space).
   ;; This prevents accidentally killing unrelated curl/rg processes.
   (let ((killed 0))
-     (dolist (proc (process-list))
-        (when (and (process-live-p proc)
-                   (or (process-get proc 'my/gptel-managed)
-                       ;; gptel's internal curl process is named "gptel-curl".
-                       (string= (process-name proc) "gptel-curl")
-                       ;; Also match by process buffer name.
-                       (and (process-buffer proc)
-                            (buffer-name (process-buffer proc))
-                            (string-match-p "gptel-curl" (buffer-name (process-buffer proc))))
-                       ;; Generic catch: gptel tool processes we create are named gptel-...
-                       (string-prefix-p "gptel-" (process-name proc))))
-          (cl-incf killed)
-          (message "Killing gptel/subagent process: %s" (process-name proc))
-          ;; Prevent sentinels/filters from writing into buffers after abort.
-          (ignore-errors (set-process-filter proc #'ignore))
-          (ignore-errors (set-process-sentinel proc #'ignore))
-          (delete-process proc)))
+    (dolist (proc (process-list))
+      (when (and (process-live-p proc)
+                 (or (process-get proc 'my/gptel-managed)
+                     ;; gptel's internal curl process is named "gptel-curl".
+                     (string= (process-name proc) "gptel-curl")
+                     ;; Also match by process buffer name.
+                     (and (process-buffer proc)
+                          (buffer-name (process-buffer proc))
+                          (string-match-p "gptel-curl" (buffer-name (process-buffer proc))))
+                     ;; Generic catch: gptel tool processes we create are named gptel-...
+                     (string-prefix-p "gptel-" (process-name proc))))
+        (cl-incf killed)
+        (message "Killing gptel/subagent process: %s" (process-name proc))
+        ;; Prevent sentinels/filters from writing into buffers after abort.
+        (ignore-errors (set-process-filter proc #'ignore))
+        (ignore-errors (set-process-sentinel proc #'ignore))
+        (delete-process proc)))
     ;; Restore gptel-agent header-line with [Agent]/[Plan] toggle button
     (when (and gptel-mode gptel-use-header-line)
       (if (fboundp 'gptel-use-header-line)
@@ -918,8 +918,8 @@ request is active."
         ;; Position cursor after marker
         (when (search-backward "### " nil t)
           (goto-char (match-end 0)))))
-     (message "Aborted gptel activity (%d process%s killed) - ready for next prompt"
-              killed (if (= killed 1) "" "es"))))
+    (message "Aborted gptel activity (%d process%s killed) - ready for next prompt"
+             killed (if (= killed 1) "" "es"))))
 
 ;; --- Interruptible Grep Tool Override ---
 ;; gptel-agent's built-in Grep uses `call-process', which is hard to abort
@@ -1007,36 +1007,36 @@ and a sandbox for Plan mode."
                   (erase-buffer))
                 
                 (set-process-filter proc
-                 (lambda (p output)
-                   (when (buffer-live-p (process-buffer p))
-                     (with-current-buffer (process-buffer p)
-                       (goto-char (point-max))
-                       (insert output)
-                       (let ((content (buffer-string)))
-                         ;; Regex tolerates potential \r or \n from terminal variations
-                         (when (string-match (format "%s:\\([0-9]+\\)[ \r\n]*\\'" marker) content)
-                           (let* ((status (string-to-number (match-string 1 content)))
-                                  (out (substring content 0 (match-beginning 0)))
-                                  (out (string-trim out))
-                                  (max-length 50000)
-                                  (truncated-out
-                                   (if (> (length out) max-length)
-                                       (let* ((temp-dir (expand-file-name "gptel-agent-temp" (temporary-file-directory)))
-                                              (temp-file (expand-file-name
-                                                          (format "bash-%s-%s.txt"
-                                                                  (format-time-string "%Y%m%d-%H%M%S")
-                                                                  (random 10000))
-                                                          temp-dir)))
-                                         (unless (file-directory-p temp-dir) (make-directory temp-dir t))
-                                         (with-temp-file temp-file (insert out))
-                                         (concat (substring out 0 (/ max-length 2))
-                                                 (format "\n\n... [Output truncated. Result exceeded 50,000 bytes. Full output saved to: %s\nUse Grep to search the full content or Read with offset/limit to view specific sections.] ...\n\n" temp-file)
-                                                 (substring out (- (/ max-length 2)))))
-                                     out)))
-                             (if timer (cancel-timer timer))
-                             (if (= status 0)
-                                 (finish truncated-out)
-                               (finish (format "Command failed with exit code %d:\nSTDOUT+STDERR:\n%s" status truncated-out))))))))))
+                                    (lambda (p output)
+                                      (when (buffer-live-p (process-buffer p))
+                                        (with-current-buffer (process-buffer p)
+                                          (goto-char (point-max))
+                                          (insert output)
+                                          (let ((content (buffer-string)))
+                                            ;; Regex tolerates potential \r or \n from terminal variations
+                                            (when (string-match (format "%s:\\([0-9]+\\)[ \r\n]*\\'" marker) content)
+                                              (let* ((status (string-to-number (match-string 1 content)))
+                                                     (out (substring content 0 (match-beginning 0)))
+                                                     (out (string-trim out))
+                                                     (max-length 50000)
+                                                     (truncated-out
+                                                      (if (> (length out) max-length)
+                                                          (let* ((temp-dir (expand-file-name "gptel-agent-temp" (temporary-file-directory)))
+                                                                 (temp-file (expand-file-name
+                                                                             (format "bash-%s-%s.txt"
+                                                                                     (format-time-string "%Y%m%d-%H%M%S")
+                                                                                     (random 10000))
+                                                                             temp-dir)))
+                                                            (unless (file-directory-p temp-dir) (make-directory temp-dir t))
+                                                            (with-temp-file temp-file (insert out))
+                                                            (concat (substring out 0 (/ max-length 2))
+                                                                    (format "\n\n... [Output truncated. Result exceeded 50,000 bytes. Full output saved to: %s\nUse Grep to search the full content or Read with offset/limit to view specific sections.] ...\n\n" temp-file)
+                                                                    (substring out (- (/ max-length 2)))))
+                                                        out)))
+                                                (if timer (cancel-timer timer))
+                                                (if (= status 0)
+                                                    (finish truncated-out)
+                                                  (finish (format "Command failed with exit code %d:\nSTDOUT+STDERR:\n%s" status truncated-out))))))))))
                 
                 (setq timer (run-at-time
                              my/gptel-bash-timeout nil
@@ -1310,13 +1310,13 @@ results are dropped."
                               (when (buffer-live-p out-buf) (kill-buffer out-buf))
                               (if (= status 0)
                                   (funcall finish
-                                   (format
-                                    "Diff successfully applied to %s.\nPatch command options: %s\nPatch STDOUT:\n%s"
-                                    target patch-options (string-trim out)))
+                                           (format
+                                            "Diff successfully applied to %s.\nPatch command options: %s\nPatch STDOUT:\n%s"
+                                            target patch-options (string-trim out)))
                                 (funcall finish
-                                 (format
-                                  "Error: Failed to apply diff to %s (exit status %s).\nPatch command options: %s\nPatch STDOUT:\n%s"
-                                  target status patch-options (string-trim out))))))))))
+                                         (format
+                                          "Error: Failed to apply diff to %s (exit status %s).\nPatch command options: %s\nPatch STDOUT:\n%s"
+                                          target status patch-options (string-trim out))))))))))
                   (process-put proc 'my/gptel-managed t)
                   (process-send-string proc patch-text)
                   (process-send-eof proc)
@@ -1329,7 +1329,7 @@ results are dropped."
                        (delete-process p))
                      (when (buffer-live-p buf) (kill-buffer buf))
                      (funcall finish "Error: edit/patch timed out."))
-                    proc out-buf))))))
+                   proc out-buf))))))
       (error
        (funcall finish (format "Error: %s" (error-message-string err)))))))
 
@@ -1364,8 +1364,8 @@ Guards against reload-time duplication where `gptel-make-tool' and
    :function #'my/gptel--agent-bash-async
    :async t
    :args '(( :name "command"
-              :type string
-              :description "Bash command string."))
+             :type string
+             :description "Bash command string."))
    :category "gptel-agent"
    :confirm t
    :include t)
@@ -1377,16 +1377,16 @@ Guards against reload-time duplication where `gptel-make-tool' and
    :function #'my/gptel--agent-grep-async
    :async t
    :args '(( :name "regex"
-              :type string)
-            ( :name "path"
-              :type string)
-            ( :name "glob"
-              :type string
-              :optional t)
-            ( :name "context_lines"
-              :optional t
-              :type integer
-              :maximum 15))
+             :type string)
+           ( :name "path"
+             :type string)
+           ( :name "glob"
+             :type string
+             :optional t)
+           ( :name "context_lines"
+             :optional t
+             :type integer
+             :maximum 15))
    :category "gptel-agent"
    :include t)
   (gptel-make-tool
@@ -1394,15 +1394,15 @@ Guards against reload-time duplication where `gptel-make-tool' and
    :description "Find files by glob pattern (async)."
    :function #'my/gptel--agent-glob-async
    :async t
-    :args '(( :name "pattern"
-              :type string
-              :description "Glob pattern.")
-            ( :name "path"
-              :type string
-              :optional t)
-            ( :name "depth"
-              :type integer
-              :optional t))
+   :args '(( :name "pattern"
+             :type string
+             :description "Glob pattern.")
+           ( :name "path"
+             :type string
+             :optional t)
+           ( :name "depth"
+             :type integer
+             :optional t))
    :category "gptel-agent"
    :include t)
   (gptel-make-tool
@@ -1410,16 +1410,16 @@ Guards against reload-time duplication where `gptel-make-tool' and
    :description "Replace text or apply a unified diff (async)."
    :function #'my/gptel--agent-edit-async
    :async t
-    :args '(( :name "path"
-              :type string)
-            ( :name "old_str"
-              :type string
-              :optional t)
-            ( :name "new_str"
-              :type string)
-            ( :name "diff"
-              :type boolean
-              :optional t))
+   :args '(( :name "path"
+             :type string)
+           ( :name "old_str"
+             :type string
+             :optional t)
+           ( :name "new_str"
+             :type string)
+           ( :name "diff"
+             :type boolean
+             :optional t))
    :category "gptel-agent"
    :confirm t
    :include t)
@@ -1438,8 +1438,8 @@ Guards against reload-time duplication where `gptel-make-tool' and
    :args (list '(:name "path" :type string :description "Directory path (use \".\" for current)")
                '(:name "filename" :type string :description "Name of the file to create")
                '(:name "content" :type string :description "Content to write"))
-    :confirm t
-    :include t)
+   :confirm t
+   :include t)
   ;; Token-efficient schema descriptions (keep names/args/types identical).
   (gptel-make-tool
    :name "Read"
@@ -1537,8 +1537,8 @@ Guards against reload-time duplication where `gptel-make-tool' and
        ( :type object
          :properties
          (:content ( :type string :minLength 1)
-          :status ( :type string :enum ["pending" "in_progress" "completed"])
-          :activeForm ( :type string :minLength 1)))))
+                   :status ( :type string :enum ["pending" "in_progress" "completed"])
+                   :activeForm ( :type string :minLength 1)))))
    :category "gptel-agent")
 
   (gptel-make-tool
@@ -1570,213 +1570,213 @@ Guards against reload-time duplication where `gptel-make-tool' and
                   #'my/gptel--wrap-gptel-agent-fetch-no-images)))
   (advice-add 'gptel-agent--task :around #'my/gptel--agent-task-override-model)
   (setq nucleus-tools-readonly
-    (my/gptel--dedup-tools-by-name
-     (append
-       (when (boundp 'nucleus--gptel-plan-readonly-tools)
-         (seq-filter #'identity (mapcar #'my/gptel--safe-get-tool nucleus--gptel-plan-readonly-tools)))
-      (list
-       (gptel-make-tool
-        :name "find_buffers_and_recent"
-        :category "gptel-agent"
-        :function #'my/find-buffers-and-recent
-        :description "Find open buffers and recent files matching a pattern"
-        :args (list '(:name "pattern" :type string :description "Regex pattern (empty for all)")))
+        (my/gptel--dedup-tools-by-name
+         (append
+          (when (boundp 'nucleus--gptel-plan-readonly-tools)
+            (seq-filter #'identity (mapcar #'my/gptel--safe-get-tool nucleus--gptel-plan-readonly-tools)))
+          (list
+           (gptel-make-tool
+            :name "find_buffers_and_recent"
+            :category "gptel-agent"
+            :function #'my/find-buffers-and-recent
+            :description "Find open buffers and recent files matching a pattern"
+            :args (list '(:name "pattern" :type string :description "Regex pattern (empty for all)")))
 
-       (gptel-make-tool
-        :name "describe_symbol"
-        :function (lambda (sym)
-                    (describe-symbol (intern sym))
-                    (with-current-buffer "*Help*" (buffer-string)))
-        :description "Show Emacs Lisp documentation for a symbol"
-        :args (list '(:name "sym" :type string :description "Symbol name")))))))
+           (gptel-make-tool
+            :name "describe_symbol"
+            :function (lambda (sym)
+                        (describe-symbol (intern sym))
+                        (with-current-buffer "*Help*" (buffer-string)))
+            :description "Show Emacs Lisp documentation for a symbol"
+            :args (list '(:name "sym" :type string :description "Symbol name")))))))
 
   (setq nucleus-tools-action
-      (my/gptel--dedup-tools-by-name
-       (append
-         ;; Include all 17 gptel-agent tools
-         (when (boundp 'nucleus--gptel-agent-action-tools)
-           (seq-filter #'identity (mapcar #'my/gptel--safe-get-tool nucleus--gptel-agent-action-tools)))
-        (list
-         (gptel-make-tool
-          :name "run_shell_command"
-          :category "gptel-agent"
-          :async t
-          :function (lambda (callback cmd &optional dir)
-                      (let* ((default-directory (if dir (expand-file-name dir) default-directory))
-                             (buf (generate-new-buffer " *gptel-shell*"))
-                             (timeout 15.0)
-                             (done nil))
-                        (cl-labels ((finish (res)
-                                      (unless done
-                                        (setq done t)
-                                        (funcall callback res)
-                                        (when (buffer-live-p buf) (kill-buffer buf)))))
-                          (condition-case err
-                              (let ((proc (start-process-shell-command "gptel-shell" buf cmd)))
-                                (process-put proc 'my/gptel-managed t)
-                                (set-process-sentinel
-                                 proc
-                                 (lambda (p _event)
-                                   (when (memq (process-status p) '(exit signal))
-                                     (finish (with-current-buffer buf (string-trim (buffer-string)))))))
-                                ;; Timeout handler
-                                (run-at-time timeout nil
-                                             (lambda (p)
-                                               (when (process-live-p p)
-                                                 (delete-process p)
-                                                 (finish (with-current-buffer buf 
-                                                           (concat (string-trim (buffer-string)) 
-                                                                   "\n[Process killed after 15s timeout]")))))
-                                             proc))
-                            (error (finish (format "Error starting shell command: %s" err)))))))
-          :description "Execute a shell command (git, diff, wc, etc.)"
-          :args (list '(:name "cmd" :type string :description "Shell command")
-                      '(:name "dir" :type string :description "Working directory" :optional t))
-          :confirm t)
+        (my/gptel--dedup-tools-by-name
+         (append
+          ;; Include all 17 gptel-agent tools
+          (when (boundp 'nucleus--gptel-agent-action-tools)
+            (seq-filter #'identity (mapcar #'my/gptel--safe-get-tool nucleus--gptel-agent-action-tools)))
+          (list
+           (gptel-make-tool
+            :name "run_shell_command"
+            :category "gptel-agent"
+            :async t
+            :function (lambda (callback cmd &optional dir)
+                        (let* ((default-directory (if dir (expand-file-name dir) default-directory))
+                               (buf (generate-new-buffer " *gptel-shell*"))
+                               (timeout 15.0)
+                               (done nil))
+                          (cl-labels ((finish (res)
+                                        (unless done
+                                          (setq done t)
+                                          (funcall callback res)
+                                          (when (buffer-live-p buf) (kill-buffer buf)))))
+                            (condition-case err
+                                (let ((proc (start-process-shell-command "gptel-shell" buf cmd)))
+                                  (process-put proc 'my/gptel-managed t)
+                                  (set-process-sentinel
+                                   proc
+                                   (lambda (p _event)
+                                     (when (memq (process-status p) '(exit signal))
+                                       (finish (with-current-buffer buf (string-trim (buffer-string)))))))
+                                  ;; Timeout handler
+                                  (run-at-time timeout nil
+                                               (lambda (p)
+                                                 (when (process-live-p p)
+                                                   (delete-process p)
+                                                   (finish (with-current-buffer buf 
+                                                             (concat (string-trim (buffer-string)) 
+                                                                     "\n[Process killed after 15s timeout]")))))
+                                               proc))
+                              (error (finish (format "Error starting shell command: %s" err)))))))
+            :description "Execute a shell command (git, diff, wc, etc.)"
+            :args (list '(:name "cmd" :type string :description "Shell command")
+                        '(:name "dir" :type string :description "Working directory" :optional t))
+            :confirm t)
 
-         ;; Alias for gptel-agent presets, which refer to ApplyPatch.
-         (gptel-make-tool
-          :name "ApplyPatch"
-          :category "gptel-agent"
-          :async t
-          :function #'my/gptel--apply-patch-dispatch
-          :description "Apply a unified diff or OpenCode envelope patch."
-          :args (list '(:name "patch" :type string :description "Unified diff content"))
-          :confirm t)
+           ;; Alias for gptel-agent presets, which refer to ApplyPatch.
+           (gptel-make-tool
+            :name "ApplyPatch"
+            :category "gptel-agent"
+            :async t
+            :function #'my/gptel--apply-patch-dispatch
+            :description "Apply a unified diff or OpenCode envelope patch."
+            :args (list '(:name "patch" :type string :description "Unified diff content"))
+            :confirm t)
 
-        (gptel-make-tool
-         :name "compact_chat"
-         :category "gptel-agent"
-         :function (lambda (summary)
-                     (or summary ""))
-         :description "Accept a compacted summary payload (no-op)."
-         :args (list '(:name "summary" :type string :description "Compacted summary")))
+           (gptel-make-tool
+            :name "compact_chat"
+            :category "gptel-agent"
+            :function (lambda (summary)
+                        (or summary ""))
+            :description "Accept a compacted summary payload (no-op)."
+            :args (list '(:name "summary" :type string :description "Compacted summary")))
 
 
 
-        (gptel-make-tool
-         :name "preview_file_change"
-         :async t
-         :category "gptel-agent"
-         :function (lambda (callback path &optional original replacement)
-                     (let* ((full-path (expand-file-name path))
-                            (orig (or original
-                                      (when (file-readable-p full-path)
-                                        (with-temp-buffer
-                                          (insert-file-contents full-path)
-                                          (buffer-string)))))
-                            (new (or replacement "")))
-                       (if (not orig)
-                           (funcall callback
-                                    (format "Error: Cannot read original content for %s"
-                                            path))
-                         (my/gptel--preview-enqueue
-                          (current-buffer) path orig new callback))))
-         :description "Preview file changes step-by-step using magit (or diff-mode fallback).
+           (gptel-make-tool
+            :name "preview_file_change"
+            :async t
+            :category "gptel-agent"
+            :function (lambda (callback path &optional original replacement)
+                        (let* ((full-path (expand-file-name path))
+                               (orig (or original
+                                         (when (file-readable-p full-path)
+                                           (with-temp-buffer
+                                             (insert-file-contents full-path)
+                                             (buffer-string)))))
+                               (new (or replacement "")))
+                          (if (not orig)
+                              (funcall callback
+                                       (format "Error: Cannot read original content for %s"
+                                               path))
+                            (my/gptel--preview-enqueue
+                             (current-buffer) path orig new callback))))
+            :description "Preview file changes step-by-step using magit (or diff-mode fallback).
 When multiple files are previewed, step through them one at a time:
   n  show next file
   q  abort remaining previews"
-         :args (list '(:name "path" :type string :description "Target file path")
-                     '(:name "original" :type string
-                       :description "Original content (optional; read from disk if omitted)"
-                       :optional t)
-                     '(:name "replacement" :type string :description "Replacement content"))
-         :confirm t)
+            :args (list '(:name "path" :type string :description "Target file path")
+                        '(:name "original" :type string
+                                :description "Original content (optional; read from disk if omitted)"
+                                :optional t)
+                        '(:name "replacement" :type string :description "Replacement content"))
+            :confirm t)
 
 
-        (gptel-make-tool
-         :name "preview_patch"
-         :async t
-         :category "gptel-agent"
-         :function (lambda (callback patch)
-                     (my/gptel--preview-patch-async
-                      patch
-                      (current-buffer)
-                      callback
-                      ;; on-confirm: user has reviewed — don't apply, just ack
-                      (lambda (cb) (funcall cb "Patch reviewed. Not applied."))
-                      ;; on-abort
-                      (lambda (cb) (funcall cb "Patch preview aborted."))
-                      ;; header
-                      "  Patch preview — n reviewed    q abort"))
-         :description "Preview a unified diff for review without applying it.
+           (gptel-make-tool
+            :name "preview_patch"
+            :async t
+            :category "gptel-agent"
+            :function (lambda (callback patch)
+                        (my/gptel--preview-patch-async
+                         patch
+                         (current-buffer)
+                         callback
+                         ;; on-confirm: user has reviewed — don't apply, just ack
+                         (lambda (cb) (funcall cb "Patch reviewed. Not applied."))
+                         ;; on-abort
+                         (lambda (cb) (funcall cb "Patch preview aborted."))
+                         ;; header
+                         "  Patch preview — n reviewed    q abort"))
+            :description "Preview a unified diff for review without applying it.
 Press n to confirm reviewed (agent continues), q to abort."
-         :args (list '(:name "patch" :type string :description "Unified diff content")))
-        (gptel-make-tool
-         :name "list_skills"
-         :category "gptel-agent"
-         :function (lambda (&optional dir)
-                     "List available skills by reading SKILL.md frontmatter."
-                     (let* ((root (expand-file-name (or dir (expand-file-name "assistant/skills" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory)))))
-                            (skill-dirs (when (file-directory-p root)
-                                          (seq-filter
-                                           (lambda (path)
-                                             (file-exists-p (expand-file-name "SKILL.md" path)))
-                                           (directory-files root t "^[^.]" t)))))
-                       (if (not skill-dirs)
-                           "No skills found."
-                         (string-join
-                          (mapcar
-                           (lambda (dir)
-                             (let* ((file (expand-file-name "SKILL.md" dir))
-                                    (text (with-temp-buffer
-                                            (insert-file-contents file)
-                                            (buffer-string)))
-                                    (name (when (string-match "^name:\s-*\(.+\)$" text)
-                                            (string-trim (match-string 1 text))))
-                                    (desc (when (string-match "^description:\s-*\(.+\)$" text)
-                                            (string-trim (match-string 1 text)))))
-                               (format "%s: %s" (or name (file-name-nondirectory dir)) (or desc ""))))
-                           skill-dirs)
-                          "\n"))))
-         :description "List available skills."
-         :args (list '(:name "dir" :type string :description "Skills root directory" :optional t)))
+            :args (list '(:name "patch" :type string :description "Unified diff content")))
+           (gptel-make-tool
+            :name "list_skills"
+            :category "gptel-agent"
+            :function (lambda (&optional dir)
+                        "List available skills by reading SKILL.md frontmatter."
+                        (let* ((root (expand-file-name (or dir (expand-file-name "assistant/skills" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory)))))
+                               (skill-dirs (when (file-directory-p root)
+                                             (seq-filter
+                                              (lambda (path)
+                                                (file-exists-p (expand-file-name "SKILL.md" path)))
+                                              (directory-files root t "^[^.]" t)))))
+                          (if (not skill-dirs)
+                              "No skills found."
+                            (string-join
+                             (mapcar
+                              (lambda (dir)
+                                (let* ((file (expand-file-name "SKILL.md" dir))
+                                       (text (with-temp-buffer
+                                               (insert-file-contents file)
+                                               (buffer-string)))
+                                       (name (when (string-match "^name:\s-*\(.+\)$" text)
+                                               (string-trim (match-string 1 text))))
+                                       (desc (when (string-match "^description:\s-*\(.+\)$" text)
+                                               (string-trim (match-string 1 text)))))
+                                  (format "%s: %s" (or name (file-name-nondirectory dir)) (or desc ""))))
+                              skill-dirs)
+                             "\n"))))
+            :description "List available skills."
+            :args (list '(:name "dir" :type string :description "Skills root directory" :optional t)))
 
-         (gptel-make-tool
-          :name "load_skill"
-          :category "gptel-agent"
-          :function (lambda (name &optional dir)
-                      "Load SKILL.md content for NAME."
-                      (let* ((name (my/gptel--normalize-skill-id name))
-                             (name (downcase name))
-                             (root (expand-file-name (or dir (expand-file-name "assistant/skills" user-emacs-directory))))
-                             (path (expand-file-name (concat name "/SKILL.md") root)))
-                        (if (file-readable-p path)
-                            (with-temp-buffer
-                              (insert-file-contents path)
-                              (buffer-string))
-                          (format "Skill not found: %s" name))))
-         :description "Load skill instructions from SKILL.md."
-         :args (list '(:name "name" :type string :description "Skill id")
-                     '(:name "dir" :type string :description "Skills root directory" :optional t)))
+           (gptel-make-tool
+            :name "load_skill"
+            :category "gptel-agent"
+            :function (lambda (name &optional dir)
+                        "Load SKILL.md content for NAME."
+                        (let* ((name (my/gptel--normalize-skill-id name))
+                               (name (downcase name))
+                               (root (expand-file-name (or dir (expand-file-name "assistant/skills" user-emacs-directory))))
+                               (path (expand-file-name (concat name "/SKILL.md") root)))
+                          (if (file-readable-p path)
+                              (with-temp-buffer
+                                (insert-file-contents path)
+                                (buffer-string))
+                            (format "Skill not found: %s" name))))
+            :description "Load skill instructions from SKILL.md."
+            :args (list '(:name "name" :type string :description "Skill id")
+                        '(:name "dir" :type string :description "Skills root directory" :optional t)))
 
-        (gptel-make-tool
-         :name "create_skill"
-         :category "gptel-agent"
-         :function (lambda (skillName userPrompt &optional dir)
-                     "Create a new skill directory with SKILL.md based on user prompt."
-                     (let* ((root (expand-file-name (or dir (expand-file-name "assistant/skills" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory)))))
-                            (name (string-trim skillName))
-                            (skill-dir (expand-file-name name root))
-                            (skill-file (expand-file-name "SKILL.md" skill-dir))
-                            (valid-name (string-match-p "\`[a-z0-9]+\(?:-[a-z0-9]+\)*\'" name)))
-                       (unless valid-name
-                         (user-error "Invalid skill name: %s" name))
-                       (let ((content (format "---\nname: %s\ndescription: %s\nversion: 1.0.0\nλ: action.identifier\n---\n\nengage nucleus:\n[φ fractal euler tao pi mu] | [Δ λ ∞/0 | ε/φ Σ/μ c/h] | OODA\nHuman ⊗ AI\n\n# %s\n\n## Identity\n\nYou are a [role]. Your mindset is shaped by:\n- **Figure A** - key principle\n- **Figure B** - key principle\n\nYour tone is [quality]; your goal is [outcome].\n\n---\n\n## Core Principle\n\nOne paragraph defining the unique value this skill provides.\n\n---\n\n## Procedure\n\n```\nλ(input).transform ⟺ [\n  step_one(input),\n  step_two(result),\n  step_three(result),\n  output(result)\n]\n```\n\n---\n\n## Decision Matrix\n\n| Input Pattern | Action | Output |\n|---------------|--------|--------|\n| Pattern A | Do X | Result |\n| Pattern B | Do Y | Result |\n| Pattern C | Do Z | Result |\n\n---\n\n## Examples\n\n**Good Input**: \"Specific, actionable request\"\n```\nResponse format\n```\n\n**Bad Input**: \"Vague, slop request\"\n```\nResponse format\n```\n\n---\n\n## Verification\n\n```\nλ(output).verify ⟺ [\n  check_one(output) AND\n  check_two(output) AND\n  check_three(output)\n]\n```\n\n**Before output, verify**:\n- [ ] Check one completed\n- [ ] Check two completed\n- [ ] Check three completed\n\n---\n\n## Eight Keys Reference\n\n| Key | Symbol | Signal | Anti-Pattern | Skill-Specific Application |\n|-----|--------|--------|--------------|---------------------------|\n| **Vitality** | φ | Organic, non-repetitive | Mechanical rephrasing | [Customize: How does this skill add fresh value?] |\n| **Clarity** | fractal | Explicit assumptions | \"Handle properly\" | [Customize: What bounds are defined?] |\n| **Purpose** | e | Actionable function | Abstract descriptions | [Customize: What concrete output?] |\n| **Wisdom** | τ | Foresight over speed | Premature optimization | [Customize: When should you measure first?] |\n| **Synthesis** | π | Holistic integration | Fragmented thinking | [Customize: How are components integrated?] |\n| **Directness** | μ | Cut pleasantries | Polite evasion | [Customize: How do you cut through noise?] |\n| **Truth** | ∃ | Favor reality | Surface agreement | [Customize: What data must be shown?] |\n| **Vigilance** | ∀ | Defensive constraint | Accepting manipulation | [Customize: What must be validated?] |\n\n---\n\n## Summary\n\n**When to use this skill**:\n1. Trigger condition\n2. Trigger condition\n3. Trigger condition\n\n**Framework eliminates slop, not adds process.**\n" name userPrompt name)))
-                         (make-directory skill-dir t)
-                         (write-region content nil skill-file)
-                         (format "Created skill: %s" skill-file))))
-         :description "Create a skill from a name and prompt."
-         :args (list '(:name "skillName" :type string :description "Skill name")
-                     '(:name "userPrompt" :type string :description "User prompt")
-                     '(:name "dir" :type string :description "Skills root directory" :optional t))))
+           (gptel-make-tool
+            :name "create_skill"
+            :category "gptel-agent"
+            :function (lambda (skillName userPrompt &optional dir)
+                        "Create a new skill directory with SKILL.md based on user prompt."
+                        (let* ((root (expand-file-name (or dir (expand-file-name "assistant/skills" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory)))))
+                               (name (string-trim skillName))
+                               (skill-dir (expand-file-name name root))
+                               (skill-file (expand-file-name "SKILL.md" skill-dir))
+                               (valid-name (string-match-p "\`[a-z0-9]+\(?:-[a-z0-9]+\)*\'" name)))
+                          (unless valid-name
+                            (user-error "Invalid skill name: %s" name))
+                          (let ((content (format "---\nname: %s\ndescription: %s\nversion: 1.0.0\nλ: action.identifier\n---\n\nengage nucleus:\n[φ fractal euler tao pi mu] | [Δ λ ∞/0 | ε/φ Σ/μ c/h] | OODA\nHuman ⊗ AI\n\n# %s\n\n## Identity\n\nYou are a [role]. Your mindset is shaped by:\n- **Figure A** - key principle\n- **Figure B** - key principle\n\nYour tone is [quality]; your goal is [outcome].\n\n---\n\n## Core Principle\n\nOne paragraph defining the unique value this skill provides.\n\n---\n\n## Procedure\n\n```\nλ(input).transform ⟺ [\n  step_one(input),\n  step_two(result),\n  step_three(result),\n  output(result)\n]\n```\n\n---\n\n## Decision Matrix\n\n| Input Pattern | Action | Output |\n|---------------|--------|--------|\n| Pattern A | Do X | Result |\n| Pattern B | Do Y | Result |\n| Pattern C | Do Z | Result |\n\n---\n\n## Examples\n\n**Good Input**: \"Specific, actionable request\"\n```\nResponse format\n```\n\n**Bad Input**: \"Vague, slop request\"\n```\nResponse format\n```\n\n---\n\n## Verification\n\n```\nλ(output).verify ⟺ [\n  check_one(output) AND\n  check_two(output) AND\n  check_three(output)\n]\n```\n\n**Before output, verify**:\n- [ ] Check one completed\n- [ ] Check two completed\n- [ ] Check three completed\n\n---\n\n## Eight Keys Reference\n\n| Key | Symbol | Signal | Anti-Pattern | Skill-Specific Application |\n|-----|--------|--------|--------------|---------------------------|\n| **Vitality** | φ | Organic, non-repetitive | Mechanical rephrasing | [Customize: How does this skill add fresh value?] |\n| **Clarity** | fractal | Explicit assumptions | \"Handle properly\" | [Customize: What bounds are defined?] |\n| **Purpose** | e | Actionable function | Abstract descriptions | [Customize: What concrete output?] |\n| **Wisdom** | τ | Foresight over speed | Premature optimization | [Customize: When should you measure first?] |\n| **Synthesis** | π | Holistic integration | Fragmented thinking | [Customize: How are components integrated?] |\n| **Directness** | μ | Cut pleasantries | Polite evasion | [Customize: How do you cut through noise?] |\n| **Truth** | ∃ | Favor reality | Surface agreement | [Customize: What data must be shown?] |\n| **Vigilance** | ∀ | Defensive constraint | Accepting manipulation | [Customize: What must be validated?] |\n\n---\n\n## Summary\n\n**When to use this skill**:\n1. Trigger condition\n2. Trigger condition\n3. Trigger condition\n\n**Framework eliminates slop, not adds process.**\n" name userPrompt name)))
+                            (make-directory skill-dir t)
+                            (write-region content nil skill-file)
+                            (format "Created skill: %s" skill-file))))
+            :description "Create a skill from a name and prompt."
+            :args (list '(:name "skillName" :type string :description "Skill name")
+                        '(:name "userPrompt" :type string :description "User prompt")
+                        '(:name "dir" :type string :description "Skills root directory" :optional t))))
 
-        ;; Finally, ensure the custom readonly tools are also here if not already included.
-        (when (boundp 'nucleus--gptel-agent-action-tools)
-          (seq-filter (lambda (tool)
-                        (not (member (gptel-tool-name tool)
-                                     nucleus--gptel-agent-action-tools)))
-                      nucleus-tools-readonly)))))
+          ;; Finally, ensure the custom readonly tools are also here if not already included.
+          (when (boundp 'nucleus--gptel-agent-action-tools)
+            (seq-filter (lambda (tool)
+                          (not (member (gptel-tool-name tool)
+                                       nucleus--gptel-agent-action-tools)))
+                        nucleus-tools-readonly)))))
 
   ;; Set the default tool list now that both lists are built.
   (setq-default gptel-tools nucleus-tools-readonly))
@@ -2048,10 +2048,10 @@ START and END are the response region positions passed by
                              (info (and fsm (gptel-fsm-info fsm))))
                         (plist-get info :error))
                     (error nil))))
-     (save-excursion
-       (goto-char end)
-       ;; Only add marker if not already present at EOB
-       (my/gptel--insert-prompt-marker-at-eob))
+    (save-excursion
+      (goto-char end)
+      ;; Only add marker if not already present at EOB
+      (my/gptel--insert-prompt-marker-at-eob))
     ;; Move cursor to end for immediate typing
     (goto-char (point-max))
     (when (search-backward "### " nil t)
@@ -2123,7 +2123,7 @@ START and END are the response region positions passed by
     :curl-args '("--http1.1")
     :models '((kimi-k2.5
                :request-params (:reasoning (:effort "high")
-                                :thinking  (:type "enabled")))
+                                           :thinking  (:type "enabled")))
               kimi-for-coding)))
 
 (defvar gptel--deepseek
@@ -2146,7 +2146,7 @@ START and END are the response region positions passed by
   `((,gptel--openrouter . anthropic/claude-sonnet-4.6)
     (,gptel--gemini     . gemini-3.1-pro-preview)
     (,gptel--moonshot   . kimi-k2.5)
-    (,gptel--copilot    . github-copilot/gpt-5-mini)
+    (,gptel--copilot    . github-copilot/gpt-5.2)
     (,gptel--cf-gateway . \@cf/zai-org/glm-4.7-flash)))
 
 (defun nucleus-resolve-model (&optional backend requested)
@@ -2466,7 +2466,7 @@ Fallback is approximate and may be smaller than actual context.
                                                  my/gptel-auto-compact-last-run)))))
     (and (not my/gptel-auto-compact-running)
          (or (null elapsed)
-              (>= elapsed my/gptel-auto-compact-min-interval)))))
+             (>= elapsed my/gptel-auto-compact-min-interval)))))
 
 (defun my/gptel--auto-compact-needed-p ()
   "Return non-nil when current buffer should be compacted."
@@ -2559,16 +2559,16 @@ Fallback is approximate and may be smaller than actual context.
       (when system
         (setq my/gptel-auto-compact-running t)
         (gptel-request (buffer-string)
-                       :system system
-                       :buffer buf
-                       :callback (lambda (response _info)
-                                   (with-current-buffer buf
-                                     (setq my/gptel-auto-compact-running nil)
-                                     (setq my/gptel-auto-compact-last-run (current-time))
-                                     (when (stringp response)
-                                       (let ((inhibit-read-only t))
-                                         (erase-buffer)
-                                         (insert response))))))))))
+          :system system
+          :buffer buf
+          :callback (lambda (response _info)
+                      (with-current-buffer buf
+                        (setq my/gptel-auto-compact-running nil)
+                        (setq my/gptel-auto-compact-last-run (current-time))
+                        (when (stringp response)
+                          (let ((inhibit-read-only t))
+                            (erase-buffer)
+                            (insert response))))))))))
 
 (add-hook 'gptel-post-response-functions #'my/gptel-auto-compact)
 
@@ -2771,7 +2771,7 @@ IMPORTANT: must call CALLBACK exactly once."
                               "No results."))))))
          (when (buffer-live-p (current-buffer))
            (kill-buffer (current-buffer)))))
-      nil t t)))
+     nil t t)))
 
 (defun my/gptel--extract-patch (text)
   "Extract all unified diff blocks from TEXT.
@@ -2924,17 +2924,17 @@ request is async, `gptel-with-preset' inside `gptel-agent--task'
 captures the values at call time)."
   (let* ((my/gptel--in-subagent-task t)
          (gptel-model (if my/gptel-subagent-model
-                         (if (stringp my/gptel-subagent-model)
-                             (intern my/gptel-subagent-model)
-                           my/gptel-subagent-model)
-                       gptel-model))
+                          (if (stringp my/gptel-subagent-model)
+                              (intern my/gptel-subagent-model)
+                            my/gptel-subagent-model)
+                        gptel-model))
          (gptel-backend (if my/gptel-subagent-model
-                             (let ((b my/gptel-subagent-backend))
-                               (or (and (symbolp b) (boundp b) (symbol-value b))
-                                   b
-                                   (and (boundp 'gptel--minimax) gptel--minimax)
-                                   gptel-backend))
-                           gptel-backend)))
+                            (let ((b my/gptel-subagent-backend))
+                              (or (and (symbolp b) (boundp b) (symbol-value b))
+                                  b
+                                  (and (boundp 'gptel--minimax) gptel--minimax)
+                                  gptel-backend))
+                          gptel-backend)))
     (when my/gptel-subagent-model
       (message "gptel subagent: using %s/%s"
                (gptel-backend-name gptel-backend) gptel-model))
@@ -3159,8 +3159,8 @@ Prefers `git apply` if in a git repository; otherwise uses `patch`."
       (progn
         (unless (or (executable-find "git") (executable-find "patch"))
           (error "ApplyPatch: neither 'git' nor 'patch' executable found"))
-         (unless (and (stringp patch) (not (string-empty-p (string-trim patch))))
-           (error "ApplyPatch: patch text is empty"))
+        (unless (and (stringp patch) (not (string-empty-p (string-trim patch))))
+          (error "ApplyPatch: patch text is empty"))
 
         (let* ((clean-patch (my/gptel--extract-patch patch))
                (patch-file (make-temp-file "gptel-patch-"))
@@ -3252,60 +3252,60 @@ Prefers `git apply` if in a git repository; otherwise uses `patch`."
                                                     backend (if (string-empty-p out) "(no output)" out)))))
                                 (t
                                  (funcall finish (format-failure status out)))))))))))
-                   (process-put proc 'my/gptel-managed t)
-                   proc))
+                 (process-put proc 'my/gptel-managed t)
+                 proc))
 
-               (do-apply ()
-                 ;; Start timeout only when actually applying.
-                 (setq timer
-                       (run-at-time
-                        my/gptel-applypatch-timeout nil
-                        (lambda ()
-                          (funcall finish
-                                   (format "ApplyPatch: timed out after %ss"
-                                           my/gptel-applypatch-timeout)))))
-                 (let ((check-args (if is-git
-                                       (list "apply" "--check" "--verbose" patch-file)
-                                     (list "--dry-run" "-p1" "-N" "-i" patch-file)))
-                       (apply-args (if is-git
-                                       (list "apply" "--verbose" "--whitespace=fix" patch-file)
-                                     (list "--batch" "-p1" "-N" "-i" patch-file))))
-                   (if my/gptel-applypatch-precheck
-                       (run-backend check-args "check"
-                                    (lambda () (run-backend apply-args "apply" nil)))
-                     (run-backend apply-args "apply" nil)))))
+            (do-apply ()
+                      ;; Start timeout only when actually applying.
+                      (setq timer
+                            (run-at-time
+                             my/gptel-applypatch-timeout nil
+                             (lambda ()
+                               (funcall finish
+                                        (format "ApplyPatch: timed out after %ss"
+                                                my/gptel-applypatch-timeout)))))
+                      (let ((check-args (if is-git
+                                            (list "apply" "--check" "--verbose" patch-file)
+                                          (list "--dry-run" "-p1" "-N" "-i" patch-file)))
+                            (apply-args (if is-git
+                                            (list "apply" "--verbose" "--whitespace=fix" patch-file)
+                                          (list "--batch" "-p1" "-N" "-i" patch-file))))
+                        (if my/gptel-applypatch-precheck
+                            (run-backend check-args "check"
+                                         (lambda () (run-backend apply-args "apply" nil)))
+                          (run-backend apply-args "apply" nil)))))
 
-            ;; When auto-preview is enabled (default): show diff and wait for
-            ;; the user to confirm (n) or abort (q) before applying.
-            ;; When nil (headless/automated): apply immediately without gate.
-            (if my/gptel-applypatch-auto-preview
-                (my/gptel--preview-patch-async
-                 patch (current-buffer) callback
-                 ;; on-confirm: user pressed n → run git apply
-                 (lambda (cb)
-                   ;; Rebind finish to use the provided callback so the
-                   ;; cl-labels closure sees the right callback reference.
-                   (setq finish (lambda (msg)
-                                  (unless done
-                                    (setq done t)
-                                    (when (timerp timer) (cancel-timer timer))
-                                    (when (buffer-live-p buf) (kill-buffer buf))
-                                    (when (file-exists-p patch-file)
-                                      (delete-file patch-file))
-                                    (funcall cb msg))))
-                   (do-apply))
-                 ;; on-abort: user pressed q → clean up and report
-                 (lambda (cb)
-                   (setq done t)
-                   (when (timerp timer) (cancel-timer timer))
-                   (when (buffer-live-p buf) (kill-buffer buf))
-                   (when (file-exists-p patch-file) (delete-file patch-file))
-                   (funcall cb "ApplyPatch aborted by user."))
-                 ;; header
-                 "  Apply patch? — n apply    q abort")
-              ;; Headless path: apply immediately, no preview gate.
-              (my/gptel--preview-patch-core patch nil)
-              (do-apply))))
+          ;; When auto-preview is enabled (default): show diff and wait for
+          ;; the user to confirm (n) or abort (q) before applying.
+          ;; When nil (headless/automated): apply immediately without gate.
+          (if my/gptel-applypatch-auto-preview
+              (my/gptel--preview-patch-async
+               patch (current-buffer) callback
+               ;; on-confirm: user pressed n → run git apply
+               (lambda (cb)
+                 ;; Rebind finish to use the provided callback so the
+                 ;; cl-labels closure sees the right callback reference.
+                 (setq finish (lambda (msg)
+                                (unless done
+                                  (setq done t)
+                                  (when (timerp timer) (cancel-timer timer))
+                                  (when (buffer-live-p buf) (kill-buffer buf))
+                                  (when (file-exists-p patch-file)
+                                    (delete-file patch-file))
+                                  (funcall cb msg))))
+                 (do-apply))
+               ;; on-abort: user pressed q → clean up and report
+               (lambda (cb)
+                 (setq done t)
+                 (when (timerp timer) (cancel-timer timer))
+                 (when (buffer-live-p buf) (kill-buffer buf))
+                 (when (file-exists-p patch-file) (delete-file patch-file))
+                 (funcall cb "ApplyPatch aborted by user."))
+               ;; header
+               "  Apply patch? — n apply    q abort")
+            ;; Headless path: apply immediately, no preview gate.
+            (my/gptel--preview-patch-core patch nil)
+            (do-apply))))
     (error (funcall callback (format "Error initiating patch application: %s" (error-message-string err))))))
 
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt)
@@ -3351,8 +3351,8 @@ AGENT-NAME must exist in `gptel-agent--agents`.  DESCRIPTION is a short
    :confirm t)
   "Custom RunAgent tool for delegation.")
 
- ;; --- Tool Definitions (Read-Only) ---
- ;; NOTE: use `setq` so re-evaluating this buffer actually refreshes the tool list.
+;; --- Tool Definitions (Read-Only) ---
+;; NOTE: use `setq` so re-evaluating this buffer actually refreshes the tool list.
 
 ;; Tool lists are canonical in nucleus-config.el
 
@@ -3745,7 +3745,7 @@ buffers) so each tool's :confirm flag decides."
          (orig-func (plist-get slots :function))
          (async (plist-get slots :async))
          (orig-confirm (plist-get slots :confirm)))
-         
+    
     ;; Wrap the execution function to check the blacklist first
     (setq slots
           (plist-put slots :function
@@ -3758,7 +3758,7 @@ buffers) so each tool's :confirm flag decides."
                          (if-let ((err (my/gptel-tool-acl-check name args)))
                              (error "%s" err) ;; gptel catches `error` and sends string to LLM
                            (apply orig-func args))))))
-                           
+    
     ;; Wrap the confirmation flag to enforce workspace boundaries
     (setq slots
           (plist-put slots :confirm
@@ -3766,7 +3766,7 @@ buffers) so each tool's :confirm flag decides."
                        (or (my/gptel-tool-acl-needs-confirm name args)
                            (and (functionp orig-confirm) (apply orig-confirm args))
                            (and (not (functionp orig-confirm)) orig-confirm)))))
-                           
+    
     (apply orig-fn slots)))
 
 (advice-add 'gptel-make-tool :around #'my/gptel-tool-router-advice)

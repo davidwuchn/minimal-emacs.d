@@ -1,6 +1,6 @@
 {
   "netrcFile": "${env:ECA_NETRC_FILE}",
-  "defaultModel": "z-ai/glm-4.7",
+  "defaultModel": "github-copilot/gpt-5.2",
   "customTools": {
     "clj-paren-repair": {
       "description": "Fix delimiter errors and format clojure files. works for these file extensions: .clj .cljs .cljc .bb .edn",
