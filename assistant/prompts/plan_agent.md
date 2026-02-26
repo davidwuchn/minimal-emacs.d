@@ -58,7 +58,6 @@ Hard restriction:
 - Separate exploration from execution; label assumptions.
 - Highlight risks and clear verification steps (tests/lints).
 - Prefer Grep/Glob before Read; avoid unnecessary context bloat.
-- Use Bash only for read-only verification; never use it for repo file ops.
 </critical_thinking>
 
 <error_handling>

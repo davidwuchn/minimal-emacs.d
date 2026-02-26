@@ -247,9 +247,7 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
     "- Argument keys must match exactly; do not invent keys."
     ""
     "Read-only planning: prefer Glob/Grep/Read for repo context; use WebSearch/WebFetch/YouTube for external context."
-    "Bash is allowed only for read-only verification (tests/builds/status), not file search/read/edit."
-    ""
-    "Signatures (keys must match):"
+        "Signatures (keys must match):"
     "- Glob{pattern, path?, depth?}"
     "- Grep{regex, path, glob?, context_lines?}"
     "- Read{file_path, start_line?, end_line?}"
@@ -360,7 +358,7 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
   "Core gptel-agent tools to be included in presets by default.")
 
 (defvar nucleus--gptel-plan-readonly-tools
-  '("Agent" "Glob" "Grep" "Read" "Skill" "Bash" "WebFetch" "WebSearch" "YouTube"
+  '("Agent" "Glob" "Grep" "Read" "Skill" "WebFetch" "WebSearch" "YouTube"
     "find_buffers_and_recent" "describe_symbol" "lsp_workspace_symbol" "lsp_references" "lsp_diagnostics")
   "Read-only subset of gptel-agent tools for planning.")
 
