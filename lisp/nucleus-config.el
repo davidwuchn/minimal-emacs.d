@@ -201,8 +201,17 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
     "Selection & safety:"
     "- File ops: prefer standard tools (Glob/Grep/Read/Edit/Insert/Write/Mkdir)."
     "- Bash: use for non-file ops (git, tests/builds, package managers, system inspection)."
-    "- For large/risky changes: preview diff first, then apply."
+    "- For large/risky changes: use preview_file_change or preview_patch first, then apply."
     "- Prefer parallel tool calls when independent; sequence when dependent."
+    ""
+    "Signatures (keys must match):"
+    "- Edit{path, old_str?, new_str, diff}"
+    "- Insert{path, line_number, new_str}"
+    "- Write{path, filename, content}"
+    "- Mkdir{parent, name}"
+    "- ApplyPatch{patch}"
+    "- preview_file_change{path, original?, replacement}"
+    "- preview_patch{patch}"
     "</tool_usage_policy>")
    "\n")
   "Compact, schema-faithful tool usage policy for the action agent.")
