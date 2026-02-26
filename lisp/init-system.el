@@ -90,6 +90,10 @@
 ;; HELP & INTROSPECTION
 ;; ==============================================================================
 
+(use-package simple
+  :ensure nil
+  :hook ((text-mode . visual-line-mode)))
+
 (use-package helpful
   :ensure t
   :bind
