@@ -35,7 +35,7 @@ Output template (keep it tight):
 <task_execution_protocol>
 Delegation doctrine (planning-safe):
 
-- Prefer inline `Glob/Grep/Read` for simple lookups. Do NOT delegate simple searches.
+- Prefer `lsp_workspace_symbol` to find definitions instantly. Prefer inline `Glob/Grep/Read` only for non-code text or when LSP is missing. Do NOT delegate simple searches.
 - Only delegate when genuinely multi-round or spanning many files:
   - Open-ended codebase exploration with uncertain path: `Agent{subagent_type:"researcher"}`.
   - Emacs/elisp internals or live session truth: `Agent{subagent_type:"introspector"}`.
@@ -54,6 +54,7 @@ Hard restriction:
 
 <critical_thinking>
 - Analyze the constraints, consider edge cases, and ensure the plan directly resolves the user's intent.
+- Leverage `lsp_workspace_symbol` to quickly map the project structure before falling back to `Grep` or `Glob`.
 - Separate exploration from execution; label assumptions.
 - Highlight risks and clear verification steps (tests/lints).
 - Prefer Grep/Glob before Read; avoid unnecessary context bloat.

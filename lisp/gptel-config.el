@@ -136,16 +136,20 @@ Two things are done for each offending entry:
               (tools (plist-get info :tools)))
     (let (pruned)
       (dolist (tc tool-use)
-        (let ((name (plist-get tc :name)))
-          (when (and (not (plist-get tc :result))
-                     (or (my/gptel--nil-tool-call-p tc)
-                         (not (cl-find-if
-                               (lambda (ts) (equal (gptel-tool-name ts) name))
-                               tools))))
-            (message "gptel: skipping malformed tool call (name=%S)" name)
-            (plist-put tc :result
-                       (format "Error: unknown or nil tool %S called by model" name))
-            (push tc pruned))))
+        (let* ((name (plist-get tc :name))
+               (matched-tool (and (stringp name)
+                                  (cl-find-if (lambda (ts) (string-equal-ignore-case (gptel-tool-name ts) name)) tools))))
+          (if matched-tool
+              (let ((correct-name (gptel-tool-name matched-tool)))
+                (unless (string= name correct-name)
+                  (message "gptel: repairing tool call casing %S -> %S" name correct-name)
+                  (plist-put tc :name correct-name)))
+            ;; Not matched: either nil or hallucinated
+            (when (not (plist-get tc :result))
+              (message "gptel: skipping malformed tool call (name=%S)" name)
+              (plist-put tc :result
+                         (format "Error: unknown or nil tool %S called by model" name))
+              (push tc pruned)))))
       ;; Prune offending entries so gptel--parse-tool-results never sees them.
       ;; This prevents orphaned tool role messages (tool_call_id=null) that
       ;; cause 400 errors when the assistant message has no matching tool_calls.
@@ -174,6 +178,7 @@ Two things are done for each offending entry:
   ;; Reasoning/thinking content preservation
   (advice-add 'gptel--handle-wait         :after  #'my/gptel--reset-reasoning-block)
   (advice-add 'gptel-curl--get-args       :before #'my/gptel--pre-serialize-inject-reasoning)
+  (advice-add 'gptel-curl--get-args       :before #'my/gptel--pre-serialize-inject-noop)
   (advice-add 'gptel--inject-prompt       :after  #'my/gptel--inject-prompt-strip-nil-tools)
   (advice-add 'gptel--inject-prompt       :after  #'my/gptel--inject-prompt-patch-reasoning))
 
@@ -649,7 +654,32 @@ that turn — the API requires presence, not a non-empty value."
 ;; Pre-serialization safety sweep: patch any remaining gaps right before JSON
 ;; encoding.  Covers the buffer re-parse path and any edge cases the streaming
 ;; injection misses (e.g. non-streaming responses, buffer-reloads).
-(defun my/gptel--pre-serialize-inject-reasoning (info _token)
+
+
+(defun my/gptel--pre-serialize-inject-noop (info _token)
+  "Before-advice on `gptel-curl--get-args': inject dummy _noop tool for LiteLLM/Anthropic.
+If tool_calls are present in message history but no active tools are selected,
+many proxies crash with 400 Bad Request. We inject a dummy to satisfy validation."
+  (when-let* ((data  (plist-get info :data))
+              (msgs  (plist-get data :messages)))
+    (let* ((tools (plist-get data :tools))
+           (has-tools (and tools (> (length tools) 0))))
+      (unless has-tools
+        (let ((has-history-tools nil))
+          (cl-loop for msg across msgs
+                   do (when (and (listp msg)
+                                 (or (plist-get msg :tool_calls)
+                                     (equal (plist-get msg :role) "tool")))
+                        (setq has-history-tools t)
+                        (cl-return)))
+          (when has-history-tools
+            (message "gptel: history has tool_calls but no tools active; injecting dummy _noop")
+            (let ((noop-tool
+                   (list :type "function"
+                         :function (list :name "_noop"
+                                         :description "Placeholder proxy compatibility tool"
+                                         :parameters (list :type "object" :properties (list :_dummy (list :type "string")))))))
+              (plist-put info :data (plist-put data :tools (vector noop-tool))))))))))(defun my/gptel--pre-serialize-inject-reasoning (info _token)
   "Before-advice on `gptel-curl--get-args': ensure reasoning_content on tool-call messages.
 For Moonshot (and any model with :thinking/:reasoning request-params), every
 assistant message that contains tool_calls must carry a reasoning_content field."
@@ -1835,23 +1865,29 @@ This advice forces the final transition."
   "Number of times to retry failed gptel requests.")
 
 (defun my/gptel-auto-retry (orig-fn machine &optional new-state)
-  "Intercept FSM transitions to ERRS and retry the request if transient."
+  "Intercept FSM transitions to ERRS and retry the request if transient.
+Implements OpenCode-style exponential backoff for network/overload errors."
   (unless new-state (setq new-state (gptel--fsm-next machine)))
   (let* ((info (gptel-fsm-info machine))
          (error-data (plist-get info :error))
+         (http-status (plist-get info :http-status))
          (retries (or (plist-get info :retries) 0)))
     (if (and (eq new-state 'ERRS)
              (< retries my/gptel-max-retries)
              (or (and (stringp error-data)
-                      (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error" error-data))
+                      (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
+                 (and (numberp http-status) (memq http-status '(408 429 500 502 503 504)))
                  ;; Catch dictionary format errors from OpenCode style backend responses
                  (and (listp error-data)
-                      (string-match-p "overloaded\\|too many requests\\|rate limit" 
+                      (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit" 
                                       (downcase (or (plist-get error-data :message) ""))))))
-        (progn
-          (message "gptel: API failed with '%s'. Retrying (%d/%d)..." 
-                   (if (stringp error-data) (string-trim error-data) "Transient API Error")
-                   (1+ retries) my/gptel-max-retries)
+        (let* ((base-delay 2.0)
+               (factor 2.0)
+               (delay (min 30.0 (* base-delay (expt factor retries)))))
+          (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..." 
+                   (if (stringp error-data) (string-trim error-data)
+                     (if http-status (format "HTTP %s" http-status) "Transient API Error"))
+                   (1+ retries) my/gptel-max-retries delay)
           
           ;; Clean up partial buffer insertions if any
           (when-let* ((start-marker (plist-get info :position))
@@ -1869,10 +1905,13 @@ This advice forces the final transition."
           (plist-put info :http-status nil)
           (plist-put info :retries (1+ retries))
           
-          ;; Sleep slightly before retry to avoid rapid-fire rate limiting
-          (sleep-for 1.5)
-          
-          (funcall orig-fn machine 'WAIT))
+          ;; Schedule the FSM transition asynchronously (non-blocking exponential backoff)
+          (run-at-time delay nil
+                       (lambda (m f-orig)
+                         (funcall f-orig m 'WAIT))
+                       machine orig-fn)
+          ;; Return nil to abort the current transition to ERRS and let the timer take over
+          nil)
       (funcall orig-fn machine new-state))))
 
 (advice-add 'gptel--fsm-transition :around #'my/gptel-auto-retry)
