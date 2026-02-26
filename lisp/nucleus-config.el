@@ -231,9 +231,6 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
     "- list_skills{dir?}"
     "- load_skill{name, dir?}"
     "- create_skill{skillName, userPrompt, dir?}"
-    "- lsp_workspace_symbol{query}"
-    "- lsp_references{path, line, character}"
-    "- lsp_diagnostics{}"
     "</tool_usage_policy>")
    "\n")
   "Compact, schema-faithful tool usage policy for the action agent.")
@@ -258,9 +255,6 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
     "- Agent{subagent_type, description, prompt}"
     "- find_buffers_and_recent{pattern}"
     "- describe_symbol{sym}"
-    "- lsp_workspace_symbol{query}"
-    "- lsp_references{path, line, character}"
-    "- lsp_diagnostics{}"
     ""
     "Disallowed in plan mode (even if known elsewhere):"
     "- Edit/Insert/Write/Mkdir/ApplyPatch/preview_*"
@@ -353,12 +347,12 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
                        (assq-delete-all 'Plan gptel-directives))))))))
 
 (defvar nucleus--gptel-agent-17-tools
-  '("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep" "Insert" "Mkdir" "Read" "RunAgent" "Skill" "TodoWrite" "WebFetch" "WebSearch" "Write" "YouTube" "lsp_workspace_symbol" "lsp_references" "lsp_diagnostics")
+  '("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep" "Insert" "Mkdir" "Read" "RunAgent" "Skill" "TodoWrite" "WebFetch" "WebSearch" "Write" "YouTube")
   "Core gptel-agent tools to be included in presets by default.")
 
 (defvar nucleus--gptel-plan-readonly-tools
   '("Agent" "Glob" "Grep" "Read" "Skill" "WebFetch" "WebSearch" "YouTube"
-    "find_buffers_and_recent" "describe_symbol" "lsp_workspace_symbol" "lsp_references" "lsp_diagnostics")
+    "find_buffers_and_recent" "describe_symbol")
   "Read-only subset of gptel-agent tools for planning.")
 
 (defvar nucleus--gptel-agent-nucleus-tools
