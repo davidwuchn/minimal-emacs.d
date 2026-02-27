@@ -208,15 +208,14 @@ Call this after gptel-agent-tools loads."
             :category "gptel-agent"
             :function #'my/find-buffers-and-recent
             :description "Find open buffers and recent files matching a pattern"
-            :args (list '(:name "pattern" :type string))
-
-            (gptel-make-tool
-             :name "describe_symbol"
-             :function (lambda (sym)
-                         (describe-symbol (intern sym))
-                         (with-current-buffer "*Help*" (buffer-string)))
-             :description "Show Emacs Lisp documentation for a symbol"
-             :args (list '(:name "sym" :type string))))))))
+            :args (list '(:name "pattern" :type string)))
+           (gptel-make-tool
+            :name "describe_symbol"
+            :function (lambda (sym)
+                        (describe-symbol (intern sym))
+                        (with-current-buffer "*Help*" (buffer-string)))
+            :description "Show Emacs Lisp documentation for a symbol"
+            :args (list '(:name "sym" :type string)))))))
 
   (setq my/gptel-tools-action
         (my/gptel--dedup-tools-by-name
@@ -274,5 +273,10 @@ Call this after gptel-agent-tools loads."
 ;;; Footer
 
 (provide 'gptel-tools)
+
+;;; Auto-initialization
+
+(with-eval-after-load 'gptel-agent-tools
+  (gptel-tools-setup))
 
 ;;; gptel-tools.el ends here
