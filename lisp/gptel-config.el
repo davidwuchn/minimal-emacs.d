@@ -2942,14 +2942,14 @@ is called with a timeout error."
   :type 'integer
   :group 'my/gptel-subagent)
 
-(defcustom my/gptel-subagent-model 'minimax-m2.5
+(defcustom my/gptel-subagent-model 'qwen3.5-plus
   "Model to use for delegated subagents (Agent/RunAgent).
 When non-nil, subagent requests use this model instead of the parent's.
 Must be a symbol matching a model in `my/gptel-subagent-backend'."
   :type '(choice (const :tag "Same as parent" nil) symbol)
   :group 'my/gptel-subagent)
 
-(defcustom my/gptel-subagent-backend nil
+(defcustom my/gptel-subagent-backend 'gptel--dashscope
   "Backend for delegated subagents.
 When nil, defaults to `gptel--gemini'.  Set to a backend variable
 like `gptel--openrouter' to route subagent traffic differently."
