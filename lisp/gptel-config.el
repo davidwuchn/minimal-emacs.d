@@ -2190,7 +2190,7 @@ START and END are the response region positions passed by
   `((,gptel--openrouter . anthropic/claude-sonnet-4.6)
     (,gptel--gemini     . gemini-3.1-pro-preview)
     (,gptel--moonshot   . kimi-k2.5)
-    (,gptel--copilot    . github-copilot/gpt-5.2)
+    (,gptel--copilot    . github-copilot/gpt-5.3-codex)
     (,gptel--cf-gateway . \@cf/zai-org/glm-4.7-flash)
     (,gptel--dashscope  . qwen3.5-plus)))
 
