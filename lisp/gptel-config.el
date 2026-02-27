@@ -2142,15 +2142,7 @@ START and END are the response region positions passed by
     :endpoint "/v1/chat/completions"
     :key (lambda () (gptel-api-key-from-auth-source "coding.dashscope.aliyuncs.com" "api"))
     :stream t
-    :models '((qwen3.5-plus
-               :request-params (:thinking (:type "enabled" :budgetTokens 1024)))
-              (MiniMax-M2.5
-               :request-params (:thinking (:type "enabled" :budgetTokens 1024)))
-              (glm-5
-               :request-params (:thinking (:type "enabled" :budgetTokens 1024)))
-              (kimi-k2.5
-               :request-params (:thinking (:type "enabled" :budgetTokens 1024)))
-              deepseek-v3.2)))
+    :models '(qwen-coder-plus qwen-coder-turbo qwen2.5-coder-32b-instruct)))
 
 (defvar gptel--moonshot
   (gptel-make-openai "Moonshot"
