@@ -120,6 +120,46 @@
     }
   },
   "providers": {
+    "dashscope": {
+      "api": "openai-chat",
+      "url": "https://coding.dashscope.aliyuncs.com/v1",
+      "keyRc": "coding.dashscope.aliyuncs.com",
+      "models": {
+        "qwen3.5-plus": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "MiniMax-M2.5": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "glm-5": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "kimi-k2.5": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "deepseek-v3.2": {}
+      }
+    },
     "openrouter": {
       "api": "openai-chat",
       "url": "https://openrouter.ai/api/v1",
