@@ -3667,7 +3667,7 @@ buffer-local variables."
   (force-mode-line-update t))
 
 ;; --- Configuration Defaults ---
-;; gptel-agent buffers use Gemini + gemini-3.1-pro-preview (set via preset).
+;; gptel-agent buffers use DashScope + qwen3.5-plus (set via preset).
 ;; Plain gptel buffers use Moonshot + kimi-k2.5 (set via mode hook).
 ;; The global default drives both the gptel-agent preset resolution and
 ;; the buffer-name prompt in M-x gptel.  Set it to Moonshot so the prompt

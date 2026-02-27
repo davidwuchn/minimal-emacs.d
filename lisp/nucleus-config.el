@@ -311,7 +311,7 @@ Keep this list nil or small for token efficiency.")
   "Make gptel-agent's Plan/Agent presets use nucleus system prompts and full toolsets."
   (when (and (fboundp 'gptel-get-preset)
              (fboundp 'gptel-make-preset))
-      (let* ((agent-backend (and (boundp 'gptel--copilot) gptel--copilot))
+      (let* ((agent-backend (and (boundp 'gptel--dashscope) gptel--dashscope))
             (preferred-model (and (fboundp 'my/gptel-resolve-model) agent-backend
                                   (my/gptel-resolve-model agent-backend)))
            (preferred-backend agent-backend))
