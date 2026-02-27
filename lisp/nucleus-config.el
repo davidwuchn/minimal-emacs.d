@@ -257,7 +257,7 @@ preview + skill management helpers.")
   '("Bash" "Edit" "ApplyPatch" "preview_file_change" "Grep" "Glob" "Read" "Write" "describe_symbol" "find_buffers_and_recent" "list_skills" "load_skill" "create_skill" "WebSearch" "WebFetch")
   "Tools whose supplemental snippets are injected into `nucleus-gptel-agent`.
 
-Keep this list nil or small for token efficiency.")
+All tool lambda signatures injected for comprehensive context without token bloat.")
 
 (defvar my/gptel-agent-action-tools
   nucleus--gptel-agent-nucleus-tools
