@@ -183,7 +183,7 @@ Call this after gptel-agent-tools loads."
                                                         :activeForm (:type string :minLength 1)))))
      :category "gptel-agent")
 
-    ;; Skill tool
+     ;; Skill tool
     (gptel-make-tool
      :name "Skill"
      :function #'my/gptel--skill-tool
@@ -191,7 +191,47 @@ Call this after gptel-agent-tools loads."
      :args '((:name "skill" :type string)
              (:name "args" :type string :optional t))
      :category "gptel-agent"
-     :include t))
+     :include t)
+
+    ;; Skill management tools
+    (gptel-make-tool
+     :name "list_skills"
+     :function (lambda (&optional dir)
+                 (let* ((dir (or dir (expand-file-name "assistant/skills/" user-emacs-directory)))
+                        (skills (when (file-directory-p dir)
+                                  (seq-filter (lambda (d) (file-directory-p (expand-file-name d dir)))
+                                              (directory-files dir)))))
+                   (if skills
+                       (format "Available skills:\n%s" (string-join (sort skills 'string-lessp) "\n"))
+                     "No skills found.")))
+     :description "List available skills in the skills directory."
+     :args '((:name "dir" :type string :optional t))
+     :category "gptel-agent")
+    (gptel-make-tool
+     :name "load_skill"
+     :function #'my/gptel--skill-tool
+     :description "Load a skill by name (alias for Skill tool)."
+     :args '((:name "name" :type string)
+             (:name "dir" :type string :optional t))
+     :category "gptel-agent")
+    (gptel-make-tool
+     :name "create_skill"
+     :function (lambda (skill-name user-prompt &optional dir)
+                 (let* ((dir (or dir (expand-file-name "assistant/skills/" user-emacs-directory)))
+                        (skill-dir (expand-file-name skill-name dir)))
+                   (unless (file-directory-p dir)
+                     (make-directory dir t))
+                   (unless (file-directory-p skill-dir)
+                     (make-directory skill-dir t))
+                   (with-temp-file (expand-file-name "SKILL.md" skill-dir)
+                     (insert (format "# Skill: %s\n\n%s\n" skill-name user-prompt)))
+                   (format "Created skill: %s" skill-dir)))
+     :description "Create a new skill with the given name and prompt."
+     :args '((:name "skillName" :type string)
+             (:name "userPrompt" :type string)
+             (:name "dir" :type string :optional t))
+     :category "gptel-agent"
+     :confirm t))
 
   ;; Build tool lists
   (setq my/gptel-tools-readonly
