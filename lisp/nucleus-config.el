@@ -182,17 +182,6 @@ Only applies when a gptel--preset is active in the current buffer."
            (sys (plist-get plist :system)))
       (and (stringp sys) (string-trim sys)))))
 
-(defun nucleus--replace-tag-block (base tag new-block)
-  "Replace <TAG>...</TAG> in BASE with NEW-BLOCK.
-
-If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
-  (if (and (stringp base) (stringp tag) (stringp new-block))
-      (let ((re (format "<%s>\\(?:.\\|%c\\)*?</%s>"
-                        (regexp-quote tag) ?\n (regexp-quote tag))))
-        (if (string-match re base)
-            (replace-regexp-in-string re new-block base t t)
-          base))
-    base))
 
 
 
@@ -201,24 +190,10 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
 
 
 
-(defconst nucleus--gptel-tool-usage-policy-introspector
-  (string-join
-   (list
-    "<tool_usage_policy>"
-    "Introspection-only: prefer completions/discovery tools, then documentation, then source."
-    "Use Eval only for small checks and to confirm live values."
-    "</tool_usage_policy>")
-   "\n")
-  "Compact tool usage policy for the introspector agent.")
 
-(defconst nucleus--gptel-tool-usage-policy-researcher
-  (string-join
-   (list
-    "<tool_usage_policy>"
-    "Read-only research: use Glob/Grep/Read for repo context; WebSearch/WebFetch/YouTube for external context."
-    "</tool_usage_policy>")
-   "\n")
-  "Compact tool usage policy for the researcher agent.")
+
+
+
 
 (defun nucleus--register-gptel-directives ()
   "Register nucleus gptel-agent system prompts as gptel directives."
@@ -378,20 +353,20 @@ Keep this list nil or small for token efficiency.")
               ((stringp sys) sys)
               ((and (listp sys) (seq-every-p #'stringp sys)) (string-join sys "\n"))
               (t nil)))
-           (patch-agent (name tools policy)
+           (patch-agent (name tools)
              (when-let ((cell (assoc name gptel-agent--agents)))
                (when tools
                  (setf (plist-get (cdr cell) :tools) tools))
                (when-let* ((sys (plist-get (cdr cell) :system))
                            (sys (sys->string sys))
-                           (sys (nucleus--replace-tag-block sys "tool_usage_policy" policy)))
+                           sys)
                  ;; Store back as a string to avoid mixed representations.
                  (setf (plist-get (cdr cell) :system) sys)))))
-        (patch-agent "executor" nucleus--gptel-agent-nucleus-tools nil)
+        (patch-agent "executor" nucleus--gptel-agent-nucleus-tools)
         ;; Do not override researcher tools; keep them minimal.
-        (patch-agent "researcher" nil nucleus--gptel-tool-usage-policy-researcher)
+        (patch-agent "researcher" nil)
         ;; Do not override introspector tools (it relies on `introspection`).
-        (patch-agent "introspector" nil nucleus--gptel-tool-usage-policy-introspector)))))
+        (patch-agent "introspector" nil)))))
 
 (defun nucleus--ensure-directory (path)
   "Return PATH coerced to an existing directory path."
