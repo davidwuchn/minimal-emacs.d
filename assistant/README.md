@@ -90,7 +90,7 @@ Two presets, toggled with `nucleus-agent-toggle` (`M-x nucleus-agent-toggle` or 
 
 | Preset | Tools | System prompt |
 |--------|-------|---------------|
-| `gptel-plan` | Glob, Grep, Read, WebSearch, WebFetch, YouTube, Agent, Skill, `find_buffers_and_recent`, `describe_symbol` | `plan_agent.md` |
+| `gptel-plan` | Glob, Grep, Read, WebSearch, WebFetch, YouTube, Agent, Skill, Eval | `plan_agent.md` |
 | `gptel-agent` | All 17 core tools + preview/skill helpers | `code_agent.md` |
 
 Tool lists are defined in `nucleus-config.el`:

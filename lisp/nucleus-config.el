@@ -240,8 +240,7 @@ Only applies when a gptel--preset is active in the current buffer."
   "Core gptel-agent tools to be included in presets by default.")
 
 (defvar my/gptel-plan-readonly-tools
-  '("Agent" "Bash" "Glob" "Grep" "Read" "Skill" "WebFetch" "WebSearch" "YouTube"
-    "find_buffers_and_recent" "describe_symbol" "Eval")
+  '("Agent" "Bash" "Glob" "Grep" "Read" "Skill" "WebFetch" "WebSearch" "YouTube" "Eval")
   "Read-only subset of gptel-agent tools for planning.")
 
 (defvar nucleus--gptel-agent-nucleus-tools
@@ -254,7 +253,7 @@ This is the canonical nucleus agent experience: the core tools plus
 preview + skill management helpers.")
 
 (defvar nucleus--gptel-agent-snippet-tools
-  '("Bash" "Edit" "ApplyPatch" "preview_file_change" "Grep" "Glob" "Read" "Write" "describe_symbol" "find_buffers_and_recent" "list_skills" "load_skill" "create_skill" "WebSearch" "WebFetch")
+  '("Bash" "Edit" "ApplyPatch" "preview_file_change" "Grep" "Glob" "Read" "Write" "list_skills" "load_skill" "create_skill" "WebSearch" "WebFetch")
   "Tools whose supplemental snippets are injected into `nucleus-gptel-agent`.
 
 All tool lambda signatures injected for comprehensive context without token bloat.")
@@ -430,8 +429,6 @@ gptel-config loads so custom tools and nucleus presets are in place."
     (Read                . "read_file.md")
     (Grep                . "grep.md")
     (Glob                . "directory_tree.md")
-    (find_buffers_and_recent . "find_buffers_and_recent.md")
-    (describe_symbol       . "describe_symbol.md")
     (WebSearch            . "web_search.md")
     (WebFetch             . "read_url.md")
     (compact_chat          . "compact_chat.md")

@@ -1,4 +1,8 @@
-;;; init-tools.el --- Magit, UI tools, AI, and miscellany -*- lexical-binding: t; -*-
+;;; init-tools.el --- Magit, UI tools, and miscellany -*- lexical-binding: t; -*-
+
+;;; Commentary:
+;; General-purpose tools: Magit, UI enhancements, Dirvish, EAT terminal.
+;; AI assistants (gptel, ECA) are configured separately in `init-ai.el'.
 
 (provide 'init-tools)
 
@@ -57,34 +61,7 @@
   (eat-eshell-visual-command-mode))
 
 ;; ==============================================================================
-;; AI ASSISTANT (gptel + nucleus)
+;; AI ASSISTANTS
 ;; ==============================================================================
 
-;; Defer gptel loading until explicitly invoked
-(use-package gptel
-  :ensure t
-  :commands (gptel gptel-send gptel-menu gptel-other-frame)
-  :defer t)
-
-(use-package gptel-agent
-  :ensure t
-  :after gptel)
-
-;; After they are installed, load the custom configurations
-(with-eval-after-load 'gptel
-  (require 'gptel-config)
-  (require 'nucleus-config))
-
-;; ==============================================================================
-;; EDITOR CODE ASSISTANT (ECA)
-;; ==============================================================================
-
-(use-package eca
-  :ensure t
-  ;; Enable inline ghost-text code completion in programming modes
-  :hook (prog-mode . eca-completion-mode)
-  :custom
-  ;; Delay before triggering inline completion (in seconds)
-  (eca-completion-idle-delay 0.5)
-  :config
-  (require 'eca-security))
+(require 'init-ai)
