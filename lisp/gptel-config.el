@@ -390,26 +390,41 @@ Also ensures the system message is applied buffer-locally, not globally."
 (defvar my/gptel--transient-origin-buffer nil
   "Buffer that opened the gptel-system-prompt transient.")
 
+(defvar my/gptel--transient-origin-preset nil
+  "Preset from the buffer that opened the gptel-system-prompt transient.
+Used to show different directive menus for gptel-agent vs regular gptel.")
+
 (with-eval-after-load 'gptel-transient
   (advice-add 'gptel--setup-directive-menu
               :around #'my/gptel--filter-directive-menu)
   (advice-add 'gptel-system-prompt :before
               (lambda (&rest _)
-                (setq my/gptel--transient-origin-buffer (current-buffer))))
+                (setq my/gptel--transient-origin-buffer (current-buffer))
+                (setq my/gptel--transient-origin-preset
+                      (and (boundp 'gptel--preset) gptel--preset))))
   (advice-add 'gptel--suffix-system-message
               :around #'my/gptel--suffix-system-message-in-buffer))
 
 (defvar gptel-directives)
+
 (defun my/gptel--filter-directive-menu (orig sym msg &optional external)
-  "Around-advice: hide internal nucleus directives from the transient picker."
-  (let* ((filtered (seq-remove (lambda (e) (memq (car e) (if (boundp 'my/gptel-hidden-directives) my/gptel-hidden-directives nil)))
-                               gptel-directives))
+  "Around-advice: filter directives based on whether we're in gptel-agent or regular gptel.
+For gptel-agent/gptel-plan buffers: show only nucleus-gptel-agent and nucleus-gptel-plan.
+For regular gptel buffers: show all directives except hidden ones."
+  (let* ((is-agent-buffer (memq my/gptel--transient-origin-preset '(gptel-plan gptel-agent)))
+         (filtered
+          (if is-agent-buffer
+              (seq-filter (lambda (e) (memq (car e) '(nucleus-gptel-plan nucleus-gptel-agent)))
+                          gptel-directives)
+            (seq-remove (lambda (e) (memq (car e) (if (boundp 'my/gptel-hidden-directives) my/gptel-hidden-directives nil)))
+                        gptel-directives)))
          (old-directives gptel-directives))
     (unwind-protect
         (progn
           (setq gptel-directives filtered)
           (funcall orig sym msg external))
       (setq gptel-directives old-directives))))
+
 
 (defun my/gptel--csv-parse-row ()
   "Parse one RFC-4180 CSV row at point, return list of field strings.
