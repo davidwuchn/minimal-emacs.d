@@ -383,9 +383,9 @@ Also ensures the system message is applied buffer-locally, not globally."
            (gptel--set-buffer-locally t))
       (with-current-buffer buf
         (gptel--edit-directive 'gptel--system-message
-                               :setup #'activate-mark
-                               :buffer buf
-                               :callback (lambda (_) (call-interactively #'gptel-menu)))))))
+          :setup #'activate-mark
+          :buffer buf
+          :callback (lambda (_) (call-interactively #'gptel-menu)))))))
 
 (defvar my/gptel--transient-origin-buffer nil
   "Buffer that opened the gptel-system-prompt transient.")
@@ -490,7 +490,7 @@ Advances point to the start of the next row."
             (gptel--set-with-scope
              'gptel--system-message prompt gptel--set-buffer-locally)
             (gptel--edit-directive 'gptel--system-message
-                                   :callback (lambda (_) (call-interactively #'gptel-menu)))))
+              :callback (lambda (_) (call-interactively #'gptel-menu)))))
       (message "No prompts available.")))
 
   ;; Replace upstream gptel--crowdsourced-prompts with a version that uses
@@ -2139,10 +2139,18 @@ START and END are the response region positions passed by
 (defvar gptel--dashscope
   (gptel-make-openai "DashScope"
     :host "coding.dashscope.aliyuncs.com"
-    :endpoint "/v1"
+    :endpoint "/v1/chat/completions"
     :key (lambda () (gptel-api-key-from-auth-source "coding.dashscope.aliyuncs.com" "api"))
     :stream t
-    :models '(glm-5 MiniMax-M2.5 kimi-k2.5 deepseek-v3.2 qwen3.5-plus)))
+    :models '((qwen3.5-plus
+               :request-params (:thinking (:type "enabled" :budgetTokens 1024)))
+              (MiniMax-M2.5
+               :request-params (:thinking (:type "enabled" :budgetTokens 1024)))
+              (glm-5
+               :request-params (:thinking (:type "enabled" :budgetTokens 1024)))
+              (kimi-k2.5
+               :request-params (:thinking (:type "enabled" :budgetTokens 1024)))
+              deepseek-v3.2)))
 
 (defvar gptel--moonshot
   (gptel-make-openai "Moonshot"
