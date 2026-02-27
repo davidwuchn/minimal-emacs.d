@@ -72,6 +72,8 @@
   (corfu-auto t)
   (corfu-auto-delay 0.0)
   (corfu-auto-prefix 1)
+  (corfu-cycle t)
+  (corfu-preselect 'prompt)
   (read-extended-command-predicate #'command-completion-default-include-p)
   (text-mode-ispell-word-completion nil)
   (tab-always-indent 'complete)

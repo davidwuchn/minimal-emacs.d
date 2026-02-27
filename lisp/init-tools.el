@@ -60,9 +60,11 @@
 ;; AI ASSISTANT (gptel + nucleus)
 ;; ==============================================================================
 
-;; Ensure the packages are downloaded and installed
+;; Defer gptel loading until explicitly invoked
 (use-package gptel
-  :ensure t)
+  :ensure t
+  :commands (gptel gptel-send gptel-menu gptel-other-frame)
+  :defer t)
 
 (use-package gptel-agent
   :ensure t

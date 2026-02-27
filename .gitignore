@@ -6,6 +6,7 @@
 !.LICENSE
 *.elc
 !lisp/
+lisp/*.elc
 !post-init.el
 !custom.el
 !AGENTS.md
