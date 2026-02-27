@@ -73,7 +73,7 @@
     },
     "reviewer": {
       "mode": "subagent",
-      "defaultModel": "google/gemini-3.1-pro-preview",
+      "defaultModel": "dashscope/qwen3.5-plus",
       "description": "Code reviewer for project changes, use it when asked to review code",
       "systemPrompt": "You are expert in code review, analyze the changes in git and be rigorous about the changes.",
       "prompts": {
@@ -82,6 +82,7 @@
     },
     "explorer": {
       "mode": "subagent",
+      "defaultModel": "moonshot/kimi-k2.5",
       "systemPrompt": "${file:prompts/explorer_agent.md}",
       "description": "Dedicated agent for deep codebase analysis requiring investigation across multiple files and concepts. Returns synthesized findings from isolated context. Use when understanding how something works requires connecting patterns across the codebase, not just locating code. High context cost - prefer grep/read/tree for simple lookups."
     },
