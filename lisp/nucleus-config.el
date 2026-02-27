@@ -312,9 +312,10 @@ Keep this list nil or small for token efficiency.")
   (when (and (fboundp 'gptel-get-preset)
              (fboundp 'gptel-make-preset))
       (let* ((agent-backend (and (boundp 'gptel--dashscope) gptel--dashscope))
-            (preferred-model (and (fboundp 'my/gptel-resolve-model) agent-backend
-                                  (my/gptel-resolve-model agent-backend)))
-           (preferred-backend agent-backend))
+             (preferred-backend agent-backend)
+             ;; Different models for agent (coding) vs plan (architecture)
+             (agent-model 'qwen3.5-plus)
+             (plan-model 'glm-5))
       (when-let ((agent (gptel-get-preset 'gptel-agent)))
         ;; `copy-sequence' is a shallow copy: the top-level plist cons cells are
         ;; new, but nested values (e.g. a `:tools' list) remain shared.  This is
@@ -323,8 +324,8 @@ Keep this list nil or small for token efficiency.")
         (let ((plist (copy-sequence agent)))
           (setq plist (plist-put plist :system 'nucleus-gptel-agent))
           (setq plist (plist-put plist :tools nucleus--gptel-agent-nucleus-tools))
-          (when preferred-model
-            (setq plist (plist-put plist :model preferred-model))
+          (when agent-model
+            (setq plist (plist-put plist :model agent-model))
             (setq plist (plist-put plist :backend preferred-backend)))
           (apply #'gptel-make-preset 'gptel-agent plist)))
 
@@ -334,8 +335,8 @@ Keep this list nil or small for token efficiency.")
         (let ((plist (copy-sequence plan)))
           (setq plist (plist-put plist :system 'nucleus-gptel-plan))
           (setq plist (plist-put plist :tools my/gptel-plan-readonly-tools))
-          (when preferred-model
-            (setq plist (plist-put plist :model preferred-model))
+          (when plan-model
+            (setq plist (plist-put plist :model plan-model))
             (setq plist (plist-put plist :backend preferred-backend)))
           (apply #'gptel-make-preset 'gptel-plan plist))))
 
