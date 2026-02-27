@@ -254,7 +254,7 @@ This is the canonical nucleus agent experience: the core tools plus
 preview + skill management helpers.")
 
 (defvar nucleus--gptel-agent-snippet-tools
-  '("Bash" "Edit" "ApplyPatch" "preview_file_change")
+  '("Bash" "Edit" "ApplyPatch" "preview_file_change" "Grep" "Glob" "Read" "Write" "describe_symbol" "find_buffers_and_recent" "list_skills" "load_skill" "create_skill" "WebSearch" "WebFetch")
   "Tools whose supplemental snippets are injected into `nucleus-gptel-agent`.
 
 Keep this list nil or small for token efficiency.")

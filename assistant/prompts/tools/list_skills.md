@@ -1,5 +1,1 @@
-```
-list_skills{dir?}
-
-- dir: optional skills root directory
-```
+λ(d). list_skills | d:?root | ret:skills

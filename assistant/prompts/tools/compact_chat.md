@@ -1,5 +1,1 @@
-```
-compact_chat{summary}
-
-- Accepts a compaction payload (no-op).
-```
+λ(payload). compact_chat | ret:∅

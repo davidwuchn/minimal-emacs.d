@@ -1,6 +1,1 @@
-```
-load_skill{name, dir?}
-
-- name: skill id
-- dir: optional skills root directory
-```
+λ(id,d). load_skill | id:name | d:?root | ret:data

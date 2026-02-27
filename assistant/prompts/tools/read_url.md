@@ -1,5 +1,1 @@
-```
-WebFetch{url}
-
-- url: target URL
-```
+λ(u). WebFetch | u:url | ret:txt

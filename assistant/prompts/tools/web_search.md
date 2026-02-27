@@ -1,6 +1,1 @@
-```
-WebSearch{query, count?}
-
-- query: search string
-- count: optional number of results
-```
+λ(q,n). WebSearch | q:query | n:?max | ret:results

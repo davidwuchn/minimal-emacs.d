@@ -1,6 +1,1 @@
-```
-# No dedicated move tool.
-
-Use Bash{command} for renames/moves when needed:
-- mv "src" "dst"
-```
+λ(s,d). Bash(mv s d) | ret:Δ

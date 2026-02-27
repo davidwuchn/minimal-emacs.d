@@ -1,5 +1,1 @@
-```
-Write{path, filename, content}
-
-- Creates a new file. Use Edit/Insert for existing files.
-```
+λ(p,f,c). Write | p:dir | f:name | c:txt | req:new-file | ret:Δ

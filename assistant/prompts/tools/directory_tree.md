@@ -1,7 +1,1 @@
-```
-Glob{pattern, path?, depth?}
-
-- pattern: glob on basename (e.g. *.el, *test*)
-- path: optional directory (defaults to ".")
-- depth: optional integer
-```
+λ(pat,p,d). Glob | pat:basename | p:?dir | d:?depth | ret:paths

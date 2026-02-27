@@ -1,5 +1,1 @@
-```
-describe_symbol{sym}
-
-- sym: Emacs Lisp symbol name
-```
+λ(sym). describe_symbol | sym:elisp | ret:doc
