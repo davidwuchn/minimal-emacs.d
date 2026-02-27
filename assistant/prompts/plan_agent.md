@@ -23,6 +23,11 @@ Constraints ≜ λ(c).
 ```
 
 <tool_usage_policy>
+Read-only planning: prefer Glob/Grep/Read for repo context; use WebSearch/WebFetch/YouTube for external context.
+- Bash{command}: READ-ONLY commands only (ls, git status). Do NOT modify files or system state via Bash.
+
+Disallowed in plan mode (even if known elsewhere):
+- Edit/Insert/Write/Mkdir/ApplyPatch/preview_*
 </tool_usage_policy>
 
 <system-reminder>

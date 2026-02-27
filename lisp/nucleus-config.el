@@ -194,40 +194,7 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
           base))
     base))
 
-(defconst nucleus--gptel-tool-usage-policy-agent
-  (string-join
-   (list
-    "<tool_usage_policy>"
-    "Selection & safety:"
-    "- File ops: prefer standard tools (Glob/Grep/Read/Edit/Insert/Write/Mkdir)."
-    "- Bash: use for non-file ops (git, tests/builds, package managers, system inspection)."
-    "- For large/risky changes: use preview_file_change or preview_patch first, then apply."
-    "- Prefer parallel tool calls when independent; sequence when dependent."
-    ""
-    "Signatures (keys must match):"
-    "- Edit{path, old_str?, new_str, diff}"
-    "- Insert{path, line_number, new_str}"
-    "- Write{path, filename, content}"
-    "- Mkdir{parent, name}"
-    "- ApplyPatch{patch}"
-    "- preview_file_change{path, original?, replacement}"
-    "- preview_patch{patch}"
-    "</tool_usage_policy>")
-   "\n")
-  "Compact, schema-faithful tool usage policy for the action agent.")
 
-(defconst nucleus--gptel-tool-usage-policy-plan
-  (string-join
-   (list
-    "<tool_usage_policy>"
-    "Read-only planning: prefer Glob/Grep/Read for repo context; use WebSearch/WebFetch/YouTube for external context."
-    "- Bash{command}: READ-ONLY commands only (ls, git status). Do NOT modify files or system state via Bash."
-    ""
-    "Disallowed in plan mode (even if known elsewhere):"
-    "- Edit/Insert/Write/Mkdir/ApplyPatch/preview_*"
-    "</tool_usage_policy>")
-   "\n")
-  "Compact, schema-faithful tool usage policy for the plan agent.")
 
 
 
@@ -276,10 +243,6 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
              (plan-file (expand-file-name "plan_agent.md" dir))
              (agent-sys (nucleus--read-gptel-agent-system agent-file))
              (plan-sys (nucleus--read-gptel-agent-system plan-file))
-             (agent-sys (nucleus--replace-tag-block agent-sys "tool_usage_policy"
-                                                    nucleus--gptel-tool-usage-policy-agent))
-             (plan-sys (nucleus--replace-tag-block plan-sys "tool_usage_policy"
-                                                   nucleus--gptel-tool-usage-policy-plan))
              ;; Inject tool snippets only for nucleus agent chats.
              (agent-tools nucleus--gptel-agent-snippet-tools)
              (agent-snips (tool-snippets-for agent-tools))
@@ -424,7 +387,7 @@ Keep this list nil or small for token efficiency.")
                            (sys (nucleus--replace-tag-block sys "tool_usage_policy" policy)))
                  ;; Store back as a string to avoid mixed representations.
                  (setf (plist-get (cdr cell) :system) sys)))))
-        (patch-agent "executor" nucleus--gptel-agent-nucleus-tools nucleus--gptel-tool-usage-policy-agent)
+        (patch-agent "executor" nucleus--gptel-agent-nucleus-tools nil)
         ;; Do not override researcher tools; keep them minimal.
         (patch-agent "researcher" nil nucleus--gptel-tool-usage-policy-researcher)
         ;; Do not override introspector tools (it relies on `introspection`).
