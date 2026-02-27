@@ -32,6 +32,16 @@
 (require 'dom)
 (require 'diff)
 (require 'gptel)
+
+(defvar my/gptel-hidden-directives nil
+  "List of directives to hide from the transient menu.")
+
+(defvar my/gptel-tools-readonly nil
+  "Read-only toolset.")
+
+(defvar my/gptel-tools-action nil
+  "Action toolset.")
+
 (eval-when-compile
   (require 'gptel-openai)
   (require 'gptel-gemini)
@@ -392,8 +402,7 @@ Also ensures the system message is applied buffer-locally, not globally."
 (defun my/gptel--filter-directive-menu (orig sym msg &optional external)
   "Around-advice: hide internal nucleus directives from the transient picker."
   (let ((gptel-directives
-         (seq-remove (lambda (e) (memq (car e) '(nucleus-gptel-agent nucleus-gptel-plan
-                                                                     Plan Agent)))
+         (seq-remove (lambda (e) (memq (car e) (if (boundp 'my/gptel-hidden-directives) my/gptel-hidden-directives nil)))
                      gptel-directives)))
     (funcall orig sym msg external)))
 
@@ -906,10 +915,7 @@ request is active."
     (when (and gptel-mode gptel-use-header-line)
       (if (fboundp 'gptel-use-header-line)
           (gptel-use-header-line)
-        (setq header-line-format nil))
-      (when (and (fboundp 'gptel--apply-preset) header-line-format)
-        (when (fboundp 'nucleus--header-line-apply-preset-label)
-          (nucleus--header-line-apply-preset-label))))
+        (setq header-line-format nil)))
     ;; Add prompt marker and position cursor for next input
     (when gptel-mode
       (let ((inhibit-read-only t))
@@ -960,8 +966,7 @@ and a sandbox for Plan mode."
          (gen my/gptel--abort-generation)
          (done nil)
          ;; Sandbox check: strictly read-only when in Plan mode
-         (is-plan (eq (and (fboundp 'nucleus--effective-preset)
-                           (nucleus--effective-preset))
+         (is-plan (eq (and (boundp 'gptel--preset) gptel--preset)
                       'gptel-plan)))
     (cl-labels
         ((finish (result)
@@ -1569,11 +1574,11 @@ Guards against reload-time duplication where `gptel-make-tool' and
                   :around
                   #'my/gptel--wrap-gptel-agent-fetch-no-images)))
   (advice-add 'gptel-agent--task :around #'my/gptel--agent-task-override-model)
-  (setq nucleus-tools-readonly
+  (setq my/gptel-tools-readonly
         (my/gptel--dedup-tools-by-name
          (append
-          (when (boundp 'nucleus--gptel-plan-readonly-tools)
-            (seq-filter #'identity (mapcar #'my/gptel--safe-get-tool nucleus--gptel-plan-readonly-tools)))
+          (when (boundp 'my/gptel-plan-readonly-tools)
+            (seq-filter #'identity (mapcar #'my/gptel--safe-get-tool my/gptel-plan-readonly-tools)))
           (list
            (gptel-make-tool
             :name "find_buffers_and_recent"
@@ -1590,12 +1595,12 @@ Guards against reload-time duplication where `gptel-make-tool' and
             :description "Show Emacs Lisp documentation for a symbol"
             :args (list '(:name "sym" :type string :description "Symbol name")))))))
 
-  (setq nucleus-tools-action
+  (setq my/gptel-tools-action
         (my/gptel--dedup-tools-by-name
          (append
           ;; Include all 17 gptel-agent tools
-          (when (boundp 'nucleus--gptel-agent-action-tools)
-            (seq-filter #'identity (mapcar #'my/gptel--safe-get-tool nucleus--gptel-agent-action-tools)))
+          (when (boundp 'my/gptel-agent-action-tools)
+            (seq-filter #'identity (mapcar #'my/gptel--safe-get-tool my/gptel-agent-action-tools)))
           (list
            (gptel-make-tool
             :name "run_shell_command"
@@ -1772,14 +1777,14 @@ Press n to confirm reviewed (agent continues), q to abort."
                         '(:name "dir" :type string :description "Skills root directory" :optional t))))
 
           ;; Finally, ensure the custom readonly tools are also here if not already included.
-          (when (boundp 'nucleus--gptel-agent-action-tools)
+          (when (boundp 'my/gptel-agent-action-tools)
             (seq-filter (lambda (tool)
                           (not (member (gptel-tool-name tool)
-                                       nucleus--gptel-agent-action-tools)))
-                        nucleus-tools-readonly)))))
+                                       my/gptel-agent-action-tools)))
+                        my/gptel-tools-readonly)))))
 
   ;; Set the default tool list now that both lists are built.
-  (setq-default gptel-tools nucleus-tools-readonly))
+  (setq-default gptel-tools my/gptel-tools-readonly))
 
 
 (defun my/gptel-keyboard-quit ()
@@ -2158,7 +2163,7 @@ START and END are the response region positions passed by
     (,gptel--cf-gateway . \@cf/zai-org/glm-4.7-flash)
     (,gptel--dashscope  . qwen3.5-plus)))
 
-(defun nucleus-resolve-model (&optional backend requested)
+(defun my/gptel-resolve-model (&optional backend requested)
   "Resolve REQUESTED model for BACKEND."
   (let* ((backend (or backend gptel-backend))
          (requested (or requested 'auto)))
@@ -3601,13 +3606,13 @@ Press n to advance to the next file, q to abort all remaining previews."
 (defun gptel-set-tool-profile (profile)
   "Set active gptel tools."
   (interactive (list (intern (completing-read "Profile: " '(readonly action)))))
-  (setq-local gptel-tools (if (eq profile 'action) nucleus-tools-action nucleus-tools-readonly))
+  (setq-local gptel-tools (if (eq profile 'action) my/gptel-tools-action my/gptel-tools-readonly))
   (message "gptel tools set to: %s" profile))
 
 (defun gptel-toggle-tool-profile ()
   "Toggle between readonly and action profiles."
   (interactive)
-  (if (eq gptel-tools nucleus-tools-action)
+  (if (eq gptel-tools my/gptel-tools-action)
       (gptel-set-tool-profile 'readonly)
     (gptel-set-tool-profile 'action)))
 
@@ -3701,7 +3706,7 @@ buffers) so each tool's :confirm flag decides."
 
 (defun my/is-inside-workspace (path)
   "Check if PATH is strictly inside the current project root."
-  (let* ((workspace (file-name-as-directory (file-truename (if (fboundp 'nucleus--project-root) (nucleus--project-root) default-directory))))
+  (let* ((workspace (file-name-as-directory (file-truename (if-let ((proj (and (featurep 'project) (project-current nil)))) (project-root proj) default-directory))))
          (target (file-truename (expand-file-name (substitute-in-file-name path)))))
     (string-prefix-p workspace target)))
 
@@ -3720,7 +3725,7 @@ buffers) so each tool's :confirm flag decides."
 
 (defun my/gptel-tool-acl-check (tool-name args)
   "Return an error string if the tool call violates ACL rules, else nil."
-  (let* ((preset (and (fboundp 'nucleus--effective-preset) (nucleus--effective-preset)))
+  (let* ((preset (and (boundp 'gptel--preset) gptel--preset))
          (is-plan (eq preset 'gptel-plan)))
     (cond
      ;; RULE 1: The Plan Mode Bash Whitelist

@@ -70,8 +70,8 @@
 
 ;; After they are installed, load the custom configurations
 (with-eval-after-load 'gptel
-  (require 'nucleus-config)
-  (require 'gptel-config))
+  (require 'gptel-config)
+  (require 'nucleus-config))
 
 ;; ==============================================================================
 ;; EDITOR CODE ASSISTANT (ECA)

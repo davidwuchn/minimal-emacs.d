@@ -56,10 +56,10 @@
 (defvar nucleus-agent-default 'gptel-plan
   "Default gptel agent preset.  Use `nucleus-agent-toggle' to switch.")
 
-(defvar nucleus-tools-readonly nil
+(defvar my/gptel-tools-readonly nil
   "Tool list for read-only (plan) profile.  Set by gptel-config after tool registration.")
 
-(defvar nucleus-tools-action nil
+(defvar my/gptel-tools-action nil
   "Tool list for action (agent) profile.  Set by gptel-config after tool registration.")
 
 (defun nucleus--effective-preset ()
@@ -84,11 +84,11 @@
           (nucleus--log "tool profile left to preset: %s" gptel--preset)
         (pcase preset
           ('gptel-plan
-           (when nucleus-tools-readonly
-             (setq-local gptel-tools nucleus-tools-readonly)))
+           (when my/gptel-tools-readonly
+             (setq-local gptel-tools my/gptel-tools-readonly)))
           ('gptel-agent
-           (when nucleus-tools-action
-             (setq-local gptel-tools nucleus-tools-action))))
+           (when my/gptel-tools-action
+             (setq-local gptel-tools my/gptel-tools-action))))
         (nucleus--log "tool profile synced to %s" preset)))))
 
 (defun nucleus-agent-toggle ()
@@ -243,7 +243,7 @@ Only applies when a gptel--preset is active in the current buffer."
   '("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep" "Insert" "Mkdir" "Read" "RunAgent" "Skill" "TodoWrite" "WebFetch" "WebSearch" "Write" "YouTube")
   "Core gptel-agent tools to be included in presets by default.")
 
-(defvar nucleus--gptel-plan-readonly-tools
+(defvar my/gptel-plan-readonly-tools
   '("Agent" "Bash" "Glob" "Grep" "Read" "Skill" "WebFetch" "WebSearch" "YouTube"
     "find_buffers_and_recent" "describe_symbol" "Eval")
   "Read-only subset of gptel-agent tools for planning.")
@@ -263,7 +263,7 @@ preview + skill management helpers.")
 
 Keep this list nil or small for token efficiency.")
 
-(defvar nucleus--gptel-agent-action-tools
+(defvar my/gptel-agent-action-tools
   nucleus--gptel-agent-nucleus-tools
   "Nucleus agent tools for action profile.")
 
@@ -286,7 +286,7 @@ Keep this list nil or small for token efficiency.")
 (defun nucleus--expected-tools-for-preset (&optional preset)
   "Return expected tool names for PRESET."
   (pcase (or preset (nucleus--effective-preset))
-    ('gptel-plan nucleus--gptel-plan-readonly-tools)
+    ('gptel-plan my/gptel-plan-readonly-tools)
     ('gptel-agent nucleus--gptel-agent-nucleus-tools)
     (_ nil)))
 
@@ -316,8 +316,8 @@ Keep this list nil or small for token efficiency.")
   (when (and (fboundp 'gptel-get-preset)
              (fboundp 'gptel-make-preset))
       (let* ((agent-backend (and (boundp 'gptel--copilot) gptel--copilot))
-            (preferred-model (and (fboundp 'nucleus-resolve-model) agent-backend
-                                  (nucleus-resolve-model agent-backend)))
+            (preferred-model (and (fboundp 'my/gptel-resolve-model) agent-backend
+                                  (my/gptel-resolve-model agent-backend)))
            (preferred-backend agent-backend))
       (when-let ((agent (gptel-get-preset 'gptel-agent)))
         ;; `copy-sequence' is a shallow copy: the top-level plist cons cells are
@@ -337,7 +337,7 @@ Keep this list nil or small for token efficiency.")
         ;; `plist-put' with fresh values, not in-place nested mutation.
         (let ((plist (copy-sequence plan)))
           (setq plist (plist-put plist :system 'nucleus-gptel-plan))
-          (setq plist (plist-put plist :tools nucleus--gptel-plan-readonly-tools))
+          (setq plist (plist-put plist :tools my/gptel-plan-readonly-tools))
           (when preferred-model
             (setq plist (plist-put plist :model preferred-model))
             (setq plist (plist-put plist :backend preferred-backend)))
@@ -595,6 +595,14 @@ At load time, prefer `nucleus-ensure-loaded' instead."
 (with-eval-after-load 'gptel
   (when (require 'gptel-agent nil t)
     (gptel-agent-update)))
+
+(defvar my/gptel-hidden-directives
+  '(nucleus-gptel-agent nucleus-gptel-plan Plan Agent explorer reviewer chatTitle compact init skillCreate completion rewrite)
+  "Directives to hide from the transient menu.")
+
+(defvar my/gptel-hidden-directives
+  '(nucleus-gptel-agent nucleus-gptel-plan Plan Agent explorer reviewer chatTitle compact init skillCreate completion rewrite)
+  "Directives to hide from the transient menu.")
 
 (provide 'nucleus-config)
 ;;; nucleus-config.el ends here
