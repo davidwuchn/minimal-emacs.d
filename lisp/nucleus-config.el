@@ -54,8 +54,7 @@
 
 ;; Default gptel-agent preset; toggle between plan and code agents.
 (defvar my/gptel-hidden-directives
-  '(nucleus-gptel-agent nucleus-gptel-plan
-        explorer reviewer chatTitle compact init skillCreate completion rewrite)
+  '(explorer reviewer chatTitle compact init skillCreate completion rewrite)
   "Directives to hide from the transient menu.")
 
 (defvar nucleus-agent-default 'gptel-plan
@@ -231,18 +230,10 @@ Only applies when a gptel--preset is active in the current buffer."
                           agent-sys)))
         (when (stringp agent-sys)
           (setf (alist-get 'nucleus-gptel-agent gptel-directives nil nil #'eq)
-                agent-sys)
-          ;; Friendly alias at front so header-line shows "Agent" not "nucleus-gptel-agent"
-          (setq gptel-directives
-                (cons (cons 'Agent agent-sys)
-                      (assq-delete-all 'Agent gptel-directives))))
+                agent-sys))
         (when (stringp plan-sys)
           (setf (alist-get 'nucleus-gptel-plan gptel-directives nil nil #'eq)
-                plan-sys)
-          ;; Friendly alias at front so header-line shows "Plan" not "nucleus-gptel-plan"
-          (setq gptel-directives
-                (cons (cons 'Plan plan-sys)
-                       (assq-delete-all 'Plan gptel-directives))))))))
+                plan-sys))))))
 
 (defvar nucleus--gptel-agent-core-tools
   '("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep" "Insert" "Mkdir" "Read" "RunAgent" "Skill" "TodoWrite" "WebFetch" "WebSearch" "Write" "YouTube")
