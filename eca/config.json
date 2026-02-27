@@ -188,7 +188,8 @@
       "url": "https://generativelanguage.googleapis.com/v1beta/openai/",
       "keyRc": "generativelanguage.googleapis.com",
       "models": {
-        "gemini-3-pro-preview": {},
+        "gemini-3.1-pro-preview": {},
+        "gemini-3.1-pro-preview-customtools": {},
         "gemini-3-flash-preview": {}
       }
     }

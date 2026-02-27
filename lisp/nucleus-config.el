@@ -53,6 +53,13 @@
     (apply #'message (concat "[nucleus] " fmt) args)))
 
 ;; Default gptel-agent preset; toggle between plan and code agents.
+(defvar my/gptel-hidden-directives
+  '(nucleus-gptel-agent nucleus-gptel-plan 
+    Plan Agent 
+    Gptel-nucleus-plan Gptel-nucleus-agent
+    explorer reviewer chatTitle compact init skillCreate completion rewrite)
+  "Directives to hide from the transient menu.")
+
 (defvar nucleus-agent-default 'gptel-plan
   "Default gptel agent preset.  Use `nucleus-agent-toggle' to switch.")
 
@@ -547,13 +554,8 @@ At load time, prefer `nucleus-ensure-loaded' instead."
                            default-text))
          ;; Filter out agents and internal tool directives from the prompt menu.
          ;; These are used programmatically (by nucleus presets, compact tool,
-         ;; skill tools etc.) and should not appear in the interactive picker.
          (filtered (seq-remove (lambda (entry)
-                                  (memq (car entry)
-                                        '(nucleus-gptel-agent nucleus-gptel-plan
-                                          explorer reviewer
-                                          chatTitle compact init
-                                          skillCreate completion rewrite)))
+                                  (memq (car entry) my/gptel-hidden-directives))
                                 all-prompts)))
     (if merged-default
         (cons (cons 'default merged-default) filtered)
@@ -595,14 +597,6 @@ At load time, prefer `nucleus-ensure-loaded' instead."
 (with-eval-after-load 'gptel
   (when (require 'gptel-agent nil t)
     (gptel-agent-update)))
-
-(defvar my/gptel-hidden-directives
-  '(nucleus-gptel-agent nucleus-gptel-plan Plan Agent explorer reviewer chatTitle compact init skillCreate completion rewrite)
-  "Directives to hide from the transient menu.")
-
-(defvar my/gptel-hidden-directives
-  '(nucleus-gptel-agent nucleus-gptel-plan Plan Agent explorer reviewer chatTitle compact init skillCreate completion rewrite)
-  "Directives to hide from the transient menu.")
 
 (provide 'nucleus-config)
 ;;; nucleus-config.el ends here
