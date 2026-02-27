@@ -37,12 +37,6 @@
 (defvar my/gptel-hidden-directives nil
   "List of directives to hide from the transient menu.")
 
-(defvar my/gptel-tools-readonly nil
-  "Read-only toolset.")
-
-(defvar my/gptel-tools-action nil
-  "Action toolset.")
-
 (eval-when-compile
   (require 'gptel-openai)
   (require 'gptel-gemini)

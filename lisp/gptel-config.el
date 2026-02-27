@@ -11,14 +11,10 @@
 (require 'gptel-ext-backends)
 (require 'gptel-ext-context)
 (require 'gptel-ext-learning)
-(require 'gptel-ext-patch)
 (require 'gptel-ext-security)
 
-;; Load new split tool modules (replaces gptel-ext-tools.el)
+;; Load split tool modules (replaces gptel-ext-tools.el)
 (require 'gptel-tools)
-
-;; Load nucleus tools (consolidated tool definitions)
-(require 'nucleus-tools)
 ;; --- Configuration Defaults ---
 (setq gptel-backend gptel--moonshot
       gptel-model 'kimi-k2.5)
