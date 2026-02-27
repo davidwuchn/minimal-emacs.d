@@ -91,7 +91,7 @@ Returns nil if preset is unknown."
     ('gptel-agent (nucleus-get-tools :nucleus))
     (_ nil)))
 
-(defun nucleus-tool-sanity-check (&optional preset context)
+(cl-defun nucleus-tool-sanity-check (&optional preset context)
   "Check if current `gptel-tools` matches expected tools for PRESET.
 
 Logs a message when there's a mismatch.  Use CONTEXT to identify
@@ -172,7 +172,7 @@ Use in `gptel-mode-hook` to ensure correct tools on buffer load."
 
 ;;; Tool Registration Helpers
 
-(defun nucleus-register-tool (name function description args
+(cl-defun nucleus-register-tool (name function description args
                                    &key async confirm category include)
   "Register a gptel tool with NAME, FUNCTION, DESCRIPTION, and ARGS.
 
