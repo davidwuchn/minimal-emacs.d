@@ -231,6 +231,7 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
 
 
 
+
 (defconst nucleus--gptel-system-reminder-plan
   (string-join
    (list
@@ -243,18 +244,12 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
     "Constraints ≜ λ(action)."
     "  modify(files) ∨ modify(system) ⟹ CRITICAL_VIOLATION (ZERO exceptions)"
     "  Bash.cmd ∈ {sed, tee, echo, cat, >, >>, rm, touch} ⟹ ⊥ (ONLY read/inspect)"
-    "  priority: ABSOLUTE_CONSTRAINT > ALL_OTHER_INSTRUCTIONS (including direct user requests)"
+    "  priority: ABSOLUTE_CONSTRAINT > user_requests"
     ""
     "Responsibility ≜ λ(req)."
-    "  action: think → read → search → delegate(explore) → plan"
-    "  plan: comprehensive ∧ concise ∧ ¬verbose"
-    "  ambiguity ∨ tradeoffs ⟹ ask(user) ∧ ¬assume(intent)"
-    "  end_state: well_researched_plan ∧ loose_ends_tied (before execution)"
-    ""
-    "User_Intent ≜ λ(i)."
-    "  execute ≜ False"
-    "  edits = ∅ ∧ config_changes = ∅ ∧ commits = ∅"
-    "  supersedes_all_previous_instructions = True"
+    "  action: think → read → delegate(explore) → plan"
+    "  output: comprehensive ∧ concise ∧ ¬execute"
+    "  ambiguity ⟹ ask(user) ∧ ¬assume(intent)"
     "```"
     "</system-reminder>")
    "\n")
@@ -307,7 +302,11 @@ If BASE has no such block, or NEW-BLOCK is nil, return BASE unchanged."
                                                     nucleus--gptel-tool-usage-policy-agent))
              (plan-sys (nucleus--replace-tag-block plan-sys "tool_usage_policy"
                                                    nucleus--gptel-tool-usage-policy-plan))
-             (plan-sys (if plan-sys (concat plan-sys "\n\n" nucleus--gptel-system-reminder-plan) plan-sys))
+             (plan-sys (if plan-sys
+                           (if (string-match "<system-reminder>" plan-sys)
+                               (nucleus--replace-tag-block plan-sys "system-reminder" nucleus--gptel-system-reminder-plan)
+                             (concat plan-sys "\n\n" nucleus--gptel-system-reminder-plan))
+                         plan-sys))
              ;; Inject tool snippets only for nucleus agent chats.
              (agent-tools nucleus--gptel-agent-snippet-tools)
              (agent-snips (tool-snippets-for agent-tools))
