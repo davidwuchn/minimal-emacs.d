@@ -2138,9 +2138,9 @@ START and END are the response region positions passed by
 
 (defvar gptel--dashscope
   (gptel-make-openai "DashScope"
-    :host "dashscope.aliyuncs.com"
+    :host "coding.dashscope.aliyuncs.com"
     :endpoint "/v1/chat/completions"
-    :key (lambda () (gptel-api-key-from-auth-source "dashscope.aliyuncs.com" "api"))
+    :key (lambda () (gptel-api-key-from-auth-source "coding.dashscope.aliyuncs.com" "api"))
     :stream t
     :models '((qwen3.5-plus
                :request-params (:thinking (:type "enabled" :budgetTokens 1024)))
