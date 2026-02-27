@@ -399,12 +399,17 @@ Also ensures the system message is applied buffer-locally, not globally."
   (advice-add 'gptel--suffix-system-message
               :around #'my/gptel--suffix-system-message-in-buffer))
 
+(defvar gptel-directives)
 (defun my/gptel--filter-directive-menu (orig sym msg &optional external)
   "Around-advice: hide internal nucleus directives from the transient picker."
-  (let ((gptel-directives
-         (seq-remove (lambda (e) (memq (car e) (if (boundp 'my/gptel-hidden-directives) my/gptel-hidden-directives nil)))
-                     gptel-directives)))
-    (funcall orig sym msg external)))
+  (let* ((filtered (seq-remove (lambda (e) (memq (car e) (if (boundp 'my/gptel-hidden-directives) my/gptel-hidden-directives nil)))
+                               gptel-directives))
+         (old-directives gptel-directives))
+    (unwind-protect
+        (progn
+          (setq gptel-directives filtered)
+          (funcall orig sym msg external))
+      (setq gptel-directives old-directives))))
 
 (defun my/gptel--csv-parse-row ()
   "Parse one RFC-4180 CSV row at point, return list of field strings.

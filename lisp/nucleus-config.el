@@ -54,10 +54,8 @@
 
 ;; Default gptel-agent preset; toggle between plan and code agents.
 (defvar my/gptel-hidden-directives
-  '(nucleus-gptel-agent nucleus-gptel-plan 
-    Plan Agent 
-    Gptel-nucleus-plan Gptel-nucleus-agent
-    explorer reviewer chatTitle compact init skillCreate completion rewrite)
+  '(nucleus-gptel-agent nucleus-gptel-plan
+        explorer reviewer chatTitle compact init skillCreate completion rewrite)
   "Directives to hide from the transient menu.")
 
 (defvar nucleus-agent-default 'gptel-plan
