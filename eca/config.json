@@ -1,6 +1,7 @@
 {
+  "$schema": "https://eca.dev/config.json",
   "netrcFile": "${env:ECA_NETRC_FILE}",
-  "defaultModel": "github-copilot/gpt-5.3-codex",
+  "defaultModel": "github-copilot/gpt-5-mini",
   "customTools": {
     "clj-paren-repair": {
       "description": "Fix delimiter errors and format clojure files. works for these file extensions: .clj .cljs .cljc .bb .edn",
@@ -60,26 +61,29 @@
   "agent": {
     "code": {
       "prompts": {
-        "defaultModel": "moonshot/kimi-for-coding",
+        "defaultModel": "github-copilot/claude-opus-4.6",
         "chat": "${file:prompts/code_agent.md}"
       }
     },
     "plan": {
       "prompts": {
-        "defaultModel": "openrouter/z-ai/glm-5",
+        "defaultModel": "gihub-copilot/claude-sonnet-4.6",
         "chat": "${file:prompts/plan_agent.md}"
       }
     },
     "reviewer": {
+      "mode": "subagent",
       "defaultModel": "google/gemini-3.1-pro-preview",
-      "toolCall": {
-        "approval": {
-          "byDefault": "allow"
-        }
-      },
+      "description": "Code reviewer for project changes, use it when asked to review code",
+      "systemPrompt": "You are expert in code review, analyze the changes in git and be rigorous about the changes.",
       "prompts": {
         "chat": "${file:prompts/reviewer.md}"
       }
+    },
+    "explorer": {
+      "mode": "subagent",
+      "systemPrompt": "${file:prompts/explorer_agent.md}",
+      "description": "Dedicated agent for deep codebase analysis requiring investigation across multiple files and concepts. Returns synthesized findings from isolated context. Use when understanding how something works requires connecting patterns across the codebase, not just locating code. High context cost - prefer grep/read/tree for simple lookups."
     },
     "dangerous": {
       "defaultModel": "deepseek/deepseek-reasoner",
@@ -91,10 +95,10 @@
     }
   },
   "rewrite": {
-    "model": "github-copilot/gpt-4.1"
+    "model": "github-copilot/gpt-5.3-codex"
   },
   "completion": {
-    "model": "github-copilot/gpt-4.1"
+    "model": "github-copilot/gpt-5.3-codex"
   },
   "prompts": {
     "chat": "${file:prompts/code_agent.md}",
