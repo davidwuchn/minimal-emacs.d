@@ -36,15 +36,16 @@ Selection & safety:
 - For large/risky changes: use preview_file_change or preview_patch first, then apply.
 - Prefer parallel tool calls when independent; sequence when dependent.
 
-LSP vs AST workflow:
-- LSP (lsp_definition, lsp_diagnostics, etc): Use to understand project-wide architecture, find cross-file definitions, and validate types/errors.
-- AST (AST_Map, AST_Read, AST_Replace): Use to extract or modify structural blocks (functions/classes) within a single file perfectly.
-- For Lisp languages (.el, .clj, .cljs, .cljc, .edn): MUST use AST_Read and AST_Replace. Do NOT use standard Edit/Read.
+Code Intelligence & Structural Editing (KISS Workflow):
+- Code_Map: Read the structure/outline of a file first before editing.
+- Code_Inspect: Find and extract the exact implementation block of a function or class. Auto-searches the project if you don't know the file path!
+- Code_Replace: For Lisp languages (.el, .clj, .cljs, .edn), you MUST use this instead of standard Edit to ensure perfectly balanced parentheses.
+- Code_Check: Verify your changes haven't broken the compiler/LSP before finishing.
 
 Signatures (keys must match):
 - Edit{path, old-str?, new-str-or-diff, diffp?}
-- AST_Read{file_path, node_name}
-- AST_Replace{file_path, node_name, new_code}
+- Code_Inspect{node_name, file_path?}
+- Code_Replace{file_path, node_name, new_code}
 - Insert{path, line_number, new_str}
 - Write{path, filename, content}
 - Mkdir{parent, name}

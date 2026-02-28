@@ -20,6 +20,7 @@
 (require 'gptel-tools-lsp)
 (require 'gptel-tools-introspection)
 (require 'gptel-tools-ast)
+(require 'gptel-tools-code)
 
 ;;; Customization
 
@@ -63,9 +64,10 @@ Call this after gptel-agent-tools loads."
   (gptel-tools-apply-register)
   (gptel-tools-agent-register)
   (gptel-tools-preview-register)
-  (gptel-tools-lsp-register)
+  ;; (gptel-tools-lsp-register)  ; Deprecated by gptel-tools-code
   (gptel-tools-introspection-register)
-  (gptel-tools-ast-register)
+  ;; (gptel-tools-ast-register)  ; Deprecated by gptel-tools-code
+  (gptel-tools-code-register)
 
   ;; Register standard gptel-agent tools
   (when (fboundp 'gptel-make-tool)
@@ -264,8 +266,7 @@ Call this after gptel-agent-tools loads."
                              '("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
                                "WebFetch" "WebSearch" "YouTube"
                                "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                               "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
-                               "lsp_definition" "lsp_hover" "AST_Map" "AST_Read")))))
+                               "Code_Map" "Code_Inspect" "Code_Check")))))
 
   (setq my/gptel-tools-action
         (my/gptel--dedup-tools-by-name
@@ -276,11 +277,9 @@ Call this after gptel-agent-tools loads."
                                 "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
                                 "WebFetch" "WebSearch" "Write" "YouTube"
                                 "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                                "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
-                                "lsp_definition" "lsp_hover" "lsp_rename"
                                 "preview_file_change" "preview_patch"
                                 "list_skills" "load_skill" "create_skill"
-                                "AST_Map" "AST_Read" "AST_Replace")))
+                                "Code_Map" "Code_Inspect" "Code_Replace" "Code_Check")))
           my/gptel-tools-readonly)))
 
   ;; Set default tool list

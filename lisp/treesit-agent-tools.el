@@ -59,7 +59,8 @@ Useful for giving an LLM a high-level overview of a file."
 
 (defun treesit-agent-replace-node (name new-text)
   "Replace the defun node named NAME with NEW-TEXT.
-Returns t on success, nil if node not found."
+Returns t on success, nil if node not found.
+Throws an error if the replacement results in invalid syntax."
   (let ((node (treesit-agent--find-defun name)))
     (if node
         (let ((start (treesit-node-start node))
@@ -67,7 +68,34 @@ Returns t on success, nil if node not found."
           (goto-char start)
           (delete-region start end)
           (insert new-text)
+          ;; Validate syntax after replacement
+          (let ((root (treesit-agent--get-root)))
+            (when (and root (treesit-node-has-error-p root))
+              ;; Emacs tree-sitter will automatically update the tree upon buffer edit.
+              ;; If the new tree has an error, we signal it.
+              (error "AST Replacement rejected: The new code introduced a syntax error (unbalanced parentheses or invalid grammar)")))
           t)
       nil)))
+
+(defun treesit-agent-rename-symbol (old-name new-name)
+  "Rename all exact matches of OLD-NAME to NEW-NAME in the current buffer structurally."
+  (let ((root (treesit-agent--get-root))
+        (matches nil))
+    (when root
+      (treesit-search-forward 
+       root
+       (lambda (node)
+         (when (equal (treesit-node-text node t) old-name)
+           (push node matches)))
+       nil t)
+      ;; Sort matches by start position descending (to replace bottom-up, preserving offsets)
+      (setq matches (sort matches (lambda (a b) (> (treesit-node-start a) (treesit-node-start b)))))
+      (let ((count 0))
+        (dolist (node matches)
+          (goto-char (treesit-node-start node))
+          (delete-region (treesit-node-start node) (treesit-node-end node))
+          (insert new-name)
+          (cl-incf count))
+        count))))
 
 (provide 'treesit-agent-tools)
