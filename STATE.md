@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **DUMB-JUMP FALLBACK VERIFIED**: Xref fallback chain verified: LSP (priority 0) → Tree-sitter local (priority 50) → Dumb-jump (priority 90). **VERIFIED**: dumb-jump-xref-activate configured in init-dev.el with priority 90, treesit-local-xref-backend with priority 50, graceful degradation when LSP offline.
 - **RUST LSP VERIFIED**: Eglot automatically starts for `.rs` files via `rust-ts-mode`. **VERIFIED**: rust-analyzer detected at `~/.cargo/bin/rust-analyzer`, eglot-ensure configured for rust-ts-mode, diagnostics flow through flymake. Unified workflow (LSP for cross-file semantics + AST for structural editing) works end-to-end.
 - **PYTHON LSP VERIFIED**: Eglot automatically starts for `.py` files via `python-ts-mode` hook. **VERIFIED**: pylsp detected at `/usr/local/bin/pylsp`, eglot-ensure starts successfully, diagnostics flow through flymake. Unified workflow (LSP for cross-file semantics + AST for structural editing) works end-to-end.
 - **CLOJURE LSP VERIFIED**: Eglot automatically starts for `.clj`/`.cljs`/`.cljc` files via `clojure-mode` hook. `Code_Check` integrates with `flymake--project-diagnostics` to surface LSP errors. **VERIFIED**: eglot-ensure starts clojure-lsp successfully, diagnostics flow through flymake, unified workflow (LSP for cross-file semantics + AST for structural editing) works end-to-end.
