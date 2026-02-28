@@ -1135,5 +1135,116 @@ START and END are the response region positions passed by
            url-cb)))
     (apply orig url wrapped-url-cb tool-cb failed-msg args)))
 
+;; --- Enhanced Tool Call Confirmation Context ---
+;; Overrides `gptel--display-tool-calls' to include arguments in the minibuffer prompt.
+(defun my/gptel--display-tool-calls (tool-calls info &optional use-minibuffer)
+  "Handle tool call confirmation with improved minibuffer context."
+  (let* ((start-marker (plist-get info :position))
+         (tracking-marker (plist-get info :tracking-marker)))
+    (with-current-buffer (plist-get info :buffer)
+      (if (or use-minibuffer        ;prompt for confirmation from the minibuffer
+              buffer-read-only ;TEMP(tool-preview) Handle read-only buffers better
+              (get-char-property
+               (max (point-min) (1- (or tracking-marker start-marker)))
+               'read-only))
+          (let* ((minibuffer-allow-text-properties t)
+                 (backend-name (gptel-backend-name (plist-get info :backend)))
+                 (prompt (format "%s wants to run " backend-name)))
+            (map-y-or-n-p
+             (lambda (tool-call-spec)
+               (let* ((tool-name (gptel-tool-name (car tool-call-spec)))
+                      (args (cadr tool-call-spec))
+                      (formatted-args
+                       (mapconcat (lambda (arg)
+                                    (cond ((stringp arg)
+                                           (truncate-string-to-width arg 60 nil nil "..."))
+                                          (t (prin1-to-string arg))))
+                                  args " ")))
+                 (concat prompt
+                         (propertize tool-name 'face 'font-lock-keyword-face)
+                         (if (string-empty-p formatted-args) ""
+                           (concat " " (propertize formatted-args 'face 'font-lock-constant-face)))
+                         ": ")))
+             (lambda (tcs) (gptel--accept-tool-calls (list tcs) nil))
+             tool-calls '("tool call" "tool calls" "run")
+             `((?i ,(lambda (_) (save-window-excursion
+                             (with-selected-window
+                                 (gptel--inspect-fsm gptel--fsm-last)
+                               (goto-char (point-min))
+                               (when (search-forward-regexp "^:tool-use" nil t)
+                                 (forward-line 0) (hl-line-highlight))
+                               (use-local-map
+                                (make-composed-keymap
+                                 (define-keymap "q" (lambda () (interactive)
+                                                      (quit-window)
+                                                      (exit-recursive-edit)))
+                                 (current-local-map)))
+                               (recursive-edit) nil)))
+                   "inspect call(s)"))))
+        ;; Prompt for confirmation from the chat buffer
+        (let* ((backend-name (gptel-backend-name (plist-get info :backend)))
+               (actions-string
+                (concat (propertize "Run tools: " 'face 'font-lock-string-face)
+                        (propertize "C-c C-c" 'face 'help-key-binding)
+                        (propertize ", Cancel request: " 'face 'font-lock-string-face)
+                        (propertize "C-c C-k" 'face 'help-key-binding)
+                        (propertize ", Inspect: " 'face 'font-lock-string-face)
+                        (propertize "C-c C-i" 'face 'help-key-binding)))
+               (confirm-strings)
+               (ov-start (save-excursion
+                           (goto-char start-marker)
+                           (text-property-search-backward 'gptel 'response)
+                           (point)))
+               (preview-handlers)
+               (ov (or (cdr-safe (get-char-property-and-overlay
+                                  start-marker 'gptel-tool))
+                       (make-overlay ov-start (or tracking-marker start-marker)
+                                     nil nil nil)))
+               (prompt-ov))
+          ;; If the cursor is at the overlay-end, it ends up outside, so move it back
+          (unless tracking-marker
+            (when (= (point) start-marker) (ignore-errors (backward-char))))
+          (save-excursion
+            (goto-char (overlay-end ov))
+            (pcase-dolist (`(,tool-spec ,arg-values _) tool-calls)
+              ;; Call tool-specific confirmation prompt
+              (if-let* ((funcs (cdr (assoc (gptel-tool-name tool-spec)
+                                           gptel--tool-preview-alist)))
+                        ((functionp (car-safe funcs))))
+                  ;;preview-teardown func   preview-handle overlay/buffer
+                  (push (list (cadr funcs) (funcall (car funcs) arg-values info))
+                        preview-handlers)
+                (push (gptel--format-tool-call (gptel-tool-name tool-spec) arg-values)
+                      confirm-strings)))
+            (and confirm-strings (apply #'insert (nreverse confirm-strings)))
+            (add-text-properties (overlay-end ov) (1- (point))
+                                 '(read-only t font-lock-fontified t))
+            (setq prompt-ov (make-overlay (overlay-end ov) (point) nil t))
+            (overlay-put
+             prompt-ov 'before-string
+             (concat "\n"
+                     (propertize " " 'display `(space :align-to (- right ,(length actions-string) 2))
+                                 'face '(:inherit font-lock-string-face :underline t :extend t))
+                     actions-string
+                     (format (propertize "\n%s wants to run:\n\n"
+                                         'face 'font-lock-string-face)
+                             backend-name)))
+            (overlay-put
+             prompt-ov 'after-string
+             (concat (propertize "\n" 'face
+                                 '(:inherit font-lock-string-face :underline t :extend t))))
+            (overlay-put prompt-ov 'evaporate t)
+            (overlay-put ov 'prompt prompt-ov)
+            (move-overlay ov ov-start (point)))
+          ;; Add confirmation prompt to the overlay
+          (when preview-handlers (overlay-put ov 'previews preview-handlers))
+          (overlay-put ov 'mouse-face 'highlight)
+          (overlay-put ov 'gptel-tool tool-calls)
+          (overlay-put ov 'help-echo
+                       (concat "Tool call(s) requested: " actions-string))
+          (overlay-put ov 'keymap gptel-tool-call-actions-map))))))
+
+(advice-add 'gptel--display-tool-calls :override #'my/gptel--display-tool-calls)
+
 (provide 'gptel-ext-core)
 ;;; gptel-ext-core.el ends here
