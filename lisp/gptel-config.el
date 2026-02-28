@@ -16,7 +16,7 @@
 ;; Load split tool modules (replaces gptel-ext-tools.el)
 (require 'gptel-tools)
 
-;; Load enhanced tool UI (patches minibuffer to match overlay options)
+;; Load enhanced tool UI BEFORE gptel creates overlays (critical timing!)
 (require 'gptel-tool-ui)
 
 ;; Load enhanced preview tools
@@ -25,10 +25,6 @@
 
 ;; Load tool verification (checks all declared tools are registered)
 (require 'nucleus-tools-verify)
-
-;; Setup tool UI after gptel is loaded (so keymap exists)
-(with-eval-after-load 'gptel
-  (my/gptel-setup-tool-ui))
 
 ;; --- Configuration Defaults ---
 (setq gptel-backend gptel--dashscope

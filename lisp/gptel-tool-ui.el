@@ -113,6 +113,10 @@ This patches `gptel-tool-call-actions-map` to use our dispatch function:
   (define-key gptel-tool-call-actions-map [mouse-1] #'my/gptel--dispatch-tool-calls)
   (message "Unified tool UI enabled (y/n/k/i/p/q | 5-tier confirmation)"))
 
+;; Setup immediately when this file loads (before gptel creates overlays)
+(when (and (boundp 'gptel-tool-call-actions-map) gptel-tool-call-actions-map)
+  (my/gptel-setup-tool-ui))
+
 (provide 'gptel-tool-ui)
 
 ;;; gptel-tool-ui.el ends here
