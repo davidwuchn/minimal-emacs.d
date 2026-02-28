@@ -25,30 +25,35 @@
 
 (defconst nucleus-toolsets
   '((:core . ("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
-             "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
-             "WebFetch" "WebSearch" "Write" "YouTube"
-             "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-    (:readonly . ("Agent" "BashRO" "Eval" "Glob" "Grep" "Read" "Skill"
-                 "WebFetch" "WebSearch" "YouTube"
-                 "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                 "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
-    (:nucleus . ("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
-                 "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
-                 "WebFetch" "WebSearch" "Write" "YouTube"
-                 "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                 "preview_file_change" "preview_patch"
-                 "list_skills" "load_skill" "create_skill"
-                 "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-    (:snippets . ("Agent" "RunAgent" "Bash" "Edit" "ApplyPatch" "preview_file_change" "preview_patch"
-                 "Grep" "Glob" "Read" "Write" "describe_symbol" "get_symbol_source"
-                 "find_buffers_and_recent" "Skill" "list_skills" "load_skill"
-                 "create_skill" "WebSearch" "WebFetch"
-                 "Eval" "Insert" "Mkdir" "TodoWrite" "YouTube"
-                 "Move" "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages")))
+              "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
+              "WebFetch" "WebSearch" "Write" "YouTube"
+              "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
+     (:readonly . ("Agent" "BashRO" "Eval" "Glob" "Grep" "Read" "Skill"
+                  "WebFetch" "WebSearch" "YouTube"
+                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                  "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
+     (:researcher . ("Agent" "BashRO" "Glob" "Grep" "Read" "Skill"
+                     "WebFetch" "WebSearch" "YouTube"
+                     "list_skills" "load_skill"
+                     "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"))
+     (:nucleus . ("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
+                  "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
+                  "WebFetch" "WebSearch" "Write" "YouTube"
+                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                  "preview_file_change" "preview_patch"
+                  "list_skills" "load_skill" "create_skill"
+                  "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
+     (:snippets . ("Agent" "RunAgent" "Bash" "Edit" "ApplyPatch" "preview_file_change" "preview_patch"
+                  "Grep" "Glob" "Read" "Write" "describe_symbol" "get_symbol_source"
+                  "find_buffers_and_recent" "Skill" "list_skills" "load_skill"
+                  "create_skill" "WebSearch" "WebFetch"
+                  "Eval" "Insert" "Mkdir" "TodoWrite" "YouTube"
+                  "Move" "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages")))
   "Canonical toolset definitions for nucleus.
 
 :core — Base gptel-agent tools (17 tools)
 :readonly — Read-only subset for plan mode (12 tools)
+:researcher — Research-specific: repo exploration + web research + skill loading (14 tools)
 :nucleus — Core + preview + skill management (21 tools)
 :snippets — Tools with supplemental prompts injected")
 

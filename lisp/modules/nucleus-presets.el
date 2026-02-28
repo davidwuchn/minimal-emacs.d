@@ -142,9 +142,13 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
                              sys)
                    (setf (plist-get (cdr cell) :system) sys)))))
           (patch-agent "executor" (nucleus-get-tools :nucleus))
-          ;; Keep researcher and introspector with their default defined tools
-          ;; by not overriding them.
-          )))))
+          (patch-agent "researcher" (nucleus-get-tools :researcher))
+          (patch-agent "introspector" (nucleus-get-tools :readonly))
+          ;; Agent tool contracts:
+          ;; - executor: full action tools for code changes (21 tools)
+          ;; - researcher: repo exploration + web research + skill loading (14 tools)
+          ;; - introspector: Emacs introspection tools (15 tools)
+           )))))
 
 (defun nucleus--after-agent-update (&rest _)
   "Post-agent-update hook: re-register directives and override presets."
