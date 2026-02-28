@@ -57,7 +57,7 @@
 
 ;;; Tool Implementations
 
-(defun my/gptel-lsp-diagnostics (callback)
+(cl-defun my/gptel-lsp-diagnostics (callback)
   "Get project-wide diagnostics from Flymake."
   (unless (fboundp 'flymake--project-diagnostics)
     (funcall callback "Error: flymake--project-diagnostics not available (requires Emacs 29+)")
@@ -84,7 +84,7 @@
                      diags)))
         (funcall callback (string-join formatted "\n"))))))
 
-(defun my/gptel-lsp-references (callback file-path line character)
+(cl-defun my/gptel-lsp-references (callback file-path line character)
   "Get LSP references for the symbol at FILE-PATH, LINE, CHARACTER (0-indexed)."
   (let ((server (my/gptel-lsp--get-server file-path)))
     (unless server
@@ -107,7 +107,7 @@
      :timeout-fn (lambda ()
                    (funcall callback "LSP Request timed out.")))))
 
-(defun my/gptel-lsp-workspace-symbol (callback query)
+(cl-defun my/gptel-lsp-workspace-symbol (callback query)
   "Query workspace symbols for QUERY."
   (let ((server (my/gptel-lsp--get-server default-directory)))
     (unless server
