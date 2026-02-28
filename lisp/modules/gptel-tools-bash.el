@@ -28,6 +28,40 @@ interactive commands like git commit."
 (defvar my/gptel--persistent-bash-process nil
   "Persistent background bash process for gptel-agent's Bash tool.")
 
+(defun my/gptel--safe-bash-command-p (command)
+  "Check if a Bash COMMAND is safe for Plan mode.
+Returns t if safe, or a string explaining why it was rejected."
+  (let* ((cmd (string-trim command))
+         (forbidden-chars '(">" "<" "`" "$(" "sed -i")))
+    (catch 'rejected
+      ;; Check forbidden syntax
+      (dolist (c forbidden-chars)
+        (when (string-match-p (regexp-quote c) cmd)
+          (throw 'rejected (format "Contains forbidden shell feature: %s" c))))
+      (when (string-match-p "\\(?:^\\|[^&]\\)&\\(?:[^&]\\|$\\)" cmd)
+        (throw 'rejected "Contains forbidden backgrounding: &"))
+
+      ;; Split and check whitelist
+      (let* ((parts (split-string cmd "\\(&&\\|||\\||\\|;\\)" t "[ \t\n\r]+"))
+             (whitelist '("ls" "pwd" "tree" "file" "find" "fd" "which" "type"
+                          "git status" "git diff" "git log" "git show" "git branch" "git grep"
+                          "grep" "rg" "cat" "head" "tail" "wc" "echo" "jq" "awk" "sed" "sort" "uniq"
+                          "pytest" "npm test" "npm run test" "cargo test" "go test" "make test" "make check")))
+        (dolist (part parts)
+          (let* ((clean-part (string-trim part))
+                 (allowed nil))
+            (dolist (w whitelist)
+              (let ((len (length w)))
+                (when (string-prefix-p w clean-part)
+                  (let ((next-char (if (> (length clean-part) len)
+                                       (substring clean-part len (1+ len))
+                                     " ")))
+                    (when (string-match-p "[ \t\n\r]" next-char)
+                      (setq allowed t))))))
+            (unless allowed
+              (throw 'rejected (format "Command not in read-only whitelist: %s" clean-part)))))
+        t))))
+
 ;;; Bash Tool Implementation
 
 (defun my/gptel--agent-bash-async (callback command)
@@ -56,12 +90,13 @@ CALLBACK is called with the result string on completion."
             (unless (and (stringp command) (not (string-empty-p (string-trim command))))
               (error "command is empty"))
 
-            (if (and is-plan
-                     (or (string-match-p "[;|&><]" command)
-                         (not (string-match-p "\\`[ \t]*\\(ls\\|pwd\\|tree\\|file\\|git status\\|git diff\\|git log\\|git show\\|git branch\\|pytest\\|npm test\\|npm run test\\|cargo test\\|go test\\|make test\\)\\b" command))))
-                (finish (format "Error: Command rejected by Emacs Whitelist Sandbox. In Plan mode, you may only use simple read-only commands (ls, git status, tree, etc.). Shell chaining (; | &) and output redirection (> <) are strictly forbidden. \n\nIMPORTANT: Do not use Bash to read or search files (no cat/grep/find); use the native `Read`, `Grep`, and `Glob` tools instead. If you truly must run a build or script, ask the user to say \"go\" to switch to Execution mode."))
+            (let ((sandbox-err (and is-plan
+                                    (let ((res (my/gptel--safe-bash-command-p command)))
+                                      (if (stringp res) res nil)))))
+              (if sandbox-err
+                  (finish (format "Error: Command rejected by Sandbox. %s.\n\nIMPORTANT: Do not use Bash to read or search files (no cat/grep/find); use the native `Read`, `Grep`, and `Glob` tools instead. You may use pipes (|) and logical operators (&&, ||, ;) to compose whitelisted read-only commands. If you truly must mutate state, ask the user to say \"go\" to switch to Execution mode." sandbox-err))
 
-              (unless (and my/gptel--persistent-bash-process
+                (unless (and my/gptel--persistent-bash-process
                            (process-live-p my/gptel--persistent-bash-process))
                 (let ((buf (get-buffer-create " *gptel-persistent-bash*")))
                   (with-current-buffer buf (erase-buffer))
@@ -130,7 +165,7 @@ CALLBACK is called with the result string on completion."
                              proc))
 
                 ;; Wrap command in {} to catch errors and safely output the exit code marker
-                (process-send-string proc (format "{ %s\n} 2>&1\necho %s:$?\n" command marker)))))
+                (process-send-string proc (format "{ %s\n} 2>&1\necho %s:$?\n" command marker))))))
         (error (finish (format "Error: %s" (error-message-string err))))))))
 
 ;;; Tool Registration
