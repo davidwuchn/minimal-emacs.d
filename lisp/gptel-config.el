@@ -1,8 +1,11 @@
 ;;; gptel-config.el --- Clean, modular gptel configuration -*- lexical-binding: t; -*-
 
 (eval-and-compile
-  (add-to-list 'load-path
-               (file-truename (expand-file-name "lisp/modules" user-emacs-directory))))
+  (let* ((base-dir (if (boundp 'minimal-emacs-user-directory)
+                       minimal-emacs-user-directory
+                     "~/.emacs.d/"))
+         (modules-dir (expand-file-name "lisp/modules" base-dir)))
+    (add-to-list 'load-path (file-truename modules-dir))))
 
 (require 'gptel-ext-core)
 (require 'gptel-ext-backends)
