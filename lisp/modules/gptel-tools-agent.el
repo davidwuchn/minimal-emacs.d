@@ -146,7 +146,7 @@ AGENT-NAME must exist in `gptel-agent--agents`."
      :function #'my/gptel--agent-task-with-timeout
      :args '((:name "subagent_type"
               :type string
-              :enum ["researcher" "introspector"])
+              :enum ["researcher" "introspector" "executor"])
             (:name "description"
               :type string)
             (:name "prompt"
