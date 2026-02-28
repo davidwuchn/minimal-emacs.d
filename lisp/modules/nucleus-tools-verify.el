@@ -78,7 +78,7 @@ Returns alist of (tool-name . status) where status is:
                           (pcase status
                             ('registered "✓ registered")
                             ('missing "✗ MISSING")
-                            ('duplicate "⚠ duplicate")))))
+                            ('duplicate "⚠ duplicate"))))))
       (goto-char (point-min))
       (display-buffer (current-buffer)))))
 
