@@ -58,29 +58,48 @@ When non-nil, subagent requests use this model instead of the parent's."
     (apply orig args)))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt)
-  "Wrapper around `gptel-agent--task' that adds a timeout.
+  "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
 
 CALLBACK is called with the result or a timeout error."
   (let* ((done nil)
-         (timer nil)
+         (timeout-timer nil)
+         (progress-timer nil)
+         (start-time (current-time))
          (parent-fsm (buffer-local-value 'gptel--fsm-last (current-buffer)))
          (origin-buf (current-buffer))
          (wrapped-cb
           (lambda (result)
             (unless done
               (setq done t)
-              (when (timerp timer) (cancel-timer timer))
+              (when (timerp timeout-timer) (cancel-timer timeout-timer))
+              (when (timerp progress-timer) (cancel-timer progress-timer))
+              (message "[nucleus] Subagent '%s' completed in %.1fs"
+                       agent-type (float-time (time-since start-time)))
               (when (buffer-live-p origin-buf)
                 (with-current-buffer origin-buf
                   (setq-local gptel--fsm-last parent-fsm))
                 (setq-local gptel--fsm-last parent-fsm))
               (funcall callback result)))))
-    (setq timer
+
+    (message "[nucleus] Delegating to subagent '%s' (timeout: %ds)..."
+             agent-type my/gptel-agent-task-timeout)
+
+    (setq progress-timer
+          (run-at-time 10 10
+           (lambda ()
+             (unless done
+               (message "[nucleus] Subagent '%s' still running... (%.1fs elapsed)"
+                        agent-type (float-time (time-since start-time)))))))
+
+    (setq timeout-timer
           (run-at-time
            my/gptel-agent-task-timeout nil
            (lambda ()
              (unless done
                (setq done t)
+               (when (timerp progress-timer) (cancel-timer progress-timer))
+               (message "[nucleus] Subagent '%s' timed out after %ds"
+                        agent-type my/gptel-agent-task-timeout)
                (when (buffer-live-p origin-buf)
                  (with-current-buffer origin-buf
                    (let ((my/gptel--abort-generation (1+ my/gptel--abort-generation)))
