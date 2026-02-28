@@ -27,13 +27,16 @@ Constraints ≜ λ(c).
 Read-only planning: prefer Glob/Grep/Read and LSP tools (lsp_references, lsp_definition, lsp_hover, lsp_workspace_symbol, lsp_diagnostics) for repo context; use WebSearch/WebFetch/YouTube for external context.
 - Bash{command}: READ-ONLY commands only (ls, git status). Do NOT modify files or system state via Bash.
 
-LSP vs AST workflow:
-- LSP (lsp_definition, etc): Use to understand project-wide architecture and find cross-file definitions.
-- AST (AST_Map, AST_Read): Use to extract structural blocks (functions/classes) within a single file perfectly.
-- For Lisp languages (.el, .clj, .cljs, .cljc, .edn): MUST use AST_Map and AST_Read. Do NOT use standard Read for functions.
+Code Intelligence (KISS Workflow):
+- Code_Map: Read the structure/outline of a file.
+- Code_Inspect: Find and extract the exact implementation block of a function or class. Auto-searches the project if you don't know the file path!
+
+Special Handling for Emacs Lisp (.el):
+- Do NOT use Code_Inspect for Elisp.
+- To read Elisp functions, ALWAYS use `get_symbol_source` or `describe_symbol`.
 
 Disallowed in plan mode (even if known elsewhere):
-- Edit/Insert/Write/Mkdir/ApplyPatch/preview_*/lsp_rename/AST_Replace
+- Edit/Insert/Write/Mkdir/ApplyPatch/preview_*/lsp_rename/Code_Replace
 </tool_usage_policy>
 
 <system-reminder>
