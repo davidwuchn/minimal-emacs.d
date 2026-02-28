@@ -1,12 +1,13 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **DOCUMENTATION COMPLETE**: Created missing tool docs (bash_ro.md, diagnostics.md, run_agent.md, skill.md). Updated bash_command.md to reference BashRO. Fixed all Code_Check → Diagnostics naming. All registered tools now have corresponding documentation.
 - **PARENTHESIS BALANCE FIX**: Fixed unbalanced parentheses in gptel-tools-code.el. Moved comment outside let bindings, added missing closing paren for when block. **FIXES**: "End of file during parsing" errors.
 - **GPTL-TOOLS-LSP REQUIRE FIX**: Removed stale `require 'gptel-tools-lsp` from gptel-tools.el. Module was deleted when functionality merged into gptel-tools-code.el. **FIXES**: "Cannot open load file: gptel-tools-lsp" compilation error.
 - **BYTE-COMPILATION FIX**: Added `no-byte-compile: t` to gptel-tools-code.el to avoid check-parens false positives with regex patterns containing `\\'`. Removed stale .elc files. **FIXES**: "End of file during parsing" errors. File loads correctly in Emacs sessions.
 - **CODE_CHECK REPORTING**: my/gptel--run-fallback-linter now reports exactly what was checked (e.g., "✓ No linter errors (ESLint) - checked package.json"). Non-standard projects get helpful message about what was searched. **FIXES**: Generic "no errors" messages.
 - **CODE_USAGES BACKEND REPORTING**: Output now includes which backend was used: "Found X usages of 'symbol' (via LSP|ripgrep)". **FIXES**: User doesn't know if results are semantic (LSP) or text-based (ripgrep).
-- **DIAGNOSTICS VS CODE_CHECK**: Upstream `Diagnostics` tool (open buffers only) overlaps with our `Code_Check` (project-wide + CLI fallback). **Resolution**: Code_Check is superior and registered in nucleus toolsets. Diagnostics remains available from upstream but not promoted. Updated Code_Check prompt to clarify distinction.
+- **DIAGNOSTICS NAMING**: Tool registered as `Diagnostics` in nucleus toolsets. Updated all documentation to use consistent naming (replaced Code_Check with Diagnostics). Upstream Diagnostics (open-buffers-only) NOT registered.
 - **LSP TOOLS CLEANUP**: Removed 4 redundant LSP tool prompts (lsp_diagnostics, lsp_references, lsp_workspace_symbol, lsp_definition) - all replaced by Code_* tools. Kept lsp_hover (type info at cursor) and lsp_rename (cross-file renaming). **Reduces LLM cognitive load**.
 - **PRE-FLIGHT PARSER CHECKS**: All Code_* tools (Map, Inspect, Replace) now verify tree-sitter parser availability BEFORE attempting operations. Auto-detect language from file extension (.py, .el, .clj, .rs). Provide step-by-step recovery: install → reopen → verify → fallback. **FIXES**: Confusing errors when files aren't in tree-sitter mode.
 - **ENHANCED LSP RETRY LOGIC**: Code_Usages now uses 5 retries with exponential backoff (0.5s, 1s, 2s, 4s, 8s = ~15s total) for LSP startup race conditions. Detects empty results vs. errors. **FIXES**: Premature fallback to ripgrep when LSP is still indexing.
