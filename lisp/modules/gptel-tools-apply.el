@@ -68,7 +68,7 @@
 CALLBACK is called with the result string."
   (let* ((clean (my/gptel--extract-patch patch)))
     (if (my/gptel--patch-looks-like-envelope-p clean)
-        (funcall callback "ApplyPatch: Envelope format not yet implemented in split module.")
+        (funcall callback "Error: Envelope format not yet implemented in split module.")
       ;; Unified diff: preview if requested, otherwise apply directly
       (if my/gptel-applypatch-auto-preview
           (my/gptel--preview-patch-async
@@ -80,7 +80,7 @@ CALLBACK is called with the result string."
              (my/gptel--apply-patch-core cb clean))
            ;; on-abort
            (lambda (cb)
-             (funcall cb "ApplyPatch: Preview aborted by user."))
+             (funcall cb "Error: Preview aborted by user."))
            "ApplyPatch preview — n apply patch    q abort")
         (my/gptel--apply-patch-core callback clean)))))
 
@@ -91,9 +91,9 @@ Prefers `git apply` if in a git repository; otherwise uses `patch`."
   (condition-case err
       (progn
         (unless (or (executable-find "git") (executable-find "patch"))
-          (error "ApplyPatch: neither 'git' nor 'patch' executable found"))
+          (error "neither 'git' nor 'patch' executable found"))
         (unless (and (stringp patch) (not (string-empty-p (string-trim patch))))
-          (error "ApplyPatch: patch text is empty"))
+          (error "patch text is empty"))
 
         (let* ((clean-patch (my/gptel--extract-patch patch))
                (patch-file (make-temp-file "gptel-patch-"))
@@ -118,11 +118,11 @@ Prefers `git apply` if in a git repository; otherwise uses `patch`."
 
           ;; Validation
           (when (string-match-p "^\\*\\*\\* Begin Patch" clean-patch)
-            (error "ApplyPatch expects unified diff, not envelope format"))
+            (error "patch expects unified diff, not envelope format"))
           (unless (my/gptel--patch-looks-like-unified-diff-p clean-patch)
-            (error "ApplyPatch: patch does not look like a unified diff"))
+            (error "patch does not look like a unified diff"))
           (when (my/gptel--patch-has-absolute-paths-p clean-patch)
-            (error "ApplyPatch: patch contains absolute paths"))
+            (error "patch contains absolute paths"))
 
           (with-temp-file patch-file (insert clean-patch))
 
@@ -156,9 +156,9 @@ Prefers `git apply` if in a git repository; otherwise uses `patch`."
                      (lambda ()
                        (when (process-live-p proc)
                          (delete-process proc))
-                       (funcall finish (format "ApplyPatch: timed out after %ss"
+                       (funcall finish (format "Error: ApplyPatch timed out after %ss"
                                                my/gptel-applypatch-timeout)))))))))
-    (error (funcall callback (format "Error initiating patch application: %s" (error-message-string err))))))
+    (error (funcall callback (format "Error: %s" (error-message-string err))))))
 
 ;;; Tool Registration
 

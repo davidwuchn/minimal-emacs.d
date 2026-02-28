@@ -60,7 +60,7 @@ CALLBACK is called exactly once unless the buffer has been aborted."
     (condition-case err
         (progn
           (unless (file-readable-p path)
-            (error "Error: File or directory %s is not readable" path))
+            (error "File or directory %s is not readable" path))
           (unless new-str-or-diff
             (error "Required argument `new_str' missing"))
           (let ((patch-mode (and diffp (not (eq diffp :json-false)))))
@@ -68,7 +68,7 @@ CALLBACK is called exactly once unless the buffer has been aborted."
                 (funcall finish
                          (gptel-agent--edit-files path old-str new-str-or-diff diffp))
               (unless (executable-find "patch")
-                (error "Error: Command \"patch\" not available, cannot apply diffs"))
+                (error "Command \"patch\" not available, cannot apply diffs"))
               (let* ((out-buf (generate-new-buffer " *gptel-patch*"))
                      (target (expand-file-name path))
                      (default-directory

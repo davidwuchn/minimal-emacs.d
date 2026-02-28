@@ -77,13 +77,13 @@ CALLBACK is called exactly once unless the buffer has been aborted."
       (condition-case err
           (progn
             (when (string-empty-p pattern)
-              (error "Error: pattern must not be empty"))
+              (error "pattern must not be empty"))
             (if path
                 (unless (and (file-readable-p path) (file-directory-p path))
-                  (error "Error: path %s is not readable" path))
+                  (error "path %s is not readable" path))
               (setq path "."))
             (unless (executable-find "tree")
-              (error "Error: Executable `tree' not found. This tool cannot be used"))
+              (error "Executable `tree' not found. This tool cannot be used"))
             (let* ((full-path (expand-file-name path))
                    (args (list "-l" "-f" "-i" "-I" ".git"
                                "--sort=mtime" "--ignore-case"
