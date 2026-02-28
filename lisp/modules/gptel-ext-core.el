@@ -1135,6 +1135,13 @@ START and END are the response region positions passed by
            url-cb)))
     (apply orig url wrapped-url-cb tool-cb failed-msg args)))
 
+(defun my/gptel-auto-permit-tool-calls ()
+  "Accept the current tool call and auto-permit all future ones in this buffer."
+  (interactive)
+  (setq-local gptel-confirm-tool-calls nil)
+  (message "Auto-permitting all future tool calls in this buffer.")
+  (call-interactively #'gptel--accept-tool-calls))
+
 ;; --- Enhanced Tool Call Confirmation Context ---
 ;; Overrides `gptel--display-tool-calls' to include arguments in the minibuffer prompt.
 (defun my/gptel--display-tool-calls (tool-calls info &optional use-minibuffer)
@@ -1180,12 +1187,20 @@ START and END are the response region positions passed by
                                                       (exit-recursive-edit)))
                                  (current-local-map)))
                                (recursive-edit) nil)))
-                   "inspect call(s)"))))
+                   "inspect call(s)")
+               (?a ,(lambda (_)
+                      (setq-local gptel-confirm-tool-calls nil)
+                      (message "Auto-permitting all future tool calls in this buffer.")
+                      (setq unread-command-events (listify-key-sequence "!"))
+                      nil)
+                   "auto-permit future calls"))))
         ;; Prompt for confirmation from the chat buffer
         (let* ((backend-name (gptel-backend-name (plist-get info :backend)))
                (actions-string
                 (concat (propertize "Run tools: " 'face 'font-lock-string-face)
                         (propertize "C-c C-c" 'face 'help-key-binding)
+                        (propertize ", Auto-permit: " 'face 'font-lock-string-face)
+                        (propertize "C-c C-a" 'face 'help-key-binding)
                         (propertize ", Cancel request: " 'face 'font-lock-string-face)
                         (propertize "C-c C-k" 'face 'help-key-binding)
                         (propertize ", Inspect: " 'face 'font-lock-string-face)
@@ -1242,7 +1257,10 @@ START and END are the response region positions passed by
           (overlay-put ov 'gptel-tool tool-calls)
           (overlay-put ov 'help-echo
                        (concat "Tool call(s) requested: " actions-string))
-          (overlay-put ov 'keymap gptel-tool-call-actions-map))))))
+          (let ((map (make-sparse-keymap)))
+            (set-keymap-parent map gptel-tool-call-actions-map)
+            (define-key map (kbd "C-c C-a") #'my/gptel-auto-permit-tool-calls)
+            (overlay-put ov 'keymap map)))))))
 
 (advice-add 'gptel--display-tool-calls :override #'my/gptel--display-tool-calls)
 
