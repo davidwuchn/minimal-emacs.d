@@ -23,6 +23,9 @@
 (require 'gptel-tools-preview-enhanced)
 (gptel-tools-preview-enhanced-register)
 
+;; Load tool verification (checks all declared tools are registered)
+(require 'nucleus-tools-verify)
+
 ;; Setup tool UI after gptel is loaded (so keymap exists)
 (with-eval-after-load 'gptel
   (my/gptel-setup-tool-ui))

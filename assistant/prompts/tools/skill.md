@@ -1,4 +1,4 @@
-λ(id, d). load_skill | id:name | d:?root | ret:skill_data
+λ(id,d). load_skill | id:name | d:?root | ret:skill_data
 
 # Skill - Load Skill Package
 
@@ -21,7 +21,7 @@ Skill{id: "python-best-practices", description: "Load Python best practices"}
 - `description` (optional): Brief description of what the skill provides
 
 ## Returns
-Skill data loaded into agent context.
+Skill data loaded into agent context with instructions and resources.
 
 ## Examples
 ```
@@ -61,9 +61,15 @@ assistant/skills/
 └── ...
 ```
 
+## Failure Modes
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| "Skill not found" | Invalid skill id | Use `list_skills` to see available skills |
+| "Failed to load" | Corrupted skill file | Check SKILL.md format |
+
 ## Related Tools
 - `list_skills` - List available skill packages
-- `load_skill` - Load a specific skill (alias for Skill)
+- `load_skill` - Alias for Skill tool
 - `create_skill` - Create a new skill package
 
 ## Notes
