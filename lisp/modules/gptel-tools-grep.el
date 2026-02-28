@@ -108,25 +108,28 @@ has been aborted, in which case results are dropped."
 
 (defun gptel-tools-grep-register ()
   "Register the Grep tool with gptel."
-  (when (fboundp 'gptel-make-tool)
-    (gptel-make-tool
-     :name "Grep"
-     :description "Search file contents under a path (async)."
-     :function #'my/gptel--agent-grep-async
-     :async t
-     :args '((:name "regex"
-              :type string)
-            (:name "path"
-              :type string)
-            (:name "glob"
-              :type string
-              :optional t)
-            (:name "context_lines"
-              :optional t
-              :type integer
-              :maximum 15))
-     :category "gptel-agent"
-     :include t)))
+  (if (not (or (executable-find "rg") (executable-find "grep")))
+      (when (fboundp 'display-warning)
+        (display-warning 'gptel-tools "Executables `rg' and `grep' not found. Grep tool will not be registered." :warning))
+    (when (fboundp 'gptel-make-tool)
+      (gptel-make-tool
+       :name "Grep"
+       :description "Search file contents under a path (async)."
+       :function #'my/gptel--agent-grep-async
+       :async t
+       :args '((:name "regex"
+                :type string)
+              (:name "path"
+                :type string)
+              (:name "glob"
+                :type string
+                :optional t)
+              (:name "context_lines"
+                :optional t
+                :type integer
+                :maximum 15))
+       :category "gptel-agent"
+       :include t))))
 
 ;;; Footer
 

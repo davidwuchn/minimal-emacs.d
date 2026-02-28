@@ -164,18 +164,21 @@ Prefers `git apply` if in a git repository; otherwise uses `patch`."
 
 (defun gptel-tools-apply-register ()
   "Register the ApplyPatch tool with gptel."
-  (when (fboundp 'gptel-make-tool)
-    (gptel-make-tool
-     :name "ApplyPatch"
-     :description "Apply a unified diff or OpenCode envelope patch."
-     :function #'my/gptel--apply-patch-dispatch
-     :async t
-     :args '((:name "patch"
-              :type string
-              :description "Unified diff content"))
-     :category "gptel-agent"
-     :confirm t
-     :include t)))
+  (if (not (or (executable-find "git") (executable-find "patch")))
+      (when (fboundp 'display-warning)
+        (display-warning 'gptel-tools "Executables `git' and `patch' not found. ApplyPatch tool will not be registered." :warning))
+    (when (fboundp 'gptel-make-tool)
+      (gptel-make-tool
+       :name "ApplyPatch"
+       :description "Apply a unified diff or OpenCode envelope patch."
+       :function #'my/gptel--apply-patch-dispatch
+       :async t
+       :args '((:name "patch"
+                :type string
+                :description "Unified diff content"))
+       :category "gptel-agent"
+       :confirm t
+       :include t))))
 
 ;;; Footer
 

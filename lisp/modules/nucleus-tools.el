@@ -57,16 +57,22 @@
 :snippets — Tools with supplemental prompts injected")
 
 (defun nucleus-get-tools (set-name)
-  "Return tool list for SET-NAME.
+  "Return tool list for SET-NAME, filtering out unregistered tools.
 
 SET-NAME can be a symbol from `nucleus-toolsets` or a list of tool names.
 Returns a list of tool name strings."
-  (pcase set-name
-    ((and (pred symbolp) name)
-     (or (alist-get name nucleus-toolsets)
-         (user-error "Unknown toolset: %S" name)))
-    ((and (pred listp) tools) tools)
-    (_ (user-error "Invalid toolset specifier: %S" set-name))))
+  (let ((tools
+         (pcase set-name
+           ((and (pred symbolp) name)
+            (or (alist-get name nucleus-toolsets)
+                (user-error "Unknown toolset: %S" name)))
+           ((and (pred listp) t-list) t-list)
+           (_ (user-error "Invalid toolset specifier: %S" set-name)))))
+    (seq-filter (lambda (tool-name)
+                  (if (fboundp 'gptel-get-tool)
+                      (ignore-errors (gptel-get-tool tool-name))
+                    t))
+                tools)))
 
 ;;; Tool Name Resolution
 

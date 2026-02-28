@@ -128,6 +128,9 @@ CALLBACK is called exactly once unless the buffer has been aborted."
 
 (defun gptel-tools-edit-register ()
   "Register the Edit tool with gptel."
+  (unless (executable-find "patch")
+    (when (fboundp 'display-warning)
+      (display-warning 'gptel-tools "Executable `patch' not found. Edit tool will only support exact string replacement." :warning)))
   (when (fboundp 'gptel-make-tool)
     (gptel-make-tool
      :name "Edit"

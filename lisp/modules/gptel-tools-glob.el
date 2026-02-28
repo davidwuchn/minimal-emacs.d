@@ -128,23 +128,26 @@ CALLBACK is called exactly once unless the buffer has been aborted."
 
 (defun gptel-tools-glob-register ()
   "Register the Glob tool with gptel."
-  (when (fboundp 'gptel-make-tool)
-    (gptel-make-tool
-     :name "Glob"
-     :description "Find files by glob pattern (async)."
-     :function #'my/gptel--agent-glob-async
-     :async t
-     :args '((:name "pattern"
-              :type string
-              :description "Glob pattern.")
-            (:name "path"
-              :type string
-              :optional t)
-            (:name "depth"
-              :type integer
-              :optional t))
-     :category "gptel-agent"
-     :include t)))
+  (if (not (executable-find "tree"))
+      (when (fboundp 'display-warning)
+        (display-warning 'gptel-tools "Executable `tree' not found. Glob tool will not be registered." :warning))
+    (when (fboundp 'gptel-make-tool)
+      (gptel-make-tool
+       :name "Glob"
+       :description "Find files by glob pattern (async)."
+       :function #'my/gptel--agent-glob-async
+       :async t
+       :args '((:name "pattern"
+                :type string
+                :description "Glob pattern.")
+              (:name "path"
+                :type string
+                :optional t)
+              (:name "depth"
+                :type integer
+                :optional t))
+       :category "gptel-agent"
+       :include t))))
 
 ;;; Footer
 
