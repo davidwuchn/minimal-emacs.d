@@ -20,6 +20,41 @@
 
 ;;; Internal Helpers
 
+(defun my/gptel-lsp--get-expected-executables (mode)
+  "Get a list of expected executable names for MODE from `eglot-server-programs'."
+  (let ((found nil))
+    (dolist (entry eglot-server-programs)
+      (let ((modes (car entry))
+            (server (cdr entry)))
+        (when (if (listp modes) (memq mode modes) (eq mode modes))
+          (setq found
+                (cond
+                 ;; ("server" "--arg")
+                 ((and (listp server) (stringp (car server)))
+                  (list (car server)))
+                 ;; "server"
+                 ((stringp server)
+                  (list server))
+                 ;; ((("server" "--arg") ("server2"))) -> ("server" "server2")
+                 ((and (listp server) (listp (car server)) (stringp (caar server)))
+                  (mapcar #'car server))
+                 ;; Dynamic/Byte-code (e.g. python, c++)
+                 ((or (byte-code-function-p server) (functionp server))
+                  '("<dynamic-resolution>"))
+                 (t '("<unknown>")))))))
+    found))
+
+(defun my/gptel-lsp--format-missing-server-error (path)
+  "Format a detailed error message indicating a missing LSP server for PATH."
+  (let* ((buf (or (find-buffer-visiting path)
+                  (find-file-noselect path)))
+         (mode (and buf (buffer-local-value 'major-mode buf)))
+         (execs (and mode (my/gptel-lsp--get-expected-executables mode))))
+    (if execs
+        (format "Error: No active Eglot server found for %s. The server could not be started automatically. Eglot expects one of the following executables for `%s': %s. Please ensure the appropriate language server is installed and available in your PATH."
+                path mode (string-join execs ", "))
+      (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." path))))
+
 (defun my/gptel-lsp--get-server (path &optional auto-start)
   "Get the active Eglot server for PATH, reliably.
 If AUTO-START is non-nil and PATH is provided, attempt to start Eglot
@@ -114,7 +149,7 @@ automatically in the background if it is not already running."
   "Get LSP references for the symbol at FILE-PATH, LINE, CHARACTER (0-indexed)."
   (let ((server (my/gptel-lsp--get-server file-path t)))
     (unless server
-      (funcall callback (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." file-path))
+      (funcall callback (my/gptel-lsp--format-missing-server-error file-path))
       (cl-return-from my/gptel-lsp-references))
     
     (jsonrpc-async-request
@@ -137,7 +172,7 @@ automatically in the background if it is not already running."
   "Get LSP definition for the symbol at FILE-PATH, LINE, CHARACTER (0-indexed)."
   (let ((server (my/gptel-lsp--get-server file-path t)))
     (unless server
-      (funcall callback (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." file-path))
+      (funcall callback (my/gptel-lsp--format-missing-server-error file-path))
       (cl-return-from my/gptel-lsp-definition))
     
     (jsonrpc-async-request
@@ -160,7 +195,7 @@ automatically in the background if it is not already running."
   "Get LSP hover info for the symbol at FILE-PATH, LINE, CHARACTER (0-indexed)."
   (let ((server (my/gptel-lsp--get-server file-path t)))
     (unless server
-      (funcall callback (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." file-path))
+      (funcall callback (my/gptel-lsp--format-missing-server-error file-path))
       (cl-return-from my/gptel-lsp-hover))
     
     (jsonrpc-async-request
@@ -189,7 +224,7 @@ automatically in the background if it is not already running."
   "Rename symbol at FILE-PATH, LINE, CHARACTER (0-indexed) to NEW-NAME."
   (let ((server (my/gptel-lsp--get-server file-path t)))
     (unless server
-      (funcall callback (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." file-path))
+      (funcall callback (my/gptel-lsp--format-missing-server-error file-path))
       (cl-return-from my/gptel-lsp-rename))
     
     (jsonrpc-async-request
