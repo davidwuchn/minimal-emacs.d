@@ -44,21 +44,39 @@
                  (t '("<unknown>")))))))
     found))
 
+(defun my/gptel-lsp--find-eglot-supported-buffer (proj)
+  "Find an open buffer in PROJ that is supported by Eglot."
+  (cl-find-if
+   (lambda (buf)
+     (let* ((file (buffer-file-name buf))
+            (mode (buffer-local-value 'major-mode buf)))
+       (and file
+            (equal (project-current nil (file-name-directory file)) proj)
+            (cl-find-if (lambda (entry)
+                          (let ((m (car entry)))
+                            (if (listp m) (memq mode m) (eq mode m))))
+                        eglot-server-programs))))
+   (buffer-list)))
+
 (defun my/gptel-lsp--format-missing-server-error (path)
   "Format a detailed error message indicating a missing LSP server for PATH."
-  (let* ((buf (or (find-buffer-visiting path)
-                  (find-file-noselect path)))
+  (let* ((proj (project-current nil path))
+         (buf (or (find-buffer-visiting path)
+                  (if (file-directory-p path)
+                      (my/gptel-lsp--find-eglot-supported-buffer proj)
+                    (find-file-noselect path))))
          (mode (and buf (buffer-local-value 'major-mode buf)))
          (execs (and mode (my/gptel-lsp--get-expected-executables mode))))
     (if execs
         (format "Error: No active Eglot server found for %s. The server could not be started automatically. Eglot expects one of the following executables for `%s': %s. Please ensure the appropriate language server is installed and available in your PATH."
-                path mode (string-join execs ", "))
-      (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." path))))
+                (if (file-directory-p path) "the current project" path) mode (string-join execs ", "))
+      (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." (if (file-directory-p path) "the current project" path)))))
 
 (defun my/gptel-lsp--get-server (path &optional auto-start)
   "Get the active Eglot server for PATH, reliably.
 If AUTO-START is non-nil and PATH is provided, attempt to start Eglot
-automatically in the background if it is not already running."
+automatically in the background if it is not already running.
+If PATH is a directory, attempts to find an open supported buffer in the project to start the server."
   (let* ((proj (project-current nil path))
          (servers (and proj (hash-table-values eglot--servers-by-project)))
          (buf (and path (find-buffer-visiting path)))
@@ -75,12 +93,15 @@ automatically in the background if it is not already running."
     
     (if (and server (jsonrpc-running-p server))
         server
-      (if (and auto-start path (file-exists-p path))
-          (let* ((new-buf (find-file-noselect path))
-                 (new-server (with-current-buffer new-buf
-                               (let ((noninteractive t))
-                                 (ignore-errors (eglot-ensure)))
-                               (eglot-current-server))))
+      (if (and auto-start path)
+          (let* ((new-buf (if (file-directory-p path)
+                              (my/gptel-lsp--find-eglot-supported-buffer proj)
+                            (and (file-exists-p path) (find-file-noselect path))))
+                 (new-server (when new-buf
+                               (with-current-buffer new-buf
+                                 (let ((noninteractive t))
+                                   (ignore-errors (eglot-ensure)))
+                                 (eglot-current-server)))))
             (if (and new-server (jsonrpc-running-p new-server))
                 new-server
               nil))
@@ -117,12 +138,9 @@ automatically in the background if it is not already running."
     (cl-return-from my/gptel-lsp-diagnostics))
   
   (let* ((proj (project-current))
-         (servers (and proj (hash-table-values eglot--servers-by-project)))
-         (active-server (cl-find-if (lambda (s) (and (equal (project-root (eglot--project s)) (project-root proj))
-                                                     (jsonrpc-running-p s)))
-                                    servers)))
-    (unless active-server
-      (funcall callback "Error: No active LSP server found for the current project. Cannot verify diagnostics. Ensure a file is open and the language server is running.")
+         (server (my/gptel-lsp--get-server default-directory t)))
+    (unless server
+      (funcall callback (my/gptel-lsp--format-missing-server-error default-directory))
       (cl-return-from my/gptel-lsp-diagnostics))
 
     (let ((diags (flymake--project-diagnostics proj)))
@@ -250,9 +268,9 @@ automatically in the background if it is not already running."
 
 (cl-defun my/gptel-lsp-workspace-symbol (callback query)
   "Query workspace symbols for QUERY."
-  (let ((server (my/gptel-lsp--get-server default-directory)))
+  (let ((server (my/gptel-lsp--get-server default-directory t)))
     (unless server
-      (funcall callback "Error: No active Eglot server found for the current project")
+      (funcall callback (my/gptel-lsp--format-missing-server-error default-directory))
       (cl-return-from my/gptel-lsp-workspace-symbol))
     
     (jsonrpc-async-request
