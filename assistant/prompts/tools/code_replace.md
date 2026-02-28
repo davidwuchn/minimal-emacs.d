@@ -39,8 +39,37 @@ Code_Replace{
 - **Preview**: Shows diff before applying (if preview enabled)
 - **Atomic**: Either fully replaces or fully reverts (no partial edits)
 
+## Dependencies
+- **Required**: tree-sitter parser for the file's language
+- **Required**: File must exist and be readable
+- **Optional**: Preview system (for diff display before applying)
+
+## Failure Modes
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| "Could not find node named 'X'" | Symbol doesn't exist in file | Use Code_Map to see available symbols, check spelling |
+| "AST Replacement rejected: syntax error" | new_code has unbalanced parens/brackets | Fix syntax in new_code, ensure all brackets close |
+| "Error executing Code_Replace" | tree-sitter parser not installed | Run `M-x treesit-install-language-grammar RET <lang> RET` |
+| Timeout after 5s | Very large file or slow disk | Ensure file is accessible, check disk performance |
+
+## Setup Requirements
+1. **Tree-sitter parsers** (auto-installed, or manual):
+   ```elisp
+   M-x treesit-install-language-grammar RET python RET
+   M-x treesit-install-language-grammar RET elisp RET
+   M-x treesit-install-language-grammar RET rust RET
+   M-x treesit-install-language-grammar RET clojure RET
+   ```
+
+2. **Verify parser installation**:
+   ```elisp
+   M-x eval-expression RET (treesit-language-available-p 'python) RET
+   ;; Should return: t
+   ```
+
 ## Notes
 - Uses tree-sitter AST for structural replacement
 - Preserves surrounding code exactly
 - Works for: Python, Elisp, Clojure (.clj/.cljs/.cljc), Rust, JavaScript
 - For Elisp: Prefer this over standard Edit to avoid paren mismatches
+- Syntax validation uses `treesit-node-check` for Emacs 30 compatibility

@@ -28,6 +28,26 @@ Code_Map{file_path: "src/utils.py"}
   process_data
 ```
 
+## Dependencies
+- **Required**: tree-sitter parser for the file's language
+- **Optional**: None (file-local operation, no LSP needed)
+
+## Failure Modes
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| "Could not generate file map" | tree-sitter parser not installed | Run `M-x treesit-install-language-grammar RET <lang> RET` |
+| "Is tree-sitter enabled?" | File not using tree-sitter mode | Ensure `global-treesit-auto-mode` is enabled |
+| Empty list | File has no definitions | File may only contain imports/exports |
+
+## Setup Requirements
+Parsers are **auto-installed** when you open a file. Manual installation:
+```elisp
+M-x treesit-install-language-grammar RET python RET
+M-x treesit-install-language-grammar RET elisp RET
+M-x treesit-install-language-grammar RET rust RET
+M-x treesit-install-language-grammar RET clojure RET
+```
+
 ## Notes
 - Works for: Python, Elisp, Clojure, Rust, JS (any tree-sitter supported language)
 - Fast, file-local operation (no project-wide search)

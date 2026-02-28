@@ -247,3 +247,35 @@ Tools are registered in `lisp/modules/gptel-tools-code.el` and included in nucle
 - [AGENTS.md](../AGENTS.md) — Bootstrap principles
 - [STATE.md](../STATE.md) — Current configuration status
 - [assistant/prompts/tools/](../assistant/prompts/tools/) — Individual tool prompt docs
+
+## Automatic Parser Installation
+
+Tree-sitter language parsers are **automatically installed** on first use:
+
+```elisp
+;; In lisp/init-treesit.el
+(setq treesit-auto-install 'auto)  ; Auto-install parsers when needed
+(global-treesit-auto-mode)         ; Enable tree-sitter modes automatically
+```
+
+### Supported Parsers
+The following parsers are pre-configured with ABI14-compatible revisions:
+
+| Language | Grammar Repository | ABI14 Revision |
+|----------|-------------------|----------------|
+| Elisp | `Wilfred/tree-sitter-elisp` | `1.2` |
+| Python | `tree-sitter/tree-sitter-python` | `v0.21.0` |
+| Rust | `tree-sitter/tree-sitter-rust` | `v0.21.0` |
+| Clojure | `sogaiu/tree-sitter-clojure` | `master` |
+
+### Manual Installation (Optional)
+To pre-install parsers before first use:
+
+```elisp
+M-x treesit-install-language-grammar RET python RET
+M-x treesit-install-language-grammar RET elisp RET
+M-x treesit-install-language-grammar RET rust RET
+M-x treesit-install-language-grammar RET clojure RET
+```
+
+Installed grammars are stored in `~/.emacs.d/var/tree-sitter/`.

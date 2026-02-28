@@ -15,28 +15,43 @@
 
 (defun my/gptel--find-usages (symbol-name)
   "Find all usages of SYMBOL-NAME in the current project.
-Tries LSP references first, falls back to ripgrep."
-  (let ((proj (project-current))
-        (root (if proj (project-root proj) default-directory))
-        (usages nil))
-    ;; Try LSP first
-    (if (and (my/gptel--lsp-active-p)
-             (fboundp 'xref-find-references))
+Tries LSP references first, falls back to ripgrep.
+Includes retry logic for LSP startup race conditions."
+  (let* ((proj (project-current))
+         (root (if proj (project-root proj) default-directory))
+         (usages nil)
+         (lsp-retries 3)
+         (lsp-ready nil))
+    ;; Try LSP first with retry logic for startup race conditions
+    (when (and (my/gptel--lsp-active-p)
+               (fboundp 'xref-find-references))
+      ;; Wait for LSP to be fully ready (retry loop)
+      (while (and (> lsp-retries 0) (not lsp-ready))
         (condition-case nil
-            (let ((refs (xref-find-references symbol-name)))
-              (when refs
-                (setq usages
-                      (mapcar (lambda (ref)
-                                (format "%s:%d: %s"
-                                        (xref-location-filename (xref-item-location ref))
-                                        (xref-location-line (xref-item-location ref))
-                                        (xref-item-summary ref)))
-                              refs))))
-          (error nil)))
-    ;; Fallback to ripgrep if LSP found nothing
+            (progn
+              (let ((refs (xref-find-references symbol-name)))
+                (when refs
+                  (setq lsp-ready t)
+                  (setq usages
+                        (mapcar (lambda (ref)
+                                  (format "%s:%d: %s"
+                                          (xref-location-filename (xref-item-location ref))
+                                          (xref-location-line (xref-item-location ref))
+                                          (xref-item-summary ref)))
+                                refs)))))
+          (error
+           ;; LSP not ready yet, retry
+           (setq lsp-retries (1- lsp-retries))
+           (when (> lsp-retries 0)
+             (sleep-for 0.5)))))
+      ;; If LSP failed after retries, clear usages to trigger ripgrep fallback
+      (unless lsp-ready
+        (setq usages nil)))
+    ;; Fallback to ripgrep if LSP found nothing or wasn't ready
     (unless usages
       (let ((grepper (executable-find "rg")))
-        (when grepper
+        (if (not grepper)
+            (setq usages (list (format "Error: ripgrep (rg) not found in PATH.\nInstall with: brew install ripgrep  (macOS)\n                 apt install ripgrep    (Ubuntu)")))
           (with-temp-buffer
             (let ((exit-code (call-process grepper nil t nil
                                            "-n" "-F" symbol-name
@@ -89,7 +104,13 @@ Always use this first to understand the structure of a file before editing."
                            (if map
                                (format "File map for %s:\n%s" file_path (string-join map "\n"))
                              (format "Could not generate file map for %s. Is tree-sitter enabled?" file_path)))))
-                   (error (format "Error executing Code_Map on %s: %s" file_path (error-message-string err)))))
+                   (error (let ((msg (error-message-string err)))
+                            (cond
+                             ((string-match-p "treesit" msg)
+                              (format "Error: tree-sitter parser not installed for this file type.\n\nTo fix: M-x treesit-install-language-grammar RET <language> RET\n\nOriginal error: %s" msg))
+                             ((string-match-p "parser" msg)
+                              (format "Error: No tree-sitter parser available for this file.\n\nTo fix: M-x treesit-install-language-grammar RET <language> RET\n\nOriginal error: %s" msg))
+                             (t (format "Error executing Code_Map on %s: %s" file_path msg)))))))
      :args (list '(:name "file_path" :type string :description "Path to the file to map"))
      :category "gptel-agent"
      :include t)
@@ -106,10 +127,19 @@ If file_path is omitted, it will search the entire project to find the definitio
                              (let ((text (treesit-agent-extract-node node_name)))
                                (if text
                                    (format "Code block '%s' from %s:\n\n%s" node_name file_path text)
-                                 (format "Error: Could not find node named '%s' in %s" node_name file_path))))
+                                 (format "Error: Could not find node named '%s' in %s.\n\nTIP: Use Code_Map first to see available symbols in the file." node_name file_path))))
                          ;; Search workspace if no file provided
-                         (treesit-agent-find-workspace node_name)))
-                   (error (format "Error executing Code_Inspect: %s" (error-message-string err)))))
+                         (let ((result (treesit-agent-find-workspace node_name)))
+                           (if (string-match-p "ripgrep.*not found\\|executable.*rg" result)
+                               (concat result "\n\nTo fix: Install ripgrep (rg):\n  macOS: brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Or provide file_path to search a specific file.")
+                             result))))
+                   (error (let ((msg (error-message-string err)))
+                            (cond
+                             ((string-match-p "treesit" msg)
+                              (format "Error: tree-sitter parser not installed.\n\nTo fix: M-x treesit-install-language-grammar RET <language> RET\n\nOriginal error: %s" msg))
+                             ((string-match-p "ripgrep\\|rg" msg)
+                              (concat msg "\n\nTo fix: Install ripgrep (rg):\n  macOS: brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Check: rg --version"))
+                             (t (format "Error executing Code_Inspect: %s" msg)))))))
      :args (list '(:name "node_name" :type string :description "Exact name of the function/class to read")
                  '(:name "file_path" :type string :optional t :description "Path to the file (optional)"))
      :category "gptel-agent"
@@ -141,7 +171,7 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
      :description "Get project-wide diagnostics/errors. Automatically tries LSP, and falls back to CLI linters if LSP is unavailable."
      :function (lambda ()
                  (if (not (fboundp 'flymake--project-diagnostics))
-                     "Error: flymake--project-diagnostics not available."
+                     "Error: flymake--project-diagnostics not available.\n\nThis usually means Flymake is not initialized. Try opening a source file first."
                    (let* ((proj (project-current))
                           (dir (if proj (project-root proj) default-directory))
                           (lsp-active (my/gptel--lsp-active-p))
@@ -150,7 +180,7 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                          (if lsp-active
                              "No compiler or LSP diagnostics found for the current project. (LSP server is running, code is clean)."
                            ;; Fallback to CLI linter if no LSP
-                           (concat "Warning: No LSP server running. Falling back to CLI linter:\n\n"
+                           (concat "Note: No LSP server running for this project.\nFalling back to CLI linter:\n\n"
                                    (my/gptel--run-fallback-linter dir)))
                        (let ((formatted
                               (mapcar (lambda (d)
@@ -177,7 +207,10 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
      :function (lambda (node_name)
                  (condition-case err
                      (with-timeout (10 (format "Error: Code_Usages timed out for '%s'" node_name))
-                       (my/gptel--find-usages node_name))
+                       (let ((result (my/gptel--find-usages node_name)))
+                         (if (string-match-p "ripgrep.*not found\\|executable.*rg" result)
+                             (concat result "\n\nTIP: Or provide file_path to Code_Inspect to search a specific file instead.")
+                           result)))
                    (error (format "Error executing Code_Usages: %s" (error-message-string err)))))
      :args (list '(:name "node_name" :type string :description "Symbol/function/class name to find usages for"))
      :category "gptel-agent"

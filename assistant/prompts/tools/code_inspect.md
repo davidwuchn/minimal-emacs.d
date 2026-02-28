@@ -42,8 +42,40 @@ Code_Inspect{node_name: "helper_function"}
       return x + y
 ```
 
+## Dependencies
+- **Required**: tree-sitter parser for the file's language
+- **Required (for workspace search)**: ripgrep (`rg`) in PATH
+- **Optional**: LSP server (not required, but workspace search uses ripgrep as fallback)
+
+## Failure Modes
+| Symptom | Cause | Resolution |
+|---------|-------|------------|
+| "Could not find node named 'X'" | Symbol doesn't exist in file | Check spelling, use Code_Map to see available symbols |
+| "Error executing Code_Inspect" | tree-sitter parser not installed | Run `M-x treesit-install-language-grammar RET <lang> RET` |
+| Workspace search returns nothing | ripgrep not installed OR symbol not in project | Install ripgrep: `brew install ripgrep` or `apt install ripgrep` |
+| Timeout after 10s | Very large project or slow disk | Provide explicit file_path to skip workspace search |
+
+## Setup Requirements
+1. **Tree-sitter parsers** (auto-installed, or manual):
+   ```elisp
+   M-x treesit-install-language-grammar RET python RET
+   M-x treesit-install-language-grammar RET elisp RET
+   ```
+
+2. **Ripgrep** (for workspace search):
+   ```bash
+   # macOS
+   brew install ripgrep
+   
+   # Ubuntu/Debian
+   apt install ripgrep
+   
+   # Check installation
+   rg --version
+   ```
+
 ## Notes
 - Uses tree-sitter AST for perfect extraction
 - Guarantees balanced parentheses/brackets
 - Auto-searches workspace if file_path omitted (uses AST_Find_Workspace)
-- Works for: Python, Elisp, Clojure (.clj/.cljs/.cljc), Rust, JS
+- Works for: Python, Elisp, Clojure (.clj/.cljs/.cljc), Rust, JavaScript
