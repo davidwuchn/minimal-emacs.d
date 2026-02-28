@@ -72,6 +72,8 @@
     (list_skills         . "list_skills.md")
     (load_skill          . "skill.md")
     (create_skill        . "create_skill.md")
+    (Skill               . "skill.md")
+    (get_symbol_source   . "get_symbol_source.md")
     (Edit                . "edit_file.md")
     (Move                . "move.md")
     (Agent               . "agent.md")

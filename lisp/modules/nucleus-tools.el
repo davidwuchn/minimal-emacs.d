@@ -42,9 +42,9 @@
                 "lsp_definition" "lsp_hover" "lsp_rename"
                 "preview_file_change" "preview_patch"
                 "list_skills" "load_skill" "create_skill"))
-    (:snippets . ("Bash" "Edit" "ApplyPatch" "preview_file_change"
+    (:snippets . ("Agent" "RunAgent" "Bash" "Edit" "ApplyPatch" "preview_file_change" "preview_patch"
                  "Grep" "Glob" "Read" "Write" "describe_symbol" "get_symbol_source"
-                 "find_buffers_and_recent" "list_skills" "load_skill"
+                 "find_buffers_and_recent" "Skill" "list_skills" "load_skill"
                  "create_skill" "WebSearch" "WebFetch"
                  "Eval" "Insert" "Mkdir" "TodoWrite" "YouTube"
                  "Move" "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
