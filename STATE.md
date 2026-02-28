@@ -1,8 +1,9 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **TOOL DOCS COMPLETED**: Created/expanded documentation for ApplyPatch, Edit (fixed arg names), Skill, TodoWrite, WebFetch, WebSearch, YouTube, Insert, Mkdir, Move, Write. All tools now have comprehensive docs with usage, parameters, examples, failure modes, and dependencies.
+- **RUNTIME TOOL VERIFICATION**: Created nucleus-tools-verify.el to verify all declared tools in nucleus-toolsets are actually registered. Auto-warns on missing/duplicate tools. Interactive: M-x nucleus-verify-tools-interactively.
 - **KEYMAP FIX**: Fixed overlay mouse click by modifying gptel-tool-call-actions-map directly with define-key instead of using advice-add. Advice doesn't work with keymap bindings. Moved setup to with-eval-after-load 'gptel to ensure keymap exists.
-- **NUCLEUS TOOL PROMPTS UPDATED**: Added Code_* tools (Code_Map, Code_Inspect, Code_Replace, Code_Usages, Diagnostics) and BashRO to nucleus-tool-prompt-files. Removed deprecated LSP tools (lsp_hover, lsp_rename). LLM now gets proper prompt documentation for all unified tools.
 - **OVERLAY CLICK FIX**: Fixed mouse click on tool permit overlay. Now moves point to click position before prompting, so gptel--accept-tool-calls can retrieve tool data correctly. Clicking overlay now works same as C-c C-y.
 - **OVERLAY MOUSE CLICK FIX**: Fixed seq-do error when clicking tool permit overlay. Changed interactive spec to properly handle mouse events from overlay keymap. Now works for both mouse clicks and interactive calls.
 - **PREVIEW CALLBACK FIX**: Fixed seq-do error in enhanced preview tools. Changed callbacks to pass string messages directly instead of converting symbols. Matches existing preview tools pattern.
