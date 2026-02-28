@@ -1,11 +1,15 @@
 ;;; gptel-config.el --- Clean, modular gptel configuration -*- lexical-binding: t; -*-
 
 (eval-and-compile
-  (let ((dir (or (and (boundp 'load-file-name) load-file-name)
-                 (and (boundp 'byte-compile-current-file) byte-compile-current-file)
-                 buffer-file-name
-                 (expand-file-name "lisp/gptel-config.el" user-emacs-directory))))
-    (add-to-list 'load-path (expand-file-name "modules" (file-name-directory dir)))))
+  (let* ((current-file (or (and (boundp 'load-file-name) load-file-name)
+                           (and (boundp 'byte-compile-current-file) byte-compile-current-file)
+                           buffer-file-name
+                           (expand-file-name "lisp/gptel-config.el" user-emacs-directory)))
+         (current-dir (if (stringp current-file)
+                          (file-name-directory (expand-file-name current-file))
+                        (expand-file-name "lisp/" user-emacs-directory)))
+         (modules-dir (expand-file-name "modules" current-dir)))
+    (add-to-list 'load-path modules-dir)))
 
 (require 'gptel-ext-core)
 (require 'gptel-ext-backends)
