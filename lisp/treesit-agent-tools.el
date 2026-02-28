@@ -2,9 +2,11 @@
 
 (require 'treesit)
 
+(require 'imenu)
+
 (defun treesit-agent--get-root ()
   "Get the tree-sitter root node for the current buffer."
-  (when (treesit-available-p)
+  (when (and (treesit-available-p) (treesit-parser-list))
     (treesit-buffer-root-node)))
 
 (defun treesit-agent--find-defun (name)

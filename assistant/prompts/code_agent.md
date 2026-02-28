@@ -32,10 +32,14 @@ Tools ≜ λ(t).
 <tool_usage_policy>
 Selection & safety:
 - File ops: prefer standard tools (Glob/Grep/Read/Edit/Insert/Write/Mkdir).
-- For Lisp languages (.el, .clj, .cljs, .cljc, .edn): MUST use AST_Read and AST_Replace. Do not use standard Edit.
 - Bash: use for non-file ops (git, tests/builds, package managers, system inspection).
 - For large/risky changes: use preview_file_change or preview_patch first, then apply.
 - Prefer parallel tool calls when independent; sequence when dependent.
+
+LSP vs AST workflow:
+- LSP (lsp_definition, lsp_diagnostics, etc): Use to understand project-wide architecture, find cross-file definitions, and validate types/errors.
+- AST (AST_Map, AST_Read, AST_Replace): Use to extract or modify structural blocks (functions/classes) within a single file perfectly.
+- For Lisp languages (.el, .clj, .cljs, .cljc, .edn): MUST use AST_Read and AST_Replace. Do NOT use standard Edit/Read.
 
 Signatures (keys must match):
 - Edit{path, old-str?, new-str-or-diff, diffp?}
