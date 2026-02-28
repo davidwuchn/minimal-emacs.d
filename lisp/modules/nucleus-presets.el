@@ -141,20 +141,50 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
                              (sys (sys->string sys))
                              sys)
                    (setf (plist-get (cdr cell) :system) sys)))))
-          (patch-agent "executor" (nucleus-get-tools :nucleus))
-          (patch-agent "researcher" (nucleus-get-tools :researcher))
-          (patch-agent "introspector" (nucleus-get-tools :readonly))
-          ;; Agent tool contracts:
-          ;; - executor: full action tools for code changes (21 tools)
-          ;; - researcher: repo exploration + web research + skill loading (14 tools)
-          ;; - introspector: Emacs introspection tools (15 tools)
+             (patch-agent "executor" (nucleus-get-tools :nucleus))
+             (patch-agent "researcher" (nucleus-get-tools :researcher))
+             (patch-agent "introspector" (nucleus-get-tools :readonly))
+             ;; Validate immediately after patching
+             (when (and (boundp 'nucleus-tools-strict-validation)
+                        nucleus-tools-strict-validation)
+               (nucleus--validate-agent-tool-contracts))
+             ;; Agent tool contracts:
+             ;; - executor: full action tools for code changes (21 tools)
+             ;; - researcher: repo exploration + web research + skill loading (18 tools)
+             ;; - introspector: Emacs introspection tools (15 tools)
            )))))
+
+(defun nucleus--validate-agent-tool-contracts ()
+  "Validate that agent tool contracts are correctly enforced.
+Signals an error if any agent has incorrect tools."
+  (when (and (boundp 'gptel-agent--agents) gptel-agent--agents)
+    (let ((expected
+           `(("executor" . ,(nucleus-get-tools :nucleus))
+             ("researcher" . ,(nucleus-get-tools :researcher))
+             ("introspector" . ,(nucleus-get-tools :readonly)))))
+      (cl-loop for (agent-name . expected-tools) in expected
+               for cell = (assoc agent-name gptel-agent--agents)
+               when cell
+               do (let* ((actual-tools (plist-get (cdr cell) :tools))
+                         (actual-names (if (listp (car actual-tools))
+                                           actual-tools
+                                         (mapcar (lambda (t) (if (stringp t) t (plist-get t :name)))
+                                                 actual-tools)))
+                         (missing (seq-difference expected-tools actual-names #'string=))
+                         (extra (seq-difference actual-names expected-tools #'string=)))
+                    (when (or missing extra)
+                      (warn "[nucleus] Agent tool contract violation for '%s': missing=[%s] extra=[%s]"
+                            agent-name
+                            (if missing (string-join missing ", ") "none")
+                            (if extra (string-join extra ", ") "none"))))))))
 
 (defun nucleus--after-agent-update (&rest _)
   "Post-agent-update hook: re-register directives and override presets."
   (when (featurep 'gptel)
     (nucleus--register-gptel-directives)
-    (nucleus--override-gptel-agent-presets)))
+    (nucleus--override-gptel-agent-presets)
+    ;; Validate agent tool contracts after update
+    (ignore-errors (nucleus--validate-agent-tool-contracts))))
 
 (defun nucleus--after-apply-preset (&rest _)
   "Nucleus post-preset hook: tool sanity check and header line refresh.

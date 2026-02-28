@@ -27,6 +27,12 @@ Disable if experiencing recursion issues."
   :type 'boolean
   :group 'nucleus-tools)
 
+(defcustom nucleus-tools-strict-validation nil
+  "When non-nil, enforce strict tool contract validation at runtime.
+May impact performance but catches tool misuse early."
+  :type 'boolean
+  :group 'nucleus-tools)
+
 ;;; Toolset Definitions
 
 (defconst nucleus-toolsets
@@ -61,8 +67,13 @@ Disable if experiencing recursion issues."
 :core — Base gptel-agent tools (17 tools)
 :readonly — Read-only subset for plan mode (15 tools)
 :researcher — Research: readonly + skill loading (18 tools, superset of :readonly)
-:nucleus — Core + preview + skill management (21 tools)
-:snippets — Tools with supplemental prompts injected")
+:nucleus — Full action tools + preview + skill management (21 tools)
+:snippets — Tools with supplemental prompts injected (21 tools)
+
+Tool contracts enforced in `nucleus--override-gptel-agent-presets':
+  executor     → :nucleus     (21 tools) - code changes & execution
+  researcher   → :researcher  (18 tools) - exploration & research
+  introspector → :readonly    (15 tools) - Emacs introspection")
 
 (defun nucleus-get-tools (set-name)
   "Return tool list for SET-NAME, filtering out unregistered tools.
@@ -229,6 +240,59 @@ Returns the tool struct from `gptel-make-tool`, or nil if gptel unavailable."
      nil)))
 
 ;;; Interactive Commands
+
+(defun nucleus-verify-agent-tool-contracts ()
+  "Verify that all agent tool contracts are correctly enforced.
+Interactive command for debugging agent tool configuration."
+  (interactive)
+  (unless (and (boundp 'gptel-agent--agents) gptel-agent--agents)
+    (user-error "gptel-agent--agents not available"))
+  
+  (let ((expected
+         `(("executor" . ,(nucleus-get-tools :nucleus))
+           ("researcher" . ,(nucleus-get-tools :researcher))
+           ("introspector" . ,(nucleus-get-tools :readonly)))))
+    (let* ((results
+            (cl-loop for (agent-name . expected-tools) in expected
+                     for cell = (assoc agent-name gptel-agent--agents)
+                     if cell
+                     collect (let* ((actual-tools (plist-get (cdr cell) :tools))
+                                    (actual-names (if (listp (car actual-tools))
+                                                      actual-tools
+                                                    (mapcar (lambda (t) (if (stringp t) t (plist-get t :name)))
+                                                            actual-tools)))
+                                    (missing (seq-difference expected-tools actual-names #'string=))
+                                    (extra (seq-difference actual-names expected-tools #'string=)))
+                               (list agent-name (length expected-tools) (length actual-names) missing extra))
+                     else collect (list agent-name 0 0 '("NOT FOUND") nil)))
+           (all-valid (cl-loop for (_ _ _ missing extra) in results
+                               always (and (not missing) (not extra)))))
+      (if all-valid
+          (message "✓ All agent tool contracts valid: %d agents verified" (length results))
+        (display-message-or-buffer
+         (format "*Agent Tool Contract Verification*
+
+Agent Tool Contracts Status:
+%s
+
+Legend: ✓ valid  ✗ mismatch  ? not found
+
+Expected toolsets:
+  executor     → :nucleus     (%d tools)
+  researcher   → :researcher  (%d tools)
+  introspector → :readonly    (%d tools)"
+                 (with-output-to-string
+                   (cl-loop for (agent-name expected-count actual-count missing extra) in results
+                            do (format t "  %-14s %s  expected=%d  actual=%d  missing=%s  extra=%s\n"
+                                       agent-name
+                                       (if (and (not missing) (not extra)) "✓" "✗")
+                                       expected-count
+                                       actual-count
+                                       (if missing (length missing) 0)
+                                       (if extra (length extra) 0)))))
+                 (length (nucleus-get-tools :nucleus))
+                 (length (nucleus-get-tools :researcher))
+                 (length (nucleus-get-tools :readonly))))))))
 
 (defun nucleus-tool-sanity-check-interactively ()
   "Run tool sanity check and display results.
