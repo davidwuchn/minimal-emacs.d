@@ -2,6 +2,7 @@
 
 (require 'gptel)
 (require 'treesit-agent-tools)
+(require 'treesit-agent-tools-workspace)
 
 (defun gptel-tools-ast-register ()
   "Register the AST tools with gptel."
@@ -60,6 +61,18 @@ MANDATORY tool for editing Clojure/ClojureScript or Elisp functions instead of s
                  '(:name "new_code" :type string :description "The perfectly balanced replacement code snippet"))
      :category "gptel-agent"
      :confirm t
+     :include t)
+
+    (gptel-make-tool
+     :name "AST_Find_Workspace"
+     :description "Search the entire project workspace for a function/class by name and extract its exact AST block. \
+Use this when you don't know which file contains the definition."
+     :function (lambda (node_name)
+                 (condition-case err
+                     (treesit-agent-find-workspace node_name)
+                   (error (format "Error executing AST_Find_Workspace: %s" (error-message-string err)))))
+     :args (list '(:name "node_name" :type string :description "Exact name of the function/class to find"))
+     :category "gptel-agent"
      :include t)))
 
 (provide 'gptel-tools-ast)
