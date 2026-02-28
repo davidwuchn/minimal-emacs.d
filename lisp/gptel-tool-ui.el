@@ -28,14 +28,6 @@ Levels:
                  (const :tag "Paranoid (manual review)" paranoid))
   :group 'my/gptel-confirmation)
 
-(defconst my/gptel--dangerous-tools
-  '("Bash" "BashRO" "Write" "ApplyPatch" "Mkdir" "Move" "Delete")
-  "List of potentially dangerous tool names that modify state.")
-
-(defun my/gptel--tool-is-dangerous-p (tool-name)
-  "Check if TOOL-NAME is in the dangerous tools list."
-  (member tool-name my/gptel--dangerous-tools))
-
 (defun my/gptel--get-confirmation-prompt ()
   "Get appropriate confirmation prompt based on confirmation level."
   (pcase my/gptel-confirmation-level
@@ -113,11 +105,12 @@ LEVEL can be: auto, safe, normal, strict, or paranoid."
 (defun my/gptel-setup-tool-ui ()
   "Set up unified tool call confirmation UI.
 
-This patches `gptel--dispatch-tool-calls' to:
+This patches `gptel-tool-call-actions-map` to use our dispatch function:
 1. Show all 6 options in minibuffer (matching overlay keymap)
 2. Support 5-tier confirmation levels
 3. Provide consistent UX between overlay and minibuffer"
-  (advice-add 'gptel--dispatch-tool-calls :override #'my/gptel--dispatch-tool-calls)
+  ;; Modify the keymap directly (advice doesn't work with keymap bindings)
+  (define-key gptel-tool-call-actions-map [mouse-1] #'my/gptel--dispatch-tool-calls)
   (message "Unified tool UI enabled (y/n/k/i/p/q | 5-tier confirmation)"))
 
 (provide 'gptel-tool-ui)

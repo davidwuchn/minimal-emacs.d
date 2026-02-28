@@ -18,11 +18,14 @@
 
 ;; Load enhanced tool UI (patches minibuffer to match overlay options)
 (require 'gptel-tool-ui)
-(my/gptel-setup-tool-ui)
 
 ;; Load enhanced preview tools
 (require 'gptel-tools-preview-enhanced)
 (gptel-tools-preview-enhanced-register)
+
+;; Setup tool UI after gptel is loaded (so keymap exists)
+(with-eval-after-load 'gptel
+  (my/gptel-setup-tool-ui))
 
 ;; --- Configuration Defaults ---
 (setq gptel-backend gptel--dashscope
