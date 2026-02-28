@@ -1,5 +1,8 @@
 ;;; init-dev.el --- Programming, LSP, Clojure, Elisp -*- lexical-binding: t; -*-
 
+;; Add lisp directory to load-path for modular config
+(add-to-list 'load-path (file-name-directory load-file-name))
+
 (provide 'init-dev)
 
 ;; Markdown
