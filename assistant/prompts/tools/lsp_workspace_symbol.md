@@ -1,1 +1,0 @@
-λ(q). lsp_sym | q:query | pref:grep/glob | ret:Sym-File:L:C

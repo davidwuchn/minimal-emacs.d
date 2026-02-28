@@ -41,7 +41,7 @@ Code Intelligence & Structural Editing (KISS Workflow):
 2. **Code_Inspect** → Extract exact function/class (auto-searches if file unknown)
 3. **Code_Replace** → Modify functions (REQUIRED for .el/.clj/.py/.rs/.js)
 4. **Code_Usages** → Find all references before renaming
-5. **Code_Check** → Verify no errors after changes
+5. **Diagnostics** → Verify no errors after changes (overrides upstream with project-wide + CLI fallback)
 
 **See individual tool docs in `assistant/prompts/tools/` for detailed usage.**
 
@@ -56,7 +56,7 @@ Signatures (keys must match):
 - Code_Inspect{node_name, file_path?}
 - Code_Replace{file_path, node_name, new_code}
 - Code_Usages{node_name}
-- Code_Check{}
+- Diagnostics{}  ← Project-wide (overrides upstream open-buffers-only version)
 - Insert{path, line_number, new_str}
 - Write{path, filename, content}
 - Mkdir{parent, name}

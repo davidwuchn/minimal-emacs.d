@@ -108,7 +108,6 @@ in `nucleus-prompts.el`). These are supplemental — the schema-faithful
 |------|------|-------------|
 | `agent.md` | Agent | Delegate to subagent |
 | `apply_patch.md` | ApplyPatch | Apply unified diff patch |
-| `ast_*.md` | AST_* | Legacy AST tools (deprecated by Code_*) |
 | `bash_command.md` | Bash, BashRO | Execute shell commands (BashRO=read-only) |
 | `edit_file.md` | Edit | Edit file with exact string match |
 | `glob.md` | Glob | Find files by pattern |

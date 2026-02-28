@@ -27,24 +27,24 @@
   '((:core . ("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
              "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
              "WebFetch" "WebSearch" "Write" "YouTube"
-             "Code_Map" "Code_Inspect" "Code_Replace" "Code_Check" "Code_Usages"))
+             "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
     (:readonly . ("Agent" "BashRO" "Eval" "Glob" "Grep" "Read" "Skill"
                  "WebFetch" "WebSearch" "YouTube"
                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                 "Code_Map" "Code_Inspect" "Code_Check" "Code_Usages"))
+                 "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
     (:nucleus . ("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
                  "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
                  "WebFetch" "WebSearch" "Write" "YouTube"
                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                  "preview_file_change" "preview_patch"
                  "list_skills" "load_skill" "create_skill"
-                 "Code_Map" "Code_Inspect" "Code_Replace" "Code_Check" "Code_Usages"))
+                 "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
     (:snippets . ("Agent" "RunAgent" "Bash" "Edit" "ApplyPatch" "preview_file_change" "preview_patch"
                  "Grep" "Glob" "Read" "Write" "describe_symbol" "get_symbol_source"
                  "find_buffers_and_recent" "Skill" "list_skills" "load_skill"
                  "create_skill" "WebSearch" "WebFetch"
                  "Eval" "Insert" "Mkdir" "TodoWrite" "YouTube"
-                 "Move" "Code_Map" "Code_Inspect" "Code_Replace" "Code_Check" "Code_Usages")))
+                 "Move" "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages")))
   "Canonical toolset definitions for nucleus.
 
 :core — Base gptel-agent tools (17 tools)

@@ -49,7 +49,7 @@
 (add-to-list 'treesit-auto-recipe-list my/clojure-tsauto-config)
 (add-to-list 'treesit-auto-recipe-list my/elisp-tsauto-config)
 
-(setq treesit-auto-install 'prompt)
+(setq treesit-auto-install 'auto)
 (treesit-auto-add-to-auto-mode-alist 'all)
 (global-treesit-auto-mode)
 

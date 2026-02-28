@@ -7,8 +7,9 @@
 ;;; Code:
 
 ;; Set tree-sitter grammar directory early, before any tree-sitter modes are loaded
+;; Note: user-emacs-directory is already set to var/ by pre-early-init.el
 (setq treesit-extra-load-path
-      (list (expand-file-name "var/tree-sitter/" user-emacs-directory)))
+      (list (expand-file-name "tree-sitter" user-emacs-directory)))
 
 (provide 'post-early-init)
 
