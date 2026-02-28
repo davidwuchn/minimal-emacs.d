@@ -45,7 +45,8 @@ Code Intelligence & Structural Editing (KISS Workflow):
 Special Handling for Emacs Lisp (.el):
 - Do NOT use Code_Inspect or Code_Replace for Elisp. The elisp AST grammar is currently broken.
 - To read Elisp functions, ALWAYS use `get_symbol_source` or `describe_symbol`.
-- To modify Elisp functions, use `Edit` or `Eval`.
+- To modify an Elisp FILE on disk, you MUST use `Edit`. 
+- To evaluate code in the live Emacs environment without modifying files, use `Eval`. Do NOT use `Eval` to modify files!
 
 Signatures (keys must match):
 - Edit{path, old-str?, new-str-or-diff, diffp?}
