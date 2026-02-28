@@ -10,3 +10,4 @@
 (require 'init-evil)
 (require 'init-dev)
 (require 'init-tools)
+(require 'init-ai)
