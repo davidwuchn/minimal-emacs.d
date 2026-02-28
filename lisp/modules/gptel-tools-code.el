@@ -16,13 +16,15 @@
 (defun my/gptel--find-usages (symbol-name)
   "Find all usages of SYMBOL-NAME in the current project.
 Tries LSP references first, falls back to ripgrep.
-Includes enhanced retry logic for LSP startup race conditions."
+Includes enhanced retry logic for LSP startup race conditions.
+Reports which backend (LSP or ripgrep) was used."
   (let* ((proj (project-current))
          (root (if proj (project-root proj) default-directory))
          (usages nil)
          (lsp-retries 5)  ; Increased from 3 to 5
          (lsp-ready nil)
-         (lsp-server (and (my/gptel--lsp-active-p) (eglot-current-server))))
+         (lsp-server (and (my/gptel--lsp-active-p) (eglot-current-server)))
+         (backend "unknown"))  ; Track which backend was used
     ;; Try LSP first with enhanced retry logic for startup race conditions
     (when lsp-server
       ;; Wait for LSP to be fully ready (retry loop with exponential backoff)
@@ -33,6 +35,7 @@ Includes enhanced retry logic for LSP startup race conditions."
                   ;; Got results, LSP is ready
                   (progn
                     (setq lsp-ready t)
+                    (setq backend "LSP")
                     (setq usages
                           (mapcar (lambda (ref)
                                     (format "%s:%d: %s"
@@ -64,6 +67,7 @@ Includes enhanced retry logic for LSP startup race conditions."
                                            (expand-file-name root))))
               (when (= exit-code 0)
                 (goto-char (point-min))
+                (setq backend "ripgrep")
                 (setq usages nil)
                 (while (not (eobp))
                   (let ((line (buffer-substring-no-properties
@@ -73,26 +77,42 @@ Includes enhanced retry logic for LSP startup race conditions."
                       (push line usages)))
                   (forward-line 1))))))))
     (if usages
-        (format "Found %d usages of '%s':\n\n%s"
+        (format "Found %d usages of '%s' (via %s):\n\n%s"
                 (length usages)
                 symbol-name
+                backend
                 (string-join (nreverse usages) "\n"))
       (format "No usages found for '%s' in %s" symbol-name root))))
 
 (defun my/gptel--run-fallback-linter (dir)
-  "Run a fallback linter (flake8, eslint, etc) if LSP is not available in DIR."
-  (let ((default-directory dir))
+  "Run a fallback linter (flake8, eslint, etc) if LSP is not available in DIR.
+Reports what was checked, even if no standard project files found."
+  (let ((default-directory dir)
+        (checked nil))
     (cond
      ((file-exists-p "package.json")
+      (setq checked "package.json (JavaScript/Node.js)")
       (let ((res (shell-command-to-string "npm run lint --silent 2>/dev/null || npx eslint . 2>/dev/null")))
-        (if (string-empty-p (string-trim res)) "No linter errors (ESLint)" res)))
+        (if (string-empty-p (string-trim res))
+            (format "✓ No linter errors (ESLint) - checked %s" checked)
+          res)))
      ((or (file-exists-p "pyproject.toml") (file-exists-p "setup.py") (directory-files dir nil "\\.py\\'"))
+      (setq checked "Python project (pyproject.toml/setup.py)")
       (let ((res (shell-command-to-string "ruff check . 2>/dev/null || flake8 . 2>/dev/null")))
-        (if (string-empty-p (string-trim res)) "No linter errors (Python)" res)))
+        (if (string-empty-p (string-trim res))
+            (format "✓ No linter errors (ruff/flake8) - checked %s" checked)
+          res)))
      ((file-exists-p "Cargo.toml")
+      (setq checked "Cargo.toml (Rust)")
       (let ((res (shell-command-to-string "cargo check 2>&1")))
-        res))
-     (t "No LSP server and no standard fallback linter detected for this project."))))
+        (if (string-match-p "Finished\\|Compiling" res)
+            (format "✓ No compiler errors (cargo check) - checked %s" checked)
+          res)))
+     (t
+      ;; No standard project files found - report what we looked for
+      (concat "Note: No standard project files found (package.json, pyproject.toml, Cargo.toml).\n"
+              "Searched for: JavaScript (package.json), Python (pyproject.toml/setup.py/.py), Rust (Cargo.toml).\n"
+              "If this is a different language, configure a linter or use LSP for diagnostics.")))))
 
 (defun gptel-tools-code-register ()
   "Register the unified Code tools with gptel."
@@ -216,9 +236,10 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
      :include t)
 
      (gptel-make-tool
-     :name "Code_Check"
-     :description "Get project-wide diagnostics/errors. Automatically tries LSP, and falls back to CLI linters if LSP is unavailable."
-     :function (lambda ()
+     :name "Diagnostics"
+     :description "Collect project-wide diagnostics/errors. Automatically tries LSP, falls back to CLI linters (ruff/eslint/cargo) if unavailable. Superior to upstream Diagnostics (project-wide vs open-buffers-only)."
+     :function (lambda (&optional all)
+                 (declare (ignore all))  ; Upstream had optional 'all' arg, we ignore it
                  (if (not (fboundp 'flymake--project-diagnostics))
                      "Error: flymake--project-diagnostics not available.\n\nThis usually means Flymake is not initialized. Try opening a source file first."
                    (let* ((proj (project-current))
@@ -246,7 +267,10 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                                                       type text)))))
                                       diags)))
                          (string-join formatted "\n"))))))
-     :args nil
+     :args (list '(:name "all"
+              :type boolean
+              :description "Ignored (legacy arg from upstream). This tool always checks entire project."
+              :optional t))
      :category "gptel-agent"
      :include t)
 

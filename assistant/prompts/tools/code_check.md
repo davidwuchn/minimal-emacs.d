@@ -1,18 +1,23 @@
-λ(). check(project-wide) | ret:file:line:[type] msg | cascade:LSP→CLI(ruff|eslint|cargo)
+λ(). Diagnostics(project-wide) | ret:file:line:[type] msg + backend(LSP|CLI) | cascade:LSP→CLI(ruff|eslint|cargo)
 
-# Code_Check - Project-Wide Diagnostics
+# Diagnostics (Code_Check) - Project-Wide Diagnostics
 
-## Purpose
-Get **project-wide** diagnostics/errors to verify your changes haven't broken the build.
+## Tool Name
+**Registered as**: `Diagnostics` (overrides upstream gptel-agent-tools.el)
 
-## ⚠️ CRITICAL: Code_Check vs Diagnostics
+**Purpose**: Get **project-wide** diagnostics/errors to verify your changes haven't broken the build.
 
-| Tool | Scope | Fallback | When to Use |
-|------|-------|----------|-------------|
-| **Code_Check** | **Entire project** | LSP → CLI linters | **DEFAULT** - Verify project health |
-| `Diagnostics` | Open buffers only | None (flymake only) | Quick check of currently open files |
+## ⚠️ CRITICAL: This Tool vs Upstream Diagnostics
 
-**ALWAYS prefer `Code_Check`** - it's more comprehensive and has CLI fallback.
+| Feature | This Tool (Ours) | Upstream Diagnostics |
+|---------|-----------------|---------------------|
+| **Scope** | **Entire project** ✅ | Open buffers only |
+| **LSP awareness** | **Checks LSP status** ✅ | None |
+| **Fallback** | **CLI linters** (ruff/eslint/cargo) ✅ | None (flymake only) |
+| **Reports backend** | **Yes (LSP or CLI)** ✅ | N/A |
+| **Registered** | ✅ Yes (overrides upstream) | ❌ No (not in nucleus toolsets) |
+
+**This Diagnostics tool is STRICTLY SUPERIOR** - it replaces the upstream version.
 
 ## When to Use
 - **AFTER** making code changes (before committing)
@@ -22,27 +27,44 @@ Get **project-wide** diagnostics/errors to verify your changes haven't broken th
 
 ## Usage
 ```
-Code_Check{}
+Diagnostics{}
 ```
 
 ## Returns
 Formatted list of all diagnostics with `file:line:[type]:message` format.
 
+**IMPORTANT**: Output indicates which backend was used:
+- LSP diagnostics when server is running
+- CLI linter output with checkmark (✓) when successful
+- Clear message about what was checked
+
 ## Examples
 ```
-Code_Check{}
+# LSP backend (semantic diagnostics)
+Diagnostics{}
 → src/utils.py:42 [Error] Undefined variable 'undefined_var'
   src/main.py:15 [Warning] Unused import 'os'
-  src/core.rs:28 [Error] Mismatched types: expected `i32`, found `String`
 
-# When no LSP but CLI linters available
-Code_Check{}
-→ Note: No LSP server running. Falling back to CLI linter:
-  
-  No linter errors (ruff)
+# CLI backend (Python project)
+Diagnostics{}
+→ ✓ No linter errors (ruff/flake8) - checked Python project (pyproject.toml/setup.py)
 
-# When code is clean
-Code_Check{}
+# CLI backend (JavaScript project)
+Diagnostics{}
+→ ✓ No linter errors (ESLint) - checked package.json (JavaScript/Node.js)
+
+# CLI backend (Rust project)
+Diagnostics{}
+→ ✓ No compiler errors (cargo check) - checked Cargo.toml (Rust)
+
+# No standard project files found
+Diagnostics{}
+→ Note: No standard project files found (package.json, pyproject.toml, Cargo.toml).
+  Searched for: JavaScript (package.json), Python (pyproject.toml/setup.py/.py), Rust (Cargo.toml).
+  If this is a different language, configure a linter or use LSP for diagnostics.
+
+# When code is clean with LSP
+Diagnostics{}
 → No compiler or LSP diagnostics found for the current project. (LSP server is running, code is clean).
 ```
 
@@ -50,12 +72,18 @@ Code_Check{}
 1. **LSP Diagnostics** (if eglot server is running)
    - Type errors, undefined vars, import errors
    - Language-specific checks (ruff, pylint, rustc, etc.)
+   - **Reports**: "LSP server is running"
 
 2. **CLI Linters** (if no LSP server)
    - Python: `ruff check .` → `flake8 .`
    - JavaScript: `npm run lint` → `npx eslint .`
    - Rust: `cargo check`
-   - Reports: "No linter errors (ToolName)" if clean
+   - **Reports**: "✓ No linter errors (tool) - checked [project type]"
+
+3. **No Standard Project** (if no recognized files)
+   - Reports what was searched for
+   - Suggests configuring linter or using LSP
+   - **Reports**: "Note: No standard project files found..."
 
 ## Dependencies
 - **Required**: flymake (built-in to Emacs 29+)
@@ -66,12 +94,15 @@ Code_Check{}
 | Symptom | Cause | Resolution |
 |---------|-------|------------|
 | "flymake--project-diagnostics not available" | Flymake not initialized | Open a source file first, ensure major mode is loaded |
-| "No LSP server running" | LSP not configured | Code_Check will automatically fall back to CLI linters |
+| "No LSP server running" | LSP not configured | Tool automatically falls back to CLI linters |
+| "No standard project files found" | Non-standard project structure | Configure custom linter or set up LSP |
 | No errors shown | Code is clean OR linters not installed | Verify with manual command: `ruff check .` or `cargo check` |
 
 ## Notes
+- **OVERRIDES upstream `Diagnostics` tool** from gptel-agent-tools.el
+- **ALWAYS reports what was checked** (LSP, CLI linter, or search attempt)
 - Automatically detects project type (Python, JS, Rust, etc.)
-- Returns "No compiler or LSP diagnostics found" if code is clean
 - Works even without LSP (falls back to CLI linters)
 - Use after Code_Replace to verify changes are valid
-- **DIFFERENT from `Diagnostics` tool**: Code_Check scans entire project, Diagnostics only checks open buffers
+- **DIFFERENT from upstream `Diagnostics`**: Scans entire project, not just open buffers
+- **Reports backend**: User knows if results are from LSP or CLI linter
