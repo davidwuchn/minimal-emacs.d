@@ -275,6 +275,7 @@ true
 
 | Instead of... | Use... |
 |---------------|--------|
+| Standard `edit_file` tool | `clojure_edit` tool (understands s-expressions, balances parens) |
 | Atoms for accumulation | `reduce` |
 | Nested null checks | `some->` |
 | `(! suffix)` | Remove it |

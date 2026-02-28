@@ -1,0 +1,1 @@
+Clojure files (.clj .cljs .cljc .edn .bb) are structurally edited through clojure_edit. It understands s-expressions, balances parentheses, and targets forms by name — things general-purpose file tools can't do. When modifying a Clojure file, that's the tool that knows how.
