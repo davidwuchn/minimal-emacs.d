@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **OVERLAY KEYMAP TIMING FIX**: Moved gptel-tool-ui.el load BEFORE gptel creates overlays. Keymap now modified synchronously on load (not in with-eval-after-load). All overlays now use our dispatch function from creation.
 - **TOOL VERIFY PARENS FIX**: Fixed missing closing parenthesis in nucleus-tools-verify.el dolist loop. Parentheses now balanced (119 open, 119 close). Module loads correctly.
 - **TOOL VERIFY FIX**: Added missing (require 'subr-x) to nucleus-tools-verify.el. string-join function needs subr-x library. Compilation now succeeds.
 - **TOOL DOCS COMPLETED**: Created/expanded documentation for ApplyPatch, Edit (fixed arg names), Skill, TodoWrite, WebFetch, WebSearch, YouTube, Insert, Mkdir, Move, Write. All tools now have comprehensive docs with usage, parameters, examples, failure modes, and dependencies.
