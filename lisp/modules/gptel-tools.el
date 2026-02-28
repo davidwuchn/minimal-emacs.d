@@ -18,6 +18,7 @@
 (require 'gptel-tools-agent)
 (require 'gptel-tools-preview)
 (require 'gptel-tools-lsp)
+(require 'gptel-tools-introspection)
 
 ;;; Customization
 
@@ -62,6 +63,7 @@ Call this after gptel-agent-tools loads."
   (gptel-tools-agent-register)
   (gptel-tools-preview-register)
   (gptel-tools-lsp-register)
+  (gptel-tools-introspection-register)
 
   ;; Register standard gptel-agent tools
   (when (fboundp 'gptel-make-tool)
@@ -255,28 +257,13 @@ Call this after gptel-agent-tools loads."
   ;; Build tool lists
   (setq my/gptel-tools-readonly
         (my/gptel--dedup-tools-by-name
-         (append
-          (seq-filter #'identity
-                      (mapcar #'my/gptel--safe-get-tool
-                              '("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
-                                "WebFetch" "WebSearch" "YouTube"
-                                "find_buffers_and_recent" "describe_symbol"
-                                "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
-                                "lsp_definition" "lsp_hover")))
-          (list
-           (gptel-make-tool
-            :name "find_buffers_and_recent"
-            :category "gptel-agent"
-            :function #'my/find-buffers-and-recent
-            :description "Find open buffers and recent files matching a pattern"
-            :args (list '(:name "pattern" :type string)))
-           (gptel-make-tool
-            :name "describe_symbol"
-            :function (lambda (sym)
-                        (describe-symbol (intern sym))
-                        (with-current-buffer "*Help*" (buffer-string)))
-            :description "Show Emacs Lisp documentation for a symbol"
-            :args (list '(:name "sym" :type string)))))))
+         (seq-filter #'identity
+                     (mapcar #'my/gptel--safe-get-tool
+                             '("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
+                               "WebFetch" "WebSearch" "YouTube"
+                               "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                               "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
+                               "lsp_definition" "lsp_hover")))))
 
   (setq my/gptel-tools-action
         (my/gptel--dedup-tools-by-name
@@ -286,6 +273,7 @@ Call this after gptel-agent-tools loads."
                               '("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
                                 "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
                                 "WebFetch" "WebSearch" "Write" "YouTube"
+                                "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                                 "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
                                 "lsp_definition" "lsp_hover" "lsp_rename"
                                 "preview_file_change" "preview_patch"
@@ -296,21 +284,6 @@ Call this after gptel-agent-tools loads."
   (setq-default gptel-tools my/gptel-tools-readonly))
 
 ;;; Utility Functions
-
-(defun my/find-buffers-and-recent (pattern)
-  "Find open buffers and recently opened files matching PATTERN."
-  (let* ((pattern (if (string-empty-p pattern) "." pattern))
-         (bufs (delq nil (mapcar (lambda (b)
-                                   (let ((name (buffer-name b)) (file (buffer-file-name b)))
-                                     (when (and (not (string-prefix-p " " name))
-                                                (or (string-match-p pattern name)
-                                                    (and file (string-match-p pattern file))))
-                                       (format "  %s%s (%s)" name (if (buffer-modified-p b) "*" "") (or file "")))))
-                                 (buffer-list))))
-         (recs (progn (recentf-mode 1)
-                      (seq-filter (lambda (f) (string-match-p pattern (file-name-nondirectory f))) recentf-list))))
-    (concat (when bufs (format "Open Buffers:\n%s\n\n" (string-join bufs "\n")))
-            (when recs (format "Recent Files:\n%s" (string-join (mapcar (lambda (f) (format "  %s" f)) recs) "\n"))))))
 
 (defun my/gptel--skill-tool (skill &optional args)
   "Wrapper for gptel-agent Skill tool."

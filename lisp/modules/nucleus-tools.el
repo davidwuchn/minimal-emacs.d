@@ -31,18 +31,19 @@
              "lsp_definition" "lsp_hover" "lsp_rename"))
     (:readonly . ("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
                  "WebFetch" "WebSearch" "YouTube"
-                 "find_buffers_and_recent" "describe_symbol"
+                 "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                  "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
                  "lsp_definition" "lsp_hover"))
     (:nucleus . ("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
                 "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
                 "WebFetch" "WebSearch" "Write" "YouTube"
+                "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                 "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
                 "lsp_definition" "lsp_hover" "lsp_rename"
                 "preview_file_change" "preview_patch"
                 "list_skills" "load_skill" "create_skill"))
     (:snippets . ("Bash" "Edit" "ApplyPatch" "preview_file_change"
-                 "Grep" "Glob" "Read" "Write" "describe_symbol"
+                 "Grep" "Glob" "Read" "Write" "describe_symbol" "get_symbol_source"
                  "find_buffers_and_recent" "list_skills" "load_skill"
                  "create_skill" "WebSearch" "WebFetch"
                  "Eval" "Insert" "Mkdir" "TodoWrite" "YouTube"
