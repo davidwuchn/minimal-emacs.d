@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **DUMB-JUMP FOR ELISP VERIFIED**: Dumb-jump supports Emacs Lisp (.el) via regex-based defun/defmacro/defsubst detection. **VERIFIED**: dumb-jump-xref-activate configured (priority 90), treesit-local-xref for file-local AST (priority 50), elisp--xref-backend built-in (priority 0). For Elisp, dumb-jump is the PRIMARY cross-file navigation tool (not LSP).
 - **DUMB-JUMP FOR CLOJURE VERIFIED**: Dumb-jump supports Clojure family (.clj, .cljs, .cljc) via regex-based defn/defmacro/defrecord detection. **VERIFIED**: File extensions properly associated (clojure-mode, clojurescript-mode, clojurec-mode), dumb-jump-go available, fallback chain works for cross-file Clojure navigation when LSP offline.
 - **DUMB-JUMP FALLBACK VERIFIED**: Xref fallback chain verified: LSP (priority 0) → Tree-sitter local (priority 50) → Dumb-jump (priority 90). **VERIFIED**: dumb-jump-xref-activate configured in init-dev.el with priority 90, treesit-local-xref-backend with priority 50, graceful degradation when LSP offline.
 - **RUST LSP VERIFIED**: Eglot automatically starts for `.rs` files via `rust-ts-mode`. **VERIFIED**: rust-analyzer detected at `~/.cargo/bin/rust-analyzer`, eglot-ensure configured for rust-ts-mode, diagnostics flow through flymake. Unified workflow (LSP for cross-file semantics + AST for structural editing) works end-to-end.
