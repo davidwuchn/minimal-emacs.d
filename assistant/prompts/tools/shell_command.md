@@ -1,1 +1,0 @@
-λ(cmd). Bash | cmd:str | use:git/test | avoid:file-ops(use-read/edit) | ret:out
