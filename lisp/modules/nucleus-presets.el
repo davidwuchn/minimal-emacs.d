@@ -163,7 +163,9 @@ Runs as :after advice on `gptel--apply-preset'."
   (when (and (boundp 'gptel--preset)
              gptel--preset
              (bound-and-true-p gptel-mode)
-             (memq gptel--preset '(gptel-plan gptel-agent)))
+             (memq gptel--preset '(gptel-plan gptel-agent))
+             (bound-and-true-p nucleus-tools-sanity-check)
+             nucleus-tools-sanity-check)
     (nucleus-tool-sanity-check gptel--preset "after-preset"))
   (nucleus--header-line-apply-preset-label))
 

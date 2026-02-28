@@ -21,6 +21,12 @@
   :type 'boolean
   :group 'nucleus-tools)
 
+(defcustom nucleus-tools-sanity-check nil
+  "When non-nil, run tool sanity check on preset changes.
+Disable if experiencing recursion issues."
+  :type 'boolean
+  :group 'nucleus-tools)
+
 ;;; Toolset Definitions
 
 (defconst nucleus-toolsets
@@ -116,6 +122,8 @@ Logs a message when there's a mismatch.  Use CONTEXT to identify
 the caller (e.g., \"after-preset\", \"mode-hook\").
 
 Returns non-nil if tools match, nil if mismatch or unavailable."
+  (unless nucleus-tools-sanity-check
+    (cl-return-from nucleus-tool-sanity-check nil))
   (unless (and (boundp 'gptel-tools) (listp gptel-tools))
     (when nucleus-tools-verbose
       (message "[nucleus-tools] gptel-tools not available"))
@@ -321,7 +329,9 @@ Call this after gptel loads to register hooks and tools."
   ;; Register mode hook for tool profile syncing
   (when (boundp 'gptel-mode-hook)
     (add-hook 'gptel-mode-hook #'nucleus-sync-tool-profile)
-    (add-hook 'gptel-mode-hook #'nucleus-tool-sanity-check))
+    ;; Sanity check disabled by default to prevent recursion
+    (when nucleus-tools-sanity-check
+      (add-hook 'gptel-mode-hook #'nucleus-tool-sanity-check)))
   
   ;; Enforce tool contracts
   (advice-add 'gptel-make-tool :around #'nucleus-tools--advise-make-tool))
