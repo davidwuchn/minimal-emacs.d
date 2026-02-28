@@ -87,14 +87,16 @@ Reports which backend (LSP or ripgrep) was used."
 (defun my/gptel--run-fallback-linter (dir)
   "Run a fallback linter (flake8, eslint, etc) if LSP is not available in DIR.
 Reports what was checked, even if no standard project files found."
-  (let ((default-directory dir))
+  (let ((default-directory dir)
+        ;; Build regex at runtime to avoid check-parens confusion with \\'
+        (py-ext (concat "\\.py" (char-to-string 39))))
     (cond
      ((file-exists-p "package.json")
       (let ((res (shell-command-to-string "npm run lint --silent 2>/dev/null || npx eslint . 2>/dev/null")))
         (if (string-empty-p (string-trim res))
             "✓ No linter errors (ESLint) - checked package.json (JavaScript/Node.js)"
           res)))
-     ((or (file-exists-p "pyproject.toml") (file-exists-p "setup.py") (directory-files dir nil "\\.py\\'"))
+     ((or (file-exists-p "pyproject.toml") (file-exists-p "setup.py") (directory-files dir nil py-ext))
       (let ((res (shell-command-to-string "ruff check . 2>/dev/null || flake8 . 2>/dev/null")))
         (if (string-empty-p (string-trim res))
             "✓ No linter errors (ruff/flake8) - checked Python project (pyproject.toml/setup.py)"
@@ -107,7 +109,7 @@ Reports what was checked, even if no standard project files found."
      (t
       ;; No standard project files found - report what we looked for
       (concat "Note: No standard project files found (package.json, pyproject.toml, Cargo.toml).\n"
-              "Searched for: JavaScript (package.json), Python (pyproject.toml/setup.py/.py), Rust (Cargo.toml).\n"
+              "Searched for: JavaScript (package.json), Python (pyproject.toml or setup.py or *.py files), Rust (Cargo.toml).\n"
               "If this is a different language, configure a linter or use LSP for diagnostics.")))))
 
 (defun gptel-tools-code-register ()
@@ -125,12 +127,16 @@ Always use this first to understand the structure of a file before editing."
                          ;; Pre-flight check: Verify tree-sitter parser is available
                          (if (not (treesit-parser-list))
                              (let ((lang (or (and (boundp 'treesit--language) treesit--language)
-                                            (cond
-                                             ((string-match-p "\\.py\\'" file_path) 'python)
-                                             ((string-match-p "\\.el\\'" file_path) 'elisp)
-                                             ((string-match-p "\\.clj\\'" file_path) 'clojure)
-                                             ((string-match-p "\\.rs\\'" file_path) 'rust)
-                                             (t 'unknown)))))
+                                            (let ((py-rx (concat "\\.py" (char-to-string 39)))
+                                                  (el-rx (concat "\\.el" (char-to-string 39)))
+                                                  (clj-rx (concat "\\.clj" (char-to-string 39)))
+                                                  (rs-rx (concat "\\.rs" (char-to-string 39))))
+                                              (cond
+                                               ((string-match-p py-rx file_path) 'python)
+                                               ((string-match-p el-rx file_path) 'elisp)
+                                               ((string-match-p clj-rx file_path) 'clojure)
+                                               ((string-match-p rs-rx file_path) 'rust)
+                                               (t 'unknown))))))
                                (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Read/Grep for this file" file_path (or lang "language") file_path (or lang "language")))
                            (let ((map (treesit-agent-get-file-map)))
                              (if map
@@ -161,12 +167,16 @@ If file_path is omitted, it will search the entire project to find the definitio
                              ;; Pre-flight check: Verify tree-sitter parser is available
                              (if (not (treesit-parser-list))
                                  (let ((lang (or (and (boundp 'treesit--language) treesit--language)
-                                                (cond
-                                                 ((string-match-p "\\.py\\'" file_path) 'python)
-                                                 ((string-match-p "\\.el\\'" file_path) 'elisp)
-                                                 ((string-match-p "\\.clj\\'" file_path) 'clojure)
-                                                 ((string-match-p "\\.rs\\'" file_path) 'rust)
-                                                 (t 'unknown)))))
+                                                (let ((py-rx (concat "\\.py" (char-to-string 39)))
+                                                      (el-rx (concat "\\.el" (char-to-string 39)))
+                                                      (clj-rx (concat "\\.clj" (char-to-string 39)))
+                                                      (rs-rx (concat "\\.rs" (char-to-string 39))))
+                                                  (cond
+                                                   ((string-match-p py-rx file_path) 'python)
+                                                   ((string-match-p el-rx file_path) 'elisp)
+                                                   ((string-match-p clj-rx file_path) 'clojure)
+                                                   ((string-match-p rs-rx file_path) 'rust)
+                                                   (t 'unknown))))))
                                    (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Read tool for this file" file_path (or lang "language") file_path (or lang "language")))
                                (let ((text (treesit-agent-extract-node node_name)))
                                  (if text
@@ -205,9 +215,13 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                          ;; Pre-flight check: Verify tree-sitter parser is available
                          (if (not (treesit-parser-list))
                              (let ((lang (or (and (boundp 'treesit--language) treesit--language)
-                                            (cond
-                                             ((string-match-p "\\.py\\'" file_path) 'python)
-                                             ((string-match-p "\\.el\\'" file_path) 'elisp)
+                                            (let ((py-rx (concat "\\.py" (char-to-string 39)))
+                                                  (el-rx (concat "\\.el" (char-to-string 39)))
+                                                  (clj-rx (concat "\\.clj" (char-to-string 39)))
+                                                  (rs-rx (concat "\\.rs" (char-to-string 39))))
+                                              (cond
+                                               ((string-match-p py-rx file_path) 'python)
+                                               ((string-match-p el-rx file_path) 'elisp)
                                              ((string-match-p "\\.clj\\'" file_path) 'clojure)
                                              ((string-match-p "\\.rs\\'" file_path) 'rust)
                                              (t 'unknown)))))
