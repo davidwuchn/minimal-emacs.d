@@ -93,15 +93,17 @@ in `nucleus-prompts.el`). These are supplemental — the schema-faithful
 | `code_usages.md` | Code_Usages | Find all symbol references |
 | `diagnostics.md` | Diagnostics | LSP diagnostics + linter fallback |
 
-#### LSP Tool Prompts (Specialized)
+#### Deprecated Tool Prompts
 | File | Tool | Description | Status |
 |------|------|-------------|--------|
-| ~~`lsp_hover.md`~~ | ~~lsp_hover~~ | ~~Type info at cursor~~ | ❌ Deprecated - Not registered |
-| ~~`lsp_rename.md`~~ | ~~lsp_rename~~ | ~~Cross-file symbol rename~~ | ❌ Deprecated - Not registered |
+| ~~`lsp_hover.md`~~ | ~~lsp_hover~~ | ~~Type info at cursor~~ | ❌ Removed from nucleus-tool-prompt-files |
+| ~~`lsp_rename.md`~~ | ~~lsp_rename~~ | ~~Cross-file symbol rename~~ | ❌ Removed from nucleus-tool-prompt-files |
 | ~~`lsp_diagnostics.md`~~ | ~~lsp_diagnostics~~ | ~~LSP errors~~ | ❌ Replaced by Diagnostics |
 | ~~`lsp_references.md`~~ | ~~lsp_references~~ | ~~Find references~~ | ❌ Replaced by Code_Usages |
 | ~~`lsp_definition.md`~~ | ~~lsp_definition~~ | ~~Go to definition~~ | ❌ Replaced by Code_Inspect |
 | ~~`lsp_workspace_symbol.md`~~ | ~~lsp_workspace_symbol~~ | ~~Workspace search~~ | ❌ Replaced by Code_Inspect |
+
+**Note:** LSP tools have been removed from `nucleus-tool-prompt-files`. Use Code_* tools instead.
 
 #### Standard Tool Prompts
 | File | Tool | Description |

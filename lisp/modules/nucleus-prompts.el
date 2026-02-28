@@ -58,6 +58,7 @@
 
 (defconst nucleus-tool-prompt-files
   '((Bash                . "bash_command.md")
+    (BashRO              . "bash_ro.md")
     (ApplyPatch          . "apply_patch.md")
     (Write               . "write_file.md")
     (Read                . "read_file.md")
@@ -84,13 +85,15 @@
     (Mkdir               . "mkdir.md")
     (TodoWrite           . "todowrite.md")
     (YouTube             . "youtube.md")
-    ;; LSP tools (kept: hover for type info, rename for cross-file renaming)
-    (lsp_hover           . "lsp_hover.md")
-    (lsp_rename          . "lsp_rename.md")
-    ;; Deprecated: lsp_diagnostics→Code_Check, lsp_references→Code_Usages,
-    ;; lsp_workspace_symbol→Code_Inspect, lsp_definition→Code_Inspect
+    ;; Code_* tools (unified AST/LSP interface)
+    (Code_Map            . "code_map.md")
+    (Code_Inspect        . "code_inspect.md")
+    (Code_Replace        . "code_replace.md")
+    (Code_Usages         . "code_usages.md")
+    (Diagnostics         . "diagnostics.md")
+    ;; Deprecated: LSP tools replaced by Code_* tools
     )
-  "Tool prompt files. Note: Most LSP tools replaced by Code_* unified interface.")
+  "Tool prompt files. Code_* tools provide unified AST/LSP interface.")
 
 ;;; Helper Functions
 
