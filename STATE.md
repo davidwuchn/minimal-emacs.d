@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **TOOL VERIFY FIX**: Added missing (require 'subr-x) to nucleus-tools-verify.el. string-join function needs subr-x library. Compilation now succeeds.
 - **TOOL DOCS COMPLETED**: Created/expanded documentation for ApplyPatch, Edit (fixed arg names), Skill, TodoWrite, WebFetch, WebSearch, YouTube, Insert, Mkdir, Move, Write. All tools now have comprehensive docs with usage, parameters, examples, failure modes, and dependencies.
 - **RUNTIME TOOL VERIFICATION**: Created nucleus-tools-verify.el to verify all declared tools in nucleus-toolsets are actually registered. Auto-warns on missing/duplicate tools. Interactive: M-x nucleus-verify-tools-interactively.
 - **KEYMAP FIX**: Fixed overlay mouse click by modifying gptel-tool-call-actions-map directly with define-key instead of using advice-add. Advice doesn't work with keymap bindings. Moved setup to with-eval-after-load 'gptel to ensure keymap exists.
