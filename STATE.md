@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **DIAGNOSTICS VS CODE_CHECK**: Upstream `Diagnostics` tool (open buffers only) overlaps with our `Code_Check` (project-wide + CLI fallback). **Resolution**: Code_Check is superior and registered in nucleus toolsets. Diagnostics remains available from upstream but not promoted. Updated Code_Check prompt to clarify distinction.
 - **LSP TOOLS CLEANUP**: Removed 4 redundant LSP tool prompts (lsp_diagnostics, lsp_references, lsp_workspace_symbol, lsp_definition) - all replaced by Code_* tools. Kept lsp_hover (type info at cursor) and lsp_rename (cross-file renaming). **Reduces LLM cognitive load**.
 - **PRE-FLIGHT PARSER CHECKS**: All Code_* tools (Map, Inspect, Replace) now verify tree-sitter parser availability BEFORE attempting operations. Auto-detect language from file extension (.py, .el, .clj, .rs). Provide step-by-step recovery: install → reopen → verify → fallback. **FIXES**: Confusing errors when files aren't in tree-sitter mode.
 - **ENHANCED LSP RETRY LOGIC**: Code_Usages now uses 5 retries with exponential backoff (0.5s, 1s, 2s, 4s, 8s = ~15s total) for LSP startup race conditions. Detects empty results vs. errors. **FIXES**: Premature fallback to ripgrep when LSP is still indexing.

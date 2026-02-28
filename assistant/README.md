@@ -256,3 +256,22 @@ The skill is immediately available via the `Skill` tool without restarting Emacs
 3. Add to `nucleus-toolsets` in `lisp/modules/nucleus-tools.el`
 4. Create prompt doc in `assistant/prompts/tools/code_*.md`
 5. Update this README and `docs/CODE_TOOLS.md`
+
+## Tool Conflicts & Resolutions
+
+### Diagnostics vs Code_Check
+
+Both tools collect diagnostics, but with different scopes:
+
+| Tool | Source | Scope | Fallback | Recommendation |
+|------|--------|-------|----------|----------------|
+| **Code_Check** | `gptel-tools-code.el` | **Entire project** | LSP → CLI linters | ✅ **USE THIS** |
+| `Diagnostics` | `gptel-agent-tools.el` (upstream) | Open buffers only | None (flymake only) | ⚠️ Only for quick open-file checks |
+
+**Why Code_Check is better:**
+1. Scans entire project, not just open buffers
+2. Has CLI linter fallback when LSP unavailable
+3. Provides clearer messaging about LSP status
+4. Auto-detects project type (Python/JS/Rust)
+
+The `Diagnostics` tool is still available from upstream but is **not registered** in our nucleus toolsets. The LLM will primarily see and use `Code_Check`.
