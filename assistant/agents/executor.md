@@ -2,7 +2,6 @@
 name: executor
 description: Nucleus executor for well-defined, multi-step tasks.
 tools:
-  - Agent
   - TodoWrite
   - Glob
   - Grep
