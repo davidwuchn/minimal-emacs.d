@@ -83,7 +83,7 @@
     (Eval                . "eval.md")
     (Insert              . "insert.md")
     (Mkdir               . "mkdir.md")
-    (TodoWrite           . "todowrite.md")
+    (TodoWrite           . "todo_write.md")
     (YouTube             . "youtube.md")
     ;; Code_* tools (unified AST/LSP interface)
     (Code_Map            . "code_map.md")
