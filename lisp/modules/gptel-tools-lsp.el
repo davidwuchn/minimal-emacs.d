@@ -20,8 +20,10 @@
 
 ;;; Internal Helpers
 
-(defun my/gptel-lsp--get-server (path)
-  "Get the active Eglot server for PATH, reliably."
+(defun my/gptel-lsp--get-server (path &optional auto-start)
+  "Get the active Eglot server for PATH, reliably.
+If AUTO-START is non-nil and PATH is provided, attempt to start Eglot
+automatically in the background if it is not already running."
   (let* ((proj (project-current nil path))
          (servers (and proj (hash-table-values eglot--servers-by-project)))
          (buf (and path (find-buffer-visiting path)))
@@ -35,9 +37,19 @@
                                         (project-root proj)))))
                         servers)
                        (eglot-current-server)))))
+    
     (if (and server (jsonrpc-running-p server))
         server
-      nil)))
+      (if (and auto-start path (file-exists-p path))
+          (let* ((new-buf (find-file-noselect path))
+                 (new-server (with-current-buffer new-buf
+                               (let ((noninteractive t))
+                                 (ignore-errors (eglot-ensure)))
+                               (eglot-current-server))))
+            (if (and new-server (jsonrpc-running-p new-server))
+                new-server
+              nil))
+        nil))))
 
 (defun my/gptel-lsp--path-to-uri (path)
   "Convert PATH to a file URI."
@@ -70,31 +82,39 @@
     (cl-return-from my/gptel-lsp-diagnostics))
   
   (let* ((proj (project-current))
-         (diags (and proj (flymake--project-diagnostics proj))))
-    (if (not diags)
-        (funcall callback "No diagnostics found for the current project.")
-      (let ((formatted
-             (mapcar (lambda (d)
-                       (let ((buf (flymake-diagnostic-buffer d))
-                             (text (flymake-diagnostic-text d))
-                             (type (flymake-diagnostic-type d))
-                             (beg (flymake-diagnostic-beg d)))
-                         (with-current-buffer buf
-                           (save-excursion
-                             (goto-char beg)
-                             (format "%s:%d:%d [%s] %s"
-                                     (buffer-file-name buf)
-                                     (1- (line-number-at-pos)) ; 0-indexed line
-                                     (current-column)          ; 0-indexed char
-                                     type text)))))
-                     diags)))
-        (funcall callback (string-join formatted "\n"))))))
+         (servers (and proj (hash-table-values eglot--servers-by-project)))
+         (active-server (cl-find-if (lambda (s) (and (equal (project-root (eglot--project s)) (project-root proj))
+                                                     (jsonrpc-running-p s)))
+                                    servers)))
+    (unless active-server
+      (funcall callback "Error: No active LSP server found for the current project. Cannot verify diagnostics. Ensure a file is open and the language server is running.")
+      (cl-return-from my/gptel-lsp-diagnostics))
+
+    (let ((diags (flymake--project-diagnostics proj)))
+      (if (not diags)
+          (funcall callback "No diagnostics found for the current project.")
+        (let ((formatted
+               (mapcar (lambda (d)
+                         (let ((buf (flymake-diagnostic-buffer d))
+                               (text (flymake-diagnostic-text d))
+                               (type (flymake-diagnostic-type d))
+                               (beg (flymake-diagnostic-beg d)))
+                           (with-current-buffer buf
+                             (save-excursion
+                               (goto-char beg)
+                               (format "%s:%d:%d [%s] %s"
+                                       (buffer-file-name buf)
+                                       (1- (line-number-at-pos)) ; 0-indexed line
+                                       (current-column)          ; 0-indexed char
+                                       type text)))))
+                       diags)))
+          (funcall callback (string-join formatted "\n")))))))
 
 (cl-defun my/gptel-lsp-references (callback file-path line character)
   "Get LSP references for the symbol at FILE-PATH, LINE, CHARACTER (0-indexed)."
-  (let ((server (my/gptel-lsp--get-server file-path)))
+  (let ((server (my/gptel-lsp--get-server file-path t)))
     (unless server
-      (funcall callback (format "Error: No active Eglot server found for %s" file-path))
+      (funcall callback (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." file-path))
       (cl-return-from my/gptel-lsp-references))
     
     (jsonrpc-async-request
@@ -115,9 +135,9 @@
 
 (cl-defun my/gptel-lsp-definition (callback file-path line character)
   "Get LSP definition for the symbol at FILE-PATH, LINE, CHARACTER (0-indexed)."
-  (let ((server (my/gptel-lsp--get-server file-path)))
+  (let ((server (my/gptel-lsp--get-server file-path t)))
     (unless server
-      (funcall callback (format "Error: No active Eglot server found for %s" file-path))
+      (funcall callback (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." file-path))
       (cl-return-from my/gptel-lsp-definition))
     
     (jsonrpc-async-request
@@ -138,9 +158,9 @@
 
 (cl-defun my/gptel-lsp-hover (callback file-path line character)
   "Get LSP hover info for the symbol at FILE-PATH, LINE, CHARACTER (0-indexed)."
-  (let ((server (my/gptel-lsp--get-server file-path)))
+  (let ((server (my/gptel-lsp--get-server file-path t)))
     (unless server
-      (funcall callback (format "Error: No active Eglot server found for %s" file-path))
+      (funcall callback (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." file-path))
       (cl-return-from my/gptel-lsp-hover))
     
     (jsonrpc-async-request
@@ -167,9 +187,9 @@
 
 (cl-defun my/gptel-lsp-rename (callback file-path line character new-name)
   "Rename symbol at FILE-PATH, LINE, CHARACTER (0-indexed) to NEW-NAME."
-  (let ((server (my/gptel-lsp--get-server file-path)))
+  (let ((server (my/gptel-lsp--get-server file-path t)))
     (unless server
-      (funcall callback (format "Error: No active Eglot server found for %s" file-path))
+      (funcall callback (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." file-path))
       (cl-return-from my/gptel-lsp-rename))
     
     (jsonrpc-async-request
