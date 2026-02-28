@@ -115,10 +115,10 @@ This patches `gptel-tool-call-actions-map` to use our dispatch function:
 3. Provide consistent UX between overlay and minibuffer"
   ;; Modify the keymap directly (advice doesn't work with keymap bindings)
   (define-key gptel-tool-call-actions-map [mouse-1] #'my/gptel--dispatch-tool-calls)
-  (message "Unified tool UI enabled (y/n/k/i/p/q | 5-tier confirmation)"))
+  (message "Unified tool UI enabled (y/n/k/a/i/p/q | 5-tier confirmation)"))
 
-;; Setup immediately when this file loads (before gptel creates overlays)
-(when (and (boundp 'gptel-tool-call-actions-map) gptel-tool-call-actions-map)
+;; Setup AFTER gptel loads and creates the keymap
+(with-eval-after-load 'gptel
   (my/gptel-setup-tool-ui))
 
 (provide 'gptel-tool-ui)

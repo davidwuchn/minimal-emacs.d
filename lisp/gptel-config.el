@@ -1,4 +1,4 @@
-;;; gptel-config.el --- Clean, modular gptel configuration -*- lexical-binding: t; -*-
+;;; gptel-config.el --- Clean, modular gptel configuration -*- lexical-binding: t -*-
 
 (eval-and-compile
   (let* ((base-dir (if (boundp 'minimal-emacs-user-directory)
@@ -16,9 +16,6 @@
 ;; Load split tool modules (replaces gptel-ext-tools.el)
 (require 'gptel-tools)
 
-;; Load enhanced tool UI BEFORE gptel creates overlays (critical timing!)
-(require 'gptel-tool-ui)
-
 ;; Load enhanced preview tools
 (require 'gptel-tools-preview-enhanced)
 (gptel-tools-preview-enhanced-register)
@@ -28,6 +25,9 @@
 
 ;; Load tool signature validation (validates prompt args match registration)
 (require 'nucleus-tools-validate)
+
+;; Load enhanced tool UI (patches keymap AFTER gptel loads)
+(require 'gptel-tool-ui)
 
 ;; --- Configuration Defaults ---
 (setq gptel-backend gptel--dashscope
