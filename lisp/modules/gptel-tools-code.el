@@ -5,7 +5,58 @@
 (require 'treesit-agent-tools-workspace)
 (require 'flymake)
 (require 'project)
-(require 'gptel-tools-lsp)
+(require 'eglot)
+(require 'xref)
+
+(defun my/gptel--lsp-active-p ()
+  "Check if an LSP server is active for the current buffer."
+  (and (fboundp 'eglot-current-server)
+       (eglot-current-server)))
+
+(defun my/gptel--find-usages (symbol-name)
+  "Find all usages of SYMBOL-NAME in the current project.
+Tries LSP references first, falls back to ripgrep."
+  (let ((proj (project-current))
+        (root (if proj (project-root proj) default-directory))
+        (usages nil))
+    ;; Try LSP first
+    (if (and (my/gptel--lsp-active-p)
+             (fboundp 'xref-find-references))
+        (condition-case nil
+            (let ((refs (xref-find-references symbol-name)))
+              (when refs
+                (setq usages
+                      (mapcar (lambda (ref)
+                                (format "%s:%d: %s"
+                                        (xref-location-filename (xref-item-location ref))
+                                        (xref-location-line (xref-item-location ref))
+                                        (xref-item-summary ref)))
+                              refs))))
+          (error nil)))
+    ;; Fallback to ripgrep if LSP found nothing
+    (unless usages
+      (let ((grepper (executable-find "rg")))
+        (when grepper
+          (with-temp-buffer
+            (let ((exit-code (call-process grepper nil t nil
+                                           "-n" "-F" symbol-name
+                                           (expand-file-name root))))
+              (when (= exit-code 0)
+                (goto-char (point-min))
+                (setq usages nil)
+                (while (not (eobp))
+                  (let ((line (buffer-substring-no-properties
+                               (line-beginning-position)
+                               (line-end-position))))
+                    (when (not (string-match-p "\\.pyc$\\|\\.elc$\\|__pycache__" line))
+                      (push line usages)))
+                  (forward-line 1))))))))
+    (if usages
+        (format "Found %d usages of '%s':\n\n%s"
+                (length usages)
+                symbol-name
+                (string-join (nreverse usages) "\n"))
+      (format "No usages found for '%s' in %s" symbol-name root))))
 
 (defun my/gptel--run-fallback-linter (dir)
   "Run a fallback linter (flake8, eslint, etc) if LSP is not available in DIR."
@@ -85,7 +136,7 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
      :confirm t
      :include t)
 
-    (gptel-make-tool
+     (gptel-make-tool
      :name "Code_Check"
      :description "Get project-wide diagnostics/errors. Automatically tries LSP, and falls back to CLI linters if LSP is unavailable."
      :function (lambda ()
@@ -93,12 +144,11 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                      "Error: flymake--project-diagnostics not available."
                    (let* ((proj (project-current))
                           (dir (if proj (project-root proj) default-directory))
-                          ;; Auto-start LSP server if available to ensure we get diagnostics
-                          (server (my/gptel-lsp--get-server dir t))
+                          (lsp-active (my/gptel--lsp-active-p))
                           (diags (and proj (flymake--project-diagnostics proj))))
                      (if (not diags)
-                         (if server
-                             "No compiler or LSP diagnostics found for the current project. (LSP server is running)."
+                         (if lsp-active
+                             "No compiler or LSP diagnostics found for the current project. (LSP server is running, code is clean)."
                            ;; Fallback to CLI linter if no LSP
                            (concat "Warning: No LSP server running. Falling back to CLI linter:\n\n"
                                    (my/gptel--run-fallback-linter dir)))
@@ -118,6 +168,18 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                                       diags)))
                          (string-join formatted "\n"))))))
      :args nil
+     :category "gptel-agent"
+     :include t)
+
+    (gptel-make-tool
+     :name "Code_Usages"
+     :description "Find all usages/references of a symbol across the project. Tries LSP first, falls back to ripgrep."
+     :function (lambda (node_name)
+                 (condition-case err
+                     (with-timeout (10 (format "Error: Code_Usages timed out for '%s'" node_name))
+                       (my/gptel--find-usages node_name))
+                   (error (format "Error executing Code_Usages: %s" (error-message-string err)))))
+     :args (list '(:name "node_name" :type string :description "Symbol/function/class name to find usages for"))
      :category "gptel-agent"
      :include t)))
 
