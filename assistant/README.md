@@ -96,9 +96,9 @@ in `nucleus-prompts.el`). These are supplemental — the schema-faithful
 #### LSP Tool Prompts (Specialized)
 | File | Tool | Description | Status |
 |------|------|-------------|--------|
-| `lsp_hover.md` | lsp_hover | Type info at cursor | ✅ Keep - Quick type lookup |
-| `lsp_rename.md` | lsp_rename | Cross-file symbol rename | ✅ Keep - LSP rename provider |
-| ~~`lsp_diagnostics.md`~~ | ~~lsp_diagnostics~~ | ~~LSP errors~~ | ❌ Replaced by Code_Check |
+| ~~`lsp_hover.md`~~ | ~~lsp_hover~~ | ~~Type info at cursor~~ | ❌ Deprecated - Not registered |
+| ~~`lsp_rename.md`~~ | ~~lsp_rename~~ | ~~Cross-file symbol rename~~ | ❌ Deprecated - Not registered |
+| ~~`lsp_diagnostics.md`~~ | ~~lsp_diagnostics~~ | ~~LSP errors~~ | ❌ Replaced by Diagnostics |
 | ~~`lsp_references.md`~~ | ~~lsp_references~~ | ~~Find references~~ | ❌ Replaced by Code_Usages |
 | ~~`lsp_definition.md`~~ | ~~lsp_definition~~ | ~~Go to definition~~ | ❌ Replaced by Code_Inspect |
 | ~~`lsp_workspace_symbol.md`~~ | ~~lsp_workspace_symbol~~ | ~~Workspace search~~ | ❌ Replaced by Code_Inspect |
@@ -109,12 +109,15 @@ in `nucleus-prompts.el`). These are supplemental — the schema-faithful
 | `agent.md` | Agent | Delegate to subagent |
 | `apply_patch.md` | ApplyPatch | Apply unified diff patch |
 | `ast_*.md` | AST_* | Legacy AST tools (deprecated by Code_*) |
-| `bash_command.md` | Bash/BashRO | Execute shell commands |
+| `bash_command.md` | Bash, BashRO | Execute shell commands (BashRO=read-only) |
 | `edit_file.md` | Edit | Edit file with exact string match |
 | `glob.md` | Glob | Find files by pattern |
 | `grep.md` | Grep | Search file contents |
 | `read_file.md` | Read | Read file contents |
 | `write_file.md` | Write | Create new file |
+| `diagnostics.md` | Diagnostics | Project-wide diagnostics (renamed from Code_Check) |
+| `run_agent.md` | RunAgent | Run subagent by name |
+| `skill.md` | Skill | Load skill package |
 | ... | ... | See `assistant/prompts/tools/` for full list |
 
 Only the tools listed in `(:snippets ...)` within `nucleus-tools.el` are injected
@@ -155,8 +158,8 @@ Two presets, toggled with `nucleus-agent-toggle` (`M-x nucleus-agent-toggle` or 
 
 | Preset | Tools | System prompt |
 |--------|-------|---------------|
-| `gptel-plan` | Read-only subset: Glob, Grep, Read, LSP (Hover, Definition, Refs, Diags, Workspace), WebSearch, WebFetch, YouTube, Agent, Skill, Eval, find_buffers, **Code_Map, Code_Inspect, Code_Usages, Code_Check** | `plan_agent.md` |
-| `gptel-agent` | Full toolset (29 tools): Core tools + LSP mutators (Rename) + Preview/Skill helpers, **Code_Map, Code_Inspect, Code_Replace, Code_Usages, Code_Check** | `code_agent.md` |
+| `gptel-plan` | Read-only: Glob, Grep, Read, WebSearch, WebFetch, YouTube, Agent, Skill, Eval, find_buffers, describe_symbol, get_symbol_source, **Code_Map, Code_Inspect, Code_Usages, Diagnostics** | `plan_agent.md` |
+| `gptel-agent` | Full toolset (25+ tools): Core tools + Preview/Skill helpers + Mutators, **Code_Map, Code_Inspect, Code_Replace, Code_Usages, Diagnostics, BashRO, RunAgent** | `code_agent.md` |
 
 Tool lists are strictly defined in `lisp/modules/nucleus-tools.el`:
 - `(:readonly . (...))`

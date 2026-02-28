@@ -12,7 +12,7 @@ The `Code_*` tools provide a unified, KISS (Keep It Simple, Stupid) interface fo
 | [`Code_Inspect`](#code_inspect) | Extract function/class by name | Read exact implementation before editing |
 | [`Code_Replace`](#code_replace) | Structural replacement | Modify functions (REQUIRED for Lisp/Python/Rust) |
 | [`Code_Usages`](#code_usages) | Find all references | Before renaming or impact analysis |
-| [`Code_Check`](#code_check) | Project diagnostics | Verify changes after editing |
+| [`Diagnostics`](#diagnostics) | Project diagnostics | Verify changes after editing |
 
 ## Workflow
 
@@ -21,7 +21,7 @@ The `Code_*` tools provide a unified, KISS (Keep It Simple, Stupid) interface fo
 2. Code_Inspect  → Extract exact function
 3. Code_Replace  → Modify function (AST-guaranteed balanced)
 4. Code_Usages   → Find all references (before renaming)
-5. Code_Check    → Verify no errors
+5. Diagnostics    → Verify no errors
 ```
 
 ---
@@ -182,13 +182,13 @@ Code_Usages{node_name: "calculate_totals"}
 
 ---
 
-## Code_Check
+## Diagnostics
 
 **Purpose**: Get project-wide diagnostics/errors to verify your changes haven't broken the build.
 
 ### Usage
 ```json
-Code_Check{}
+Diagnostics{}
 ```
 
 ### Returns
@@ -196,7 +196,7 @@ Formatted list of all diagnostics with `file:line:type:message` format.
 
 ### Example
 ```
-Code_Check{}
+Diagnostics{}
 → src/utils.py:42 [Error] Undefined variable 'undefined_var'
   src/main.py:15 [Warning] Unused import 'os'
   src/core.rs:28 [Error] Mismatched types: expected `i32`, found `String`
@@ -229,7 +229,7 @@ All `Code_*` tools use Emacs 29+'s built-in tree-sitter parser for structural un
 - Language-agnostic interface
 
 ### LSP Integration
-- `Code_Check` integrates with `flymake--project-diagnostics` for LSP errors
+- `Diagnostics` integrates with `flymake--project-diagnostics` for LSP errors
 - `Code_Usages` uses `xref-find-references` for semantic reference finding
 - Automatic fallback to CLI tools when LSP unavailable
 
