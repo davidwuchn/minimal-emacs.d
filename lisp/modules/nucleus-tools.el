@@ -29,7 +29,7 @@
              "WebFetch" "WebSearch" "Write" "YouTube"
              "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
              "lsp_definition" "lsp_hover" "lsp_rename"))
-    (:readonly . ("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
+    (:readonly . ("Agent" "BashRO" "Eval" "Glob" "Grep" "Read" "Skill"
                  "WebFetch" "WebSearch" "YouTube"
                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                  "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
@@ -262,6 +262,56 @@ Expected tools: %S"
 
 ;;; Integration Hooks
 
+(defun nucleus-tools--validate-contract (tool-name func args async-p)
+  "Wrap FUNC with runtime contract validation based on ARGS schema.
+Ensure that incoming arguments match the type definitions in ARGS."
+  (lambda (&rest call-args)
+    (let* ((actual-args (if async-p (cdr call-args) call-args))
+           (i 0))
+      ;; Check for missing required arguments or invalid types
+      (dolist (spec (if (functionp args) (funcall args) args))
+        (let* ((val (nth i actual-args))
+               (type (plist-get spec :type))
+               (arg-name (plist-get spec :name))
+               (optional (plist-get spec :optional)))
+          (cond
+           ((and (null val) (not optional) (not (member type '("boolean" boolean))))
+            (user-error "Tool Contract Violation (%s): missing or null required argument '%s'" tool-name arg-name))
+           ((not (null val))
+            (pcase type
+              ((or "string" 'string)
+               (unless (stringp val)
+                 (user-error "Tool Contract Violation (%s): expected '%s' to be a string, got %S" tool-name arg-name val)))
+              ((or "integer" 'integer)
+               (unless (integerp val)
+                 (user-error "Tool Contract Violation (%s): expected '%s' to be an integer, got %S" tool-name arg-name val)))
+              ((or "number" 'number)
+               (unless (numberp val)
+                 (user-error "Tool Contract Violation (%s): expected '%s' to be a number, got %S" tool-name arg-name val)))
+              ((or "boolean" 'boolean)
+               (unless (memq val '(t nil :json-false))
+                 (user-error "Tool Contract Violation (%s): expected '%s' to be a boolean, got %S" tool-name arg-name val)))
+              ((or "array" 'array)
+               (unless (or (vectorp val) (listp val))
+                 (user-error "Tool Contract Violation (%s): expected '%s' to be an array, got %S" tool-name arg-name val)))
+              ((or "object" 'object)
+               (unless (or (hash-table-p val) (listp val))
+                 (user-error "Tool Contract Violation (%s): expected '%s' to be an object, got %S" tool-name arg-name val))))))
+        (cl-incf i)))
+    (apply func call-args))))
+
+(defun nucleus-tools--advise-make-tool (orig-fn &rest kwargs)
+  "Advice for `gptel-make-tool' to enforce tool contracts at runtime.
+Wraps the provided :function with argument type validation."
+  (let* ((name (plist-get kwargs :name))
+         (func (plist-get kwargs :function))
+         (args (plist-get kwargs :args))
+         (async-p (plist-get kwargs :async)))
+    (when (and name func args)
+      (setq kwargs (plist-put kwargs :function
+                              (nucleus-tools--validate-contract name func args async-p))))
+    (apply orig-fn kwargs)))
+
 (defun nucleus-tools-setup ()
   "Setup nucleus-tools module.
 
@@ -269,7 +319,13 @@ Call this after gptel loads to register hooks and tools."
   ;; Register mode hook for tool profile syncing
   (when (boundp 'gptel-mode-hook)
     (add-hook 'gptel-mode-hook #'nucleus-sync-tool-profile)
-    (add-hook 'gptel-mode-hook #'nucleus-tool-sanity-check)))
+    (add-hook 'gptel-mode-hook #'nucleus-tool-sanity-check))
+  
+  ;; Enforce tool contracts
+  (advice-add 'gptel-make-tool :around #'nucleus-tools--advise-make-tool))
+
+(with-eval-after-load 'gptel
+  (nucleus-tools-setup))
 
 ;;; Footer
 

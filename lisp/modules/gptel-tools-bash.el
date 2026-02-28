@@ -183,6 +183,17 @@ CALLBACK is called with the result string on completion."
               :description "Bash command string."))
      :category "gptel-agent"
      :confirm t
+     :include t)
+    (gptel-make-tool
+     :name "BashRO"
+     :description "Execute a READ-ONLY Bash command (async, interruptible). strictly sandboxed to whitelisted inspection commands (ls, pwd, tree, git status/diff/log, grep, cat, jq, awk). NO mutating commands, NO redirection, NO chaining allowed. If you need to mutate, ask the user to say 'go' to switch to Execution mode."
+     :function #'my/gptel--agent-bash-async
+     :async t
+     :args '((:name "command"
+              :type string
+              :description "Read-only Bash command string."))
+     :category "gptel-agent"
+     :confirm t
      :include t)))
 
 ;;; Footer

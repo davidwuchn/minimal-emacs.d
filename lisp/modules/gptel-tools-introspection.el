@@ -105,7 +105,7 @@
      :name "find_buffers_and_recent"
      :description "List currently open buffers and recently accessed file paths matching a pattern."
      :function #'my/gptel--find-buffers-and-recent
-     :args (list '(:name "pattern" :type string :description "Regex pattern to match against buffer/file names"))
+     :args '((:name "pattern" :type string :description "Regex pattern to match against buffer/file names"))
      :category "gptel-agent"
      :confirm nil
      :include t)))

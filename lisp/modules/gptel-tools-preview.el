@@ -34,7 +34,15 @@ presses n/y or q respectively."
 
 Shows the diff between ORIGINAL and REPLACEMENT for PATH.
 CALLBACK is called when user confirms or aborts."
-  (let* ((diff-buf (get-buffer-create "*gptel-preview*"))
+  (let* ((parent-fsm (buffer-local-value 'gptel--fsm-last buffer))
+         (wrapped-cb
+          (lambda (result)
+            (when (buffer-live-p buffer)
+              (with-current-buffer buffer
+                (setq-local gptel--fsm-last parent-fsm)))
+            (setq-local gptel--fsm-last parent-fsm)
+            (funcall callback result)))
+         (diff-buf (get-buffer-create "*gptel-preview*"))
          (temp1 (make-temp-file "orig"))
          (temp2 (make-temp-file "new"))
          (diff-output
@@ -54,8 +62,8 @@ CALLBACK is called when user confirms or aborts."
           (display-buffer diff-buf)
           (my/gptel--setup-preview-keys
            diff-buf
-           (lambda () (funcall callback "Preview confirmed."))
-           (lambda () (funcall callback "Preview aborted."))))
+           (lambda () (funcall wrapped-cb "Preview confirmed."))
+           (lambda () (funcall wrapped-cb "Preview aborted."))))
       (delete-file temp1)
       (delete-file temp2))))
 
@@ -67,7 +75,15 @@ BUFFER is the originating buffer.
 CALLBACK is called with the result.
 ON-CONFIRM and ON-ABORT are called based on user action.
 HEADER is the prompt to show."
-  (let* ((diff-buf (get-buffer-create "*gptel-patch-preview*")))
+  (let* ((parent-fsm (buffer-local-value 'gptel--fsm-last buffer))
+         (wrapped-cb
+          (lambda (result)
+            (when (buffer-live-p buffer)
+              (with-current-buffer buffer
+                (setq-local gptel--fsm-last parent-fsm)))
+            (setq-local gptel--fsm-last parent-fsm)
+            (funcall callback result)))
+         (diff-buf (get-buffer-create "*gptel-patch-preview*")))
     (with-current-buffer diff-buf
       (erase-buffer)
       (insert header "\n\n")
@@ -76,8 +92,8 @@ HEADER is the prompt to show."
     (display-buffer diff-buf)
     (my/gptel--setup-preview-keys
      diff-buf
-     (lambda () (funcall on-confirm callback))
-     (lambda () (funcall on-abort callback)))))
+     (lambda () (funcall on-confirm wrapped-cb))
+     (lambda () (funcall on-abort wrapped-cb)))))
 
 ;;; Tool Registration
 

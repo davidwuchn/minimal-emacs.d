@@ -79,9 +79,9 @@ Call this after gptel-agent-tools loads."
                      (with-temp-file filepath (insert content)))
                    (format "Created new file: %s" filepath)))
      :description "Create a new file with the specified content. SAFETY: refuses to overwrite existing files."
-     :args (list '(:name "path" :type string :description "Directory path")
-                 '(:name "filename" :type string :description "File name")
-                 '(:name "content" :type string :description "Content"))
+     :args '((:name "path" :type string :description "Directory path")
+             (:name "filename" :type string :description "File name")
+             (:name "content" :type string :description "Content"))
      :confirm t
      :include t)
 
@@ -113,8 +113,8 @@ Call this after gptel-agent-tools loads."
      :name "Mkdir"
      :function #'gptel-agent--make-directory
      :description "Create a directory under a parent directory."
-     :args (list '(:name "parent" :type "string")
-                 '(:name "name" :type "string"))
+     :args '((:name "parent" :type string)
+             (:name "name" :type string))
      :category "gptel-agent"
      :confirm t
      :include t)
@@ -176,7 +176,7 @@ Call this after gptel-agent-tools loads."
      :name "WebFetch"
      :function #'gptel-agent--read-url
      :description "Fetch and read the text of a URL."
-     :args '((:name "url" :type "string"))
+     :args '((:name "url" :type string))
      :async t
      :include t
      :category "gptel-agent")
@@ -186,7 +186,7 @@ Call this after gptel-agent-tools loads."
      :name "YouTube"
      :function #'gptel-agent--yt-read-url
      :description "Fetch YouTube description and transcript."
-     :args '((:name "url" :type "string"))
+     :args '((:name "url" :type string))
      :category "gptel-agent"
      :async t
      :include t)
