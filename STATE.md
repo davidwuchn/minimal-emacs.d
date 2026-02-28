@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **OVERLAY MOUSE CLICK FIX**: Fixed seq-do error when clicking tool permit overlay. Changed interactive spec to properly handle mouse events from overlay keymap. Now works for both mouse clicks and interactive calls.
 - **PREVIEW CALLBACK FIX**: Fixed seq-do error in enhanced preview tools. Changed callbacks to pass string messages directly instead of converting symbols. Matches existing preview tools pattern.
 - **ENHANCED PREVIEW TOOLS**: Added inline_diff_preview (syntax-highlighted diffs), batch_preview (multiple files), and syntax_preview (auto-detect mode). All with quick confirm/abort keybindings.
 - **5-TIER CONFIRMATION SYSTEM**: Implemented configurable confirmation levels (auto/safe/normal/strict/paranoid). Auto mode skips confirmation, safe mode confirms only dangerous tools, normal confirms all, strict/paranoid add review requirements. Interactive: M-x my/gptel-set-confirmation-level.
