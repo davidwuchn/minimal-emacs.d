@@ -26,6 +26,9 @@
 ;; Load tool verification (checks all declared tools are registered)
 (require 'nucleus-tools-verify)
 
+;; Load tool signature validation (validates prompt args match registration)
+(require 'nucleus-tools-validate)
+
 ;; --- Configuration Defaults ---
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3.5-plus)

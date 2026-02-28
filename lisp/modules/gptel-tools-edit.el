@@ -139,10 +139,10 @@ CALLBACK is called exactly once unless the buffer has been aborted."
      :async t
      :args '((:name "path"
               :type string)
-            (:name "old-str"
+            (:name "old_str"
               :type string
               :optional t)
-            (:name "new-str-or-diff"
+            (:name "new_str_or_diff"
               :type string)
             (:name "diffp"
               :type boolean

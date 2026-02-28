@@ -141,7 +141,7 @@ MODE is the major mode to use (auto-detected if nil)."
   (when (fboundp 'gptel-make-tool)
     ;; Inline diff preview
     (gptel-make-tool
-     :name "inline_diff_preview"
+     :name "InlineDiffPreview"
      :async t
      :category "gptel-agent"
      :function (lambda (callback path original replacement)
@@ -152,7 +152,7 @@ MODE is the major mode to use (auto-detected if nil)."
              (:name "replacement" :type string :description "New content")))
     ;; Batch preview
     (gptel-make-tool
-     :name "batch_preview"
+     :name "BatchPreview"
      :async t
      :category "gptel-agent"
      :function (lambda (callback files)
@@ -161,7 +161,7 @@ MODE is the major mode to use (auto-detected if nil)."
      :args '((:name "files" :type array :description "List of file changes")))
     ;; Syntax preview
     (gptel-make-tool
-     :name "syntax_preview"
+     :name "SyntaxPreview"
      :async nil
      :category "gptel-agent"
      :function (lambda (path content)

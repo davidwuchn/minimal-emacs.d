@@ -1,4 +1,4 @@
-λ(p,o,n,d). Edit | p:path | o:old-str(opt) | n:new-str-or-diff | d:diffp(opt) | ret:success/error
+λ(p,o,n,d). Edit | p:path | o:old_str(opt) | n:new_str_or_diff | d:diffp(opt) | ret:success/error
 
 # Edit - Replace Text or Apply Diff
 
@@ -14,10 +14,10 @@ Replace text in a file or apply a unified diff patch. Async operation with confi
 ## Usage
 ```
 # Simple text replacement
-Edit{path: "src/utils.py", old-str: "def old():", new-str-or-diff: "def new():", diffp: false}
+Edit{path: "src/utils.py", old_str: "def old():", new_str_or_diff: "def new():", diffp: false}
 
 # Apply unified diff
-Edit{path: "src/utils.py", new-str-or-diff: "--- a/src/utils.py\n+++ b/src/utils.py\n@@ -1,4 +1,4 @@\n-def old():\n+def new():", diffp: true}
+Edit{path: "src/utils.py", new_str_or_diff: "--- a/src/utils.py\n+++ b/src/utils.py\n@@ -1,4 +1,4 @@\n-def old():\n+def new():", diffp: true}
 ```
 
 ## Parameters
@@ -35,8 +35,8 @@ Edit{path: "src/utils.py", new-str-or-diff: "--- a/src/utils.py\n+++ b/src/utils
 # Replace exact text
 Edit{
   path: "src/utils.py",
-  old-str: "def calculate_totals(data):\n    return sum(data)",
-  new-str-or-diff: "def calculate_totals(data):\n    return sum(item.get('value', 0) for item in data)",
+  old_str: "def calculate_totals(data):\n    return sum(data)",
+  new_str_or_diff: "def calculate_totals(data):\n    return sum(item.get('value', 0) for item in data)",
   diffp: false
 }
 → Successfully edited src/utils.py
@@ -44,7 +44,7 @@ Edit{
 # Apply unified diff
 Edit{
   path: "src/utils.py",
-  new-str-or-diff: "--- a/src/utils.py\n+++ b/src/utils.py\n@@ -5,7 +5,7 @@\n-def old():\n+def new():",
+  new_str_or_diff: "--- a/src/utils.py\n+++ b/src/utils.py\n@@ -5,7 +5,7 @@\n-def old():\n+def new():",
   diffp: true
 }
 → Successfully applied diff to src/utils.py

@@ -214,7 +214,7 @@ AGENT-NAME must exist in `gptel-agent--agents`."
      :name "RunAgent"
      :description "Run a gptel-agent agent by name (e.g. explorer)"
      :function #'my/gptel--run-agent-tool
-     :args '((:name "agent-name"
+     :args '((:name "agent_name"
               :type string
               :description "Agent name (from gptel-agent--agents)")
              (:name "description"
