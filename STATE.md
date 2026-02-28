@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **PARENTHESIS BALANCE FIX**: Fixed unbalanced parentheses in gptel-tools-code.el. Moved comment outside let bindings, added missing closing paren for when block. **FIXES**: "End of file during parsing" errors.
 - **GPTL-TOOLS-LSP REQUIRE FIX**: Removed stale `require 'gptel-tools-lsp` from gptel-tools.el. Module was deleted when functionality merged into gptel-tools-code.el. **FIXES**: "Cannot open load file: gptel-tools-lsp" compilation error.
 - **BYTE-COMPILATION FIX**: Added `no-byte-compile: t` to gptel-tools-code.el to avoid check-parens false positives with regex patterns containing `\\'`. Removed stale .elc files. **FIXES**: "End of file during parsing" errors. File loads correctly in Emacs sessions.
 - **CODE_CHECK REPORTING**: my/gptel--run-fallback-linter now reports exactly what was checked (e.g., "✓ No linter errors (ESLint) - checked package.json"). Non-standard projects get helpful message about what was searched. **FIXES**: Generic "no errors" messages.
