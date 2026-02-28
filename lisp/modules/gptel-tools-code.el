@@ -16,34 +16,40 @@
 (defun my/gptel--find-usages (symbol-name)
   "Find all usages of SYMBOL-NAME in the current project.
 Tries LSP references first, falls back to ripgrep.
-Includes retry logic for LSP startup race conditions."
+Includes enhanced retry logic for LSP startup race conditions."
   (let* ((proj (project-current))
          (root (if proj (project-root proj) default-directory))
          (usages nil)
-         (lsp-retries 3)
-         (lsp-ready nil))
-    ;; Try LSP first with retry logic for startup race conditions
-    (when (and (my/gptel--lsp-active-p)
-               (fboundp 'xref-find-references))
-      ;; Wait for LSP to be fully ready (retry loop)
+         (lsp-retries 5)  ; Increased from 3 to 5
+         (lsp-ready nil)
+         (lsp-server (and (my/gptel--lsp-active-p) (eglot-current-server))))
+    ;; Try LSP first with enhanced retry logic for startup race conditions
+    (when lsp-server
+      ;; Wait for LSP to be fully ready (retry loop with exponential backoff)
       (while (and (> lsp-retries 0) (not lsp-ready))
         (condition-case nil
-            (progn
-              (let ((refs (xref-find-references symbol-name)))
-                (when refs
-                  (setq lsp-ready t)
-                  (setq usages
-                        (mapcar (lambda (ref)
-                                  (format "%s:%d: %s"
-                                          (xref-location-filename (xref-item-location ref))
-                                          (xref-location-line (xref-item-location ref))
-                                          (xref-item-summary ref)))
-                                refs)))))
+            (let ((refs (xref-find-references symbol-name)))
+              (if (and refs (not (equal refs '(nil))))
+                  ;; Got results, LSP is ready
+                  (progn
+                    (setq lsp-ready t)
+                    (setq usages
+                          (mapcar (lambda (ref)
+                                    (format "%s:%d: %s"
+                                            (xref-location-filename (xref-item-location ref))
+                                            (xref-location-line (xref-item-location ref))
+                                            (xref-item-summary ref)))
+                                  refs)))
+                ;; Got empty results, LSP might not be fully indexed yet
+                (setq lsp-retries (1- lsp-retries))
+                (when (> lsp-retries 0)
+                  ;; Exponential backoff: 0.5s, 1s, 2s, 4s, 8s (max ~15s total)
+                  (sleep-for (* 0.5 (expt 2 (- 5 lsp-retries)))))))
           (error
            ;; LSP not ready yet, retry
            (setq lsp-retries (1- lsp-retries))
            (when (> lsp-retries 0)
-             (sleep-for 0.5)))))
+             (sleep-for (* 0.5 (expt 2 (- 5 lsp-retries))))))))
       ;; If LSP failed after retries, clear usages to trigger ripgrep fallback
       (unless lsp-ready
         (setq usages nil)))
@@ -100,17 +106,29 @@ Always use this first to understand the structure of a file before editing."
                  (condition-case err
                      (with-timeout (5 (format "Error: Code_Map timed out after 5 seconds on %s" file_path))
                        (with-current-buffer (find-file-noselect file_path)
-                         (let ((map (treesit-agent-get-file-map)))
-                           (if map
-                               (format "File map for %s:\n%s" file_path (string-join map "\n"))
-                             (format "Could not generate file map for %s. Is tree-sitter enabled?" file_path)))))
+                         ;; Pre-flight check: Verify tree-sitter parser is available
+                         (if (not (treesit-parser-list))
+                             (let ((lang (or (and (boundp 'treesit--language) treesit--language)
+                                            (cond
+                                             ((string-match-p "\\.py\\'" file_path) 'python)
+                                             ((string-match-p "\\.el\\'" file_path) 'elisp)
+                                             ((string-match-p "\\.clj\\'" file_path) 'clojure)
+                                             ((string-match-p "\\.rs\\'" file_path) 'rust)
+                                             (t 'unknown)))))
+                               (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Read/Grep for this file" file_path (or lang "language") file_path (or lang "language")))
+                           (let ((map (treesit-agent-get-file-map)))
+                             (if map
+                                 (format "File map for %s:\n%s" file_path (string-join map "\n"))
+                               (format "Could not generate file map for %s.\n\nACTION: Check if tree-sitter is enabled for this file type.\n  - Run: M-x treesit-install-language-grammar RET <language> RET\n  - Verify: M-x eval-expression RET (treesit-language-available-p '<lang>) RET" file_path)))))
                    (error (let ((msg (error-message-string err)))
                             (cond
                              ((string-match-p "treesit" msg)
-                              (format "Error: tree-sitter parser not installed for this file type.\n\nTo fix: M-x treesit-install-language-grammar RET <language> RET\n\nOriginal error: %s" msg))
+                              (format "Error: tree-sitter parser not installed for this file type.\n\nACTION: Install the parser:\n  M-x treesit-install-language-grammar RET <language> RET\n\nExample: M-x treesit-install-language-grammar RET python RET\n\nOriginal error: %s" msg))
                              ((string-match-p "parser" msg)
-                              (format "Error: No tree-sitter parser available for this file.\n\nTo fix: M-x treesit-install-language-grammar RET <language> RET\n\nOriginal error: %s" msg))
-                             (t (format "Error executing Code_Map on %s: %s" file_path msg)))))))
+                              (format "Error: No tree-sitter parser available for this file.\n\nACTION: Install the parser:\n  M-x treesit-install-language-grammar RET <language> RET\n\nThen reopen the file.\n\nOriginal error: %s" msg))
+                             ((string-match-p "No such file\\|does not exist" msg)
+                              (format "Error: File not found: %s\n\nACTION: Check the file path and try again." file_path))
+                             (t (format "Error executing Code_Map on %s: %s\n\nACTION: Check file permissions and try again." file_path msg)))))))
      :args (list '(:name "file_path" :type string :description "Path to the file to map"))
      :category "gptel-agent"
      :include t)
@@ -124,22 +142,37 @@ If file_path is omitted, it will search the entire project to find the definitio
                      (with-timeout (10 (format "Error: Code_Inspect timed out for '%s'" node_name))
                        (if file_path
                            (with-current-buffer (find-file-noselect file_path)
-                             (let ((text (treesit-agent-extract-node node_name)))
-                               (if text
-                                   (format "Code block '%s' from %s:\n\n%s" node_name file_path text)
-                                 (format "Error: Could not find node named '%s' in %s.\n\nTIP: Use Code_Map first to see available symbols in the file." node_name file_path))))
+                             ;; Pre-flight check: Verify tree-sitter parser is available
+                             (if (not (treesit-parser-list))
+                                 (let ((lang (or (and (boundp 'treesit--language) treesit--language)
+                                                (cond
+                                                 ((string-match-p "\\.py\\'" file_path) 'python)
+                                                 ((string-match-p "\\.el\\'" file_path) 'elisp)
+                                                 ((string-match-p "\\.clj\\'" file_path) 'clojure)
+                                                 ((string-match-p "\\.rs\\'" file_path) 'rust)
+                                                 (t 'unknown)))))
+                                   (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Read tool for this file" file_path (or lang "language") file_path (or lang "language")))
+                               (let ((text (treesit-agent-extract-node node_name)))
+                                 (if text
+                                     (format "Code block '%s' from %s:\n\n%s" node_name file_path text)
+                                   (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols in the file\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))
                          ;; Search workspace if no file provided
                          (let ((result (treesit-agent-find-workspace node_name)))
-                           (if (string-match-p "ripgrep.*not found\\|executable.*rg" result)
-                               (concat result "\n\nTo fix: Install ripgrep (rg):\n  macOS: brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Or provide file_path to search a specific file.")
-                             result))))
+                           (cond
+                            ((string-match-p "ripgrep.*not found\\|executable.*rg" result)
+                             (concat result "\n\nACTION: Install ripgrep (rg) for workspace search:\n  macOS:  brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Check:  rg --version\n\nAlternatively, provide file_path to search a specific file."))
+                            ((string-match-p "No structural definition found" result)
+                             (format "Error: Could not find '%s' anywhere in the project\n\nACTION:\n  1. Check spelling: '%s' may be misspelled\n  2. Symbol may not exist - use Code_Map to explore files\n  3. Symbol may be dynamically defined (not in AST)" node_name node_name))
+                            (t result)))))
                    (error (let ((msg (error-message-string err)))
                             (cond
                              ((string-match-p "treesit" msg)
-                              (format "Error: tree-sitter parser not installed.\n\nTo fix: M-x treesit-install-language-grammar RET <language> RET\n\nOriginal error: %s" msg))
+                              (format "Error: tree-sitter parser not installed.\n\nACTION: M-x treesit-install-language-grammar RET <language> RET\n\nOriginal error: %s" msg))
                              ((string-match-p "ripgrep\\|rg" msg)
-                              (concat msg "\n\nTo fix: Install ripgrep (rg):\n  macOS: brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Check: rg --version"))
-                             (t (format "Error executing Code_Inspect: %s" msg)))))))
+                              (concat msg "\n\nACTION: Install ripgrep:\n  macOS:  brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Check:  rg --version"))
+                             ((string-match-p "timeout" msg)
+                              (format "Error: Code_Inspect timed out after 10 seconds for '%s'\n\nACTION:\n  1. Provide explicit file_path to skip workspace search\n  2. Large project - search may take time\n  3. Try Code_Map on specific files first" node_name))
+                             (t (format "Error executing Code_Inspect: %s\n\nACTION: Check symbol name and file path, then try again." msg)))))))
      :args (list '(:name "node_name" :type string :description "Exact name of the function/class to read")
                  '(:name "file_path" :type string :optional t :description "Path to the file (optional)"))
      :category "gptel-agent"
@@ -153,12 +186,28 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                  (condition-case err
                      (with-timeout (5 (format "Error: Code_Replace timed out on %s" file_path))
                        (with-current-buffer (find-file-noselect file_path)
-                         (if (treesit-agent-replace-node node_name new_code)
-                             (progn
-                               (save-buffer)
-                               (format "Successfully replaced '%s' in %s" node_name file_path))
-                           (format "Error: Could not find node named '%s' to replace in %s" node_name file_path))))
-                   (error (format "Error executing Code_Replace on %s: %s" file_path (error-message-string err)))))
+                         ;; Pre-flight check: Verify tree-sitter parser is available
+                         (if (not (treesit-parser-list))
+                             (let ((lang (or (and (boundp 'treesit--language) treesit--language)
+                                            (cond
+                                             ((string-match-p "\\.py\\'" file_path) 'python)
+                                             ((string-match-p "\\.el\\'" file_path) 'elisp)
+                                             ((string-match-p "\\.clj\\'" file_path) 'clojure)
+                                             ((string-match-p "\\.rs\\'" file_path) 'rust)
+                                             (t 'unknown)))))
+                               (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Edit tool (manual paren balancing required)" file_path (or lang "language") file_path (or lang "language")))
+                           (if (treesit-agent-replace-node node_name new_code)
+                               (progn
+                                 (save-buffer)
+                                 (format "Successfully replaced '%s' in %s" node_name file_path))
+                             (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))
+                   (error (let ((msg (error-message-string err)))
+                            (cond
+                             ((string-match-p "treesit" msg)
+                              (format "Error: tree-sitter parser not installed.\n\nACTION: M-x treesit-install-language-grammar RET <language> RET\n\nOriginal error: %s" msg))
+                             ((string-match-p "syntax error\\|has-error" msg)
+                              (format "Error: New code has syntax errors (unbalanced parentheses/brackets)\n\nACTION:\n  1. Check that all opening brackets have closing brackets\n  2. Verify indentation is correct\n  3. Test code in a REPL before replacing\n\nOriginal error: %s" msg))
+                             (t (format "Error executing Code_Replace on %s: %s\n\nACTION: Check function name and new code syntax, then try again." file_path msg)))))))
      :args (list '(:name "file_path" :type string :description "Path to the file")
                  '(:name "node_name" :type string :description "Exact name of the function/class to replace")
                  '(:name "new_code" :type string :description "The perfectly balanced replacement code snippet"))
