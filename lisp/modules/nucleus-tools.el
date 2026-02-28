@@ -53,8 +53,8 @@
   "Canonical toolset definitions for nucleus.
 
 :core — Base gptel-agent tools (17 tools)
-:readonly — Read-only subset for plan mode (12 tools)
-:researcher — Research-specific: repo exploration + web research + skill loading (14 tools)
+:readonly — Read-only subset for plan mode (15 tools)
+:researcher — Research: readonly + skill loading (18 tools, superset of :readonly)
 :nucleus — Core + preview + skill management (21 tools)
 :snippets — Tools with supplemental prompts injected")
 
