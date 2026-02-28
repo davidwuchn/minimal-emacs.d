@@ -36,16 +36,6 @@ Levels:
   "Check if TOOL-NAME is in the dangerous tools list."
   (member tool-name my/gptel--dangerous-tools))
 
-(defun my/gptel--should-confirm-tool-p (tool-name)
-  "Determine if TOOL-NAME requires confirmation based on confirmation level."
-  (pcase my/gptel-confirmation-level
-    ('auto nil)  ; Never confirm
-    ('safe (my/gptel--tool-is-dangerous-p tool-name))  ; Only dangerous
-    ('normal t)  ; Always confirm
-    ('strict t)  ; Always confirm with details
-    ('paranoid t)  ; Always confirm with review
-    (_ t)))
-
 (defun my/gptel--get-confirmation-prompt ()
   "Get appropriate confirmation prompt based on confirmation level."
   (pcase my/gptel-confirmation-level
@@ -59,15 +49,22 @@ Levels:
 (defun my/gptel--dispatch-tool-calls (&optional event)
   "Unified tool call dispatcher with consistent overlay/minibuffer options.
 
-Called from overlay keymap (mouse click) or interactively.
-Shows all 6 available options in the minibuffer to match overlay keymap:
+When called from overlay mouse click, EVENT is the mouse event.
+When called interactively, EVENT is nil.
+
+Shows all 6 available options in the minibuffer:
 - y: Accept and run
 - n: Skip but continue
 - k: Cancel/reject
 - i: Inspect details
 - p: Previous overlay
 - q: Quit/reject"
-  (interactive (list last-input-event))
+  (interactive)
+  ;; If called from overlay click, move point to click position
+  (when event
+    (let ((pos (posn-point (event-end event))))
+      (when pos
+        (goto-char pos))))
   (let* ((prompt (my/gptel--get-confirmation-prompt))
          (choices '((?y ?Y "yes - Accept and run tool calls")
                     (?n ?N "no - Skip tool calls, continue without")
@@ -81,7 +78,7 @@ Shows all 6 available options in the minibuffer to match overlay keymap:
       (message "Auto-executing tool calls...")
       (call-interactively #'gptel--accept-tool-calls))
      (t
-      ;; Show confirmation with all options
+      ;; Show confirmation with all options (always via minibuffer)
       (let ((choice (read-multiple-choice (concat prompt " (y/n/k/i/p/q) ") choices)))
         (pcase (car choice)
           (?y (call-interactively #'gptel--accept-tool-calls))
