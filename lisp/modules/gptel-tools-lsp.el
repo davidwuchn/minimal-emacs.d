@@ -58,19 +58,35 @@
                         eglot-server-programs))))
    (buffer-list)))
 
-(defun my/gptel-lsp--format-missing-server-error (path)
-  "Format a detailed error message indicating a missing LSP server for PATH."
+(defun my/gptel-lsp--format-missing-server-error (path &optional tool-name)
+  "Format a detailed error message indicating a missing LSP server for PATH.
+If TOOL-NAME is provided, includes specific fallback advice for the AI agent."
   (let* ((proj (project-current nil path))
          (buf (or (find-buffer-visiting path)
                   (if (file-directory-p path)
                       (my/gptel-lsp--find-eglot-supported-buffer proj)
                     (find-file-noselect path))))
          (mode (and buf (buffer-local-value 'major-mode buf)))
-         (execs (and mode (my/gptel-lsp--get-expected-executables mode))))
-    (if execs
-        (format "Error: No active Eglot server found for %s. The server could not be started automatically. Eglot expects one of the following executables for `%s': %s. Please ensure the appropriate language server is installed and available in your PATH."
-                (if (file-directory-p path) "the current project" path) mode (string-join execs ", "))
-      (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." (if (file-directory-p path) "the current project" path)))))
+         (execs (and mode (my/gptel-lsp--get-expected-executables mode)))
+         (base-err
+          (if execs
+              (format "Error: No active Eglot server found for %s. The server could not be started automatically. Eglot expects one of the following executables for `%s': %s. Please ensure the appropriate language server is installed and available in your PATH."
+                      (if (file-directory-p path) "the current project" path) mode (string-join execs ", "))
+            (format "Error: No active Eglot server found for %s. The server could not be started automatically (is the required language server executable installed?)." (if (file-directory-p path) "the current project" path))))
+         (fallback
+          (pcase tool-name
+            ((or "lsp_references" "lsp_workspace_symbol")
+             " Fallback Advice: Use the `Grep` tool to search for the symbol across the project.")
+            ("lsp_definition"
+             " Fallback Advice: Use the `Grep` or `Glob` tools to find the symbol definition.")
+            ("lsp_rename"
+             " Fallback Advice: Use `Grep` to find all occurrences and the `Edit` tool to rename them manually.")
+            ("lsp_hover"
+             " Fallback Advice: Use `Grep` to find the definition and `Read` to inspect the source code surrounding it.")
+            ("lsp_diagnostics"
+             " Fallback Advice: You cannot get project-wide LSP diagnostics without an active server. Rely on compiler/linter output via `Bash` (e.g., `npm run lint`, `cargo check`).")
+            (_ ""))))
+    (concat base-err fallback)))
 
 (defun my/gptel-lsp--get-server (path &optional auto-start)
   "Get the active Eglot server for PATH, reliably.
@@ -140,7 +156,7 @@ If PATH is a directory, attempts to find an open supported buffer in the project
   (let* ((proj (project-current))
          (server (my/gptel-lsp--get-server default-directory t)))
     (unless server
-      (funcall callback (my/gptel-lsp--format-missing-server-error default-directory))
+      (funcall callback (my/gptel-lsp--format-missing-server-error default-directory "lsp_diagnostics"))
       (cl-return-from my/gptel-lsp-diagnostics))
 
     (let ((diags (flymake--project-diagnostics proj)))
@@ -167,7 +183,7 @@ If PATH is a directory, attempts to find an open supported buffer in the project
   "Get LSP references for the symbol at FILE-PATH, LINE, CHARACTER (0-indexed)."
   (let ((server (my/gptel-lsp--get-server file-path t)))
     (unless server
-      (funcall callback (my/gptel-lsp--format-missing-server-error file-path))
+      (funcall callback (my/gptel-lsp--format-missing-server-error file-path "lsp_references"))
       (cl-return-from my/gptel-lsp-references))
     
     (jsonrpc-async-request
@@ -190,7 +206,7 @@ If PATH is a directory, attempts to find an open supported buffer in the project
   "Get LSP definition for the symbol at FILE-PATH, LINE, CHARACTER (0-indexed)."
   (let ((server (my/gptel-lsp--get-server file-path t)))
     (unless server
-      (funcall callback (my/gptel-lsp--format-missing-server-error file-path))
+      (funcall callback (my/gptel-lsp--format-missing-server-error file-path "lsp_definition"))
       (cl-return-from my/gptel-lsp-definition))
     
     (jsonrpc-async-request
@@ -213,7 +229,7 @@ If PATH is a directory, attempts to find an open supported buffer in the project
   "Get LSP hover info for the symbol at FILE-PATH, LINE, CHARACTER (0-indexed)."
   (let ((server (my/gptel-lsp--get-server file-path t)))
     (unless server
-      (funcall callback (my/gptel-lsp--format-missing-server-error file-path))
+      (funcall callback (my/gptel-lsp--format-missing-server-error file-path "lsp_hover"))
       (cl-return-from my/gptel-lsp-hover))
     
     (jsonrpc-async-request
@@ -242,7 +258,7 @@ If PATH is a directory, attempts to find an open supported buffer in the project
   "Rename symbol at FILE-PATH, LINE, CHARACTER (0-indexed) to NEW-NAME."
   (let ((server (my/gptel-lsp--get-server file-path t)))
     (unless server
-      (funcall callback (my/gptel-lsp--format-missing-server-error file-path))
+      (funcall callback (my/gptel-lsp--format-missing-server-error file-path "lsp_rename"))
       (cl-return-from my/gptel-lsp-rename))
     
     (jsonrpc-async-request
@@ -270,7 +286,7 @@ If PATH is a directory, attempts to find an open supported buffer in the project
   "Query workspace symbols for QUERY."
   (let ((server (my/gptel-lsp--get-server default-directory t)))
     (unless server
-      (funcall callback (my/gptel-lsp--format-missing-server-error default-directory))
+      (funcall callback (my/gptel-lsp--format-missing-server-error default-directory "lsp_workspace_symbol"))
       (cl-return-from my/gptel-lsp-workspace-symbol))
     
     (jsonrpc-async-request
