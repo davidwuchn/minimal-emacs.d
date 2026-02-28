@@ -1,6 +1,9 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **AUTO-PERMIT PERSISTENCE FIX**: Fixed auto-permit ('a' option) to persist across tool calls. Keymap now modified AFTER gptel loads using with-eval-after-load, ensuring my/gptel-confirmation-level is properly checked on all subsequent calls.
+- **NAMING STANDARDIZED**: Renamed preview tools to PascalCase (InlineDiffPreview, BatchPreview, SyntaxPreview). Standardized arg names to snake_case (old_str, new_str_or_diff, agent_name). Updated all documentation to match.
+- **SIGNATURE VALIDATION**: Created nucleus-tools-validate.el to verify tool prompt lambda signatures match registered :args. Interactive: M-x nucleus-validate-tool-signatures. Catches mismatches between documentation and implementation.
 - **NAMING STANDARDIZED**: Renamed preview tools to PascalCase (InlineDiffPreview, BatchPreview, SyntaxPreview). Standardized arg names to snake_case (old_str, new_str_or_diff, agent_name). Updated all documentation to match.
 - **SIGNATURE VALIDATION**: Created nucleus-tools-validate.el to verify tool prompt lambda signatures match registered :args. Interactive: M-x nucleus-validate-tool-signatures. Catches mismatches between documentation and implementation.
 - **CLEANUP DEPRECATED PROMPTS**: Removed deprecated LSP tool prompts (lsp_hover.md, lsp_rename.md, code_check.md) and duplicate todowrite.md. Updated nucleus-prompts.el to reference todo_write.md. nucleus now only references existing, non-deprecated tool prompt files.
