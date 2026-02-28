@@ -2,9 +2,6 @@
 
 (require 'treesit-auto)
 
-;; Unify tree-sitter grammar directories
-(setq treesit-extra-load-path (list (expand-file-name "var/tree-sitter" user-emacs-directory)))
-
 (setq treesit-auto-langs '(python rust clojure elisp emacs-lisp))
 
 ;; Custom recipes with ABI14 revisions for Emacs 30 compatibility
@@ -25,7 +22,7 @@
        :remap '(rust-mode)
        :url "https://github.com/tree-sitter/tree-sitter-rust"
        :revision "master"
-       :abi14-revision "v0.23.1"
+       :abi14-revision "v0.21.0"
        :ext "\\.rs\\'"))
 
 (setq my/clojure-tsauto-config
@@ -44,7 +41,7 @@
        :remap '(emacs-lisp-mode)
        :url "https://github.com/Wilfred/tree-sitter-elisp"
        :revision "master"
-       :abi14-revision "v1.2.0"
+       :abi14-revision "1.2"
        :ext "\\.el\\'"))
 
 (add-to-list 'treesit-auto-recipe-list my/python-tsauto-config)
