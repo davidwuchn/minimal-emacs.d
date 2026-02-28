@@ -84,13 +84,13 @@
     (Mkdir               . "mkdir.md")
     (TodoWrite           . "todowrite.md")
     (YouTube             . "youtube.md")
-    (lsp_diagnostics     . "lsp_diagnostics.md")
-    (lsp_references      . "lsp_references.md")
-    (lsp_workspace_symbol . "lsp_workspace_symbol.md")
-    (lsp_definition      . "lsp_definition.md")
+    ;; LSP tools (kept: hover for type info, rename for cross-file renaming)
     (lsp_hover           . "lsp_hover.md")
-    (lsp_rename          . "lsp_rename.md"))
-  "Tool prompt files.")
+    (lsp_rename          . "lsp_rename.md")
+    ;; Deprecated: lsp_diagnostics→Code_Check, lsp_references→Code_Usages,
+    ;; lsp_workspace_symbol→Code_Inspect, lsp_definition→Code_Inspect
+    )
+  "Tool prompt files. Note: Most LSP tools replaced by Code_* unified interface.")
 
 ;;; Helper Functions
 

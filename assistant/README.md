@@ -84,7 +84,7 @@ One `.md` file per tool, keyed by tool name (see `nucleus-tool-prompt-files`
 in `nucleus-prompts.el`). These are supplemental — the schema-faithful
 `<tool_usage_policy>` block in the main agent prompt is the primary contract.
 
-#### Code_* Tool Prompts
+#### Code_* Tool Prompts (Primary Interface)
 | File | Tool | Description |
 |------|------|-------------|
 | `code_map.md` | Code_Map | File structure/outline |
@@ -92,6 +92,16 @@ in `nucleus-prompts.el`). These are supplemental — the schema-faithful
 | `code_replace.md` | Code_Replace | AST structural replacement |
 | `code_usages.md` | Code_Usages | Find all symbol references |
 | `code_check.md` | Code_Check | LSP diagnostics + linter fallback |
+
+#### LSP Tool Prompts (Specialized)
+| File | Tool | Description | Status |
+|------|------|-------------|--------|
+| `lsp_hover.md` | lsp_hover | Type info at cursor | ✅ Keep - Quick type lookup |
+| `lsp_rename.md` | lsp_rename | Cross-file symbol rename | ✅ Keep - LSP rename provider |
+| ~~`lsp_diagnostics.md`~~ | ~~lsp_diagnostics~~ | ~~LSP errors~~ | ❌ Replaced by Code_Check |
+| ~~`lsp_references.md`~~ | ~~lsp_references~~ | ~~Find references~~ | ❌ Replaced by Code_Usages |
+| ~~`lsp_definition.md`~~ | ~~lsp_definition~~ | ~~Go to definition~~ | ❌ Replaced by Code_Inspect |
+| ~~`lsp_workspace_symbol.md`~~ | ~~lsp_workspace_symbol~~ | ~~Workspace search~~ | ❌ Replaced by Code_Inspect |
 
 #### Standard Tool Prompts
 | File | Tool | Description |
@@ -103,7 +113,6 @@ in `nucleus-prompts.el`). These are supplemental — the schema-faithful
 | `edit_file.md` | Edit | Edit file with exact string match |
 | `glob.md` | Glob | Find files by pattern |
 | `grep.md` | Grep | Search file contents |
-| `lsp_*.md` | lsp_* | LSP tools (definition, references, etc.) |
 | `read_file.md` | Read | Read file contents |
 | `write_file.md` | Write | Create new file |
 | ... | ... | See `assistant/prompts/tools/` for full list |
