@@ -17,6 +17,7 @@
 (require 'gptel-tools-apply)
 (require 'gptel-tools-agent)
 (require 'gptel-tools-preview)
+(require 'gptel-tools-lsp)
 
 ;;; Customization
 
@@ -60,6 +61,7 @@ Call this after gptel-agent-tools loads."
   (gptel-tools-apply-register)
   (gptel-tools-agent-register)
   (gptel-tools-preview-register)
+  (gptel-tools-lsp-register)
 
   ;; Register standard gptel-agent tools
   (when (fboundp 'gptel-make-tool)
@@ -111,6 +113,23 @@ Call this after gptel-agent-tools loads."
      :description "Create a directory under a parent directory."
      :args (list '(:name "parent" :type "string")
                  '(:name "name" :type "string"))
+     :category "gptel-agent"
+     :confirm t
+     :include t)
+
+    ;; Move tool
+    (gptel-make-tool
+     :name "Move"
+     :function (lambda (source dest)
+                 (let ((src (expand-file-name source))
+                       (dst (expand-file-name dest)))
+                   (if (not (file-exists-p src))
+                       (error "Source file does not exist: %s" src)
+                     (rename-file src dst t)
+                     (format "Moved %s to %s" src dst))))
+     :description "Move or rename a file safely."
+     :args '((:name "source" :type string :description "Source file path")
+             (:name "dest" :type string :description "Destination file path"))
      :category "gptel-agent"
      :confirm t
      :include t)
@@ -263,8 +282,9 @@ Call this after gptel-agent-tools loads."
           (seq-filter #'identity
                       (mapcar #'my/gptel--safe-get-tool
                               '("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
-                                "Insert" "Mkdir" "Read" "RunAgent" "Skill" "TodoWrite"
+                                "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
                                 "WebFetch" "WebSearch" "Write" "YouTube"
+                                "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
                                 "preview_file_change" "preview_patch"
                                 "list_skills" "load_skill" "create_skill")))
           my/gptel-tools-readonly)))

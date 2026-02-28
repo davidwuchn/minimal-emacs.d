@@ -1,1 +1,0 @@
-λ(s,d). Bash(mv s d) | ret:Δ
