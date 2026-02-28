@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **PREVIEW CALLBACK FIX**: Fixed seq-do error in enhanced preview tools. Changed callbacks to pass string messages directly instead of converting symbols. Matches existing preview tools pattern.
 - **ENHANCED PREVIEW TOOLS**: Added inline_diff_preview (syntax-highlighted diffs), batch_preview (multiple files), and syntax_preview (auto-detect mode). All with quick confirm/abort keybindings.
 - **5-TIER CONFIRMATION SYSTEM**: Implemented configurable confirmation levels (auto/safe/normal/strict/paranoid). Auto mode skips confirmation, safe mode confirms only dangerous tools, normal confirms all, strict/paranoid add review requirements. Interactive: M-x my/gptel-set-confirmation-level.
 - **UNIFIED TOOL UI**: Minibuffer prompt now shows 6 options (y/n/k/i/p/q) matching overlay keymap. Previously showed only 4 options, causing confusion. Consistent UX between overlay clicks and minibuffer prompts.
