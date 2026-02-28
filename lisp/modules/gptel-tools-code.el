@@ -1,4 +1,4 @@
-;;; gptel-tools-code.el --- Unified Code tools for gptel-agent -*- lexical-binding: t -*-
+;;; gptel-tools-code.el --- Unified Code tools for gptel-agent -*- lexical-binding: t; no-byte-compile: t -*-
 
 (require 'gptel)
 (require 'treesit-agent-tools)
