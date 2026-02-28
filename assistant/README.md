@@ -48,12 +48,11 @@ message from `init_AGENTS.md` + the project's `AGENTS.md` + `MEMENTUM.md`.
 ### Tool Prompts (`assistant/prompts/tools/`)
 
 One `.md` file per tool, keyed by tool name (see `nucleus-tool-prompt-files`
-in `nucleus-config.el`). These are supplemental — the schema-faithful
+in `nucleus-prompts.el`). These are supplemental — the schema-faithful
 `<tool_usage_policy>` block in the main agent prompt is the primary contract.
 
-Only the tools listed in `nucleus--gptel-agent-snippet-tools` are injected
-into the agent system prompt (currently: `Bash`, `Edit`, `ApplyPatch`,
-`preview_file_change`).
+Only the tools listed in `(:snippets ...)` within `nucleus-tools.el` are injected
+into the agent system prompt (currently includes `Bash`, `Edit`, `LSP` mutators, etc.).
 
 ## Agents (`assistant/agents/`)
 
@@ -90,15 +89,26 @@ Two presets, toggled with `nucleus-agent-toggle` (`M-x nucleus-agent-toggle` or 
 
 | Preset | Tools | System prompt |
 |--------|-------|---------------|
-| `gptel-plan` | Glob, Grep, Read, WebSearch, WebFetch, YouTube, Agent, Skill, Eval | `plan_agent.md` |
-| `gptel-agent` | All 17 core tools + preview/skill helpers | `code_agent.md` |
+| `gptel-plan` | Read-only subset: Glob, Grep, Read, LSP (Hover, Definition, Refs, Diags, Workspace), WebSearch, WebFetch, YouTube, Agent, Skill, Eval, find_buffers | `plan_agent.md` |
+| `gptel-agent` | Full toolset (29 tools): Core tools + LSP mutators (Rename) + Preview/Skill helpers | `code_agent.md` |
 
-Tool lists are defined in `nucleus-config.el`:
-- `nucleus--gptel-plan-readonly-tools`
-- `nucleus--gptel-agent-nucleus-tools`
+Tool lists are strictly defined in `nucleus-tools.el`:
+- `(:readonly . (...))`
+- `(:nucleus . (...))`
+- `(:core . (...))`
 
-Tool list construction is deferred to `with-eval-after-load 'gptel-agent-tools`
-so all upstream tool structs are registered before the lists are snapshotted.
+## Models & Routing
+
+Nucleus implements task-specific model routing to optimize cost and capability (configured via `nucleus-presets.el` and `gptel-tools-agent.el`):
+
+| Role | Default Model | Reasoning |
+|------|---------------|-----------|
+| **Global Fallback** | `qwen3.5-plus` | Solid generalist via `dashscope` |
+| **Plan Agent** | `qwen3.5-plus` | Fast, logic-heavy planning and reasoning |
+| **Action Agent** | `glm-5` | High capability for complex coding and refactoring |
+| **Subagents** | `kimi-k2.5` | Fast, deep-context model via `moonshot` for heavy codebase reading |
+
+*Note: Subagents spawned via `RunAgent` or `Agent` are entirely stateless and use exponential backoff (`my/gptel-auto-retry`) for stability.*
 
 ## Key Customizations in `gptel-config.el`
 
