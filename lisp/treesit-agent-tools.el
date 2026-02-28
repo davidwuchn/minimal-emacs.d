@@ -68,9 +68,9 @@ Throws an error if the replacement results in invalid syntax."
           (goto-char start)
           (delete-region start end)
           (insert new-text)
-          ;; Validate syntax after replacement
+          ;; Validate syntax after replacement using Emacs 30 compatible function
           (let ((root (treesit-agent--get-root)))
-            (when (and root (treesit-node-has-error-p root))
+            (when (and root (treesit-node-check root 'has-error))
               ;; Emacs tree-sitter will automatically update the tree upon buffer edit.
               ;; If the new tree has an error, we signal it.
               (error "AST Replacement rejected: The new code introduced a syntax error (unbalanced parentheses or invalid grammar)")))
