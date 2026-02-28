@@ -1,6 +1,10 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **NAMING STANDARDIZED**: Renamed preview tools to PascalCase (InlineDiffPreview, BatchPreview, SyntaxPreview). Standardized arg names to snake_case (old_str, new_str_or_diff, agent_name). Updated all documentation to match.
+- **SIGNATURE VALIDATION**: Created nucleus-tools-validate.el to verify tool prompt lambda signatures match registered :args. Interactive: M-x nucleus-validate-tool-signatures. Catches mismatches between documentation and implementation.
+- **CLEANUP DEPRECATED PROMPTS**: Removed deprecated LSP tool prompts (lsp_hover.md, lsp_rename.md, code_check.md) and duplicate todowrite.md. Updated nucleus-prompts.el to reference todo_write.md. nucleus now only references existing, non-deprecated tool prompt files.
+- **CLEANUP DEPRECATED PROMPTS**: Removed deprecated LSP tool prompts (lsp_hover.md, lsp_rename.md, code_check.md) and duplicate todowrite.md. Updated nucleus-prompts.el to reference todo_write.md. nucleus now only references existing, non-deprecated tool prompt files.
 - **TOOL UI AUTO-PERMIT**: Added `a` (auto) option to the tool confirmation prompt. Users can now press `a` to set the confirmation level to 'auto' and automatically permit all subsequent tool calls without being prompted again.
 - **OVERLAY KEYMAP TIMING FIX**: Moved gptel-tool-ui.el load BEFORE gptel creates overlays. Keymap now modified synchronously on load (not in with-eval-after-load). All overlays now use our dispatch function from creation.
 - **TOOL VERIFY PARENS FIX**: Fixed missing closing parenthesis in nucleus-tools-verify.el dolist loop. Parentheses now balanced (119 open, 119 close). Module loads correctly.
