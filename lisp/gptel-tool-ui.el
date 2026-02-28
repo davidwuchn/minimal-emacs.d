@@ -48,6 +48,7 @@ Shows all 6 available options in the minibuffer:
 - y: Accept and run
 - n: Skip but continue
 - k: Cancel/reject
+- a: Auto-permit all future tool calls
 - i: Inspect details
 - p: Previous overlay
 - q: Quit/reject"
@@ -59,6 +60,7 @@ Shows all 6 available options in the minibuffer:
          (choices '((?y "yes - Accept and run tool calls")
                     (?n "no - Skip tool calls, continue without")
                     (?k "cancel - Reject and cancel request")
+                    (?a "auto - Always accept tool calls (no confirmation)")
                     (?i "inspect - Inspect tool call details")
                     (?p "previous - Jump to previous overlay")
                     (?q "quit - Reject tool calls"))))
@@ -69,11 +71,15 @@ Shows all 6 available options in the minibuffer:
       (call-interactively #'gptel--accept-tool-calls))
      (t
       ;; Show confirmation with all options (always via minibuffer)
-      (let ((choice (read-multiple-choice (concat prompt " (y/n/k/i/p/q) ") choices)))
+      (let ((choice (read-multiple-choice (concat prompt " (y/n/k/a/i/p/q) ") choices)))
         (pcase (car choice)
           (?y (call-interactively #'gptel--accept-tool-calls))
           (?n (message "Skipping tool calls...") nil)
           (?k (call-interactively #'gptel--reject-tool-calls))
+          (?a (progn
+                (setq my/gptel-confirmation-level 'auto)
+                (message "Tool confirmation set to AUTO. Executing...")
+                (call-interactively #'gptel--accept-tool-calls)))
           (?i (when (fboundp 'gptel--inspect-fsm)
                 (gptel--inspect-fsm gptel--fsm-last)))
           (?p (when (fboundp 'gptel-agent--previous-overlay)
