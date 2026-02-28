@@ -44,9 +44,10 @@ Returns t if safe, or a string explaining why it was rejected."
       ;; Split and check whitelist
       (let* ((parts (split-string cmd "\\(&&\\|||\\||\\|;\\)" t "[ \t\n\r]+"))
              (whitelist '("ls" "pwd" "tree" "file" "find" "fd" "which" "type"
-                          "git status" "git diff" "git log" "git show" "git branch" "git grep"
-                          "grep" "rg" "cat" "head" "tail" "wc" "echo" "jq" "awk" "sort" "uniq"
-                          "pytest" "npm test" "npm run test" "cargo test" "go test" "make test" "make check")))
+                          "git status" "git diff" "git log" "git show" "git branch" "git grep" "git rev-parse" "git describe" "git remote" "git tag"
+                          "grep" "rg" "cat" "head" "tail" "wc" "echo" "jq" "awk" "sort" "uniq" "cut" "tr" "xargs"
+                          "pytest" "npm test" "npm run test" "cargo test" "go test" "make test" "make check" "make" "cargo" "npm" "pip" "python" "node"
+                          "test" "[" "true" "false" "basename" "dirname" "realpath" "readlink")))
         (dolist (part parts)
           (let* ((clean-part (string-trim part))
                  (allowed nil))
@@ -94,7 +95,7 @@ CALLBACK is called with the result string on completion."
                                     (let ((res (my/gptel--safe-bash-command-p command)))
                                       (if (stringp res) res nil)))))
               (if sandbox-err
-                  (finish (format "Error: Command rejected by Sandbox. %s.\n\nIMPORTANT: Do not use Bash to read or search files (no cat/grep/find); use the native `Read`, `Grep`, and `Glob` tools instead. You may use pipes (|) and logical operators (&&, ||, ;) to compose whitelisted read-only commands. If you truly must mutate state, ask the user to say \"go\" to switch to Execution mode." sandbox-err))
+                  (finish (format "Error: Command rejected by Sandbox. %s.\n\nTIP: For file operations, prefer native tools (`Read`, `Grep`, `Glob`) over Bash. For shell commands, use whitelisted read-only commands (git, ls, cat, grep, etc.) or ask the user to say \"go\" to switch to Execution mode." sandbox-err))
 
                 (unless (and my/gptel--persistent-bash-process
                            (process-live-p my/gptel--persistent-bash-process))
@@ -184,9 +185,9 @@ CALLBACK is called with the result string on completion."
      :category "gptel-agent"
      :confirm t
      :include t)
-    (gptel-make-tool
+     (gptel-make-tool
      :name "BashRO"
-     :description "Execute a READ-ONLY Bash command (async, interruptible). strictly sandboxed to whitelisted inspection commands (ls, pwd, tree, git status/diff/log, grep, cat, jq, awk). NO mutating commands, NO redirection, NO chaining allowed. If you need to mutate, ask the user to say 'go' to switch to Execution mode."
+     :description "Execute a READ-ONLY Bash command (async, interruptible). Sandboxed to whitelisted inspection commands (git, ls, cat, grep, find, test utilities, build tools). NO file redirection (> <), NO sed -i, NO backgrounding (&). For mutations, ask user to say 'go' to switch to Execution mode."
      :function #'my/gptel--agent-bash-async
      :async t
      :args '((:name "command"
