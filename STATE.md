@@ -1,9 +1,12 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
-- **ERROR HANDLING IMPROVED**: All Code_* tools now have enhanced error detection and user-friendly messages. Code_Map detects missing parsers and suggests installation. Code_Inspect/Code_Usages detect missing ripgrep and provide brew/apt install commands. Code_Usages has LSP retry logic (3 retries, 0.5s delay) for startup race conditions. Code_Check provides clearer messaging about LSP status.
+- **PRE-FLIGHT PARSER CHECKS**: All Code_* tools (Map, Inspect, Replace) now verify tree-sitter parser availability BEFORE attempting operations. Auto-detect language from file extension (.py, .el, .clj, .rs). Provide step-by-step recovery: install → reopen → verify → fallback. **FIXES**: Confusing errors when files aren't in tree-sitter mode.
+- **ENHANCED LSP RETRY LOGIC**: Code_Usages now uses 5 retries with exponential backoff (0.5s, 1s, 2s, 4s, 8s = ~15s total) for LSP startup race conditions. Detects empty results vs. errors. **FIXES**: Premature fallback to ripgrep when LSP is still indexing.
+- **ACTIONABLE ERROR MESSAGES**: All Code_* tools now provide numbered ACTION steps with exact commands (M-x commands, brew/apt install, verification commands). Distinguish between parser missing, ripgrep missing, timeout, and syntax errors.
+- **BUFFER MODE ENFORCEMENT**: Code_Map, Code_Inspect, Code_Replace check (treesit-parser-list) and provide language-specific recovery instructions with fallback to standard tools (Read, Edit, Grep).
 - **TREE-SITTER AUTO-INSTALL**: Changed `treesit-auto-install` from `'prompt` to `'auto` in `init-treesit.el`. Parsers now install automatically on first use without prompting.
-- **COMPREHENSIVE DOCS**: Created `docs/CODE_TOOLS.md` with full documentation for all Code_* tools. Updated `assistant/README.md` with Code_* tool table, workflow diagram, and when-to-use guide. All tool prompts now include Dependencies, Failure Modes, and Setup Requirements tables.
+- **COMPREHENSIVE DOCS**: Created `docs/CODE_TOOLS.md` with full documentation. Updated `assistant/README.md` with Code_* tool table, workflow diagram, and when-to-use guide. All tool prompts include Dependencies, Failure Modes, and Setup Requirements tables.
 - **CODE_USAGES ADDED**: New tool finds all references of a symbol across the project. Cascades: LSP references (semantic) → ripgrep (text search). Added to all nucleus toolsets.
 - **POST-EARLY-INIT CREATED**: `post-early-init.el` sets `treesit-extra-load-path` early in the boot sequence, ensuring tree-sitter grammars are found before any modes load.
 - **CODE_CHECK FIXED**: Replaced missing `my/gptel-lsp--get-server` with `my/gptel--lsp-active-p` (uses `eglot-current-server`). LSP diagnostics now work correctly.
@@ -16,11 +19,21 @@
 
 | Tool | Status | Dependencies | Fallback |
 |------|--------|--------------|----------|
-| Code_Map | ✅ Operational | tree-sitter parser | None (file-local) |
+| Code_Map | ✅ Operational | tree-sitter parser | Read, Grep |
 | Code_Inspect | ✅ Operational | tree-sitter, ripgrep | File-local if rg missing |
 | Code_Replace | ✅ Operational | tree-sitter parser | Edit (manual) |
 | Code_Usages | ✅ Operational | ripgrep (optional) | LSP references |
 | Code_Check | ✅ Operational | flymake, LSP (optional) | CLI linters |
+
+## Error Handling Matrix
+
+| Error Type | Detection | Action Provided |
+|------------|-----------|-----------------|
+| Parser not installed | `(treesit-parser-list)` nil | M-x treesit-install-language-grammar + reopen file |
+| Ripgrep missing | `(executable-find "rg")` nil | brew/apt install commands |
+| LSP not ready | Empty xref results | 5 retries with exponential backoff |
+| Syntax error | `treesit-node-check` has-error | Check bracket balancing |
+| Timeout | with-timeout exceeded | Provide file_path to skip workspace search |
 
 ## Setup Checklist for Users
 
