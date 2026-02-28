@@ -9,6 +9,7 @@
 (require 'subr-x)
 (require 'seq)
 (require 'project)
+(require 'gptel-tools-preview)
 
 ;;; Customization
 
@@ -65,16 +66,23 @@
   "Dispatch PATCH to either envelope or unified diff handler.
 
 CALLBACK is called with the result string."
-  (let* ((clean (my/gptel--extract-patch patch))
-         (root (if-let ((proj (project-current nil)))
-                   (expand-file-name (project-root proj))
-                 (expand-file-name default-directory))))
+  (let* ((clean (my/gptel--extract-patch patch)))
     (if (my/gptel--patch-looks-like-envelope-p clean)
-        (condition-case env-err
-            (funcall callback (format "ApplyPatch: Envelope format not yet implemented in split module. Original error: %s" env-err))
-          (error (funcall callback (format "ApplyPatch envelope error: %s" (error-message-string env-err)))))
-      ;; Unified diff: apply directly
-      (my/gptel--apply-patch-core callback patch))))
+        (funcall callback "ApplyPatch: Envelope format not yet implemented in split module.")
+      ;; Unified diff: preview if requested, otherwise apply directly
+      (if my/gptel-applypatch-auto-preview
+          (my/gptel--preview-patch-async
+           clean
+           (current-buffer)
+           callback
+           ;; on-confirm
+           (lambda (cb)
+             (my/gptel--apply-patch-core cb clean))
+           ;; on-abort
+           (lambda (cb)
+             (funcall cb "ApplyPatch: Preview aborted by user."))
+           "ApplyPatch preview — n apply patch    q abort")
+        (my/gptel--apply-patch-core callback clean)))))
 
 (defun my/gptel--apply-patch-core (callback patch)
   "Apply PATCH (unified diff) at the Emacs project root asynchronously.

@@ -16,6 +16,19 @@
 
 ;;; Preview Functions
 
+(defun my/gptel--setup-preview-keys (buffer on-confirm on-abort)
+  "Set up local keys in preview BUFFER for confirmation.
+
+ON-CONFIRM and ON-ABORT are called with no arguments when the user
+presses n/y or q respectively."
+  (with-current-buffer buffer
+    (let ((map (make-sparse-keymap)))
+      (set-keymap-parent map (current-local-map))
+      (define-key map (kbd "n") (lambda () (interactive) (kill-buffer buffer) (funcall on-confirm)))
+      (define-key map (kbd "y") (lambda () (interactive) (kill-buffer buffer) (funcall on-confirm)))
+      (define-key map (kbd "q") (lambda () (interactive) (kill-buffer buffer) (funcall on-abort)))
+      (use-local-map map))))
+
 (defun my/gptel--preview-enqueue (buffer path original replacement callback)
   "Enqueue a file preview for BUFFER.
 
@@ -39,7 +52,10 @@ CALLBACK is called when user confirms or aborts."
             (insert diff-output)
             (diff-mode))
           (display-buffer diff-buf)
-          (funcall callback "Preview shown. User confirmation pending (simplified implementation)."))
+          (my/gptel--setup-preview-keys
+           diff-buf
+           (lambda () (funcall callback "Preview confirmed."))
+           (lambda () (funcall callback "Preview aborted."))))
       (delete-file temp1)
       (delete-file temp2))))
 
@@ -58,9 +74,10 @@ HEADER is the prompt to show."
       (insert patch)
       (diff-mode))
     (display-buffer diff-buf)
-    ;; For now, call on-confirm immediately
-    ;; In a full implementation, this would wait for n/q keypress
-    (funcall on-confirm callback)))
+    (my/gptel--setup-preview-keys
+     diff-buf
+     (lambda () (funcall on-confirm callback))
+     (lambda () (funcall on-abort callback)))))
 
 ;;; Tool Registration
 
