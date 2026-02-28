@@ -56,9 +56,10 @@ Levels:
     ('paranoid "MANUAL REVIEW REQUIRED: Approve tool calls?")
     (_ "Run tool calls?")))
 
-(defun my/gptel--dispatch-tool-calls (&optional _event)
+(defun my/gptel--dispatch-tool-calls (&optional event)
   "Unified tool call dispatcher with consistent overlay/minibuffer options.
 
+Called from overlay keymap (mouse click) or interactively.
 Shows all 6 available options in the minibuffer to match overlay keymap:
 - y: Accept and run
 - n: Skip but continue
@@ -66,7 +67,7 @@ Shows all 6 available options in the minibuffer to match overlay keymap:
 - i: Inspect details
 - p: Previous overlay
 - q: Quit/reject"
-  (interactive)
+  (interactive (list last-input-event))
   (let* ((prompt (my/gptel--get-confirmation-prompt))
          (choices '((?y ?Y "yes - Accept and run tool calls")
                     (?n ?N "no - Skip tool calls, continue without")
