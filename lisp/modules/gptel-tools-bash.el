@@ -45,7 +45,7 @@ Returns t if safe, or a string explaining why it was rejected."
       (let* ((parts (split-string cmd "\\(&&\\|||\\||\\|;\\)" t "[ \t\n\r]+"))
              (whitelist '("ls" "pwd" "tree" "file" "find" "fd" "which" "type"
                           "git status" "git diff" "git log" "git show" "git branch" "git grep"
-                          "grep" "rg" "cat" "head" "tail" "wc" "echo" "jq" "awk" "sed" "sort" "uniq"
+                          "grep" "rg" "cat" "head" "tail" "wc" "echo" "jq" "awk" "sort" "uniq"
                           "pytest" "npm test" "npm run test" "cargo test" "go test" "make test" "make check")))
         (dolist (part parts)
           (let* ((clean-part (string-trim part))
