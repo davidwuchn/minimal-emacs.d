@@ -32,6 +32,9 @@
   :ensure t
   :custom
   (treesit-auto-install 'prompt)
+  :init
+  ;; Unify tree-sitter grammar directories
+  (setq treesit-extra-load-path (list (expand-file-name "var/tree-sitter" user-emacs-directory)))
   :config
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode))
