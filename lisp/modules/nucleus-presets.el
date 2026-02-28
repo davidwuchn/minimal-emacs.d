@@ -99,7 +99,7 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
            (preferred-backend agent-backend)
            ;; Different models for agent (coding) vs plan (architecture)
            (agent-model 'glm-5)
-           (plan-model 'glm-5))
+           (plan-model 'qwen3.5-plus))
       
       ;; Override gptel-agent preset
       (when-let ((agent (gptel-get-preset 'gptel-agent)))

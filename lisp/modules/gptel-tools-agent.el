@@ -19,13 +19,13 @@
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defcustom my/gptel-subagent-model 'qwen3.5-plus
+(defcustom my/gptel-subagent-model 'kimi-k2.5
   "Model to use for delegated subagents.
 When non-nil, subagent requests use this model instead of the parent's."
   :type '(choice (const :tag "Same as parent" nil) symbol)
   :group 'gptel-tools-agent)
 
-(defcustom my/gptel-subagent-backend 'gptel--dashscope
+(defcustom my/gptel-subagent-backend 'gptel--moonshot
   "Backend for delegated subagents."
   :type '(choice (const :tag "Gemini (default)" nil) variable)
   :group 'gptel-tools-agent)
