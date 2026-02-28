@@ -98,7 +98,7 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
                                gptel--dashscope))
            (preferred-backend agent-backend)
            ;; Different models for agent (coding) vs plan (architecture)
-           (agent-model 'qwen3.5-plus)
+           (agent-model 'glm-5)
            (plan-model 'glm-5))
       
       ;; Override gptel-agent preset

@@ -16,8 +16,8 @@
 ;; Load split tool modules (replaces gptel-ext-tools.el)
 (require 'gptel-tools)
 ;; --- Configuration Defaults ---
-(setq gptel-backend gptel--moonshot
-      gptel-model 'kimi-k2.5)
+(setq gptel-backend gptel--dashscope
+      gptel-model 'qwen3.5-plus)
 
 (setq gptel-confirm-tool-calls 'auto)
 (setq-default gptel-confirm-tool-calls 'auto)
