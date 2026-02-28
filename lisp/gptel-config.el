@@ -20,6 +20,10 @@
 (require 'gptel-tool-ui)
 (my/gptel-setup-tool-ui)
 
+;; Load enhanced preview tools
+(require 'gptel-tools-preview-enhanced)
+(gptel-tools-preview-enhanced-register)
+
 ;; --- Configuration Defaults ---
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3.5-plus)
