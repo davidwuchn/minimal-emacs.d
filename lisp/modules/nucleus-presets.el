@@ -142,9 +142,9 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
                              sys)
                    (setf (plist-get (cdr cell) :system) sys)))))
           (patch-agent "executor" (nucleus-get-tools :nucleus))
-          ;; Keep researcher and introspector minimal
-          (patch-agent "researcher" nil)
-          (patch-agent "introspector" nil))))))
+          ;; Keep researcher and introspector with their default defined tools
+          ;; by not overriding them.
+          )))))
 
 (defun nucleus--after-agent-update (&rest _)
   "Post-agent-update hook: re-register directives and override presets."
