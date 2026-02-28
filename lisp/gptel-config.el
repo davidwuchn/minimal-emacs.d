@@ -15,6 +15,11 @@
 
 ;; Load split tool modules (replaces gptel-ext-tools.el)
 (require 'gptel-tools)
+
+;; Load enhanced tool UI (patches minibuffer to match overlay options)
+(require 'gptel-tool-ui)
+(my/gptel-setup-tool-ui)
+
 ;; --- Configuration Defaults ---
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3.5-plus)
@@ -58,4 +63,5 @@
   (message "gptel Tool Confirmation: AUTO (Respects tool flags)"))
 
 (provide 'gptel-config)
+
 ;;; gptel-config.el ends here
