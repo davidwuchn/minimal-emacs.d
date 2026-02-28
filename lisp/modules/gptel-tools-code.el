@@ -87,26 +87,22 @@ Reports which backend (LSP or ripgrep) was used."
 (defun my/gptel--run-fallback-linter (dir)
   "Run a fallback linter (flake8, eslint, etc) if LSP is not available in DIR.
 Reports what was checked, even if no standard project files found."
-  (let ((default-directory dir)
-        (checked nil))
+  (let ((default-directory dir))
     (cond
      ((file-exists-p "package.json")
-      (setq checked "package.json (JavaScript/Node.js)")
       (let ((res (shell-command-to-string "npm run lint --silent 2>/dev/null || npx eslint . 2>/dev/null")))
         (if (string-empty-p (string-trim res))
-            (format "✓ No linter errors (ESLint) - checked %s" checked)
+            "✓ No linter errors (ESLint) - checked package.json (JavaScript/Node.js)"
           res)))
      ((or (file-exists-p "pyproject.toml") (file-exists-p "setup.py") (directory-files dir nil "\\.py\\'"))
-      (setq checked "Python project (pyproject.toml/setup.py)")
       (let ((res (shell-command-to-string "ruff check . 2>/dev/null || flake8 . 2>/dev/null")))
         (if (string-empty-p (string-trim res))
-            (format "✓ No linter errors (ruff/flake8) - checked %s" checked)
+            "✓ No linter errors (ruff/flake8) - checked Python project (pyproject.toml/setup.py)"
           res)))
      ((file-exists-p "Cargo.toml")
-      (setq checked "Cargo.toml (Rust)")
       (let ((res (shell-command-to-string "cargo check 2>&1")))
         (if (string-match-p "Finished\\|Compiling" res)
-            (format "✓ No compiler errors (cargo check) - checked %s" checked)
+            "✓ No compiler errors (cargo check) - checked Cargo.toml (Rust)"
           res)))
      (t
       ;; No standard project files found - report what we looked for
