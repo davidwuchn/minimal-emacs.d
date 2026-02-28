@@ -15,7 +15,11 @@ Provides fallback regexps for languages that don't set treesit-defun-type-regexp
   (or (bound-and-true-p treesit-defun-type-regexp)
       ;; Fallback for Elisp (regexp matches node type string, not a query)
       (and (derived-mode-p 'emacs-lisp-mode 'emacs-lisp-ts-mode)
-           "function_definition")))
+           "function_definition")
+      ;; Fallback for Clojure family (check parser language since mode might not be set)
+      (and (treesit-parser-list)
+           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'clojure)) (treesit-parser-list))
+           "list_lit")))
 
 (defun treesit-agent--get-defun-name (node)
   "Get the name of a defun NODE.
@@ -24,7 +28,17 @@ Provides fallback for languages where treesit-defun-name returns nil."
       ;; Fallback for Elisp: get the name child node (field name must be string)
       (let ((name-node (treesit-node-child-by-field-name node "name")))
         (when name-node
-          (treesit-node-text name-node t)))))
+          (treesit-node-text name-node t)))
+      ;; Fallback for Clojure: list_lit nodes have ( defn name ... ) structure
+      (and (equal (treesit-node-type node) "list_lit")
+           (>= (treesit-node-child-count node) 3)
+           (let* ((defn-node (treesit-node-child node 1))
+                  (name-node (treesit-node-child node 2)))
+             (when (and defn-node name-node
+                        (equal (treesit-node-type defn-node) "sym_lit")
+                        (member (treesit-node-text defn-node t) '("defn" "defn-" "defmacro" "defrecord" "deftype" "defmulti" "defmethod")))
+               ;; For defrecord/deftype, the name is the symbol after defn
+               (treesit-node-text name-node t))))))
 
 (defun treesit-agent--find-defun (name)
   "Find a defun node by NAME in the current buffer using tree-sitter."
@@ -36,10 +50,18 @@ Provides fallback for languages where treesit-defun-name returns nil."
              (match nil))
         (catch 'found
           (dolist (node nodes)
-            (when (equal (treesit-agent--get-defun-name node) name)
-              (setq match node)
-              (throw 'found t))))
+            ;; Filter out non-definition nodes for Clojure
+            (when (or (not (treesit-agent--clojure-parser-p))
+                      (treesit-agent--is-clojure-def-node node))
+              (when (equal (treesit-agent--get-defun-name node) name)
+                (setq match node)
+                (throw 'found t)))))
         match))))
+
+(defun treesit-agent--clojure-parser-p ()
+  "Check if current buffer has a Clojure tree-sitter parser."
+  (and (treesit-parser-list)
+       (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'clojure)) (treesit-parser-list))))
 
 (defun treesit-agent--flatten-sparse-tree (tree)
   "Flatten a sparse tree produced by `treesit-induce-sparse-tree'."
@@ -53,6 +75,15 @@ Provides fallback for languages where treesit-defun-name returns nil."
         (setq res (append res (treesit-agent--flatten-sparse-tree child))))
       res)))
 
+(defun treesit-agent--is-clojure-def-node (node)
+  "Check if NODE is a Clojure definition (defn, defmacro, defrecord, etc)."
+  (and (equal (treesit-node-type node) "list_lit")
+       (>= (treesit-node-child-count node) 2)
+       (let ((defn-node (treesit-node-child node 1)))
+         (and (equal (treesit-node-type defn-node) "sym_lit")
+              (member (treesit-node-text defn-node t)
+                      '("defn" "defn-" "defmacro" "defrecord" "deftype" "defmulti" "defmethod" "def"))))))
+
 (defun treesit-agent-get-file-map ()
   "Return a list of all defined function/class names in the current buffer.
  Useful for giving an LLM a high-level overview of a file."
@@ -63,9 +94,12 @@ Provides fallback for languages where treesit-defun-name returns nil."
              (nodes (treesit-agent--flatten-sparse-tree tree))
              (names nil))
         (dolist (node nodes)
-          (let ((name (treesit-agent--get-defun-name node)))
-            (when name
-              (push name names))))
+          ;; Filter out non-definition nodes for Clojure
+          (when (or (not (treesit-agent--clojure-parser-p))
+                    (treesit-agent--is-clojure-def-node node))
+            (let ((name (treesit-agent--get-defun-name node)))
+              (when name
+                (push name names)))))
         (nreverse names)))))
 
 (defun treesit-agent-extract-node (name)
