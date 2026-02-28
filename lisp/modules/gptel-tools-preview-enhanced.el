@@ -11,6 +11,7 @@
 
 (require 'diff-mode)
 (require 'ediff)
+(require 'ansi-color)
 
 ;;; Inline Preview
 
@@ -39,8 +40,8 @@ CALLBACK is called with user's decision (confirmed/aborted)."
           (when callback
             (my/gptel--setup-preview-keys
              diff-buf
-             (lambda () (funcall callback 'confirmed))
-             (lambda () (funcall callback 'aborted)))))
+             (lambda () (funcall callback "Preview confirmed"))
+             (lambda () (funcall callback "Preview aborted")))))
       (delete-file temp1)
       (delete-file temp2))))
 
@@ -95,7 +96,7 @@ CALLBACK is called with list of confirmed files."
   (let ((callback (buffer-local-value 'my/gptel--callback (current-buffer))))
     (kill-buffer)
     (when callback
-      (funcall callback 'all-confirmed))))
+      (funcall callback "All files confirmed"))))
 
 (defun my/gptel--batch-confirm-current ()
   "Confirm current file in batch preview."
@@ -108,7 +109,7 @@ CALLBACK is called with list of confirmed files."
   (let ((callback (buffer-local-value 'my/gptel--callback (current-buffer))))
     (kill-buffer)
     (when callback
-      (funcall callback 'aborted))))
+      (funcall callback "Preview aborted"))))
 
 ;;; Syntax-Highlighted Preview
 
@@ -144,9 +145,7 @@ MODE is the major mode to use (auto-detected if nil)."
      :async t
      :category "gptel-agent"
      :function (lambda (callback path original replacement)
-                 (my/gptel--inline-diff-preview path original replacement
-                   (lambda (result)
-                     (funcall callback (symbol-name result)))))
+                 (my/gptel--inline-diff-preview path original replacement callback))
      :description "Show inline diff preview with syntax highlighting"
      :args '((:name "path" :type string :description "File path")
              (:name "original" :type string :description "Original content")
@@ -157,9 +156,7 @@ MODE is the major mode to use (auto-detected if nil)."
      :async t
      :category "gptel-agent"
      :function (lambda (callback files)
-                 (my/gptel--batch-preview-files files
-                   (lambda (result)
-                     (funcall callback (symbol-name result)))))
+                 (my/gptel--batch-preview-files files callback))
      :description "Preview multiple file changes at once"
      :args '((:name "files" :type array :description "List of file changes")))
     ;; Syntax preview
