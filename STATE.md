@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **RUST LSP VERIFIED**: Eglot automatically starts for `.rs` files via `rust-ts-mode`. **VERIFIED**: rust-analyzer detected at `~/.cargo/bin/rust-analyzer`, eglot-ensure configured for rust-ts-mode, diagnostics flow through flymake. Unified workflow (LSP for cross-file semantics + AST for structural editing) works end-to-end.
 - **PYTHON LSP VERIFIED**: Eglot automatically starts for `.py` files via `python-ts-mode` hook. **VERIFIED**: pylsp detected at `/usr/local/bin/pylsp`, eglot-ensure starts successfully, diagnostics flow through flymake. Unified workflow (LSP for cross-file semantics + AST for structural editing) works end-to-end.
 - **CLOJURE LSP VERIFIED**: Eglot automatically starts for `.clj`/`.cljs`/`.cljc` files via `clojure-mode` hook. `Code_Check` integrates with `flymake--project-diagnostics` to surface LSP errors. **VERIFIED**: eglot-ensure starts clojure-lsp successfully, diagnostics flow through flymake, unified workflow (LSP for cross-file semantics + AST for structural editing) works end-to-end.
 - **CLOJURE FAMILY AST TOOLS VERIFIED**: Added Clojure parser detection and `list_lit` filtering for `defn`/`defmacro`/`defrecord` nodes. **VERIFIED**: File map, node extraction, structural replacement, and syntax validation all work for `.clj`, `.cljs`, and `.cljc` files. Methods inside `defrecord`/`deftype` are not extracted (by design, as they're accessed through instances).
