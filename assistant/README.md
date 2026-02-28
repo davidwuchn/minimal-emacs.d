@@ -27,6 +27,39 @@ assistant/
 doom-loop detection, and keybindings. See the table of contents at the top of
 that file for a section map.
 
+## Code_* Tools (Structural Editing)
+
+The unified `Code_*` toolset provides KISS (Keep It Simple, Stupid) code intelligence and structural editing:
+
+| Tool | Purpose | Key Feature |
+|------|---------|-------------|
+| **Code_Map** | File structure/outline | First tool for unfamiliar files |
+| **Code_Inspect** | Extract function/class | Auto-searches project if file unknown |
+| **Code_Replace** | Structural replacement | **REQUIRED** for .el/.clj/.py/.rs/.js |
+| **Code_Usages** | Find all references | LSP → ripgrep fallback |
+| **Code_Check** | Project diagnostics | LSP → CLI linter fallback |
+
+**See [docs/CODE_TOOLS.md](../docs/CODE_TOOLS.md) for comprehensive documentation.**
+
+### When to Use Code_* vs Standard Tools
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Task                          │ Use This                    │
+├─────────────────────────────────────────────────────────────┤
+│ Read file structure           │ Code_Map                    │
+│ Read specific function        │ Code_Inspect                │
+│ Modify function (Lisp/Py/Rust)│ Code_Replace (NOT Edit!)    │
+│ Find where function is used   │ Code_Usages                 │
+│ Verify changes                │ Code_Check                  │
+│ Read arbitrary text file      │ Read                        │
+│ Search text pattern           │ Grep                        │
+│ Find files by name            │ Glob                        │
+│ Create new file               │ Write                       │
+│ Edit non-function text        │ Edit                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ## Prompts (`assistant/prompts/`)
 
 | File | Directive key | Purpose |
@@ -50,6 +83,30 @@ message from `init_AGENTS.md` + the project's `AGENTS.md` + `MEMENTUM.md`.
 One `.md` file per tool, keyed by tool name (see `nucleus-tool-prompt-files`
 in `nucleus-prompts.el`). These are supplemental — the schema-faithful
 `<tool_usage_policy>` block in the main agent prompt is the primary contract.
+
+#### Code_* Tool Prompts
+| File | Tool | Description |
+|------|------|-------------|
+| `code_map.md` | Code_Map | File structure/outline |
+| `code_inspect.md` | Code_Inspect | Extract function/class by name |
+| `code_replace.md` | Code_Replace | AST structural replacement |
+| `code_usages.md` | Code_Usages | Find all symbol references |
+| `code_check.md` | Code_Check | LSP diagnostics + linter fallback |
+
+#### Standard Tool Prompts
+| File | Tool | Description |
+|------|------|-------------|
+| `agent.md` | Agent | Delegate to subagent |
+| `apply_patch.md` | ApplyPatch | Apply unified diff patch |
+| `ast_*.md` | AST_* | Legacy AST tools (deprecated by Code_*) |
+| `bash_command.md` | Bash/BashRO | Execute shell commands |
+| `edit_file.md` | Edit | Edit file with exact string match |
+| `glob.md` | Glob | Find files by pattern |
+| `grep.md` | Grep | Search file contents |
+| `lsp_*.md` | lsp_* | LSP tools (definition, references, etc.) |
+| `read_file.md` | Read | Read file contents |
+| `write_file.md` | Write | Create new file |
+| ... | ... | See `assistant/prompts/tools/` for full list |
 
 Only the tools listed in `(:snippets ...)` within `nucleus-tools.el` are injected
 into the agent system prompt (currently includes `Bash`, `Edit`, `LSP` mutators, etc.).
@@ -89,10 +146,10 @@ Two presets, toggled with `nucleus-agent-toggle` (`M-x nucleus-agent-toggle` or 
 
 | Preset | Tools | System prompt |
 |--------|-------|---------------|
-| `gptel-plan` | Read-only subset: Glob, Grep, Read, LSP (Hover, Definition, Refs, Diags, Workspace), WebSearch, WebFetch, YouTube, Agent, Skill, Eval, find_buffers | `plan_agent.md` |
-| `gptel-agent` | Full toolset (29 tools): Core tools + LSP mutators (Rename) + Preview/Skill helpers | `code_agent.md` |
+| `gptel-plan` | Read-only subset: Glob, Grep, Read, LSP (Hover, Definition, Refs, Diags, Workspace), WebSearch, WebFetch, YouTube, Agent, Skill, Eval, find_buffers, **Code_Map, Code_Inspect, Code_Usages, Code_Check** | `plan_agent.md` |
+| `gptel-agent` | Full toolset (29 tools): Core tools + LSP mutators (Rename) + Preview/Skill helpers, **Code_Map, Code_Inspect, Code_Replace, Code_Usages, Code_Check** | `code_agent.md` |
 
-Tool lists are strictly defined in `nucleus-tools.el`:
+Tool lists are strictly defined in `lisp/modules/nucleus-tools.el`:
 - `(:readonly . (...))`
 - `(:nucleus . (...))`
 - `(:core . (...))`
@@ -182,3 +239,11 @@ mkdir assistant/skills/<name>
 ```
 
 The skill is immediately available via the `Skill` tool without restarting Emacs.
+
+## Adding a New Code_* Tool
+
+1. Implement the tool function in `lisp/modules/gptel-tools-code.el`
+2. Register with `gptel-make-tool` in `gptel-tools-code-register()`
+3. Add to `nucleus-toolsets` in `lisp/modules/nucleus-tools.el`
+4. Create prompt doc in `assistant/prompts/tools/code_*.md`
+5. Update this README and `docs/CODE_TOOLS.md`

@@ -1,7 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
-- **CODE_* PROMPT DOCS EXPANDED**: Created comprehensive documentation for all Code_* tools in `assistant/prompts/tools/`. Each tool doc includes: purpose, when to use, usage examples, parameters, returns, and notes. Updated code_agent.md and plan_agent.md with numbered workflow steps (1.Code_Map → 2.Code_Inspect → 3.Code_Replace → 4.Code_Usages → 5.Code_Check).
+- **COMPREHENSIVE DOCS**: Created `docs/CODE_TOOLS.md` with full documentation for all Code_* tools (usage, examples, parameters, returns). Updated `assistant/README.md` with Code_* tool table, workflow diagram, and when-to-use guide. All documentation now includes: purpose, usage syntax, examples, supported languages, safety features, and implementation notes.
 - **CODE_USAGES ADDED**: New tool finds all references of a symbol across the project. Cascades: LSP references (semantic) → ripgrep (text search). Added to all nucleus toolsets.
 - **POST-EARLY-INIT CREATED**: `post-early-init.el` sets `treesit-extra-load-path` early in the boot sequence, ensuring tree-sitter grammars are found before any modes load.
 - **CODE_CHECK FIXED**: Replaced missing `my/gptel-lsp--get-server` with `my/gptel--lsp-active-p` (uses `eglot-current-server`). LSP diagnostics now work correctly.
