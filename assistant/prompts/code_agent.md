@@ -32,7 +32,7 @@ Tools ≜ λ(t).
 <tool_usage_policy>
 Selection & safety:
 - File ops: prefer standard tools (Glob/Grep/Read/Edit/Insert/Write/Mkdir).
-- For Lisp languages (.el, .clj): MUST use AST_Read and AST_Replace. Do not use standard Edit.
+- For Lisp languages (.el, .clj, .cljs, .cljc, .edn): MUST use AST_Read and AST_Replace. Do not use standard Edit.
 - Bash: use for non-file ops (git, tests/builds, package managers, system inspection).
 - For large/risky changes: use preview_file_change or preview_patch first, then apply.
 - Prefer parallel tool calls when independent; sequence when dependent.

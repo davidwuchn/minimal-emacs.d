@@ -9,7 +9,7 @@
     (gptel-make-tool
      :name "AST_Map"
      :description "Get a high-level map of all functions and classes defined in a file. \
-Useful for quickly understanding the structure of a Clojure or Elisp file without reading it entirely."
+Useful for quickly understanding the structure of a Clojure/ClojureScript or Elisp file without reading it entirely."
      :function (lambda (file_path)
                  (with-current-buffer (find-file-noselect file_path)
                    (let ((map (treesit-agent-get-file-map)))
@@ -23,7 +23,7 @@ Useful for quickly understanding the structure of a Clojure or Elisp file withou
     (gptel-make-tool
      :name "AST_Read"
      :description "Extract the exact, perfectly balanced code block for a specific function or class by name. \
-MANDATORY tool for reading Clojure or Elisp functions instead of Grep or Read."
+MANDATORY tool for reading Clojure/ClojureScript or Elisp functions instead of Grep or Read."
      :function (lambda (file_path node_name)
                  (with-current-buffer (find-file-noselect file_path)
                    (let ((text (treesit-agent-extract-node node_name)))
@@ -38,7 +38,7 @@ MANDATORY tool for reading Clojure or Elisp functions instead of Grep or Read."
     (gptel-make-tool
      :name "AST_Replace"
      :description "Surgically replace an exact function or class by name with new code. \
-MANDATORY tool for editing Clojure or Elisp functions instead of standard Edit to ensure parentheses remain perfectly balanced."
+MANDATORY tool for editing Clojure/ClojureScript or Elisp functions instead of standard Edit to ensure parentheses remain perfectly balanced."
      :function (lambda (file_path node_name new_code)
                  (with-current-buffer (find-file-noselect file_path)
                    (if (treesit-agent-replace-node node_name new_code)
