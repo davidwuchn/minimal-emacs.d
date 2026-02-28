@@ -16,6 +16,18 @@
   :init
   (add-hook 'xref-backend-functions #'dumb-jump-xref-activate 90))
 
+(use-package treesit-local-xref
+  :ensure nil
+  :commands (treesit-local-xref-backend)
+  :init
+  (add-hook 'xref-backend-functions #'treesit-local-xref-backend 50))
+
+(use-package treesit-agent-tools
+  :ensure nil
+  :commands (treesit-agent-get-file-map
+             treesit-agent-extract-node
+             treesit-agent-replace-node))
+
 (use-package treesit-auto
   :ensure t
   :custom

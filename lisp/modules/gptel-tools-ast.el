@@ -1,20 +1,5 @@
-# PLAN: Native AST Tools for gptel-agent
-
-## Goal
-Implement dedicated `gptel-make-tool` definitions for `AST_Map`, `AST_Read`, and `AST_Replace` to allow the LLM to safely manipulate parenthesized languages (Clojure, Elisp) without prompt injection or shell escaping issues.
-
-## Current State
-- `treesit-agent-tools.el` provides the backend AST manipulation (`treesit-agent-get-file-map`, `treesit-agent-extract-node`, `treesit-agent-replace-node`).
-- We need to expose these to the LLM by defining them as formal JSON-RPC tools using `gptel-make-tool`.
-- We are in PLAN MODE, so we must strictly observe, analyze, and draft without making any system changes yet.
-
-## Steps
-
-### 1. Create `lisp/modules/gptel-tools-ast.el`
-Create a new module that registers the three AST tools using `gptel-make-tool`. Note the list structure for `:args`.
-
-```elisp
 ;;; gptel-tools-ast.el --- AST tools for gptel-agent -*- lexical-binding: t -*-
+
 (require 'gptel)
 (require 'treesit-agent-tools)
 
@@ -69,18 +54,3 @@ MANDATORY tool for editing Clojure or Elisp functions instead of standard Edit t
      :include t)))
 
 (provide 'gptel-tools-ast)
-```
-
-### 2. Update Tool Registry (`lisp/modules/gptel-tools.el`)
-- Add `(require 'gptel-tools-ast)` at the top.
-- Add `(gptel-tools-ast-register)` inside `gptel-tools-register-all`.
-- Add `"AST_Map"`, `"AST_Read"` to the `my/gptel-tools-readonly` list near the bottom.
-- Add `"AST_Map"`, `"AST_Read"`, and `"AST_Replace"` to the `my/gptel-tools-action` list.
-
-### 3. Update Prompts (`assistant/prompts/`)
-- In `code_agent.md`, append to `<tool_usage_policy>` under `Selection & safety:`:
-  `- For Lisp languages (.el, .clj): MUST use AST_Read and AST_Replace. Do not use standard Edit.`
-- Add signature representations in `code_agent.md`:
-  `- AST_Read{file_path, node_name}`
-  `- AST_Replace{file_path, node_name, new_code}`
-- Create the supplemental prompt files in `assistant/prompts/tools/` for `ast_map.md`, `ast_read.md`, and `ast_replace.md` to feed into `nucleus-config.el` loader.

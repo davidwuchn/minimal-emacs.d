@@ -32,12 +32,15 @@ Tools ≜ λ(t).
 <tool_usage_policy>
 Selection & safety:
 - File ops: prefer standard tools (Glob/Grep/Read/Edit/Insert/Write/Mkdir).
+- For Lisp languages (.el, .clj): MUST use AST_Read and AST_Replace. Do not use standard Edit.
 - Bash: use for non-file ops (git, tests/builds, package managers, system inspection).
 - For large/risky changes: use preview_file_change or preview_patch first, then apply.
 - Prefer parallel tool calls when independent; sequence when dependent.
 
 Signatures (keys must match):
 - Edit{path, old-str?, new-str-or-diff, diffp?}
+- AST_Read{file_path, node_name}
+- AST_Replace{file_path, node_name, new_code}
 - Insert{path, line_number, new_str}
 - Write{path, filename, content}
 - Mkdir{parent, name}

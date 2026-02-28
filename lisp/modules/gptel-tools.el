@@ -19,6 +19,7 @@
 (require 'gptel-tools-preview)
 (require 'gptel-tools-lsp)
 (require 'gptel-tools-introspection)
+(require 'gptel-tools-ast)
 
 ;;; Customization
 
@@ -64,6 +65,7 @@ Call this after gptel-agent-tools loads."
   (gptel-tools-preview-register)
   (gptel-tools-lsp-register)
   (gptel-tools-introspection-register)
+  (gptel-tools-ast-register)
 
   ;; Register standard gptel-agent tools
   (when (fboundp 'gptel-make-tool)
@@ -263,7 +265,7 @@ Call this after gptel-agent-tools loads."
                                "WebFetch" "WebSearch" "YouTube"
                                "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                                "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
-                               "lsp_definition" "lsp_hover")))))
+                               "lsp_definition" "lsp_hover" "AST_Map" "AST_Read")))))
 
   (setq my/gptel-tools-action
         (my/gptel--dedup-tools-by-name
@@ -277,7 +279,8 @@ Call this after gptel-agent-tools loads."
                                 "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
                                 "lsp_definition" "lsp_hover" "lsp_rename"
                                 "preview_file_change" "preview_patch"
-                                "list_skills" "load_skill" "create_skill")))
+                                "list_skills" "load_skill" "create_skill"
+                                "AST_Map" "AST_Read" "AST_Replace")))
           my/gptel-tools-readonly)))
 
   ;; Set default tool list
