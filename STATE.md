@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **BYTE-COMPILATION FIX**: Added `no-byte-compile: t` to gptel-tools-code.el to avoid check-parens false positives with regex patterns containing `\\'`. Removed stale .elc files. **FIXES**: "End of file during parsing" errors. File loads correctly in Emacs sessions.
 - **CODE_CHECK REPORTING**: my/gptel--run-fallback-linter now reports exactly what was checked (e.g., "✓ No linter errors (ESLint) - checked package.json"). Non-standard projects get helpful message about what was searched. **FIXES**: Generic "no errors" messages.
 - **CODE_USAGES BACKEND REPORTING**: Output now includes which backend was used: "Found X usages of 'symbol' (via LSP|ripgrep)". **FIXES**: User doesn't know if results are semantic (LSP) or text-based (ripgrep).
 - **DIAGNOSTICS VS CODE_CHECK**: Upstream `Diagnostics` tool (open buffers only) overlaps with our `Code_Check` (project-wide + CLI fallback). **Resolution**: Code_Check is superior and registered in nucleus toolsets. Diagnostics remains available from upstream but not promoted. Updated Code_Check prompt to clarify distinction.
