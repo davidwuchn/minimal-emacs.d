@@ -260,7 +260,9 @@ Call this after gptel-agent-tools loads."
                       (mapcar #'my/gptel--safe-get-tool
                               '("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
                                 "WebFetch" "WebSearch" "YouTube"
-                                "find_buffers_and_recent" "describe_symbol")))
+                                "find_buffers_and_recent" "describe_symbol"
+                                "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
+                                "lsp_definition" "lsp_hover")))
           (list
            (gptel-make-tool
             :name "find_buffers_and_recent"
@@ -285,6 +287,7 @@ Call this after gptel-agent-tools loads."
                                 "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
                                 "WebFetch" "WebSearch" "Write" "YouTube"
                                 "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
+                                "lsp_definition" "lsp_hover" "lsp_rename"
                                 "preview_file_change" "preview_patch"
                                 "list_skills" "load_skill" "create_skill")))
           my/gptel-tools-readonly)))

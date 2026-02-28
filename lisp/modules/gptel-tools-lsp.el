@@ -21,17 +21,23 @@
 ;;; Internal Helpers
 
 (defun my/gptel-lsp--get-server (path)
-  "Get the Eglot server for PATH, reliably."
+  "Get the active Eglot server for PATH, reliably."
   (let* ((proj (project-current nil path))
          (servers (and proj (hash-table-values eglot--servers-by-project)))
-         (server (cl-find-if
-                  (lambda (s)
-                    (let ((s-proj (eglot--project s)))
-                      (and s-proj
-                           (equal (project-root s-proj)
-                                  (project-root proj)))))
-                  servers)))
-    (or server (eglot-current-server))))
+         (buf (and path (find-buffer-visiting path)))
+         (server (if buf
+                     (with-current-buffer buf (eglot-current-server))
+                   (or (cl-find-if
+                        (lambda (s)
+                          (let ((s-proj (eglot--project s)))
+                            (and s-proj
+                                 (equal (project-root s-proj)
+                                        (project-root proj)))))
+                        servers)
+                       (eglot-current-server)))))
+    (if (and server (jsonrpc-running-p server))
+        server
+      nil)))
 
 (defun my/gptel-lsp--path-to-uri (path)
   "Convert PATH to a file URI."
@@ -105,7 +111,87 @@
      :error-fn (lambda (err)
                  (funcall callback (format "LSP Error: %s" (plist-get err :message))))
      :timeout-fn (lambda ()
-                   (funcall callback "LSP Request timed out.")))))
+                   (funcall callback (format "LSP textDocument/references request for '%s' timed out." file-path))))))
+
+(cl-defun my/gptel-lsp-definition (callback file-path line character)
+  "Get LSP definition for the symbol at FILE-PATH, LINE, CHARACTER (0-indexed)."
+  (let ((server (my/gptel-lsp--get-server file-path)))
+    (unless server
+      (funcall callback (format "Error: No active Eglot server found for %s" file-path))
+      (cl-return-from my/gptel-lsp-definition))
+    
+    (jsonrpc-async-request
+     server
+     :textDocument/definition
+     (list :textDocument (list :uri (my/gptel-lsp--path-to-uri file-path))
+           :position (list :line line :character character))
+     :success-fn (lambda (res)
+                   (if (not res)
+                       (funcall callback "No definition found.")
+                     (let* ((res-list (if (vectorp res) (append res nil) (list res)))
+                            (formatted (mapcar #'my/gptel-lsp--format-location res-list)))
+                       (funcall callback (string-join formatted "\n")))))
+     :error-fn (lambda (err)
+                 (funcall callback (format "LSP Error: %s" (plist-get err :message))))
+     :timeout-fn (lambda ()
+                   (funcall callback (format "LSP textDocument/definition request for '%s' timed out." file-path))))))
+
+(cl-defun my/gptel-lsp-hover (callback file-path line character)
+  "Get LSP hover info for the symbol at FILE-PATH, LINE, CHARACTER (0-indexed)."
+  (let ((server (my/gptel-lsp--get-server file-path)))
+    (unless server
+      (funcall callback (format "Error: No active Eglot server found for %s" file-path))
+      (cl-return-from my/gptel-lsp-hover))
+    
+    (jsonrpc-async-request
+     server
+     :textDocument/hover
+     (list :textDocument (list :uri (my/gptel-lsp--path-to-uri file-path))
+           :position (list :line line :character character))
+     :success-fn (lambda (res)
+                   (if (not res)
+                       (funcall callback "No hover information found.")
+                     (let* ((contents (plist-get res :contents))
+                            (val (cond
+                                  ((stringp contents) contents)
+                                  ((and (listp contents) (plist-get contents :value))
+                                   (plist-get contents :value))
+                                  ((and (listp contents) (stringp (car contents)))
+                                   (string-join contents "\n"))
+                                  (t (format "%S" contents)))))
+                       (funcall callback val))))
+     :error-fn (lambda (err)
+                 (funcall callback (format "LSP Error: %s" (plist-get err :message))))
+     :timeout-fn (lambda ()
+                   (funcall callback (format "LSP textDocument/hover request for '%s' timed out." file-path))))))
+
+(cl-defun my/gptel-lsp-rename (callback file-path line character new-name)
+  "Rename symbol at FILE-PATH, LINE, CHARACTER (0-indexed) to NEW-NAME."
+  (let ((server (my/gptel-lsp--get-server file-path)))
+    (unless server
+      (funcall callback (format "Error: No active Eglot server found for %s" file-path))
+      (cl-return-from my/gptel-lsp-rename))
+    
+    (jsonrpc-async-request
+     server
+     :textDocument/rename
+     (list :textDocument (list :uri (my/gptel-lsp--path-to-uri file-path))
+           :position (list :line line :character character)
+           :newName new-name)
+     :success-fn (lambda (res)
+                   (if (not res)
+                       (funcall callback "No rename edits returned by server.")
+                     (condition-case err
+                         (progn
+                           ;; Apply workspace edit without user confirmation for agents
+                           (eglot--apply-workspace-edit res nil)
+                           (funcall callback (format "Successfully applied rename to '%s'." new-name)))
+                       (error
+                        (funcall callback (format "Failed to apply rename edit: %s" (error-message-string err)))))))
+     :error-fn (lambda (err)
+                 (funcall callback (format "LSP Error: %s" (plist-get err :message))))
+     :timeout-fn (lambda ()
+                   (funcall callback (format "LSP textDocument/rename request for '%s' timed out." file-path))))))
 
 (cl-defun my/gptel-lsp-workspace-symbol (callback query)
   "Query workspace symbols for QUERY."
@@ -133,7 +219,7 @@
      :error-fn (lambda (err)
                  (funcall callback (format "LSP Error: %s" (plist-get err :message))))
      :timeout-fn (lambda ()
-                   (funcall callback "LSP Request timed out.")))))
+                   (funcall callback (format "LSP workspace/symbol request for '%s' timed out." query))))))
 
 ;;; Tool Registration
 
@@ -158,6 +244,41 @@
              (:name "character" :type integer :description "0-indexed character position"))
      :category "gptel-agent"
      :async t
+     :include t)
+
+    (gptel-make-tool
+     :name "lsp_definition"
+     :description "Find the definition of a symbol at a specific file, line, and character (0-indexed)."
+     :function #'my/gptel-lsp-definition
+     :args '((:name "file_path" :type string)
+             (:name "line" :type integer :description "0-indexed line number")
+             (:name "character" :type integer :description "0-indexed character position"))
+     :category "gptel-agent"
+     :async t
+     :include t)
+
+    (gptel-make-tool
+     :name "lsp_hover"
+     :description "Get type information, signature, and documentation for a symbol at a specific file, line, and character (0-indexed)."
+     :function #'my/gptel-lsp-hover
+     :args '((:name "file_path" :type string)
+             (:name "line" :type integer :description "0-indexed line number")
+             (:name "character" :type integer :description "0-indexed character position"))
+     :category "gptel-agent"
+     :async t
+     :include t)
+
+    (gptel-make-tool
+     :name "lsp_rename"
+     :description "Rename a symbol globally across the workspace using the LSP server."
+     :function #'my/gptel-lsp-rename
+     :args '((:name "file_path" :type string)
+             (:name "line" :type integer :description "0-indexed line number")
+             (:name "character" :type integer :description "0-indexed character position")
+             (:name "new_name" :type string :description "The new name for the symbol"))
+     :category "gptel-agent"
+     :async t
+     :confirm t
      :include t)
 
     (gptel-make-tool

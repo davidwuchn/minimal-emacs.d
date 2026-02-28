@@ -84,7 +84,10 @@
     (YouTube             . "youtube.md")
     (lsp_diagnostics     . "lsp_diagnostics.md")
     (lsp_references      . "lsp_references.md")
-    (lsp_workspace_symbol . "lsp_workspace_symbol.md"))
+    (lsp_workspace_symbol . "lsp_workspace_symbol.md")
+    (lsp_definition      . "lsp_definition.md")
+    (lsp_hover           . "lsp_hover.md")
+    (lsp_rename          . "lsp_rename.md"))
   "Tool prompt files.")
 
 ;;; Helper Functions

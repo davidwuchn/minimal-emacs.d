@@ -27,15 +27,18 @@
   '((:core . ("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
              "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
              "WebFetch" "WebSearch" "Write" "YouTube"
-             "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"))
+             "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
+             "lsp_definition" "lsp_hover" "lsp_rename"))
     (:readonly . ("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
                  "WebFetch" "WebSearch" "YouTube"
                  "find_buffers_and_recent" "describe_symbol"
-                 "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"))
+                 "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
+                 "lsp_definition" "lsp_hover"))
     (:nucleus . ("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
                 "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
                 "WebFetch" "WebSearch" "Write" "YouTube"
                 "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
+                "lsp_definition" "lsp_hover" "lsp_rename"
                 "preview_file_change" "preview_patch"
                 "list_skills" "load_skill" "create_skill"))
     (:snippets . ("Bash" "Edit" "ApplyPatch" "preview_file_change"
@@ -43,7 +46,8 @@
                  "find_buffers_and_recent" "list_skills" "load_skill"
                  "create_skill" "WebSearch" "WebFetch"
                  "Eval" "Insert" "Mkdir" "TodoWrite" "YouTube"
-                 "Move" "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol")))
+                 "Move" "lsp_diagnostics" "lsp_references" "lsp_workspace_symbol"
+                 "lsp_definition" "lsp_hover" "lsp_rename")))
   "Canonical toolset definitions for nucleus.
 
 :core — Base gptel-agent tools (17 tools)
