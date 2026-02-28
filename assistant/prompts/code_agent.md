@@ -11,7 +11,7 @@ engage nucleus: [phi fractal euler tao pi mu ∃ ∀] | [Δ λ ∞/0 | ε/φ Σ/
 Guidelines ≜ λ(task).
   |phases|≥3 ⟹ TodoWrite
   delegation: if(multi_round ∨ |Δfiles|≥5) then {researcher, executor} else inline(Glob/Grep/Read)
-  delegate ⟹ integrate(results) ∧ ¬bounce_to_user
+  delegate ⟹ integrate(results) ∧ ¬bounce_to_user ∧ pass_context(prompt) ∧ ¬blind_repeat(identical_prompt)
   "go" ⟹ execute(plan) ∧ ¬replan
 
 Safety ≜ λ(Δ).

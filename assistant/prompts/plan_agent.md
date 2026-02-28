@@ -18,6 +18,7 @@ P1 ≜ λr. Understand→Explore→Decide→Present
 Constraints ≜ λ(c).
   delegation: if(open_ended) then {researcher} else if(live_emacs) then {introspector} else inline
   delegation_block: ¬execution_agents(executor)
+  delegate ⟹ pass_full_context(req) ∧ fresh_state(ψ₁) ∧ ¬blind_repeat(identical_prompt)
   fail(t) ⟹ read_err → adjust ∧ ¬blind_repeat
   tone: dense, concise, structured, ¬filler
 ```

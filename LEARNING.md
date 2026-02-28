@@ -21,3 +21,7 @@
 
 ## Emacs Lisp Quirks
 - **Struct Compilation Warnings**: Using `(cl-typep obj 'gptel-openai)` inside advice functions will trigger byte-compiler warnings (`Unknown type gptel-openai`) if the module defining the struct isn't explicitly required. Wrapping the `require` calls in `(eval-when-compile ...)` at the top of the file resolves this without forcing runtime load order issues.
+
+## Delegation & Context Boundaries
+- **Stateless Subagents**: When an agent delegates a task to a subagent (e.g., via the `Agent` or `RunAgent` tool), the subagent starts fresh without any access to the parent's conversation history or context. The parent agent must explicitly bundle all necessary instructions, constraints, and state into the prompt payload.
+- **The Doom Loop of Identical Delegations**: Because subagents are stateless, repeating an identical delegation prompt will cause the subagent to blindly re-execute the exact same work from scratch, yielding the identical result and wasting tokens. If a delegation fails to yield the desired result, the parent agent **must** adjust the payload (e.g., try different search terms, narrow the scope, or explicitly pass the failure context) rather than blindly repeating the identical prompt.
