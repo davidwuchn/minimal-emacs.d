@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **TOOL UI ENHANCED**: Minibuffer prompt now shows 6 options (y/n/k/i/p/q) matching overlay keymap. Previously only showed 4 options, causing confusion. Patched gptel--dispatch-tool-calls in gptel-tool-ui.el.
 - **DEPRECATED DOCS REMOVED**: Removed deprecated AST tool docs (ast_map.md, ast_read.md, ast_replace.md, ast_find_workspace.md) and LSP tool docs (lsp_*.md). All functionality merged into Code_* tools. Cleaned up assistant/README.md references.
 - **DOCUMENTATION COMPLETE**: Created missing tool docs (bash_ro.md, diagnostics.md, run_agent.md, skill.md). Updated bash_command.md to reference BashRO. Fixed all Code_Check → Diagnostics naming. All registered tools now have corresponding documentation.
 - **PARENTHESIS BALANCE FIX**: Fixed unbalanced parentheses in gptel-tools-code.el. Moved comment outside let bindings, added missing closing paren for when block. **FIXES**: "End of file during parsing" errors.
