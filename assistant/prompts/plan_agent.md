@@ -32,8 +32,7 @@ Code Intelligence (KISS Workflow):
 - Code_Inspect: Find and extract the exact implementation block of a function or class. Auto-searches the project if you don't know the file path!
 
 Special Handling for Emacs Lisp (.el):
-- Do NOT use Code_Inspect for Elisp.
-- To read Elisp functions, ALWAYS use `get_symbol_source` or `describe_symbol`.
+- For reading Elisp functions, you may use `get_symbol_source` or `describe_symbol` (native introspection) OR `Code_Inspect` (AST-based).
 
 Disallowed in plan mode (even if known elsewhere):
 - Edit/Insert/Write/Mkdir/ApplyPatch/preview_*/lsp_rename/Code_Replace

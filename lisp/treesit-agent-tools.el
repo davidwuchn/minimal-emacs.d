@@ -9,17 +9,34 @@
   (when (and (treesit-available-p) (treesit-parser-list))
     (treesit-buffer-root-node)))
 
+(defun treesit-agent--get-defun-regexp ()
+  "Get the appropriate defun type regexp for the current buffer.
+Provides fallback regexps for languages that don't set treesit-defun-type-regexp."
+  (or (bound-and-true-p treesit-defun-type-regexp)
+      ;; Fallback for Elisp (regexp matches node type string, not a query)
+      (and (derived-mode-p 'emacs-lisp-mode 'emacs-lisp-ts-mode)
+           "function_definition")))
+
+(defun treesit-agent--get-defun-name (node)
+  "Get the name of a defun NODE.
+Provides fallback for languages where treesit-defun-name returns nil."
+  (or (and (fboundp 'treesit-defun-name) (treesit-defun-name node))
+      ;; Fallback for Elisp: get the name child node (field name must be string)
+      (let ((name-node (treesit-node-child-by-field-name node "name")))
+        (when name-node
+          (treesit-node-text name-node t)))))
+
 (defun treesit-agent--find-defun (name)
   "Find a defun node by NAME in the current buffer using tree-sitter."
   (let ((root (treesit-agent--get-root))
-        (regexp (bound-and-true-p treesit-defun-type-regexp)))
+        (regexp (treesit-agent--get-defun-regexp)))
     (when (and root regexp)
       (let* ((tree (treesit-induce-sparse-tree root regexp))
              (nodes (treesit-agent--flatten-sparse-tree tree))
              (match nil))
         (catch 'found
           (dolist (node nodes)
-            (when (equal (treesit-defun-name node) name)
+            (when (equal (treesit-agent--get-defun-name node) name)
               (setq match node)
               (throw 'found t))))
         match))))
@@ -38,15 +55,15 @@
 
 (defun treesit-agent-get-file-map ()
   "Return a list of all defined function/class names in the current buffer.
-Useful for giving an LLM a high-level overview of a file."
+ Useful for giving an LLM a high-level overview of a file."
   (let ((root (treesit-agent--get-root))
-        (regexp (bound-and-true-p treesit-defun-type-regexp)))
+        (regexp (treesit-agent--get-defun-regexp)))
     (when (and root regexp)
       (let* ((tree (treesit-induce-sparse-tree root regexp))
              (nodes (treesit-agent--flatten-sparse-tree tree))
              (names nil))
         (dolist (node nodes)
-          (let ((name (treesit-defun-name node)))
+          (let ((name (treesit-agent--get-defun-name node)))
             (when name
               (push name names))))
         (nreverse names)))))

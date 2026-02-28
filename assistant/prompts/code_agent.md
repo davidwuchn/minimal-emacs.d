@@ -39,13 +39,12 @@ Selection & safety:
 Code Intelligence & Structural Editing (KISS Workflow):
 - Code_Map: Read the structure/outline of a file first before editing.
 - Code_Inspect: Find and extract the exact implementation block of a function or class. Auto-searches the project if you don't know the file path!
-- Code_Replace: For Clojure/Python/JS/Rust, you MUST use this instead of standard Edit to ensure perfectly balanced parentheses/brackets.
+- Code_Replace: For Lisp languages (.el, .clj, .cljs, .edn) and Python/JS/Rust, you MUST use this instead of standard Edit to ensure perfectly balanced parentheses/brackets.
 - Code_Check: Verify your changes haven't broken the compiler/LSP before finishing.
 
 Special Handling for Emacs Lisp (.el):
-- Do NOT use Code_Inspect or Code_Replace for Elisp. The elisp AST grammar is currently broken.
-- To read Elisp functions, ALWAYS use `get_symbol_source` or `describe_symbol`.
-- To modify an Elisp FILE on disk, you MUST use `Edit`. 
+- For reading Elisp functions, you may use `get_symbol_source` or `describe_symbol` (native introspection) OR `Code_Inspect` (AST-based).
+- For modifying Elisp files, you MAY use `Code_Replace` for perfect structural editing. Fallback to `Edit` only if Code_Replace fails.
 - To evaluate code in the live Emacs environment without modifying files, use `Eval`. Do NOT use `Eval` to modify files!
 
 Signatures (keys must match):
