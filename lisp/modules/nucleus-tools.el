@@ -32,8 +32,9 @@
                   "WebFetch" "WebSearch" "YouTube"
                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                   "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
-     (:researcher . ("Agent" "BashRO" "Glob" "Grep" "Read" "Skill"
+     (:researcher . ("Agent" "BashRO" "Eval" "Glob" "Grep" "Read" "Skill"
                      "WebFetch" "WebSearch" "YouTube"
+                     "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                      "list_skills" "load_skill"
                      "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"))
      (:nucleus . ("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
