@@ -24,9 +24,9 @@ presses n/y or q respectively."
   (with-current-buffer buffer
     (let ((map (make-sparse-keymap)))
       (set-keymap-parent map (current-local-map))
-      (define-key map (kbd "n") (lambda () (interactive) (kill-buffer buffer) (funcall on-confirm)))
-      (define-key map (kbd "y") (lambda () (interactive) (kill-buffer buffer) (funcall on-confirm)))
-      (define-key map (kbd "q") (lambda () (interactive) (kill-buffer buffer) (funcall on-abort)))
+      (define-key map (kbd "n") (lambda () (interactive) (funcall on-confirm) (kill-buffer buffer)))
+      (define-key map (kbd "y") (lambda () (interactive) (funcall on-confirm) (kill-buffer buffer)))
+      (define-key map (kbd "q") (lambda () (interactive) (funcall on-abort) (kill-buffer buffer)))
       (use-local-map map))))
 
 (defun my/gptel--preview-enqueue (buffer path original replacement callback)
@@ -35,13 +35,16 @@ presses n/y or q respectively."
 Shows the diff between ORIGINAL and REPLACEMENT for PATH.
 CALLBACK is called when user confirms or aborts."
   (let* ((parent-fsm (buffer-local-value 'gptel--fsm-last buffer))
+         (cb-called nil)
          (wrapped-cb
           (lambda (result)
-            (when (buffer-live-p buffer)
-              (with-current-buffer buffer
-                (setq-local gptel--fsm-last parent-fsm)))
-            (setq-local gptel--fsm-last parent-fsm)
-            (funcall callback result)))
+            (unless cb-called
+              (setq cb-called t)
+              (when (buffer-live-p buffer)
+                (with-current-buffer buffer
+                  (setq-local gptel--fsm-last parent-fsm)))
+              (setq-local gptel--fsm-last parent-fsm)
+              (funcall callback result))))
          (diff-buf (get-buffer-create "*gptel-preview*"))
          (temp1 (make-temp-file "orig"))
          (temp2 (make-temp-file "new"))
@@ -58,7 +61,8 @@ CALLBACK is called when user confirms or aborts."
             (erase-buffer)
             (insert (format "Preview: %s\n\n" path))
             (insert diff-output)
-            (diff-mode))
+            (diff-mode)
+            (add-hook 'kill-buffer-hook (lambda () (funcall wrapped-cb "Preview aborted.")) nil t))
           (display-buffer diff-buf)
           (my/gptel--setup-preview-keys
            diff-buf
@@ -76,19 +80,23 @@ CALLBACK is called with the result.
 ON-CONFIRM and ON-ABORT are called based on user action.
 HEADER is the prompt to show."
   (let* ((parent-fsm (buffer-local-value 'gptel--fsm-last buffer))
+         (cb-called nil)
          (wrapped-cb
           (lambda (result)
-            (when (buffer-live-p buffer)
-              (with-current-buffer buffer
-                (setq-local gptel--fsm-last parent-fsm)))
-            (setq-local gptel--fsm-last parent-fsm)
-            (funcall callback result)))
+            (unless cb-called
+              (setq cb-called t)
+              (when (buffer-live-p buffer)
+                (with-current-buffer buffer
+                  (setq-local gptel--fsm-last parent-fsm)))
+              (setq-local gptel--fsm-last parent-fsm)
+              (funcall callback result))))
          (diff-buf (get-buffer-create "*gptel-patch-preview*")))
     (with-current-buffer diff-buf
       (erase-buffer)
       (insert header "\n\n")
       (insert patch)
-      (diff-mode))
+      (diff-mode)
+      (add-hook 'kill-buffer-hook (lambda () (funcall on-abort wrapped-cb)) nil t))
     (display-buffer diff-buf)
     (my/gptel--setup-preview-keys
      diff-buf
