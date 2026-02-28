@@ -17,9 +17,9 @@
 (require 'gptel-tools-apply)
 (require 'gptel-tools-agent)
 (require 'gptel-tools-preview)
-(require 'gptel-tools-lsp)
+;; (require 'gptel-tools-lsp)  ; Deprecated, functionality merged into gptel-tools-code
 (require 'gptel-tools-introspection)
-(require 'gptel-tools-ast)
+;; (require 'gptel-tools-ast)  ; Deprecated, functionality merged into gptel-tools-code
 (require 'gptel-tools-code)
 
 ;;; Customization
