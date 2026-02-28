@@ -53,17 +53,15 @@ Shows all 6 available options in the minibuffer:
 - q: Quit/reject"
   (interactive)
   ;; If called from overlay click, move point to click position
-  (when event
-    (let ((pos (posn-point (event-end event))))
-      (when pos
-        (goto-char pos))))
+  (when (mouse-event-p last-nonmenu-event)
+    (mouse-set-point last-nonmenu-event))
   (let* ((prompt (my/gptel--get-confirmation-prompt))
-         (choices '((?y ?Y "yes - Accept and run tool calls")
-                    (?n ?N "no - Skip tool calls, continue without")
-                    (?k ?K "cancel - Reject and cancel request")
-                    (?i ?I "inspect - Inspect tool call details")
-                    (?p ?P "previous - Jump to previous overlay")
-                    (?q ?Q "quit - Reject tool calls"))))
+         (choices '((?y "yes - Accept and run tool calls")
+                    (?n "no - Skip tool calls, continue without")
+                    (?k "cancel - Reject and cancel request")
+                    (?i "inspect - Inspect tool call details")
+                    (?p "previous - Jump to previous overlay")
+                    (?q "quit - Reject tool calls"))))
     (cond
      ((eq my/gptel-confirmation-level 'auto)
       ;; Auto-execute without confirmation
