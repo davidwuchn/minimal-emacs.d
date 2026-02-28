@@ -136,12 +136,12 @@ CALLBACK is called exactly once unless the buffer has been aborted."
      :async t
      :args '((:name "path"
               :type string)
-            (:name "old_str"
+            (:name "old-str"
               :type string
               :optional t)
-            (:name "new_str"
+            (:name "new-str-or-diff"
               :type string)
-            (:name "diff"
+            (:name "diffp"
               :type boolean
               :optional t))
      :category "gptel-agent"

@@ -37,7 +37,7 @@ Selection & safety:
 - Prefer parallel tool calls when independent; sequence when dependent.
 
 Signatures (keys must match):
-- Edit{path, old_str?, new_str, diff}
+- Edit{path, old-str?, new-str-or-diff, diffp?}
 - Insert{path, line_number, new_str}
 - Write{path, filename, content}
 - Mkdir{parent, name}
