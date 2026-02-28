@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **LSP FOR ELISP (NOT USED)**: Emacs Lisp does NOT use LSP - this is by design. Emacs provides superior native introspection: `elisp--xref-backend` (built-in xref), `find-function`, `describe-function`, full obarray access, and load-path searching. **Optimal Elisp stack**: elisp--xref-backend (loaded libs/builtins) → dumb-jump (project .el files) → Tree-sitter (current file AST). No LSP configuration needed or recommended for Elisp.
 - **DUMB-JUMP FOR PYTHON/RUST VERIFIED**: Dumb-jump supports Python (.py) and Rust (.rs) via regex-based function/struct detection. **VERIFIED**: dumb-jump-go executes successfully for both languages, project root detection works via .git, xref fallback chain (LSP → Tree-sitter → Dumb-jump) fully operational for cross-file navigation when LSP offline.
 - **DUMB-JUMP FOR ELISP VERIFIED**: Dumb-jump supports Emacs Lisp (.el) via regex-based defun/defmacro/defsubst detection. **VERIFIED**: dumb-jump-xref-activate configured (priority 90), treesit-local-xref for file-local AST (priority 50), elisp--xref-backend built-in (priority 0). For Elisp, dumb-jump is the PRIMARY cross-file navigation tool (not LSP).
 - **DUMB-JUMP FOR CLOJURE VERIFIED**: Dumb-jump supports Clojure family (.clj, .cljs, .cljc) via regex-based defn/defmacro/defrecord detection. **VERIFIED**: File extensions properly associated (clojure-mode, clojurescript-mode, clojurec-mode), dumb-jump-go available, fallback chain works for cross-file Clojure navigation when LSP offline.
