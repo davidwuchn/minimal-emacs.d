@@ -28,16 +28,8 @@
              treesit-agent-extract-node
              treesit-agent-replace-node))
 
-(use-package treesit-auto
-  :ensure t
-  :custom
-  (treesit-auto-install 'prompt)
-  :init
-  ;; Unify tree-sitter grammar directories
-  (setq treesit-extra-load-path (list (expand-file-name "var/tree-sitter" user-emacs-directory)))
-  :config
-  (treesit-auto-add-to-auto-mode-alist 'all)
-  (global-treesit-auto-mode))
+;; Tree-sitter auto configuration with custom recipes
+(require 'init-treesit)
 
 (use-package apheleia
   :ensure t
