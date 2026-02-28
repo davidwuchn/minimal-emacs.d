@@ -37,7 +37,7 @@ The unified `Code_*` toolset provides KISS (Keep It Simple, Stupid) code intelli
 | **Code_Inspect** | Extract function/class | Auto-searches project if file unknown |
 | **Code_Replace** | Structural replacement | **REQUIRED** for .el/.clj/.py/.rs/.js |
 | **Code_Usages** | Find all references | LSP → ripgrep fallback |
-| **Code_Check** | Project diagnostics | LSP → CLI linter fallback |
+| **Diagnostics** | Project diagnostics | LSP → CLI linter fallback |
 
 **See [docs/CODE_TOOLS.md](../docs/CODE_TOOLS.md) for comprehensive documentation.**
 
@@ -51,7 +51,7 @@ The unified `Code_*` toolset provides KISS (Keep It Simple, Stupid) code intelli
 │ Read specific function        │ Code_Inspect                │
 │ Modify function (Lisp/Py/Rust)│ Code_Replace (NOT Edit!)    │
 │ Find where function is used   │ Code_Usages                 │
-│ Verify changes                │ Code_Check                  │
+│ Verify changes                │ Diagnostics                  │
 │ Read arbitrary text file      │ Read                        │
 │ Search text pattern           │ Grep                        │
 │ Find files by name            │ Glob                        │
@@ -91,7 +91,7 @@ in `nucleus-prompts.el`). These are supplemental — the schema-faithful
 | `code_inspect.md` | Code_Inspect | Extract function/class by name |
 | `code_replace.md` | Code_Replace | AST structural replacement |
 | `code_usages.md` | Code_Usages | Find all symbol references |
-| `code_check.md` | Code_Check | LSP diagnostics + linter fallback |
+| `diagnostics.md` | Diagnostics | LSP diagnostics + linter fallback |
 
 #### LSP Tool Prompts (Specialized)
 | File | Tool | Description | Status |
@@ -262,19 +262,19 @@ The skill is immediately available via the `Skill` tool without restarting Emacs
 
 ## Tool Conflicts & Resolutions
 
-### Diagnostics vs Code_Check
+### Our Diagnostics vs Upstream Diagnostics
 
 Both tools collect diagnostics, but with different scopes:
 
 | Tool | Source | Scope | Fallback | Recommendation |
 |------|--------|-------|----------|----------------|
-| **Code_Check** | `gptel-tools-code.el` | **Entire project** | LSP → CLI linters | ✅ **USE THIS** |
+| **Diagnostics** | `gptel-tools-code.el` | **Entire project** | LSP → CLI linters | ✅ **USE THIS** |
 | `Diagnostics` | `gptel-agent-tools.el` (upstream) | Open buffers only | None (flymake only) | ⚠️ Only for quick open-file checks |
 
-**Why Code_Check is better:**
+**Why Diagnostics is better:**
 1. Scans entire project, not just open buffers
 2. Has CLI linter fallback when LSP unavailable
 3. Provides clearer messaging about LSP status
 4. Auto-detects project type (Python/JS/Rust)
 
-The `Diagnostics` tool is still available from upstream but is **not registered** in our nucleus toolsets. The LLM will primarily see and use `Code_Check`.
+The upstream `Diagnostics` tool from gptel-agent-tools.el (open-buffers-only) is **not registered** in our nucleus toolsets. The LLM will primarily see and use our `Diagnostics` tool (project-wide + CLI fallback).
