@@ -87,8 +87,8 @@ Reports which backend (LSP or ripgrep) was used."
 (defun my/gptel--run-fallback-linter (dir)
   "Run a fallback linter (flake8, eslint, etc) if LSP is not available in DIR.
 Reports what was checked, even if no standard project files found."
+  ;; Build regex at runtime to avoid check-parens confusion with \\
   (let ((default-directory dir)
-        ;; Build regex at runtime to avoid check-parens confusion with \\'
         (py-ext (concat "\\.py" (char-to-string 39))))
     (cond
      ((file-exists-p "package.json")
@@ -297,7 +297,7 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                    (error (format "Error executing Code_Usages: %s" (error-message-string err)))))
      :args (list '(:name "node_name" :type string :description "Symbol/function/class name to find usages for"))
      :category "gptel-agent"
-     :include t)))
+     :include t))))
 
 ;; Register tool previews
 (when (boundp 'gptel--tool-preview-alist)
@@ -331,8 +331,7 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
        from (1- (point)) 'font-lock-face (if (fboundp 'gptel-agent--block-bg) (gptel-agent--block-bg) 'default))
       (when (fboundp 'gptel-agent--confirm-overlay)
         (gptel-agent--confirm-overlay from (point) t))))
-        
   (setf (alist-get "Code_Replace" gptel--tool-preview-alist nil nil #'equal)
-        #'gptel-tools-code--replace-preview-setup))
+        #'gptel-tools-code--replace-preview-setup)))
 
 (provide 'gptel-tools-code)
