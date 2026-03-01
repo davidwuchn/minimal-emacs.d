@@ -1021,9 +1021,10 @@ This advice forces the final transition."
 ;; Gemini often returns "Malformed JSON" due to API load or payload limits.
 ;; This automatically retries the request up to 3 times before failing.
 
-(defcustom my/gptel-max-retries nil
+(defcustom my/gptel-max-retries 3
   "Number of times to retry failed gptel requests.
-If nil, retry indefinitely using exponential backoff (capped at 30s)."
+If nil, retry indefinitely using exponential backoff (capped at 30s).
+Default is 3 to prevent doom-loops caused by context overflow errors."
   :type '(choice (const :tag "Infinite" nil) integer)
   :group 'gptel)
 
