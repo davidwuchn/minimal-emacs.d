@@ -5,6 +5,9 @@
 ## Purpose
 Get **project-wide** diagnostics/errors to verify your changes haven't broken the build.
 
+## Availability
+- `Diagnostics`: :core, :readonly, :researcher, :nucleus, :snippets
+
 ## ⚠️ CRITICAL: This Tool vs Upstream Diagnostics
 
 | Feature | This Tool (Ours) | Upstream Diagnostics |

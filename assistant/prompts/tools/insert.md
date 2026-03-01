@@ -5,6 +5,9 @@
 ## Purpose
 Insert text at a specific line number in a file. Non-destructive - doesn't replace existing content.
 
+## Availability
+- `Insert`: :core, :nucleus, :snippets
+
 ## When to Use
 - Adding new functions to a file
 - Inserting imports at the top

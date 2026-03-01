@@ -6,6 +6,10 @@
 ## Purpose
 Load a skill package to extend agent capabilities. Skills are modular knowledge packages that can be loaded on demand.
 
+## Availability
+- `Skill`: :core, :readonly, :researcher, :nucleus, :snippets
+- `load_skill`: :researcher, :nucleus, :snippets
+
 ## When to Use
 - Need specialized knowledge not in base training
 - Working with domain-specific frameworks

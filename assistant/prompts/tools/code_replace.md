@@ -5,6 +5,9 @@
 ## Purpose
 Surgically replace an exact function or class by name with new code. GUARANTEES perfectly balanced parentheses/brackets.
 
+## Availability
+- `Code_Replace`: :core, :nucleus, :snippets
+
 ## ⚠️ CRITICAL: When to Use
 - **MUST use** for Lisp languages (.el, .clj, .cljs, .cljc, .edn)
 - **MUST use** for Python, JavaScript, Rust when modifying existing functions

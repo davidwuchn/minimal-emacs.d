@@ -187,7 +187,8 @@ AGENT-NAME must exist in `gptel-agent--agents`."
      :function #'my/gptel--run-agent-tool
      :args '((:name "agent_name"
               :type string
-              :description "Agent name (e.g. 'researcher', 'introspector', 'executor', 'explorer')")
+              :description "Agent name (e.g. 'researcher', 'introspector', 'executor', 'explorer')"
+              :enum ["explorer" "researcher" "introspector" "executor"])
              (:name "description"
               :type string
               :description "Short task label")

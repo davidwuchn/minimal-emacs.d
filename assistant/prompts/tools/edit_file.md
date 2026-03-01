@@ -5,6 +5,9 @@
 ## Purpose
 Replace text in a file or apply a unified diff patch. Async operation with confirmation.
 
+## Availability
+- `Edit`: :core, :nucleus, :snippets
+
 ## When to Use
 - Simple text replacements in a single file
 - Applying small diffs without full patch machinery

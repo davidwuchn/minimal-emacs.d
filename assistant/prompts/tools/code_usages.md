@@ -5,6 +5,9 @@
 ## Purpose
 Find all usages/references of a symbol (function, class, variable) across the entire project.
 
+## Availability
+- `Code_Usages`: :core, :readonly, :researcher, :nucleus, :snippets
+
 ## When to Use
 - Before renaming a function (find all call sites)
 - Understanding how a function is used across the codebase

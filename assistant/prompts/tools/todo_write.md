@@ -5,6 +5,9 @@
 ## Purpose
 Create, update, and track tasks in a structured todo list. Used for planning and tracking progress on multi-step tasks.
 
+## Availability
+- `TodoWrite`: :core, :nucleus, :snippets
+
 ## When to Use
 - Breaking down complex tasks into steps
 - Tracking progress on multi-file changes
@@ -18,8 +21,8 @@ TodoWrite{todos: [{content: "Step 1", status: "in_progress", priority: "high"}, 
 
 ## Parameters
 - `todos` (required): Array of todo objects with:
-  - `content` (string): Task description
-  - `status` (string): "pending", "in_progress", "completed", "cancelled"
+  - `content` (string): [**minLength: 1**] Task description
+  - `status` (string): [**enum: ["pending", "in_progress", "completed"]**] "pending", "in_progress", "completed", "cancelled"
   - `priority` (string): "high", "medium", "low"
 
 ## Returns

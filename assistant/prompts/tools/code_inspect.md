@@ -5,6 +5,9 @@
 ## Purpose
 Extract the exact, perfectly balanced implementation block of a function or class by name.
 
+## Availability
+- `Code_Inspect`: :core, :readonly, :researcher, :nucleus, :snippets
+
 ## When to Use
 - Need to read the full implementation of a specific function
 - Before modifying a function (use Code_Inspect first, then Code_Replace)

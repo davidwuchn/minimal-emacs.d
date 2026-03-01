@@ -5,6 +5,9 @@
 ## Purpose
 Get a high-level overview of all functions, classes, and definitions in a file before editing.
 
+## Availability
+- `Code_Map`: :core, :readonly, :researcher, :nucleus, :snippets
+
 ## When to Use
 - **FIRST** tool when opening an unfamiliar file
 - Before making any edits to understand file organization

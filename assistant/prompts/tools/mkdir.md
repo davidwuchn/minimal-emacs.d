@@ -5,6 +5,9 @@
 ## Purpose
 Create a new directory under a parent directory. Creates parent directories if needed.
 
+## Availability
+- `Mkdir`: :core, :nucleus, :snippets
+
 ## When to Use
 - Creating project structure
 - Making new package directories

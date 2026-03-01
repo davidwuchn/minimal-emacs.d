@@ -5,6 +5,9 @@
 ## Purpose
 Create a new file with specified content. Will NOT overwrite existing files (safety feature).
 
+## Availability
+- `Write`: :core, :nucleus, :snippets
+
 ## When to Use
 - Creating new source files
 - Writing configuration files

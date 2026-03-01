@@ -5,6 +5,9 @@
 ## Purpose
 Fetch YouTube video transcripts and metadata. Useful for learning from video tutorials without watching.
 
+## Availability
+- `YouTube`: :core, :readonly, :researcher, :nucleus, :snippets
+
 ## When to Use
 - Getting information from video tutorials
 - Extracting code examples from videos

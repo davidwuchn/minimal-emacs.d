@@ -5,6 +5,9 @@
 ## Purpose
 Move files or directories from source to destination. Can also rename within same directory.
 
+## Availability
+- `Move`: :core, :nucleus, :snippets
+
 ## When to Use
 - Renaming files
 - Moving files between directories
