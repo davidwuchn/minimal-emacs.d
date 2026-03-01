@@ -17,9 +17,7 @@
 (require 'gptel-tools)
 (gptel-tools-setup)
 
-;; Load enhanced preview tools
-(require 'gptel-tools-preview-enhanced)
-(gptel-tools-preview-enhanced-register)
+
 
 ;; Load tool usage analytics
 (require 'nucleus-analytics)
