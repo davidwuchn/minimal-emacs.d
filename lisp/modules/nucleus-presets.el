@@ -105,6 +105,8 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
       (when-let ((agent (gptel-get-preset 'gptel-agent)))
         (let ((plist (copy-sequence agent)))
           (setq plist (plist-put plist :system 'nucleus-gptel-agent))
+          (setq plist (plist-put plist :description
+                                "Nucleus execution agent — full tool access, code changes"))
           (setq plist (plist-put plist :tools
                                 (nucleus-get-tools :nucleus)))
           (when agent-model
@@ -116,6 +118,8 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
       (when-let ((plan (gptel-get-preset 'gptel-plan)))
         (let ((plist (copy-sequence plan)))
           (setq plist (plist-put plist :system 'nucleus-gptel-plan))
+          (setq plist (plist-put plist :description
+                                "Nucleus planning agent — read-only, architecture & research"))
           (setq plist (plist-put plist :tools
                                 (nucleus-get-tools :readonly)))
           (when plan-model
