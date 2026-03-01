@@ -121,6 +121,10 @@ by `my/gptel--mode-hook-setup' before this runs)."
 ;; Lower temperature for reliable tool calling (1.0 causes malformed tool calls).
 (setq gptel-temperature 0.5)
 
+;; Uncomment to enable full request/response logging in *gptel-log* buffer.
+;; Useful for diagnosing 400 errors — shows exact JSON sent to the API.
+;; (setq gptel-log-level 'debug)
+
 ;; Handle nil/unknown tool calls gracefully instead of hanging the FSM.
 ;; When a model sends a tool call with a nil or unrecognized name, gptel's
 ;; `gptel--handle-tool-use' logs a message but doesn't advance the tool
@@ -189,6 +193,7 @@ Two things are done for each offending entry:
   (advice-add 'gptel--handle-wait         :after  #'my/gptel--reset-reasoning-block)
   (advice-add 'gptel-curl--get-args       :before #'my/gptel--pre-serialize-inject-reasoning)
   (advice-add 'gptel-curl--get-args       :before #'my/gptel--pre-serialize-inject-noop)
+  (advice-add 'gptel-curl--get-args       :before #'my/gptel--pre-serialize-sanitize-messages)
   (advice-add 'gptel--inject-prompt       :after  #'my/gptel--inject-prompt-strip-nil-tools)
   (advice-add 'gptel--inject-prompt       :after  #'my/gptel--inject-prompt-patch-reasoning))
 
@@ -778,8 +783,12 @@ OpenRouter/Anthropic when the model emits a tool call with a nil function name
                   ;; No valid tool calls remain — demote to plain assistant message
                   ;; so the conversation stays well-formed.
                   (progn (plist-put msg :tool_calls nil)
-                         (when (eq (plist-get msg :content) :null)
-                           (plist-put msg :content "")))
+                         ;; :content may be :null (gptel's JSON null sentinel) OR
+                         ;; Elisp nil (json-serialize encodes nil as {}, causing
+                         ;; DashScope/OpenAI 400 "got object instead of string").
+                         (let ((c (plist-get msg :content)))
+                           (when (or (eq c :null) (null c))
+                             (plist-put msg :content ""))))
                 (plist-put msg :tool_calls (vconcat filtered))))))))))
 
 ;; Immediate patch: stamp reasoning_content right when the message is injected
@@ -1276,6 +1285,38 @@ START and END are the response region positions passed by
     (message "Calling tool... (Hint: Use C-c C-y to auto-permit future calls in this buffer)")))
 
 (advice-add 'gptel--accept-tool-calls :before #'my/gptel--hint-auto-permit-on-accept)
+
+;; --- Pre-serialization content sanitizer ---
+;; json-serialize encodes Elisp nil as {} (empty object), not null or "".
+;; Any message with :content nil will cause a DashScope/OpenAI 400:
+;;   "Invalid type for 'messages.[N].content': expected string or array, got object"
+;; This runs as :before advice on gptel-curl--get-args to catch any nil :content
+;; that slipped through earlier guards (e.g. in the inject-prompt-strip-nil-tools
+;; path when :content was nil rather than :null).
+
+(defun my/gptel--pre-serialize-sanitize-messages (info _token)
+  "Ensure no message has nil :content before JSON serialization.
+
+nil :content is encoded as {} by json-serialize, causing a 400 Bad Request
+from DashScope and OpenAI-compatible APIs that expect a string or array.
+
+Runs as :before advice on `gptel-curl--get-args'.  Coerces nil :content to
+an empty string on messages that have no :tool_calls (i.e. text-role messages).
+Messages with :tool_calls legitimately have :content :null which is fine."
+  (when-let* ((data (plist-get info :data))
+              (msgs (plist-get data :messages)))
+    (cl-loop for msg across msgs
+             when (and (listp msg)
+                       (null (plist-get msg :content))
+                       ;; :tool_calls present means the assistant is calling tools;
+                       ;; its :content is intentionally :null — leave it alone.
+                       ;; But if it's nil with no tool_calls, it will serialize badly.
+                       (null (plist-get msg :tool_calls)))
+             do (progn
+                  (message "gptel: sanitizing nil :content on %s message"
+                           (plist-get msg :role))
+                  (plist-put msg :content "")))))
+
 
 (provide 'gptel-ext-core)
 ;;; gptel-ext-core.el ends here
