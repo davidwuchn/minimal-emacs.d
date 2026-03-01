@@ -144,6 +144,7 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
              (patch-agent "executor" (nucleus-get-tools :nucleus))
              (patch-agent "researcher" (nucleus-get-tools :researcher))
              (patch-agent "introspector" (nucleus-get-tools :readonly))
+             (patch-agent "reviewer" (nucleus-get-tools :reviewer))
              ;; Validate immediately after patching
              (when (and (boundp 'nucleus-tools-strict-validation)
                         nucleus-tools-strict-validation)
@@ -152,6 +153,7 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
              ;; - executor: full action tools for code changes (21 tools)
              ;; - researcher: repo exploration + web research + skill loading (18 tools)
              ;; - introspector: Emacs introspection tools (15 tools)
+             ;; - reviewer: minimal read-only set for code review (3 tools)
            )))))
 
 (defun nucleus--validate-agent-tool-contracts ()
@@ -161,7 +163,8 @@ Signals an error if any agent has incorrect tools."
     (let ((expected
            `(("executor" . ,(nucleus-get-tools :nucleus))
              ("researcher" . ,(nucleus-get-tools :researcher))
-             ("introspector" . ,(nucleus-get-tools :readonly)))))
+             ("introspector" . ,(nucleus-get-tools :readonly))
+             ("reviewer" . ,(nucleus-get-tools :reviewer)))))
       (cl-loop for (agent-name . expected-tools) in expected
                for cell = (assoc agent-name gptel-agent--agents)
                when cell

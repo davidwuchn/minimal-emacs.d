@@ -62,24 +62,27 @@ When enabled, validates:
                   "preview_file_change" "preview_patch"
                   "list_skills" "load_skill" "create_skill"
                   "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
+     (:reviewer . ("Glob" "Grep" "Read"))
      (:snippets . ("RunAgent" "Bash" "Edit" "ApplyPatch" "preview_file_change" "preview_patch"
-                  "Grep" "Glob" "Read" "Write" "describe_symbol" "get_symbol_source"
-                  "find_buffers_and_recent" "Skill" "list_skills" "load_skill"
-                  "create_skill" "WebSearch" "WebFetch"
-                  "Eval" "Insert" "Mkdir" "TodoWrite" "YouTube"
-                  "Move" "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages")))
+                   "Grep" "Glob" "Read" "Write" "describe_symbol" "get_symbol_source"
+                   "find_buffers_and_recent" "Skill" "list_skills" "load_skill"
+                   "create_skill" "WebSearch" "WebFetch"
+                   "Eval" "Insert" "Mkdir" "TodoWrite" "YouTube"
+                   "Move" "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages")))
   "Canonical toolset definitions for nucleus.
 
 :core — Base gptel-agent tools (23 tools)
 :readonly — Read-only subset for plan mode (16 tools)
 :researcher — Research: readonly + skill loading (19 tools, superset of :readonly)
 :nucleus — Full action tools + preview + skill management (31 tools)
+:reviewer — Minimal read-only set for code review (3 tools: Glob/Grep/Read)
 :snippets — Tools with supplemental prompts injected (31 tools)
 
 Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   executor     → :nucleus     (31 tools) - code changes & execution
   researcher   → :researcher  (19 tools) - exploration & research
-  introspector → :readonly    (16 tools) - Emacs introspection")
+  introspector → :readonly    (16 tools) - Emacs introspection
+  reviewer     → :reviewer     (3 tools) - read-only code review")
 
 (defun nucleus-get-tools (set-name)
   "Return tool list for SET-NAME, filtering out unregistered tools.
@@ -260,7 +263,8 @@ Interactive command for debugging agent tool configuration."
   (let ((expected
          `(("executor" . ,(nucleus-get-tools :nucleus))
            ("researcher" . ,(nucleus-get-tools :researcher))
-           ("introspector" . ,(nucleus-get-tools :readonly)))))
+           ("introspector" . ,(nucleus-get-tools :readonly))
+           ("reviewer" . ,(nucleus-get-tools :reviewer)))))
     (let* ((results
             (cl-loop for (agent-name . expected-tools) in expected
                      for cell = (assoc agent-name gptel-agent--agents)
@@ -289,7 +293,8 @@ Legend: ✓ valid  ✗ mismatch  ? not found
 Expected toolsets:
   executor     → :nucleus     (%d tools)
   researcher   → :researcher  (%d tools)
-  introspector → :readonly    (%d tools)"
+  introspector → :readonly    (%d tools)
+  reviewer     → :reviewer     (%d tools)"
                  (with-output-to-string
                    (cl-loop for (agent-name expected-count actual-count missing extra) in results
                             do (format t "  %-14s %s  expected=%d  actual=%d  missing=%s  extra=%s\n"
@@ -301,7 +306,8 @@ Expected toolsets:
                                         (if extra (length extra) 0))))
                  (length (nucleus-get-tools :nucleus))
                  (length (nucleus-get-tools :researcher))
-                 (length (nucleus-get-tools :readonly))))))))
+                 (length (nucleus-get-tools :readonly))
+                 (length (nucleus-get-tools :reviewer))))))))
 
 (defun nucleus-test-tool-validation ()
   "Test tool contract validation with sample inputs.
