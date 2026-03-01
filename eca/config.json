@@ -60,13 +60,13 @@
     },
     "agent": {
         "code": {
-            "defaultModel": "github-copilot/claude-opus-4.6",
+            "defaultModel": "github-copilot/gpt-5.3-codex",
             "prompts": {
                 "chat": "${file:prompts/code_agent.md}"
             }
         },
         "plan": {
-            "defaultModel": "gihub-copilot/claude-sonnet-4.6",
+            "defaultModel": "gihub-copilot/gpt-5.3-codex",
             "prompts": {
                 "chat": "${file:prompts/plan_agent.md}"
             }

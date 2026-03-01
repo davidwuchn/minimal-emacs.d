@@ -7,4 +7,4 @@
 - `command` (string): Bash command
 
 ## Plan Mode Sandbox
-Read-only whitelist: git/ls/cat/grep/find/test runners. ¬{>,<,sed -i,&,$()}.
+(Only applies if you are in Plan Mode) Read-only whitelist: git/ls/cat/grep/find/test runners. ¬{>,<,sed -i,&,$()}. In Agent Mode, Bash is unrestricted.

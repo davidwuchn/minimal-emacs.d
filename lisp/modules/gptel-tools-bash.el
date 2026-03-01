@@ -176,7 +176,7 @@ CALLBACK is called with the result string on completion."
   (when (fboundp 'gptel-make-tool)
     (gptel-make-tool
      :name "Bash"
-     :description "Execute a Bash command. In Plan Mode, it is sandboxed to read-only commands."
+     :description "Execute a Bash command. (Note: In Plan Mode, it is sandboxed to read-only commands. In Agent Mode, it is unrestricted.)"
      :function #'my/gptel--agent-bash-async
      :async t
      :args '((:name "command"

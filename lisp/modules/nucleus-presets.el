@@ -106,9 +106,9 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
         (let ((plist (copy-sequence agent)))
           (setq plist (plist-put plist :system 'nucleus-gptel-agent))
           (setq plist (plist-put plist :description
-                                "Nucleus execution agent — full tool access, code changes"))
+                                 "Nucleus execution agent — full tool access, code changes"))
           (setq plist (plist-put plist :tools
-                                (nucleus-get-tools :nucleus)))
+                                 (nucleus-get-tools :nucleus)))
           (when agent-model
             (setq plist (plist-put plist :model agent-model))
             (setq plist (plist-put plist :backend preferred-backend)))
@@ -119,9 +119,9 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
         (let ((plist (copy-sequence plan)))
           (setq plist (plist-put plist :system 'nucleus-gptel-plan))
           (setq plist (plist-put plist :description
-                                "Nucleus planning agent — read-only, architecture & research"))
+                                 "Nucleus planning agent — read-only, architecture & research"))
           (setq plist (plist-put plist :tools
-                                (nucleus-get-tools :readonly)))
+                                 (nucleus-get-tools :readonly)))
           (when plan-model
             (setq plist (plist-put plist :model plan-model))
             (setq plist (plist-put plist :backend preferred-backend)))
@@ -130,35 +130,35 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
       ;; Patch subagents in gptel-agent--agents
       (when (boundp 'gptel-agent--agents)
         (cl-labels
-            ((sys->string (sys)
-               (cond
-                ((stringp sys) sys)
-                ((and (listp sys)
-                      (seq-every-p #'stringp sys))
-                 (string-join sys "\n"))
-                (t nil)))
-             (patch-agent (name tools)
-               (when-let ((cell (assoc name gptel-agent--agents)))
-                 (when tools
-                   (setf (plist-get (cdr cell) :tools) tools))
-                 (when-let* ((sys (plist-get (cdr cell) :system))
-                             (sys (sys->string sys))
-                             sys)
-                   (setf (plist-get (cdr cell) :system) sys)))))
-             (patch-agent "executor" (nucleus-get-tools :nucleus))
-             (patch-agent "researcher" (nucleus-get-tools :researcher))
-             (patch-agent "introspector" (nucleus-get-tools :readonly))
-             (patch-agent "reviewer" (nucleus-get-tools :reviewer))
-             ;; Validate immediately after patching
-             (when (and (boundp 'nucleus-tools-strict-validation)
-                        nucleus-tools-strict-validation)
-               (nucleus--validate-agent-tool-contracts))
-             ;; Agent tool contracts:
-             ;; - executor: full action tools for code changes (21 tools)
-             ;; - researcher: repo exploration + web research + skill loading (18 tools)
-             ;; - introspector: Emacs introspection tools (15 tools)
-             ;; - reviewer: minimal read-only set for code review (3 tools)
-           )))))
+         ((sys->string (sys)
+            (cond
+             ((stringp sys) sys)
+             ((and (listp sys)
+                   (seq-every-p #'stringp sys))
+              (string-join sys "\n"))
+             (t nil)))
+          (patch-agent (name tools)
+            (when-let ((cell (assoc name gptel-agent--agents)))
+              (when tools
+                (setf (plist-get (cdr cell) :tools) tools))
+              (when-let* ((sys (plist-get (cdr cell) :system))
+                          (sys (sys->string sys))
+                          sys)
+                (setf (plist-get (cdr cell) :system) sys)))))
+         (patch-agent "executor" (nucleus-get-tools :nucleus))
+         (patch-agent "researcher" (nucleus-get-tools :researcher))
+         (patch-agent "introspector" (nucleus-get-tools :readonly))
+         (patch-agent "reviewer" (nucleus-get-tools :reviewer))
+         ;; Validate immediately after patching
+         (when (and (boundp 'nucleus-tools-strict-validation)
+                    nucleus-tools-strict-validation)
+           (nucleus--validate-agent-tool-contracts))
+         ;; Agent tool contracts:
+         ;; - executor: full action tools for code changes (21 tools)
+         ;; - researcher: repo exploration + web research + skill loading (18 tools)
+         ;; - introspector: Emacs introspection tools (15 tools)
+         ;; - reviewer: minimal read-only set for code review (3 tools)
+         )))))
 
 (defun nucleus--validate-agent-tool-contracts ()
   "Validate that agent tool contracts are correctly enforced.
@@ -203,36 +203,50 @@ Signals an error if any agent has incorrect tools."
 `gptel--preset' buffer-locally before delegating."
   (when (and (consp preset)
              setter
-             (bound-and-true-p gptel-mode)
              (boundp 'gptel--known-presets))
     (when-let* ((cell (cl-find preset gptel--known-presets
                                :key #'cdr :test #'eq)))
       (set (make-local-variable 'gptel--preset) (car cell))))
   (funcall orig preset setter))
 
-(defun nucleus--after-transform-apply-preset (&rest _)
+(defun nucleus--after-transform-apply-preset (&rest args)
   "After advice on `gptel--transform-apply-preset': sync gptel--preset from header.
 
 Fallback for when the plist eq-lookup in `nucleus--around-apply-preset'
 fails (e.g. plist was re-consed between registration and send).  Reads
 `gptel-backend' and `gptel-tools' to infer the active preset by checking
-which nucleus preset's tool list matches the buffer-local tools."
-  (when (and (bound-and-true-p gptel-mode)
-             (boundp 'gptel--known-presets)
-             (boundp 'gptel-tools))
-    (let* ((current-tools gptel-tools)
-           (agent-tools (nucleus-get-tools :nucleus))
-           (plan-tools  (nucleus-get-tools :readonly))
-           (inferred
-            (cond
-             ((equal current-tools agent-tools) 'gptel-agent)
-             ((equal current-tools plan-tools)  'gptel-plan)
-             (t nil))))
-      (when (and inferred
-                 (not (eq (buffer-local-value 'gptel--preset (current-buffer))
-                          inferred)))
-        (set (make-local-variable 'gptel--preset) inferred)
-        (nucleus--header-line-apply-preset-label)))))
+which nucleus preset's tool list matches the buffer-local tools.
+It also updates the original chat buffer so the header-line reflects the new mode."
+  (let* ((fsm (car args))
+         (orig-buf (and fsm (fboundp 'gptel-fsm-info) (plist-get (gptel-fsm-info fsm) :buffer))))
+    (when (and (boundp 'gptel--known-presets)
+               (boundp 'gptel-tools))
+      (let* ((current-tools (if (fboundp 'nucleus--tool-names-from-tools)
+                                (nucleus--tool-names-from-tools gptel-tools)
+                              gptel-tools))
+             (agent-tools (nucleus-get-tools :nucleus))
+             (plan-tools  (nucleus-get-tools :readonly))
+             (tools-match-p (lambda (a b)
+                              (and (= (length a) (length b))
+                                   (null (seq-difference a b #'string=))
+                                   (null (seq-difference b a #'string=)))))
+             (inferred
+              (cond
+               ((funcall tools-match-p current-tools agent-tools) 'gptel-agent)
+               ((funcall tools-match-p current-tools plan-tools)  'gptel-plan)
+               (t nil))))
+        (when inferred
+          (let ((target-bufs (if (buffer-live-p orig-buf) (list (current-buffer) orig-buf) (list (current-buffer)))))
+            (dolist (buf target-bufs)
+              (with-current-buffer buf
+                (when (not (eq (buffer-local-value 'gptel--preset buf) inferred))
+                  (set (make-local-variable 'gptel--preset) inferred)
+                  (setq nucleus-agent-default inferred)
+                  (when (fboundp 'gptel--apply-preset)
+                    ;; Apply preset to original buffer to make the mode switch permanent
+                    (gptel--apply-preset inferred (lambda (sym val) (set (make-local-variable sym) val))))
+                  (when (bound-and-true-p gptel-mode)
+                    (nucleus--header-line-apply-preset-label)))))))))))
 
 (defun nucleus--after-apply-preset (&rest _)
   "Nucleus post-preset hook: tool sanity check and header line refresh.
@@ -257,7 +271,7 @@ Runs as :after advice on `gptel--apply-preset'."
                        user-emacs-directory))
            (user-agents (expand-file-name "assistant/agents/" base-dir))
            (proj-agents (expand-file-name "assistant/agents/"
-                                         (nucleus--project-root)))
+                                          (nucleus--project-root)))
            (skill-dir (expand-file-name "assistant/skills/" base-dir))
            (agent-dirs (seq-remove
                         (lambda (dir)
