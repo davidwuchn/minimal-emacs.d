@@ -8,23 +8,26 @@
 
 (require 'cl-lib)
 
-(defun nucleus--extract-prompt-signature (prompt-text)
-  "Extract lambda signature from PROMPT-TEXT.
+(defun nucleus--extract-prompt-signature (tool-name prompt-text)
+  "Extract lambda signature for TOOL-NAME from PROMPT-TEXT.
 
 Returns alist of param names, or nil if no signature found."
-  (when (string-match "^λ(\\([^)]*\\))" prompt-text)
-    (let ((params-str (match-string 1 prompt-text)))
-      (cl-loop for param in (split-string params-str "," t)
-               for clean = (car (split-string (string-trim param) ":"))
-               when (and clean (not (string-empty-p clean)))
-               collect (intern clean)))))
+  (let ((regex (format "^λ(\\([^)]*\\))\\. %s" (regexp-quote (symbol-name tool-name)))))
+    (when (or (string-match regex prompt-text)
+              (string-match "^λ(\\([^)]*\\))" prompt-text))
+      (let ((params-str (match-string 1 prompt-text)))
+        (cl-loop for param in (split-string params-str "," t)
+                 for clean = (car (split-string (string-trim param) ":"))
+                 when (and clean (not (string-empty-p clean)))
+                 collect (intern (replace-regexp-in-string "\\?$" "" clean)))))))
 
 (defun nucleus--extract-registered-args (tool-name)
   "Extract registered arg names for TOOL-NAME.
 
 Returns list of arg name symbols, or nil if tool not found."
-  (when (fboundp 'my/gptel--safe-get-tool)
-    (let ((tool (my/gptel--safe-get-tool tool-name)))
+  (when (fboundp 'gptel-get-tool)
+    (let* ((name-str (if (symbolp tool-name) (symbol-name tool-name) tool-name))
+           (tool (ignore-errors (gptel-get-tool name-str))))
       (when tool
         (let ((args (gptel-tool-args tool)))
           (cl-loop for arg in args
@@ -36,10 +39,10 @@ Returns list of arg name symbols, or nil if tool not found."
   "Validate TOOL-NAME prompt signature matches registered args.
 
 Returns (status . message) where status is:
-- 'ok: Signature matches
-- 'warning: Minor mismatch (e.g. opt marker)
-- 'error: Major mismatch"
-  (let ((prompt-sig (nucleus--extract-prompt-signature prompt-text))
+- \\='ok: Signature matches
+- \\='warning: Minor mismatch (e.g. opt marker)
+- \\='error: Major mismatch"
+  (let ((prompt-sig (nucleus--extract-prompt-signature tool-name prompt-text))
         (registered-args (nucleus--extract-registered-args tool-name)))
     (cond
      ((and (null prompt-sig) (null registered-args))
@@ -100,6 +103,29 @@ Displays results in a buffer showing:
       (display-buffer (current-buffer))
       (when (> errors 0)
         (message "Validation complete: %d errors found. See *nucleus-tool-validation* buffer." errors)))))
+
+(defun nucleus--report-tool-signatures ()
+  "Report signature validation results and warn about errors."
+  (let ((results (nucleus--validate-all-tools))
+        (errors 0)
+        (warnings 0)
+        (ok 0)
+        (error-details '()))
+    (cl-loop for (tool-name . (status . msg)) in results
+             do (pcase status
+                  ('ok (cl-incf ok))
+                  ('warning (cl-incf warnings))
+                  ('error
+                   (cl-incf errors)
+                   (push (format "%s (%s)" tool-name msg) error-details))))
+    (when (> errors 0)
+      (message "[nucleus] WARNING: %d tool signature mismatches found: %s"
+               errors (string-join (nreverse error-details) ", "))
+      (message "[nucleus] Run M-x nucleus-validate-tool-signatures for details."))))
+
+;;; Auto-validate on load
+(when (and (boundp 'nucleus-tool-prompts) nucleus-tool-prompts)
+  (run-with-idle-timer 3 nil #'nucleus--report-tool-signatures))
 
 (provide 'nucleus-tools-validate)
 

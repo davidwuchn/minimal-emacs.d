@@ -1,4 +1,4 @@
-λ(name, desc, prompt, files?, history?, diff?). run_agent | name:agent | ret:subagent_result | async:true
+λ(agent_name, description, prompt, files?, include_history?, include_diff?). run_agent | name:agent | ret:subagent_result | async:true
 
 # RunAgent - Run Subagent by Name
 

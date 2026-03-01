@@ -1,1 +1,1 @@
-λ(id,p,d). create_skill | id:name | p:prompt | d:?root | ret:path
+λ(skillName, userPrompt, dir?). create_skill | id:name | p:prompt | d:?root | ret:path

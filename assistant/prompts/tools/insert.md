@@ -1,4 +1,4 @@
-λ(p,l,s). Insert | p:path | l:line_number | s:new_str | ret:success/error
+λ(path, line_number, new_str). Insert | p:path | l:line_number | s:new_str | ret:success/error
 
 # Insert - Insert Text at Line Number
 

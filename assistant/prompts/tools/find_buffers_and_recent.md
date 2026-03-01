@@ -1,1 +1,1 @@
-λ(pat). find_buffers | pat:regex | ret:paths
+λ(pattern). find_buffers | pat:regex | ret:paths

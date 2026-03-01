@@ -1,1 +1,1 @@
-λ(sym). describe_symbol | sym:elisp | ret:doc
+λ(name). describe_symbol | sym:elisp | ret:doc

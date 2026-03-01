@@ -1,1 +1,1 @@
-λ(payload). compact_chat | ret:∅
+λ(). compact_chat | ret:∅

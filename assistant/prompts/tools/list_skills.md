@@ -1,1 +1,1 @@
-λ(d). list_skills | d:?root | ret:skills
+λ(dir?). list_skills | d:?root | ret:skills

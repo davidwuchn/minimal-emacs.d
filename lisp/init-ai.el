@@ -41,9 +41,8 @@
   ;; Delay before triggering inline completion (in seconds)
   (eca-completion-idle-delay 0.5)
   :config
-  (when (fboundp 'eca-mode)
-    (require 'eca-security)
-    ;; Enable inline ghost-text code completion in programming modes
-    (add-hook 'prog-mode-hook #'eca-completion-mode)))
+  (require 'eca-security)
+  ;; Enable inline ghost-text code completion in programming modes
+  (add-hook 'prog-mode-hook #'eca-completion-mode))
 
 ;;; init-ai.el ends here

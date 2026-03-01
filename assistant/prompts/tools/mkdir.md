@@ -1,4 +1,4 @@
-λ(p,n). Mkdir | p:parent | n:name | ret:success/error
+λ(parent, name). Mkdir | p:parent | n:name | ret:success/error
 
 # Mkdir - Create Directory
 

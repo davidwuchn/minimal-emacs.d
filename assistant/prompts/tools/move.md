@@ -1,4 +1,4 @@
-λ(s,d). Move | s:source | d:dest | ret:success/error
+λ(source, dest). Move | s:source | d:dest | ret:success/error
 
 # Move - Move or Rename Files/Directories
 

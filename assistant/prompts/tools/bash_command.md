@@ -1,4 +1,4 @@
-λ(cmd). bash | cmd:str | ret:stdout/stderr | use:git/tests/system | avoid:file-ops
+λ(command). bash | cmd:str | ret:stdout/stderr | use:git/tests/system | avoid:file-ops
 
 # Bash - Execute Shell Commands
 

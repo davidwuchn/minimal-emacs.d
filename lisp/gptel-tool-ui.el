@@ -78,6 +78,10 @@ Shows all 6 available options in the minibuffer:
           (?k (call-interactively #'gptel--reject-tool-calls))
           (?a (progn
                 (setq my/gptel-confirmation-level 'auto)
+                (setq gptel-confirm-tool-calls nil)
+                (setq-default gptel-confirm-tool-calls nil)
+                (when (derived-mode-p 'gptel-mode)
+                  (setq-local gptel-confirm-tool-calls nil))
                 (message "Tool confirmation set to AUTO. Executing...")
                 (call-interactively #'gptel--accept-tool-calls)))
           (?i (when (fboundp 'gptel--inspect-fsm)

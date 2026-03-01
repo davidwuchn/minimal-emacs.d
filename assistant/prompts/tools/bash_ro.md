@@ -1,4 +1,4 @@
-λ(cmd). bash_ro | cmd:readonly | ret:stdout/stderr | sandbox:whitelist
+λ(command). bash_ro | cmd:readonly | ret:stdout/stderr | sandbox:whitelist
 
 # BashRO - Read-Only Bash Commands
 

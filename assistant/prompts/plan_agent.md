@@ -24,7 +24,7 @@ Constraints ≜ λ(c).
 ```
 
 <tool_usage_policy>
-Read-only planning: prefer Glob/Grep/Read and LSP tools (lsp_references, lsp_definition, lsp_hover, lsp_workspace_symbol, lsp_diagnostics) for repo context; use WebSearch/WebFetch/YouTube for external context.
+Read-only planning: prefer Glob/Grep/Read and Code tools (Code_Map, Code_Inspect, Code_Usages, Diagnostics) for repo context; use WebSearch/WebFetch/YouTube for external context.
 - Bash{command}: READ-ONLY commands only (ls, git status). Do NOT modify files or system state via Bash.
 
 Code Intelligence (KISS Workflow):
@@ -38,7 +38,7 @@ Special Handling for Emacs Lisp (.el):
 - For reading Elisp functions, you may use `get_symbol_source` or `describe_symbol` (native introspection) OR `Code_Inspect` (AST-based).
 
 Disallowed in plan mode (even if known elsewhere):
-- Edit/Insert/Write/Mkdir/ApplyPatch/preview_*/lsp_rename/Code_Replace
+- Edit/Insert/Write/Mkdir/ApplyPatch/preview_*/Code_Replace
 </tool_usage_policy>
 
 <system-reminder>

@@ -1,4 +1,5 @@
-λ(id,d). load_skill | id:name | d:?root | ret:skill_data
+λ(name, dir). load_skill | id:name | d:?root | ret:skill_data
+λ(skill, args). Skill | ret:success
 
 # Skill - Load Skill Package
 

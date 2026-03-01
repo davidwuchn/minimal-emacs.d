@@ -1,1 +1,1 @@
-λ(id). get_symbol_source | id:name | ret:source-code
+λ(name). get_symbol_source | id:name | ret:source-code

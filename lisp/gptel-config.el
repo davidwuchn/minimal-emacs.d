@@ -20,6 +20,9 @@
 (require 'gptel-tools-preview-enhanced)
 (gptel-tools-preview-enhanced-register)
 
+;; Load tool usage analytics
+(require 'nucleus-analytics)
+
 ;; Load tool verification (checks all declared tools are registered)
 (require 'nucleus-tools-verify)
 

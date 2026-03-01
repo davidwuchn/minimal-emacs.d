@@ -1,4 +1,4 @@
-λ(q,u,t). web_search | q:query | u:urls(opt) | t:think(opt) | ret:results
+λ(query, count?). web_search | q:query | u:urls(opt) | t:think(opt) | ret:results
 
 # WebSearch - Search the Web
 

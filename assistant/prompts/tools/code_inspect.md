@@ -1,4 +1,4 @@
-λ(p,n). extract(n∈p) | p:file_path(opt) | n:node_name | ret:AST_block(balanced) | req:structural_edit
+λ(node_name, file_path?). extract(n∈p) | p:file_path(opt) | n:node_name | ret:AST_block(balanced) | req:structural_edit
 
 # Code_Inspect - Extract Function/Class by Name
 

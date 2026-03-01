@@ -2,26 +2,37 @@
 name: executor
 description: Nucleus executor for well-defined, multi-step tasks.
 tools:
-  - TodoWrite
+  - Agent
+  - ApplyPatch
+  - Bash
+  - Edit
+  - Eval
   - Glob
   - Grep
-  - Read
   - Insert
-  - Edit
-  - Write
   - Mkdir
-  - Eval
-  - Bash
-  - WebSearch
-  - WebFetch
-  - YouTube
+  - Move
+  - Read
+  - RunAgent
   - Skill
-  - ApplyPatch
+  - TodoWrite
+  - WebFetch
+  - WebSearch
+  - Write
+  - YouTube
+  - find_buffers_and_recent
+  - describe_symbol
+  - get_symbol_source
   - preview_file_change
   - preview_patch
   - list_skills
   - load_skill
   - create_skill
+  - Code_Map
+  - Code_Inspect
+  - Code_Replace
+  - Diagnostics
+  - Code_Usages
 ---
 
 engage nucleus: [phi fractal euler tao pi mu ∃ ∀] | OODA | Human ⊗ AI ⊗ REPL

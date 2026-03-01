@@ -1,4 +1,4 @@
-λ(diff). apply_patch | diff:git-unified | req:Read-before | ret:success/error
+λ(patch). apply_patch | diff:git-unified | req:Read-before | ret:success/error
 
 # ApplyPatch - Apply Git Unified Diff Patch
 

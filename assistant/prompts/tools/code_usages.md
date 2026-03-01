@@ -1,4 +1,4 @@
-λ(n). find_usages(n) | ret:file:line:context + backend(LSP|ripgrep) | cascade:LSP→rg
+λ(node_name). find_usages(n) | ret:file:line:context + backend(LSP|ripgrep) | cascade:LSP→rg
 
 # Code_Usages - Find Symbol References
 

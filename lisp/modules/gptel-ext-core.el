@@ -170,8 +170,9 @@ Two things are done for each offending entry:
         ;; gptel--handle-tool-use's when-let* will short-circuit on (ntools 0)
         ;; and never call gptel--fsm-transition, leaving the FSM stuck in TOOL
         ;; state forever.  Force it to DONE so the turn ends cleanly.
-        (when (null (plist-get info :tool-use))
+        (when (= 0 (length (plist-get info :tool-use)))
           (message "gptel: all tool calls were malformed, advancing FSM to DONE")
+          (when gptel-mode (gptel--update-status " Ready" 'success))
           (funcall (plist-get info :callback)
                    "gptel: turn skipped (all tool calls had nil/unknown names)" info)
           (gptel--fsm-transition fsm 'DONE))))))

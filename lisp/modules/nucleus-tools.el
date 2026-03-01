@@ -27,7 +27,7 @@ Disable if experiencing recursion issues."
   :type 'boolean
   :group 'nucleus-tools)
 
-(defcustom nucleus-tools-strict-validation nil
+(defcustom nucleus-tools-strict-validation t
   "When non-nil, enforce strict tool contract validation at runtime.
 May impact performance but catches tool misuse early.
 
@@ -70,16 +70,16 @@ When enabled, validates:
                   "Move" "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages")))
   "Canonical toolset definitions for nucleus.
 
-:core — Base gptel-agent tools (17 tools)
-:readonly — Read-only subset for plan mode (15 tools)
-:researcher — Research: readonly + skill loading (18 tools, superset of :readonly)
-:nucleus — Full action tools + preview + skill management (21 tools)
-:snippets — Tools with supplemental prompts injected (21 tools)
+:core — Base gptel-agent tools (23 tools)
+:readonly — Read-only subset for plan mode (16 tools)
+:researcher — Research: readonly + skill loading (19 tools, superset of :readonly)
+:nucleus — Full action tools + preview + skill management (31 tools)
+:snippets — Tools with supplemental prompts injected (31 tools)
 
 Tool contracts enforced in `nucleus--override-gptel-agent-presets':
-  executor     → :nucleus     (21 tools) - code changes & execution
-  researcher   → :researcher  (18 tools) - exploration & research
-  introspector → :readonly    (15 tools) - Emacs introspection")
+  executor     → :nucleus     (31 tools) - code changes & execution
+  researcher   → :researcher  (19 tools) - exploration & research
+  introspector → :readonly    (16 tools) - Emacs introspection")
 
 (defun nucleus-get-tools (set-name)
   "Return tool list for SET-NAME, filtering out unregistered tools.
@@ -94,9 +94,12 @@ Returns a list of tool name strings."
            ((and (pred listp) t-list) t-list)
            (_ (user-error "Invalid toolset specifier: %S" set-name)))))
     (seq-filter (lambda (tool-name)
-                  (if (fboundp 'gptel-get-tool)
-                      (ignore-errors (gptel-get-tool tool-name))
-                    t))
+                  (let ((found (if (fboundp 'gptel-get-tool)
+                                   (ignore-errors (gptel-get-tool tool-name))
+                                 t)))
+                    (unless found
+                      (message "[nucleus] WARNING: Tool '%s' requested in set '%s' but not registered" tool-name set-name))
+                    found))
                 tools)))
 
 ;;; Tool Name Resolution

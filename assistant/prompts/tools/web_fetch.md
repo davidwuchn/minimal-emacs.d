@@ -1,4 +1,4 @@
-λ(url,f). web_fetch | url:URL | f:format(opt) | ret:content
+λ(url). web_fetch | url:URL | f:format(opt) | ret:content
 
 # WebFetch - Fetch Web Page Content
 

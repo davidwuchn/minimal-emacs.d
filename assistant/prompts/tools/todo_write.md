@@ -1,4 +1,4 @@
-λ(t). TodoWrite | t:[{status,content,priority}] | ret:updated_list
+λ(todos). TodoWrite | t:[{status,content,priority}] | ret:updated_list
 
 # TodoWrite - Manage Task List
 

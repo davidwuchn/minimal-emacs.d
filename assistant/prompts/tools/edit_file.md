@@ -1,4 +1,4 @@
-λ(p,o,n,d). Edit | p:path | o:old_str(opt) | n:new_str_or_diff | d:diffp(opt) | ret:success/error
+λ(path, old_str?, new_str_or_diff, diffp?). Edit | p:path | o:old_str(opt) | n:new_str_or_diff | d:diffp(opt) | ret:success/error
 
 # Edit - Replace Text or Apply Diff
 

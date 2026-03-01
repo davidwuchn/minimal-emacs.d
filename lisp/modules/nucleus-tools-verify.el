@@ -17,26 +17,29 @@ Returns alist of (tool-name . status) where status is:
 - 'missing: Tool not found (module may have failed to load)
 - 'duplicate: Tool appears multiple times"
   (let ((all-declared (cl-loop for (_ . tools) in nucleus-toolsets
-                               nconc tools))
-        (registered-tools (when (fboundp 'my/gptel--safe-get-tool)
-                            (cl-loop for tool in '("Agent" "ApplyPatch" "Bash" "BashRO" "Edit" "Read" "Write"
-                                                   "Glob" "Grep" "Insert" "Mkdir" "Move" "TodoWrite" "Eval"
-                                                   "WebSearch" "WebFetch" "YouTube" "Skill" "RunAgent"
-                                                   "preview_file_change" "preview_patch"
-                                                   "list_skills" "load_skill" "create_skill"
-                                                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                                                   "Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages" "Diagnostics")
-                                   when (my/gptel--safe-get-tool tool)
+                               append tools))
+        (registered-tools (when (fboundp 'gptel-get-tool)
+                            (cl-loop for tool in (cl-remove-duplicates
+                                                  (cl-loop for (_ . tools) in nucleus-toolsets append tools)
+                                                  :test 'equal)
+                                   when (ignore-errors (gptel-get-tool tool))
                                    collect tool)))
         (seen (make-hash-table :test 'equal))
         (result '()))
     (dolist (tool all-declared)
-      (let ((status (cond
-                     ((gethash tool seen) 'duplicate)
-                     ((member tool registered-tools) 'registered)
-                     (t 'missing))))
+      (let* ((already-seen (gethash tool seen))
+             (status (cond
+                      (already-seen 'duplicate)
+                      ((member tool registered-tools) 'registered)
+                      (t 'missing))))
         (puthash tool t seen)
-        (push (cons tool status) result)))
+        ;; We only want to report 'missing or 'registered once per unique tool, 
+        ;; but 'duplicate each time it reappears is technically correct if we want to flag duplicates.
+        ;; However, since nucleus-toolsets defines multiple agents that share tools, 
+        ;; duplicates across different toolsets are EXPECTED and not an error.
+        ;; We should only care if the unique set of tools are registered.
+        (unless already-seen
+          (push (cons tool status) result))))
     (nreverse result)))
 
 (defun nucleus--report-tool-verification ()
