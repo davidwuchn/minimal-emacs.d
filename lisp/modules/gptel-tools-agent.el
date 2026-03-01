@@ -37,10 +37,14 @@ When non-nil, subagent requests use this model instead of the parent's."
 
 ;;; Context Builder
 
-(defun my/gptel--build-subagent-context (prompt files include-history include-diff)
+(defun my/gptel--build-subagent-context (prompt files include-history include-diff &optional origin-buf)
   "Package context for a subagent payload.
 Appends contents of FILES, git diff if INCLUDE-DIFF, and recent buffer history
-if INCLUDE-HISTORY to the base PROMPT."
+if INCLUDE-HISTORY to the base PROMPT.
+
+ORIGIN-BUF is the parent chat buffer to read history from.  Defaults to
+`current-buffer' if not provided, but callers should always pass it
+explicitly to avoid capturing the wrong buffer."
   (let ((context ""))
     (when (and files (sequencep files))
       (let ((file-context ""))
@@ -66,9 +70,12 @@ if INCLUDE-HISTORY to the base PROMPT."
           (setq context (concat context "<git_diff>\n" diff-out "\n</git_diff>\n\n")))))
 
     (when include-history
-      (let* ((history-text (buffer-substring-no-properties
-                            (max (point-min) (- (point) 8000))
-                            (point))))
+      (let* ((src-buf (or (and (buffer-live-p origin-buf) origin-buf)
+                          (current-buffer)))
+             (history-text (with-current-buffer src-buf
+                             (buffer-substring-no-properties
+                              (max (point-min) (- (point-max) 8000))
+                              (point-max)))))
         (when (not (string-empty-p history-text))
           (setq context (concat context "<parent_conversation_history>\n" history-text "\n</parent_conversation_history>\n\n")))))
 
@@ -77,26 +84,6 @@ if INCLUDE-HISTORY to the base PROMPT."
       (concat context "Task:\n" prompt))))
 
 ;;; Subagent Functions
-
-(defun my/gptel--agent-task-override-model (orig &rest args)
-  "Around-advice for `gptel-agent--task': override model/backend for subagents."
-  (let* ((my/gptel--in-subagent-task t)
-         (gptel-model (if my/gptel-subagent-model
-                          (if (stringp my/gptel-subagent-model)
-                              (intern my/gptel-subagent-model)
-                            my/gptel-subagent-model)
-                        gptel-model))
-         (gptel-backend (if my/gptel-subagent-model
-                            (let ((b my/gptel-subagent-backend))
-                              (or (and (symbolp b) (boundp b) (symbol-value b))
-                                  b
-                                  (and (boundp 'gptel--minimax) gptel--minimax)
-                                  gptel-backend))
-                          gptel-backend)))
-    (when my/gptel-subagent-model
-      (message "gptel subagent: using %s/%s"
-               (gptel-backend-name gptel-backend) gptel-model))
-    (apply orig args)))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
@@ -108,7 +95,7 @@ CALLBACK is called with the result or a timeout error."
          (start-time (current-time))
          (parent-fsm (buffer-local-value 'gptel--fsm-last (current-buffer)))
          (origin-buf (current-buffer))
-         (packaged-prompt (my/gptel--build-subagent-context prompt files include-history include-diff))
+         (packaged-prompt (my/gptel--build-subagent-context prompt files include-history include-diff origin-buf))
          (wrapped-cb
           (lambda (result)
             (unless done
@@ -149,7 +136,7 @@ CALLBACK is called with the result or a timeout error."
                    (setq-local gptel--fsm-last parent-fsm))
                  (setq-local gptel--fsm-last parent-fsm))
                (funcall callback
-                        (format "Error: Agent task \"%s\" (%s) timed out after %ds."
+                        (format "Error: Task \"%s\" (%s) timed out after %ds."
                                 description agent-type my/gptel-agent-task-timeout))))))
     (gptel-agent--task wrapped-cb agent-type description packaged-prompt)))
 

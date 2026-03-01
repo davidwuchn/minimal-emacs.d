@@ -327,8 +327,8 @@ When PRESET is nil, defaults to `gptel--preset` when available."
 Runs as :after advice on `gptel--apply-preset'.  Nucleus-side work
 \(sanity check, header refresh) is handled by `nucleus--after-apply-preset'
 registered in nucleus-config."
-  ;; model/backend override for subagents is handled by
-  ;; my/gptel--agent-task-override-model via dynamic let-binding.
+  ;; model/backend override for subagents is handled by dynamic let-bindings
+  ;; in my/gptel--agent-task-with-timeout (gptel-tools-agent.el).
   (when (and (boundp 'gptel--preset) gptel--preset
              (not my/gptel--in-subagent-task)
              (bound-and-true-p gptel-mode)
