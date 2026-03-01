@@ -110,7 +110,7 @@ in `nucleus-prompts.el`). These are supplemental — the schema-faithful
 |------|------|-------------|
 | `agent.md` | Agent | Delegate to subagent |
 | `apply_patch.md` | ApplyPatch | Apply unified diff patch |
-| `bash_command.md` | Bash, BashRO | Execute shell commands (BashRO=read-only) |
+| `bash_command.md` | Bash | Execute shell commands (sandboxed in Plan mode) |
 | `edit_file.md` | Edit | Edit file with exact string match |
 | `glob.md` | Glob | Find files by pattern |
 | `grep.md` | Grep | Search file contents |
@@ -160,7 +160,7 @@ Two presets, toggled with `nucleus-agent-toggle` (`M-x nucleus-agent-toggle` or 
 | Preset | Tools | System prompt |
 |--------|-------|---------------|
 | `gptel-plan` | Read-only: Glob, Grep, Read, WebSearch, WebFetch, YouTube, Agent, Skill, Eval, find_buffers, describe_symbol, get_symbol_source, **Code_Map, Code_Inspect, Code_Usages, Diagnostics** | `plan_agent.md` |
-| `gptel-agent` | Full toolset (25+ tools): Core tools + Preview/Skill helpers + Mutators, **Code_Map, Code_Inspect, Code_Replace, Code_Usages, Diagnostics, BashRO, RunAgent** | `code_agent.md` |
+| `gptel-agent` | Full toolset (25+ tools): Core tools + Preview/Skill helpers + Mutators, **Code_Map, Code_Inspect, Code_Replace, Code_Usages, Diagnostics, Bash, RunAgent** | `code_agent.md` |
 
 Tool lists are strictly defined in `lisp/modules/nucleus-tools.el`:
 - `(:readonly . (...))`
