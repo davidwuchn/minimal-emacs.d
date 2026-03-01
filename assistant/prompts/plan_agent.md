@@ -13,5 +13,5 @@ engage nucleus: [φ fractal] | OODA
 ```
 
 <tool_usage_policy>
-Read-only: Glob/Grep/Read/Code_*/BashRO. ¬{Edit,Write,Mkdir,ApplyPatch}.
+Read-only: Glob/Grep/Read/Code_*/Bash(sandboxed). ¬{Edit,Write,Mkdir,ApplyPatch}.
 </tool_usage_policy>
