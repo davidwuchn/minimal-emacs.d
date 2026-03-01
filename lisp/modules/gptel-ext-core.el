@@ -345,7 +345,6 @@ registered in nucleus-config."
               :after #'my/gptel--capture-tool-reasoning)
   (add-hook 'gptel-post-response-functions #'my/gptel-add-prompt-marker)
   (when (boundp 'gptel-mode-map)
-    (define-key gptel-mode-map [remap keyboard-quit] #'my/gptel-keyboard-quit)
     ;; A dedicated abort binding (muscle memory from terminal "Ctrl-C").
     (define-key gptel-mode-map (kbd "C-c C-k") #'my/gptel-abort-here))
   (define-key gptel-mode-map (kbd "C-c C-p") #'my/gptel-add-project-files)
@@ -884,13 +883,7 @@ OpenRouter/Anthropic when the model emits a tool call with a nil function name
     (unless (bolp) (insert "\n"))
     (insert my/gptel-prompt-marker)))
 
-(defun my/gptel-keyboard-quit ()
-  "In gptel buffers, abort the request then quit.
 
-This makes C-g reliably stop long-hanging tool calls / curl stalls."
-  (interactive)
-  (my/gptel-abort-here)
-  (keyboard-quit))
 
 (defun my/gptel-abort-here ()
   "Abort any active gptel request for the current buffer.
@@ -1207,61 +1200,64 @@ START and END are the response region positions passed by
                         (propertize ", Inspect: " 'face 'font-lock-string-face)
                         (propertize "C-c C-i" 'face 'help-key-binding)))
                (confirm-strings)
-               (ov-start (save-excursion
-                           (goto-char start-marker)
-                           (text-property-search-backward 'gptel 'response)
-                           (point)))
+               (ov-start (and start-marker
+                              (save-excursion
+                                (goto-char start-marker)
+                                (text-property-search-backward 'gptel 'response)
+                                (point))))
                (preview-handlers)
-               (ov (or (cdr-safe (get-char-property-and-overlay
-                                  start-marker 'gptel-tool))
-                       (make-overlay ov-start (or tracking-marker start-marker)
-                                     nil nil nil)))
+               (ov (and ov-start
+                        (or (cdr-safe (get-char-property-and-overlay
+                                       start-marker 'gptel-tool))
+                            (make-overlay ov-start (or tracking-marker start-marker)
+                                          nil nil nil))))
                (prompt-ov))
           ;; If the cursor is at the overlay-end, it ends up outside, so move it back
-          (unless tracking-marker
+          (when (and start-marker (not tracking-marker))
             (when (= (point) start-marker) (ignore-errors (backward-char))))
-          (save-excursion
-            (goto-char (overlay-end ov))
-            (pcase-dolist (`(,tool-spec ,arg-values _) tool-calls)
-              ;; Call tool-specific confirmation prompt
-              (if-let* ((funcs (cdr (assoc (gptel-tool-name tool-spec)
-                                           gptel--tool-preview-alist)))
-                        ((functionp (car-safe funcs))))
-                  ;;preview-teardown func   preview-handle overlay/buffer
-                  (push (list (cadr funcs) (funcall (car funcs) arg-values info))
-                        preview-handlers)
-                (push (gptel--format-tool-call (gptel-tool-name tool-spec) arg-values)
-                      confirm-strings)))
-            (and confirm-strings (apply #'insert (nreverse confirm-strings)))
-            (add-text-properties (overlay-end ov) (1- (point))
-                                 '(read-only t font-lock-fontified t))
-            (setq prompt-ov (make-overlay (overlay-end ov) (point) nil t))
-            (overlay-put
-             prompt-ov 'before-string
-             (concat "\n"
-                     (propertize " " 'display `(space :align-to (- right ,(length actions-string) 2))
-                                 'face '(:inherit font-lock-string-face :underline t :extend t))
-                     actions-string
-                     (format (propertize "\n%s wants to run:\n\n"
-                                         'face 'font-lock-string-face)
-                             backend-name)))
-            (overlay-put
-             prompt-ov 'after-string
-             (concat (propertize "\n" 'face
-                                 '(:inherit font-lock-string-face :underline t :extend t))))
-            (overlay-put prompt-ov 'evaporate t)
-            (overlay-put ov 'prompt prompt-ov)
-            (move-overlay ov ov-start (point)))
-          ;; Add confirmation prompt to the overlay
-          (when preview-handlers (overlay-put ov 'previews preview-handlers))
-          (overlay-put ov 'mouse-face 'highlight)
-          (overlay-put ov 'gptel-tool tool-calls)
-          (overlay-put ov 'help-echo
-                       (concat "Tool call(s) requested: " actions-string))
-          (let ((map (make-sparse-keymap)))
-            (set-keymap-parent map gptel-tool-call-actions-map)
-            (define-key map (kbd "C-c C-y") #'my/gptel-auto-permit-tool-calls)
-            (overlay-put ov 'keymap map)))))))
+          (when ov
+            (save-excursion
+              (goto-char (overlay-end ov))
+              (pcase-dolist (`(,tool-spec ,arg-values _) tool-calls)
+                ;; Call tool-specific confirmation prompt
+                (if-let* ((funcs (cdr (assoc (gptel-tool-name tool-spec)
+                                             gptel--tool-preview-alist)))
+                          ((functionp (car-safe funcs))))
+                    ;;preview-teardown func   preview-handle overlay/buffer
+                    (push (list (cadr funcs) (funcall (car funcs) arg-values info))
+                          preview-handlers)
+                  (push (gptel--format-tool-call (gptel-tool-name tool-spec) arg-values)
+                        confirm-strings)))
+              (and confirm-strings (apply #'insert (nreverse confirm-strings)))
+              (add-text-properties (overlay-end ov) (1- (point))
+                                   '(read-only t font-lock-fontified t))
+              (setq prompt-ov (make-overlay (overlay-end ov) (point) nil t))
+              (overlay-put
+               prompt-ov 'before-string
+               (concat "\n"
+                       (propertize " " 'display `(space :align-to (- right ,(length actions-string) 2))
+                                   'face '(:inherit font-lock-string-face :underline t :extend t))
+                       actions-string
+                       (format (propertize "\n%s wants to run:\n\n"
+                                           'face 'font-lock-string-face)
+                               backend-name)))
+              (overlay-put
+               prompt-ov 'after-string
+               (concat (propertize "\n" 'face
+                                   '(:inherit font-lock-string-face :underline t :extend t))))
+              (overlay-put prompt-ov 'evaporate t)
+              (overlay-put ov 'prompt prompt-ov)
+              (move-overlay ov ov-start (point))
+              ;; Add confirmation prompt to the overlay
+              (when preview-handlers (overlay-put ov 'previews preview-handlers))
+              (overlay-put ov 'mouse-face 'highlight)
+              (overlay-put ov 'gptel-tool tool-calls)
+              (overlay-put ov 'help-echo
+                           (concat "Tool call(s) requested: " actions-string))
+              (let ((map (make-sparse-keymap)))
+                (set-keymap-parent map gptel-tool-call-actions-map)
+                (define-key map (kbd "C-c C-y") #'my/gptel-auto-permit-tool-calls)
+                (overlay-put ov 'keymap map)))))))))
 
 (advice-add 'gptel--display-tool-calls :override #'my/gptel--display-tool-calls)
 
