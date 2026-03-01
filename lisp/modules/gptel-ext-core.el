@@ -894,9 +894,11 @@ OpenRouter/Anthropic when the model emits a tool call with a nil function name
          "--max-time" (number-to-string my/gptel-curl-max-time)
          "-y" (number-to-string my/gptel-curl-low-speed-time)
          "-Y" (number-to-string my/gptel-curl-low-speed-limit)
-         ;; Work around some HTTP/2/proxy stalls where we never see the first
-         ;; status line ("HTTP/..."), leaving gptel stuck "waiting on headline".
-         "--http1.1"
+         ;; NOTE: --http1.1 is intentionally NOT set here globally.
+         ;; It caused DashScope (and other HTTP/2-capable backends) to fail on
+         ;; large request bodies (e.g. subagent 3rd turn with full file content).
+         ;; Moonshot backend already declares --http1.1 in its own :curl-args slot,
+         ;; so it still gets the workaround it needs.
          ;; Make curl stream output as it arrives.
          "--no-buffer")))
 
