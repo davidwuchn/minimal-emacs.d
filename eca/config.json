@@ -75,10 +75,7 @@
             "mode": "subagent",
             "defaultModel": "dashscope/qwen3.5-plus",
             "description": "Code reviewer for project changes, use it when asked to review code",
-            "systemPrompt": "You are expert in code review, analyze the changes in git and be rigorous about the changes.",
-            "prompts": {
-                "chat": "${file:prompts/reviewer.md}"
-            }
+            "systemPrompt": "You are expert in code review, analyze the changes in git and be rigorous about the changes."
         },
         "explorer": {
             "mode": "subagent",
