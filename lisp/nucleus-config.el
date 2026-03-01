@@ -33,7 +33,10 @@
   
   (when (fboundp 'gptel--apply-preset)
     (advice-add 'gptel--apply-preset :around #'nucleus--around-apply-preset)
-    (advice-add 'gptel--apply-preset :after  #'nucleus--after-apply-preset)))
+    (advice-add 'gptel--apply-preset :after  #'nucleus--after-apply-preset))
+  (when (fboundp 'gptel--transform-apply-preset)
+    (advice-add 'gptel--transform-apply-preset :after
+                #'nucleus--after-transform-apply-preset)))
 
 (with-eval-after-load 'gptel-agent
   (advice-add 'gptel-agent :around #'nucleus--agent-around)

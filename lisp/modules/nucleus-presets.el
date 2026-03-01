@@ -198,16 +198,41 @@ Signals an error if any agent has incorrect tools."
 
 `gptel--transform-apply-preset' passes a plist directly to
 `gptel--apply-preset', bypassing the name→plist lookup that normally sets
-`gptel--preset'.  This advice finds the matching preset name by identity and
-sets it buffer-locally before delegating, so the header-line and mode-switch
-logic see the correct preset symbol."
+`gptel--preset'.  This advice finds the matching preset name by scanning
+`gptel--known-presets' for a cell whose cdr is `eq' to PRESET, then sets
+`gptel--preset' buffer-locally before delegating."
   (when (and (consp preset)
              setter
              (bound-and-true-p gptel-mode)
              (boundp 'gptel--known-presets))
-    (when-let* ((name (car (cl-rassoc preset gptel--known-presets))))
-      (set (make-local-variable 'gptel--preset) name)))
+    (when-let* ((cell (cl-find preset gptel--known-presets
+                               :key #'cdr :test #'eq)))
+      (set (make-local-variable 'gptel--preset) (car cell))))
   (funcall orig preset setter))
+
+(defun nucleus--after-transform-apply-preset (&rest _)
+  "After advice on `gptel--transform-apply-preset': sync gptel--preset from header.
+
+Fallback for when the plist eq-lookup in `nucleus--around-apply-preset'
+fails (e.g. plist was re-consed between registration and send).  Reads
+`gptel-backend' and `gptel-tools' to infer the active preset by checking
+which nucleus preset's tool list matches the buffer-local tools."
+  (when (and (bound-and-true-p gptel-mode)
+             (boundp 'gptel--known-presets)
+             (boundp 'gptel-tools))
+    (let* ((current-tools gptel-tools)
+           (agent-tools (nucleus-get-tools :nucleus))
+           (plan-tools  (nucleus-get-tools :readonly))
+           (inferred
+            (cond
+             ((equal current-tools agent-tools) 'gptel-agent)
+             ((equal current-tools plan-tools)  'gptel-plan)
+             (t nil))))
+      (when (and inferred
+                 (not (eq (buffer-local-value 'gptel--preset (current-buffer))
+                          inferred)))
+        (set (make-local-variable 'gptel--preset) inferred)
+        (nucleus--header-line-apply-preset-label)))))
 
 (defun nucleus--after-apply-preset (&rest _)
   "Nucleus post-preset hook: tool sanity check and header line refresh.
@@ -269,7 +294,10 @@ Call this after gptel-agent loads."
   
   (when (fboundp 'gptel--apply-preset)
     (advice-add 'gptel--apply-preset :around #'nucleus--around-apply-preset)
-    (advice-add 'gptel--apply-preset :after #'nucleus--after-apply-preset)))
+    (advice-add 'gptel--apply-preset :after  #'nucleus--after-apply-preset))
+  (when (fboundp 'gptel--transform-apply-preset)
+    (advice-add 'gptel--transform-apply-preset :after
+                #'nucleus--after-transform-apply-preset)))
 
 ;;; Footer
 
