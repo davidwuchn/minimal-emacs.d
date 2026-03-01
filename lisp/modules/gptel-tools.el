@@ -266,7 +266,7 @@ Call this after gptel-agent-tools loads."
                              '("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
                                "WebFetch" "WebSearch" "YouTube"
                                "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                               "Code_Map" "Code_Inspect" "Code_Check")))))
+                               "Code_Map" "Code_Inspect" "Diagnostics")))))
 
   (setq my/gptel-tools-action
         (my/gptel--dedup-tools-by-name
@@ -279,7 +279,7 @@ Call this after gptel-agent-tools loads."
                                 "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                                 "preview_file_change" "preview_patch"
                                 "list_skills" "load_skill" "create_skill"
-                                "Code_Map" "Code_Inspect" "Code_Replace" "Code_Check")))
+                                "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics")))
           my/gptel-tools-readonly)))
 
   ;; Set default tool list
