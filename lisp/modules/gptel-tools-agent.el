@@ -183,12 +183,12 @@ AGENT-NAME must exist in `gptel-agent--agents`."
   (when (fboundp 'gptel-make-tool)
     (gptel-make-tool
      :name "RunAgent"
-     :description "Run a gptel-agent subagent by name (e.g. explorer, researcher, executor)"
+     :description "Run a gptel-agent subagent by name (e.g. explorer, researcher, executor, reviewer)"
      :function #'my/gptel--run-agent-tool
      :args '((:name "agent_name"
-              :type string
-              :description "Agent name (e.g. 'researcher', 'introspector', 'executor', 'explorer')"
-              :enum ["explorer" "researcher" "introspector" "executor"])
+               :type string
+               :description "Agent name (e.g. 'researcher', 'introspector', 'executor', 'explorer', 'reviewer')"
+               :enum ["explorer" "researcher" "introspector" "executor" "reviewer"])
              (:name "description"
               :type string
               :description "Short task label")

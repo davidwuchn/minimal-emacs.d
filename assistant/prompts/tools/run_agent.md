@@ -4,7 +4,7 @@
 - `RunAgent`: :core, :nucleus, :snippets
 
 ## Parameters
-- `agent_name` (string): [**enum: ["explorer", "researcher", "introspector", "executor"]**]
+- `agent_name` (string): [**enum: ["explorer", "researcher", "introspector", "executor", "reviewer"]**]
 - `description` (string): 3-5 word task label
 - `prompt` (string): Detailed autonomous instructions
 - `files` (array): Optional file paths to inject
