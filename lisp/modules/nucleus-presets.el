@@ -145,20 +145,25 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
                           (sys (sys->string sys))
                           sys)
                 (setf (plist-get (cdr cell) :system) sys))
-              ;; Pin subagents to my/gptel-subagent-model/backend so they don't
-              ;; inherit the parent buffer's model (e.g. glm-5 on DashScope,
-              ;; which has streaming parse issues).
-              (let* ((sub-model (and (boundp 'my/gptel-subagent-model)
-                                    my/gptel-subagent-model))
-                     (sub-backend-sym (and (boundp 'my/gptel-subagent-backend)
-                                           my/gptel-subagent-backend))
-                     (sub-backend (and sub-backend-sym
-                                       (boundp sub-backend-sym)
-                                       (symbol-value sub-backend-sym))))
-                (when sub-model
-                  (setf (plist-get (cdr cell) :model) sub-model))
-                (when sub-backend
-                  (setf (plist-get (cdr cell) :backend) sub-backend))))))
+               ;; Pin subagents to my/gptel-subagent-model/backend so they don't
+               ;; inherit the parent buffer's model (e.g. glm-5 on DashScope,
+               ;; which has streaming parse issues).
+               (let* ((sub-model (and (boundp 'my/gptel-subagent-model)
+                                      my/gptel-subagent-model))
+                      (sub-backend-sym (and (boundp 'my/gptel-subagent-backend)
+                                            my/gptel-subagent-backend))
+                      (sub-backend (and sub-backend-sym
+                                        (boundp sub-backend-sym)
+                                        (symbol-value sub-backend-sym))))
+                 (when sub-model
+                   (setf (plist-get (cdr cell) :model) sub-model))
+                 (when sub-backend
+                   (setf (plist-get (cdr cell) :backend) sub-backend))
+                 ;; Disable streaming for subagents: SSE stalls on large
+                 ;; contexts (the 3rd+ turn with full file content embedded).
+                 ;; Non-streaming (single JSON response) is more reliable.
+                 (setf (plist-get (cdr cell) :stream) nil)))))
+
          (patch-agent "executor" (nucleus-get-tools :nucleus))
          (patch-agent "researcher" (nucleus-get-tools :researcher))
          (patch-agent "introspector" (nucleus-get-tools :readonly))
