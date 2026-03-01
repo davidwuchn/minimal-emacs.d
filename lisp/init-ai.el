@@ -29,14 +29,21 @@
 ;;; EDITOR CODE ASSISTANT (ECA)
 ;;; ==============================================================================
 
+(use-package buttercup
+  :ensure t
+  :defer t)
+
 (use-package eca
   :ensure t
-  ;; Enable inline ghost-text code completion in programming modes
-  :hook (prog-mode . eca-completion-mode)
+  :vc (:url "https://github.com/editor-code-assistant/eca-emacs"
+       :rev :newest)
   :custom
   ;; Delay before triggering inline completion (in seconds)
   (eca-completion-idle-delay 0.5)
   :config
-  (require 'eca-security))
+  (when (fboundp 'eca-mode)
+    (require 'eca-security)
+    ;; Enable inline ghost-text code completion in programming modes
+    (add-hook 'prog-mode-hook #'eca-completion-mode)))
 
 ;;; init-ai.el ends here

@@ -265,7 +265,7 @@ Interactive command for debugging agent tool configuration."
                      collect (let* ((actual-tools (plist-get (cdr cell) :tools))
                                     (actual-names (if (listp (car actual-tools))
                                                       actual-tools
-                                                    (mapcar (lambda (t) (if (stringp t) t (plist-get t :name)))
+                                                    (mapcar (lambda (tool) (if (stringp tool) tool (plist-get tool :name)))
                                                             actual-tools)))
                                     (missing (seq-difference expected-tools actual-names #'string=))
                                     (extra (seq-difference actual-names expected-tools #'string=)))
@@ -295,7 +295,7 @@ Expected toolsets:
                                        expected-count
                                        actual-count
                                        (if missing (length missing) 0)
-                                       (if extra (length extra) 0)))))
+                                        (if extra (length extra) 0))))
                  (length (nucleus-get-tools :nucleus))
                  (length (nucleus-get-tools :researcher))
                  (length (nucleus-get-tools :readonly))))))))

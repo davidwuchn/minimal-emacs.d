@@ -168,7 +168,7 @@ Signals an error if any agent has incorrect tools."
                do (let* ((actual-tools (plist-get (cdr cell) :tools))
                          (actual-names (if (listp (car actual-tools))
                                            actual-tools
-                                         (mapcar (lambda (t) (if (stringp t) t (plist-get t :name)))
+                                         (mapcar (lambda (tool) (if (stringp tool) tool (plist-get tool :name)))
                                                  actual-tools)))
                          (missing (seq-difference expected-tools actual-names #'string=))
                          (extra (seq-difference actual-names expected-tools #'string=)))

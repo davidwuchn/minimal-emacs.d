@@ -2,7 +2,7 @@
 
 (require 'treesit-auto)
 
-(setq treesit-auto-langs '(python rust clojure elisp emacs-lisp))
+(setq treesit-auto-langs '(python rust clojure elisp))
 
 ;; Custom recipes with ABI14 revisions for Emacs 30 compatibility
 (setq my/python-tsauto-config
