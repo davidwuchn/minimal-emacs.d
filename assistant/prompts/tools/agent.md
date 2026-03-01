@@ -1,12 +1,13 @@
+λ(agent_name, description, prompt, files?, include_history?, include_diff?). RunAgent | name:agent | ret:subagent_result | async:true
 λ(subagent_type, description, prompt, files?, include_history?, include_diff?). Agent | req:subagent | ret:result
 
-# Agent - Launch Autonomous Subagent
+# Agent / RunAgent - Launch Autonomous Subagent
 
-Use this tool to delegate complex, open-ended tasks to a specialized subagent. The subagent runs independently to research, explore, or execute code before returning a final result.
+Use these tools to delegate complex, open-ended tasks to a specialized subagent. The subagent runs independently to research, explore, or execute code before returning a final result.
 
 ## Parameters
 
-- `subagent_type` (string, required): The type of specialized subagent to launch (e.g., "explorer", "researcher", "executor", "introspector").
+- `subagent_type` / `agent_name` (string, required): The type of specialized subagent to launch (e.g., "explorer", "researcher", "executor", "introspector").
 - `description` (string, required): A short (3-5 words) description of the task being delegated.
 - `prompt` (string, required): Detailed, highly specific instructions for the subagent to perform autonomously. Specify exactly what format/information you want back.
 - `files` (array, optional): A list of file paths to explicitly include in the subagent's initial context.

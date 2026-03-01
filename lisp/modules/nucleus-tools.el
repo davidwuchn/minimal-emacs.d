@@ -46,11 +46,11 @@ When enabled, validates:
               "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
               "WebFetch" "WebSearch" "Write" "YouTube"
               "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-     (:readonly . ("Agent" "BashRO" "Eval" "Glob" "Grep" "Read" "Skill"
+     (:readonly . ("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
                   "WebFetch" "WebSearch" "YouTube"
                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                   "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
-     (:researcher . ("Agent" "BashRO" "Eval" "Glob" "Grep" "Read" "Skill"
+     (:researcher . ("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
                      "WebFetch" "WebSearch" "YouTube"
                      "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                      "list_skills" "load_skill"

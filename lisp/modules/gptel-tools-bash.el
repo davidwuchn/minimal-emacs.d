@@ -176,23 +176,12 @@ CALLBACK is called with the result string on completion."
   (when (fboundp 'gptel-make-tool)
     (gptel-make-tool
      :name "Bash"
-     :description "Execute a Bash command (async, interruptible, timeout). Use for git/tests/builds; not for file read/edit/search."
+     :description "Execute a Bash command. In Plan Mode, it is sandboxed to read-only commands."
      :function #'my/gptel--agent-bash-async
      :async t
      :args '((:name "command"
               :type string
               :description "Bash command string."))
-     :category "gptel-agent"
-     :confirm t
-     :include t)
-     (gptel-make-tool
-     :name "BashRO"
-     :description "Execute a READ-ONLY Bash command (async, interruptible). Sandboxed to whitelisted inspection commands (git, ls, cat, grep, find, test utilities, build tools). NO file redirection (> <), NO sed -i, NO backgrounding (&). For mutations, ask user to say 'go' to switch to Execution mode."
-     :function #'my/gptel--agent-bash-async
-     :async t
-     :args '((:name "command"
-              :type string
-              :description "Read-only Bash command string."))
      :category "gptel-agent"
      :confirm t
      :include t)))
