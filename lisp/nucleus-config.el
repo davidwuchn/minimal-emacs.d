@@ -18,12 +18,14 @@
 (require 'nucleus-prompts)
 (require 'nucleus-ui)
 (require 'nucleus-presets)
+(require 'nucleus-mode-switch)
 
 ;;; Deferred Initialization
 
 (with-eval-after-load 'gptel-config
   (nucleus--register-gptel-directives)
   (nucleus--override-gptel-agent-presets)
+  (nucleus-mode-switch-setup)
   
   (add-hook 'gptel-mode-hook #'nucleus-sync-tool-profile)
   (add-hook 'gptel-mode-hook #'nucleus-tool-sanity-check)
