@@ -939,11 +939,15 @@ request is active."
         (ignore-errors (set-process-filter proc #'ignore))
         (ignore-errors (set-process-sentinel proc #'ignore))
         (delete-process proc)))
-    ;; Restore gptel-agent header-line with [Agent]/[Plan] toggle button
+    ;; Restore header-line: first reset to gptel's stock format, then re-inject
+    ;; the nucleus [Plan]/[Agent] toggle on top.  Calling gptel-use-header-line
+    ;; alone blows away the toggle; nucleus--header-line-apply-preset-label
+    ;; alone doesn't work if header-line-format was wiped by gptel internals.
     (when (and gptel-mode gptel-use-header-line)
-      (if (fboundp 'gptel-use-header-line)
-          (gptel-use-header-line)
-        (setq header-line-format nil)))
+      (when (fboundp 'gptel-use-header-line)
+        (gptel-use-header-line))
+      (when (fboundp 'nucleus--header-line-apply-preset-label)
+        (nucleus--header-line-apply-preset-label)))
     ;; Add prompt marker and position cursor for next input
     (when gptel-mode
       (let ((inhibit-read-only t))
