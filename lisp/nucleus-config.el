@@ -39,7 +39,6 @@
                 #'nucleus--after-transform-apply-preset)))
 
 (with-eval-after-load 'gptel-agent
-  (advice-add 'gptel-agent :around #'nucleus--agent-around)
-  (advice-add 'gptel-agent-update :after #'nucleus--after-agent-update))
+  (nucleus-presets-setup))
 
 ;;; nucleus-config.el ends here
