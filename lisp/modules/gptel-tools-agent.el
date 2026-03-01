@@ -19,9 +19,11 @@
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defcustom my/gptel-subagent-model 'qwen3.5-plus
+(defcustom my/gptel-subagent-model 'glm-4.7
   "Model to use for delegated subagents.
-When non-nil, subagent requests use this model instead of the parent's."
+Should be a non-reasoning model to avoid streaming parse failures.
+qwen3.5-plus and glm-5 always emit thinking tokens that break the stream
+parser; glm-4.7 on DashScope is a plain completion model without reasoning."
   :type '(choice (const :tag "Same as parent" nil) symbol)
   :group 'gptel-tools-agent)
 
