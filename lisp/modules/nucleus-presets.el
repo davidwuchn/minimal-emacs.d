@@ -193,6 +193,22 @@ Signals an error if any agent has incorrect tools."
     ;; Validate agent tool contracts after update
     (ignore-errors (nucleus--validate-agent-tool-contracts))))
 
+(defun nucleus--around-apply-preset (orig preset &optional setter)
+  "Around advice: ensure `gptel--preset' is set even when PRESET is a raw plist.
+
+`gptel--transform-apply-preset' passes a plist directly to
+`gptel--apply-preset', bypassing the name→plist lookup that normally sets
+`gptel--preset'.  This advice finds the matching preset name by identity and
+sets it buffer-locally before delegating, so the header-line and mode-switch
+logic see the correct preset symbol."
+  (when (and (consp preset)
+             setter
+             (bound-and-true-p gptel-mode)
+             (boundp 'gptel--known-presets))
+    (when-let* ((name (car (cl-rassoc preset gptel--known-presets))))
+      (set (make-local-variable 'gptel--preset) name)))
+  (funcall orig preset setter))
+
 (defun nucleus--after-apply-preset (&rest _)
   "Nucleus post-preset hook: tool sanity check and header line refresh.
 
@@ -252,6 +268,7 @@ Call this after gptel-agent loads."
     (advice-add 'gptel-agent-update :after #'nucleus--after-agent-update))
   
   (when (fboundp 'gptel--apply-preset)
+    (advice-add 'gptel--apply-preset :around #'nucleus--around-apply-preset)
     (advice-add 'gptel--apply-preset :after #'nucleus--after-apply-preset)))
 
 ;;; Footer
