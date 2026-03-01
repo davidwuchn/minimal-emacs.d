@@ -141,28 +141,63 @@ by `my/gptel--mode-hook-setup' before this runs)."
 Two things are done for each offending entry:
 1. Pre-set :result so gptel--handle-tool-use skips execution.
 2. Remove the entry from :tool-use entirely so gptel--parse-tool-results
-   does not emit an orphaned `tool` role message (tool_call_id=null with
+   does not emit an orphaned `tool' role message (tool_call_id=null with
    no matching tool_calls in the assistant message), which would cause a
-   400 Bad Request from OpenRouter/Anthropic on the next turn."
+   400 Bad Request from OpenRouter/Anthropic on the next turn.
+
+Recovery: if a tool is not in info :tools but IS registered in
+`gptel--known-tools' (i.e. a preset misconfiguration rather than
+hallucination), it is injected into info :tools so it can execute.
+This handles the case where the gptel-agent preset was applied before
+RunAgent was registered, leaving it out of the buffer's tool list."
   (when-let* ((info (and (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
-              (tool-use (plist-get info :tool-use))
-              (tools (plist-get info :tools)))
-    (let (pruned)
+              (tool-use (plist-get info :tool-use)))
+    ;; Get the tools list; may be nil if preset had no tools set.
+    (let ((tools (plist-get info :tools))
+          pruned)
       (dolist (tc tool-use)
         (let* ((name (plist-get tc :name))
                (matched-tool (and (stringp name)
-                                  (cl-find-if (lambda (ts) (string-equal-ignore-case (gptel-tool-name ts) name)) tools))))
-          (if matched-tool
-              (let ((correct-name (gptel-tool-name matched-tool)))
-                (unless (string= name correct-name)
-                  (message "gptel: repairing tool call casing %S -> %S" name correct-name)
-                  (plist-put tc :name correct-name)))
-            ;; Not matched: either nil or hallucinated
+                                  (cl-find-if
+                                   (lambda (ts) (string-equal-ignore-case
+                                                 (gptel-tool-name ts) name))
+                                   tools))))
+          (cond
+           ;; Case 1: found in info :tools (normal case)
+           (matched-tool
+            (let ((correct-name (gptel-tool-name matched-tool)))
+              (unless (string= name correct-name)
+                (message "gptel: repairing tool call casing %S -> %S" name correct-name)
+                (plist-put tc :name correct-name))))
+           ;; Case 2: not in info :tools but IS registered globally —
+           ;; preset misconfiguration recovery (e.g. RunAgent missing from
+           ;; buffer's gptel-tools due to load order issue at buffer creation).
+           ((and (stringp name)
+                 (fboundp 'gptel-get-tool)
+                 (ignore-errors (gptel-get-tool name)))
+            (let* ((global-tool (ignore-errors (gptel-get-tool name)))
+                   (new-tools (append tools (list global-tool))))
+              (message "gptel: recovering tool call %S not in FSM tools \
+(preset misconfiguration); injecting from global registry" name)
+              ;; Inject the tool into info :tools so gptel--handle-tool-use
+              ;; can find it with its own cl-find-if lookup.
+              ;; plist-put returns new list if :tools key is absent; store
+              ;; it back into the FSM info to be sure.
+              (setq info (plist-put info :tools new-tools))
+              (setf (gptel-fsm-info fsm) info)
+              ;; Update our local tools reference for subsequent loop iterations.
+              (setq tools new-tools)))
+           ;; Case 3: genuinely unknown / nil tool name — prune it
+           (t
             (when (not (plist-get tc :result))
-              (message "gptel: skipping malformed tool call (name=%S)" name)
+              (message "gptel: skipping malformed tool call \
+(name=%S, known-tools=%S)"
+                       name
+                       (and (boundp 'gptel--known-tools)
+                            (mapcar #'car gptel--known-tools)))
               (plist-put tc :result
                          (format "Error: unknown or nil tool %S called by model" name))
-              (push tc pruned)))))
+              (push tc pruned))))))
       ;; Prune offending entries so gptel--parse-tool-results never sees them.
       ;; This prevents orphaned tool role messages (tool_call_id=null) that
       ;; cause 400 errors when the assistant message has no matching tool_calls.
@@ -1304,6 +1339,8 @@ START and END are the response region positions passed by
 ;; that slipped through earlier guards (e.g. in the inject-prompt-strip-nil-tools
 ;; path when :content was nil rather than :null).
 
+;; Last-resort nil guard before JSON encoding: catches any nil :content that
+;; slipped through earlier guards, preventing 400 Bad Request from APIs.
 (defun my/gptel--pre-serialize-sanitize-messages (info _token)
   "Ensure no message has nil :content before JSON serialization.
 

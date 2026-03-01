@@ -160,7 +160,25 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
          ;; - introspector: Emacs introspection tools (15 tools)
          ;; - explorer: minimal read-only set for codebase exploration (3 tools)
          ;; - reviewer: minimal read-only set for code review (3 tools)
-         )))))
+         ))
+      ;; Re-apply the updated presets to any already-open gptel buffers.
+      ;; Existing buffers keep stale gptel-tools if the preset definition
+      ;; changed (e.g. RunAgent added after buffer was created).  Silently
+      ;; update each buffer to match its active preset.
+      (when (fboundp 'gptel--apply-preset)
+        (dolist (buf (buffer-list))
+          (with-current-buffer buf
+            (when (and (bound-and-true-p gptel-mode)
+                       (boundp 'gptel--preset)
+                       (memq gptel--preset '(gptel-plan gptel-agent)))
+              (condition-case err
+                  (gptel--apply-preset gptel--preset
+                                       (lambda (sym val)
+                                         (set (make-local-variable sym) val)))
+                (error
+                 (message "[nucleus] Warning: failed to re-apply preset %S to buffer %S: %s"
+                          gptel--preset (buffer-name buf)
+                          (error-message-string err)))))))))))
 
 (defun nucleus--validate-agent-tool-contracts ()
   "Validate that agent tool contracts are correctly enforced.
