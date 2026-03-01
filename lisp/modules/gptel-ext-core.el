@@ -1044,25 +1044,21 @@ Implements OpenCode-style exponential backoff for network/overload errors."
   (add-to-list 'gptel-agent-request--handlers '(DONE . (gptel--handle-post)))
   (add-to-list 'gptel-agent-request--handlers '(ERRS . (gptel--handle-post)))
   (add-to-list 'gptel-agent-request--handlers '(ABRT . (gptel--handle-post)))
-  
-  ;; Make agent tasks fail loudly instead of quietly feeding errors to the LLM
+
+  ;; Log subagent errors loudly but ALWAYS call main-cb so the parent FSM can
+  ;; continue.  The old implementation swallowed the callback when the result
+  ;; matched "^Error: Task", leaving the parent tool-call result pending forever
+  ;; and causing the parent FSM to hang.
   (advice-add 'gptel-agent--task :around
               (lambda (orig main-cb agent-type desc prompt)
-                (let* ((main-buf (current-buffer))
-                       (main-fsm (buffer-local-value 'gptel--fsm-last main-buf))
-                       (new-cb (lambda (result)
-                                 (if (and (stringp result) (string-match-p "^Error: Task" result))
-                                     (progn
-                                       (message "gptel-agent error: %s" result)
-                                       (when (buffer-live-p main-buf)
-                                         (with-current-buffer main-buf
-                                           (let ((my/gptel--abort-generation (1+ my/gptel--abort-generation)))
-                                             ;; Force FSM state to ABRT manually since gptel-abort won't find a process
-                                             (when main-fsm
-                                               (setf (gptel-fsm-state main-fsm) 'ABRT)
-                                               (gptel--handle-abort main-fsm))
-                                             (my/gptel-abort-here)))))
-                                   (funcall main-cb result)))))
+                (let* ((new-cb (lambda (result)
+                                 (when (and (stringp result)
+                                            (string-match-p "^Error: Task" result))
+                                   (message "[nucleus] subagent '%s' error: %s"
+                                            agent-type result))
+                                 ;; Always forward to main-cb — the parent FSM
+                                 ;; must receive a result to close its tool cycle.
+                                 (funcall main-cb result))))
                   (funcall orig new-cb agent-type desc prompt)))))
 
 (defun my/gptel--recover-fsm-on-error (_start _end)
