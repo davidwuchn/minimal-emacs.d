@@ -1201,10 +1201,13 @@ START and END are the response region positions passed by
                         (propertize "C-c C-i" 'face 'help-key-binding)))
                (confirm-strings)
                (ov-start (and start-marker
-                              (save-excursion
-                                (goto-char start-marker)
-                                (text-property-search-backward 'gptel 'response)
-                                (point))))
+                               (save-excursion
+                                 (goto-char start-marker)
+                                 ;; text-property-search-backward returns nil on no-match
+                                 ;; and moves point to (point-min) — use return value to
+                                 ;; distinguish "found" from "not found".
+                                 (when (text-property-search-backward 'gptel 'response)
+                                   (point)))))
                (preview-handlers)
                (ov (and ov-start
                         (or (cdr-safe (get-char-property-and-overlay
@@ -1229,8 +1232,11 @@ START and END are the response region positions passed by
                   (push (gptel--format-tool-call (gptel-tool-name tool-spec) arg-values)
                         confirm-strings)))
               (and confirm-strings (apply #'insert (nreverse confirm-strings)))
-              (add-text-properties (overlay-end ov) (1- (point))
-                                   '(read-only t font-lock-fontified t))
+              ;; Only mark read-only if text was actually inserted (guard inverted range).
+              (let ((insert-end (point)))
+                (when (> insert-end (overlay-end ov))
+                  (add-text-properties (overlay-end ov) (1- insert-end)
+                                       '(read-only t font-lock-fontified t))))
               (setq prompt-ov (make-overlay (overlay-end ov) (point) nil t))
               (overlay-put
                prompt-ov 'before-string
