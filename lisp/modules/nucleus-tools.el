@@ -42,27 +42,27 @@ When enabled, validates:
 ;;; Toolset Definitions
 
 (defconst nucleus-toolsets
-  '((:core . ("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
+  '((:core . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
               "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
               "WebFetch" "WebSearch" "Write" "YouTube"
               "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-     (:readonly . ("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
+     (:readonly . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill"
                   "WebFetch" "WebSearch" "YouTube"
                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                   "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
-     (:researcher . ("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
+     (:researcher . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill"
                      "WebFetch" "WebSearch" "YouTube"
                      "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                      "list_skills" "load_skill"
                      "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"))
-     (:nucleus . ("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
+     (:nucleus . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
                   "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
                   "WebFetch" "WebSearch" "Write" "YouTube"
                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                   "preview_file_change" "preview_patch"
                   "list_skills" "load_skill" "create_skill"
                   "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-     (:snippets . ("Agent" "RunAgent" "Bash" "Edit" "ApplyPatch" "preview_file_change" "preview_patch"
+     (:snippets . ("RunAgent" "Bash" "Edit" "ApplyPatch" "preview_file_change" "preview_patch"
                   "Grep" "Glob" "Read" "Write" "describe_symbol" "get_symbol_source"
                   "find_buffers_and_recent" "Skill" "list_skills" "load_skill"
                   "create_skill" "WebSearch" "WebFetch"

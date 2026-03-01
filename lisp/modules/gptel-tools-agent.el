@@ -179,44 +179,15 @@ AGENT-NAME must exist in `gptel-agent--agents`."
 ;;; Tool Registration
 
 (defun gptel-tools-agent-register ()
-  "Register Agent and RunAgent tools with gptel."
+  "Register RunAgent tool with gptel."
   (when (fboundp 'gptel-make-tool)
-    ;; Agent tool (delegates to gptel-agent--task)
-    (gptel-make-tool
-     :name "Agent"
-     :description "Run a delegated subagent task."
-     :function #'my/gptel--agent-task-with-timeout
-     :args '((:name "subagent_type"
-              :type string
-              :enum ["researcher" "introspector" "executor"])
-             (:name "description"
-              :type string)
-             (:name "prompt"
-              :type string)
-             (:name "files"
-              :type array
-              :optional t
-              :description "Optional list of file paths to inject into the subagent context.")
-             (:name "include_history"
-              :type boolean
-              :optional t
-              :description "If true, injects recent conversation history into subagent context.")
-             (:name "include_diff"
-              :type boolean
-              :optional t
-              :description "If true, injects git diff HEAD into subagent context."))
-     :category "gptel-agent"
-     :async t
-     :confirm t
-     :include t)
-    ;; RunAgent tool (run any agent by name)
     (gptel-make-tool
      :name "RunAgent"
-     :description "Run a gptel-agent agent by name (e.g. explorer)"
+     :description "Run a gptel-agent subagent by name (e.g. explorer, researcher, executor)"
      :function #'my/gptel--run-agent-tool
      :args '((:name "agent_name"
               :type string
-              :description "Agent name (from gptel-agent--agents)")
+              :description "Agent name (e.g. 'researcher', 'introspector', 'executor', 'explorer')")
              (:name "description"
               :type string
               :description "Short task label")
