@@ -77,3 +77,6 @@
 (provide 'gptel-config)
 
 ;;; gptel-config.el ends here
+
+;; Load nucleus mode transition handler
+(require 'nucleus-mode-switch)
