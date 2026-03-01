@@ -345,6 +345,7 @@ registered in nucleus-config."
               :after #'my/gptel--capture-tool-reasoning)
   (add-hook 'gptel-post-response-functions #'my/gptel-add-prompt-marker)
   (when (boundp 'gptel-mode-map)
+    (define-key gptel-mode-map [remap keyboard-quit] #'my/gptel-keyboard-quit)
     ;; A dedicated abort binding (muscle memory from terminal "Ctrl-C").
     (define-key gptel-mode-map (kbd "C-c C-k") #'my/gptel-abort-here))
   (define-key gptel-mode-map (kbd "C-c C-p") #'my/gptel-add-project-files)
@@ -883,7 +884,13 @@ OpenRouter/Anthropic when the model emits a tool call with a nil function name
     (unless (bolp) (insert "\n"))
     (insert my/gptel-prompt-marker)))
 
+(defun my/gptel-keyboard-quit ()
+  "In gptel buffers, abort the request then quit.
 
+This makes C-g reliably stop long-hanging tool calls / curl stalls."
+  (interactive)
+  (my/gptel-abort-here)
+  (keyboard-quit))
 
 (defun my/gptel-abort-here ()
   "Abort any active gptel request for the current buffer.
