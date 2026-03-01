@@ -18,11 +18,13 @@
 (defun nucleus--header-line-apply-preset-label (&rest _)
   "Set the gptel header-line to show the active preset with a toggle button.
 
-Only applies when a gptel--preset is active in the current buffer."
+Only applies when a gptel--preset is active in the current buffer.
+Skips special buffers like *Message* that may have gptel-mode enabled."
   (when (and (bound-and-true-p gptel-mode)
              (bound-and-true-p gptel-use-header-line)
              (consp header-line-format)
-             (bound-and-true-p gptel--preset))
+             (bound-and-true-p gptel--preset)
+             (not (string-prefix-p "*" (buffer-name))))
     (setcar header-line-format
             '(:eval
               (let* ((preset (if (and (boundp 'gptel--preset)

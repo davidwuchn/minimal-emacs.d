@@ -143,7 +143,7 @@ CALLBACK is called with the result or a timeout error."
                                 description agent-type my/gptel-agent-task-timeout))))))
     (gptel-agent--task wrapped-cb agent-type description packaged-prompt)))
 
-(defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
+(cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.
 
 AGENT-NAME must exist in `gptel-agent--agents`."
