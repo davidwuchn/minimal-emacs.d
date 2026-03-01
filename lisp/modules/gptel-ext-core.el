@@ -345,7 +345,6 @@ registered in nucleus-config."
               :after #'my/gptel--capture-tool-reasoning)
   (add-hook 'gptel-post-response-functions #'my/gptel-add-prompt-marker)
   (when (boundp 'gptel-mode-map)
-    (define-key gptel-mode-map [remap keyboard-quit] #'my/gptel-keyboard-quit)
     ;; A dedicated abort binding (muscle memory from terminal "Ctrl-C").
     (define-key gptel-mode-map (kbd "C-c C-k") #'my/gptel-abort-here))
   (define-key gptel-mode-map (kbd "C-c C-p") #'my/gptel-add-project-files)
