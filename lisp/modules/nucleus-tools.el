@@ -62,6 +62,7 @@ When enabled, validates:
                   "preview_file_change" "preview_patch"
                   "list_skills" "load_skill" "create_skill"
                   "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
+     (:explorer . ("Glob" "Grep" "Read"))
      (:reviewer . ("Glob" "Grep" "Read"))
      (:snippets . ("RunAgent" "Bash" "Edit" "ApplyPatch" "preview_file_change" "preview_patch"
                    "Grep" "Glob" "Read" "Write" "describe_symbol" "get_symbol_source"
@@ -75,6 +76,7 @@ When enabled, validates:
 :readonly — Read-only subset for plan mode (16 tools)
 :researcher — Research: readonly + skill loading (19 tools, superset of :readonly)
 :nucleus — Full action tools + preview + skill management (31 tools)
+:explorer — Minimal read-only set for codebase exploration (3 tools: Glob/Grep/Read)
 :reviewer — Minimal read-only set for code review (3 tools: Glob/Grep/Read)
 :snippets — Tools with supplemental prompts injected (31 tools)
 
@@ -82,6 +84,7 @@ Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   executor     → :nucleus     (31 tools) - code changes & execution
   researcher   → :researcher  (19 tools) - exploration & research
   introspector → :readonly    (16 tools) - Emacs introspection
+  explorer     → :explorer     (3 tools) - read-only codebase exploration
   reviewer     → :reviewer     (3 tools) - read-only code review")
 
 (defun nucleus-get-tools (set-name)
@@ -264,6 +267,7 @@ Interactive command for debugging agent tool configuration."
          `(("executor" . ,(nucleus-get-tools :nucleus))
            ("researcher" . ,(nucleus-get-tools :researcher))
            ("introspector" . ,(nucleus-get-tools :readonly))
+           ("explorer" . ,(nucleus-get-tools :explorer))
            ("reviewer" . ,(nucleus-get-tools :reviewer)))))
     (let* ((results
             (cl-loop for (agent-name . expected-tools) in expected
@@ -294,6 +298,7 @@ Expected toolsets:
   executor     → :nucleus     (%d tools)
   researcher   → :researcher  (%d tools)
   introspector → :readonly    (%d tools)
+  explorer     → :explorer     (%d tools)
   reviewer     → :reviewer     (%d tools)"
                  (with-output-to-string
                    (cl-loop for (agent-name expected-count actual-count missing extra) in results
@@ -307,6 +312,7 @@ Expected toolsets:
                  (length (nucleus-get-tools :nucleus))
                  (length (nucleus-get-tools :researcher))
                  (length (nucleus-get-tools :readonly))
+                 (length (nucleus-get-tools :explorer))
                  (length (nucleus-get-tools :reviewer))))))))
 
 (defun nucleus-test-tool-validation ()
