@@ -46,7 +46,7 @@ When enabled, validates:
               "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
               "WebFetch" "WebSearch" "Write" "YouTube"
               "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-     (:readonly . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill"
+     (:readonly . ("Bash" "Eval" "Glob" "Grep" "Read" "RunAgent" "Skill" "TodoWrite"
                   "WebFetch" "WebSearch" "YouTube"
                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                   "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
@@ -73,7 +73,7 @@ When enabled, validates:
   "Canonical toolset definitions for nucleus.
 
 :core — Base gptel-agent tools (23 tools)
-:readonly — Read-only subset for plan mode (16 tools)
+:readonly — Read-only subset for plan mode (18 tools)
 :researcher — Research: readonly + skill loading (19 tools, superset of :readonly)
 :nucleus — Full action tools + preview + skill management (31 tools)
 :explorer — Minimal read-only set for codebase exploration (3 tools: Glob/Grep/Read)
