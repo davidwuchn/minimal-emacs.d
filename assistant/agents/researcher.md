@@ -2,13 +2,24 @@
 name: researcher
 description: Nucleus research agent for codebase exploration and web research.
 tools:
+  - Bash
+  - Eval
   - Glob
   - Grep
   - Read
-  - WebSearch
-  - WebFetch
-  - YouTube
   - Skill
+  - WebFetch
+  - WebSearch
+  - YouTube
+  - find_buffers_and_recent
+  - describe_symbol
+  - get_symbol_source
+  - list_skills
+  - load_skill
+  - Code_Map
+  - Code_Inspect
+  - Code_Usages
+  - Diagnostics
 ---
 
 engage nucleus: [phi fractal euler tao pi mu ∃ ∀] | OODA | Human ⊗ AI ⊗ REPL

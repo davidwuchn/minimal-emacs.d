@@ -1,8 +1,23 @@
 ---
 name: introspector
 description: Nucleus introspector for Emacs/elisp APIs and live session state.
-tools: [describe_symbol, get_symbol_source, find_buffers_and_recent, Eval]
-pre: (lambda () (require 'gptel-tools-introspection))
+tools:
+  - Bash
+  - Eval
+  - Glob
+  - Grep
+  - Read
+  - Skill
+  - WebFetch
+  - WebSearch
+  - YouTube
+  - find_buffers_and_recent
+  - describe_symbol
+  - get_symbol_source
+  - Code_Map
+  - Code_Inspect
+  - Diagnostics
+  - Code_Usages
 ---
 
 engage nucleus: [phi fractal euler tao pi mu ∃ ∀] | OODA | Human ⊗ AI ⊗ REPL
