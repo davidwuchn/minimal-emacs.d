@@ -158,6 +158,41 @@ HEADER is the prompt to show."
      (lambda () (funcall wrapped-cb "Patch reviewed. Not applied."))
      (lambda () (funcall wrapped-cb "Patch preview aborted.")))))
 
+(defun my/gptel--preview-patch-async (patch buffer callback on-confirm on-abort header)
+  "Show patch preview asynchronously for ApplyPatch tool.
+
+PATCH is the unified diff content.
+BUFFER is the originating buffer.
+CALLBACK is called with the result.
+ON-CONFIRM is called with wrapped callback when user confirms.
+ON-ABORT is called with wrapped callback when user aborts.
+HEADER is the prompt to show."
+  (let* ((parent-fsm (buffer-local-value 'gptel--fsm-last buffer))
+         (cb-called nil)
+         (wrapped-cb
+          (lambda (result)
+            (unless cb-called
+              (setq cb-called t)
+              (when (buffer-live-p buffer)
+                (with-current-buffer buffer
+                  (setq-local gptel--fsm-last parent-fsm)))
+              (setq-local gptel--fsm-last parent-fsm)
+              (funcall callback result))))
+         (diff-buf (my/gptel--create-diff-buffer
+                    "*gptel-patch-preview*"
+                    header
+                    patch
+                    #'diff-mode)))
+    (with-current-buffer diff-buf
+      (add-hook 'kill-buffer-hook
+                (lambda () (funcall on-abort wrapped-cb))
+                nil t))
+    (my/gptel--display-preview-buffer diff-buf)
+    (my/gptel--setup-preview-keys
+     diff-buf
+     (lambda () (funcall on-confirm wrapped-cb))
+     (lambda () (funcall on-abort wrapped-cb)))))
+
 ;;; Inline Diff Preview
 
 (defun my/gptel--inline-diff-preview (path original replacement callback)
@@ -199,20 +234,25 @@ CALLBACK is called with user's decision (confirmed/aborted)."
 (defvar-local my/gptel--batch-callback nil
   "Callback for batch preview.")
 
+(defvar-local my/gptel--batch-file-list nil
+  "List of file paths in batch preview.")
+
 (defun my/gptel--batch-preview-files (file-changes callback)
   "Show batch preview for multiple FILE-CHANGES.
 
 FILE-CHANGES is an alist: ((path . (original . replacement)) ...)
 CALLBACK is called with list of confirmed files."
   (let* ((temp-dir (make-temp-file "batch" t))
+         (file-list (mapcar #'car file-changes))
          (diff-buf (my/gptel--create-diff-buffer
                     "*gptel-batch-preview*"
                     (concat "Batch Preview: Multiple File Changes\n\n"
-                            "Press 'n' to confirm all, 'y' to confirm selected, 'q' to abort\n\n"
+                            "Press 'n' to confirm all, 'y' to confirm current file, 'q' to abort\n\n"
                             "========================================\n\n"))))
     (with-current-buffer diff-buf
       (setq-local my/gptel--batch-confirmed-files '()
-                  my/gptel--batch-callback callback)
+                  my/gptel--batch-callback callback
+                  my/gptel--batch-file-list file-list)
       (cl-loop for (path . contents) in file-changes
                do (let* ((original (car contents))
                          (replacement (cdr contents))
@@ -224,7 +264,8 @@ CALLBACK is called with list of confirmed files."
                     (insert "----------------------------------------\n")
                     (insert (my/gptel--run-diff temp1 temp2))
                     (insert "\n\n")))
-      (diff-mode))
+      (diff-mode)
+      (goto-char (point-min)))
     (my/gptel--display-preview-buffer diff-buf 0.5)
     (my/gptel--setup-batch-preview-keys diff-buf)))
 
@@ -249,7 +290,20 @@ CALLBACK is called with list of confirmed files."
 (defun my/gptel--batch-confirm-current ()
   "Confirm current file in batch preview."
   (interactive)
-  (message "Confirming selected file..."))
+  (let ((callback my/gptel--batch-callback)
+        (file-list my/gptel--batch-file-list))
+    (save-excursion
+      (beginning-of-line)
+      (if (re-search-backward "^File: \\(.+\\)$" nil t)
+          (let* ((current-file (match-string 1))
+                 (confirmed my/gptel--batch-confirmed-files))
+            (unless (member current-file confirmed)
+              (setq my/gptel--batch-confirmed-files
+                    (cons current-file confirmed)))
+            (message "Confirmed: %s (%d/%d)" current-file
+                     (length my/gptel--batch-confirmed-files)
+                     (length file-list)))
+        (message "No file header found")))))
 
 (defun my/gptel--batch-abort ()
   "Abort batch preview."
