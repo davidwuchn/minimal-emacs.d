@@ -24,7 +24,8 @@ Skips special buffers like *Message* that may have gptel-mode enabled."
              (bound-and-true-p gptel-use-header-line)
              (consp header-line-format)
              (bound-and-true-p gptel--preset)
-             (not (string-prefix-p "*" (buffer-name))))
+             (not (string-match-p "^\\*Message" (buffer-name)))
+             (not (string-match-p "^ \\*gptel" (buffer-name))))
     (setcar header-line-format
             '(:eval
               (let* ((preset (if (and (boundp 'gptel--preset)

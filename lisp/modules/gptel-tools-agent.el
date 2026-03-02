@@ -21,11 +21,91 @@
 
 (defcustom my/gptel-subagent-model 'glm-4.7
   "Model to use for delegated subagents.
-Should be a non-reasoning model to avoid streaming parse failures.
-qwen3.5-plus and glm-5 always emit thinking tokens that break the stream
-parser; glm-4.7 on DashScope is a plain completion model without reasoning."
+Uses glm-4.7 because it is a fast completion model that does not emit reasoning
+tokens, avoiding DashScope proxy timeouts."
   :type '(choice (const :tag "Same as parent" nil) symbol)
   :group 'gptel-tools-agent)
+
+(require 'gptel)
+(require 'gptel-agent nil t)
+
+;; PATCH: Override gptel-agent--task to support streaming correctly
+
+
+
+
+(defun my/gptel-agent--task-override (main-cb agent-type description prompt)
+  "Call a gptel agent to do specific compound tasks (patched for streaming)."
+  (gptel-with-preset
+      (nconc (list :include-reasoning nil
+                   :use-tools t
+                   :use-context nil)
+             (cdr (assoc agent-type gptel-agent--agents)))
+    (let* ((info (gptel-fsm-info gptel--fsm-last))
+           (parent-buf (plist-get info :buffer))
+           (where (or (plist-get info :tracking-marker)
+                      (plist-get info :position)))
+           (tracking-marker (let ((m (copy-marker where)))
+                              (set-marker-insertion-type m t)
+                              (set-marker m (marker-position where) parent-buf)
+                              m))
+           (partial (format "%s result for task: %s\n\n"
+                            (capitalize agent-type) description)))
+      (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
+      (gptel-request prompt
+        :context (gptel-agent--task-overlay where agent-type description)
+        :fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)
+        :position tracking-marker
+        :buffer parent-buf
+        :in-place t
+        :stream t
+        :callback
+        (let ((main-cb-local main-cb))
+          (lambda (resp info)
+            (let ((ov (plist-get info :context)))
+              (cond
+                ((null resp)
+                 (delete-overlay ov)
+                 (funcall main-cb-local
+                          (format "Error: Task %s could not finish task \"%s\". \n\nError details: %S"
+                                  agent-type description (plist-get info :error))))
+                ((and (consp resp) (eq (car-safe resp) 'tool-call))
+                 (unless (plist-get info :tracking-marker)
+                   (plist-put info :tracking-marker tracking-marker))
+                 (gptel--display-tool-calls (cdr resp) info))
+                ((stringp resp)
+                 (setq partial (concat partial resp))
+                 (unless (plist-get info :tool-use)
+                   (delete-overlay ov)
+                   (when-let* ((transformer (plist-get info :transformer)))
+                     (setq partial (funcall transformer partial)))
+                   (funcall main-cb-local partial)))
+                ((eq resp 'abort)
+                 (delete-overlay ov)
+                 (funcall main-cb-local
+                          (format "Error: Task \"%s\" was aborted by the user. \n%s could not finish."
+                                  description agent-type)))
+                ((eq resp t)
+                 (unless (plist-get info :tool-use)
+                   (delete-overlay ov)
+                   (when-let* ((transformer (plist-get info :transformer)))
+                     (setq partial (funcall transformer partial)))
+                   (if (> (length partial) 4000)
+                       (let* ((temp-file (make-temp-file "gptel-subagent-result-" nil ".txt"))
+                              (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
+                                                 (substring partial 0 4000)
+                                                 temp-file)))
+                         (with-temp-file temp-file
+                           (insert partial))
+                         (funcall main-cb-local trunc-msg))
+                     (funcall main-cb-local partial))))))))))))
+
+(with-eval-after-load 'gptel-agent-tools
+  (advice-add 'gptel-agent--task :override #'my/gptel-agent--task-override))
+
+
+
+
 
 (defcustom my/gptel-subagent-backend 'gptel--dashscope
   "Backend for delegated subagents."
@@ -141,7 +221,9 @@ CALLBACK is called with the result or a timeout error."
                (funcall callback
                         (format "Error: Task \"%s\" (%s) timed out after %ds."
                                 description agent-type my/gptel-agent-task-timeout))))))
-    (gptel-agent--task wrapped-cb agent-type description packaged-prompt)))
+    (let* ((gptel-model (or my/gptel-subagent-model gptel-model))
+           (gptel-backend (or my/gptel-subagent-backend gptel-backend)))
+      (gptel-agent--task wrapped-cb agent-type description packaged-prompt))))
 
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.
@@ -187,16 +269,17 @@ AGENT-NAME must exist in `gptel-agent--agents`."
               :description "Full task prompt")
              (:name "files"
               :type array
+              :items (:type string)
               :optional t
               :description "Optional list of file paths to inject into the subagent context.")
              (:name "include_history"
-              :type boolean
+              :type string
               :optional t
-              :description "If true, injects recent conversation history into subagent context.")
+              :description "Set to \"true\" to inject recent conversation history into subagent context.")
              (:name "include_diff"
-              :type boolean
+              :type string
               :optional t
-              :description "If true, injects git diff HEAD into subagent context."))
+              :description "Set to \"true\" to inject git diff HEAD into subagent context."))
      :category "gptel-agent"
      :async t
      :confirm t
