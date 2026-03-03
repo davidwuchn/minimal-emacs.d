@@ -263,17 +263,17 @@ Call this after gptel-agent-tools loads."
         (my/gptel--dedup-tools-by-name
          (seq-filter #'identity
                      (mapcar #'my/gptel--safe-get-tool
-                             '("Agent" "Bash" "Eval" "Glob" "Grep" "Read" "Skill"
-                               "WebFetch" "WebSearch" "YouTube"
-                               "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                               "Code_Map" "Code_Inspect" "Diagnostics")))))
+                              '("Bash" "Eval" "Glob" "Grep" "Read" "Skill"
+                                "WebFetch" "WebSearch" "YouTube"
+                                "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                                "Code_Map" "Code_Inspect" "Diagnostics")))))
 
   (setq my/gptel-tools-action
         (my/gptel--dedup-tools-by-name
          (append
           (seq-filter #'identity
                       (mapcar #'my/gptel--safe-get-tool
-                              '("Agent" "ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
+                               '("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
                                 "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
                                 "WebFetch" "WebSearch" "Write" "YouTube"
                                 "find_buffers_and_recent" "describe_symbol" "get_symbol_source"

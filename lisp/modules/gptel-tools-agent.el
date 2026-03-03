@@ -108,6 +108,16 @@ and large-result truncation via `my/gptel--deliver-subagent-result'."
 (with-eval-after-load 'gptel-agent-tools
   (advice-add 'gptel-agent--task :override #'my/gptel-agent--task-override))
 
+(defun my/gptel--deregister-upstream-agent (&rest _)
+  "Remove the upstream \"Agent\" tool after `gptel-agent-update'.
+Our \"RunAgent\" is strictly superior (more agent types, context
+injection, timeout, truncation, FSM restore)."
+  (when-let* ((cat (assoc "gptel-agent" gptel--known-tools)))
+    (setf (alist-get "Agent" (cdr cat) nil 'remove #'equal) nil)))
+
+(with-eval-after-load 'gptel-agent
+  (advice-add 'gptel-agent-update :after #'my/gptel--deregister-upstream-agent))
+
 
 
 
