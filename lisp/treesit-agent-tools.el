@@ -31,7 +31,15 @@ Provides fallback regexps for languages that don't set treesit-defun-type-regexp
       ;; Fallback for Java (class, method, constructor, enum, interface, record)
       (and (treesit-parser-list)
            (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'java)) (treesit-parser-list))
-           "\\(?:class\\|method\\|constructor\\|enum\\|interface\\|record\\)_declaration")))
+           "\\(?:class\\|method\\|constructor\\|enum\\|interface\\|record\\)_declaration")
+      ;; Fallback for C (function, struct, enum, union, type_definition)
+      (and (treesit-parser-list)
+           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'c)) (treesit-parser-list))
+           "\\(?:function_definition\\|struct_specifier\\|enum_specifier\\|union_specifier\\|type_definition\\)")
+      ;; Fallback for C++ (adds class_specifier and namespace_definition)
+      (and (treesit-parser-list)
+           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'cpp)) (treesit-parser-list))
+           "\\(?:function_definition\\|class_specifier\\|struct_specifier\\|enum_specifier\\|union_specifier\\|namespace_definition\\|type_definition\\)")))
 
 (defun treesit-agent--get-defun-name (node)
   "Get the name of a defun NODE.
@@ -59,7 +67,16 @@ Provides fallback for languages where treesit-defun-name returns nil."
               ((and trait-node type-node)
                (concat (treesit-node-text trait-node t) " for " (treesit-node-text type-node t)))
               (type-node
-               (treesit-node-text type-node t)))))))
+               (treesit-node-text type-node t)))))
+      ;; Fallback for C/C++ function_definition: declarator.declarator gives just the name
+      (and (equal (treesit-node-type node) "function_definition")
+           (let* ((decl (treesit-node-child-by-field-name node "declarator"))
+                  (inner (and decl (treesit-node-child-by-field-name decl "declarator"))))
+             (when inner (treesit-node-text inner t))))
+      ;; Fallback for C/C++ type_definition: declarator field is the typedef name
+      (and (equal (treesit-node-type node) "type_definition")
+           (let ((decl (treesit-node-child-by-field-name node "declarator")))
+             (when decl (treesit-node-text decl t))))))
 
 (defun treesit-agent--find-defun (name)
   "Find a defun node by NAME in the current buffer using tree-sitter."

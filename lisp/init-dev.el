@@ -71,6 +71,8 @@
   :ensure nil
   :commands (eglot-ensure eglot-rename eglot-format-buffer)
   :hook ((clojure-mode . eglot-ensure)
-         (java-ts-mode . eglot-ensure))
+         (java-ts-mode . eglot-ensure)
+         (c-ts-mode . eglot-ensure)
+         (c++-ts-mode . eglot-ensure))
   :custom
   (eglot-ignored-server-capabilities '(:documentHighlightProvider)))
