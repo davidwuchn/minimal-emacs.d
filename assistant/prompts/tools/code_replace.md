@@ -1,4 +1,4 @@
-λ(p,n,c). replace(n∈p) | p:file_path | n:node_name | c:new_code(balanced) | req:Lisp(.el|.clj|.cljs|.cljc)|Python|JS|Rust
+λ(file_path, node_name, new_code). replace(node_name∈file_path) | file_path:path | node_name:symbol | new_code:balanced | req:Lisp(.el|.clj|.cljs|.cljc)|Python|JS|Rust
 
 ## Availability
 - `Code_Replace`: :core, :nucleus, :snippets

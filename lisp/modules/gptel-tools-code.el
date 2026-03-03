@@ -63,8 +63,11 @@ Reports which backend (LSP or ripgrep) was used."
             (setq usages (list (format "Error: ripgrep (rg) not found in PATH.\nInstall with: brew install ripgrep  (macOS)\n                 apt install ripgrep    (Ubuntu)")))
           (with-temp-buffer
             (let ((exit-code (call-process grepper nil t nil
-                                           "-n" "-F" symbol-name
-                                           (expand-file-name root))))
+                                            "--no-ignore" "-n" "-F"
+                                            "--glob" "!*.elc"
+                                            "--glob" "!var/elpa/"
+                                            symbol-name
+                                            (expand-file-name root))))
               (when (= exit-code 0)
                 (goto-char (point-min))
                 (setq backend "ripgrep")
@@ -122,9 +125,10 @@ Reports what was checked, even if no standard project files found."
 Always use this first to understand the structure of a file before editing."
      :function (lambda (file_path)
                  (condition-case err
-                     (with-timeout (5 (format "Error: Code_Map timed out after 5 seconds on %s" file_path))
-                       (with-current-buffer (find-file-noselect file_path)
-                         ;; Pre-flight check: Verify tree-sitter parser is available
+                      (with-timeout (5 (format "Error: Code_Map timed out after 5 seconds on %s" file_path))
+                        (with-current-buffer (find-file-noselect file_path)
+                          (treesit-agent--ensure-parser file_path)
+                          ;; Pre-flight check: Verify tree-sitter parser is available
                          (if (not (treesit-parser-list))
                              (let ((lang (or (and (boundp 'treesit--language) treesit--language)
                                             (let ((py-rx (concat "\\.py" (char-to-string 39)))
@@ -150,7 +154,7 @@ Always use this first to understand the structure of a file before editing."
                               (format "Error: No tree-sitter parser available for this file.\n\nACTION: Install the parser:\n  M-x treesit-install-language-grammar RET <language> RET\n\nThen reopen the file.\n\nOriginal error: %s" msg))
                              ((string-match-p "No such file\\|does not exist" msg)
                               (format "Error: File not found: %s\n\nACTION: Check the file path and try again." file_path))
-                             (t (format "Error executing Code_Map on %s: %s\n\nACTION: Check file permissions and try again." file_path msg)))))))
+                             (t (format "Error executing Code_Map on %s: %s\n\nACTION: Check file permissions and try again." file_path msg))))))))
      :args (list '(:name "file_path" :type string :description "Path to the file to map"))
      :category "gptel-agent"
      :include t)
@@ -162,9 +166,10 @@ If file_path is omitted, it will search the entire project to find the definitio
      :function (lambda (node_name &optional file_path)
                  (condition-case err
                      (with-timeout (10 (format "Error: Code_Inspect timed out for '%s'" node_name))
-                       (if file_path
-                           (with-current-buffer (find-file-noselect file_path)
-                             ;; Pre-flight check: Verify tree-sitter parser is available
+                        (if file_path
+                            (with-current-buffer (find-file-noselect file_path)
+                              (treesit-agent--ensure-parser file_path)
+                              ;; Pre-flight check: Verify tree-sitter parser is available
                              (if (not (treesit-parser-list))
                                  (let ((lang (or (and (boundp 'treesit--language) treesit--language)
                                                 (let ((py-rx (concat "\\.py" (char-to-string 39)))
@@ -211,12 +216,13 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
      :function (lambda (file_path node_name new_code)
                  (condition-case err
                      (with-timeout (5 (format "Error: Code_Replace timed out on %s" file_path))
-                       (with-current-buffer (find-file-noselect file_path)
-                         ;; Pre-flight check: Verify tree-sitter parser is available
-                         (if (not (treesit-parser-list))
-                             (let ((lang (or (and (boundp 'treesit--language) treesit--language)
-                                            (let ((py-rx (concat "\\.py" (char-to-string 39)))
-                                                  (el-rx (concat "\\.el" (char-to-string 39)))
+                        (with-current-buffer (find-file-noselect file_path)
+                          (treesit-agent--ensure-parser file_path)
+                          ;; Pre-flight check: Verify tree-sitter parser is available
+                          (if (not (treesit-parser-list))
+                              (let ((lang (or (and (boundp 'treesit--language) treesit--language)
+                                             (let ((py-rx (concat "\\.py" (char-to-string 39)))
+                                                   (el-rx (concat "\\.el" (char-to-string 39)))
                                                   (clj-rx (concat "\\.clj" (char-to-string 39)))
                                                   (rs-rx (concat "\\.rs" (char-to-string 39))))
                                               (cond
@@ -237,7 +243,7 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                               (format "Error: tree-sitter parser not installed.\n\nACTION: M-x treesit-install-language-grammar RET <language> RET\n\nOriginal error: %s" msg))
                              ((string-match-p "syntax error\\|has-error" msg)
                               (format "Error: New code has syntax errors (unbalanced parentheses/brackets)\n\nACTION:\n  1. Check that all opening brackets have closing brackets\n  2. Verify indentation is correct\n  3. Test code in a REPL before replacing\n\nOriginal error: %s" msg))
-                             (t (format "Error executing Code_Replace on %s: %s\n\nACTION: Check function name and new code syntax, then try again." file_path msg)))))))
+                             (t (format "Error executing Code_Replace on %s: %s\n\nACTION: Check function name and new code syntax, then try again." file_path msg))))))))
      :args (list '(:name "file_path" :type string :description "Path to the file")
                  '(:name "node_name" :type string :description "Exact name of the function/class to replace")
                  '(:name "new_code" :type string :description "The perfectly balanced replacement code snippet"))
@@ -297,7 +303,7 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                    (error (format "Error executing Code_Usages: %s" (error-message-string err)))))
      :args (list '(:name "node_name" :type string :description "Symbol/function/class name to find usages for"))
      :category "gptel-agent"
-     :include t))))
+      :include t)))
 
 ;; Register tool previews
 (when (boundp 'gptel--tool-preview-alist)
@@ -332,6 +338,6 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
       (when (fboundp 'gptel-agent--confirm-overlay)
         (gptel-agent--confirm-overlay from (point) t))))
   (setf (alist-get "Code_Replace" gptel--tool-preview-alist nil nil #'equal)
-        #'gptel-tools-code--replace-preview-setup)))
+        #'gptel-tools-code--replace-preview-setup))
 
 (provide 'gptel-tools-code)
