@@ -33,10 +33,8 @@ Dedup guard: only fires when the tracked state actually changes."
         (setq-local nucleus--plan-mode-active is-plan)
         (cond
          ((and was-plan is-agent)
-          (message "[nucleus] Mode transitioned: Plan -> Build. Injecting system reminder.")
           (nucleus--inject-build-mode-reminder))
          ((and (not was-plan) is-plan)
-          (message "[nucleus] Mode transitioned: Build -> Plan. Injecting system reminder.")
           (nucleus--inject-plan-mode-reminder)))))))
 
 (defun nucleus--inject-build-mode-reminder ()
