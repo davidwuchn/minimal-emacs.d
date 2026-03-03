@@ -249,6 +249,13 @@ AGENT-NAME must exist in `gptel-agent--agents`."
                      agent-name
                      (string-join (sort (mapcar #'car gptel-agent--agents) #'string<) ", ")))
     (cl-return-from my/gptel--run-agent-tool))
+  ;; Hard gate: executor is forbidden in Plan mode (read-only preset).
+  (when (and (equal agent-name "executor")
+             (boundp 'gptel--preset)
+             (eq gptel--preset 'gptel-plan))
+    (funcall callback
+             "Error: executor is not available in Plan mode. Switch to Agent mode first.")
+    (cl-return-from my/gptel--run-agent-tool))
   (unless (fboundp 'gptel-agent--task)
     (funcall callback "Error: gptel-agent task runner not available")
     (cl-return-from my/gptel--run-agent-tool))
