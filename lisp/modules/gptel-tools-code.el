@@ -25,23 +25,28 @@ Reports which backend (LSP or ripgrep) was used."
          (lsp-ready nil)
          (lsp-server (and (my/gptel--lsp-active-p) (eglot-current-server)))
          (backend "unknown"))  ; Track which backend was used
-    ;; Try LSP first with enhanced retry logic for startup race conditions
+    ;; Try LSP first with enhanced retry logic for startup race conditions.
+    ;; Uses xref-backend-references (programmatic API) instead of
+    ;; xref-find-references (interactive command that pops a UI buffer).
     (when lsp-server
       ;; Wait for LSP to be fully ready (retry loop with exponential backoff)
       (while (and (> lsp-retries 0) (not lsp-ready))
         (condition-case nil
-            (let ((refs (xref-find-references symbol-name)))
-              (if (and refs (not (equal refs '(nil))))
+            (let* ((backend-type (xref-find-backend))
+                   (refs (and backend-type
+                              (xref-backend-references backend-type symbol-name))))
+              (if (and refs (listp refs))
                   ;; Got results, LSP is ready
                   (progn
                     (setq lsp-ready t)
                     (setq backend "LSP")
                     (setq usages
                           (mapcar (lambda (ref)
-                                    (format "%s:%d: %s"
-                                            (xref-location-filename (xref-item-location ref))
-                                            (xref-location-line (xref-item-location ref))
-                                            (xref-item-summary ref)))
+                                    (let ((loc (xref-item-location ref)))
+                                      (format "%s:%d: %s"
+                                              (xref-location-group loc)
+                                              (xref-location-line loc)
+                                              (xref-item-summary ref))))
                                   refs)))
                 ;; Got empty results, LSP might not be fully indexed yet
                 (setq lsp-retries (1- lsp-retries))
