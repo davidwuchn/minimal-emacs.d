@@ -44,6 +44,9 @@
 (defvar nucleus-tool-prompts nil
   "Alist of loaded tool prompt templates.")
 
+(defvar nucleus--directives-registered nil
+  "Non-nil after `nucleus--register-gptel-directives' has run once.")
+
 (defconst nucleus-prompt-files
   '((nucleus-gptel-agent . "code_agent.md")
     (chatTitle           . "title.md")
@@ -228,49 +231,51 @@ At load time, prefer `nucleus-ensure-loaded' instead."
            (string-trim sys)))))
 
 (defun nucleus--register-gptel-directives ()
-  "Register nucleus gptel-agent system prompts as gptel directives."
-  (nucleus-ensure-loaded)
-  
-  (unless (boundp 'gptel-directives)
-    (setq gptel-directives '()))
-  
-  (when (boundp 'gptel-directives)
-    (cl-labels
-        ((tool-snippets-for (tool-names)
-           (when (and tool-names (fboundp 'nucleus-gptel-tool-prompts))
-             (let* ((snips (nucleus-gptel-tool-prompts))
-                    (chunks
-                     (delq nil
-                           (mapcar
-                            (lambda (name)
-                              (when-let ((txt (alist-get (intern name) snips)))
-                                (format "[%s]\n%s" name (string-trim txt))))
-                            tool-names))))
-               (and chunks
-                    (string-join chunks "\n\n"))))))
-      (let* ((dir nucleus-prompts-dir)
-             (agent-file (expand-file-name "code_agent.md" dir))
-             (plan-file (expand-file-name "plan_agent.md" dir))
-             (agent-sys (nucleus--read-gptel-agent-system agent-file))
-             (plan-sys (nucleus--read-gptel-agent-system plan-file))
-             (agent-tools (nucleus-get-tools :snippets))
-             (agent-snips (tool-snippets-for agent-tools))
-             (agent-sys (if agent-snips
-                            (concat agent-sys
-                                    "\n\n## Nucleus Tool Prompts (Supplemental)\n"
-                                    agent-snips)
-                          agent-sys)))
-        (when (stringp agent-sys)
-          (setf (alist-get 'nucleus-gptel-agent
-                          gptel-directives nil nil #'eq)
-                agent-sys))
-        (when (stringp plan-sys)
-          (setf (alist-get 'nucleus-gptel-plan
-                          gptel-directives nil nil #'eq)
-                plan-sys))
-        (nucleus--log "Registered %d directives"
-                     (length gptel-directives))))))
+  "Register nucleus gptel-agent system prompts as gptel directives.
+Idempotent: only registers and logs once per session."
+  (unless nucleus--directives-registered
+    (nucleus-ensure-loaded)
 
+    (unless (boundp 'gptel-directives)
+      (setq gptel-directives '()))
+
+    (when (boundp 'gptel-directives)
+      (cl-labels
+          ((tool-snippets-for (tool-names)
+             (when (and tool-names (fboundp 'nucleus-gptel-tool-prompts))
+               (let* ((snips (nucleus-gptel-tool-prompts))
+                      (chunks
+                       (delq nil
+                             (mapcar
+                              (lambda (name)
+                                (when-let ((txt (alist-get (intern name) snips)))
+                                  (format "[%s]\n%s" name (string-trim txt))))
+                              tool-names))))
+                 (and chunks
+                      (string-join chunks "\n\n"))))))
+        (let* ((dir nucleus-prompts-dir)
+               (agent-file (expand-file-name "code_agent.md" dir))
+               (plan-file (expand-file-name "plan_agent.md" dir))
+               (agent-sys (nucleus--read-gptel-agent-system agent-file))
+               (plan-sys (nucleus--read-gptel-agent-system plan-file))
+               (agent-tools (nucleus-get-tools :snippets))
+               (agent-snips (tool-snippets-for agent-tools))
+               (agent-sys (if agent-snips
+                              (concat agent-sys
+                                      "\n\n## Nucleus Tool Prompts (Supplemental)\n"
+                                      agent-snips)
+                            agent-sys)))
+          (when (stringp agent-sys)
+            (setf (alist-get 'nucleus-gptel-agent
+                            gptel-directives nil nil #'eq)
+                  agent-sys))
+          (when (stringp plan-sys)
+            (setf (alist-get 'nucleus-gptel-plan
+                            gptel-directives nil nil #'eq)
+                  plan-sys))
+          (nucleus--log "Registered %d directives"
+                       (length gptel-directives))
+          (setq nucleus--directives-registered t))))))
 ;;; Public API
 
 (defun nucleus-gptel-directives ()

@@ -1,239 +1,247 @@
 {
-    "$schema": "https://eca.dev/config.json",
-    "netrcFile": "${env:ECA_NETRC_FILE}",
-    "defaultModel": "github-copilot/gpt-5.2",
-    "customTools": {
-        "clj-paren-repair": {
-            "description": "Fix delimiter errors and format clojure files. works for these file extensions: .clj .cljs .cljc .bb .edn",
-            "command": "clj-paren-repair {{filepath}}",
-            "schema": {
-                "properties": {
-                    "filepath": {
-                        "type": "string",
-                        "description": "The full path to the file to repair or format"
-                    }
-                },
-                "required": [
-                    "filepath"
-                ]
-            }
+  "$schema": "https://eca.dev/config.json",
+  "netrcFile": "${env:ECA_NETRC_FILE}",
+  "defaultModel": "github-copilot/gpt-5.2",
+  "customTools": {
+    "clj-paren-repair": {
+      "description": "Fix delimiter errors and format clojure files. works for these file extensions: .clj .cljs .cljc .bb .edn",
+      "command": "clj-paren-repair {{filepath}}",
+      "schema": {
+        "properties": {
+          "filepath": {
+            "type": "string",
+            "description": "The full path to the file to repair or format"
+          }
         },
-        "clj-nrepl-eval": {
-            "description": "${file:prompts/tools/clj-nrepl-eval.md}",
-            "command": "read -r -d '' CODE << 'EoC' || true\n{{code}}\nEoC\nif [[ '{{repl}}' = 'cljs' ]]; then clj-nrepl-eval -p 9000 \"$CODE\"; else clj-nrepl-eval -p $(cat .nrepl-port) \"$CODE\"; fi",
-            "schema": {
-                "properties": {
-                    "code": {
-                        "type": "string",
-                        "description": "A string of clojure code to evaluate in the application runtime. It will be wrapped in bash heredoc syntax"
-                    },
-                    "repl": {
-                        "type": "string",
-                        "description": "Optional: specify repl type: clj | cljs  Default: clj"
-                    }
-                },
-                "required": [
-                    "code"
-                ]
-            }
-        }
+        "required": [
+          "filepath"
+        ]
+      }
     },
-    "mcpServers": {
-        "context7": {
-            "type": "stdio",
-            "command": "npx",
-            "args": [
-                "-y",
-                "@upstash/context7-mcp"
-            ],
-            "env": {}
-        }
-    },
-    "toolCall": {
-        "approval": {
-            "byDefault": "ask",
-            "allow": {
-                "eca": {},
-                "context7": {}
-            }
-        }
-    },
-    "agent": {
-        "code": {
-            "defaultModel": "github-copilot/gpt-5.3-codex",
-            "prompts": {
-                "chat": "${file:prompts/code_agent.md}"
-            }
+    "clj-nrepl-eval": {
+      "description": "${file:prompts/tools/clj-nrepl-eval.md}",
+      "command": "read -r -d '' CODE << 'EoC' || true\n{{code}}\nEoC\nif [[ '{{repl}}' = 'cljs' ]]; then clj-nrepl-eval -p 9000 \"$CODE\"; else clj-nrepl-eval -p $(cat .nrepl-port) \"$CODE\"; fi",
+      "schema": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "A string of clojure code to evaluate in the application runtime. It will be wrapped in bash heredoc syntax"
+          },
+          "repl": {
+            "type": "string",
+            "description": "Optional: specify repl type: clj | cljs  Default: clj"
+          }
         },
-        "plan": {
-            "defaultModel": "gihub-copilot/gpt-5.3-codex",
-            "prompts": {
-                "chat": "${file:prompts/plan_agent.md}"
-            }
-        },
-        "reviewer": {
-            "mode": "subagent",
-            "defaultModel": "dashscope/qwen3.5-plus",
-            "description": "Code reviewer for project changes, use it when asked to review code",
-            "systemPrompt": "You are expert in code review, analyze the changes in git and be rigorous about the changes."
-        },
-        "explorer": {
-            "mode": "subagent",
-            "defaultModel": "moonshot/kimi-k2.5",
-            "systemPrompt": "${file:prompts/explorer_agent.md}",
-            "description": "Dedicated agent for deep codebase analysis requiring investigation across multiple files and concepts. Returns synthesized findings from isolated context. Use when understanding how something works requires connecting patterns across the codebase, not just locating code. High context cost - prefer grep/read/tree for simple lookups."
-        },
-        "dangerous": {
-            "defaultModel": "deepseek/deepseek-reasoner",
-            "toolCall": {
-                "approval": {
-                    "byDefault": "allow"
-                }
-            }
-        }
-    },
-    "rewrite": {
-        "model": "github-copilot/gpt-5.3-codex"
-    },
-    "completion": {
-        "model": "github-copilot/gpt-5.3-codex"
-    },
-    "prompts": {
-        "chat": "${file:prompts/code_agent.md}",
-        "chatTitle": "${file:prompts/title.md}",
-        "compact": "${file:prompts/compact.md}",
-        "init": "${file:prompts/init.md}",
-        "skillCreate": "${file:prompts/skill_create.md}",
-        "completion": "${file:prompts/inline_completion.md}",
-        "rewrite": "${file:prompts/rewrite.md}",
-        "tools": {
-            "eca__shell_command": "${file:prompts/tools/shell_command.md}",
-            "eca__edit_file": "${file:prompts/tools/edit_file.md}",
-            "eca__write_file": "${file:prompts/tools/write_file.md}",
-            "eca__read_file": "${file:prompts/tools/read_file.md}",
-            "eca__grep": "${file:prompts/tools/grep.md}",
-            "eca__directory_tree": "${file:prompts/tools/directory_tree.md}",
-            "eca__skill": "${file:prompts/tools/skill.md}",
-            "eca__move_file": "${file:prompts/tools/move_file.md}"
-        }
-    },
-    "providers": {
-        "dashscope": {
-            "api": "openai-chat",
-            "url": "https://coding.dashscope.aliyuncs.com/v1",
-            "keyRc": "coding.dashscope.aliyuncs.com",
-            "models": {
-                "qwen3.5-plus": {
-                    "extraPayload": {
-                        "thinking": {
-                            "type": "enabled",
-                            "budgetTokens": 1024
-                        }
-                    }
-                },
-                "MiniMax-M2.5": {
-                    "extraPayload": {
-                        "thinking": {
-                            "type": "enabled",
-                            "budgetTokens": 1024
-                        }
-                    }
-                },
-                "glm-5": {
-                    "extraPayload": {
-                        "thinking": {
-                            "type": "enabled",
-                            "budgetTokens": 1024
-                        }
-                    }
-                },
-                "kimi-k2.5": {
-                    "extraPayload": {
-                        "thinking": {
-                            "type": "enabled",
-                            "budgetTokens": 1024
-                        }
-                    }
-                },
-                "deepseek-v3.2": {}
-            }
-        },
-        "openrouter": {
-            "api": "openai-chat",
-            "url": "https://openrouter.ai/api/v1",
-            "httpClient": {
-                "version": "http-1.1"
-            },
-            "keyRc": "api.openrouter.com",
-            "models": {
-                "anthropic/claude-sonnet-4.6": {},
-                "openai/gpt-5.3-codex": {}
-            }
-        },
-        "deepseek": {
-            "api": "openai-chat",
-            "url": "https://api.deepseek.com",
-            "keyRc": "api.deepseek.com",
-            "models": {
-                "deepseek-chat": {},
-                "deepseek-reasoner": {}
-            }
-        },
-        "minimax": {
-            "api": "openai-chat",
-            "url": "https://api.minimaxi.com/v1",
-            "keyRc": "api.minimaxi.com",
-            "models": {
-                "minimax-m2.1": {},
-                "minimax-m2.5": {}
-            }
-        },
-        "moonshot": {
-            "api": "openai-chat",
-            "url": "https://api.kimi.com/coding/v1",
-            "httpClient": {
-                "version": "http-1.1"
-            },
-            "keyRc": "api.kimi.com",
-            "models": {
-                "kimi-k2.5": {
-                    "extraPayload": {
-                        "reasoning": {
-                            "effort": "high"
-                        },
-                        "thinking": {
-                            "type": "enabled"
-                        }
-                    },
-                    "extraHeaders": {
-                        "User-Agent": "KimiCLI/1.3"
-                    }
-                },
-                "kimi-for-coding": {
-                    "extraHeaders": {
-                        "User-Agent": "KimiCLI/1.3"
-                    }
-                }
-            }
-        },
-        "z-ai": {
-            "api": "openai-chat",
-            "url": "https://open.bigmodel.cn/api/coding/paas/v4",
-            "keyRc": "open.bigmodel.cn",
-            "models": {
-                "glm-4.7": {},
-                "glm-5": {}
-            }
-        },
-        "google": {
-            "api": "openai-chat",
-            "url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-            "keyRc": "generativelanguage.googleapis.com",
-            "models": {
-                "gemini-3.1-pro-preview": {},
-                "gemini-3.1-pro-preview-customtools": {},
-                "gemini-3-flash-preview": {}
-            }
-        }
+        "required": [
+          "code"
+        ]
+      }
     }
+  },
+  "mcpServers": {
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "env": {}
+    }
+  },
+  "toolCall": {
+    "approval": {
+      "byDefault": "ask",
+      "allow": {
+        "eca": {},
+        "context7": {}
+      }
+    }
+  },
+  "agent": {
+    "code": {
+      "defaultModel": "github-copilot/gpt-5.3-codex",
+      "prompts": {
+        "chat": "${file:prompts/code_agent.md}"
+      }
+    },
+    "plan": {
+      "defaultModel": "gihub-copilot/claude-sonnet-4.6",
+      "prompts": {
+        "chat": "${file:prompts/plan_agent.md}"
+      }
+    },
+    "executor": {
+      "model": "subagent",
+      "defaultModel": "dashscope/qwen3-coder-next",
+      "description": "Versatile subagent for grunt work (Tests, Docs, Linting).",
+      "systemPrompt": "Your primary responsibilities include writing/fixing unit tests, generating comprehensive documentation, and resolving linter/formatting errors. Analyze the user's prompt to determine which task you are executing."
+    },
+    "reviewer": {
+      "mode": "subagent",
+      "defaultModel": "dashscope/qwen3.5-plus",
+      "description": "Code reviewer for project changes, use it when asked to review code",
+      "systemPrompt": "You are expert in code review, analyze the changes in git and be rigorous about the changes."
+    },
+    "explorer": {
+      "mode": "subagent",
+      "defaultModel": "moonshot/kimi-k2.5",
+      "systemPrompt": "${file:prompts/explorer_agent.md}",
+      "description": "Dedicated agent for deep codebase analysis requiring investigation across multiple files and concepts. Returns synthesized findings from isolated context. Use when understanding how something works requires connecting patterns across the codebase, not just locating code. High context cost - prefer grep/read/tree for simple lookups."
+    },
+    "dangerous": {
+      "defaultModel": "google/gemini-3.1-pro-preview-customtools",
+      "toolCall": {
+        "approval": {
+          "byDefault": "allow"
+        }
+      }
+    }
+  },
+  "rewrite": {
+    "model": "github-copilot/gpt-5.3-codex"
+  },
+  "completion": {
+    "model": "github-copilot/gpt-5.3-codex"
+  },
+  "prompts": {
+    "chat": "${file:prompts/code_agent.md}",
+    "chatTitle": "${file:prompts/title.md}",
+    "compact": "${file:prompts/compact.md}",
+    "init": "${file:prompts/init.md}",
+    "skillCreate": "${file:prompts/skill_create.md}",
+    "completion": "${file:prompts/inline_completion.md}",
+    "rewrite": "${file:prompts/rewrite.md}",
+    "tools": {
+      "eca__shell_command": "${file:prompts/tools/shell_command.md}",
+      "eca__edit_file": "${file:prompts/tools/edit_file.md}",
+      "eca__write_file": "${file:prompts/tools/write_file.md}",
+      "eca__read_file": "${file:prompts/tools/read_file.md}",
+      "eca__grep": "${file:prompts/tools/grep.md}",
+      "eca__directory_tree": "${file:prompts/tools/directory_tree.md}",
+      "eca__skill": "${file:prompts/tools/skill.md}",
+      "eca__move_file": "${file:prompts/tools/move_file.md}"
+    }
+  },
+  "providers": {
+    "dashscope": {
+      "api": "openai-chat",
+      "url": "https://coding.dashscope.aliyuncs.com/v1",
+      "keyRc": "coding.dashscope.aliyuncs.com",
+      "models": {
+        "qwen3.5-plus": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "MiniMax-M2.5": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "glm-5": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "kimi-k2.5": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
+        "deepseek-v3.2": { },
+        "glm-4.7": { },
+        "qwen3-coder-next" : { }
+      }
+    },
+    "openrouter": {
+      "api": "openai-chat",
+      "url": "https://openrouter.ai/api/v1",
+      "httpClient": {
+        "version": "http-1.1"
+      },
+      "keyRc": "api.openrouter.com",
+      "models": {
+        "anthropic/claude-sonnet-4.6": {},
+        "openai/gpt-5.3-codex": {}
+      }
+    },
+    "deepseek": {
+      "api": "openai-chat",
+      "url": "https://api.deepseek.com",
+      "keyRc": "api.deepseek.com",
+      "models": {
+        "deepseek-chat": {},
+        "deepseek-reasoner": {}
+      }
+    },
+    "minimax": {
+      "api": "openai-chat",
+      "url": "https://api.minimaxi.com/v1",
+      "keyRc": "api.minimaxi.com",
+      "models": {
+        "minimax-m2.1": {},
+        "minimax-m2.5": {}
+      }
+    },
+    "moonshot": {
+      "api": "openai-chat",
+      "url": "https://api.kimi.com/coding/v1",
+      "httpClient": {
+        "version": "http-1.1"
+      },
+      "keyRc": "api.kimi.com",
+      "models": {
+        "kimi-k2.5": {
+          "extraPayload": {
+            "reasoning": {
+              "effort": "high"
+            },
+            "thinking": {
+              "type": "enabled"
+            }
+          },
+          "extraHeaders": {
+            "User-Agent": "KimiCLI/1.3"
+          }
+        },
+        "kimi-for-coding": {
+          "extraHeaders": {
+            "User-Agent": "KimiCLI/1.3"
+          }
+        }
+      }
+    },
+    "z-ai": {
+      "api": "openai-chat",
+      "url": "https://open.bigmodel.cn/api/coding/paas/v4",
+      "keyRc": "open.bigmodel.cn",
+      "models": {
+        "glm-4.7": {},
+        "glm-5": {}
+      }
+    },
+    "google": {
+      "api": "openai-chat",
+      "url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "keyRc": "generativelanguage.googleapis.com",
+      "models": {
+        "gemini-3.1-pro-preview": {},
+        "gemini-3.1-pro-preview-customtools": {},
+        "gemini-3-flash-preview": {}
+      }
+    }
+  }
 }

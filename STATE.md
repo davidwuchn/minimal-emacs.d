@@ -1,6 +1,7 @@
 # STATE: Current Emacs Project Configuration
 
 ## Recent Updates
+- **SUBAGENT REVIEWER FIXED**: Full end-to-end subagent (RunAgent/reviewer) pipeline now working. Three fixes applied: (1) Removed `:stream t` from `my/gptel-agent--task-override` — non-streaming mode matches upstream and avoids DashScope HTTP parse failures, (2) Switched subagent model from `glm-4.7` to `qwen3-coder-next` — glm-4.7 returned unparseable responses even in non-streaming mode, (3) Added `(tool-result . _)` handler in callback to properly handle subagent internal tool use. Result delivery chain: subagent callback → `my/gptel--deliver-subagent-result` (truncates >4000 chars) → `wrapped-cb` (timeout guard) → `process-tool-result` (parent FSM injection).
 - **AUTO-PERMIT PERSISTENCE FIX**: Fixed auto-permit ('a' option) to persist across tool calls. Keymap now modified AFTER gptel loads using with-eval-after-load, ensuring my/gptel-confirmation-level is properly checked on all subsequent calls.
 - **NAMING STANDARDIZED**: Renamed preview tools to PascalCase (InlineDiffPreview, BatchPreview, SyntaxPreview). Standardized arg names to snake_case (old_str, new_str_or_diff, agent_name). Updated all documentation to match.
 - **SIGNATURE VALIDATION**: Created nucleus-tools-validate.el to verify tool prompt lambda signatures match registered :args. Interactive: M-x nucleus-validate-tool-signatures. Catches mismatches between documentation and implementation.

@@ -21,21 +21,23 @@
   "Advice to run after `gptel--apply-preset'.
 
 Detects plan<->agent transitions and injects a system reminder in both
-directions to break the LLM out of its prior mode mindset."
+directions to break the LLM out of its prior mode mindset.
+Dedup guard: only fires when the tracked state actually changes."
   (when (and (boundp 'gptel--preset)
              gptel--preset)
     (let ((was-plan nucleus--plan-mode-active)
           (is-plan (eq gptel--preset 'gptel-plan))
           (is-agent (eq gptel--preset 'gptel-agent)))
-      (setq-local nucleus--plan-mode-active is-plan)
-
-      (cond
-       ((and was-plan is-agent)
-        (message "[nucleus] Mode transitioned: Plan -> Build. Injecting system reminder.")
-        (nucleus--inject-build-mode-reminder))
-       ((and (not was-plan) is-plan)
-        (message "[nucleus] Mode transitioned: Build -> Plan. Injecting system reminder.")
-        (nucleus--inject-plan-mode-reminder))))))
+      ;; Only act when the state actually changes (dedup guard)
+      (unless (eq was-plan is-plan)
+        (setq-local nucleus--plan-mode-active is-plan)
+        (cond
+         ((and was-plan is-agent)
+          (message "[nucleus] Mode transitioned: Plan -> Build. Injecting system reminder.")
+          (nucleus--inject-build-mode-reminder))
+         ((and (not was-plan) is-plan)
+          (message "[nucleus] Mode transitioned: Build -> Plan. Injecting system reminder.")
+          (nucleus--inject-plan-mode-reminder)))))))
 
 (defun nucleus--inject-build-mode-reminder ()
   "Inject a system reminder when switching from plan to build mode.

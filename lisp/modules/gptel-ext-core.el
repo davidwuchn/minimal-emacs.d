@@ -1032,13 +1032,20 @@ Default is 3 to prevent doom-loops caused by context overflow errors."
 
 (defun my/gptel-auto-retry (orig-fn machine &optional new-state)
   "Intercept FSM transitions to ERRS and retry the request if transient.
-Implements OpenCode-style exponential backoff for network/overload errors."
+Implements OpenCode-style exponential backoff for network/overload errors.
+Skips retries for subagent FSMs (they have their own timeout handler)."
   (unless new-state (setq new-state (gptel--fsm-next machine)))
   (let* ((info (gptel-fsm-info machine))
          (error-data (plist-get info :error))
          (http-status (plist-get info :http-status))
-         (retries (or (plist-get info :retries) 0)))
+         (retries (or (plist-get info :retries) 0))
+         ;; Detect subagent FSMs: they use gptel-agent-request--handlers
+         ;; and should not be retried (the parent's timeout handles failures).
+         ;; Check: handlers are NOT the default gptel-request--handlers.
+         (subagent-p (not (eq (gptel-fsm-handlers machine)
+                              gptel-request--handlers))))
     (if (and (eq new-state 'ERRS)
+             (not subagent-p)
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
              (or (and (stringp error-data)
                       (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
@@ -1060,11 +1067,17 @@ Implements OpenCode-style exponential backoff for network/overload errors."
                        (if http-status (format "HTTP %s" http-status) "Transient API Error"))
                      (1+ retries) delay))
           
-          ;; Clean up partial buffer insertions if any
+          ;; Clean up partial buffer insertions if any.
+          ;; Guard: both markers must be live, in the same buffer, and
+          ;; start <= tracking to avoid corrupting the buffer.
           (when-let* ((start-marker (plist-get info :position))
                       (tracking-marker (plist-get info :tracking-marker))
+                      (start-pos (and (markerp start-marker) (marker-position start-marker)))
+                      (track-pos (and (markerp tracking-marker) (marker-position tracking-marker)))
                       (buf (marker-buffer tracking-marker)))
-            (when (buffer-live-p buf)
+            (when (and (buffer-live-p buf)
+                       (eq (marker-buffer start-marker) buf)
+                       (< start-pos track-pos))
               (with-current-buffer buf
                 (let ((inhibit-read-only t))
                   (delete-region start-marker tracking-marker)
