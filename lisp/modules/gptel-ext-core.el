@@ -53,6 +53,67 @@
 ;; gptel-config does not require it — all nucleus calls are guarded with
 ;; fboundp/boundp so this file works stand-alone for testing.
 
+;; --- Fix: jit-lock error during streaming ---
+;; During streaming, gptel inserts text chunks into a markdown-mode buffer.
+;; Each insert triggers jit-lock-after-change, which marks the region for
+;; refontification.  On next redisplay, jit-lock--run-functions calls
+;; font-lock-fontify-region, which invokes markdown-mode's syntax-propertize
+;; and extend-region machinery.  With incomplete streaming content (e.g., an
+;; open ``` fence without a closing one), markdown-code-block-at-pos returns
+;; bogus values, causing nil to reach (max ...) or (min ...) in jit-lock,
+;; producing: (jit-lock-function N) signaled (wrong-type-argument
+;; integer-or-marker-p nil).
+;;
+;; Fix: track gptel streaming state and suppress jit-lock errors during it.
+;; The flag is buffer-local and persists across the insert → redisplay boundary.
+;; It is set when streaming starts and cleared on post-response.
+;; Jit-lock errors during streaming are caught; the region stays marked for
+;; refontification and gets correctly fontified once streaming completes.
+
+(defvar-local my/gptel--streaming-p nil
+  "Non-nil while gptel is actively streaming into this buffer.")
+
+(defun my/gptel--stream-set-flag (response info &optional _raw)
+  "Set streaming flag when first text chunk arrives.
+RESPONSE and INFO are from `gptel-curl--stream-insert-response'."
+  (when (stringp response)
+    (when-let* ((marker (plist-get info :position))
+                (buf (marker-buffer marker)))
+      (with-current-buffer buf
+        (setq my/gptel--streaming-p t)))))
+
+(advice-add 'gptel-curl--stream-insert-response :before
+            #'my/gptel--stream-set-flag)
+
+(defun my/gptel--stream-clear-flag (&rest _args)
+  "Clear streaming flag after response completes."
+  (setq my/gptel--streaming-p nil)
+  ;; Force a full refontification now that text is complete.
+  (when jit-lock-mode
+    (jit-lock-refontify)))
+
+(add-hook 'gptel-post-response-functions #'my/gptel--stream-clear-flag)
+
+(defun my/gptel--jit-lock-safe (orig-fn start)
+  "Catch jit-lock errors during gptel streaming.
+When `my/gptel--streaming-p' is non-nil, wrap ORIG-FN in `condition-case'
+to prevent markdown-mode fontification errors from propagating to the
+redisplay engine.  START is the position to fontify."
+  (if my/gptel--streaming-p
+      (condition-case err
+          (funcall orig-fn start)
+        (error
+         ;; Mark the region as needing refontification on next cycle.
+         ;; jit-lock-after-change already did this, but the fontified=nil
+         ;; property may have been overwritten by the failed attempt.
+         (with-silent-modifications
+           (put-text-property start (min (+ start 1) (point-max)) 'fontified nil))
+         (when gptel-log-level
+           (message "gptel: suppressed jit-lock error during streaming: %S" err))))
+    (funcall orig-fn start)))
+
+(advice-add 'jit-lock-function :around #'my/gptel--jit-lock-safe)
+
 ;; --- Markdown Face Compatibility ---
 ;; Some markdown-mode versions only define heading faces up to level 6.
 ;; When content contains 7+ hash headings (e.g. "####### Title"), font-lock may
