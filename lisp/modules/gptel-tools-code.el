@@ -363,6 +363,6 @@ With optional argument `all`, also collect notes and low-severity diagnostics."
       (when (fboundp 'gptel-agent--confirm-overlay)
         (gptel-agent--confirm-overlay from (point) t))))
   (setf (alist-get "Code_Replace" gptel--tool-preview-alist nil nil #'equal)
-        #'gptel-tools-code--replace-preview-setup))
+        (list #'gptel-tools-code--replace-preview-setup)))
 
 (provide 'gptel-tools-code)
