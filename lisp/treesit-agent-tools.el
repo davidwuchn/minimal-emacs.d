@@ -170,25 +170,4 @@ Throws an error if the replacement results in invalid syntax."
           t)
       nil)))
 
-(defun treesit-agent-rename-symbol (old-name new-name)
-  "Rename all exact matches of OLD-NAME to NEW-NAME in the current buffer structurally."
-  (let ((root (treesit-agent--get-root))
-        (matches nil))
-    (when root
-      (treesit-search-forward 
-       root
-       (lambda (node)
-         (when (equal (treesit-node-text node t) old-name)
-           (push node matches)))
-       nil t)
-      ;; Sort matches by start position descending (to replace bottom-up, preserving offsets)
-      (setq matches (sort matches (lambda (a b) (> (treesit-node-start a) (treesit-node-start b)))))
-      (let ((count 0))
-        (dolist (node matches)
-          (goto-char (treesit-node-start node))
-          (delete-region (treesit-node-start node) (treesit-node-end node))
-          (insert new-name)
-          (cl-incf count))
-        count))))
-
 (provide 'treesit-agent-tools)

@@ -1,86 +1,45 @@
 # PLAN: Native AST Tools for gptel-agent
 
-## Goal
-Implement dedicated `gptel-make-tool` definitions for `AST_Map`, `AST_Read`, and `AST_Replace` to allow the LLM to safely manipulate parenthesized languages (Clojure, Elisp) without prompt injection or shell escaping issues.
+## Status: ✓ COMPLETED
 
-## Current State
-- `treesit-agent-tools.el` provides the backend AST manipulation (`treesit-agent-get-file-map`, `treesit-agent-extract-node`, `treesit-agent-replace-node`).
-- We need to expose these to the LLM by defining them as formal JSON-RPC tools using `gptel-make-tool`.
-- We are in PLAN MODE, so we must strictly observe, analyze, and draft without making any system changes yet.
+The AST tooling described in the original plan has been implemented, though under
+different names and in a different file than originally planned.
 
-## Steps
+## What Was Built
 
-### 1. Create `lisp/modules/gptel-tools-ast.el`
-Create a new module that registers the three AST tools using `gptel-make-tool`. Note the list structure for `:args`.
+### Original Plan → Actual Implementation
 
-```elisp
-;;; gptel-tools-ast.el --- AST tools for gptel-agent -*- lexical-binding: t -*-
-(require 'gptel)
-(require 'treesit-agent-tools)
+| Planned Tool   | Actual Tool      | File                              |
+| -------------- | ---------------- | --------------------------------- |
+| `AST_Map`      | `Code_Map`       | `lisp/modules/gptel-tools-code.el` |
+| `AST_Read`     | `Code_Inspect`   | `lisp/modules/gptel-tools-code.el` |
+| `AST_Replace`  | `Code_Replace`   | `lisp/modules/gptel-tools-code.el` |
+| `AST_Rename`   | *(not implemented — deemed unnecessary)* | — |
 
-(defun gptel-tools-ast-register ()
-  "Register the AST tools with gptel."
-  (when (fboundp 'gptel-make-tool)
-    (gptel-make-tool
-     :name "AST_Map"
-     :description "Get a high-level map of all functions and classes defined in a file. \
-Useful for quickly understanding the structure of a Clojure or Elisp file without reading it entirely."
-     :function (lambda (file_path)
-                 (with-current-buffer (find-file-noselect file_path)
-                   (let ((map (treesit-agent-get-file-map)))
-                     (if map
-                         (format "File map for %s:\n%s" file_path (string-join map "\n"))
-                       (format "Could not generate file map for %s. Is tree-sitter enabled?" file_path)))))
-     :args (list '(:name "file_path" :type string :description "Path to the file to map"))
-     :category "gptel-agent"
-     :include t)
+### Architecture
 
-    (gptel-make-tool
-     :name "AST_Read"
-     :description "Extract the exact, perfectly balanced code block for a specific function or class by name. \
-MANDATORY tool for reading Clojure or Elisp functions instead of Grep or Read."
-     :function (lambda (file_path node_name)
-                 (with-current-buffer (find-file-noselect file_path)
-                   (let ((text (treesit-agent-extract-node node_name)))
-                     (if text
-                         (format "AST Node '%s' from %s:\n\n%s" node_name file_path text)
-                       (format "Error: Could not find AST node named '%s' in %s" node_name file_path)))))
-     :args (list '(:name "file_path" :type string :description "Path to the file")
-                 '(:name "node_name" :type string :description "Exact name of the function/class to read"))
-     :category "gptel-agent"
-     :include t)
-
-    (gptel-make-tool
-     :name "AST_Replace"
-     :description "Surgically replace an exact function or class by name with new code. \
-MANDATORY tool for editing Clojure or Elisp functions instead of standard Edit to ensure parentheses remain perfectly balanced."
-     :function (lambda (file_path node_name new_code)
-                 (with-current-buffer (find-file-noselect file_path)
-                   (if (treesit-agent-replace-node node_name new_code)
-                       (progn
-                         (save-buffer)
-                         (format "Successfully replaced AST node '%s' in %s" node_name file_path))
-                     (format "Error: Could not find AST node named '%s' to replace in %s" node_name file_path))))
-     :args (list '(:name "file_path" :type string :description "Path to the file")
-                 '(:name "node_name" :type string :description "Exact name of the function/class to replace")
-                 '(:name "new_code" :type string :description "The perfectly balanced replacement code snippet"))
-     :category "gptel-agent"
-     :confirm t
-     :include t)))
-
-(provide 'gptel-tools-ast)
+```
+treesit-agent-tools.el (core AST engine)
+    ├── treesit-agent-tools-workspace.el (workspace-wide search)
+    └── gptel-tools-code.el (gptel tool registration + preview)
+            ├── Code_Map     → treesit-agent-get-file-map
+            ├── Code_Inspect → treesit-agent-extract-node + find-workspace
+            └── Code_Replace → treesit-agent-replace-node + extract-node
 ```
 
-### 2. Update Tool Registry (`lisp/modules/gptel-tools.el`)
-- Add `(require 'gptel-tools-ast)` at the top.
-- Add `(gptel-tools-ast-register)` inside `gptel-tools-register-all`.
-- Add `"AST_Map"`, `"AST_Read"` to the `my/gptel-tools-readonly` list near the bottom.
-- Add `"AST_Map"`, `"AST_Read"`, and `"AST_Replace"` to the `my/gptel-tools-action` list.
+### Key Decisions
 
-### 3. Update Prompts (`assistant/prompts/`)
-- In `code_agent.md`, append to `<tool_usage_policy>` under `Selection & safety:`:
-  `- For Lisp languages (.el, .clj): MUST use AST_Read and AST_Replace. Do not use standard Edit.`
-- Add signature representations in `code_agent.md`:
-  `- AST_Read{file_path, node_name}`
-  `- AST_Replace{file_path, node_name, new_code}`
-- Create the supplemental prompt files in `assistant/prompts/tools/` for `ast_map.md`, `ast_read.md`, and `ast_replace.md` to feed into `nucleus-config.el` loader.
+- **Naming**: `Code_*` instead of `AST_*` — more intuitive for the LLM, avoids
+  jargon. The LLM doesn't need to know it's using tree-sitter under the hood.
+- **No `AST_Rename`**: The `treesit-agent-rename-symbol` backend was removed as
+  dead code. Rename-symbol is better handled by language servers or search-replace.
+- **Preview integration**: `Code_Replace` has a unified diff preview registered
+  in `gptel--tool-preview-alist`, showing old vs new code in a side window.
+- **Workspace search**: `Code_Inspect` can find definitions across project files
+  via `treesit-agent-find-workspace` when the node isn't in the specified file.
+
+## Cleanup (v0.5.6)
+
+- Deleted `rewrite-ast-tools.el` (orphaned scratch file with dead preview fns)
+- Removed `treesit-agent-rename-symbol` from `treesit-agent-tools.el`
+- Updated this plan to reflect actual state
