@@ -145,7 +145,7 @@ Always use this first to understand the structure of a file before editing."
                            (let ((map (treesit-agent-get-file-map)))
                              (if map
                                  (format "File map for %s:\n%s" file_path (string-join map "\n"))
-                               (format "Could not generate file map for %s.\n\nACTION: Check if tree-sitter is enabled for this file type.\n  - Run: M-x treesit-install-language-grammar RET <language> RET\n  - Verify: M-x eval-expression RET (treesit-language-available-p '<lang>) RET" file_path)))))
+                               (format "Could not generate file map for %s.\n\nACTION: Check if tree-sitter is enabled for this file type.\n  - Run: M-x treesit-install-language-grammar RET <language> RET\n  - Verify: M-x eval-expression RET (treesit-language-available-p '<lang>) RET" file_path))))))
                    (error (let ((msg (error-message-string err)))
                             (cond
                              ((string-match-p "treesit" msg)
@@ -154,7 +154,7 @@ Always use this first to understand the structure of a file before editing."
                               (format "Error: No tree-sitter parser available for this file.\n\nACTION: Install the parser:\n  M-x treesit-install-language-grammar RET <language> RET\n\nThen reopen the file.\n\nOriginal error: %s" msg))
                              ((string-match-p "No such file\\|does not exist" msg)
                               (format "Error: File not found: %s\n\nACTION: Check the file path and try again." file_path))
-                             (t (format "Error executing Code_Map on %s: %s\n\nACTION: Check file permissions and try again." file_path msg))))))))
+                             (t (format "Error executing Code_Map on %s: %s\n\nACTION: Check file permissions and try again." file_path msg)))))))
      :args (list '(:name "file_path" :type string :description "Path to the file to map"))
      :category "gptel-agent"
      :include t)
@@ -230,20 +230,20 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                                                ((string-match-p el-rx file_path) 'elisp)
                                              ((string-match-p "\\.clj\\'" file_path) 'clojure)
                                              ((string-match-p "\\.rs\\'" file_path) 'rust)
-                                             (t 'unknown)))))
-                               (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Edit tool (manual paren balancing required)" file_path (or lang "language") file_path (or lang "language")))
-                           (if (treesit-agent-replace-node node_name new_code)
-                               (progn
-                                 (save-buffer)
-                                 (format "Successfully replaced '%s' in %s" node_name file_path))
-                             (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))
+                                              (t 'unknown))))))
+                                (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Edit tool (manual paren balancing required)" file_path (or lang "language") file_path (or lang "language")))
+                            (if (treesit-agent-replace-node node_name new_code)
+                                (progn
+                                  (save-buffer)
+                                  (format "Successfully replaced '%s' in %s" node_name file_path))
+                              (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))
                    (error (let ((msg (error-message-string err)))
                             (cond
                              ((string-match-p "treesit" msg)
                               (format "Error: tree-sitter parser not installed.\n\nACTION: M-x treesit-install-language-grammar RET <language> RET\n\nOriginal error: %s" msg))
                              ((string-match-p "syntax error\\|has-error" msg)
                               (format "Error: New code has syntax errors (unbalanced parentheses/brackets)\n\nACTION:\n  1. Check that all opening brackets have closing brackets\n  2. Verify indentation is correct\n  3. Test code in a REPL before replacing\n\nOriginal error: %s" msg))
-                             (t (format "Error executing Code_Replace on %s: %s\n\nACTION: Check function name and new code syntax, then try again." file_path msg))))))))
+                             (t (format "Error executing Code_Replace on %s: %s\n\nACTION: Check function name and new code syntax, then try again." file_path msg)))))))
      :args (list '(:name "file_path" :type string :description "Path to the file")
                  '(:name "node_name" :type string :description "Exact name of the function/class to replace")
                  '(:name "new_code" :type string :description "The perfectly balanced replacement code snippet"))
