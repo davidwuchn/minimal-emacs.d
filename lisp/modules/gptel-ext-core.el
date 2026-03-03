@@ -1041,9 +1041,13 @@ Skips retries for subagent FSMs (they have their own timeout handler)."
          (retries (or (plist-get info :retries) 0))
          ;; Detect subagent FSMs: they use gptel-agent-request--handlers
          ;; and should not be retried (the parent's timeout handles failures).
-         ;; Check: handlers are NOT the default gptel-request--handlers.
-         (subagent-p (not (eq (gptel-fsm-handlers machine)
-                              gptel-request--handlers))))
+         ;; A request is retryable if its handlers are one of the two known
+         ;; "main" handler sets: gptel-send--handlers (interactive) or
+         ;; gptel-request--handlers (programmatic).  Anything else is a
+         ;; subagent whose parent timeout manages failure.
+         (handlers (gptel-fsm-handlers machine))
+         (subagent-p (not (or (eq handlers gptel-send--handlers)
+                              (eq handlers gptel-request--handlers)))))
     (if (and (eq new-state 'ERRS)
              (not subagent-p)
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
