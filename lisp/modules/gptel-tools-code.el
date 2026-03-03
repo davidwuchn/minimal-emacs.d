@@ -258,16 +258,28 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
 
      (gptel-make-tool
      :name "Diagnostics"
-     :description "Collect project-wide diagnostics/errors. Automatically tries LSP, falls back to CLI linters (ruff/eslint/cargo) if unavailable. Superior to upstream Diagnostics (project-wide vs open-buffers-only)."
+     :description "Collect project-wide diagnostics (errors and warnings) via LSP/Flymake. \
+Falls back to CLI linters (ruff/eslint/cargo) when no LSP is available.
+
+With optional argument `all`, also collect notes and low-severity diagnostics."
      :function (lambda (&optional all)
-                 (declare (ignore all))  ; Upstream had optional 'all' arg, we ignore it
                  (if (not (fboundp 'flymake--project-diagnostics))
                      "Error: flymake--project-diagnostics not available.\n\nThis usually means Flymake is not initialized. Try opening a source file first."
                    (let* ((proj (project-current))
                           (dir (if proj (project-root proj) default-directory))
                           (lsp-active (my/gptel--lsp-active-p))
-                          (diags (and proj (flymake--project-diagnostics proj))))
-                     (if (not diags)
+                          (diags (and proj (flymake--project-diagnostics proj)))
+                          ;; Filter by severity: :error and :warning by default,
+                          ;; include :note when `all' is non-nil.
+                          (high-severity '(:error :warning))
+                          (filtered
+                           (seq-filter
+                            (lambda (d)
+                              (let ((type (flymake-diagnostic-type d)))
+                                (or (memq type high-severity)
+                                    (and all (eq type :note)))))
+                            diags)))
+                     (if (not filtered)
                          (if lsp-active
                              "No compiler or LSP diagnostics found for the current project. (LSP server is running, code is clean)."
                            ;; Fallback to CLI linter if no LSP
@@ -282,15 +294,23 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                                           (with-current-buffer buf
                                             (save-excursion
                                               (goto-char beg)
-                                              (format "%s:%d [%s] %s"
-                                                      (buffer-file-name buf)
-                                                      (line-number-at-pos)
-                                                      type text)))))
-                                      diags)))
-                         (string-join formatted "\n"))))))
+                                              (let ((line-text
+                                                     (string-trim
+                                                      (buffer-substring-no-properties
+                                                       (line-beginning-position)
+                                                       (line-end-position)))))
+                                                (format "%s:%d [%s] %s\n  %s"
+                                                        (buffer-file-name buf)
+                                                        (line-number-at-pos)
+                                                        type text line-text))))))
+                                      filtered)))
+                         (format "Found %d diagnostic(s)%s:\n\n%s"
+                                 (length formatted)
+                                 (if all " (including notes)" "")
+                                 (string-join formatted "\n\n")))))))
      :args (list '(:name "all"
               :type boolean
-              :description "Ignored (legacy arg from upstream). This tool always checks entire project."
+              :description "When true, also collect notes and low-severity diagnostics. Default: only errors and warnings."
               :optional t))
      :category "gptel-agent"
      :include t)
