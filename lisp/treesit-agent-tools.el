@@ -19,7 +19,15 @@ Provides fallback regexps for languages that don't set treesit-defun-type-regexp
       ;; Fallback for Clojure family (check parser language since mode might not be set)
       (and (treesit-parser-list)
            (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'clojure)) (treesit-parser-list))
-           "list_lit")))
+           "list_lit")
+      ;; Fallback for Rust (function, struct, enum, impl, trait, mod)
+      (and (treesit-parser-list)
+           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'rust)) (treesit-parser-list))
+           "\\(?:function\\|struct\\|enum\\|impl\\|trait\\|mod\\)_item")
+      ;; Fallback for Python (class, function — matches inside decorated_definition too)
+      (and (treesit-parser-list)
+           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'python)) (treesit-parser-list))
+           "\\(?:class\\|function\\)_definition")))
 
 (defun treesit-agent--get-defun-name (node)
   "Get the name of a defun NODE.
@@ -38,7 +46,16 @@ Provides fallback for languages where treesit-defun-name returns nil."
                         (equal (treesit-node-type defn-node) "sym_lit")
                         (member (treesit-node-text defn-node t) '("defn" "defn-" "defmacro" "defrecord" "deftype" "defmulti" "defmethod")))
                ;; For defrecord/deftype, the name is the symbol after defn
-               (treesit-node-text name-node t))))))
+               (treesit-node-text name-node t))))
+      ;; Fallback for Rust impl_item: "impl Type" or "impl Trait for Type"
+      (and (equal (treesit-node-type node) "impl_item")
+           (let ((trait-node (treesit-node-child-by-field-name node "trait"))
+                 (type-node (treesit-node-child-by-field-name node "type")))
+             (cond
+              ((and trait-node type-node)
+               (concat (treesit-node-text trait-node t) " for " (treesit-node-text type-node t)))
+              (type-node
+               (treesit-node-text type-node t)))))))
 
 (defun treesit-agent--find-defun (name)
   "Find a defun node by NAME in the current buffer using tree-sitter."

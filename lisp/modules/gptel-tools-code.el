@@ -228,8 +228,8 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                                               (cond
                                                ((string-match-p py-rx file_path) 'python)
                                                ((string-match-p el-rx file_path) 'elisp)
-                                             ((string-match-p "\\.clj\\'" file_path) 'clojure)
-                                             ((string-match-p "\\.rs\\'" file_path) 'rust)
+                                                ((string-match-p clj-rx file_path) 'clojure)
+                                                ((string-match-p rs-rx file_path) 'rust)
                                               (t 'unknown))))))
                                 (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Edit tool (manual paren balancing required)" file_path (or lang "language") file_path (or lang "language")))
                             (if (treesit-agent-replace-node node_name new_code)
