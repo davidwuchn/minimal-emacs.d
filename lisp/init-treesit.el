@@ -2,7 +2,7 @@
 
 (require 'treesit-auto)
 
-(setq treesit-auto-langs '(python rust clojure elisp))
+(setq treesit-auto-langs '(python rust clojure elisp java))
 
 ;; Custom recipes with ABI14 revisions for Emacs 30 compatibility
 (setq my/python-tsauto-config
@@ -48,6 +48,17 @@
 (add-to-list 'treesit-auto-recipe-list my/rust-tsauto-config)
 (add-to-list 'treesit-auto-recipe-list my/clojure-tsauto-config)
 (add-to-list 'treesit-auto-recipe-list my/elisp-tsauto-config)
+
+(setq my/java-tsauto-config
+      (make-treesit-auto-recipe
+       :lang 'java
+       :ts-mode 'java-ts-mode
+       :remap '(java-mode)
+       :url "https://github.com/tree-sitter/tree-sitter-java"
+       :revision "master"
+       :ext "\\.java\\'"))
+
+(add-to-list 'treesit-auto-recipe-list my/java-tsauto-config)
 
 (setq treesit-auto-install 'auto)
 (treesit-auto-add-to-auto-mode-alist 'all)

@@ -27,7 +27,11 @@ Provides fallback regexps for languages that don't set treesit-defun-type-regexp
       ;; Fallback for Python (class, function — matches inside decorated_definition too)
       (and (treesit-parser-list)
            (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'python)) (treesit-parser-list))
-           "\\(?:class\\|function\\)_definition")))
+           "\\(?:class\\|function\\)_definition")
+      ;; Fallback for Java (class, method, constructor, enum, interface, record)
+      (and (treesit-parser-list)
+           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'java)) (treesit-parser-list))
+           "\\(?:class\\|method\\|constructor\\|enum\\|interface\\|record\\)_declaration")))
 
 (defun treesit-agent--get-defun-name (node)
   "Get the name of a defun NODE.
