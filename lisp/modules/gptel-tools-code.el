@@ -68,11 +68,11 @@ Reports which backend (LSP or ripgrep) was used."
             (setq usages (list (format "Error: ripgrep (rg) not found in PATH.\nInstall with: brew install ripgrep  (macOS)\n                 apt install ripgrep    (Ubuntu)")))
           (with-temp-buffer
             (let ((exit-code (call-process grepper nil t nil
-                                            "--no-ignore" "-n" "-F"
-                                            "--glob" "!*.elc"
-                                            "--glob" "!var/elpa/"
-                                            symbol-name
-                                            (expand-file-name root))))
+                                           "--no-ignore" "-n" "-F"
+                                           "--glob" "!*.elc"
+                                           "--glob" "!var/elpa/"
+                                           symbol-name
+                                           (expand-file-name root))))
               (when (= exit-code 0)
                 (goto-char (point-min))
                 (setq backend "ripgrep")
@@ -130,22 +130,22 @@ Reports what was checked, even if no standard project files found."
 Always use this first to understand the structure of a file before editing."
      :function (lambda (file_path)
                  (condition-case err
-                      (with-timeout (5 (format "Error: Code_Map timed out after 5 seconds on %s" file_path))
-                        (with-current-buffer (find-file-noselect file_path)
-                          (treesit-agent--ensure-parser file_path)
-                          ;; Pre-flight check: Verify tree-sitter parser is available
+                     (with-timeout (5 (format "Error: Code_Map timed out after 5 seconds on %s" file_path))
+                       (with-current-buffer (find-file-noselect file_path)
+                         (treesit-agent--ensure-parser file_path)
+                         ;; Pre-flight check: Verify tree-sitter parser is available
                          (if (not (treesit-parser-list))
                              (let ((lang (or (and (boundp 'treesit--language) treesit--language)
-                                            (let ((py-rx (concat "\\.py" (char-to-string 39)))
-                                                  (el-rx (concat "\\.el" (char-to-string 39)))
-                                                  (clj-rx (concat "\\.clj" (char-to-string 39)))
-                                                  (rs-rx (concat "\\.rs" (char-to-string 39))))
-                                              (cond
-                                               ((string-match-p py-rx file_path) 'python)
-                                               ((string-match-p el-rx file_path) 'elisp)
-                                               ((string-match-p clj-rx file_path) 'clojure)
-                                               ((string-match-p rs-rx file_path) 'rust)
-                                               (t 'unknown))))))
+                                             (let ((py-rx (concat "\\.py" (char-to-string 39)))
+                                                   (el-rx (concat "\\.el" (char-to-string 39)))
+                                                   (clj-rx (concat "\\.clj" (char-to-string 39)))
+                                                   (rs-rx (concat "\\.rs" (char-to-string 39))))
+                                               (cond
+                                                ((string-match-p py-rx file_path) 'python)
+                                                ((string-match-p el-rx file_path) 'elisp)
+                                                ((string-match-p clj-rx file_path) 'clojure)
+                                                ((string-match-p rs-rx file_path) 'rust)
+                                                (t 'unknown))))))
                                (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Read/Grep for this file" file_path (or lang "language") file_path (or lang "language")))
                            (let ((map (treesit-agent-get-file-map)))
                              (if map
@@ -171,22 +171,22 @@ If file_path is omitted, it will search the entire project to find the definitio
      :function (lambda (node_name &optional file_path)
                  (condition-case err
                      (with-timeout (10 (format "Error: Code_Inspect timed out for '%s'" node_name))
-                        (if file_path
-                            (with-current-buffer (find-file-noselect file_path)
-                              (treesit-agent--ensure-parser file_path)
-                              ;; Pre-flight check: Verify tree-sitter parser is available
+                       (if file_path
+                           (with-current-buffer (find-file-noselect file_path)
+                             (treesit-agent--ensure-parser file_path)
+                             ;; Pre-flight check: Verify tree-sitter parser is available
                              (if (not (treesit-parser-list))
                                  (let ((lang (or (and (boundp 'treesit--language) treesit--language)
-                                                (let ((py-rx (concat "\\.py" (char-to-string 39)))
-                                                      (el-rx (concat "\\.el" (char-to-string 39)))
-                                                      (clj-rx (concat "\\.clj" (char-to-string 39)))
-                                                      (rs-rx (concat "\\.rs" (char-to-string 39))))
-                                                  (cond
-                                                   ((string-match-p py-rx file_path) 'python)
-                                                   ((string-match-p el-rx file_path) 'elisp)
-                                                   ((string-match-p clj-rx file_path) 'clojure)
-                                                   ((string-match-p rs-rx file_path) 'rust)
-                                                   (t 'unknown))))))
+                                                 (let ((py-rx (concat "\\.py" (char-to-string 39)))
+                                                       (el-rx (concat "\\.el" (char-to-string 39)))
+                                                       (clj-rx (concat "\\.clj" (char-to-string 39)))
+                                                       (rs-rx (concat "\\.rs" (char-to-string 39))))
+                                                   (cond
+                                                    ((string-match-p py-rx file_path) 'python)
+                                                    ((string-match-p el-rx file_path) 'elisp)
+                                                    ((string-match-p clj-rx file_path) 'clojure)
+                                                    ((string-match-p rs-rx file_path) 'rust)
+                                                    (t 'unknown))))))
                                    (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Read tool for this file" file_path (or lang "language") file_path (or lang "language")))
                                (let ((text (treesit-agent-extract-node node_name)))
                                  (if text
@@ -214,6 +214,7 @@ If file_path is omitted, it will search the entire project to find the definitio
      :category "gptel-agent"
      :include t)
 
+    ;; Tree-sitter powered replacement
     (gptel-make-tool
      :name "Code_Replace"
      :description "Surgically replace an exact function or class by name with new code. \
@@ -221,27 +222,27 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
      :function (lambda (file_path node_name new_code)
                  (condition-case err
                      (with-timeout (5 (format "Error: Code_Replace timed out on %s" file_path))
-                        (with-current-buffer (find-file-noselect file_path)
-                          (treesit-agent--ensure-parser file_path)
-                          ;; Pre-flight check: Verify tree-sitter parser is available
-                          (if (not (treesit-parser-list))
-                              (let ((lang (or (and (boundp 'treesit--language) treesit--language)
+                       (with-current-buffer (find-file-noselect file_path)
+                         (treesit-agent--ensure-parser file_path)
+                         ;; Pre-flight check: Verify tree-sitter parser is available
+                         (if (not (treesit-parser-list))
+                             (let ((lang (or (and (boundp 'treesit--language) treesit--language)
                                              (let ((py-rx (concat "\\.py" (char-to-string 39)))
                                                    (el-rx (concat "\\.el" (char-to-string 39)))
-                                                  (clj-rx (concat "\\.clj" (char-to-string 39)))
-                                                  (rs-rx (concat "\\.rs" (char-to-string 39))))
-                                              (cond
-                                               ((string-match-p py-rx file_path) 'python)
-                                               ((string-match-p el-rx file_path) 'elisp)
+                                                   (clj-rx (concat "\\.clj" (char-to-string 39)))
+                                                   (rs-rx (concat "\\.rs" (char-to-string 39))))
+                                               (cond
+                                                ((string-match-p py-rx file_path) 'python)
+                                                ((string-match-p el-rx file_path) 'elisp)
                                                 ((string-match-p clj-rx file_path) 'clojure)
                                                 ((string-match-p rs-rx file_path) 'rust)
-                                              (t 'unknown))))))
-                                (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Edit tool (manual paren balancing required)" file_path (or lang "language") file_path (or lang "language")))
-                            (if (treesit-agent-replace-node node_name new_code)
-                                (progn
-                                  (save-buffer)
-                                  (format "Successfully replaced '%s' in %s" node_name file_path))
-                              (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))
+                                                (t 'unknown))))))
+                               (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Edit tool (manual paren balancing required)" file_path (or lang "language") file_path (or lang "language")))
+                           (if (treesit-agent-replace-node node_name new_code)
+                               (progn
+                                 (save-buffer)
+                                 (format "Successfully replaced '%s' in %s" node_name file_path))
+                             (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))
                    (error (let ((msg (error-message-string err)))
                             (cond
                              ((string-match-p "treesit" msg)
@@ -256,7 +257,7 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
      :confirm t
      :include t)
 
-     (gptel-make-tool
+    (gptel-make-tool
      :name "Diagnostics"
      :description "Collect project-wide diagnostics (errors and warnings) via LSP/Flymake. \
 Falls back to CLI linters (ruff/eslint/cargo) when no LSP is available.
@@ -309,9 +310,9 @@ With optional argument `all`, also collect notes and low-severity diagnostics."
                                  (if all " (including notes)" "")
                                  (string-join formatted "\n\n")))))))
      :args (list '(:name "all"
-              :type boolean
-              :description "When true, also collect notes and low-severity diagnostics. Default: only errors and warnings."
-              :optional t))
+                         :type boolean
+                         :description "When true, also collect notes and low-severity diagnostics. Default: only errors and warnings."
+                         :optional t))
      :category "gptel-agent"
      :include t)
 
@@ -328,41 +329,98 @@ With optional argument `all`, also collect notes and low-severity diagnostics."
                    (error (format "Error executing Code_Usages: %s" (error-message-string err)))))
      :args (list '(:name "node_name" :type string :description "Symbol/function/class name to find usages for"))
      :category "gptel-agent"
-      :include t)))
+     :include t)))
 
 ;; Register tool previews
 (when (boundp 'gptel--tool-preview-alist)
+
+  (defun gptel-tools-code--make-unified-diff (path old-code new-code)
+    "Generate a unified diff string between OLD-CODE and NEW-CODE for PATH.
+Returns a string in standard unified diff format with ---/+++ headers
+and -/+ line prefixes suitable for display in `diff-mode'."
+    (let ((old-lines (split-string old-code "\n"))
+          (new-lines (split-string new-code "\n"))
+          (filename (file-name-nondirectory path)))
+      (concat
+       (format "--- a/%s\n+++ b/%s\n" filename filename)
+       (format "@@ -%d,%d +%d,%d @@\n"
+               1 (length old-lines) 1 (length new-lines))
+       (mapconcat (lambda (l) (concat "-" l)) old-lines "\n")
+       "\n"
+       (mapconcat (lambda (l) (concat "+" l)) new-lines "\n")
+       "\n")))
+
   (defun gptel-tools-code--replace-preview-setup (arg-values _info)
-    "Setup diff preview for Code_Replace tool."
+    "Setup diff preview for Code_Replace tool.
+
+Shows a compact inline summary in the chat buffer and opens a
+*Code_Replace Preview* buffer in a side window with a unified diff
+in `diff-mode'.  Returns the preview buffer as the handle for teardown."
     (pcase-let ((from (point))
                 (`(,path ,node-name ,new-code) arg-values))
+      ;; --- Inline summary in chat buffer ---
       (insert
        "(" (propertize "Code_Replace " 'font-lock-face 'font-lock-keyword-face)
-       (propertize (concat "\"" (file-name-nondirectory path) "\"") 'font-lock-face 'font-lock-constant-face)
-       " " (propertize (concat "\"" node-name "\"") 'font-lock-face 'font-lock-string-face)
-       ")\n")
-      
+       (propertize (concat "\"" (file-name-nondirectory path) "\"")
+                   'font-lock-face 'font-lock-constant-face)
+       " " (propertize (concat "\"" node-name "\"")
+                       'font-lock-face 'font-lock-string-face)
+       ")")
       (let* ((full-path (expand-file-name path))
              (old-code (when (file-readable-p full-path)
-                        (with-current-buffer (find-file-noselect full-path)
-                          (treesit-agent-extract-node node-name)))))
+                         (with-current-buffer (find-file-noselect full-path)
+                           (treesit-agent-extract-node node-name))))
+             (preview-buf (get-buffer-create "*Code_Replace Preview*")))
+        ;; Insert a compact note pointing to the diff buffer
         (if old-code
-            (insert
-             (propertize old-code 'font-lock-face 'diff-removed
-                         'line-prefix (propertize "-" 'face 'diff-removed))
-             "\n"
-             (propertize new-code 'font-lock-face 'diff-added
-                         'line-prefix (propertize "+" 'face 'diff-added))
-             "\n")
-          (insert
-           (propertize new-code 'font-lock-face 'font-lock-string-face)
-           "\n")))
-           
-      (font-lock-append-text-property
-       from (1- (point)) 'font-lock-face (if (fboundp 'gptel-agent--block-bg) (gptel-agent--block-bg) 'default))
-      (when (fboundp 'gptel-agent--confirm-overlay)
-        (gptel-agent--confirm-overlay from (point) t))))
+            (insert " "
+                    (propertize (format "[%d -> %d lines]"
+                                        (length (split-string old-code "\n"))
+                                        (length (split-string new-code "\n")))
+                                'font-lock-face 'font-lock-doc-face))
+          (insert " " (propertize "[new]" 'font-lock-face 'font-lock-doc-face)))
+        (insert "\n")
+
+        ;; Background styling for inline part
+        (font-lock-append-text-property
+         from (1- (point)) 'font-lock-face
+         (if (fboundp 'gptel-agent--block-bg) (gptel-agent--block-bg) 'default))
+        (when (fboundp 'gptel-agent--confirm-overlay)
+          (gptel-agent--confirm-overlay from (point) t))
+
+        ;; --- Side window with unified diff ---
+        (with-current-buffer preview-buf
+          (let ((inhibit-read-only t))
+            (erase-buffer)
+            (if old-code
+                (insert (gptel-tools-code--make-unified-diff path old-code new-code))
+              ;; No old code found — show the new code as all additions
+              (insert (format "--- /dev/null\n+++ b/%s\n@@ -0,0 +1,%d @@\n%s\n"
+                              (file-name-nondirectory path)
+                              (length (split-string new-code "\n"))
+                              (mapconcat (lambda (l) (concat "+" l))
+                                         (split-string new-code "\n") "\n"))))
+            (diff-mode)
+            (font-lock-ensure)
+            (goto-char (point-min))
+            (setq buffer-read-only t)))
+        (display-buffer preview-buf
+                        '((display-buffer-in-side-window)
+                          (side . right)
+                          (window-width . 0.5)
+                          (preserve-size . (t . nil))))
+        ;; Return the buffer as the handle for teardown
+        preview-buf)))
+
+  (defun gptel-tools-code--replace-preview-teardown (preview-buf)
+    "Close the Code_Replace preview buffer and its window."
+    (when (buffer-live-p preview-buf)
+      (when-let* ((win (get-buffer-window preview-buf t)))
+        (delete-window win))
+      (kill-buffer preview-buf)))
+
   (setf (alist-get "Code_Replace" gptel--tool-preview-alist nil nil #'equal)
-        (list #'gptel-tools-code--replace-preview-setup)))
+        (list #'gptel-tools-code--replace-preview-setup
+              #'gptel-tools-code--replace-preview-teardown)))
 
 (provide 'gptel-tools-code)
