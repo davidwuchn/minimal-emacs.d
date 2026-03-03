@@ -163,13 +163,6 @@ If rules conflict:
 1. Prioritize Safety → Accuracy → Reproducibility.
 2. Ask for clarification if ambiguity remains.
 
-### Subagent Payload Limits
-
-When a subagent generates a large output (e.g., >4000 characters), do not return the full result directly to the main LLM to avoid HTTP parsing errors and payload limits. Instead:
-1. Save the full output to a temporary disk file.
-2. Return a truncated preview of the result to the main LLM.
-3. Inform the main LLM of the file path so it can use the `Read` tool to access the rest if needed.
-
 ---
 
 **See Also:** [README](README.md) · [STATE](STATE.md) · [PLAN](PLAN.md) · [LEARNING](LEARNING.md) · [CHANGELOG](CHANGELOG.md)
