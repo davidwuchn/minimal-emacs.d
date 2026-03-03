@@ -5,10 +5,11 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(apheleia avy cape cider compile-angel corfu dirvish doom-modeline dumb-jump
-              eat eca embark-consult enhanced-evil-paredit evil-collection
-              evil-surround evil-visualstar exec-path-from-shell gptel-agent
-              helpful json5-ts-mode magit marginalia nerd-icons-completion
+   '(apheleia avy buttercup cape cider clojure-ts-mode compile-angel corfu dirvish
+              doom-modeline dumb-jump eat eca embark-consult
+              enhanced-evil-paredit evil-collection evil-surround
+              evil-visualstar exec-path-from-shell gptel-agent helpful
+              json5-ts-mode magit marginalia nerd-icons-completion
               nerd-icons-corfu nerd-icons-dired tempel treesit-auto undo-fu
               undo-fu-session vertico vterm vundo)))
 (custom-set-faces
