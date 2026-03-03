@@ -73,6 +73,7 @@
   :hook ((clojure-mode . eglot-ensure)
          (java-ts-mode . eglot-ensure)
          (c-ts-mode . eglot-ensure)
-         (c++-ts-mode . eglot-ensure))
+         (c++-ts-mode . eglot-ensure)
+         (lua-ts-mode . eglot-ensure))
   :custom
   (eglot-ignored-server-capabilities '(:documentHighlightProvider)))

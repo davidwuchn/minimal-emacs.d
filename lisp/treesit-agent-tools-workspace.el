@@ -22,7 +22,8 @@ extension."
                   ((member ext '("go"))          'go)
                   ((member ext '("c" "h"))       'c)
                   ((member ext '("cpp" "cc" "cxx" "hpp")) 'cpp)
-                  ((member ext '("java"))        'java))))
+                   ((member ext '("java"))        'java)
+                   ((member ext '("lua"))         'lua))))
       (when (and lang (treesit-language-available-p lang))
         (treesit-parser-create lang)))))
 

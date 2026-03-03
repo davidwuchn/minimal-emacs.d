@@ -39,7 +39,11 @@ Provides fallback regexps for languages that don't set treesit-defun-type-regexp
       ;; Fallback for C++ (adds class_specifier and namespace_definition)
       (and (treesit-parser-list)
            (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'cpp)) (treesit-parser-list))
-           "\\(?:function_definition\\|class_specifier\\|struct_specifier\\|enum_specifier\\|union_specifier\\|namespace_definition\\|type_definition\\)")))
+           "\\(?:function_definition\\|class_specifier\\|struct_specifier\\|enum_specifier\\|union_specifier\\|namespace_definition\\|type_definition\\)")
+      ;; Fallback for Lua (function_declaration only — name field handles extraction)
+      (and (treesit-parser-list)
+           (cl-find-if (lambda (p) (eq (treesit-parser-language p) 'lua)) (treesit-parser-list))
+           "function_declaration")))
 
 (defun treesit-agent--get-defun-name (node)
   "Get the name of a defun NODE.
