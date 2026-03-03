@@ -23,6 +23,12 @@
   :type 'float
   :group 'gptel-tools-preview)
 
+(defcustom gptel-tools-preview-timeout 300
+  "Seconds before an unattended preview auto-aborts.
+Set to nil to disable the timeout."
+  :type '(choice integer (const nil))
+  :group 'gptel-tools-preview)
+
 ;;; Core Preview Functions
 
 (defun my/gptel--setup-preview-keys (buffer on-confirm on-abort)
@@ -62,6 +68,32 @@ Returns the window displaying the buffer."
                   `(display-buffer-reuse-window
                     display-buffer-below-selected
                     (window-height . ,(or height gptel-tools-preview-window-height)))))
+
+(defun my/gptel--preview-start-timeout (buffer)
+  "Start a timeout timer for preview BUFFER.
+
+After `gptel-tools-preview-timeout' seconds, kills BUFFER which
+triggers the kill-buffer-hook abort path.  Returns the timer, or
+nil if timeouts are disabled.
+
+The timer is stored as a buffer-local variable and cancelled
+automatically on buffer kill via kill-buffer-hook."
+  (when gptel-tools-preview-timeout
+    (let ((timer (run-at-time
+                  gptel-tools-preview-timeout nil
+                  (lambda ()
+                    (when (buffer-live-p buffer)
+                      (message "[gptel-preview] Timeout after %ds, aborting preview"
+                               gptel-tools-preview-timeout)
+                      (kill-buffer buffer))))))
+      (with-current-buffer buffer
+        (setq-local my/gptel--preview-timer timer)
+        (add-hook 'kill-buffer-hook
+                  (lambda ()
+                    (when (timerp my/gptel--preview-timer)
+                      (cancel-timer my/gptel--preview-timer)))
+                  nil t))
+      timer)))
 
 (defun my/gptel--run-diff (temp1 temp2)
   "Run diff between TEMP1 and TEMP2 files.
@@ -106,6 +138,7 @@ CALLBACK is called when user confirms or aborts."
                     (lambda () (funcall wrapped-cb "Preview aborted."))
                     nil t)
           (my/gptel--display-preview-buffer diff-buf)
+          (my/gptel--preview-start-timeout diff-buf)
           (my/gptel--setup-preview-keys
            diff-buf
            (lambda () (funcall wrapped-cb "Preview confirmed."))
@@ -139,9 +172,10 @@ HEADER is the prompt to show."
                     patch
                     #'diff-mode)))
     (add-hook 'kill-buffer-hook
-              (lambda () (funcall callback "Preview aborted."))
+              (lambda () (funcall wrapped-cb "Preview aborted."))
               nil t)
     (my/gptel--display-preview-buffer diff-buf)
+    (my/gptel--preview-start-timeout diff-buf)
     (my/gptel--setup-preview-keys
      diff-buf
      (lambda () (funcall wrapped-cb "Patch reviewed. Not applied."))
@@ -177,6 +211,7 @@ HEADER is the prompt to show."
                 (lambda () (funcall on-abort wrapped-cb))
                 nil t))
     (my/gptel--display-preview-buffer diff-buf)
+    (my/gptel--preview-start-timeout diff-buf)
     (my/gptel--setup-preview-keys
      diff-buf
      (lambda () (funcall on-confirm wrapped-cb))
