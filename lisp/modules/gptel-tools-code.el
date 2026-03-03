@@ -223,6 +223,13 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                  (condition-case err
                      (with-timeout (5 (format "Error: Code_Replace timed out on %s" file_path))
                        (with-current-buffer (find-file-noselect file_path)
+                         ;; Sync buffer with disk before operating — prevents
+                         ;; "changed since visited" prompts when multiple
+                         ;; Code_Replace calls target the same file in sequence.
+                         (when (and (buffer-file-name)
+                                    (file-exists-p (buffer-file-name))
+                                    (not (verify-visited-file-modtime)))
+                           (revert-buffer t t t))
                          (treesit-agent--ensure-parser file_path)
                          ;; Pre-flight check: Verify tree-sitter parser is available
                          (if (not (treesit-parser-list))
@@ -238,11 +245,25 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
                                                 ((string-match-p rs-rx file_path) 'rust)
                                                 (t 'unknown))))))
                                (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Edit tool (manual paren balancing required)" file_path (or lang "language") file_path (or lang "language")))
-                           (if (treesit-agent-replace-node node_name new_code)
-                               (progn
-                                 (save-buffer)
-                                 (format "Successfully replaced '%s' in %s" node_name file_path))
-                             (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))
+                           (let ((old-code (treesit-agent-extract-node node_name)))
+                             ;; Guard: reject likely-truncated replacements.
+                             ;; If old code is non-trivial (>5 lines) and new code
+                             ;; is <20% the size, the LLM probably sent just a
+                             ;; signature without the body.
+                             (if (and old-code
+                                      (> (length old-code) 200)
+                                      (< (length new_code) (* 0.2 (length old-code))))
+                                 (format "Error: Replacement rejected — new code (%d chars) is suspiciously shorter than original (%d chars).\nThis usually means the function body was truncated.\n\nACTION: Provide the COMPLETE replacement including the full function body."
+                                         (length new_code) (length old-code))
+                               (if (treesit-agent-replace-node node_name new_code)
+                                   (progn
+                                     ;; Suppress supersession warnings during save —
+                                     ;; we just synced the buffer above, so any disk
+                                     ;; change is from our own prior Code_Replace call.
+                                     (cl-letf (((symbol-function 'ask-user-about-supersession-threat) #'ignore))
+                                       (save-buffer))
+                                     (format "Successfully replaced '%s' in %s" node_name file_path))
+                              (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))))
                    (error (let ((msg (error-message-string err)))
                             (cond
                              ((string-match-p "treesit" msg)
