@@ -1206,6 +1206,28 @@ START and END are the response region positions passed by
   (message "Auto-permitting all future tool calls in this buffer.")
   (call-interactively #'gptel--accept-tool-calls))
 
+;; --- FSM Lookup Helper ---
+;; Upstream `gptel--inspect-fsm' has a bug: when called with nil FSM arg, it
+;; falls back to `(cdr-safe (cl-find-if pred gptel--request-alist))' which
+;; yields (FSM . CLEANUP-FN) — a cons cell, not a bare gptel-fsm struct.
+;; This helper does the extraction correctly.
+
+(defun my/gptel--current-fsm ()
+  "Return the current gptel-fsm struct for the active request.
+
+Looks up the FSM from `gptel--request-alist' using the correct
+extraction: (car (cdr entry)) to unwrap the (FSM . CLEANUP-FN)
+cons cell.  Falls back to `gptel--fsm-last' if no active request
+is found."
+  (or (and (bound-and-true-p gptel--request-alist)
+           (car (cdr-safe
+                 (cl-find-if
+                  (lambda (entry)
+                    (let ((buf (process-buffer (car entry))))
+                      (eq buf (current-buffer))))
+                  gptel--request-alist))))
+      gptel--fsm-last))
+
 ;; --- Enhanced Tool Call Confirmation Context ---
 ;; Overrides `gptel--display-tool-calls' to include arguments in the minibuffer prompt.
 (defun my/gptel--display-tool-calls (tool-calls info &optional use-minibuffer)
@@ -1240,7 +1262,7 @@ START and END are the response region positions passed by
              tool-calls '("tool call" "tool calls" "run")
              `((?i ,(lambda (_) (save-window-excursion
                              (with-selected-window
-                                 (gptel--inspect-fsm gptel--fsm-last)
+                                 (gptel--inspect-fsm (my/gptel--current-fsm))
                                (goto-char (point-min))
                                (when (search-forward-regexp "^:tool-use" nil t)
                                  (forward-line 0) (hl-line-highlight))
