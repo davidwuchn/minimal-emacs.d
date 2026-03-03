@@ -26,8 +26,12 @@ tokens, avoiding DashScope proxy timeouts."
   :type '(choice (const :tag "Same as parent" nil) symbol)
   :group 'gptel-tools-agent)
 
-(require 'gptel)
-(require 'gptel-agent nil t)
+(eval-and-compile
+  (require 'gptel nil t)
+  (require 'gptel-agent nil t))
+
+;; Fallback macro definition removed in favor of explicit cl-progv scoping
+
 
 ;; PATCH: Override gptel-agent--task to support streaming correctly
 
@@ -36,69 +40,72 @@ tokens, avoiding DashScope proxy timeouts."
 
 (defun my/gptel-agent--task-override (main-cb agent-type description prompt)
   "Call a gptel agent to do specific compound tasks (patched for streaming)."
-  (gptel-with-preset
-      (nconc (list :include-reasoning nil
-                   :use-tools t
-                   :use-context nil)
-             (cdr (assoc agent-type gptel-agent--agents)))
-    (let* ((info (gptel-fsm-info gptel--fsm-last))
-           (parent-buf (plist-get info :buffer))
-           (where (or (plist-get info :tracking-marker)
-                      (plist-get info :position)))
-           (tracking-marker (let ((m (copy-marker where)))
-                              (set-marker-insertion-type m t)
-                              (set-marker m (marker-position where) parent-buf)
-                              m))
-           (partial (format "%s result for task: %s\n\n"
-                            (capitalize agent-type) description)))
-      (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
-      (gptel-request prompt
-        :context (gptel-agent--task-overlay where agent-type description)
-        :fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)
-        :position tracking-marker
-        :buffer parent-buf
-        :in-place t
-        :stream t
-        :callback
-        (let ((main-cb-local main-cb))
-          (lambda (resp info)
-            (let ((ov (plist-get info :context)))
-              (cond
-                ((null resp)
-                 (delete-overlay ov)
-                 (funcall main-cb-local
-                          (format "Error: Task %s could not finish task \"%s\". \n\nError details: %S"
-                                  agent-type description (plist-get info :error))))
-                ((and (consp resp) (eq (car-safe resp) 'tool-call))
-                 (unless (plist-get info :tracking-marker)
-                   (plist-put info :tracking-marker tracking-marker))
-                 (gptel--display-tool-calls (cdr resp) info))
-                ((stringp resp)
-                 (setq partial (concat partial resp))
-                 (unless (plist-get info :tool-use)
+  (let* ((preset (nconc (list :include-reasoning nil
+                              :use-tools t
+                              :use-context nil)
+                        (cdr (assoc agent-type gptel-agent--agents))))
+         (syms (cons 'gptel--preset (gptel--preset-syms preset)))
+         (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
+    (cl-progv syms vals
+      (gptel--apply-preset preset)
+      (let* ((info (gptel-fsm-info gptel--fsm-last))
+             (parent-buf (plist-get info :buffer))
+             (where (or (plist-get info :tracking-marker)
+                        (plist-get info :position)))
+             (tracking-marker (let ((m (copy-marker where)))
+                                (set-marker-insertion-type m t)
+                                (set-marker m (marker-position where) parent-buf)
+                                m))
+             (partial (format "%s result for task: %s\n\n"
+                              (capitalize agent-type) description)))
+        (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
+        (gptel-request prompt
+          :context (gptel-agent--task-overlay where agent-type description)
+          :fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)
+          :position tracking-marker
+          :buffer parent-buf
+          :in-place t
+          :stream t
+          :callback
+          (let ((main-cb-local main-cb))
+            (lambda (resp info)
+              (let ((ov (plist-get info :context)))
+                (cond
+                  ((null resp)
                    (delete-overlay ov)
-                   (when-let* ((transformer (plist-get info :transformer)))
-                     (setq partial (funcall transformer partial)))
-                   (funcall main-cb-local partial)))
-                ((eq resp 'abort)
-                 (delete-overlay ov)
-                 (funcall main-cb-local
-                          (format "Error: Task \"%s\" was aborted by the user. \n%s could not finish."
-                                  description agent-type)))
-                ((eq resp t)
-                 (unless (plist-get info :tool-use)
+                   (funcall main-cb-local
+                            (format "Error: Task %s could not finish task \"%s\". \n\nError details: %S"
+                                    agent-type description (plist-get info :error))))
+                  ((and (consp resp) (eq (car-safe resp) 'tool-call))
+                   (unless (plist-get info :tracking-marker)
+                     (plist-put info :tracking-marker tracking-marker))
+                   (gptel--display-tool-calls (cdr resp) info))
+                  ((stringp resp)
+                   (setq partial (concat partial resp))
+                   (unless (plist-get info :tool-use)
+                     (delete-overlay ov)
+                     (when-let* ((transformer (plist-get info :transformer)))
+                       (setq partial (funcall transformer partial)))
+                     (funcall main-cb-local partial)))
+                  ((eq resp 'abort)
                    (delete-overlay ov)
-                   (when-let* ((transformer (plist-get info :transformer)))
-                     (setq partial (funcall transformer partial)))
-                   (if (> (length partial) 4000)
-                       (let* ((temp-file (make-temp-file "gptel-subagent-result-" nil ".txt"))
-                              (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
-                                                 (substring partial 0 4000)
-                                                 temp-file)))
-                         (with-temp-file temp-file
-                           (insert partial))
-                         (funcall main-cb-local trunc-msg))
-                     (funcall main-cb-local partial))))))))))))
+                   (funcall main-cb-local
+                            (format "Error: Task \"%s\" was aborted by the user. \n%s could not finish."
+                                    description agent-type)))
+                  ((eq resp t)
+                   (unless (plist-get info :tool-use)
+                     (delete-overlay ov)
+                     (when-let* ((transformer (plist-get info :transformer)))
+                       (setq partial (funcall transformer partial)))
+                     (if (> (length partial) 4000)
+                         (let* ((temp-file (make-temp-file "gptel-subagent-result-" nil ".txt"))
+                                (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
+                                                   (substring partial 0 4000)
+                                                   temp-file)))
+                           (with-temp-file temp-file
+                             (insert partial))
+                           (funcall main-cb-local trunc-msg))
+                       (funcall main-cb-local partial)))))))))))))
 
 (with-eval-after-load 'gptel-agent-tools
   (advice-add 'gptel-agent--task :override #'my/gptel-agent--task-override))
