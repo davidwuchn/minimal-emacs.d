@@ -4,6 +4,7 @@
 
 set -e
 
+PLAN_DIR="docs/plans"
 ERRORS=0
 WARNINGS=0
 
@@ -13,36 +14,36 @@ echo ""
 # Check if planning files exist
 echo "📁 Checking planning files..."
 
-if [ -f "task_plan.md" ]; then
-    echo "  ✅ task_plan.md exists"
+if [ -f "$PLAN_DIR/task_plan.md" ]; then
+    echo "  ✅ $PLAN_DIR/task_plan.md exists"
 else
-    echo "  ❌ task_plan.md missing"
+    echo "  ❌ $PLAN_DIR/task_plan.md missing"
     ((ERRORS++))
 fi
 
-if [ -f "findings.md" ]; then
-    echo "  ✅ findings.md exists"
+if [ -f "$PLAN_DIR/findings.md" ]; then
+    echo "  ✅ $PLAN_DIR/findings.md exists"
 else
-    echo "  ⚠️  findings.md missing (optional but recommended)"
+    echo "  ⚠️  $PLAN_DIR/findings.md missing (optional but recommended)"
     ((WARNINGS++))
 fi
 
-if [ -f "progress.md" ]; then
-    echo "  ✅ progress.md exists"
+if [ -f "$PLAN_DIR/progress.md" ]; then
+    echo "  ✅ $PLAN_DIR/progress.md exists"
 else
-    echo "  ⚠️  progress.md missing (optional but recommended)"
+    echo "  ⚠️  $PLAN_DIR/progress.md missing (optional but recommended)"
     ((WARNINGS++))
 fi
 
 echo ""
 
 # Check task_plan.md for completion
-if [ -f "task_plan.md" ]; then
-    echo "📋 Checking task_plan.md..."
+if [ -f "$PLAN_DIR/task_plan.md" ]; then
+    echo "📋 Checking $PLAN_DIR/task_plan.md..."
     
     # Check for incomplete phases
-    INCOMPLETE=$(grep -c "Status:.*\`pending\`" task_plan.md 2>/dev/null || echo "0")
-    IN_PROGRESS=$(grep -c "Status:.*\`in_progress\`" task_plan.md 2>/dev/null || echo "0")
+    INCOMPLETE=$(grep -c "Status:.*\`pending\`" "$PLAN_DIR/task_plan.md" 2>/dev/null || echo "0")
+    IN_PROGRESS=$(grep -c "Status:.*\`in_progress\`" "$PLAN_DIR/task_plan.md" 2>/dev/null || echo "0")
     
     if [ "$INCOMPLETE" -gt 0 ]; then
         echo "  ⚠️  $INCOMPLETE phase(s) still pending"
@@ -55,7 +56,7 @@ if [ -f "task_plan.md" ]; then
     fi
     
     # Check if goal is defined
-    if grep -q "\[One sentence describing the end state\]" task_plan.md; then
+    if grep -q "\[One sentence describing the end state\]" "$PLAN_DIR/task_plan.md"; then
         echo "  ⚠️  Goal not defined (placeholder still present)"
         ((WARNINGS++))
     else

@@ -50,7 +50,7 @@ Filesystem     = Disk (persistent, unlimited)
 
 ```bash
 # Check if plan files exist but are stale
-ls -la task_plan.md findings.md progress.md 2>/dev/null
+ls -la docs/plans/task_plan.md docs/plans/findings.md docs/plans/progress.md 2>/dev/null
 
 # If files exist, read them before proceeding
 ```
@@ -67,9 +67,9 @@ If resuming after `/clear` or session gap:
 
 | File | Symbol | Purpose | nucleus Mapping |
 |------|--------|---------|-----------------|
-| `task_plan.md` | φ | Phase tracking, goals | Intent → Structure |
-| `findings.md` | π | Research synthesis | Discovery → Knowledge |
-| `progress.md` | Δ | Session state changes | Action → History |
+| `docs/plans/task_plan.md` | φ | Phase tracking, goals | Intent → Structure |
+| `docs/plans/findings.md` | π | Research synthesis | Discovery → Knowledge |
+| `docs/plans/progress.md` | Δ | Session state changes | Action → History |
 
 ---
 
@@ -77,9 +77,9 @@ If resuming after `/clear` or session gap:
 
 Before ANY complex task:
 
-1. **Create `task_plan.md`** — Use [templates/task_plan.md](templates/task_plan.md)
-2. **Create `findings.md`** — Use [templates/findings.md](templates/findings.md)
-3. **Create `progress.md`** — Use [templates/progress.md](templates/progress.md)
+1. **Create `docs/plans/task_plan.md`** — Use [templates/task_plan.md](templates/task_plan.md)
+2. **Create `docs/plans/findings.md`** — Use [templates/findings.md](templates/findings.md)
+3. **Create `docs/plans/progress.md`** — Use [templates/progress.md](templates/progress.md)
 4. **Re-read plan before decisions** — Keeps goals in attention window
 5. **Update after each phase** — Mark complete, log errors
 
@@ -88,7 +88,7 @@ Before ANY complex task:
 ## Critical Rules
 
 ### 1. Create Plan First (τ — Wisdom)
-Never start a complex task without `task_plan.md`. Non-negotiable.
+Never start a complex task without `docs/plans/task_plan.md`. Non-negotiable.
 
 ### 2. The 2-Action Rule (φ — Vitality)
 > "After every 2 view/browser/search operations, IMMEDIATELY save key findings to text files."
@@ -123,7 +123,7 @@ Track attempts. Mutate approach.
 ## Procedure
 
 1. **Initialize plan files**
-   - Create `task_plan.md`, `findings.md`, `progress.md` from templates.
+   - Create `docs/plans/task_plan.md`, `docs/plans/findings.md`, `docs/plans/progress.md` from templates.
 2. **Review before action**
    - Read plan/findings before starting any phase.
 3. **Execute in phases**
@@ -176,11 +176,11 @@ AFTER 3 FAILURES: Escalate to User
 
 | Question | Answer Source | Key |
 |----------|--------------|-----|
-| Where am I? | Current phase in task_plan.md | φ |
+| Where am I? | Current phase in docs/plans/task_plan.md | φ |
 | Where am I going? | Remaining phases | π |
 | What's the goal? | Goal statement in plan | e |
-| What have I learned? | findings.md | τ |
-| What have I done? | progress.md | Δ |
+| What have I learned? | docs/plans/findings.md | τ |
+| What have I done? | docs/plans/progress.md | Δ |
 
 If you can answer all five, your context management is solid.
 
@@ -227,9 +227,9 @@ Helper scripts for automation:
 | **Clarity** | fractal | Explicit assumptions | "Handle properly" | Explicit phase definitions and success criteria |
 | **Purpose** | e | Actionable function | Abstract descriptions | Clear phase names with testable completion status |
 | **Wisdom** | τ | Foresight over speed | Premature optimization | Create plan before executing, 3-strike error protocol |
-| **Synthesis** | π | Holistic integration | Fragmented thinking | task_plan.md + findings.md + progress.md integration |
-| **Directness** | μ | Cut pleasantries | Polite evasion | Direct error logging, no euphemisms in progress.md |
-| **Truth** | ∃ | Favor reality | Surface agreement | Log actual errors, not "should work" in findings.md |
+| **Synthesis** | π | Holistic integration | Fragmented thinking | docs/plans/task_plan.md + docs/plans/findings.md + docs/plans/progress.md integration |
+| **Directness** | μ | Cut pleasantries | Polite evasion | Direct error logging, no euphemisms in docs/plans/progress.md |
+| **Truth** | ∃ | Favor reality | Surface agreement | Log actual errors, not "should work" in docs/plans/findings.md |
 | **Vigilance** | ∀ | Defensive constraint | Accepting manipulation | 3-strike error protocol, never repeat failures |
 
 ---
@@ -241,7 +241,7 @@ Helper scripts for automation:
 | Stuff everything in context | Store large content in files |
 | Start executing immediately | Create plan file FIRST |
 | Repeat failed actions | Track attempts, mutate approach |
-| Create files in skill directory | Create files in your project |
+| Create files in skill directory | Create files in `docs/plans/` |
 | Use vague phase names | Use verb-named, testable phases |
 
 ---
@@ -250,21 +250,21 @@ Helper scripts for automation:
 
 ### With `!fractal`
 Use planning files at different scales:
-- **Strategic**: task_plan.md — Overall goal
-- **Tactical**: Current phase in task_plan.md — Immediate objective
-- **Implementation**: progress.md — Current action
+- **Strategic**: docs/plans/task_plan.md — Overall goal
+- **Tactical**: Current phase in docs/plans/task_plan.md — Immediate objective
+- **Implementation**: docs/plans/progress.md — Current action
 
 ### With `!reflect`
 Before reflecting, check:
-1. Does task_plan.md match actual work?
-2. Are findings.md discoveries captured?
-3. Does progress.md show clear Δ?
+1. Does docs/plans/task_plan.md match actual work?
+2. Are docs/plans/findings.md discoveries captured?
+3. Does docs/plans/progress.md show clear Δ?
 
 ### With `!verify`
 Verification checklist:
-- [ ] All phases in task_plan.md have status
-- [ ] findings.md contains research outputs
-- [ ] progress.md logs errors and completions
+- [ ] All phases in docs/plans/task_plan.md have status
+- [ ] docs/plans/findings.md contains research outputs
+- [ ] docs/plans/progress.md logs errors and completions
 - [ ] No orphan files (created but unreferenced)
 
 ---
@@ -276,7 +276,7 @@ Use these tags in your planning files:
 ```markdown
 <!-- φ: Requires creativity/decision -->
 <!-- π: Synthesis point — connect findings -->
-<!-- Δ: State change — update progress.md -->
+<!-- Δ: State change — update docs/plans/progress.md -->
 <!-- τ: Wisdom check — is this the right path? -->
 <!-- ∃: Truth check — what do we actually know? -->
 <!-- ∀: Vigilance — what could go wrong? -->
@@ -287,11 +287,11 @@ Use these tags in your planning files:
 ## Verification
 
 Before concluding planning task:
-- [ ] task_plan.md created with all phases defined
-- [ ] findings.md contains research outputs and discoveries
-- [ ] progress.md tracks all actions and errors
-- [ ] All phases in task_plan.md have status (pending/in_progress/complete)
-- [ ] Errors logged in task_plan.md error table
+- [ ] docs/plans/task_plan.md created with all phases defined
+- [ ] docs/plans/findings.md contains research outputs and discoveries
+- [ ] docs/plans/progress.md tracks all actions and errors
+- [ ] All phases in docs/plans/task_plan.md have status (pending/in_progress/complete)
+- [ ] Errors logged in docs/plans/task_plan.md error table
 - [ ] No orphan files (created but unreferenced)
 - [ ] 5-Question Reboot Test answers found in planning files
 
