@@ -1,20 +1,14 @@
-λ(path, original?, replacement). preview_file_change | diff:magit
-λ(patch). preview_patch | diff:unified
-λ(path, original, replacement). preview_inline | diff:inline
-λ(files). preview_batch | diff:batch
-λ(path, content). preview_syntax | read:syntax
+λ(path?, original?, replacement?, patch?). Preview | diff:unified
 
 ## Availability
-- `preview_file_change`: :nucleus, :snippets
-- `preview_patch`: :nucleus, :snippets
-- `preview_inline`: :nucleus, :snippets
-- `preview_batch`: :nucleus, :snippets
-- `preview_syntax`: :nucleus, :snippets
+- `Preview`: :nucleus, :snippets
+
+## Modes
+1. **File change**: provide `path` + `replacement` (optional `original`, auto-read from file)
+2. **Patch**: provide `patch` (raw unified diff)
 
 ## Parameters
-- `path` (string): File path
-- `original` (string, optional): Original content
-- `replacement` (string): New content
-- `patch` (string): Unified diff content
-- `files` (array): File change objects [{path, original, replacement}]
-- `content` (string): Code snippet content
+- `path` (string, optional): Target file path (file change mode)
+- `original` (string, optional): Original content (auto-read from file if omitted)
+- `replacement` (string, optional): Replacement content (file change mode)
+- `patch` (string, optional): Unified diff content (patch mode)

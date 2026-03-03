@@ -204,12 +204,10 @@ Nucleus implements task-specific model routing to optimize cost and capability (
   tool-call turns so the API never receives messages without the required field.
 
 ### Preview & patch
-- **`preview_file_change`** — Async step-through preview using `magit-diff-paths`
-  (falls back to `diff-mode`). Multiple files queue up and are shown one at a
-  time; `n` advances, `q` aborts remaining. The FSM waits for each `n`/`q`
-  before the agent can proceed.
-- **`preview_patch`** — Async inspect-only patch preview (`n` = reviewed,
-  not applied; `q` = abort).
+- **`Preview`** — Unified async preview tool. Two modes: (1) file change
+  (`path` + `replacement`) generates and shows unified diff; (2) patch mode
+  (`patch` param) shows raw unified diff. Both display in `diff-mode` with
+  `n`/`y` to confirm, `q` to abort. The FSM waits for user response.
 - **`ApplyPatch`** — Shows `*gptel-patch-preview*` in `diff-mode` and waits for
   `n` (apply) or `q` (abort) before running `git apply`. Gated by
   `my/gptel-applypatch-auto-preview` (default `t`); set to `nil` for headless use.

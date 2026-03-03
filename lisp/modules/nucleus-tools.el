@@ -59,12 +59,12 @@ When enabled, validates:
                   "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
                   "WebFetch" "WebSearch" "Write" "YouTube"
                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                  "preview_file_change" "preview_patch"
-                  "list_skills" "load_skill" "create_skill"
-                  "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
+                   "Preview"
+                   "list_skills" "load_skill" "create_skill"
+                   "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
      (:explorer . ("Glob" "Grep" "Read"))
      (:reviewer . ("Glob" "Grep" "Read"))
-     (:snippets . ("RunAgent" "Bash" "Edit" "ApplyPatch" "preview_file_change" "preview_patch"
+     (:snippets . ("RunAgent" "Bash" "Edit" "ApplyPatch" "Preview"
                    "Grep" "Glob" "Read" "Write" "describe_symbol" "get_symbol_source"
                    "find_buffers_and_recent" "Skill" "list_skills" "load_skill"
                    "create_skill" "WebSearch" "WebFetch"
@@ -75,13 +75,13 @@ When enabled, validates:
 :core — Base gptel-agent tools (23 tools)
 :readonly — Read-only subset for plan mode (18 tools)
 :researcher — Research: readonly + skill loading (19 tools, superset of :readonly)
-:nucleus — Full action tools + preview + skill management (31 tools)
+:nucleus — Full action tools + preview + skill management (30 tools)
 :explorer — Minimal read-only set for codebase exploration (3 tools: Glob/Grep/Read)
 :reviewer — Minimal read-only set for code review (3 tools: Glob/Grep/Read)
-:snippets — Tools with supplemental prompts injected (31 tools)
+:snippets — Tools with supplemental prompts injected (30 tools)
 
 Tool contracts enforced in `nucleus--override-gptel-agent-presets':
-  executor     → :nucleus     (31 tools) - code changes & execution
+  executor     → :nucleus     (30 tools) - code changes & execution
   researcher   → :researcher  (19 tools) - exploration & research
   introspector → :readonly    (16 tools) - Emacs introspection
   explorer     → :explorer     (3 tools) - read-only codebase exploration

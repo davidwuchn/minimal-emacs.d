@@ -42,7 +42,7 @@
     ("Mkdir" (expand-file-name (nth 1 args) (nth 0 args)))
     ("Grep" (nth 1 args))
     ("Glob" (if (> (length args) 1) (nth 1 args) default-directory))
-    ("preview_file_change" (nth 0 args))
+    ("Preview" (nth 0 args))
     (_ nil)))
 
 (defun my/gptel-tool-acl-check (tool-name args)

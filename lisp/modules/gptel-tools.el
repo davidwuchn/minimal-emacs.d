@@ -277,7 +277,7 @@ Call this after gptel-agent-tools loads."
                                 "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
                                 "WebFetch" "WebSearch" "Write" "YouTube"
                                 "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                                "preview_file_change" "preview_patch"
+                                "Preview"
                                 "list_skills" "load_skill" "create_skill"
                                 "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics")))
           my/gptel-tools-readonly)))
