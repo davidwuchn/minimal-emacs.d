@@ -35,8 +35,9 @@
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3.5-plus)
 
-(setq gptel-confirm-tool-calls 'auto)
-(setq-default gptel-confirm-tool-calls 'auto)
+;; Tool confirmation is managed by gptel-tool-ui.el via
+;; my/gptel-confirmation-level (auto/normal/confirm-all).
+;; Use M-x my/gptel-set-confirmation-level to change at runtime.
 
 ;; --- Keybindings & UI Helpers ---
 (defun my/gptel-add-project-files ()
@@ -50,28 +51,6 @@
           (gptel-add-file f))
         (message "Added %d files to gptel context." (length selected)))
     (user-error "Not in a project or no files selected")))
-
-(defun my/gptel-tool-confirmation-never ()
-  "Disable tool call confirmation everywhere."
-  (interactive)
-  (setq gptel-confirm-tool-calls nil)
-  (setq-default gptel-confirm-tool-calls nil)
-  (dolist (b (buffer-list))
-    (with-current-buffer b
-      (when (derived-mode-p 'gptel-mode)
-        (setq-local gptel-confirm-tool-calls nil))))
-  (message "gptel Tool Confirmation: OFF (Auto-executes everything)"))
-
-(defun my/gptel-tool-confirmation-auto ()
-  "Restore default tool call confirmation behavior."
-  (interactive)
-  (setq gptel-confirm-tool-calls 'auto)
-  (setq-default gptel-confirm-tool-calls 'auto)
-  (dolist (b (buffer-list))
-    (with-current-buffer b
-      (when (derived-mode-p 'gptel-mode)
-        (setq-local gptel-confirm-tool-calls 'auto))))
-  (message "gptel Tool Confirmation: AUTO (Respects tool flags)"))
 
 (provide 'gptel-config)
 
