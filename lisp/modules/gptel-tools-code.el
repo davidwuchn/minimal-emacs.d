@@ -356,20 +356,30 @@ With optional argument `all`, also collect notes and low-severity diagnostics."
 (when (boundp 'gptel--tool-preview-alist)
 
   (defun gptel-tools-code--make-unified-diff (path old-code new-code)
-    "Generate a unified diff string between OLD-CODE and NEW-CODE for PATH.
-Returns a string in standard unified diff format with ---/+++ headers
-and -/+ line prefixes suitable for display in `diff-mode'."
-    (let ((old-lines (split-string old-code "\n"))
-          (new-lines (split-string new-code "\n"))
-          (filename (file-name-nondirectory path)))
-      (concat
-       (format "--- a/%s\n+++ b/%s\n" filename filename)
-       (format "@@ -%d,%d +%d,%d @@\n"
-               1 (length old-lines) 1 (length new-lines))
-       (mapconcat (lambda (l) (concat "-" l)) old-lines "\n")
-       "\n"
-       (mapconcat (lambda (l) (concat "+" l)) new-lines "\n")
-       "\n")))
+    "Generate a unified diff between OLD-CODE and NEW-CODE for PATH.
+Uses the system `diff' command to produce a real unified diff with
+context lines and proper hunks, suitable for `diff-mode'.
+Falls back to a naive all-remove/all-add diff if `diff' is unavailable."
+    (let ((filename (file-name-nondirectory path))
+          (old-file (make-temp-file "code-replace-old-"))
+          (new-file (make-temp-file "code-replace-new-")))
+      (unwind-protect
+          (progn
+            (with-temp-file old-file (insert old-code))
+            (with-temp-file new-file (insert new-code))
+            (let ((diff-output
+                   (with-temp-buffer
+                     (call-process "diff" nil t nil
+                                   "-u"
+                                   (concat "--label=a/" filename)
+                                   (concat "--label=b/" filename)
+                                   old-file new-file)
+                     (buffer-string))))
+              (if (string-empty-p diff-output)
+                  (format "--- a/%s\n+++ b/%s\n(no differences)\n" filename filename)
+                diff-output)))
+        (ignore-errors (delete-file old-file))
+        (ignore-errors (delete-file new-file)))))
 
   (defun gptel-tools-code--replace-preview-setup (arg-values _info)
     "Setup diff preview for Code_Replace tool.
@@ -390,6 +400,7 @@ in `diff-mode'.  Returns the preview buffer as the handle for teardown."
       (let* ((full-path (expand-file-name path))
              (old-code (when (file-readable-p full-path)
                          (with-current-buffer (find-file-noselect full-path)
+                           (treesit-agent--ensure-parser full-path)
                            (treesit-agent-extract-node node-name))))
              (preview-buf (get-buffer-create "*Code_Replace Preview*")))
         ;; Insert a compact note pointing to the diff buffer
