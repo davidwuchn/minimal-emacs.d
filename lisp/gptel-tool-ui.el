@@ -85,7 +85,7 @@ Shows all 6 available options in the minibuffer:
                 (message "Tool confirmation set to AUTO. Executing...")
                 (call-interactively #'gptel--accept-tool-calls)))
           (?i (when (fboundp 'gptel--inspect-fsm)
-                (gptel--inspect-fsm (my/gptel--current-fsm))))
+                (gptel--inspect-fsm gptel--fsm-last)))
           (?p (when (fboundp 'gptel-agent--previous-overlay)
                 (call-interactively #'gptel-agent--previous-overlay)))
           (?q (call-interactively #'gptel--reject-tool-calls))))))))
