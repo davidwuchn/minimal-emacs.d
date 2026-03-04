@@ -61,15 +61,18 @@
          (scheme-mode . paredit-mode)
          (clojure-mode . paredit-mode)
          (cider-repl-mode . paredit-mode))
-  :config
+  :init
   ;; Paredit rebinds RET to paredit-RET in paredit-mode-map (a minor-mode map),
   ;; which has higher priority than the buffer-local map.  This breaks M-:
   ;; (eval-expression) by inserting a newline instead of confirming.
   ;; Use minor-mode-overriding-map-alist (checked BEFORE minor-mode-map-alist)
   ;; to restore RET without globally mutating paredit-mode-map.
-  ;; NOTE: No guard on paredit-mode — the lambda runs BEFORE paredit-mode
-  ;; activates (hook ordering), so the guard would always fail.  The alist
-  ;; entry (paredit-mode . map) is only consulted when paredit-mode is non-nil.
+  ;;
+  ;; This MUST be in :init, not :config.  :config runs only after paredit.el
+  ;; loads (deferred via :hook), so the add-hook wouldn't execute until the
+  ;; first M-: triggers paredit autoload — too late for that minibuffer, and
+  ;; depending on hook ordering, possibly never effective.  :init runs at
+  ;; init time, ensuring the lambda is on the hook before any M-: invocation.
   (add-hook 'eval-expression-minibuffer-setup-hook
             (lambda ()
               (let ((map (make-sparse-keymap)))
