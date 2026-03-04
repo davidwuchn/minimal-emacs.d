@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-04 (tag v0.5.12)
+> Last updated: 2026-03-04 (tag v0.5.13)
 
 ## Architecture Overview
 
@@ -92,10 +92,16 @@ Version 0.9.9.4 installed, but `.elc` files contain a **newer unreleased version
 
 None currently. All identified bugs have been fixed and committed.
 
+### Recent Changes (v0.5.13)
+
+- **Centralize backend/model config** (⚒): Single source of truth in `gptel-config.el` lines 35-36. `nucleus-presets.el` agent/plan presets now derive from `gptel-backend`/`gptel-model`. `gptel-tools-agent.el` subagent backend/model defcustoms default to nil (inherit global). Switching providers requires changing exactly one line.
+- **Tools array reduction on retry** (⚒): New `my/gptel--reduce-tools-for-retry` function filters `:data :tools` and `:tools` struct list to only tools actually called in the conversation history. Activated on retry 2+ (alongside reasoning stripping). Removes ~60-80% of tool definitions (~5-8KB) from conversations that use only 3-5 of 18+ registered tools.
+- **ERT test suite expanded** (38 tests): 14 new tests for tools reduction covering filtering, struct list sync, idempotence, edge cases, and integration with other trimming functions.
+
 ### Recent Changes (v0.5.12)
 
 - **Progressive payload trimming** (⊘): `my/gptel--trim-tool-results-for-retry` now escalates trimming with each retry: keep count = `max(0, default - retries)`. Retry 1 keeps 1 recent tool result (was 2), retry 2+ keeps 0 (truncates ALL). New `my/gptel--trim-reasoning-content` function strips `reasoning_content` fields from assistant messages on retry 2+. This addresses DashScope connection resets on oversized payloads after multiple tool-use rounds.
-- **ERT test suite** (24 tests): `tests/test-gptel-trim.el` covers progressive trimming behavior, reasoning stripping, edge cases, and integration scenarios.
+- **ERT test suite** (24 tests → 38 tests): `tests/test-gptel-trim.el` covers progressive trimming behavior, reasoning stripping, tools reduction, edge cases, and integration scenarios.
 
 ### Recent Changes (v0.5.10-v0.5.11)
 

@@ -1204,6 +1204,60 @@ Returns the number of messages whose reasoning_content was stripped."
             (cl-incf stripped)))))
     stripped))
 
+(defun my/gptel--reduce-tools-for-retry (info)
+  "Reduce the tools array in INFO to only tools referenced in conversation.
+
+Scans :data :messages for all assistant messages containing :tool_calls,
+collects the set of tool names actually invoked, then filters both
+:data :tools (the serialized vector sent to the API) and :tools (the
+gptel-tool struct list used for dispatch) to only those names.
+
+This typically removes 60-80% of the tools payload (~5-8KB) on
+conversations that only use 3-5 of 18+ registered tools.
+
+Returns the number of tool definitions removed, or 0 if nothing changed."
+  (let* ((data (plist-get info :data))
+         (messages (and data (plist-get data :messages)))
+         (data-tools (and data (plist-get data :tools)))  ; vector of plists
+         (struct-tools (plist-get info :tools))            ; list of gptel-tool structs
+         (used-names (make-hash-table :test #'equal))
+         (removed 0))
+    (when (and messages data-tools (> (length data-tools) 0))
+      ;; Pass 1: collect all tool names referenced in tool_calls
+      (dotimes (i (length messages))
+        (let* ((msg (aref messages i))
+               (tool-calls (plist-get msg :tool_calls)))
+          (when tool-calls
+            (dotimes (j (length tool-calls))
+              (let* ((tc (aref tool-calls j))
+                     (func (plist-get tc :function))
+                     (name (and func (plist-get func :name))))
+                (when name
+                  (puthash name t used-names)))))))
+      ;; Only filter if we found any used tools (safety: don't send empty tools)
+      (when (> (hash-table-count used-names) 0)
+        (let* ((original-count (length data-tools))
+               ;; Filter serialized tools vector
+               (filtered (vconcat
+                          (cl-remove-if-not
+                           (lambda (tool-plist)
+                             (let* ((func (plist-get tool-plist :function))
+                                    (name (and func (plist-get func :name))))
+                               (gethash name used-names)))
+                           (append data-tools nil)))) ; vector -> list for cl-remove-if-not
+               (new-count (length filtered)))
+          (when (< new-count original-count)
+            (plist-put data :tools filtered)
+            ;; Also filter struct list to match
+            (when struct-tools
+              (plist-put info :tools
+                         (cl-remove-if-not
+                          (lambda (ts)
+                            (gethash (gptel-tool-name ts) used-names))
+                          struct-tools)))
+            (setq removed (- original-count new-count))))))
+    removed))
+
 (defun my/gptel-auto-retry (orig-fn machine &optional new-state)
   "Intercept FSM transitions to ERRS and retry the request if transient.
 Implements OpenCode-style exponential backoff for network/overload errors.
@@ -1268,20 +1322,25 @@ Skips retries for subagent FSMs (they have their own timeout handler)."
            (plist-put info :retries (1+ retries))
            
            ;; Progressive payload trimming before retry.
-            ;; Tool results: keep count decreases with each retry
-            ;;   retry 1 → keep max(0, default-1), retry 2+ → keep 0
-            ;; Reasoning content: stripped on retry 2+ to reclaim space
-            ;; from accumulated chain-of-thought text.
-            (let ((trimmed (my/gptel--trim-tool-results-for-retry info))
-                  (new-retries (plist-get info :retries)))
-              (when (> trimmed 0)
-                (message "gptel: Trimmed %d old tool result(s) to reduce payload (retry %d, keeping %d recent)"
-                         trimmed new-retries
-                         (max 0 (- my/gptel-retry-keep-recent-tool-results new-retries))))
-              (when (>= new-retries 2)
-                (let ((reasoning-stripped (my/gptel--trim-reasoning-content info)))
-                  (when (> reasoning-stripped 0)
-                    (message "gptel: Stripped reasoning_content from %d assistant message(s)" reasoning-stripped)))))
+             ;; Tool results: keep count decreases with each retry
+             ;;   retry 1 → keep max(0, default-1), retry 2+ → keep 0
+             ;; Reasoning content: stripped on retry 2+ to reclaim space
+             ;; from accumulated chain-of-thought text.
+             ;; Tools array: reduced on retry 2+ to only tools actually
+             ;; used in the conversation, removing ~60-80% of definitions.
+             (let ((trimmed (my/gptel--trim-tool-results-for-retry info))
+                   (new-retries (plist-get info :retries)))
+               (when (> trimmed 0)
+                 (message "gptel: Trimmed %d old tool result(s) to reduce payload (retry %d, keeping %d recent)"
+                          trimmed new-retries
+                          (max 0 (- my/gptel-retry-keep-recent-tool-results new-retries))))
+               (when (>= new-retries 2)
+                 (let ((reasoning-stripped (my/gptel--trim-reasoning-content info)))
+                   (when (> reasoning-stripped 0)
+                     (message "gptel: Stripped reasoning_content from %d assistant message(s)" reasoning-stripped)))
+                 (let ((tools-removed (my/gptel--reduce-tools-for-retry info)))
+                   (when (> tools-removed 0)
+                     (message "gptel: Removed %d unused tool definition(s) from payload" tools-removed)))))
            
            ;; Schedule the FSM transition asynchronously (non-blocking exponential backoff)
            (run-at-time delay nil

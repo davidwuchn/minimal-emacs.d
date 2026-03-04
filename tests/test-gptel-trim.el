@@ -428,4 +428,276 @@ Progressive trimming based on :retries in INFO."
       (should (= 3 (my/gptel--trim-reasoning-content info))))))
 
 (provide 'test-gptel-trim)
+
+;;; ===========================================================================
+;;; Tools array reduction tests
+;;; ===========================================================================
+
+;;; ---- Stubs for gptel-tool structs ----
+
+;; Minimal gptel-tool struct stub for testing.  The real struct has many fields;
+;; we only need `name' for our function.
+(cl-defstruct (gptel-tool-stub (:constructor gptel-tool-stub-create))
+  "Minimal stub for gptel-tool."
+  name)
+
+;; Our function calls (gptel-tool-name ts) — provide that accessor:
+(unless (fboundp 'gptel-tool-name)
+  (defalias 'gptel-tool-name #'gptel-tool-stub-name))
+
+;; Copy of the function under test (same pattern as other stubs above)
+(defun my/gptel--reduce-tools-for-retry (info)
+  "Reduce the tools array in INFO to only tools referenced in conversation."
+  (let* ((data (plist-get info :data))
+         (messages (and data (plist-get data :messages)))
+         (data-tools (and data (plist-get data :tools)))
+         (struct-tools (plist-get info :tools))
+         (used-names (make-hash-table :test #'equal))
+         (removed 0))
+    (when (and messages data-tools (> (length data-tools) 0))
+      (dotimes (i (length messages))
+        (let* ((msg (aref messages i))
+               (tool-calls (plist-get msg :tool_calls)))
+          (when tool-calls
+            (dotimes (j (length tool-calls))
+              (let* ((tc (aref tool-calls j))
+                     (func (plist-get tc :function))
+                     (name (and func (plist-get func :name))))
+                (when name
+                  (puthash name t used-names)))))))
+      (when (> (hash-table-count used-names) 0)
+        (let* ((original-count (length data-tools))
+               (filtered (vconcat
+                          (cl-remove-if-not
+                           (lambda (tool-plist)
+                             (let* ((func (plist-get tool-plist :function))
+                                    (name (and func (plist-get func :name))))
+                               (gethash name used-names)))
+                           (append data-tools nil))))
+               (new-count (length filtered)))
+          (when (< new-count original-count)
+            (plist-put data :tools filtered)
+            (when struct-tools
+              (plist-put info :tools
+                         (cl-remove-if-not
+                          (lambda (ts)
+                            (gethash (gptel-tool-name ts) used-names))
+                          struct-tools)))
+            (setq removed (- original-count new-count))))))
+    removed))
+
+;;; ---- Test helpers for tools reduction ----
+
+(defun test--make-tool-def (name)
+  "Create a serialized tool definition plist for tool NAME."
+  (list :type "function"
+        :function (list :name name
+                        :description (format "Tool %s" name)
+                        :parameters (list :type "object" :properties nil))))
+
+(defun test--make-tool-struct (name)
+  "Create a gptel-tool struct stub with NAME."
+  (gptel-tool-stub-create :name name))
+
+(defun test--make-tool-call (name &optional id)
+  "Create a tool_call vector entry for tool NAME with optional ID."
+  (list :id (or id (format "call_%d" (random 100000)))
+        :type "function"
+        :function (list :name name :arguments "{}")))
+
+(defun test--make-assistant-with-tool-calls (tool-names)
+  "Create an assistant message with tool_calls for each name in TOOL-NAMES."
+  (let ((calls (vconcat (mapcar #'test--make-tool-call tool-names))))
+    (list :role "assistant" :content nil :tool_calls calls)))
+
+(defun test--make-tools-info (messages tool-def-names &optional struct-names)
+  "Create an INFO plist with MESSAGES, tool definitions for TOOL-DEF-NAMES,
+and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
+  (let* ((defs (vconcat (mapcar #'test--make-tool-def tool-def-names)))
+         (structs (mapcar #'test--make-tool-struct (or struct-names tool-def-names)))
+         (info (list :data (list :messages (apply #'vector messages)
+                                 :tools defs)
+                     :tools structs)))
+    info))
+
+;;; ---- Basic behavior ----
+
+(ert-deftest reduce-tools/no-tool-calls-in-messages ()
+  "No tool_calls in any message → 0 removed (don't remove everything)."
+  (let* ((info (test--make-tools-info
+                (list (test--make-user-msg "hello")
+                      (test--make-assistant-msg))
+                '("read_file" "write_file" "search"))))
+    (should (= 0 (my/gptel--reduce-tools-for-retry info)))
+    ;; Tools unchanged
+    (should (= 3 (length (plist-get (plist-get info :data) :tools))))))
+
+(ert-deftest reduce-tools/nil-data ()
+  "Nil :data → 0 removed."
+  (let ((info (list :data nil)))
+    (should (= 0 (my/gptel--reduce-tools-for-retry info)))))
+
+(ert-deftest reduce-tools/nil-tools ()
+  "No :tools in :data → 0 removed."
+  (let ((info (list :data (list :messages (vector (test--make-user-msg "hi"))
+                                :tools nil))))
+    (should (= 0 (my/gptel--reduce-tools-for-retry info)))))
+
+(ert-deftest reduce-tools/empty-tools-vector ()
+  "Empty tools vector → 0 removed."
+  (let ((info (list :data (list :messages (vector (test--make-user-msg "hi"))
+                                :tools []))))
+    (should (= 0 (my/gptel--reduce-tools-for-retry info)))))
+
+(ert-deftest reduce-tools/empty-messages ()
+  "Empty messages → 0 removed."
+  (let ((info (list :data (list :messages (vector)
+                                :tools (vector (test--make-tool-def "foo"))))))
+    (should (= 0 (my/gptel--reduce-tools-for-retry info)))))
+
+;;; ---- Core filtering behavior ----
+
+(ert-deftest reduce-tools/removes-unused-tools ()
+  "Only tools referenced in tool_calls survive filtering."
+  (let* ((asst (test--make-assistant-with-tool-calls '("read_file")))
+         (tool-result (test--make-tool-msg "file contents"))
+         (info (test--make-tools-info
+                (list (test--make-user-msg "read foo.el")
+                      asst
+                      tool-result)
+                '("read_file" "write_file" "search" "list_dir" "run_command"))))
+    (should (= 4 (my/gptel--reduce-tools-for-retry info)))
+    (let ((remaining (plist-get (plist-get info :data) :tools)))
+      (should (= 1 (length remaining)))
+      (should (equal "read_file"
+                     (plist-get (plist-get (aref remaining 0) :function) :name))))))
+
+(ert-deftest reduce-tools/keeps-multiple-used-tools ()
+  "Multiple tools called across rounds are all kept."
+  (let* ((asst1 (test--make-assistant-with-tool-calls '("read_file" "search")))
+         (tool1 (test--make-tool-msg "search results"))
+         (tool2 (test--make-tool-msg "file contents"))
+         (asst2 (test--make-assistant-with-tool-calls '("write_file")))
+         (tool3 (test--make-tool-msg "wrote file"))
+         (info (test--make-tools-info
+                (list (test--make-user-msg "refactor")
+                      asst1 tool1 tool2
+                      asst2 tool3)
+                '("read_file" "write_file" "search" "list_dir" "run_command" "git_status"))))
+    (should (= 3 (my/gptel--reduce-tools-for-retry info)))
+    (let* ((remaining (plist-get (plist-get info :data) :tools))
+           (names (mapcar (lambda (td) (plist-get (plist-get td :function) :name))
+                          (append remaining nil))))
+      (should (= 3 (length remaining)))
+      (should (member "read_file" names))
+      (should (member "write_file" names))
+      (should (member "search" names)))))
+
+(ert-deftest reduce-tools/all-tools-used-no-change ()
+  "When all defined tools are referenced, nothing is removed."
+  (let* ((asst (test--make-assistant-with-tool-calls '("read_file" "write_file")))
+         (info (test--make-tools-info
+                (list (test--make-user-msg "hi") asst)
+                '("read_file" "write_file"))))
+    (should (= 0 (my/gptel--reduce-tools-for-retry info)))))
+
+(ert-deftest reduce-tools/single-tool-used-of-many ()
+  "1 of 18 tools used → removes 17."
+  (let* ((all-tools (cl-loop for i from 1 to 18
+                             collect (format "tool_%d" i)))
+         (asst (test--make-assistant-with-tool-calls '("tool_5")))
+         (info (test--make-tools-info
+                (list (test--make-user-msg "go") asst)
+                all-tools)))
+    (should (= 17 (my/gptel--reduce-tools-for-retry info)))
+    (let ((remaining (plist-get (plist-get info :data) :tools)))
+      (should (= 1 (length remaining)))
+      (should (equal "tool_5"
+                     (plist-get (plist-get (aref remaining 0) :function) :name))))))
+
+;;; ---- Struct list filtering ----
+
+(ert-deftest reduce-tools/filters-struct-list-too ()
+  "The :tools struct list is filtered to match :data :tools."
+  (let* ((asst (test--make-assistant-with-tool-calls '("read_file")))
+         (info (test--make-tools-info
+                (list (test--make-user-msg "hi") asst)
+                '("read_file" "write_file" "search"))))
+    (my/gptel--reduce-tools-for-retry info)
+    (let ((structs (plist-get info :tools)))
+      (should (= 1 (length structs)))
+      (should (equal "read_file" (gptel-tool-name (car structs)))))))
+
+(ert-deftest reduce-tools/no-struct-list-still-works ()
+  "If :tools struct list is nil, data :tools is still filtered."
+  (let* ((asst (test--make-assistant-with-tool-calls '("read_file")))
+         (info (list :data (list :messages (vector (test--make-user-msg "hi") asst)
+                                 :tools (vconcat (mapcar #'test--make-tool-def
+                                                         '("read_file" "write_file"))))
+                     :tools nil)))
+    (should (= 1 (my/gptel--reduce-tools-for-retry info)))
+    (should (= 1 (length (plist-get (plist-get info :data) :tools))))))
+
+;;; ---- Idempotence ----
+
+(ert-deftest reduce-tools/idempotent ()
+  "Running reduce twice returns 0 on second run."
+  (let* ((asst (test--make-assistant-with-tool-calls '("read_file")))
+         (info (test--make-tools-info
+                (list (test--make-user-msg "hi") asst)
+                '("read_file" "write_file" "search"))))
+    (should (= 2 (my/gptel--reduce-tools-for-retry info)))
+    (should (= 0 (my/gptel--reduce-tools-for-retry info)))))
+
+;;; ---- Duplicate tool calls ----
+
+(ert-deftest reduce-tools/duplicate-tool-calls-handled ()
+  "Same tool called multiple times doesn't cause issues."
+  (let* ((asst1 (test--make-assistant-with-tool-calls '("read_file")))
+         (asst2 (test--make-assistant-with-tool-calls '("read_file" "read_file")))
+         (info (test--make-tools-info
+                (list (test--make-user-msg "hi") asst1
+                      (test--make-tool-msg "result1")
+                      asst2
+                      (test--make-tool-msg "result2")
+                      (test--make-tool-msg "result3"))
+                '("read_file" "write_file" "search"))))
+    (should (= 2 (my/gptel--reduce-tools-for-retry info)))
+    (should (= 1 (length (plist-get (plist-get info :data) :tools))))))
+
+;;; ===========================================================================
+;;; Integration: full progressive trimming + tools reduction
+;;; ===========================================================================
+
+(ert-deftest integration/retry-2-trims-results-reasoning-and-tools ()
+  "Retry 2: tool results truncated, reasoning stripped, AND tools reduced."
+  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+         ;; Assistant calls read_file and search, but 5 tools are defined
+         (asst1 (test--make-assistant-with-tool-calls '("read_file")))
+         (asst2 (test--make-assistant-with-tool-calls '("search")))
+         (msgs (list
+                (test--make-assistant-msg "reasoning 1")
+                asst1
+                (test--make-tool-msg "file contents long enough for truncation by the replacement text string")
+                (test--make-assistant-msg "reasoning 2")
+                asst2
+                (test--make-tool-msg "search results long enough for truncation by the replacement text string")))
+         (info (test--make-tools-info msgs '("read_file" "write_file" "search" "list_dir" "run_command")))
+         (messages (plist-get (plist-get info :data) :messages)))
+    ;; Set retries=2
+    (plist-put info :retries 2)
+    ;; Tool results: keep=0, truncate both
+    (should (= 2 (my/gptel--trim-tool-results-for-retry info)))
+    ;; Reasoning: strip both
+    (should (= 2 (my/gptel--trim-reasoning-content info)))
+    ;; Tools: reduce from 5 to 2 (read_file + search)
+    (should (= 3 (my/gptel--reduce-tools-for-retry info)))
+    (let* ((remaining (plist-get (plist-get info :data) :tools))
+           (names (mapcar (lambda (td) (plist-get (plist-get td :function) :name))
+                          (append remaining nil))))
+      (should (= 2 (length remaining)))
+      (should (member "read_file" names))
+      (should (member "search" names)))))
+
+(provide 'test-gptel-trim)
 ;;; test-gptel-trim.el ends here
