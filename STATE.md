@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-04 (commit 86fb489, tag v0.5.8)
+> Last updated: 2026-03-04 (tag v0.5.9)
 
 ## Architecture Overview
 
@@ -92,8 +92,15 @@ Version 0.9.9.4 installed, but `.elc` files contain a **newer unreleased version
 
 None currently. All identified bugs have been fixed and committed.
 
+### Recent Changes (v0.5.9)
+
+- **Symlink cleanup & data directory consolidation**: Removed root-level `elpa/` and `tree-sitter/` symlinks that pointed into `var/`. These were unnecessary (paths already configured in `pre-early-init.el` and `post-early-init.el`) and created a symlink footgun risk (`rm -rf symlink/` follows the link and deletes target contents).
+- **`.gitignore` allowlist fix**: Added `!pre-early-init.el` and `!post-early-init.el` to the deny-all allowlist — these were tracked via `git add -f` but not explicitly allowlisted.
+- **Full package recovery**: After accidental data loss from `rm -rf` following symlinks, reinstalled all 99 ELPA packages + eca (via `package-vc-install`) and recompiled all 8 tree-sitter grammars (ABI 14, elisp ABI 13).
+
 ### Recent Changes (v0.5.8)
 
+- **Trim custom.el** (859bb4b): Reduced `package-selected-packages` to just `(eca)` — all other packages are declared in config files and installed via `package-install` on demand.
 - **Dead code cleanup** (e81886e): Removed unused `:core` toolset, derived `:snippets` from `:nucleus`, deleted `nucleus-register-tool` helper, removed dead `gptel-tools.el` variables. Added `:depth` to advice ordering.
 - **jit-lock timing gap fix** (de8e1b5): Changed `my/gptel--jit-lock-safe` gate from `my/gptel--streaming-p` to `(bound-and-true-p gptel-mode)` — eliminates post-response refontification gap.
 - **INTRO.md** (255d4af): Fork overview and nucleus architecture summary for GitHub.

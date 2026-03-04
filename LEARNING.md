@@ -59,3 +59,19 @@
 - **Collaboration line preserves per-file intent**: The second line (`Human ⊗ AI`, `Human ⊗ AI ⊗ REPL`, `Human ∧ AI`) is NOT uniform — each file's operator reflects its semantic intent. `⊗` = tensor product (parallel execution), `∧` = logical conjunction (nucleus-tutor enforces strict AND). `⊗ REPL` suffix only appears in files where REPL interaction is integral (e.g. clojure-expert, reference docs). Do not blindly unify this line.
 - **Three header formats coexist**: (1) Inline single-line in agents/prompts: `engage nucleus: [...] | OODA` + `Human ⊗ AI`. (2) Multi-line in code blocks in skills: three separate lines inside triple-backtick fences. (3) Compact `nucleus:` prefix in utility prompts (inline_completion, rewrite, title, compact) — these do NOT use the engage header at all.
 - **`.gitignore` deny-all pattern**: The repo uses `*` at top of `.gitignore`. All files under `assistant/` and `lisp/modules/` require `git add -f` to stage. `rg` (ripgrep) also respects `.gitignore` by default — use `--no-ignore` when searching these directories.
+
+## Symlink Footguns & Data Directory Hygiene
+- **`rm -rf symlink/` follows the symlink**: On macOS/Linux, `rm -rf elpa/` where `elpa` is a symlink to `var/elpa` will **delete the contents of `var/elpa/`**, not the symlink itself. The trailing `/` (or shell tab-completion adding it) causes `rm` to resolve the symlink and recurse into the target. The safe way to remove a symlink is `rm elpa` (no trailing slash, no `-rf`).
+- **Root-level symlinks are unnecessary when paths are configured**: If `package-user-dir` points to `var/elpa` and `treesit-extra-load-path` includes `var/tree-sitter`, no root-level `elpa/` or `tree-sitter/` symlinks are needed. They only create confusion and symlink footgun risk. Remove them.
+- **`.gitignore` allowlist must cover all tracked root files**: The deny-all `*` pattern means every tracked file at the repo root needs an explicit `!filename` entry. `pre-early-init.el` and `post-early-init.el` were tracked (via `git add -f`) but not allowlisted — this causes `git status` to show them as ignored in fresh clones. Always add allowlist entries when tracking new root files.
+
+## Emacs Batch Init Chain
+- **`--batch` mode does NOT trigger the full init chain**: Running `emacs --batch --init-directory=DIR` does not automatically load `early-init.el` → `init.el`. For full verification of the init chain in batch mode, you must explicitly: (1) `--load early-init.el`, (2) call `(package-initialize)`, (3) `--load init.el`. This is the only reliable way to test that all packages load correctly without launching a GUI.
+- **Package reinstall via batch `package-install`**: After catastrophic loss of `var/elpa/`, all packages can be reinstalled by iterating over `package-selected-packages` in batch mode: `emacs --batch -l early-init.el --eval '(package-initialize)' --eval '(package-refresh-contents)' --eval '(mapc #'\''package-install package-selected-packages)'`. The `eca` package (installed via `:vc`) needs a separate `package-vc-install` call.
+
+## Path Resolution in minimal-emacs.d
+- **`minimal-emacs-user-directory`** = repo root (`~/.emacs.d/` = `~/workspace/minimal-emacs.d/`). This is the *original* `user-emacs-directory` before `pre-early-init.el` redirects it.
+- **`user-emacs-directory`** = `var/` (set by `pre-early-init.el`). All Emacs-generated data goes here.
+- **`package-user-dir`** = `var/elpa` (set by `pre-early-init.el`). ELPA packages install here.
+- **`treesit-extra-load-path`** = `var/tree-sitter` (set in `post-early-init.el` via `(expand-file-name "tree-sitter" user-emacs-directory)` — by this point `user-emacs-directory` is already `var/`).
+- **`custom-file`** = repo root `custom.el` (uses `minimal-emacs-user-directory`). This stays at root because it's version-controlled.

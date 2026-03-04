@@ -8,6 +8,8 @@
 !lisp/
 lisp/*.elc
 lisp/modules/*.elc
+!pre-early-init.el
+!post-early-init.el
 !post-init.el
 !custom.el
 !AGENTS.md
