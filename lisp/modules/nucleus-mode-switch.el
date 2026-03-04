@@ -1,10 +1,11 @@
 ;;; nucleus-mode-switch.el --- Mode transition handler for nucleus -*- lexical-binding: t; -*-
 
 ;; Author: David Wu
-;; Version: 1.0.2
+;; Version: 1.1.0
 ;;
 ;; Handles mode transitions (plan <-> agent) and injects appropriate
 ;; system reminders to break LLM context carryover.
+;; Auto-attaches PLAN.md to gptel-context on plan-mode entry.
 
 (require 'cl-lib)
 
@@ -14,6 +15,19 @@
   "Tracks whether we were previously in plan mode.")
 
 (make-variable-buffer-local 'nucleus--plan-mode-active)
+
+(defvar nucleus--auto-context-files nil
+  "Files auto-attached to `gptel-context' by mode transitions.
+Only these files are removed on mode exit (preserves user-added context).")
+
+(make-variable-buffer-local 'nucleus--auto-context-files)
+
+(defcustom nucleus-plan-context-files '("PLAN.md")
+  "Files to auto-attach to `gptel-context' when entering plan mode.
+Each entry is a filename (not path) to look for in the project root.
+Files that don't exist are silently skipped."
+  :type '(repeat string)
+  :group 'gptel)
 
 ;;; Mode Transition Detection
 
@@ -33,8 +47,10 @@ Dedup guard: only fires when the tracked state actually changes."
         (setq-local nucleus--plan-mode-active is-plan)
         (cond
          ((and was-plan is-agent)
+          (nucleus--detach-plan-context)
           (nucleus--inject-build-mode-reminder))
          ((and (not was-plan) is-plan)
+          (nucleus--attach-plan-context)
           (nucleus--inject-plan-mode-reminder)))))))
 
 (defun nucleus--inject-build-mode-reminder ()
@@ -84,6 +100,39 @@ Inserts after the last assistant exchange, before the current prompt."
             (unless (looking-back (regexp-quote "<system-reminder>")
                                   (max 0 (- (point) 100)))
               (insert reminder))))))))
+
+;;; Plan Context Auto-Attach
+
+(defun nucleus--find-project-root ()
+  "Return project root directory, or `default-directory' as fallback."
+  (or (when-let* ((proj (project-current)))
+        (project-root proj))
+      default-directory))
+
+(defun nucleus--attach-plan-context ()
+  "Auto-attach plan context files to `gptel-context'.
+Adds files from `nucleus-plan-context-files' found in the project root.
+Tracks which files were auto-added in `nucleus--auto-context-files'."
+  (when (boundp 'gptel-context)
+    (let ((root (nucleus--find-project-root)))
+      (dolist (name nucleus-plan-context-files)
+        (let ((path (expand-file-name name root)))
+          (when (and (file-readable-p path)
+                     (not (member path gptel-context)))
+            (push path gptel-context)
+            (push path nucleus--auto-context-files)
+            (message "[nucleus] Plan context: attached %s" name)))))))
+
+(defun nucleus--detach-plan-context ()
+  "Remove auto-attached plan context files from `gptel-context'.
+Only removes files that were added by `nucleus--attach-plan-context'."
+  (when (and (boundp 'gptel-context) nucleus--auto-context-files)
+    (dolist (path nucleus--auto-context-files)
+      (when (member path gptel-context)
+        (setq gptel-context (delete path gptel-context))
+        (message "[nucleus] Plan context: detached %s"
+                 (file-name-nondirectory path))))
+    (setq nucleus--auto-context-files nil)))
 
 ;;; Integration
 

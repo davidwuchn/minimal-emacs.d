@@ -45,13 +45,19 @@ Returns nil if no frontmatter found."
         (let* ((front (match-string 1 text))
                (rest (substring text (match-end 0)))
                ;; Increment evidence count
-               (front (if (string-match "^evidence:\\s-*\\([0-9]+\\)" front)
-                          (let ((count (1+ (string-to-number (match-string 1 front)))))
-                            (replace-regexp-in-string
-                             "^evidence:.*$"
-                             (format "evidence: %d" count)
-                             front))
-                        (concat front "evidence: 1\n")))
+               (front (cond
+                        ;; Numeric evidence: increment
+                        ((string-match "^evidence:\\s-*\\([0-9]+\\)" front)
+                         (let ((count (1+ (string-to-number (match-string 1 front)))))
+                           (replace-regexp-in-string
+                            "^evidence:.*$"
+                            (format "evidence: %d" count)
+                            front)))
+                        ;; Non-numeric evidence (e.g. "built-in"): leave as-is
+                        ((string-match "^evidence:" front)
+                         front)
+                        ;; No evidence field: add it
+                        (t (concat front "evidence: 1\n"))))
                ;; Update last-accessed date
                (front (if (string-match "^last-accessed:" front)
                           (replace-regexp-in-string
