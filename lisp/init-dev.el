@@ -67,14 +67,16 @@
   ;; (eval-expression) by inserting a newline instead of confirming.
   ;; Use minor-mode-overriding-map-alist (checked BEFORE minor-mode-map-alist)
   ;; to restore RET without globally mutating paredit-mode-map.
+  ;; NOTE: No guard on paredit-mode — the lambda runs BEFORE paredit-mode
+  ;; activates (hook ordering), so the guard would always fail.  The alist
+  ;; entry (paredit-mode . map) is only consulted when paredit-mode is non-nil.
   (add-hook 'eval-expression-minibuffer-setup-hook
             (lambda ()
-              (when (bound-and-true-p paredit-mode)
-                (let ((map (make-sparse-keymap)))
-                  (define-key map (kbd "RET") #'exit-minibuffer)
-                  (define-key map (kbd "<return>") #'exit-minibuffer)
-                  (push (cons 'paredit-mode map)
-                        minor-mode-overriding-map-alist))))))
+              (let ((map (make-sparse-keymap)))
+                (define-key map (kbd "RET") #'exit-minibuffer)
+                (define-key map (kbd "<return>") #'exit-minibuffer)
+                (push (cons 'paredit-mode map)
+                      minor-mode-overriding-map-alist)))))
 
 (use-package enhanced-evil-paredit
   :ensure t
