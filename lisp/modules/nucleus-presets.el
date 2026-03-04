@@ -94,12 +94,11 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
   "Make gptel-agent's Plan/Agent presets use nucleus system prompts and toolsets."
   (when (and (fboundp 'gptel-get-preset)
              (fboundp 'gptel-make-preset))
-    (let* ((agent-backend (and (boundp 'gptel--dashscope)
-                               gptel--dashscope))
-           (preferred-backend agent-backend)
-           ;; Different models for agent (coding) vs plan (architecture)
-           (agent-model 'glm-5)
-           (plan-model 'qwen3.5-plus))
+    (let* ((preferred-backend gptel-backend)
+           ;; Use the global default model for both agent and plan presets.
+           ;; Change once in gptel-config.el to switch everywhere.
+           (agent-model gptel-model)
+           (plan-model gptel-model))
       
       ;; Override gptel-agent preset
       (when-let ((agent (gptel-get-preset 'gptel-agent)))

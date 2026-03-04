@@ -19,9 +19,10 @@
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defcustom my/gptel-subagent-model 'qwen3-coder-next
+(defcustom my/gptel-subagent-model nil
   "Model to use for delegated subagents.
-Uses qwen3-coder-next on DashScope — fast, no reasoning tokens."
+nil means use `gptel-model' (the global default).
+Change the default in `gptel-config.el' to switch everywhere."
   :type '(choice (const :tag "Same as parent" nil) symbol)
   :group 'gptel-tools-agent)
 
@@ -131,8 +132,9 @@ remove it."
 
 
 
-(defcustom my/gptel-subagent-backend 'gptel--dashscope
-  "Backend for delegated subagents."
+(defcustom my/gptel-subagent-backend nil
+  "Backend for delegated subagents.
+nil means use `gptel-backend' (the global default)."
   :type '(choice (const :tag "Same as parent" nil) variable)
   :group 'gptel-tools-agent)
 
