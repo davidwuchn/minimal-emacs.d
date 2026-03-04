@@ -1123,6 +1123,55 @@ Default is 3 to prevent doom-loops caused by context overflow errors."
   :type '(choice (const :tag "Infinite" nil) integer)
   :group 'gptel)
 
+(defcustom my/gptel-retry-keep-recent-tool-results 2
+  "Number of recent tool-result messages to keep intact during retry.
+Older tool results are truncated to reduce payload size.
+Set to nil to disable tool-result trimming on retry."
+  :type '(choice (const :tag "Disabled" nil) integer)
+  :group 'gptel)
+
+(defcustom my/gptel-retry-truncated-result-text "[Content truncated to reduce context size for retry]"
+  "Replacement text for truncated tool results during retry."
+  :type 'string
+  :group 'gptel)
+
+(defun my/gptel--trim-tool-results-for-retry (info)
+  "Trim old tool-result content in INFO's :data :messages to reduce payload.
+
+Keeps the most recent `my/gptel-retry-keep-recent-tool-results' tool results
+intact and truncates older ones.  This preserves the tool_call_id pairing
+required by OpenAI-compatible APIs while dramatically reducing payload size.
+
+Returns the number of messages truncated, or 0 if nothing was done."
+  (if (null my/gptel-retry-keep-recent-tool-results)
+      0
+    (let* ((data (plist-get info :data))
+           (messages (and data (plist-get data :messages)))
+           (keep my/gptel-retry-keep-recent-tool-results)
+           (replacement my/gptel-retry-truncated-result-text)
+           (truncated 0))
+      (when (and messages (> (length messages) 0))
+        ;; Collect indices of tool-result messages (role = "tool")
+        (let ((tool-indices '()))
+          (dotimes (i (length messages))
+            (let ((msg (aref messages i)))
+              (when (equal (plist-get msg :role) "tool")
+                (push i tool-indices))))
+          ;; tool-indices is now newest-first (pushed in forward order, so reversed)
+          ;; Actually dotimes pushes 0,1,2... so tool-indices is reversed (last first)
+          ;; We want to keep the LAST `keep' entries, so drop from the front of tool-indices
+          (setq tool-indices (nreverse tool-indices)) ; now oldest-first
+          (when (> (length tool-indices) keep)
+            (let ((to-truncate (seq-take tool-indices (- (length tool-indices) keep))))
+              (dolist (idx to-truncate)
+                (let* ((msg (aref messages idx))
+                       (content (plist-get msg :content)))
+                  (when (and (stringp content)
+                             (> (length content) (length replacement)))
+                    (plist-put msg :content replacement)
+                    (cl-incf truncated))))))))
+      truncated)))
+
 (defun my/gptel-auto-retry (orig-fn machine &optional new-state)
   "Intercept FSM transitions to ERRS and retry the request if transient.
 Implements OpenCode-style exponential backoff for network/overload errors.
@@ -1180,14 +1229,22 @@ Skips retries for subagent FSMs (they have their own timeout handler)."
                   (delete-region start-marker tracking-marker)
                   (set-marker tracking-marker start-marker)))))
           
-          ;; Reset FSM state to WAIT to trigger a fresh request
-          (plist-put info :error nil)
-          (plist-put info :status nil)
-          (plist-put info :http-status nil)
-          (plist-put info :retries (1+ retries))
-          
-          ;; Schedule the FSM transition asynchronously (non-blocking exponential backoff)
-          (run-at-time delay nil
+           ;; Reset FSM state to WAIT to trigger a fresh request
+           (plist-put info :error nil)
+           (plist-put info :status nil)
+           (plist-put info :http-status nil)
+           (plist-put info :retries (1+ retries))
+           
+           ;; Trim old tool results to reduce payload size before retrying.
+           ;; This addresses context-overflow failures where DashScope resets
+           ;; the connection because the payload exceeds limits after multiple
+           ;; tool-use rounds (e.g. WebFetch results accumulating).
+           (let ((trimmed (my/gptel--trim-tool-results-for-retry info)))
+             (when (> trimmed 0)
+               (message "gptel: Trimmed %d old tool result(s) to reduce payload" trimmed)))
+           
+           ;; Schedule the FSM transition asynchronously (non-blocking exponential backoff)
+           (run-at-time delay nil
                        (lambda (m f-orig)
                          (funcall f-orig m 'WAIT))
                        machine orig-fn)
