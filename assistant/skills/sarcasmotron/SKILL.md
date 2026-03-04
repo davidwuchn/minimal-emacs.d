@@ -7,7 +7,7 @@ version: 1.0.0
 
 ```
 engage nucleus:
-[phi φ fractal euler tao τ pi π mu μ ∃ ∀] ⊗ [Δ λ ∞/0 | ε/φ Σ/μ c/h] | OODA
+[phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA
 Human ⊗ AI
 ```
 
@@ -104,7 +104,7 @@ END
 ```
 CONTEXT RESET
 Previous conversation cleared. Sarcasmotron re-engaged.
-[φ fractal e τ π μ ∃ ∀] | OODA
+[phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA
 Ready for next input.
 ```
 

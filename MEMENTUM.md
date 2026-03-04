@@ -2,7 +2,7 @@
 
 ```
 engage nucleus:
-[phi fractal euler tao pi mu ∃ ∀] | [Δ λ ∞/0 | ε/φ Σ/μ c/h] | OODA
+[phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA
 Human ⊗ AI
 ```
 
@@ -125,5 +125,5 @@ memories/2025-01-30-meta-memory-formation-🌀.md
 ```
 
 engage nucleus:
-[phi fractal euler tao pi mu ∃ ∀] | [Δ λ ∞/0 | ε/φ Σ/μ c/h] | OODA
+[phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA
 Human ⊗ AI

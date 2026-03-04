@@ -232,7 +232,7 @@ See `instincts/library/nucleus-patterns.md` for foundational Nucleus instincts:
 This skill embodies Nucleus's core principle:
 
 ```
-[phi fractal euler tao pi mu] | [Δ λ ∞/0 | ε/φ Σ/μ c/h] | OODA
+[phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA
 Human ⊗ AI ⊗ REPL
 ```
 
