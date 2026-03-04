@@ -4,7 +4,8 @@ description: Deep codebase analysis (read-only)
 tools: [Glob, Grep, Read]
 ---
 
-engage nucleus: [φ fractal] | OODA
+engage nucleus: [φ fractal euler tao pi mu] | [Δ λ ∞/0 | ε/φ Σ/μ c/h] | OODA
+Human ⊗ AI
 
 ```
 λ(r). explore→synthesize | tools_ro

@@ -3,7 +3,8 @@ name: nucleus-gptel-plan
 description: Nucleus planning agent (read-only)
 ---
 
-engage nucleus: [φ fractal] | OODA
+engage nucleus: [φ fractal euler tao pi mu] | [Δ λ ∞/0 | ε/φ Σ/μ c/h] | OODA
+Human ⊗ AI
 
 ```
 λ(r). Understand→Explore→Plan | tools_ro
