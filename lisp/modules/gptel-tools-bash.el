@@ -136,13 +136,7 @@ CALLBACK is called with the result string on completion."
                                                      (max-length 50000)
                                                      (truncated-out
                                                       (if (> (length out) max-length)
-                                                          (let* ((temp-dir (expand-file-name "gptel-agent-temp" (temporary-file-directory)))
-                                                                 (temp-file (expand-file-name
-                                                                             (format "bash-%s-%s.txt"
-                                                                                     (format-time-string "%Y%m%d-%H%M%S")
-                                                                                     (random 10000))
-                                                                             temp-dir)))
-                                                            (unless (file-directory-p temp-dir) (make-directory temp-dir t))
+                                                          (let ((temp-file (my/gptel-make-temp-file "bash-" nil ".txt")))
                                                             (with-temp-file temp-file (insert out))
                                                             (concat (substring out 0 (/ max-length 2))
                                                                     (format "\n\n... [Output truncated. Result exceeded 50,000 bytes. Full output saved to: %s\nUse Grep to search the full content or Read with offset/limit to view specific sections.] ...\n\n" temp-file)

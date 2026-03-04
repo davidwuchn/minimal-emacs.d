@@ -96,7 +96,7 @@ Prefers `git apply` if in a git repository; otherwise uses `patch`."
           (error "patch text is empty"))
 
         (let* ((clean-patch (my/gptel--extract-patch patch))
-               (patch-file (make-temp-file "gptel-patch-"))
+               (patch-file (my/gptel-make-temp-file "gptel-patch-"))
                (root (if-let ((proj (project-current nil)))
                          (expand-file-name (project-root proj))
                        (expand-file-name default-directory)))

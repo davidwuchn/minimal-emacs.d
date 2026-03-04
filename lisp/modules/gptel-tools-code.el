@@ -361,8 +361,8 @@ Uses the system `diff' command to produce a real unified diff with
 context lines and proper hunks, suitable for `diff-mode'.
 Falls back to a naive all-remove/all-add diff if `diff' is unavailable."
     (let ((filename (file-name-nondirectory path))
-          (old-file (make-temp-file "code-replace-old-"))
-          (new-file (make-temp-file "code-replace-new-")))
+          (old-file (my/gptel-make-temp-file "code-replace-old-"))
+          (new-file (my/gptel-make-temp-file "code-replace-new-")))
       (unwind-protect
           (progn
             (with-temp-file old-file (insert old-code))

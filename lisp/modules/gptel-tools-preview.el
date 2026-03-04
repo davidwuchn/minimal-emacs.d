@@ -121,8 +121,8 @@ CALLBACK is called when user confirms or aborts."
                   (setq-local gptel--fsm-last parent-fsm)))
               (setq-local gptel--fsm-last parent-fsm)
               (funcall callback result))))
-         (temp1 (make-temp-file "orig"))
-         (temp2 (make-temp-file "new"))
+         (temp1 (my/gptel-make-temp-file "orig"))
+         (temp2 (my/gptel-make-temp-file "new"))
          (diff-output
           (progn
             (write-region original nil temp1 nil 'silent)

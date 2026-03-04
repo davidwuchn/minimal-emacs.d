@@ -96,7 +96,7 @@ and large-result truncation via `my/gptel--deliver-subagent-result'."
 (defun my/gptel--deliver-subagent-result (callback result)
   "Deliver RESULT to CALLBACK, truncating large results to a temp file."
   (if (> (length result) 4000)
-      (let* ((temp-file (make-temp-file "gptel-subagent-result-" nil ".txt"))
+      (let* ((temp-file (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt"))
              (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
                                 (substring result 0 4000)
                                 temp-file)))

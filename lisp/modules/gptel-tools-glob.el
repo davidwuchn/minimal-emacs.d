@@ -29,13 +29,7 @@ If TEXT exceeds 20000 bytes, it's saved to a temp file and only
 the first 50 lines are returned with a reference to the full content."
   (if (<= (length text) 20000)
       text
-    (let* ((temp-dir (expand-file-name "gptel-agent-temp" (temporary-file-directory)))
-           (temp-file (expand-file-name
-                       (format "glob-%s-%s.txt"
-                               (format-time-string "%Y%m%d-%H%M%S")
-                               (random 10000))
-                       temp-dir)))
-      (unless (file-directory-p temp-dir) (make-directory temp-dir t))
+    (let ((temp-file (my/gptel-make-temp-file "glob-" nil ".txt")))
       (with-temp-file temp-file (insert text))
       (with-temp-buffer
         (insert text)
