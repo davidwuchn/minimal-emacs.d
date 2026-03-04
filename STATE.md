@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-04 (tag v0.5.14)
+> Last updated: 2026-03-04 (tag v0.5.15)
 
 ## Architecture Overview
 
@@ -137,6 +137,12 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Prompt caching (explicit cache headers) | **Skip** | OpenAI-compatible backends do server-side caching automatically; no client changes needed |
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
 | Per-tool output limits | **Skip** | Flat 4000-char truncation on subagents works fine |
+
+### Recent Changes (v0.5.15)
+
+- **Fix gptel-ext-learning.el** (⊘): Cleaned 18 unnecessary requires (backends, gptel-openai, etc.) → only `cl-lib`, `seq`, `subr-x`. Fixed instinct path (hardcoded `instincts/` → `my/learning-instincts-dirs` defcustom pointing to `~/.config/opencode/skill/continuous-learning/instincts`). Fixed frontmatter regex (PCRE `[\s\S]*?` → Emacs `\(?:.*\n\)*?`). Fixed slug extraction (`###` → `##`). Added proper `my/learning--parse-frontmatter` parser. Unicode regex fix: `[a-zA-Z_-]` → `[[:alpha:]_-]` for parsing Greek letter keys like `φ` in instinct frontmatter.
+- **Docs update** (◈): STATE.md Active Backend section, Feature Evaluation Decisions table, Payload Management Architecture diagram. LEARNING.md "Feature Evaluation Discipline" section. INTRO.md freshened.
+- **Test suite**: 26 inline tests (5 groups) for learning module: frontmatter parsing (real + synthetic), slug extraction, update-instinct, learning-ref traceability, auto-evolve integration. All pass.
 
 ### Recent Changes (v0.5.14)
 

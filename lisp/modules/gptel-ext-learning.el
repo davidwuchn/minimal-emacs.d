@@ -30,7 +30,7 @@ Returns nil if no frontmatter found."
     (let ((front (match-string 1 text))
           (result nil))
       (dolist (line (split-string front "\n" t))
-        (when (string-match "^\\([a-zA-Z_-]+\\):\\s-*\\(.*\\)$" line)
+        (when (string-match "^\\([[:alpha:]_-]+\\):\\s-*\\(.*\\)$" line)
           (push (cons (match-string 1 line) (match-string 2 line)) result)))
       (nreverse result))))
 
