@@ -88,7 +88,8 @@ Use symbols in commit messages for searchable git history.
 | File         | Purpose                      | Fidelity |
 | ------------ | ---------------------------- | -------- |
 | AGENTS.md    | Bootstrap (this file)        | Reference |
-| README.md    | User documentation           | Guide |
+| INTRO.md     | Fork overview & nucleus architecture | Guide |
+| README.md    | Upstream user documentation   | Guide |
 | **STATE.md** | **Now** (what is true)       | **Full** — Current status, changes frequently (if present) |
 | **PLAN.md**  | **Next** (what should happen)| **Summary** — Roadmap, decisions, medium-term (if present) |
 | **LEARNING.md**| **Past** (patterns discovered)| **Distilled** — Eternal truths, timeless patterns (if present) |
@@ -165,6 +166,6 @@ If rules conflict:
 
 ---
 
-**See Also:** [README](README.md) · [STATE](STATE.md) · [PLAN](PLAN.md) · [LEARNING](LEARNING.md) · [CHANGELOG](CHANGELOG.md)
+**See Also:** [INTRO](INTRO.md) · [README](README.md) · [STATE](STATE.md) · [PLAN](PLAN.md) · [LEARNING](LEARNING.md) · [CHANGELOG](CHANGELOG.md)
 
 *Patterns and detailed learnings: see LEARNING.md*
