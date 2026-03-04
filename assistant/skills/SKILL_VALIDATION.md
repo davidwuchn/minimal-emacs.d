@@ -57,8 +57,8 @@ Human ⊗ AI ⊗ REPL
 
 **Checks**:
 - [ ] Framework header present
-- [ ] All 6 human principles present
-- [ ] All 6 AI principles present
+- [ ] All 8 human principles present
+- [ ] All 7 AI principles present
 - [ ] Valid control loop
 - [ ] Valid collaboration operator
 

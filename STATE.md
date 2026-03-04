@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-04 (commit e81886e)
+> Last updated: 2026-03-04 (commit 86fb489, tag v0.5.8)
 
 ## Architecture Overview
 
@@ -91,6 +91,13 @@ Version 0.9.9.4 installed, but `.elc` files contain a **newer unreleased version
 ## Known Issues
 
 None currently. All identified bugs have been fixed and committed.
+
+### Recent Changes (v0.5.8)
+
+- **Dead code cleanup** (e81886e): Removed unused `:core` toolset, derived `:snippets` from `:nucleus`, deleted `nucleus-register-tool` helper, removed dead `gptel-tools.el` variables. Added `:depth` to advice ordering.
+- **jit-lock timing gap fix** (de8e1b5): Changed `my/gptel--jit-lock-safe` gate from `my/gptel--streaming-p` to `(bound-and-true-p gptel-mode)` — eliminates post-response refontification gap.
+- **INTRO.md** (255d4af): Fork overview and nucleus architecture summary for GitHub.
+- **Unified nucleus engage header** (86fb489): All 28 agent/prompt/skill/doc files now use canonical `[phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA`. Collaboration lines preserved per-file (`Human ⊗ AI`, `Human ∧ AI` for nucleus-tutor, `Human ⊗ AI ⊗ REPL` for clojure-expert and reference docs).
 
 ### Phantom Issues (DO NOT attempt to fix)
 
