@@ -1138,16 +1138,28 @@ Set to nil to disable tool-result trimming on retry."
 (defun my/gptel--trim-tool-results-for-retry (info)
   "Trim old tool-result content in INFO's :data :messages to reduce payload.
 
-Keeps the most recent `my/gptel-retry-keep-recent-tool-results' tool results
-intact and truncates older ones.  This preserves the tool_call_id pairing
-required by OpenAI-compatible APIs while dramatically reducing payload size.
+Progressive trimming: on each successive retry, fewer tool results are kept
+intact.  The keep count is computed as:
+
+  max(0, `my/gptel-retry-keep-recent-tool-results' - retries)
+
+where retries is the CURRENT retry count from INFO's :retries (already
+incremented before this function is called).
+
+Retry 1 (retries=1): keep max(0, 2-1) = 1 recent result
+Retry 2 (retries=2): keep max(0, 2-2) = 0 results (truncate ALL)
+Retry 3+:            keep 0 (truncate ALL)
+
+This preserves the tool_call_id pairing required by OpenAI-compatible APIs
+while progressively reducing payload size on successive retries.
 
 Returns the number of messages truncated, or 0 if nothing was done."
   (if (null my/gptel-retry-keep-recent-tool-results)
       0
     (let* ((data (plist-get info :data))
            (messages (and data (plist-get data :messages)))
-           (keep my/gptel-retry-keep-recent-tool-results)
+           (retries (or (plist-get info :retries) 1))
+           (keep (max 0 (- my/gptel-retry-keep-recent-tool-results retries)))
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0))
       (when (and messages (> (length messages) 0))
@@ -1171,6 +1183,26 @@ Returns the number of messages truncated, or 0 if nothing was done."
                     (plist-put msg :content replacement)
                     (cl-incf truncated))))))))
       truncated)))
+
+(defun my/gptel--trim-reasoning-content (info)
+  "Strip reasoning_content from assistant messages in INFO to reduce payload.
+
+Called on retry 2+ (retries >= 2) to remove chain-of-thought reasoning text
+that accumulates across tool-use rounds.  The :reasoning_content field is
+set to nil (removed from the plist) for all assistant messages.
+
+Returns the number of messages whose reasoning_content was stripped."
+  (let* ((data (plist-get info :data))
+         (messages (and data (plist-get data :messages)))
+         (stripped 0))
+    (when (and messages (> (length messages) 0))
+      (dotimes (i (length messages))
+        (let ((msg (aref messages i)))
+          (when (and (equal (plist-get msg :role) "assistant")
+                     (plist-get msg :reasoning_content))
+            (plist-put msg :reasoning_content nil)
+            (cl-incf stripped)))))
+    stripped))
 
 (defun my/gptel-auto-retry (orig-fn machine &optional new-state)
   "Intercept FSM transitions to ERRS and retry the request if transient.
@@ -1235,13 +1267,21 @@ Skips retries for subagent FSMs (they have their own timeout handler)."
            (plist-put info :http-status nil)
            (plist-put info :retries (1+ retries))
            
-           ;; Trim old tool results to reduce payload size before retrying.
-           ;; This addresses context-overflow failures where DashScope resets
-           ;; the connection because the payload exceeds limits after multiple
-           ;; tool-use rounds (e.g. WebFetch results accumulating).
-           (let ((trimmed (my/gptel--trim-tool-results-for-retry info)))
-             (when (> trimmed 0)
-               (message "gptel: Trimmed %d old tool result(s) to reduce payload" trimmed)))
+           ;; Progressive payload trimming before retry.
+            ;; Tool results: keep count decreases with each retry
+            ;;   retry 1 → keep max(0, default-1), retry 2+ → keep 0
+            ;; Reasoning content: stripped on retry 2+ to reclaim space
+            ;; from accumulated chain-of-thought text.
+            (let ((trimmed (my/gptel--trim-tool-results-for-retry info))
+                  (new-retries (plist-get info :retries)))
+              (when (> trimmed 0)
+                (message "gptel: Trimmed %d old tool result(s) to reduce payload (retry %d, keeping %d recent)"
+                         trimmed new-retries
+                         (max 0 (- my/gptel-retry-keep-recent-tool-results new-retries))))
+              (when (>= new-retries 2)
+                (let ((reasoning-stripped (my/gptel--trim-reasoning-content info)))
+                  (when (> reasoning-stripped 0)
+                    (message "gptel: Stripped reasoning_content from %d assistant message(s)" reasoning-stripped)))))
            
            ;; Schedule the FSM transition asynchronously (non-blocking exponential backoff)
            (run-at-time delay nil

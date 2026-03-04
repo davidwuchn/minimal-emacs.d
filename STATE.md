@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-04 (tag v0.5.9)
+> Last updated: 2026-03-04 (tag v0.5.12)
 
 ## Architecture Overview
 
@@ -10,7 +10,7 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 
 | Module | Purpose | Lines |
 |--------|---------|-------|
-| `gptel-ext-core.el` | Core advice/hooks: retry, FSM recovery, streaming, tool sanitization | ~1470 |
+| `gptel-ext-core.el` | Core advice/hooks: retry, FSM recovery, streaming, tool sanitization, progressive trimming | ~1600 |
 | `gptel-ext-backends.el` | Backend configuration (DashScope, etc.) | |
 | `gptel-ext-context.el` | Context management extensions | |
 | `gptel-ext-learning.el` | Learning integration | |
@@ -92,7 +92,15 @@ Version 0.9.9.4 installed, but `.elc` files contain a **newer unreleased version
 
 None currently. All identified bugs have been fixed and committed.
 
-### Recent Changes (v0.5.9)
+### Recent Changes (v0.5.12)
+
+- **Progressive payload trimming** (⊘): `my/gptel--trim-tool-results-for-retry` now escalates trimming with each retry: keep count = `max(0, default - retries)`. Retry 1 keeps 1 recent tool result (was 2), retry 2+ keeps 0 (truncates ALL). New `my/gptel--trim-reasoning-content` function strips `reasoning_content` fields from assistant messages on retry 2+. This addresses DashScope connection resets on oversized payloads after multiple tool-use rounds.
+- **ERT test suite** (24 tests): `tests/test-gptel-trim.el` covers progressive trimming behavior, reasoning stripping, edge cases, and integration scenarios.
+
+### Recent Changes (v0.5.10-v0.5.11)
+
+- **Tool-result trimming on retry** (v0.5.10): Initial implementation of `my/gptel--trim-tool-results-for-retry` — truncates old tool results on retry, keeping most recent 2 intact.
+- **Paredit M-: RET fix** (v0.5.11): Fixed `eval-expression` minibuffer where RET inserted newline instead of confirming, using `minor-mode-overriding-map-alist`.
 
 - **Symlink cleanup & data directory consolidation**: Removed root-level `elpa/` and `tree-sitter/` symlinks that pointed into `var/`. These were unnecessary (paths already configured in `pre-early-init.el` and `post-early-init.el`) and created a symlink footgun risk (`rm -rf symlink/` follows the link and deletes target contents).
 - **`.gitignore` allowlist fix**: Added `!pre-early-init.el` and `!post-early-init.el` to the deny-all allowlist — these were tracked via `git add -f` but not explicitly allowlisted.
