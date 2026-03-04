@@ -700,4 +700,219 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
       (should (member "search" names)))))
 
 (provide 'test-gptel-trim)
+
+;;; ===========================================================================
+;;; Pre-send payload compaction tests
+;;; ===========================================================================
+
+;;; ---- Stubs for compaction ----
+
+(defvar my/gptel-payload-byte-limit 200000
+  "Test stub for payload byte limit.")
+
+(defconst my/gptel-model-context-bytes
+  '((kimi-k2\.5        . 400000)
+    (deepseek-chat      . 200000)
+    (tiny-model         . 50000))
+  "Test stub for model context byte limits.")
+
+;; Stub gptel--json-encode: use json-serialize (built-in C function, no require needed)
+(unless (fboundp 'gptel--json-encode)
+  (defun gptel--json-encode (obj)
+    (json-serialize obj :null-object :null :false-object :json-false)))
+
+;; Copy of helper functions under test
+(defun my/gptel--estimate-payload-bytes (info)
+  "Estimate the JSON byte size of INFO's :data payload."
+  (let ((data (plist-get info :data)))
+    (if data
+        (condition-case nil
+            (string-bytes (gptel--json-encode data))
+          (error 0))
+      0)))
+
+(defun my/gptel--effective-byte-limit (info)
+  "Return the byte limit for INFO's request."
+  (let* ((model (plist-get info :model))
+         (global-limit (or my/gptel-payload-byte-limit 999999999))
+         (model-limit (or (alist-get model my/gptel-model-context-bytes) 999999999)))
+    (min global-limit model-limit)))
+
+;; Simplified compact function that takes info directly (no FSM dependency)
+(defun test--compact-payload-on-info (info)
+  "Test helper: run compaction logic directly on INFO plist.
+Returns the number of items trimmed, or 0 if no compaction needed."
+  (when my/gptel-payload-byte-limit
+    (let* ((retries (or (plist-get info :retries) 0))
+           (limit (my/gptel--effective-byte-limit info))
+           (bytes (my/gptel--estimate-payload-bytes info))
+           (trimmed-total 0))
+      (when (and (= retries 0) (> bytes limit))
+        ;; Pass 1: trim tool results (keep 2 recent)
+        (let ((my/gptel-retry-keep-recent-tool-results 2))
+          (plist-put info :retries 1)
+          (let ((n (my/gptel--trim-tool-results-for-retry info)))
+            (cl-incf trimmed-total n)
+            (setq bytes (my/gptel--estimate-payload-bytes info))))
+        ;; Pass 2: strip reasoning (if still over)
+        (when (> bytes limit)
+          (let ((n (my/gptel--trim-reasoning-content info)))
+            (cl-incf trimmed-total n)
+            (setq bytes (my/gptel--estimate-payload-bytes info))))
+        ;; Pass 3: reduce tools array (if still over)
+        (when (> bytes limit)
+          (let ((n (my/gptel--reduce-tools-for-retry info)))
+            (cl-incf trimmed-total n)
+            (setq bytes (my/gptel--estimate-payload-bytes info))))
+        ;; Pass 4: aggressive tool result trim (keep 0)
+        (when (> bytes limit)
+          (let ((my/gptel-retry-keep-recent-tool-results 2))
+            (plist-put info :retries 3)
+            (let ((n (my/gptel--trim-tool-results-for-retry info)))
+              (cl-incf trimmed-total n)
+              (setq bytes (my/gptel--estimate-payload-bytes info)))))
+        ;; Reset retries
+        (plist-put info :retries 0))
+      trimmed-total)))
+
+;;; ---- Test helpers for large payloads ----
+
+(defun test--make-large-tool-result (size-bytes)
+  "Create a tool-result message with content of approximately SIZE-BYTES."
+  (list :role "tool" :tool_call_id "call_12345"
+        :content (make-string size-bytes ?x)))
+
+(defun test--make-large-assistant-msg (reasoning-size)
+  "Create an assistant message with reasoning_content of REASONING-SIZE bytes."
+  (let ((msg (list :role "assistant" :content "response")))
+    (when (and reasoning-size (> reasoning-size 0))
+      (plist-put msg :reasoning_content (make-string reasoning-size ?r)))
+    msg))
+
+;;; ---- Byte estimation tests ----
+
+(ert-deftest estimate-bytes/nil-data ()
+  "Nil :data returns 0."
+  (should (= 0 (my/gptel--estimate-payload-bytes (list :data nil)))))
+
+(ert-deftest estimate-bytes/empty-data ()
+  "Empty messages produces small payload."
+  (let* ((info (list :data (list :messages [] :model "test")))
+         (bytes (my/gptel--estimate-payload-bytes info)))
+    (should (> bytes 0))
+    (should (< bytes 100))))
+
+(ert-deftest estimate-bytes/grows-with-content ()
+  "Larger content produces larger byte estimate."
+  (let* ((small (list :data (list :messages
+                                   (vector (list :role "user" :content "hi")))))
+         (large (list :data (list :messages
+                                   (vector (list :role "user"
+                                                 :content (make-string 10000 ?x)))))))
+    (should (> (my/gptel--estimate-payload-bytes large)
+               (my/gptel--estimate-payload-bytes small)))))
+
+;;; ---- Effective byte limit tests ----
+
+(ert-deftest effective-limit/global-only ()
+  "When model has no specific limit, use global limit."
+  (let ((my/gptel-payload-byte-limit 150000)
+        (info (list :model 'unknown-model)))
+    (should (= 150000 (my/gptel--effective-byte-limit info)))))
+
+(ert-deftest effective-limit/model-smaller-than-global ()
+  "Model-specific limit wins when smaller than global."
+  (let ((my/gptel-payload-byte-limit 200000)
+        (info (list :model 'tiny-model)))
+    (should (= 50000 (my/gptel--effective-byte-limit info)))))
+
+(ert-deftest effective-limit/global-smaller-than-model ()
+  "Global limit wins when smaller than model limit."
+  (let ((my/gptel-payload-byte-limit 100000)
+        (info (list :model 'kimi-k2\.5)))
+    (should (= 100000 (my/gptel--effective-byte-limit info)))))
+
+(ert-deftest effective-limit/nil-global-means-no-limit ()
+  "nil global limit effectively disables size checking."
+  (let ((my/gptel-payload-byte-limit nil)
+        (info (list :model 'unknown-model)))
+    (should (= 999999999 (my/gptel--effective-byte-limit info)))))
+
+;;; ---- Compaction logic tests ----
+
+(ert-deftest compact/no-compaction-when-under-limit ()
+  "Payload under limit → no trimming."
+  (let* ((my/gptel-payload-byte-limit 200000)
+         (info (test--make-info
+                (list (test--make-user-msg "hello")
+                      (test--make-assistant-msg))
+                0)))
+    (plist-put info :model 'kimi-k2\.5)
+    (should (= 0 (test--compact-payload-on-info info)))))
+
+(ert-deftest compact/no-compaction-when-disabled ()
+  "nil limit → no compaction."
+  (let* ((my/gptel-payload-byte-limit nil)
+         (info (test--make-info
+                (list (test--make-large-tool-result 300000)) 0)))
+    (plist-put info :model 'kimi-k2\.5)
+    ;; Returns nil when disabled
+    (should-not (test--compact-payload-on-info info))))
+
+(ert-deftest compact/skips-on-retry ()
+  "Compaction only runs on first attempt (retries=0)."
+  (let* ((my/gptel-payload-byte-limit 1000)
+         (info (test--make-info
+                (list (test--make-large-tool-result 5000)) 2)))
+    (plist-put info :model 'kimi-k2\.5)
+    ;; retries=2, should skip
+    (should (= 0 (test--compact-payload-on-info info)))))
+
+(ert-deftest compact/trims-large-tool-results ()
+  "Large tool results get trimmed when over limit."
+  (let* ((my/gptel-payload-byte-limit 1000)
+         (msgs (list
+                (test--make-user-msg "code review please")
+                (test--make-assistant-msg)
+                (test--make-large-tool-result 5000)
+                (test--make-assistant-msg)
+                (test--make-large-tool-result 5000)))
+         (info (test--make-info msgs 0)))
+    (plist-put info :model 'kimi-k2\.5)
+    (let ((trimmed (test--compact-payload-on-info info)))
+      (should (> trimmed 0))
+      ;; Retries should be reset to 0
+      (should (= 0 (plist-get info :retries))))))
+
+(ert-deftest compact/strips-reasoning-when-tool-trim-not-enough ()
+  "Reasoning gets stripped if tool-result trimming is insufficient."
+  (let* ((my/gptel-payload-byte-limit 500)
+         (msgs (list
+                (test--make-large-assistant-msg 2000)
+                (test--make-large-tool-result 2000)
+                (test--make-large-assistant-msg 2000)
+                (test--make-large-tool-result 2000)))
+         (info (test--make-info msgs 0)))
+    (plist-put info :model 'kimi-k2\.5)
+    (let ((trimmed (test--compact-payload-on-info info)))
+      (should (> trimmed 0))
+      ;; Check reasoning was stripped
+      (let ((messages (plist-get (plist-get info :data) :messages)))
+        (should (null (plist-get (aref messages 0) :reasoning_content)))
+        (should (null (plist-get (aref messages 2) :reasoning_content))))
+      ;; Retries reset
+      (should (= 0 (plist-get info :retries))))))
+
+(ert-deftest compact/respects-model-specific-limit ()
+  "Uses model-specific limit when smaller than global."
+  (let* ((my/gptel-payload-byte-limit 999999)
+         ;; tiny-model has 50000 byte limit
+         (msgs (list (test--make-large-tool-result 60000)))
+         (info (test--make-info msgs 0)))
+    (plist-put info :model 'tiny-model)
+    (let ((trimmed (test--compact-payload-on-info info)))
+      ;; Should compact because model limit is 50000 < payload
+      (should (> trimmed 0)))))
+
+(provide 'test-gptel-trim)
 ;;; test-gptel-trim.el ends here

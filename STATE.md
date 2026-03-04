@@ -65,6 +65,7 @@ Minibuffer dispatch: `y/n/k/a/i/p/q`. Upstream `n` = "defer" (FSM stays paused, 
 | `my/gptel--detect-doom-loop` | `gptel--handle-tool-use` | `:before` | gptel-ext-core.el | Abort repeated identical tool calls |
 | `my/gptel--display-tool-calls` | `gptel--display-tool-calls` | `:override` | gptel-ext-core.el | Enhanced tool confirmation UI |
 | `my/gptel-auto-retry` | `gptel--fsm-transition` | `:around` | gptel-ext-core.el | Exponential backoff retry |
+| `my/gptel--compact-payload` | `gptel-curl-get-response` | `:before` | gptel-ext-core.el | Pre-send payload compaction |
 | `my/gptel-fix-fsm-stuck-in-type` | `gptel-curl--stream-cleanup` | `:around` | gptel-ext-core.el | Unstick FSM from TYPE state |
 | `my/gptel--stream-set-flag` | `gptel-curl--stream-insert-response` | `:before` | gptel-ext-core.el | Set streaming flag for jit-lock protection |
 | `my/gptel--jit-lock-safe` | `jit-lock-function` | `:around` | gptel-ext-core.el | Suppress jit-lock errors in gptel-mode buffers |
@@ -96,12 +97,13 @@ None currently. All identified bugs have been fixed and committed.
 
 - **Centralize backend/model config** (⚒): Single source of truth in `gptel-config.el` lines 35-36. `nucleus-presets.el` agent/plan presets now derive from `gptel-backend`/`gptel-model`. `gptel-tools-agent.el` subagent backend/model defcustoms default to nil (inherit global). Switching providers requires changing exactly one line.
 - **Tools array reduction on retry** (⚒): New `my/gptel--reduce-tools-for-retry` function filters `:data :tools` and `:tools` struct list to only tools actually called in the conversation history. Activated on retry 2+ (alongside reasoning stripping). Removes ~60-80% of tool definitions (~5-8KB) from conversations that use only 3-5 of 18+ registered tools.
-- **ERT test suite expanded** (38 tests): 14 new tests for tools reduction covering filtering, struct list sync, idempotence, edge cases, and integration with other trimming functions.
+- **Pre-send payload compaction** (⚒): New `my/gptel--compact-payload` advice on `gptel-curl-get-response` estimates JSON payload byte size before the first send. If over `my/gptel-payload-byte-limit` (default 200KB) or model-specific limit, proactively applies 4-pass progressive trimming (tool results → reasoning → tools array → aggressive trim) to prevent wasted retries. Model limits in `my/gptel-model-context-bytes` alist.
+- **ERT test suite expanded** (51 tests): 13 new tests for pre-send compaction covering byte estimation, effective limit resolution, compaction passes, disabled/retry skip scenarios.
 
 ### Recent Changes (v0.5.12)
 
 - **Progressive payload trimming** (⊘): `my/gptel--trim-tool-results-for-retry` now escalates trimming with each retry: keep count = `max(0, default - retries)`. Retry 1 keeps 1 recent tool result (was 2), retry 2+ keeps 0 (truncates ALL). New `my/gptel--trim-reasoning-content` function strips `reasoning_content` fields from assistant messages on retry 2+. This addresses DashScope connection resets on oversized payloads after multiple tool-use rounds.
-- **ERT test suite** (24 tests → 38 tests): `tests/test-gptel-trim.el` covers progressive trimming behavior, reasoning stripping, tools reduction, edge cases, and integration scenarios.
+- **ERT test suite** (24 tests → 51 tests): `tests/test-gptel-trim.el` covers progressive trimming behavior, reasoning stripping, tools reduction, pre-send compaction, edge cases, and integration scenarios.
 
 ### Recent Changes (v0.5.10-v0.5.11)
 

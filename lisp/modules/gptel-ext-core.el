@@ -1353,6 +1353,129 @@ Skips retries for subagent FSMs (they have their own timeout handler)."
 
 (advice-add 'gptel--fsm-transition :around #'my/gptel-auto-retry)
 
+;; --- Pre-Send Payload Compaction ---
+;; Proactively trim oversized payloads BEFORE the first send attempt,
+;; preventing wasted retries when the payload is already too large.
+
+(defcustom my/gptel-payload-byte-limit 200000
+  "Maximum JSON payload size in bytes before proactive compaction.
+When the serialized payload exceeds this limit, the pre-send hook
+applies progressive trimming (tool results, reasoning, tools array)
+before the request is sent.
+
+Set to nil to disable pre-send compaction (rely on retry trimming only).
+Default is 200KB — conservative for DashScope/Moonshot endpoints that
+tend to reset connections around 250-300KB."
+  :type '(choice (const :tag "Disabled" nil) integer)
+  :group 'gptel)
+
+(defconst my/gptel-model-context-bytes
+  '((kimi-k2\.5        . 400000)   ; 131K tokens ≈ 460KB, leave room for output
+    (kimi-for-coding    . 400000)
+    (qwen3\.5-plus      . 400000)   ; 131K tokens
+    (qwen3-coder-next   . 400000)
+    (qwen3-coder-plus   . 400000)
+    (qwen3-max-2026-01-23 . 400000)
+    (glm-5              . 350000)   ; 128K tokens
+    (glm-4\.7            . 350000)
+    (MiniMax-M2\.5       . 300000)
+    (deepseek-chat      . 200000)   ; 64K tokens
+    (deepseek-reasoner  . 200000))
+  "Approximate max JSON byte size per model (context window × ~3.5 bytes/token,
+minus output reservation).  Used as fallback when `my/gptel-payload-byte-limit'
+would be too generous for a smaller-context model.")
+
+(defun my/gptel--estimate-payload-bytes (info)
+  "Estimate the JSON byte size of INFO's :data payload.
+Uses `json-serialize' for accuracy.  Returns 0 if :data is nil."
+  (let ((data (plist-get info :data)))
+    (if data
+        (condition-case nil
+            (string-bytes (gptel--json-encode data))
+          (error 0))
+      0)))
+
+(defun my/gptel--effective-byte-limit (info)
+  "Return the byte limit to use for INFO's request.
+Takes the minimum of `my/gptel-payload-byte-limit' and the model-specific
+context limit from `my/gptel-model-context-bytes'."
+  (let* ((model (plist-get info :model))
+         (global-limit (or my/gptel-payload-byte-limit 999999999))
+         (model-limit (or (alist-get model my/gptel-model-context-bytes) 999999999)))
+    (min global-limit model-limit)))
+
+(defun my/gptel--compact-payload (fsm)
+  "Proactively trim FSM's payload if it exceeds byte limits.
+Called as :before advice on `gptel-curl-get-response'.
+
+Only runs on the first attempt (retries=0) — retry trimming handles
+subsequent attempts via `my/gptel-auto-retry'.
+
+Applies trimming progressively until under limit or nothing left to trim:
+  1. Trim old tool results (keep 2 recent)
+  2. Strip reasoning_content
+  3. Reduce tools array to only used tools"
+  (when my/gptel-payload-byte-limit
+    (let* ((info (gptel-fsm-info fsm))
+           (retries (or (plist-get info :retries) 0)))
+      ;; Only compact on first send — retries have their own trimming
+      (when (= retries 0)
+        (let ((limit (my/gptel--effective-byte-limit info))
+              (bytes (my/gptel--estimate-payload-bytes info))
+              (trimmed-total 0)
+              (pass 0))
+          (when (> bytes limit)
+            (message "gptel: Payload %dKB exceeds %dKB limit, compacting..."
+                     (/ bytes 1024) (/ limit 1024))
+            ;; Pass 1: trim tool results (keep 2 recent)
+            (let ((my/gptel-retry-keep-recent-tool-results 2))
+              (plist-put info :retries 1)  ; simulate retry 1 for keep count
+              (let ((n (my/gptel--trim-tool-results-for-retry info)))
+                (cl-incf trimmed-total n)
+                (setq bytes (my/gptel--estimate-payload-bytes info))
+                (setq pass 1)
+                (when (> n 0)
+                  (message "gptel: Pass 1: trimmed %d tool result(s), now %dKB"
+                           n (/ bytes 1024)))))
+            ;; Pass 2: strip reasoning (if still over)
+            (when (> bytes limit)
+              (let ((n (my/gptel--trim-reasoning-content info)))
+                (cl-incf trimmed-total n)
+                (setq bytes (my/gptel--estimate-payload-bytes info))
+                (setq pass 2)
+                (when (> n 0)
+                  (message "gptel: Pass 2: stripped reasoning from %d message(s), now %dKB"
+                           n (/ bytes 1024)))))
+            ;; Pass 3: reduce tools array (if still over)
+            (when (> bytes limit)
+              (let ((n (my/gptel--reduce-tools-for-retry info)))
+                (cl-incf trimmed-total n)
+                (setq bytes (my/gptel--estimate-payload-bytes info))
+                (setq pass 3)
+                (when (> n 0)
+                  (message "gptel: Pass 3: removed %d unused tool def(s), now %dKB"
+                           n (/ bytes 1024)))))
+            ;; Pass 4: aggressive tool result trim (keep 0)
+            (when (> bytes limit)
+              (let ((my/gptel-retry-keep-recent-tool-results 2))
+                (plist-put info :retries 3)  ; simulate retry 3 for keep=0
+                (let ((n (my/gptel--trim-tool-results-for-retry info)))
+                  (cl-incf trimmed-total n)
+                  (setq bytes (my/gptel--estimate-payload-bytes info))
+                  (setq pass 4)
+                  (when (> n 0)
+                    (message "gptel: Pass 4: truncated ALL remaining tool results, now %dKB"
+                             n (/ bytes 1024))))))
+            ;; Reset retries to 0 (we simulated retries for trim functions)
+            (plist-put info :retries 0)
+            (if (> bytes limit)
+                (message "gptel: WARNING: Payload still %dKB after %d passes of compaction (limit %dKB)"
+                         (/ bytes 1024) pass (/ limit 1024))
+              (message "gptel: Compaction complete: %d items trimmed across %d pass(es), payload now %dKB"
+                       trimmed-total pass (/ bytes 1024)))))))))
+
+(advice-add 'gptel-curl-get-response :before #'my/gptel--compact-payload)
+
 ;; --- Fix gptel-agent Missing FSM Handlers ---
 ;; `gptel-agent` defines its own handlers for background tasks but forgets to
 ;; include DONE, ERRS, and ABRT! This causes background agents to hang forever
