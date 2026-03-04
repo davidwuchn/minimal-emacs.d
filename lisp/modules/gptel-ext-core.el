@@ -1273,13 +1273,6 @@ START and END are the response region positions passed by
            url-cb)))
     (apply orig url wrapped-url-cb tool-cb failed-msg args)))
 
-(defun my/gptel-auto-permit-tool-calls ()
-  "Accept the current tool call and auto-permit all future ones in this buffer."
-  (interactive)
-  (setq-local gptel-confirm-tool-calls nil)
-  (message "Auto-permitting all future tool calls in this buffer.")
-  (call-interactively #'gptel--accept-tool-calls))
-
 ;; --- FSM Lookup Helper ---
 ;; Upstream `gptel--inspect-fsm' has a bug: when called with nil FSM arg, it
 ;; falls back to `(cdr-safe (cl-find-if pred gptel--request-alist))' which
@@ -1304,9 +1297,30 @@ is found."
 
 ;; --- Enhanced Tool Call Confirmation Context ---
 ;; Overrides `gptel--display-tool-calls' to include arguments in the minibuffer prompt.
+;; Integrates with gptel-tool-ui.el per-tool permit system.
+
+(defun my/gptel--permit-and-accept-tool-calls ()
+  "Permit all tools in the current overlay, then accept."
+  (interactive)
+  (when-let* ((ov (cdr-safe (get-char-property-and-overlay (point) 'gptel-tool)))
+              (tool-calls (overlay-get ov 'gptel-tool)))
+    (dolist (tc tool-calls)
+      (my/gptel-permit-tool (gptel-tool-name (car tc)))))
+  (call-interactively #'gptel--accept-tool-calls))
+
 (defun my/gptel--display-tool-calls (tool-calls info &optional use-minibuffer)
-  "Handle tool call confirmation with improved minibuffer context."
-  (let* ((start-marker (plist-get info :position))
+  "Handle tool call confirmation with per-tool permit memory.
+
+If all requested tools are already permitted (via `my/gptel-permitted-tools'),
+auto-accepts without prompting.  Otherwise shows the standard confirmation
+with an additional `p' option to permit and remember a tool."
+  ;; Fast path: if all tools are already permitted, auto-accept
+  (if (and (bound-and-true-p my/gptel-permitted-tools)
+           (cl-every (lambda (tc) (my/gptel-tool-permitted-p (gptel-tool-name (car tc))))
+                     tool-calls))
+      (gptel--accept-tool-calls tool-calls nil)
+    ;; Slow path: show confirmation UI
+    (let* ((start-marker (plist-get info :position))
          (tracking-marker (plist-get info :tracking-marker)))
     (with-current-buffer (plist-get info :buffer)
       (if (or use-minibuffer        ;prompt for confirmation from the minibuffer
@@ -1321,17 +1335,21 @@ is found."
              (lambda (tool-call-spec)
                (let* ((tool-name (gptel-tool-name (car tool-call-spec)))
                       (args (cadr tool-call-spec))
+                      (permitted (my/gptel-tool-permitted-p tool-name))
                       (formatted-args
                        (mapconcat (lambda (arg)
                                     (cond ((stringp arg)
                                            (truncate-string-to-width arg 60 nil nil "..."))
                                           (t (prin1-to-string arg))))
                                   args " ")))
-                 (concat prompt
-                         (propertize tool-name 'face 'font-lock-keyword-face)
-                         (if (string-empty-p formatted-args) ""
-                           (concat " " (propertize formatted-args 'face 'font-lock-constant-face)))
-                         ": ")))
+                 (if permitted
+                     ;; Already permitted — auto-accept this one
+                     (progn (gptel--accept-tool-calls (list tool-call-spec) nil) nil)
+                   (concat prompt
+                           (propertize tool-name 'face 'font-lock-keyword-face)
+                           (if (string-empty-p formatted-args) ""
+                             (concat " " (propertize formatted-args 'face 'font-lock-constant-face)))
+                           ": "))))
              (lambda (tcs) (gptel--accept-tool-calls (list tcs) nil))
              tool-calls '("tool call" "tool calls" "run")
              `((?i ,(lambda (_) (save-window-excursion
@@ -1348,20 +1366,22 @@ is found."
                                  (current-local-map)))
                                (recursive-edit) nil)))
                    "inspect call(s)")
-               (?a ,(lambda (_)
-                      (setq-local gptel-confirm-tool-calls nil)
-                      (message "Auto-permitting all future tool calls in this buffer.")
-                      (setq unread-command-events (listify-key-sequence "!"))
+               (?p ,(lambda (tool-call-spec)
+                      (let ((name (gptel-tool-name (car tool-call-spec))))
+                        (my/gptel-permit-tool name)
+                        (message "Permitted %s for this session" name))
+                      ;; Accept this tool call and continue
+                      (gptel--accept-tool-calls (list tool-call-spec) nil)
                       nil)
-                   "auto-permit future calls"))))
-        ;; Prompt for confirmation from the chat buffer
+                   "permit & run (remember)"))))
+        ;; Prompt for confirmation from the chat buffer overlay
         (let* ((backend-name (gptel-backend-name (plist-get info :backend)))
                (actions-string
-                (concat (propertize "Run tools: " 'face 'font-lock-string-face)
+                (concat (propertize "Run: " 'face 'font-lock-string-face)
                         (propertize "C-c C-c" 'face 'help-key-binding)
-                        (propertize ", Auto-permit: " 'face 'font-lock-string-face)
-                        (propertize "C-c C-y" 'face 'help-key-binding)
-                        (propertize ", Cancel request: " 'face 'font-lock-string-face)
+                        (propertize ", Permit & run: " 'face 'font-lock-string-face)
+                        (propertize "C-c C-p" 'face 'help-key-binding)
+                        (propertize ", Cancel: " 'face 'font-lock-string-face)
                         (propertize "C-c C-k" 'face 'help-key-binding)
                         (propertize ", Inspect: " 'face 'font-lock-string-face)
                         (propertize "C-c C-i" 'face 'help-key-binding)))
@@ -1369,9 +1389,6 @@ is found."
                (ov-start (and start-marker
                                (save-excursion
                                  (goto-char start-marker)
-                                 ;; text-property-search-backward returns nil on no-match
-                                 ;; and moves point to (point-min) — use return value to
-                                 ;; distinguish "found" from "not found".
                                  (when (text-property-search-backward 'gptel 'response)
                                    (point)))))
                (preview-handlers)
@@ -1428,20 +1445,10 @@ is found."
                            (concat "Tool call(s) requested: " actions-string))
               (let ((map (make-sparse-keymap)))
                 (set-keymap-parent map gptel-tool-call-actions-map)
-                (define-key map (kbd "C-c C-y") #'my/gptel-auto-permit-tool-calls)
-                (overlay-put ov 'keymap map)))))))))
+                (define-key map (kbd "C-c C-p") #'my/gptel--permit-and-accept-tool-calls)
+                (overlay-put ov 'keymap map))))))))))
 
 (advice-add 'gptel--display-tool-calls :override #'my/gptel--display-tool-calls)
-
-(defun my/gptel--hint-auto-permit-on-accept (&rest _args)
-  "Show a hint about auto-permitting when the user manually accepts a tool call."
-  (when (and (boundp 'gptel-confirm-tool-calls)
-             gptel-confirm-tool-calls
-             ;; Don't hint if it's currently executing as a subagent
-             (not (bound-and-true-p my/gptel--in-subagent-task)))
-    (message "Calling tool... (Hint: Use C-c C-y to auto-permit future calls in this buffer)")))
-
-(advice-add 'gptel--accept-tool-calls :before #'my/gptel--hint-auto-permit-on-accept)
 
 ;; --- Pre-serialization content sanitizer ---
 ;; json-serialize encodes Elisp nil as {} (empty object), not null or "".

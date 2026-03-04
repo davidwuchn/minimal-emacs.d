@@ -35,9 +35,9 @@
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3.5-plus)
 
-;; Tool confirmation is managed by gptel-tool-ui.el via
-;; my/gptel-confirmation-level (auto/normal/confirm-all).
-;; Use M-x my/gptel-set-confirmation-level to change at runtime.
+;; Tool confirmation: auto (default) / confirm-all (kill switch).
+;; Use M-x my/gptel-toggle-confirm to switch modes.
+;; Per-tool permits remembered for the session (M-x my/gptel-show-permits).
 
 ;; --- Keybindings & UI Helpers ---
 (defun my/gptel-add-project-files ()
