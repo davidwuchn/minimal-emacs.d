@@ -1,4 +1,4 @@
-;;; post-early-init.el --- Post Early Init -*- lexical-binding: t; -*-
+;;; post-early-init.el --- Post Early Init -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; This file is loaded after early-init.el but before init.el.

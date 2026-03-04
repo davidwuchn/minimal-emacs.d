@@ -98,6 +98,7 @@ None currently. All identified bugs have been fixed and committed.
 - **jit-lock timing gap fix** (de8e1b5): Changed `my/gptel--jit-lock-safe` gate from `my/gptel--streaming-p` to `(bound-and-true-p gptel-mode)` — eliminates post-response refontification gap.
 - **INTRO.md** (255d4af): Fork overview and nucleus architecture summary for GitHub.
 - **Unified nucleus engage header** (86fb489): All 28 agent/prompt/skill/doc files now use canonical `[phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA`. Collaboration lines preserved per-file (`Human ⊗ AI`, `Human ∧ AI` for nucleus-tutor, `Human ⊗ AI ⊗ REPL` for clojure-expert and reference docs).
+- **Restore upstream init.el**: Reverted `init.el` to exact upstream `jamescherti/minimal-emacs.d`, deleted redundant `lisp/init-defaults.el`. All customizations now live exclusively in `post-init.el` / `post-early-init.el` / `pre-early-init.el` as intended. Added missing `no-byte-compile: t` to `post-early-init.el`.
 
 ### Phantom Issues (DO NOT attempt to fix)
 
