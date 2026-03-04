@@ -62,13 +62,19 @@
          (clojure-mode . paredit-mode)
          (cider-repl-mode . paredit-mode))
   :config
-  ;; Paredit rebinds RET to paredit-newline, which breaks M-: (eval-expression)
-  ;; by inserting a newline instead of confirming.  Restore RET in the minibuffer.
+  ;; Paredit rebinds RET to paredit-RET in paredit-mode-map (a minor-mode map),
+  ;; which has higher priority than the buffer-local map.  This breaks M-:
+  ;; (eval-expression) by inserting a newline instead of confirming.
+  ;; Use minor-mode-overriding-map-alist (checked BEFORE minor-mode-map-alist)
+  ;; to restore RET without globally mutating paredit-mode-map.
   (add-hook 'eval-expression-minibuffer-setup-hook
             (lambda ()
               (when (bound-and-true-p paredit-mode)
-                (local-set-key (kbd "RET") #'exit-minibuffer)
-                (local-set-key (kbd "<return>") #'exit-minibuffer)))))
+                (let ((map (make-sparse-keymap)))
+                  (define-key map (kbd "RET") #'exit-minibuffer)
+                  (define-key map (kbd "<return>") #'exit-minibuffer)
+                  (push (cons 'paredit-mode map)
+                        minor-mode-overriding-map-alist))))))
 
 (use-package enhanced-evil-paredit
   :ensure t
