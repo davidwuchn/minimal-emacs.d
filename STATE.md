@@ -13,7 +13,7 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 | `gptel-ext-core.el` | Core advice/hooks: retry, FSM recovery, streaming, tool sanitization, progressive trimming, pre-send compaction | ~1790 |
 | `gptel-ext-backends.el` | Backend configuration (Moonshot, DashScope, DeepSeek, Gemini, OpenRouter, etc.) | ~111 |
 | `gptel-ext-context.el` | Context management extensions | |
-| `gptel-ext-learning.el` | Learning integration | |
+| `gptel-ext-learning.el` | Learning integration: auto-evolve instinct files on git commit via `git-commit-finish-hook` | ~144 |
 | `gptel-ext-security.el` | ACL router advice on gptel-make-tool | ~110 |
 | `gptel-tools.el` | Tool registration orchestrator, readonly/action tool lists | ~320 |
 | `gptel-tools-agent.el` | RunAgent tool + subagent delegation + upstream Agent deregistration | ~326 |
