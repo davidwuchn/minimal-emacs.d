@@ -16,4 +16,5 @@ lisp/modules/*.elc
 !STATE.md
 !LEARNING.md
 !CHANGELOG.md
+!INTRO.md
 !assistant/
