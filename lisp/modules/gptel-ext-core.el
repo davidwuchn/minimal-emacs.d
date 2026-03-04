@@ -64,11 +64,14 @@
 ;; producing: (jit-lock-function N) signaled (wrong-type-argument
 ;; integer-or-marker-p nil).
 ;;
-;; Fix: track gptel streaming state and suppress jit-lock errors during it.
-;; The flag is buffer-local and persists across the insert → redisplay boundary.
-;; It is set when streaming starts and cleared on post-response.
-;; Jit-lock errors during streaming are caught; the region stays marked for
-;; refontification and gets correctly fontified once streaming completes.
+;; Fix: suppress jit-lock errors unconditionally in gptel-mode buffers.
+;; A streaming flag tracks when gptel is actively inserting chunks, but the
+;; condition-case protection must NOT be gated on it: the most dangerous
+;; refontification happens AFTER streaming ends — my/gptel--stream-clear-flag
+;; calls jit-lock-refontify after clearing the flag, and upstream font-lock-flush
+;; runs on post-response hooks.  Both can trigger errors on malformed markdown.
+;; Using (bound-and-true-p gptel-mode) as the gate makes protection unconditional
+;; for gptel buffers while leaving non-gptel buffers completely unaffected.
 
 (defvar-local my/gptel--streaming-p nil
   "Non-nil while gptel is actively streaming into this buffer.")
@@ -95,11 +98,17 @@ RESPONSE and INFO are from `gptel-curl--stream-insert-response'."
 (add-hook 'gptel-post-response-functions #'my/gptel--stream-clear-flag)
 
 (defun my/gptel--jit-lock-safe (orig-fn start)
-  "Catch jit-lock errors during gptel streaming.
-When `my/gptel--streaming-p' is non-nil, wrap ORIG-FN in `condition-case'
-to prevent markdown-mode fontification errors from propagating to the
-redisplay engine.  START is the position to fontify."
-  (if my/gptel--streaming-p
+  "Catch jit-lock errors in gptel buffers.
+Wrap ORIG-FN in `condition-case' when `gptel-mode' is active to prevent
+markdown-mode fontification errors from propagating to the redisplay engine.
+
+The protection is unconditional for gptel-mode buffers (not gated on the
+streaming flag) because the most dangerous refontification happens AFTER
+streaming completes: `my/gptel--stream-clear-flag' calls `jit-lock-refontify'
+after clearing `my/gptel--streaming-p', and upstream `font-lock-flush' runs
+on post-response hooks.  Both trigger jit-lock with incomplete/malformed
+markdown content that can throw errors.  START is the position to fontify."
+  (if (bound-and-true-p gptel-mode)
       (condition-case err
           (funcall orig-fn start)
         (error
@@ -109,7 +118,7 @@ redisplay engine.  START is the position to fontify."
          (with-silent-modifications
            (put-text-property start (min (+ start 1) (point-max)) 'fontified nil))
          (when gptel-log-level
-           (message "gptel: suppressed jit-lock error during streaming: %S" err))))
+           (message "gptel: suppressed jit-lock error in gptel buffer: %S" err))))
     (funcall orig-fn start)))
 
 (advice-add 'jit-lock-function :around #'my/gptel--jit-lock-safe)

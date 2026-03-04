@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-04 (commit b102294)
+> Last updated: 2026-03-04 (commit e81886e)
 
 ## Architecture Overview
 
@@ -67,7 +67,7 @@ Minibuffer dispatch: `y/n/k/a/i/p/q`. Upstream `n` = "defer" (FSM stays paused, 
 | `my/gptel-auto-retry` | `gptel--fsm-transition` | `:around` | gptel-ext-core.el | Exponential backoff retry |
 | `my/gptel-fix-fsm-stuck-in-type` | `gptel-curl--stream-cleanup` | `:around` | gptel-ext-core.el | Unstick FSM from TYPE state |
 | `my/gptel--stream-set-flag` | `gptel-curl--stream-insert-response` | `:before` | gptel-ext-core.el | Set streaming flag for jit-lock protection |
-| `my/gptel--jit-lock-safe` | `jit-lock-function` | `:around` | gptel-ext-core.el | Suppress jit-lock errors during streaming |
+| `my/gptel--jit-lock-safe` | `jit-lock-function` | `:around` | gptel-ext-core.el | Suppress jit-lock errors in gptel-mode buffers |
 | `my/gptel-agent--task-override` | `gptel-agent--task` | `:override` | gptel-tools-agent.el | Parent-buffer tracking, large-result truncation |
 | `my/gptel--deregister-upstream-agent` | `gptel-agent-update` | `:after` | gptel-tools-agent.el | Remove upstream "Agent" tool (RunAgent is superior) |
 

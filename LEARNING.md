@@ -21,6 +21,7 @@
 
 ## Emacs Lisp Quirks
 - **Struct Compilation Warnings**: Using `(cl-typep obj 'gptel-openai)` inside advice functions will trigger byte-compiler warnings (`Unknown type gptel-openai`) if the module defining the struct isn't explicitly required. Wrapping the `require` calls in `(eval-when-compile ...)` at the top of the file resolves this without forcing runtime load order issues.
+- **jit-lock Timing Gap with State Flags**: Gating `condition-case` protection on a transient flag (e.g. `my/gptel--streaming-p`) creates a timing gap: when a post-response hook clears the flag then triggers refontification (`jit-lock-refontify`, `font-lock-flush`), the refontification runs *without* protection because the flag is already nil. The fix is to gate on a stable predicate like `(bound-and-true-p gptel-mode)` — the mode stays active for the buffer's lifetime, so protection is unconditional and the timing gap disappears.
 
 ## Delegation & Context Boundaries
 - **Stateless Subagents**: When an agent delegates a task to a subagent (e.g., via the `Agent` or `RunAgent` tool), the subagent starts fresh without any access to the parent's conversation history or context. The parent agent must explicitly bundle all necessary instructions, constraints, and state into the prompt payload.
