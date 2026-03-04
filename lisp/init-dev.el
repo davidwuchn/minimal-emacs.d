@@ -60,7 +60,15 @@
          (lisp-interaction-mode . paredit-mode)
          (scheme-mode . paredit-mode)
          (clojure-mode . paredit-mode)
-         (cider-repl-mode . paredit-mode)))
+         (cider-repl-mode . paredit-mode))
+  :config
+  ;; Paredit rebinds RET to paredit-newline, which breaks M-: (eval-expression)
+  ;; by inserting a newline instead of confirming.  Restore RET in the minibuffer.
+  (add-hook 'eval-expression-minibuffer-setup-hook
+            (lambda ()
+              (when (bound-and-true-p paredit-mode)
+                (local-set-key (kbd "RET") #'exit-minibuffer)
+                (local-set-key (kbd "<return>") #'exit-minibuffer)))))
 
 (use-package enhanced-evil-paredit
   :ensure t
