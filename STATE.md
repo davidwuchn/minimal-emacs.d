@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-04 (tag v0.5.13)
+> Last updated: 2026-03-04 (tag v0.5.14)
 
 ## Architecture Overview
 
@@ -10,13 +10,13 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 
 | Module | Purpose | Lines |
 |--------|---------|-------|
-| `gptel-ext-core.el` | Core advice/hooks: retry, FSM recovery, streaming, tool sanitization, progressive trimming | ~1600 |
-| `gptel-ext-backends.el` | Backend configuration (DashScope, etc.) | |
+| `gptel-ext-core.el` | Core advice/hooks: retry, FSM recovery, streaming, tool sanitization, progressive trimming, pre-send compaction | ~1790 |
+| `gptel-ext-backends.el` | Backend configuration (Moonshot, DashScope, DeepSeek, Gemini, OpenRouter, etc.) | ~111 |
 | `gptel-ext-context.el` | Context management extensions | |
 | `gptel-ext-learning.el` | Learning integration | |
 | `gptel-ext-security.el` | ACL router advice on gptel-make-tool | ~110 |
 | `gptel-tools.el` | Tool registration orchestrator, readonly/action tool lists | ~320 |
-| `gptel-tools-agent.el` | RunAgent tool + subagent delegation + upstream Agent deregistration | ~310 |
+| `gptel-tools-agent.el` | RunAgent tool + subagent delegation + upstream Agent deregistration | ~326 |
 | `gptel-tools-apply.el` | ApplyPatch tool | |
 | `gptel-tools-bash.el` | Async Bash tool | |
 | `gptel-tools-code.el` | Code_Map, Code_Inspect, Code_Replace, Diagnostics, Code_Usages | ~460 |
@@ -72,6 +72,30 @@ Minibuffer dispatch: `y/n/k/a/i/p/q`. Upstream `n` = "defer" (FSM stays paused, 
 | `my/gptel-agent--task-override` | `gptel-agent--task` | `:override` | gptel-tools-agent.el | Parent-buffer tracking, large-result truncation |
 | `my/gptel--deregister-upstream-agent` | `gptel-agent-update` | `:after` | gptel-tools-agent.el | Remove upstream "Agent" tool (RunAgent is superior) |
 
+### Payload Management Architecture
+
+Three-layer defense against oversized API payloads:
+
+```
+Layer 1 — Pre-send (retries=0): my/gptel--compact-payload
+  → Estimates JSON bytes via gptel--json-encode
+  → 4-pass trimming if over limit: tool results → reasoning → tools array → aggressive
+
+Layer 2 — Retry (retries=1): my/gptel-auto-retry
+  → Trim tool results (keep count decreasing with retries)
+
+Layer 3 — Retry (retries=2+): my/gptel-auto-retry
+  → Truncate ALL results + strip reasoning_content + reduce tools array
+```
+
+Key functions in `gptel-ext-core.el`:
+- Lines 1119-1136: Retry defcustoms (`my/gptel-max-retries`, etc.)
+- Lines 1138-1185: `my/gptel--trim-tool-results-for-retry`
+- Lines 1187-1205: `my/gptel--trim-reasoning-content`
+- Lines 1207-1260: `my/gptel--reduce-tools-for-retry`
+- Lines 1262-1352: `my/gptel-auto-retry` (exponential backoff + progressive trimming)
+- Lines 1356-1470: `my/gptel--compact-payload` (pre-send estimation + 4-pass trim)
+
 ### Code Tools Pipeline
 
 ```
@@ -89,16 +113,40 @@ treesit-agent-tools.el (core AST engine)
 
 Version 0.9.9.4 installed, but `.elc` files contain a **newer unreleased version** with the full FSM architecture (`gptel-fsm` struct). The `.el` source files are stale and don't match the compiled bytecode. DO NOT edit upstream files under `var/elpa/`.
 
+## Active Backend
+
+Default: `gptel--moonshot` / `kimi-k2.5` (`api.kimi.com`). Single source of truth in `gptel-config.el` lines 35-36. Switched from DashScope — better tool-calling reliability and streaming stability. DashScope, DeepSeek, Gemini, OpenRouter, Copilot, MiniMax, and CF-Gateway remain defined in `gptel-ext-backends.el` as available alternatives.
+
+DeepSeek (`gptel--deepseek`) is available with `deepseek-chat` (V3) and `deepseek-reasoner` (R1). Considered for routing plan-mode queries to DeepSeek reasoner, but deferred — single backend is simpler to debug and Moonshot handles all modes well.
+
 ## Known Issues
 
 None currently. All identified bugs have been fixed and committed.
+
+## Feature Evaluation Decisions (v0.5.14)
+
+Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. Decisions:
+
+| Feature | Decision | Rationale |
+|---------|----------|-----------|
+| Three-layer defense (tool-level + history pruning + LLM compaction) | **Skip** | Already covered by our 3-layer retry/compaction system |
+| ECA-style recovery (proactive 75% + reactive overflow) | **Skip** | Pre-send compaction + retry trimming already covers this |
+| Explicit provider error classification | **Skip for now** | Single backend (Moonshot); retry handles main failure mode. Revisit if misclassified errors appear |
+| Per-mode model routing (Roo-style 7 modes) | **Skip** | K2.5 handles all modes; per-preset model overrides already architecturally supported if needed later |
+| @-mention context selection | **Skip** | gptel-context + nucleus tools already provide this; agent can pull its own context via tools |
+| Prompt caching (explicit cache headers) | **Skip** | OpenAI-compatible backends do server-side caching automatically; no client changes needed |
+| Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
+| Per-tool output limits | **Skip** | Flat 4000-char truncation on subagents works fine |
+
+### Recent Changes (v0.5.14)
+
+- **Pre-send payload compaction** (⚒): New `my/gptel--compact-payload` advice on `gptel-curl-get-response` estimates JSON payload byte size before the first send. If over `my/gptel-payload-byte-limit` (default 200KB) or model-specific limit, proactively applies 4-pass progressive trimming (tool results → reasoning → tools array → aggressive trim) to prevent wasted retries. Model limits in `my/gptel-model-context-bytes` alist.
+- **ERT test suite expanded** (51 tests): 13 new tests for pre-send compaction covering byte estimation, effective limit resolution, compaction passes, disabled/retry skip scenarios.
 
 ### Recent Changes (v0.5.13)
 
 - **Centralize backend/model config** (⚒): Single source of truth in `gptel-config.el` lines 35-36. `nucleus-presets.el` agent/plan presets now derive from `gptel-backend`/`gptel-model`. `gptel-tools-agent.el` subagent backend/model defcustoms default to nil (inherit global). Switching providers requires changing exactly one line.
 - **Tools array reduction on retry** (⚒): New `my/gptel--reduce-tools-for-retry` function filters `:data :tools` and `:tools` struct list to only tools actually called in the conversation history. Activated on retry 2+ (alongside reasoning stripping). Removes ~60-80% of tool definitions (~5-8KB) from conversations that use only 3-5 of 18+ registered tools.
-- **Pre-send payload compaction** (⚒): New `my/gptel--compact-payload` advice on `gptel-curl-get-response` estimates JSON payload byte size before the first send. If over `my/gptel-payload-byte-limit` (default 200KB) or model-specific limit, proactively applies 4-pass progressive trimming (tool results → reasoning → tools array → aggressive trim) to prevent wasted retries. Model limits in `my/gptel-model-context-bytes` alist.
-- **ERT test suite expanded** (51 tests): 13 new tests for pre-send compaction covering byte estimation, effective limit resolution, compaction passes, disabled/retry skip scenarios.
 
 ### Recent Changes (v0.5.12)
 
