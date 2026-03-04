@@ -173,12 +173,12 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
          (when (and (boundp 'nucleus-tools-strict-validation)
                     nucleus-tools-strict-validation)
            (nucleus--validate-agent-tool-contracts))
-         ;; Agent tool contracts:
-         ;; - executor: full action tools for code changes (21 tools)
-         ;; - researcher: repo exploration + web research + skill loading (18 tools)
-         ;; - introspector: Emacs introspection tools (15 tools)
-         ;; - explorer: minimal read-only set for codebase exploration (3 tools)
-         ;; - reviewer: minimal read-only set for code review (3 tools)
+         ;; Agent tool contracts (counts must match nucleus-toolsets):
+         ;; - executor:     :nucleus    (30 tools) - code changes & execution
+         ;; - researcher:   :researcher (19 tools) - exploration & research
+         ;; - introspector: :readonly   (18 tools) - Emacs introspection
+         ;; - explorer:     :explorer    (3 tools) - read-only codebase exploration
+         ;; - reviewer:     :reviewer    (3 tools) - read-only code review
          ))
       ;; Re-apply the updated presets to any already-open gptel buffers.
       ;; Existing buffers keep stale gptel-tools if the preset definition

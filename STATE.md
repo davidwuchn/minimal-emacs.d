@@ -50,13 +50,12 @@ Minibuffer dispatch: `y/n/k/a/i/p/q`. Upstream `n` = "defer" (FSM stays paused, 
 
 | Set | Tools | Used by |
 |-----|-------|---------|
-| `:core` | 22 | Base gptel-agent tools |
 | `:readonly` | 18 | Plan mode, introspector subagent |
 | `:researcher` | 19 | Researcher subagent |
 | `:nucleus` | 30 | Agent mode, executor subagent |
 | `:explorer` | 3 | Explorer subagent (Glob/Grep/Read) |
 | `:reviewer` | 3 | Reviewer subagent (Glob/Grep/Read) |
-| `:snippets` | 30 | Tools with supplemental prompts |
+| `:snippets` | (= `:nucleus`) | Derived from `:nucleus`; tools with supplemental prompts |
 
 ### Advice/Hook Chain
 
@@ -98,5 +97,3 @@ None currently. All identified bugs have been fixed and committed.
 These were hallucinated by prior AI sessions — verified as non-issues:
 
 - `my/gptel--deliver-subagent-result` "truncation risk" — the 4000 char truncation IS the fix
-- `nucleus-tools--validate-contract` "performance" — function doesn't exist
-- `nucleus-tools-strict-validation` toggle — doesn't exist

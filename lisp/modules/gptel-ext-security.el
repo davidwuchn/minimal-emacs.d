@@ -105,7 +105,9 @@
     
     (apply orig-fn slots)))
 
-(advice-add 'gptel-make-tool :around #'my/gptel-tool-router-advice)
+;; Depth 10: runs before nucleus-tools contract validation (depth 20).
+;; Lower depth = outermost wrapper = checked first at call time.
+(advice-add 'gptel-make-tool :around #'my/gptel-tool-router-advice '((depth . 10)))
 
 (provide 'gptel-ext-security)
 ;;; gptel-ext-security.el ends here

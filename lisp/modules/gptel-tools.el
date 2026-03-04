@@ -28,30 +28,6 @@
   "Tool registry and management for gptel-agent."
   :group 'gptel)
 
-(defvar my/gptel-tools-readonly nil
-  "Read-only toolset (populated after registration).")
-
-(defvar my/gptel-tools-action nil
-  "Action toolset (populated after registration).")
-
-;;; Tool Registration
-
-(defun my/gptel--safe-get-tool (name)
-  "Return tool NAME from gptel registry, or nil if missing."
-  (condition-case nil
-      (gptel-get-tool name)
-    (error nil)))
-
-(defun my/gptel--dedup-tools-by-name (tools)
-  "Return TOOLS with duplicates by tool name removed (last wins)."
-  (let ((seen (make-hash-table :test #'equal)))
-    (nreverse
-     (cl-loop for tool in (nreverse (copy-sequence tools))
-              for name = (ignore-errors (gptel-tool-name tool))
-              when (and name (not (gethash name seen)))
-              do (puthash name t seen)
-              and collect tool))))
-
 (defun gptel-tools-register-all ()
   "Register all gptel tools.
 
@@ -258,32 +234,9 @@ Call this after gptel-agent-tools loads."
      :category "gptel-agent"
      :confirm t))
 
-  ;; Build tool lists
-  (setq my/gptel-tools-readonly
-        (my/gptel--dedup-tools-by-name
-         (seq-filter #'identity
-                     (mapcar #'my/gptel--safe-get-tool
-                              '("Bash" "Eval" "Glob" "Grep" "Read" "Skill"
-                                "WebFetch" "WebSearch" "YouTube"
-                                "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                                "Code_Map" "Code_Inspect" "Diagnostics")))))
-
-  (setq my/gptel-tools-action
-        (my/gptel--dedup-tools-by-name
-         (append
-          (seq-filter #'identity
-                      (mapcar #'my/gptel--safe-get-tool
-                               '("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
-                                "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
-                                "WebFetch" "WebSearch" "Write" "YouTube"
-                                "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                                "Preview"
-                                "list_skills" "load_skill" "create_skill"
-                                "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics")))
-          my/gptel-tools-readonly)))
-
-  ;; Set default tool list
-  (setq-default gptel-tools my/gptel-tools-readonly))
+  ;; Default toolset is set by nucleus-sync-tool-profile in gptel-mode-hook.
+  ;; Use (nucleus-get-tools :readonly) or (nucleus-get-tools :nucleus) directly.
+  )
 
 ;;; Utility Functions
 

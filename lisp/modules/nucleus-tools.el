@@ -42,11 +42,7 @@ When enabled, validates:
 ;;; Toolset Definitions
 
 (defconst nucleus-toolsets
-  '((:core . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
-              "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
-              "WebFetch" "WebSearch" "Write" "YouTube"
-              "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-     (:readonly . ("Bash" "Eval" "Glob" "Grep" "Read" "RunAgent" "Skill" "TodoWrite"
+  '((:readonly . ("Bash" "Eval" "Glob" "Grep" "Read" "RunAgent" "Skill" "TodoWrite"
                   "WebFetch" "WebSearch" "YouTube"
                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                   "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
@@ -63,37 +59,36 @@ When enabled, validates:
                    "list_skills" "load_skill" "create_skill"
                    "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
      (:explorer . ("Glob" "Grep" "Read"))
-     (:reviewer . ("Glob" "Grep" "Read"))
-     (:snippets . ("RunAgent" "Bash" "Edit" "ApplyPatch" "Preview"
-                   "Grep" "Glob" "Read" "Write" "describe_symbol" "get_symbol_source"
-                   "find_buffers_and_recent" "Skill" "list_skills" "load_skill"
-                   "create_skill" "WebSearch" "WebFetch"
-                   "Eval" "Insert" "Mkdir" "TodoWrite" "YouTube"
-                   "Move" "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages")))
+     (:reviewer . ("Glob" "Grep" "Read")))
   "Canonical toolset definitions for nucleus.
 
-:core — Base gptel-agent tools (23 tools)
 :readonly — Read-only subset for plan mode (18 tools)
 :researcher — Research: readonly + skill loading (19 tools, superset of :readonly)
 :nucleus — Full action tools + preview + skill management (30 tools)
-:explorer — Minimal read-only set for codebase exploration (3 tools: Glob/Grep/Read)
-:reviewer — Minimal read-only set for code review (3 tools: Glob/Grep/Read)
-:snippets — Tools with supplemental prompts injected (30 tools)
+:explorer — Minimal read-only set for codebase exploration (3 tools)
+:reviewer — Minimal read-only set for code review (3 tools)
+
+:snippets is derived from :nucleus at runtime (see `nucleus-get-tools').
 
 Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   executor     → :nucleus     (30 tools) - code changes & execution
   researcher   → :researcher  (19 tools) - exploration & research
-  introspector → :readonly    (16 tools) - Emacs introspection
+  introspector → :readonly    (18 tools) - Emacs introspection
   explorer     → :explorer     (3 tools) - read-only codebase exploration
   reviewer     → :reviewer     (3 tools) - read-only code review")
 
 (defun nucleus-get-tools (set-name)
   "Return tool list for SET-NAME, filtering out unregistered tools.
 
-SET-NAME can be a symbol from `nucleus-toolsets` or a list of tool names.
+SET-NAME can be a symbol from `nucleus-toolsets' or a list of tool names.
+:snippets is derived from :nucleus (tools that have prompt snippets).
 Returns a list of tool name strings."
   (let ((tools
          (pcase set-name
+           (:snippets
+            ;; Derived from :nucleus — all tools get prompt snippets
+            (or (alist-get :nucleus nucleus-toolsets)
+                (user-error "Unknown toolset: :nucleus (needed for :snippets)")))
            ((and (pred symbolp) name)
             (or (alist-get name nucleus-toolsets)
                 (user-error "Unknown toolset: %S" name)))
@@ -221,38 +216,6 @@ Use in `gptel-mode-hook` to ensure correct tools on buffer load."
            (setq-local gptel-tools (nucleus-get-tools :nucleus))
            (when nucleus-tools-verbose
              (message "[nucleus-tools] Tool profile synced to agent (nucleus)"))))))))
-
-;;; Tool Registration Helpers
-
-(cl-defun nucleus-register-tool (name function description args
-                                   &key async confirm category include)
-  "Register a gptel tool with NAME, FUNCTION, DESCRIPTION, and ARGS.
-
-KEYWORDS:
-  ASYNC — When non-nil, tool function is async (takes callback first arg)
-  CONFIRM — When non-nil, require user confirmation before execution
-  CATEGORY — Tool category (default: \"nucleus\")
-  INCLUDE — When non-nil, include in default tool sets
-
-Returns the tool struct from `gptel-make-tool`, or nil if gptel unavailable."
-  (unless (fboundp 'gptel-make-tool)
-    (message "[nucleus-tools] Cannot register tool %S: gptel-make-tool unavailable" name)
-    (cl-return-from nucleus-register-tool nil))
-
-  (condition-case err
-      (gptel-make-tool
-       :name name
-       :function function
-       :description description
-       :args args
-       :async (or async nil)
-       :confirm (or confirm nil)
-       :category (or category "nucleus")
-       :include (or include t))
-    (error
-     (message "[nucleus-tools] Failed to register tool %S: %s" name
-              (error-message-string err))
-     nil)))
 
 ;;; Interactive Commands
 
@@ -393,7 +356,7 @@ Expected tools: %S"
 
 ;;; Backward Compatibility
 
-;; Code should use (nucleus-get-tools :core) etc. directly.
+;; Code should use (nucleus-get-tools :readonly) etc. directly.
 ;; These variable aliases are deprecated and will be removed in a future version.
 ;; For now, they're not defined to avoid load-time evaluation issues.
 
@@ -584,8 +547,8 @@ Call this after gptel loads to register hooks and tools."
     (when nucleus-tools-sanity-check
       (add-hook 'gptel-mode-hook #'nucleus-tool-sanity-check)))
   
-  ;; Enforce tool contracts
-  (advice-add 'gptel-make-tool :around #'nucleus-tools--advise-make-tool))
+  ;; Enforce tool contracts (depth 20: innermost, after security ACL at depth 10)
+  (advice-add 'gptel-make-tool :around #'nucleus-tools--advise-make-tool '((depth . 20))))
 
 (with-eval-after-load 'gptel
   (nucleus-tools-setup))
