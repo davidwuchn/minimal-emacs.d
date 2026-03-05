@@ -42,13 +42,18 @@
   (evil-search-wrap nil)
   (evil-want-Y-yank-to-eol t))
 
-(use-package evil-collection
-  :after evil
-  :ensure t
-  :init
-  (setq evil-collection-setup-minibuffer t)
-  :config
-  (evil-collection-init))
+;; Only set up evil-collection if it's actually installed.
+;; use-package :after evil registers eval-after-load immediately —
+;; if evil-collection is missing when evil loads (e.g. via eca-chat),
+;; the hard (require 'evil-collection nil nil) crashes init.
+(when (locate-library "evil-collection")
+  (use-package evil-collection
+    :after evil
+    :ensure t
+    :init
+    (setq evil-collection-setup-minibuffer t)
+    :config
+    (evil-collection-init)))
 
 (use-package evil-surround
   :after evil
