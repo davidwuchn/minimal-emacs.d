@@ -112,7 +112,7 @@
 **Files Created:**
 - `modules/nucleus-prompts.el` - Prompt loading (~280 lines)
 - `modules/nucleus-presets.el` - Preset management (~250 lines)
-- `modules/nucleus-ui.el` - Header-line, UI (~100 lines)
+- `modules/nucleus-header-line.el` - Header-line preset display (~100 lines)
 
 **Files Modified:**
 - `lisp/nucleus-config.el` - Converted to backward-compat shim (~40 lines)

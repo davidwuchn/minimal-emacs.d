@@ -49,7 +49,7 @@ Split monolithic configuration files into focused, modular components with clear
 
 - [x] Create `modules/nucleus-prompts.el` (~280 lines)
 - [x] Create `modules/nucleus-presets.el` (~250 lines)
-- [x] Create `modules/nucleus-ui.el` (~100 lines)
+- [x] Create `modules/nucleus-header-line.el` (~100 lines)
 - [x] Update nucleus-config.el to require new modules (shim)
 - **Status:** `complete`
 

@@ -39,9 +39,9 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 | `nucleus-tools.el` | Toolset definitions (nucleus-toolsets constant), tool filtering, agent-tool contracts | ~565 |
 | `nucleus-tools-validate.el` | Tool signature validation (M-x nucleus-validate-tool-signatures) | |
 | `nucleus-tools-verify.el` | Tool registration verification (M-x nucleus-verify-tools-interactively) | |
-| `nucleus-ui.el` | Header-line, UI helpers | ~100 |
+| `nucleus-header-line.el` | Header-line preset display | ~100 |
 
-### Confirmation UI (`lisp/gptel-tool-ui.el`)
+### Confirmation UI (`lisp/modules/gptel-ext-tool-permits.el`)
 
 3 tiers mapping to upstream `gptel-confirm-tool-calls`:
 

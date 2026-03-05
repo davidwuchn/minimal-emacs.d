@@ -32,8 +32,8 @@
 ;; Load tool signature validation (validates prompt args match registration)
 (require 'nucleus-tools-validate)
 
-;; Load enhanced tool UI (patches keymap AFTER gptel loads)
-(require 'gptel-tool-ui)
+;; Load tool permit system (auto / confirm-all + per-tool permits)
+(require 'gptel-ext-tool-permits)
 
 ;; --- Configuration Defaults ---
 (setq gptel-backend gptel--moonshot

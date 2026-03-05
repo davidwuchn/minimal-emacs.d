@@ -102,7 +102,7 @@ lisp/
     ├── nucleus-tools.el         # NEW: Tool definitions (DONE)
     ├── nucleus-prompts.el       # NEW: Prompt loading
     ├── nucleus-presets.el       # NEW: Preset management
-    └── nucleus-ui.el            # NEW: Header-line, modeline
+    └── nucleus-header-line.el      # NEW: Header-line preset display
 ```
 
 ---

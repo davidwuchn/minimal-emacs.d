@@ -2,7 +2,7 @@
 
 ;;; Commentary:
 ;; Override `gptel--display-tool-calls' to include arguments in the minibuffer
-;; prompt.  Integrates with gptel-tool-ui.el per-tool permit system.
+;; prompt.  Integrates with gptel-ext-tool-permits.el per-tool permit system.
 ;; Includes FSM lookup helper for the inspect action.
 
 ;;; Code:
@@ -13,9 +13,9 @@
 (defvar gptel-tool-call-actions-map) ; defined in gptel
 (defvar gptel--tool-preview-alist)   ; defined in gptel
 
-;; Forward declarations for gptel-tool-ui.el functions
-(declare-function my/gptel-permit-tool "gptel-tool-ui")
-(declare-function my/gptel-tool-permitted-p "gptel-tool-ui")
+;; Forward declarations for gptel-ext-tool-permits.el functions
+(declare-function my/gptel-permit-tool "gptel-ext-tool-permits")
+(declare-function my/gptel-tool-permitted-p "gptel-ext-tool-permits")
 (defvar my/gptel-permitted-tools)
 
 ;; --- FSM Lookup Helper ---

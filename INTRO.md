@@ -33,7 +33,7 @@ lisp/modules/
   nucleus-tools.el         Toolset definitions and filtering
   nucleus-presets.el       Preset management and tool contract validation
   nucleus-prompts.el       Prompt loading from assistant/prompts/
-  nucleus-ui.el            Header-line and UI helpers
+  nucleus-header-line.el     Header-line preset display
 
 assistant/prompts/         System prompts and tool supplemental prompts
 tests/test-gptel-trim.el   51 ERT tests for payload trimming and compaction
