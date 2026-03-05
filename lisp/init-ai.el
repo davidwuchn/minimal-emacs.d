@@ -33,6 +33,10 @@
   :ensure t
   :defer t)
 
+;; Load ECA security/config early — all code inside is guarded by
+;; eval-after-load so nothing runs until eca/eca-process actually load.
+(require 'eca-security)
+
 (use-package eca
   :ensure t
   :vc (:url "https://github.com/editor-code-assistant/eca-emacs"
@@ -41,7 +45,6 @@
   ;; Delay before triggering inline completion (in seconds)
   (eca-completion-idle-delay 0.5)
   :config
-  (require 'eca-security)
   ;; Enable inline ghost-text code completion in programming modes
   (add-hook 'prog-mode-hook #'eca-completion-mode))
 
