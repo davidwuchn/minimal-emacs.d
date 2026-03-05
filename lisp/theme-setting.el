@@ -1,79 +1,95 @@
 ;;; theme-setting.el --- User Visual and Theme Customizations -*- lexical-binding: t; -*-
 
-(provide 'theme-setting)
+;;; Fonts
 
-;; You will most likely need to adjust this font size for your system!
-(defvar efs/default-font-size 180)
-(defvar efs/default-variable-font-size 180)
+(defvar my/default-font-size 180
+  "Default height for the `default' and `fixed-pitch' faces.")
 
-;; Make frame transparency overridable
-(defvar efs/frame-transparency '(90 . 90))
+(defvar my/default-variable-font-size 180
+  "Default height for the `variable-pitch' face.")
 
-(set-face-attribute 'default nil :font "FiraCode Nerd Font" :height efs/default-font-size)
+(defvar my/fixed-pitch-font "FiraCode Nerd Font"
+  "Font family for `default' and `fixed-pitch' faces.")
 
-;; Set the fixed pitch face
-(set-face-attribute 'fixed-pitch nil :font "FiraCode Nerd Font" :height efs/default-font-size)
+(defvar my/variable-pitch-font "Cantarell"
+  "Font family for the `variable-pitch' face.")
 
-;; Set the variable pitch face
-(set-face-attribute 'variable-pitch nil :font "Cantarell" :height efs/default-variable-font-size :weight 'regular)
+(when (find-font (font-spec :family my/fixed-pitch-font))
+  (set-face-attribute 'default nil
+                      :font my/fixed-pitch-font
+                      :height my/default-font-size)
+  (set-face-attribute 'fixed-pitch nil
+                      :font my/fixed-pitch-font
+                      :height my/default-font-size))
 
-;; Set frame transparency
-(set-frame-parameter (selected-frame) 'alpha efs/frame-transparency)
-(add-to-list 'default-frame-alist `(alpha . ,efs/frame-transparency))
+(when (find-font (font-spec :family my/variable-pitch-font))
+  (set-face-attribute 'variable-pitch nil
+                      :font my/variable-pitch-font
+                      :height my/default-variable-font-size
+                      :weight 'regular))
+
+;;; Frame
+
+(defvar my/frame-transparency '(90 . 90)
+  "Frame transparency as (ACTIVE . INACTIVE) alpha values.")
+
+(set-frame-parameter (selected-frame) 'alpha my/frame-transparency)
+(add-to-list 'default-frame-alist `(alpha . ,my/frame-transparency))
 (set-frame-parameter (selected-frame) 'fullscreen 'maximized)
 (add-to-list 'default-frame-alist '(fullscreen . maximized))
 
-;; Disable line numbers for some modes
-(dolist (mode '(org-mode-hook
+;;; Line numbers
+
+(defun my/disable-line-numbers ()
+  "Disable `display-line-numbers-mode' in the current buffer."
+  (display-line-numbers-mode 0))
+
+(dolist (hook '(org-mode-hook
                 term-mode-hook
                 shell-mode-hook
                 treemacs-mode-hook
                 eshell-mode-hook))
-  (add-hook mode (lambda () (display-line-numbers-mode 0))))
+  (add-hook hook #'my/disable-line-numbers))
 
-;; Disable built-in themes first
+;;; Modus Themes (v4.x)
+
+;; Forward declarations (suppress byte-compiler free-variable warnings).
+(defvar modus-themes-bold-constructs)
+(defvar modus-themes-italic-constructs)
+(defvar modus-themes-prompts)
+(defvar modus-themes-completions)
+(defvar modus-themes-headings)
+(defvar modus-themes-common-palette-overrides)
+
+;; Disable any previously enabled themes before loading.
 (mapc #'disable-theme custom-enabled-themes)
 
-;; Modus themes ship with recent Emacs versions.
 (require 'modus-themes nil t)
 
-;; Add all your customizations prior to loading the themes.
-;; Configure the Modus Themes' appearance
-(setq modus-themes-mode-line '(accented borderless)
-      modus-themes-bold-constructs t
+;; Configure before loading — only options valid in Modus Themes 4.x.
+(setq modus-themes-bold-constructs t
       modus-themes-italic-constructs t
-      modus-themes-fringes 'subtle
-      modus-themes-tabs-accented t
-      modus-themes-paren-match '(bold intense)
-      modus-themes-prompts '(bold intense)
-      ;; The `modus-themes-completions' is an alist that reads two
-      ;; keys: `matches', `selection'.
+      modus-themes-prompts '(bold italic)
       modus-themes-completions
       '((matches . (extrabold))
-        (selection . (semibold italic text-also)))
-
-      modus-themes-org-blocks 'tinted-background
-      modus-themes-scale-headings t
-      modus-themes-region '(bg-only)
+        (selection . (semibold italic)))
       modus-themes-headings
-      '((1 . (rainbow overline background 1.4))
-        (2 . (rainbow background 1.3))
-        (3 . (rainbow bold 1.2))
+      '((1 . (variable-pitch 1.4))
+        (2 . (variable-pitch 1.3))
+        (3 . (bold 1.2))
         (t . (semilight 1.1))))
 
-;; Load the theme now that variables are set
+;; Palette overrides: custom background and region colors.
+;; This replaces the old with-eval-after-load set-face-background hack.
+(setq modus-themes-common-palette-overrides
+      '((bg-main "#262626")              ; grey15
+        (bg-region "#666666")))
+
 (load-theme 'modus-vivendi t)
 
-;; Optional overrides (must be run after theme is loaded)
-(with-eval-after-load 'modus-vivendi-theme
-  (set-face-background 'default "grey15")
-  (set-face-attribute 'region nil :background "#666"))
+;;; Header line (clickable for window dragging)
 
-;; Keep title bar for window dragging (remove undecorated)
-;; (add-to-list 'default-frame-alist '(undecorated . t))
-
-;; Make header-line clickable (for window dragging)
-(defvar my-header-line-map
+(defvar my/header-line-map
   (let ((map (make-sparse-keymap)))
     (define-key map [header-line mouse-1] #'ignore)
     (define-key map [header-line mouse-2] #'ignore)
@@ -81,4 +97,8 @@
   "Keymap for header-line mouse clicks.")
 
 (setq-default header-line-format
-              '(:eval (propertize " " 'local-map my-header-line-map 'mouse-face 'mode-line-highlight)))
+              '(:eval (propertize " " 'local-map my/header-line-map
+                                  'mouse-face 'mode-line-highlight)))
+
+(provide 'theme-setting)
+;;; theme-setting.el ends here
