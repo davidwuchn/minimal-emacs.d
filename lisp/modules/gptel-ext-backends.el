@@ -70,24 +70,6 @@
     :stream t
     :models '(\@cf/zai-org/glm-4.7-flash \@cf/openai/whisper \@cf/openai/whisper-large-v3-turbo)))
 
-;; --- Model Resolution ---
-(defconst my/gptel-preferred-models
-  `((,gptel--openrouter . anthropic/claude-sonnet-4.6)
-    (,gptel--gemini     . gemini-3.1-pro-preview)
-    (,gptel--moonshot   . kimi-k2.5)
-    (,gptel--copilot    . github-copilot/gpt-5.3-codex)
-    (,gptel--cf-gateway . \@cf/zai-org/glm-4.7-flash)
-    (,gptel--dashscope  . qwen3.5-plus)))
-
-(defun my/gptel-resolve-model (&optional backend requested)
-  "Resolve REQUESTED model for BACKEND."
-  (let* ((backend (or backend gptel-backend))
-         (requested (or requested 'auto)))
-    (if (not (eq requested 'auto))
-        requested
-      (or (alist-get backend my/gptel-preferred-models)
-          (car-safe (gptel-backend-models backend))))))
-
 ;; --- Helper Functions ---
 
 (provide 'gptel-ext-backends)

@@ -31,6 +31,22 @@ Set to nil to disable the timeout."
 
 ;;; Core Preview Functions
 
+(defun my/gptel--make-preview-callback (buffer callback)
+  "Wrap CALLBACK as an idempotent, FSM-restoring preview callback.
+
+Saves the current `gptel--fsm-last' from BUFFER and returns a function
+that, on first invocation only, restores the FSM state and calls CALLBACK
+with its argument.  Subsequent calls are no-ops."
+  (let ((parent-fsm (buffer-local-value 'gptel--fsm-last buffer))
+        (cb-called nil))
+    (lambda (result)
+      (unless cb-called
+        (setq cb-called t)
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer
+            (setq-local gptel--fsm-last parent-fsm)))
+        (funcall callback result)))))
+
 (defun my/gptel--setup-preview-keys (buffer on-confirm on-abort)
   "Set up local keys in preview BUFFER for confirmation.
 
@@ -110,17 +126,7 @@ Returns the diff output string."
 
 Shows diff between ORIGINAL and REPLACEMENT for PATH.
 CALLBACK is called when user confirms or aborts."
-  (let* ((parent-fsm (buffer-local-value 'gptel--fsm-last buffer))
-         (cb-called nil)
-         (wrapped-cb
-          (lambda (result)
-            (unless cb-called
-              (setq cb-called t)
-              (when (buffer-live-p buffer)
-                (with-current-buffer buffer
-                  (setq-local gptel--fsm-last parent-fsm)))
-              (setq-local gptel--fsm-last parent-fsm)
-              (funcall callback result))))
+  (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
          (temp1 (my/gptel-make-temp-file "orig"))
          (temp2 (my/gptel-make-temp-file "new"))
          (diff-output
@@ -155,17 +161,7 @@ PATCH is the unified diff content.
 BUFFER is the originating buffer.
 CALLBACK is called with the result.
 HEADER is the prompt to show."
-  (let* ((parent-fsm (buffer-local-value 'gptel--fsm-last buffer))
-         (cb-called nil)
-         (wrapped-cb
-          (lambda (result)
-            (unless cb-called
-              (setq cb-called t)
-              (when (buffer-live-p buffer)
-                (with-current-buffer buffer
-                  (setq-local gptel--fsm-last parent-fsm)))
-              (setq-local gptel--fsm-last parent-fsm)
-              (funcall callback result))))
+  (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
          (diff-buf (my/gptel--create-diff-buffer
                     "*gptel-patch-preview*"
                     header
@@ -190,17 +186,7 @@ CALLBACK is called with the result.
 ON-CONFIRM is called with wrapped callback when user confirms.
 ON-ABORT is called with wrapped callback when user aborts.
 HEADER is the prompt to show."
-  (let* ((parent-fsm (buffer-local-value 'gptel--fsm-last buffer))
-         (cb-called nil)
-         (wrapped-cb
-          (lambda (result)
-            (unless cb-called
-              (setq cb-called t)
-              (when (buffer-live-p buffer)
-                (with-current-buffer buffer
-                  (setq-local gptel--fsm-last parent-fsm)))
-              (setq-local gptel--fsm-last parent-fsm)
-              (funcall callback result))))
+  (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
          (diff-buf (my/gptel--create-diff-buffer
                     "*gptel-patch-preview*"
                     header

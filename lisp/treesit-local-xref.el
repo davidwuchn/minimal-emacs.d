@@ -2,6 +2,7 @@
 
 (require 'xref)
 (require 'treesit)
+(require 'treesit-agent-tools)
 
 (defun treesit-local-xref-backend ()
   "Tree-sitter file-local xref backend.
@@ -16,7 +17,7 @@ allowing graceful fallback to dumb-jump for external definitions."
       (when (and identifier
                  (catch 'found
                    (let* ((tree (treesit-induce-sparse-tree (treesit-buffer-root-node) treesit-defun-type-regexp))
-                          (nodes (treesit-local-xref--flatten-sparse-tree tree)))
+                          (nodes (treesit-agent--flatten-sparse-tree tree)))
                      (dolist (node nodes)
                        (when (equal (treesit-defun-name node) identifier)
                          (throw 'found t))))))
@@ -27,21 +28,9 @@ allowing graceful fallback to dumb-jump for external definitions."
     (when bounds
       (buffer-substring-no-properties (car bounds) (cdr bounds)))))
 
-(defun treesit-local-xref--flatten-sparse-tree (tree)
-  "Flatten a sparse tree produced by `treesit-induce-sparse-tree'."
-  (if (not tree)
-      nil
-    (let ((node (car tree))
-          (children (cdr tree))
-          (res nil))
-      (when node (push node res))
-      (dolist (child children)
-        (setq res (append res (treesit-local-xref--flatten-sparse-tree child))))
-      res)))
-
 (cl-defmethod xref-backend-definitions ((_backend (eql treesit-local)) identifier)
   (let* ((tree (treesit-induce-sparse-tree (treesit-buffer-root-node) treesit-defun-type-regexp))
-         (nodes (treesit-local-xref--flatten-sparse-tree tree))
+         (nodes (treesit-agent--flatten-sparse-tree tree))
          (matches nil))
     (dolist (node nodes)
       (when (equal (treesit-defun-name node) identifier)

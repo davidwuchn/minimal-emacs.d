@@ -77,6 +77,15 @@ Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   explorer     → :explorer     (3 tools) - read-only codebase exploration
   reviewer     → :reviewer     (3 tools) - read-only code review")
 
+(defconst nucleus-agent-tool-contracts
+  '(("executor"     . :nucleus)
+    ("researcher"   . :researcher)
+    ("introspector" . :readonly)
+    ("explorer"     . :explorer)
+    ("reviewer"     . :reviewer))
+  "Mapping from gptel-agent agent names to their expected nucleus toolset keys.
+Used by `nucleus--override-gptel-agent-presets' and contract validation.")
+
 (defun nucleus-get-tools (set-name)
   "Return tool list for SET-NAME, filtering out unregistered tools.
 
@@ -227,11 +236,8 @@ Interactive command for debugging agent tool configuration."
     (user-error "gptel-agent--agents not available"))
   
   (let ((expected
-         `(("executor" . ,(nucleus-get-tools :nucleus))
-           ("researcher" . ,(nucleus-get-tools :researcher))
-           ("introspector" . ,(nucleus-get-tools :readonly))
-           ("explorer" . ,(nucleus-get-tools :explorer))
-           ("reviewer" . ,(nucleus-get-tools :reviewer)))))
+         (mapcar (lambda (c) (cons (car c) (nucleus-get-tools (cdr c))))
+                 nucleus-agent-tool-contracts)))
     (let* ((results
             (cl-loop for (agent-name . expected-tools) in expected
                      for cell = (assoc agent-name gptel-agent--agents)

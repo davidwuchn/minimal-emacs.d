@@ -72,11 +72,11 @@
 ;; Keep title bar for window dragging (remove undecorated)
 ;; (add-to-list 'default-frame-alist '(undecorated . t))
 
-;; Make header-line clickable
+;; Make header-line clickable (for window dragging)
 (defvar my-header-line-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [header-line mouse-1] #'mode-line-highlight)
-    (define-key map [header-line mouse-2] #'mode-line-highlight)
+    (define-key map [header-line mouse-1] #'ignore)
+    (define-key map [header-line mouse-2] #'ignore)
     map)
   "Keymap for header-line mouse clicks.")
 

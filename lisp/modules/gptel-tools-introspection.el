@@ -9,12 +9,6 @@
 (require 'subr-x)
 (require 'find-func)
 
-;;; Customization
-
-(defgroup gptel-tools-introspection nil
-  "Introspection tools for gptel-agent."
-  :group 'gptel)
-
 ;;; Helper Functions
 
 (defun my/gptel--describe-symbol (name)

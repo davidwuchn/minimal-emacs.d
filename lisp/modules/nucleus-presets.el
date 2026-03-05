@@ -9,6 +9,8 @@
 (require 'seq)
 (require 'subr-x)
 
+(defvar nucleus-agent-tool-contracts)  ; defined in nucleus-tools.el
+
 ;;; Customization
 
 (defgroup nucleus-presets nil
@@ -155,12 +157,9 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
                  ;; Non-streaming (single JSON response) is more reliable.
                  (setf (plist-get (cdr cell) :stream) nil)))))
 
-         (patch-agent "executor" (nucleus-get-tools :nucleus))
-         (patch-agent "researcher" (nucleus-get-tools :researcher))
-         (patch-agent "introspector" (nucleus-get-tools :readonly))
-         (patch-agent "explorer" (nucleus-get-tools :explorer))
-         (patch-agent "reviewer" (nucleus-get-tools :reviewer))
-         ;; Validate immediately after patching
+         (dolist (contract nucleus-agent-tool-contracts)
+           (patch-agent (car contract) (nucleus-get-tools (cdr contract))))
+          ;; Validate immediately after patching
          (when (and (boundp 'nucleus-tools-strict-validation)
                     nucleus-tools-strict-validation)
            (nucleus--validate-agent-tool-contracts))
@@ -195,11 +194,8 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
 Signals an error if any agent has incorrect tools."
   (when (and (boundp 'gptel-agent--agents) gptel-agent--agents)
     (let ((expected
-           `(("executor" . ,(nucleus-get-tools :nucleus))
-             ("researcher" . ,(nucleus-get-tools :researcher))
-             ("introspector" . ,(nucleus-get-tools :readonly))
-             ("explorer" . ,(nucleus-get-tools :explorer))
-             ("reviewer" . ,(nucleus-get-tools :reviewer)))))
+           (mapcar (lambda (c) (cons (car c) (nucleus-get-tools (cdr c))))
+                   nucleus-agent-tool-contracts)))
       (cl-loop for (agent-name . expected-tools) in expected
                for cell = (assoc agent-name gptel-agent--agents)
                when cell

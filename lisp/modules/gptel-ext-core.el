@@ -689,16 +689,24 @@ Populated by `my/gptel--capture-tool-reasoning' after each tool call turn
 so that `my/gptel--parse-buffer-inject-reasoning' can recover reasoning_content
 when re-serializing the conversation for APIs that require it (e.g. Moonshot).")
 
+(defun my/gptel--reasoning-key-for-model (model &optional backend)
+  "Return the reasoning field keyword for MODEL on BACKEND, or nil.
+Returns :reasoning_content for models with :thinking param (Moonshot),
+:reasoning for models with :reasoning param (OpenRouter/DeepSeek).
+When BACKEND is non-nil, only returns a key for gptel-openai backends."
+  (when (fboundp 'gptel--model-request-params)
+    (when (or (null backend) (cl-typep backend 'gptel-openai))
+      (let ((params (gptel--model-request-params model)))
+        (cond
+         ((plist-member params :thinking)  :reasoning_content)
+         ((plist-member params :reasoning) :reasoning)
+         (t nil))))))
+
 (defun my/gptel--thinking-model-p ()
   "Return the reasoning field keyword if current model has thinking/reasoning enabled.
 Returns :reasoning_content for Moonshot (:thinking param),
 :reasoning for OpenRouter/DeepSeek (:reasoning param), nil otherwise."
-  (when (fboundp 'gptel--model-request-params)
-    (let ((params (gptel--model-request-params gptel-model)))
-      (cond
-       ((plist-member params :thinking)  :reasoning_content)
-       ((plist-member params :reasoning) :reasoning)
-       (t nil)))))
+  (my/gptel--reasoning-key-for-model gptel-model))
 
 (defun my/gptel--reset-reasoning-block (fsm)
   "After-advice on `gptel--handle-wait': reset :reasoning-block to nil.
@@ -731,6 +739,31 @@ message, even when the model produced no visible reasoning for that turn.
               (setf (alist-get id my/gptel--tool-reasoning-alist nil nil #'equal)
                     reasoning))))))))
 
+(defun my/gptel--ensure-reasoning-on-messages (messages reasoning-key &optional reasoning-alist)
+  "Ensure every assistant+tool_calls message in MESSAGES carries REASONING-KEY.
+MESSAGES may be a list or vector of plist messages.  For each message with
+role=\"assistant\" and :tool_calls but missing REASONING-KEY, look up the first
+tool call's ID in REASONING-ALIST (an alist of id→string); if absent or empty
+string, inject :null, otherwise inject the stored value.  When REASONING-ALIST
+is nil the field is always set to :null."
+  (seq-doseq (msg messages)
+    (when (and (listp msg)
+               (equal (plist-get msg :role) "assistant")
+               (plist-get msg :tool_calls)
+               (not (plist-get msg reasoning-key)))
+      (let* ((tc  (and (vectorp (plist-get msg :tool_calls))
+                       (> (length (plist-get msg :tool_calls)) 0)
+                       (aref (plist-get msg :tool_calls) 0)))
+             (id  (and tc (plist-get tc :id)))
+             (stored (if (and reasoning-alist id)
+                         (alist-get id reasoning-alist :absent nil #'equal)
+                       :absent)))
+        (plist-put msg reasoning-key
+                   (if (or (eq stored :absent)
+                           (and (stringp stored) (string-empty-p stored)))
+                       :null
+                     stored))))))
+
 (defun my/gptel--parse-buffer-inject-reasoning (orig backend &optional max-entries)
   "Around-advice on `gptel--parse-buffer': inject reasoning_content into tool-call messages.
 For backends where thinking is enabled (e.g. Moonshot/Kimi), every assistant
@@ -741,26 +774,8 @@ that turn — the API requires presence, not a non-empty value."
     ;; Only act for OpenAI-compatible backends with thinking/reasoning enabled.
     (when-let* (((cl-typep backend 'gptel-openai))
                 (reasoning-key (my/gptel--thinking-model-p)))
-      (dolist (msg prompts)
-        (when (and (listp msg)
-                   (equal (plist-get msg :role) "assistant")
-                   (plist-get msg :tool_calls)
-                   (not (plist-get msg reasoning-key)))
-          ;; Look up stored reasoning by the first tool call's ID.
-          ;; Fall back to "" when not in alist — the field must be present.
-          (let* ((tc (and (vectorp (plist-get msg :tool_calls))
-                          (> (length (plist-get msg :tool_calls)) 0)
-                          (aref (plist-get msg :tool_calls) 0)))
-                 (id (and tc (plist-get tc :id)))
-                 (stored (if id
-                             (alist-get id my/gptel--tool-reasoning-alist
-                                        :absent nil #'equal)
-                           :absent))
-                 (reasoning (if (or (eq stored :absent)
-                                    (and (stringp stored) (string-empty-p stored)))
-                                :null
-                              stored)))
-            (plist-put msg reasoning-key reasoning)))))
+      (my/gptel--ensure-reasoning-on-messages
+       prompts reasoning-key my/gptel--tool-reasoning-alist))
     prompts))
 
 
@@ -796,19 +811,13 @@ many proxies crash with 400 Bad Request. We inject a dummy to satisfy validation
                          :function (list :name "_noop"
                                          :description "Placeholder proxy compatibility tool"
                                          :parameters (list :type "object" :properties (list :_dummy (list :type "string")))))))
-              (plist-put info :data (plist-put data :tools (vector noop-tool))))))))))(defun my/gptel--pre-serialize-inject-reasoning (info _token)
+               (plist-put info :data (plist-put data :tools (vector noop-tool))))))))))(defun my/gptel--pre-serialize-inject-reasoning (info _token)
   "Before-advice on `gptel-curl--get-args': ensure reasoning_content on tool-call messages.
 For Moonshot (and any model with :thinking/:reasoning request-params), every
 assistant message that contains tool_calls must carry a reasoning_content field."
   (let* ((model   (plist-get info :model))
          (backend (plist-get info :backend))
-         (params  (and model (cl-typep backend 'gptel-openai)
-                       (gptel--model-request-params model)))
-         (reasoning-key
-          (cond
-           ((plist-member params :thinking)  :reasoning_content)
-           ((plist-member params :reasoning) :reasoning)
-           (t nil))))
+         (reasoning-key (my/gptel--reasoning-key-for-model model backend)))
     (when reasoning-key
       (let* ((data      (plist-get info :data))
              (msgs      (plist-get data :messages))
@@ -817,22 +826,8 @@ assistant message that contains tool_calls must carry a reasoning_content field.
               (and gptel-buf (buffer-live-p gptel-buf)
                    (buffer-local-value 'my/gptel--tool-reasoning-alist gptel-buf))))
         (when (and msgs (> (length msgs) 0))
-          (cl-loop
-           for msg across msgs
-           when (and (listp msg)
-                     (equal (plist-get msg :role) "assistant")
-                     (plist-get msg :tool_calls)
-                     (not (plist-get msg reasoning-key)))
-           do (let* ((tc  (and (vectorp (plist-get msg :tool_calls))
-                               (> (length (plist-get msg :tool_calls)) 0)
-                               (aref (plist-get msg :tool_calls) 0)))
-                     (id  (and tc (plist-get tc :id)))
-                     (stored (alist-get id reasoning-alist :absent nil #'equal)))
-                (plist-put msg reasoning-key
-                           (if (or (eq stored :absent)
-                                   (and (stringp stored) (string-empty-p stored)))
-                               :null
-                             stored))))))))  )
+          (my/gptel--ensure-reasoning-on-messages
+           msgs reasoning-key reasoning-alist))))))
 
 ;; --- Nil-named tool call guard (inject-prompt level) ---
 ;; gptel-curl--parse-stream injects the assistant+tool_calls message into
@@ -888,24 +883,13 @@ OpenRouter/Anthropic when the model emits a tool call with a nil function name
   (let* ((model-name (plist-get data :model))
          (model (and model-name
                      (if (symbolp model-name) model-name (intern model-name))))
-         (params (and model (cl-typep backend 'gptel-openai)
-                      (gptel--model-request-params model)))
-         (reasoning-key
-          (cond
-           ((plist-member params :thinking)  :reasoning_content)
-           ((plist-member params :reasoning) :reasoning)
-           (t nil))))
+         (reasoning-key (my/gptel--reasoning-key-for-model model backend)))
     (when reasoning-key
       (let ((msgs (cond
                    ((keywordp (car-safe new-prompt)) (list new-prompt))
                    ((listp new-prompt) new-prompt)
                    (t (list new-prompt)))))
-        (dolist (msg msgs)
-          (when (and (listp msg)
-                     (equal (plist-get msg :role) "assistant")
-                     (plist-get msg :tool_calls)
-                     (not (plist-get msg reasoning-key)))
-            (plist-put msg reasoning-key :null))))))  )
+        (my/gptel--ensure-reasoning-on-messages msgs reasoning-key)))))
 
 
 
