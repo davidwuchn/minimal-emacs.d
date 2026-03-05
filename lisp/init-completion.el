@@ -92,6 +92,14 @@
         (insert "/"))))
   (define-key corfu-map (kbd "/") #'my/corfu-insert-slash))
 
+;; Enable Corfu popup in terminal Emacs (required for Emacs < 31)
+(use-package corfu-terminal
+  :ensure t
+  :unless (display-graphic-p)
+  :after corfu
+  :config
+  (corfu-terminal-mode 1))
+
 (use-package cape
   :ensure t
   :bind ("C-c p" . cape-prefix-map)
