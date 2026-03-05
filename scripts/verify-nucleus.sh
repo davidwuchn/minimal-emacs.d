@@ -3,6 +3,9 @@
 # verify-nucleus.sh
 # Runs nucleus validation checks in batch mode.
 # Can be used as a pre-commit hook or in CI.
+#
+# Loads early-init.el (for package paths) but NOT init.el/post-init.el,
+# avoiding unrelated packages (evil, eca, etc.) that may break in batch.
 
 set -e
 
@@ -13,8 +16,9 @@ echo "Running Nucleus Tool Validations..."
 
 $EMACS -Q --batch \
        -l "$DIR/early-init.el" \
-       -l "$DIR/init.el" \
        --eval "(progn
+         (package-initialize)
+         (add-to-list 'load-path (expand-file-name \"lisp\" \"$DIR\"))
          (add-to-list 'load-path (expand-file-name \"lisp/modules\" \"$DIR\"))
          (require 'gptel-config)
          (message \"\n[1/3] Verifying Agent Tool Contracts...\")

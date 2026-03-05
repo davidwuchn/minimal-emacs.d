@@ -8,6 +8,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'nucleus-tools)
 
 (defun nucleus--verify-tools ()
   "Verify all tools in nucleus-toolsets are actually registered.
