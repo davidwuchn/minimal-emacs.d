@@ -10,7 +10,7 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 
 | Module | Purpose | Lines |
 |--------|---------|-------|
-| `gptel-ext-core.el` | Core advice/hooks: retry, FSM recovery, streaming, tool sanitization, progressive trimming, pre-send compaction | ~1790 |
+| `gptel-ext-core.el` | Core advice/hooks: retry, FSM recovery, streaming, tool sanitization, progressive trimming, pre-send compaction | ~1720 |
 | `gptel-ext-backends.el` | Backend configuration (Moonshot, DashScope, DeepSeek, Gemini, OpenRouter, etc.) | ~111 |
 | `gptel-ext-context.el` | Context management extensions | |
 | `gptel-ext-security.el` | ACL router advice on gptel-make-tool | ~110 |
@@ -143,6 +143,9 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 - **Remove nucleus-analytics.el** (⚒): Deleted experimental tool-usage analytics module. Never committed to git, 1 data point recorded total, no UI or consumers. Dead code.
 - **Remove MEMENTUM.md** (⚒): Deleted unused git-memory protocol. `memories/` directory was empty, zero memory commits ever made. Redundant with LEARNING.md + continuous-learning skill. Removed from system prompt injection (`nucleus-prompts.el`), AGENTS.md, and `.gitignore`.
 - **Add .ignore for ripgrep** (⊘): The `.gitignore` deny-all `*` pattern caused `rg` to skip force-added files under `lisp/modules/`. Added `.ignore` with `!*` override + exclusions for `var/`, `temp/`, `*.elc`.
+- **Clean up require preambles** (⚒): Removed 92 lines of duplicate/unused requires across 4 `gptel-ext-*.el` files. `gptel-ext-core.el` had triple-duplicate require blocks; all 4 files shared a copy-pasted 20-line preamble with 10+ unused packages each. Each file now requires only what it uses.
+- **Fix hidden-directives bug** (⊘): `nucleus-hidden-directives` (defined in `nucleus-presets.el`) was never wired to `my/gptel-hidden-directives` (read by `gptel-ext-core.el` filter). Directive filtering in transient menu was silently a no-op. Fixed by replacing the disconnected variable with a forward-declaration of `nucleus-hidden-directives`.
+- **Remove dead code and unused symbols** (⚒): Removed 6 unused defvars/defcustoms, 7 unused functions, and 1 dead feature block across 9 files. Added 4 forward declarations to eliminate byte-compiler warnings. -189 lines net.
 
 ### Recent Changes (v0.5.16)
 

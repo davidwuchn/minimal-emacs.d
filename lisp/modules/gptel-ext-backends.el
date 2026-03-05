@@ -1,26 +1,9 @@
 ;;; -*- lexical-binding: t; -*-
 
-(require 'cl-lib)
-(require 'subr-x)
-(require 'seq)
-(require 'project)
-(require 'url)
-(require 'url-parse)
-(require 'url-util)
-(require 'json)
-(require 'dom)
-(require 'diff)
 (require 'gptel)
-(eval-when-compile
-  (require 'gptel-openai)
-  (require 'gptel-gemini)
-  (require 'gptel-gh))
-(require 'gptel-context)
-(require 'gptel-request)
-(require 'gptel-gh)
-(require 'gptel-gemini)
 (require 'gptel-openai)
-;; (require 'gptel-openai-extras)
+(require 'gptel-gemini)
+(require 'gptel-gh)
 
 ;; --- Provider Backends ---
 (defvar gptel--copilot (gptel-make-gh-copilot "Copilot"))

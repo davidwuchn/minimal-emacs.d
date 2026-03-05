@@ -33,14 +33,6 @@
       gptel--preset
     nucleus-agent-default))
 
-(defun nucleus--ensure-directory (path)
-  "Return PATH coerced to an existing directory path."
-  (let* ((expanded (expand-file-name (or path default-directory)))
-         (dir (if (file-directory-p expanded)
-                  expanded
-                (file-name-directory expanded))))
-    (file-name-as-directory dir)))
-
 (defun nucleus-agent-toggle ()
   "Toggle the default gptel agent preset between plan and agent.
 

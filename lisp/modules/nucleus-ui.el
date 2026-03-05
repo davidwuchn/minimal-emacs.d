@@ -84,16 +84,6 @@ Skips special buffers like *Message* that may have gptel-mode enabled."
       (with-current-buffer new-buf
         (nucleus--header-line-apply-preset-label)))))
 
-;;; Integration
-
-(defun nucleus-ui-setup ()
-  "Setup nucleus UI components.
-
-Call this after gptel loads to configure header-line."
-  ;; Header-line setup is handled by hooks in nucleus-config.el
-  ;; This function is provided for future extensions
-  )
-
 ;;; Footer
 
 (provide 'nucleus-ui)

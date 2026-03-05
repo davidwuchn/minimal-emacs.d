@@ -465,12 +465,6 @@ CONSTRAINTS may include :minItems, :maxItems, :items."
         (user-error "Tool Contract Violation: '%s' has %d items, maximum is %d"
                     arg-name len max-items)))))
 
-(defun nucleus-tools--validate-enum (val arg-name enum)
-  "Validate VAL is in ENUM list."
-  (unless (member val enum)
-    (user-error "Tool Contract Violation: '%s' value %S not in allowed values %S"
-                arg-name val enum)))
-
 ;;; Tool Contract Validation
 
 (defun nucleus-tools--validate-contract (tool-name func args async-p)

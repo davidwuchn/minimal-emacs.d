@@ -27,11 +27,6 @@
   :type 'boolean
   :group 'gptel-tools-apply)
 
-(defcustom my/gptel-applypatch-precheck t
-  "When non-nil, run a dry-run check before applying a patch."
-  :type 'boolean
-  :group 'gptel-tools-apply)
-
 ;;; Helper Functions
 
 (defun my/gptel--patch-looks-like-unified-diff-p (text)

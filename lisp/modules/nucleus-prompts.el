@@ -269,48 +269,10 @@ Idempotent: only registers and logs once per session."
           (setq nucleus--directives-registered t))))))
 ;;; Public API
 
-(defun nucleus-gptel-directives ()
-  "Build gptel directives from nucleus prompts."
-  (nucleus-ensure-loaded)
-  (let* ((all-prompts (copy-sequence nucleus-prompts))
-         (agent (alist-get 'nucleus-gptel-agent all-prompts))
-         (init (alist-get 'init all-prompts))
-         (default-text (or (alist-get 'default all-prompts) agent))
-         (merged-default (if (and init default-text)
-                             (concat init "\n\n" default-text)
-                           default-text))
-         (hidden '(explorer reviewer chatTitle compact init
-                   skillCreate completion rewrite))
-         (filtered (seq-remove (lambda (entry)
-                                (memq (car entry) hidden))
-                              all-prompts)))
-    (if merged-default
-        (cons (cons 'default merged-default) filtered)
-      filtered)))
-
 (defun nucleus-gptel-tool-prompts ()
   "Return the nucleus tool-prompt alist, loading lazily if needed."
   (nucleus-ensure-loaded)
   nucleus-tool-prompts)
-
-(defun nucleus-gptel-tools-instructions ()
-  "Return all tool prompts as a single formatted string, or nil if none loaded."
-  (nucleus-ensure-loaded)
-  (when nucleus-tool-prompts
-    (string-join
-     (mapcar (lambda (entry)
-               (format "[%s]\n%s" (car entry) (cdr entry)))
-             nucleus-tool-prompts)
-     "\n\n")))
-
-;;; Integration
-
-(defun nucleus-prompts-setup ()
-  "Setup nucleus prompts module.
-
-Call this after gptel loads to register directives."
-  (nucleus-ensure-loaded)
-  (nucleus--register-gptel-directives))
 
 ;;; Footer
 

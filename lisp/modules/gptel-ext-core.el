@@ -5,34 +5,9 @@
 (require 'seq)
 (require 'project)
 (require 'url)
-(require 'url-parse)
-(require 'url-util)
-(require 'json)
-(require 'dom)
-(require 'diff)
 (require 'gptel)
-(eval-when-compile
-  (require 'gptel-openai)
-  (require 'gptel-gemini)
-  (require 'gptel-gh))
-(require 'gptel-context)
 (require 'gptel-request)
-(require 'gptel-gh)
-(require 'gptel-gemini)
 (require 'gptel-openai)
-;; (require 'gptel-openai-extras)
-
-(require 'cl-lib)
-(require 'subr-x)
-(require 'seq)
-(require 'project)
-(require 'url)
-(require 'url-parse)
-(require 'url-util)
-(require 'json)
-(require 'dom)
-(require 'diff)
-(require 'gptel)
 
 ;; ==============================================================================
 ;; PROJECT TEMP DIRECTORY
@@ -57,24 +32,7 @@ PREFIX, DIR-FLAG, and SUFFIX are passed to `make-temp-file'."
   (let ((temporary-file-directory (my/gptel-temp-dir)))
     (make-temp-file prefix dir-flag suffix)))
 
-(defvar my/gptel-hidden-directives nil
-  "List of directives to hide from the transient menu.")
-
-(eval-when-compile
-  (require 'gptel-openai)
-  (require 'gptel-gemini)
-  (require 'gptel-gh))
-(require 'gptel-context)
-(require 'gptel-request)
-(require 'gptel-gh)
-(require 'gptel-gemini)
-(require 'gptel-openai)
-;; (require 'gptel-openai-extras) ;; Temporarily disabled: missing dependency
-(require 'recentf)
-;; (add-to-list 'load-path (expand-file-name "personal" user-emacs-directory)) ;; Temporarily disabled: directory missing
-;; nucleus-config is loaded independently by init.el before this file.
-;; gptel-config does not require it — all nucleus calls are guarded with
-;; fboundp/boundp so this file works stand-alone for testing.
+(defvar nucleus-hidden-directives) ; defined in nucleus-presets.el
 
 ;; --- Fix: jit-lock error during streaming ---
 ;; During streaming, gptel inserts text chunks into a markdown-mode buffer.
@@ -162,6 +120,8 @@ markdown content that can throw errors.  START is the position to fontify."
 (defvar gptel--minimax)   ; defined later; forward-declared for byte-compiler
 (defvar gptel--moonshot)  ; defined later; forward-declared for byte-compiler
 (defvar gptel--cf-gateway) ; defined later; forward-declared for byte-compiler
+(defvar my/gptel--in-subagent-task) ; defined in gptel-tools-agent.el
+(defvar gptel-agent-request--handlers) ; defined in gptel-agent-tools.el
 
 (defcustom my/gptel-plain-model 'kimi-k2.5
   "Model for plain `gptel' buffers (no preset / non-agent sessions).
@@ -540,7 +500,7 @@ For regular gptel buffers: show all directives except hidden ones."
           (if is-agent-buffer
               (seq-filter (lambda (e) (memq (car e) '(nucleus-gptel-plan nucleus-gptel-agent)))
                           gptel-directives)
-            (seq-remove (lambda (e) (memq (car e) (if (boundp 'my/gptel-hidden-directives) my/gptel-hidden-directives nil)))
+            (seq-remove (lambda (e) (memq (car e) (if (boundp 'nucleus-hidden-directives) nucleus-hidden-directives nil)))
                         gptel-directives)))
          (old-directives gptel-directives))
     (unwind-protect
@@ -1101,7 +1061,6 @@ never transitions the FSM from WAIT to TYPE. Then the cleanup sentinel
 transitions it from WAIT to TYPE, leaving it stuck in TYPE forever.
 This advice forces the final transition."
   (let* ((fsm (car (alist-get process (bound-and-true-p gptel--request-alist))))
-         (info (and fsm (gptel-fsm-info fsm)))
          (state-before (and fsm (gptel-fsm-state fsm))))
     (funcall orig-fn process status)
     (when (and fsm
@@ -1548,32 +1507,6 @@ START and END are the response region positions passed by
       (goto-char (match-end 0)))))
 
 
-
-;; --- SHR/SVG Rendering Hardening (gptel-agent Web Tools) ---
-;; Some web pages include inline SVG that triggers libxml/SVG rendering errors
-;; like: "Namespace prefix xlink for href on use is not defined".
-;; gptel-agent web tools use `shr-insert-document' for text extraction; images
-;; are unnecessary. Disable image rendering during these fetch callbacks.
-
-(defgroup my/gptel-web nil
-  "Web extraction tweaks for gptel-agent."
-  :group 'gptel)
-
-(defcustom my/gptel-web-inhibit-images t
-  "When non-nil, inhibit images during gptel-agent web extraction."
-  :type 'boolean
-  :group 'my/gptel-web)
-
-(defun my/gptel--wrap-gptel-agent-fetch-no-images (orig url url-cb tool-cb failed-msg &rest args)
-  "Around-advice: inhibit SHR images during gptel-agent URL fetch callbacks."
-  (let ((wrapped-url-cb
-         (if my/gptel-web-inhibit-images
-             (let ((orig-url-cb url-cb))
-               (lambda (&rest cbargs)
-                 (let ((shr-inhibit-images t))
-                   (apply orig-url-cb cbargs))))
-           url-cb)))
-    (apply orig url wrapped-url-cb tool-cb failed-msg args)))
 
 ;; --- FSM Lookup Helper ---
 ;; Upstream `gptel--inspect-fsm' has a bug: when called with nil FSM arg, it
