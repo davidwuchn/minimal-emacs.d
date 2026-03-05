@@ -20,14 +20,21 @@
   :type 'integer
   :group 'gptel-tools-glob)
 
+(defcustom my/gptel-glob-result-limit 20000
+  "Max characters to return inline from Glob output.
+Results longer than this are saved to a temp file and only the
+first 50 lines are returned with a reference to the full content."
+  :type 'integer
+  :group 'gptel-tools-glob)
+
 ;;; Helper Functions
 
 (defun my/gptel--agent-glob--maybe-truncate (text)
   "Return TEXT, truncating and persisting to a temp file if needed.
 
-If TEXT exceeds 20000 bytes, it's saved to a temp file and only
+If TEXT exceeds `my/gptel-glob-result-limit' bytes, it's saved to a temp file and only
 the first 50 lines are returned with a reference to the full content."
-  (if (<= (length text) 20000)
+  (if (<= (length text) my/gptel-glob-result-limit)
       text
     (let ((temp-file (my/gptel-make-temp-file "glob-" nil ".txt")))
       (with-temp-file temp-file (insert text))

@@ -19,6 +19,18 @@
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defcustom my/gptel-subagent-result-limit 4000
+  "Max characters to return inline from a subagent result.
+Results longer than this are truncated and the full text is saved
+to a temp file."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defcustom my/gptel-subagent-progress-interval 10
+  "Seconds between progress messages while a subagent is running."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
 (defcustom my/gptel-subagent-model nil
   "Model to use for delegated subagents.
 nil means use `gptel-model' (the global default).
@@ -96,10 +108,10 @@ and large-result truncation via `my/gptel--deliver-subagent-result'."
 
 (defun my/gptel--deliver-subagent-result (callback result)
   "Deliver RESULT to CALLBACK, truncating large results to a temp file."
-  (if (> (length result) 4000)
+  (if (> (length result) my/gptel-subagent-result-limit)
       (let* ((temp-file (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt"))
              (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
-                                (substring result 0 4000)
+                                (substring result 0 my/gptel-subagent-result-limit)
                                 temp-file)))
         (with-temp-file temp-file
           (insert result))
@@ -223,7 +235,8 @@ CALLBACK is called with the result or a timeout error."
              agent-type my/gptel-agent-task-timeout)
 
     (setq progress-timer
-          (run-at-time 10 10
+          (run-at-time my/gptel-subagent-progress-interval
+                       my/gptel-subagent-progress-interval
            (lambda ()
              (unless done
                (message "[nucleus] Subagent '%s' still running... (%.1fs elapsed)"

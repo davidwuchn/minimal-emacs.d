@@ -20,6 +20,12 @@
   :type 'integer
   :group 'gptel-tools-grep)
 
+(defcustom my/gptel-grep-max-count 1000
+  "Maximum number of matching lines returned by the Grep tool.
+Passed as --max-count to rg/grep."
+  :type 'integer
+  :group 'gptel-tools-grep)
+
 ;;; Grep Tool Implementation
 
 (defun my/gptel--agent-grep-async (callback regex path &optional glob context-lines)
@@ -47,18 +53,18 @@ has been aborted, in which case results are dropped."
                  (args
                   (cond
                    ((string= "rg" cmd)
-                    (delq nil (list "--sort=modified"
-                                    (format "--context=%d" context-lines)
-                                    (and glob (format "--glob=%s" glob))
-                                    "--max-count=1000"
-                                    "--heading" "--line-number"
-                                    "-e" regex
-                                    expanded-path)))
-                   ((string= "grep" cmd)
-                    (delq nil (list "--recursive"
-                                    (format "--context=%d" context-lines)
-                                    (and glob (format "--include=%s" glob))
-                                    "--max-count=1000"
+                     (delq nil (list "--sort=modified"
+                                     (format "--context=%d" context-lines)
+                                     (and glob (format "--glob=%s" glob))
+                                     (format "--max-count=%d" my/gptel-grep-max-count)
+                                     "--heading" "--line-number"
+                                     "-e" regex
+                                     expanded-path)))
+                    ((string= "grep" cmd)
+                     (delq nil (list "--recursive"
+                                     (format "--context=%d" context-lines)
+                                     (and glob (format "--include=%s" glob))
+                                     (format "--max-count=%d" my/gptel-grep-max-count)
                                     "--line-number" "--regexp" regex
                                     expanded-path)))
                    (t (error "failed to identify grepper"))))
