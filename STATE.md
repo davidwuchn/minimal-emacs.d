@@ -10,24 +10,24 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 
 | Module | Purpose | Lines |
 |--------|---------|-------|
-| `gptel-ext-core.el` | Core advice/hooks: retry, FSM recovery, streaming, tool sanitization, progressive trimming, pre-send compaction | ~1720 |
-| `gptel-ext-backends.el` | Backend configuration (Moonshot, DashScope, DeepSeek, Gemini, OpenRouter, etc.) | ~111 |
+| `gptel-ext-core.el` | Core advice/hooks: retry, FSM recovery, streaming, tool sanitization, progressive trimming, pre-send compaction | ~1710 |
+| `gptel-ext-backends.el` | Backend configuration (Moonshot, DashScope, DeepSeek, Gemini, OpenRouter, etc.) | ~93 |
 | `gptel-ext-context.el` | Context management extensions | |
 | `gptel-ext-security.el` | ACL router advice on gptel-make-tool | ~110 |
 | `gptel-tools.el` | Tool registration orchestrator, readonly/action tool lists | ~320 |
 | `gptel-tools-agent.el` | RunAgent tool + subagent delegation + upstream Agent deregistration | ~326 |
 | `gptel-tools-apply.el` | ApplyPatch tool | |
 | `gptel-tools-bash.el` | Async Bash tool | |
-| `gptel-tools-code.el` | Code_Map, Code_Inspect, Code_Replace, Diagnostics, Code_Usages | ~460 |
+| `gptel-tools-code.el` | Code_Map, Code_Inspect, Code_Replace, Diagnostics, Code_Usages | ~450 |
 | `gptel-tools-edit.el` | Async Edit tool | |
 | `gptel-tools-glob.el` | Async Glob tool | |
 | `gptel-tools-grep.el` | Async Grep tool | |
 | `gptel-tools-introspection.el` | Emacs introspection tools (describe_symbol, get_symbol_source, find_buffers_and_recent) | |
-| `gptel-tools-preview.el` | Unified Preview tool (diff display in side window) | ~290 |
+| `gptel-tools-preview.el` | Unified Preview tool (diff display in side window) | ~270 |
 | `nucleus-mode-switch.el` | Plan/Agent mode switching with system reminders | |
-| `nucleus-presets.el` | Preset management, agent patching, tool contract validation | ~360 |
+| `nucleus-presets.el` | Preset management, agent patching, tool contract validation | ~347 |
 | `nucleus-prompts.el` | Prompt loading from assistant/prompts/ | ~280 |
-| `nucleus-tools.el` | Toolset definitions (nucleus-toolsets constant), tool filtering | ~600 |
+| `nucleus-tools.el` | Toolset definitions (nucleus-toolsets constant), tool filtering, agent-tool contracts | ~565 |
 | `nucleus-tools-validate.el` | Tool signature validation (M-x nucleus-validate-tool-signatures) | |
 | `nucleus-tools-verify.el` | Tool registration verification (M-x nucleus-verify-tools-interactively) | |
 | `nucleus-ui.el` | Header-line, UI helpers | ~100 |
@@ -146,6 +146,7 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 - **Clean up require preambles** (⚒): Removed 92 lines of duplicate/unused requires across 4 `gptel-ext-*.el` files. `gptel-ext-core.el` had triple-duplicate require blocks; all 4 files shared a copy-pasted 20-line preamble with 10+ unused packages each. Each file now requires only what it uses.
 - **Fix hidden-directives bug** (⊘): `nucleus-hidden-directives` (defined in `nucleus-presets.el`) was never wired to `my/gptel-hidden-directives` (read by `gptel-ext-core.el` filter). Directive filtering in transient menu was silently a no-op. Fixed by replacing the disconnected variable with a forward-declaration of `nucleus-hidden-directives`.
 - **Remove dead code and unused symbols** (⚒): Removed 6 unused defvars/defcustoms, 7 unused functions, and 1 dead feature block across 9 files. Added 4 forward declarations to eliminate byte-compiler warnings. -189 lines net.
+- **Audit DRY + dead code fixes** (⚒): Removed `my/gptel-resolve-model`/`my/gptel-preferred-models` dead code, empty defgroup. Fixed `#'mode-line-highlight` bug (face, not command). Extracted 7 shared helpers: `my/gptel--ensure-reasoning-on-messages` (3 reasoning injection loops → 1), `my/gptel--reasoning-key-for-model` (key detection), `my/gptel--make-preview-callback` (3 inline callbacks), `my/gptel--detect-treesit-language` (3 inline detectors), `my/gptel--treesit-error-message` (3 inline handlers), `nucleus-agent-tool-contracts` (agent→toolset mapping), flatten-sparse-tree dedup. -71 lines across 9 files.
 
 ### Recent Changes (v0.5.16)
 
