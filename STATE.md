@@ -16,24 +16,24 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 | `gptel-ext-context.el` | Context management extensions | |
 | `gptel-ext-fsm.el` | FSM recovery: fix-stuck-in-type, agent handler fixes, recover-on-error | ~82 |
 | `gptel-ext-reasoning.el` | Reasoning/thinking model support: key detection, capture, inject, noop tool, nil-tool strip | ~255 |
-| `gptel-ext-retry.el` | Auto-retry with exponential backoff, progressive trimming, pre-send compaction | ~386 |
+| `gptel-ext-retry.el` | Auto-retry with exponential backoff, progressive trimming, pre-send compaction | ~397 |
 | `gptel-ext-security.el` | ACL router advice on gptel-make-tool | ~110 |
 | `gptel-ext-streaming.el` | Streaming flag, jit-lock protection during gptel responses | ~79 |
-| `gptel-ext-tool-confirm.el` | Enhanced tool confirmation UI (display-tool-calls override, permit-and-accept) | ~197 |
+| `gptel-ext-tool-confirm.el` | Enhanced tool confirmation UI (display-tool-calls override, permit-and-accept) | ~206 |
 | `gptel-ext-tool-sanitize.el` | Nil-tool filtering, tool-call sanitization, doom-loop detection, dedup | ~191 |
 | `gptel-ext-transient.el` | Transient menu extensions: suffix-system-message, filter-directive, crowdsourced prompts | ~195 |
 | `gptel-tools.el` | Tool registration orchestrator, readonly/action tool lists | ~320 |
 | `gptel-tools-agent.el` | RunAgent tool + subagent delegation + upstream Agent deregistration | ~326 |
 | `gptel-tools-apply.el` | ApplyPatch tool | |
-| `gptel-tools-bash.el` | Async Bash tool | |
-| `gptel-tools-code.el` | Code_Map, Code_Inspect, Code_Replace, Diagnostics, Code_Usages | ~450 |
+| `gptel-tools-bash.el` | Async Bash tool | ~202 |
+| `gptel-tools-code.el` | Code_Map, Code_Inspect, Code_Replace, Diagnostics, Code_Usages | ~464 |
 | `gptel-tools-edit.el` | Async Edit tool | |
 | `gptel-tools-glob.el` | Async Glob tool | |
 | `gptel-tools-grep.el` | Async Grep tool | |
 | `gptel-tools-introspection.el` | Emacs introspection tools (describe_symbol, get_symbol_source, find_buffers_and_recent) | |
 | `gptel-tools-preview.el` | Unified Preview tool (diff display in side window) | ~270 |
 | `nucleus-mode-switch.el` | Plan/Agent mode switching with system reminders | |
-| `nucleus-presets.el` | Preset management, agent patching, tool contract validation | ~347 |
+| `nucleus-presets.el` | Preset management, agent patching, tool contract validation | ~344 |
 | `nucleus-prompts.el` | Prompt loading from assistant/prompts/ | ~280 |
 | `nucleus-tools.el` | Toolset definitions (nucleus-toolsets constant), tool filtering, agent-tool contracts | ~565 |
 | `nucleus-tools-validate.el` | Tool signature validation (M-x nucleus-validate-tool-signatures) | |
@@ -99,6 +99,8 @@ Layer 3 — Retry (retries=2+): my/gptel-auto-retry
 
 Key functions in `gptel-ext-retry.el`:
 - `my/gptel-max-retries`, `my/gptel-retry-keep-tool-results`: Retry defcustoms
+- `my/gptel--transient-error-p`: Predicate for retryable network/overload errors
+- `my/gptel--cleanup-partial-insertion`: Remove partial buffer output before retry
 - `my/gptel--trim-tool-results-for-retry`: Progressive tool-result truncation
 - `my/gptel--trim-reasoning-content`: Strip reasoning_content on retry 2+
 - `my/gptel--reduce-tools-for-retry`: Filter tools to only those called in history
@@ -150,6 +152,8 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 ### Recent Changes (v0.5.17)
 
 - **Decompose gptel-ext-core.el** (⚒): Split monolithic 1707-line `gptel-ext-core.el` into 8 focused modules + ~286-line residual core. New modules: `gptel-ext-streaming` (jit-lock/streaming flag), `gptel-ext-tool-sanitize` (nil-tool/dedup/doom-loop), `gptel-ext-reasoning` (thinking model support), `gptel-ext-retry` (auto-retry/compaction), `gptel-ext-transient` (transient menu extensions), `gptel-ext-abort` (abort/prompt markers), `gptel-ext-tool-confirm` (tool confirmation UI), `gptel-ext-fsm` (FSM recovery). Each module self-registers its advice/hooks. `gptel-config.el` requires all 8. All 9 modules byte-compile cleanly. Fixed format-string bug in compact-payload message.
+
+- **Refactor long functions** (⚒): Extracted 12 named helpers from 5 long functions (>80 lines each) across 5 modules. `gptel-tools-code.el`: 6 inline lambdas → named defuns (`gptel-tools-code--no-parser-message`, `--map-file`, `--inspect-node`, `--replace-node`, `--format-diagnostic`, `--diagnostics`). `gptel-ext-tool-confirm.el`: split `my/gptel--display-tool-calls` into minibuffer + overlay dispatchers (`my/gptel--confirm-tool-calls-minibuffer`, `my/gptel--confirm-tool-calls-overlay`). `nucleus-presets.el`: extracted DRY preset override + buffer refresh (`nucleus--override-preset`, `nucleus--refresh-open-gptel-buffers`). `gptel-tools-bash.el`: extracted persistent shell setup + process filter (`my/gptel--ensure-persistent-bash`, `my/gptel--bash-process-filter`); timer stored on process plist. `gptel-ext-retry.el`: extracted transient-error predicate + partial-insertion cleanup (`my/gptel--transient-error-p`, `my/gptel--cleanup-partial-insertion`). All 5 files verify cleanly (byte-compile or check-parens).
 
 - **Remove gptel-ext-learning.el** (⚒): Deleted elisp learning-integration module. AGENTS.md already instructs AI agents to run `λ(learn)`/`λ(observe)`/`λ(evolve)` via the continuous-learning OpenCode skill — the deterministic git-commit hook was redundant. Instinct evidence tracking now handled entirely by the AI agent on demand.
 - **Remove plan context auto-attach** (⚒): Stripped `gptel-context` auto-attach/detach of PLAN.md from `nucleus-mode-switch.el` (v2.0.0). AGENTS.md instructs AI to read PLAN.md before acting; OpenCode has tool access to do so. Mode transition system reminders (plan↔build) retained.

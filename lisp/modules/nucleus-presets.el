@@ -84,6 +84,37 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
          (set (make-local-variable sym) val)))
       (force-mode-line-update))))
 
+(defun nucleus--override-preset (preset-name system-symbol description toolset model backend)
+  "Override PRESET-NAME with nucleus SYSTEM-SYMBOL, DESCRIPTION, TOOLSET, MODEL, BACKEND."
+  (when-let ((base (gptel-get-preset preset-name)))
+    (let ((plist (copy-sequence base)))
+      (setq plist (plist-put plist :system system-symbol))
+      (setq plist (plist-put plist :description description))
+      (setq plist (plist-put plist :tools (nucleus-get-tools toolset)))
+      (when model
+        (setq plist (plist-put plist :model model))
+        (setq plist (plist-put plist :backend backend)))
+      (apply #'gptel-make-preset preset-name plist))))
+
+(defun nucleus--refresh-open-gptel-buffers ()
+  "Re-apply active presets to already-open gptel buffers.
+Existing buffers keep stale gptel-tools if the preset definition
+changed (e.g. RunAgent added after buffer was created)."
+  (when (fboundp 'gptel--apply-preset)
+    (dolist (buf (buffer-list))
+      (with-current-buffer buf
+        (when (and (bound-and-true-p gptel-mode)
+                   (boundp 'gptel--preset)
+                   (memq gptel--preset '(gptel-plan gptel-agent)))
+          (condition-case err
+              (gptel--apply-preset gptel--preset
+                                   (lambda (sym val)
+                                     (set (make-local-variable sym) val)))
+            (error
+             (message "[nucleus] Warning: failed to re-apply preset %S to buffer %S: %s"
+                      gptel--preset (buffer-name buf)
+                      (error-message-string err)))))))))
+
 (defun nucleus--override-gptel-agent-presets ()
   "Make gptel-agent's Plan/Agent presets use nucleus system prompts and toolsets."
   (when (and (fboundp 'gptel-get-preset)
@@ -91,34 +122,17 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
     (let* ((preferred-backend gptel-backend)
            ;; Use the global default model for both agent and plan presets.
            ;; Change once in gptel-config.el to switch everywhere.
-           (agent-model gptel-model)
-           (plan-model gptel-model))
-      
-      ;; Override gptel-agent preset
-      (when-let ((agent (gptel-get-preset 'gptel-agent)))
-        (let ((plist (copy-sequence agent)))
-          (setq plist (plist-put plist :system 'nucleus-gptel-agent))
-          (setq plist (plist-put plist :description
-                                 "Nucleus execution agent — full tool access, code changes"))
-          (setq plist (plist-put plist :tools
-                                 (nucleus-get-tools :nucleus)))
-          (when agent-model
-            (setq plist (plist-put plist :model agent-model))
-            (setq plist (plist-put plist :backend preferred-backend)))
-          (apply #'gptel-make-preset 'gptel-agent plist)))
-      
-      ;; Override gptel-plan preset
-      (when-let ((plan (gptel-get-preset 'gptel-plan)))
-        (let ((plist (copy-sequence plan)))
-          (setq plist (plist-put plist :system 'nucleus-gptel-plan))
-          (setq plist (plist-put plist :description
-                                 "Nucleus planning agent — read-only, architecture & research"))
-          (setq plist (plist-put plist :tools
-                                 (nucleus-get-tools :readonly)))
-          (when plan-model
-            (setq plist (plist-put plist :model plan-model))
-            (setq plist (plist-put plist :backend preferred-backend)))
-          (apply #'gptel-make-preset 'gptel-plan plist)))
+           (model gptel-model))
+
+      (nucleus--override-preset
+       'gptel-agent 'nucleus-gptel-agent
+       "Nucleus execution agent — full tool access, code changes"
+       :nucleus model preferred-backend)
+
+      (nucleus--override-preset
+       'gptel-plan 'nucleus-gptel-plan
+       "Nucleus planning agent — read-only, architecture & research"
+       :readonly model preferred-backend)
       
       ;; Patch subagents in gptel-agent--agents
       (when (boundp 'gptel-agent--agents)
@@ -142,9 +156,9 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
                ;; inherit the parent buffer's model (e.g. glm-5 on DashScope,
                ;; which has streaming parse issues).
                (let* ((sub-model (and (boundp 'my/gptel-subagent-model)
-                                      my/gptel-subagent-model))
+                                       my/gptel-subagent-model))
                       (sub-backend-sym (and (boundp 'my/gptel-subagent-backend)
-                                            my/gptel-subagent-backend))
+                                             my/gptel-subagent-backend))
                       (sub-backend (and sub-backend-sym
                                         (boundp sub-backend-sym)
                                         (symbol-value sub-backend-sym))))
@@ -170,24 +184,7 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
          ;; - explorer:     :explorer    (3 tools) - read-only codebase exploration
          ;; - reviewer:     :reviewer    (3 tools) - read-only code review
          ))
-      ;; Re-apply the updated presets to any already-open gptel buffers.
-      ;; Existing buffers keep stale gptel-tools if the preset definition
-      ;; changed (e.g. RunAgent added after buffer was created).  Silently
-      ;; update each buffer to match its active preset.
-      (when (fboundp 'gptel--apply-preset)
-        (dolist (buf (buffer-list))
-          (with-current-buffer buf
-            (when (and (bound-and-true-p gptel-mode)
-                       (boundp 'gptel--preset)
-                       (memq gptel--preset '(gptel-plan gptel-agent)))
-              (condition-case err
-                  (gptel--apply-preset gptel--preset
-                                       (lambda (sym val)
-                                         (set (make-local-variable sym) val)))
-                (error
-                 (message "[nucleus] Warning: failed to re-apply preset %S to buffer %S: %s"
-                          gptel--preset (buffer-name buf)
-                          (error-message-string err)))))))))))
+      (nucleus--refresh-open-gptel-buffers))))
 
 (defun nucleus--validate-agent-tool-contracts ()
   "Validate that agent tool contracts are correctly enforced.

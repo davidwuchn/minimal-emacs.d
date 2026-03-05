@@ -63,6 +63,58 @@ Returns t if safe, or a string explaining why it was rejected."
               (throw 'rejected (format "Command not in read-only whitelist: %s" clean-part)))))
         t))))
 
+;;; Internal Helpers
+
+(defun my/gptel--ensure-persistent-bash ()
+  "Create a persistent background bash process if one doesn't exist or died.
+Sets `my/gptel--persistent-bash-process' to a live process with TERM=dumb."
+  (unless (and my/gptel--persistent-bash-process
+               (process-live-p my/gptel--persistent-bash-process))
+    (let ((buf (get-buffer-create " *gptel-persistent-bash*")))
+      (with-current-buffer buf (erase-buffer))
+      (setq my/gptel--persistent-bash-process
+            (make-process
+             :name "gptel-bash"
+             :buffer buf
+             :command '("bash" "--norc" "--noprofile")
+             :connection-type 'pipe
+             :noquery t))
+      (process-put my/gptel--persistent-bash-process 'my/gptel-managed t)
+      ;; Initialize Dumb Terminal variables to prevent interactive hanging
+      (process-send-string my/gptel--persistent-bash-process
+                           "export TERM=dumb PAGER=cat GIT_PAGER=cat DEBIAN_FRONTEND=noninteractive PS1=''\n")
+      (sleep-for 0.1))))
+
+(defun my/gptel--bash-process-filter (proc output marker finish-fn)
+  "Process filter for gptel persistent bash.
+Accumulates OUTPUT in PROC's buffer, detects the end-of-command MARKER,
+truncates oversized output, and calls FINISH-FN with the result string.
+Cancels the timeout timer stored on PROC via `process-get'."
+  (when (buffer-live-p (process-buffer proc))
+    (with-current-buffer (process-buffer proc)
+      (goto-char (point-max))
+      (insert output)
+      (let ((content (buffer-string)))
+        ;; Regex tolerates potential \r or \n from terminal variations
+        (when (string-match (format "%s:\\([0-9]+\\)[ \r\n]*\\'" marker) content)
+          (let* ((status (string-to-number (match-string 1 content)))
+                 (out (substring content 0 (match-beginning 0)))
+                 (out (string-trim out))
+                 (max-length 50000)
+                 (truncated-out
+                  (if (> (length out) max-length)
+                      (let ((temp-file (my/gptel-make-temp-file "bash-" nil ".txt")))
+                        (with-temp-file temp-file (insert out))
+                        (concat (substring out 0 (/ max-length 2))
+                                (format "\n\n... [Output truncated. Result exceeded 50,000 bytes. Full output saved to: %s\nUse Grep to search the full content or Read with offset/limit to view specific sections.] ...\n\n" temp-file)
+                                (substring out (- (/ max-length 2)))))
+                    out))
+                 (timer (process-get proc 'my/gptel-bash-timer)))
+            (when timer (cancel-timer timer))
+            (if (= status 0)
+                (funcall finish-fn truncated-out)
+              (funcall finish-fn (format "Command failed with exit code %d:\nSTDOUT+STDERR:\n%s" status truncated-out)))))))))
+
 ;;; Bash Tool Implementation
 
 (defun my/gptel--agent-bash-async (callback command)
@@ -97,67 +149,30 @@ CALLBACK is called with the result string on completion."
               (if sandbox-err
                   (finish (format "Error: Command rejected by Sandbox. %s.\n\nTIP: For file operations, prefer native tools (`Read`, `Grep`, `Glob`) over Bash. For shell commands, use whitelisted read-only commands (git, ls, cat, grep, etc.) or ask the user to say \"go\" to switch to Execution mode." sandbox-err))
 
-                (unless (and my/gptel--persistent-bash-process
-                           (process-live-p my/gptel--persistent-bash-process))
-                (let ((buf (get-buffer-create " *gptel-persistent-bash*")))
-                  (with-current-buffer buf (erase-buffer))
-                  (setq my/gptel--persistent-bash-process
-                        (make-process
-                         :name "gptel-bash"
-                         :buffer buf
-                         :command '("bash" "--norc" "--noprofile")
-                         :connection-type 'pipe
-                         :noquery t))
-                  (process-put my/gptel--persistent-bash-process 'my/gptel-managed t)
-                  ;; Initialize Dumb Terminal variables to prevent interactive hanging
-                  (process-send-string my/gptel--persistent-bash-process
-                                       "export TERM=dumb PAGER=cat GIT_PAGER=cat DEBIAN_FRONTEND=noninteractive PS1=''\n")
-                  (sleep-for 0.1)))
+                (my/gptel--ensure-persistent-bash)
 
               (let* ((proc my/gptel--persistent-bash-process)
                      (buf (process-buffer proc))
-                     (marker (format "gptel_cmd_done_%s" (md5 (number-to-string (random)))))
-                     (timer nil))
+                     (marker (format "gptel_cmd_done_%s" (md5 (number-to-string (random))))))
 
                 (with-current-buffer buf (erase-buffer))
 
                 (set-process-filter proc
                                     (lambda (p output)
-                                      (when (buffer-live-p (process-buffer p))
-                                        (with-current-buffer (process-buffer p)
-                                          (goto-char (point-max))
-                                          (insert output)
-                                          (let ((content (buffer-string)))
-                                            ;; Regex tolerates potential \r or \n from terminal variations
-                                            (when (string-match (format "%s:\\([0-9]+\\)[ \r\n]*\\'" marker) content)
-                                              (let* ((status (string-to-number (match-string 1 content)))
-                                                     (out (substring content 0 (match-beginning 0)))
-                                                     (out (string-trim out))
-                                                     (max-length 50000)
-                                                     (truncated-out
-                                                      (if (> (length out) max-length)
-                                                          (let ((temp-file (my/gptel-make-temp-file "bash-" nil ".txt")))
-                                                            (with-temp-file temp-file (insert out))
-                                                            (concat (substring out 0 (/ max-length 2))
-                                                                    (format "\n\n... [Output truncated. Result exceeded 50,000 bytes. Full output saved to: %s\nUse Grep to search the full content or Read with offset/limit to view specific sections.] ...\n\n" temp-file)
-                                                                    (substring out (- (/ max-length 2)))))
-                                                        out)))
-                                                (if timer (cancel-timer timer))
-                                                (if (= status 0)
-                                                    (finish truncated-out)
-                                                  (finish (format "Command failed with exit code %d:\nSTDOUT+STDERR:\n%s" status truncated-out))))))))))
+                                      (my/gptel--bash-process-filter p output marker #'finish)))
 
-                (setq timer (run-at-time
-                             my/gptel-bash-timeout nil
-                             (lambda (p)
-                               (when (process-live-p p)
-                                 ;; For timeouts, we must kill the hung persistent process
-                                 ;; and force a fresh shell on the next call.
-                                 (ignore-errors (set-process-filter p #'ignore))
-                                 (ignore-errors (set-process-sentinel p #'ignore))
-                                 (delete-process p))
-                               (finish (format "Error: Bash timed out after %ss" my/gptel-bash-timeout)))
-                             proc))
+                (process-put proc 'my/gptel-bash-timer
+                             (run-at-time
+                              my/gptel-bash-timeout nil
+                              (lambda (p)
+                                (when (process-live-p p)
+                                  ;; For timeouts, we must kill the hung persistent process
+                                  ;; and force a fresh shell on the next call.
+                                  (ignore-errors (set-process-filter p #'ignore))
+                                  (ignore-errors (set-process-sentinel p #'ignore))
+                                  (delete-process p))
+                                (finish (format "Error: Bash timed out after %ss" my/gptel-bash-timeout)))
+                              proc))
 
                 ;; Wrap command in {} to catch errors and safely output the exit code marker
                 (process-send-string proc (format "{ %s\n} 2>&1\necho %s:$?\n" command marker))))))

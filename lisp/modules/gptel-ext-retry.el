@@ -164,6 +164,36 @@ Returns the number of tool definitions removed, or 0 if nothing changed."
             (setq removed (- original-count new-count))))))
     removed))
 
+(defun my/gptel--transient-error-p (error-data http-status)
+  "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error.
+Matches network failures, overload responses, rate limits, and common
+curl error codes that are safe to retry with backoff."
+  (or (and (stringp error-data)
+           (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
+      (and (numberp http-status) (memq http-status '(408 429 500 502 503 504)))
+      ;; Catch dictionary format errors from OpenCode style backend responses
+      (and (listp error-data)
+           (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
+                           (downcase (or (plist-get error-data :message) ""))))))
+
+(defun my/gptel--cleanup-partial-insertion (info)
+  "Remove partial buffer text inserted before a failed request.
+Uses INFO's :position and :tracking-marker to identify the region.
+Guard: both markers must be live, in the same buffer, and
+start <= tracking to avoid corrupting the buffer."
+  (when-let* ((start-marker (plist-get info :position))
+              (tracking-marker (plist-get info :tracking-marker))
+              (start-pos (and (markerp start-marker) (marker-position start-marker)))
+              (track-pos (and (markerp tracking-marker) (marker-position tracking-marker)))
+              (buf (marker-buffer tracking-marker)))
+    (when (and (buffer-live-p buf)
+               (eq (marker-buffer start-marker) buf)
+               (< start-pos track-pos))
+      (with-current-buffer buf
+        (let ((inhibit-read-only t))
+          (delete-region start-marker tracking-marker)
+          (set-marker tracking-marker start-marker))))))
+
 (defun my/gptel-auto-retry (orig-fn machine &optional new-state)
   "Intercept FSM transitions to ERRS and retry the request if transient.
 Implements OpenCode-style exponential backoff for network/overload errors.
@@ -185,13 +215,7 @@ Skips retries for subagent FSMs (they have their own timeout handler)."
     (if (and (eq new-state 'ERRS)
              (not subagent-p)
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
-             (or (and (stringp error-data)
-                      (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
-                 (and (numberp http-status) (memq http-status '(408 429 500 502 503 504)))
-                 ;; Catch dictionary format errors from OpenCode style backend responses
-                 (and (listp error-data)
-                      (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit" 
-                                      (downcase (or (plist-get error-data :message) ""))))))
+             (my/gptel--transient-error-p error-data http-status))
         (let* ((base-delay 2.0)
                (factor 2.0)
                (delay (min 30.0 (* base-delay (expt factor retries)))))
@@ -206,20 +230,7 @@ Skips retries for subagent FSMs (they have their own timeout handler)."
                      (1+ retries) delay))
           
           ;; Clean up partial buffer insertions if any.
-          ;; Guard: both markers must be live, in the same buffer, and
-          ;; start <= tracking to avoid corrupting the buffer.
-          (when-let* ((start-marker (plist-get info :position))
-                      (tracking-marker (plist-get info :tracking-marker))
-                      (start-pos (and (markerp start-marker) (marker-position start-marker)))
-                      (track-pos (and (markerp tracking-marker) (marker-position tracking-marker)))
-                      (buf (marker-buffer tracking-marker)))
-            (when (and (buffer-live-p buf)
-                       (eq (marker-buffer start-marker) buf)
-                       (< start-pos track-pos))
-              (with-current-buffer buf
-                (let ((inhibit-read-only t))
-                  (delete-region start-marker tracking-marker)
-                  (set-marker tracking-marker start-marker)))))
+           (my/gptel--cleanup-partial-insertion info)
           
            ;; Reset FSM state to WAIT to trigger a fresh request
            (plist-put info :error nil)

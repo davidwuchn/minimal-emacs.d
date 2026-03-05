@@ -147,31 +147,162 @@ MSG is the original error message, FILE-PATH is the file being operated on."
     (format "Error: File not found: %s\n\nACTION: Check the file path and try again." file-path))
    (t nil)))
 
+(defun gptel-tools-code--no-parser-message (file-path lang action-fallback)
+  "Format a user-friendly error when no tree-sitter parser is active.
+FILE-PATH is the file, LANG the detected language, ACTION-FALLBACK
+the tool to suggest as alternative."
+  (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use %s"
+          file-path (or lang "language") file-path (or lang "language") action-fallback))
+
+(defun gptel-tools-code--map-file (file_path)
+  "Get a high-level outline of all functions and classes in FILE_PATH.
+Returns a formatted string with the file map, or an error message."
+  (condition-case err
+      (with-timeout (5 (format "Error: Code_Map timed out after 5 seconds on %s" file_path))
+        (with-current-buffer (find-file-noselect file_path)
+          (treesit-agent--ensure-parser file_path)
+          (if (not (treesit-parser-list))
+              (gptel-tools-code--no-parser-message
+               file_path (my/gptel--detect-treesit-language file_path) "Read/Grep for this file")
+            (let ((map (treesit-agent-get-file-map)))
+              (if map
+                  (format "File map for %s:\n%s" file_path (string-join map "\n"))
+                (format "Could not generate file map for %s.\n\nACTION: Check if tree-sitter is enabled for this file type.\n  - Run: M-x treesit-install-language-grammar RET <language> RET\n  - Verify: M-x eval-expression RET (treesit-language-available-p '<lang>) RET" file_path))))))
+    (error (let* ((msg (error-message-string err))
+                  (friendly (my/gptel--treesit-error-message msg file_path)))
+             (or friendly
+                 (format "Error executing Code_Map on %s: %s\n\nACTION: Check file permissions and try again." file_path msg))))))
+
+(defun gptel-tools-code--inspect-node (node_name &optional file_path)
+  "Extract the code block for NODE_NAME, optionally from FILE_PATH.
+When FILE_PATH is nil, searches the entire project workspace."
+  (condition-case err
+      (with-timeout (10 (format "Error: Code_Inspect timed out for '%s'" node_name))
+        (if file_path
+            (with-current-buffer (find-file-noselect file_path)
+              (treesit-agent--ensure-parser file_path)
+              (if (not (treesit-parser-list))
+                  (gptel-tools-code--no-parser-message
+                   file_path (my/gptel--detect-treesit-language file_path) "Read tool for this file")
+                (let ((text (treesit-agent-extract-node node_name)))
+                  (if text
+                      (format "Code block '%s' from %s:\n\n%s" node_name file_path text)
+                    (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols in the file\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))
+          ;; Search workspace if no file provided
+          (let ((result (treesit-agent-find-workspace node_name)))
+            (cond
+             ((string-match-p "ripgrep.*not found\\|executable.*rg" result)
+              (concat result "\n\nACTION: Install ripgrep (rg) for workspace search:\n  macOS:  brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Check:  rg --version\n\nAlternatively, provide file_path to search a specific file."))
+             ((string-match-p "No structural definition found" result)
+              (format "Error: Could not find '%s' anywhere in the project\n\nACTION:\n  1. Check spelling: '%s' may be misspelled\n  2. Symbol may not exist - use Code_Map to explore files\n  3. Symbol may be dynamically defined (not in AST)" node_name node_name))
+             (t result)))))
+    (error (let* ((msg (error-message-string err))
+                  (friendly (my/gptel--treesit-error-message msg (or file_path ""))))
+             (or friendly
+                 (cond
+                  ((string-match-p "ripgrep\\|rg" msg)
+                   (concat msg "\n\nACTION: Install ripgrep:\n  macOS:  brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Check:  rg --version"))
+                  ((string-match-p "timeout" msg)
+                   (format "Error: Code_Inspect timed out after 10 seconds for '%s'\n\nACTION:\n  1. Provide explicit file_path to skip workspace search\n  2. Large project - search may take time\n  3. Try Code_Map on specific files first" node_name))
+                   (t (format "Error executing Code_Inspect: %s\n\nACTION: Check symbol name and file path, then try again." msg))))))))
+
+(defun gptel-tools-code--replace-node (file_path node_name new_code)
+  "Surgically replace NODE_NAME in FILE_PATH with NEW_CODE.
+Syncs buffer with disk, validates parser, guards against truncation."
+  (condition-case err
+      (with-timeout (5 (format "Error: Code_Replace timed out on %s" file_path))
+        (with-current-buffer (find-file-noselect file_path)
+          ;; Sync buffer with disk before operating — prevents
+          ;; "changed since visited" prompts when multiple
+          ;; Code_Replace calls target the same file in sequence.
+          (when (and (buffer-file-name)
+                     (file-exists-p (buffer-file-name))
+                     (not (verify-visited-file-modtime)))
+            (revert-buffer t t t))
+          (treesit-agent--ensure-parser file_path)
+          (if (not (treesit-parser-list))
+              (gptel-tools-code--no-parser-message
+               file_path (my/gptel--detect-treesit-language file_path)
+               "Edit tool (manual paren balancing required)")
+            (let ((old-code (treesit-agent-extract-node node_name)))
+              ;; Guard: reject likely-truncated replacements.
+              (if (and old-code
+                       (> (length old-code) 200)
+                       (< (length new_code) (* 0.2 (length old-code))))
+                  (format "Error: Replacement rejected — new code (%d chars) is suspiciously shorter than original (%d chars).\nThis usually means the function body was truncated.\n\nACTION: Provide the COMPLETE replacement including the full function body."
+                          (length new_code) (length old-code))
+                (if (treesit-agent-replace-node node_name new_code)
+                    (progn
+                      ;; Suppress supersession warnings during save.
+                      (cl-letf (((symbol-function 'ask-user-about-supersession-threat) #'ignore))
+                        (save-buffer))
+                      (format "Successfully replaced '%s' in %s" node_name file_path))
+                  (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))))
+    (error (let* ((msg (error-message-string err))
+                  (friendly (my/gptel--treesit-error-message msg file_path)))
+             (or friendly
+                 (cond
+                  ((string-match-p "syntax error\\|has-error" msg)
+                   (format "Error: New code has syntax errors (unbalanced parentheses/brackets)\n\nACTION:\n  1. Check that all opening brackets have closing brackets\n  2. Verify indentation is correct\n  3. Test code in a REPL before replacing\n\nOriginal error: %s" msg))
+                   (t (format "Error executing Code_Replace on %s: %s\n\nACTION: Check function name and new code syntax, then try again." file_path msg))))))))
+
+(defun gptel-tools-code--format-diagnostic (d)
+  "Format a single flymake diagnostic D as a string with file, line, type, and context."
+  (let ((buf (flymake-diagnostic-buffer d))
+        (text (flymake-diagnostic-text d))
+        (type (flymake-diagnostic-type d))
+        (beg (flymake-diagnostic-beg d)))
+    (with-current-buffer buf
+      (save-excursion
+        (goto-char beg)
+        (let ((line-text
+               (string-trim
+                (buffer-substring-no-properties
+                 (line-beginning-position)
+                 (line-end-position)))))
+          (format "%s:%d [%s] %s\n  %s"
+                  (buffer-file-name buf)
+                  (line-number-at-pos)
+                  type text line-text))))))
+
+(defun gptel-tools-code--diagnostics (&optional all)
+  "Collect project-wide diagnostics via LSP/Flymake.
+Falls back to CLI linters when no LSP is available.
+When ALL is non-nil, include notes and low-severity diagnostics."
+  (if (not (fboundp 'flymake--project-diagnostics))
+      "Error: flymake--project-diagnostics not available.\n\nThis usually means Flymake is not initialized. Try opening a source file first."
+    (let* ((proj (project-current))
+           (dir (if proj (project-root proj) default-directory))
+           (lsp-active (my/gptel--lsp-active-p))
+           (diags (and proj (flymake--project-diagnostics proj)))
+           (high-severity '(:error :warning))
+           (filtered
+            (seq-filter
+             (lambda (d)
+               (let ((type (flymake-diagnostic-type d)))
+                 (or (memq type high-severity)
+                     (and all (eq type :note)))))
+             diags)))
+      (if (not filtered)
+          (if lsp-active
+              "No compiler or LSP diagnostics found for the current project. (LSP server is running, code is clean)."
+            (concat "Note: No LSP server running for this project.\nFalling back to CLI linter:\n\n"
+                    (my/gptel--run-fallback-linter dir)))
+        (let ((formatted (mapcar #'gptel-tools-code--format-diagnostic filtered)))
+          (format "Found %d diagnostic(s)%s:\n\n%s"
+                  (length formatted)
+                  (if all " (including notes)" "")
+                  (string-join formatted "\n\n")))))))
+
 (defun gptel-tools-code-register ()
   "Register the unified Code tools with gptel."
   (when (fboundp 'gptel-make-tool)
-    
+
     (gptel-make-tool
      :name "Code_Map"
      :description "Get a high-level outline of all functions and classes defined in a file. \
 Always use this first to understand the structure of a file before editing."
-     :function (lambda (file_path)
-                 (condition-case err
-                     (with-timeout (5 (format "Error: Code_Map timed out after 5 seconds on %s" file_path))
-                       (with-current-buffer (find-file-noselect file_path)
-                         (treesit-agent--ensure-parser file_path)
-                         ;; Pre-flight check: Verify tree-sitter parser is available
-                          (if (not (treesit-parser-list))
-                              (let ((lang (my/gptel--detect-treesit-language file_path)))
-                                (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Read/Grep for this file" file_path (or lang "language") file_path (or lang "language")))
-                            (let ((map (treesit-agent-get-file-map)))
-                              (if map
-                                  (format "File map for %s:\n%s" file_path (string-join map "\n"))
-                                (format "Could not generate file map for %s.\n\nACTION: Check if tree-sitter is enabled for this file type.\n  - Run: M-x treesit-install-language-grammar RET <language> RET\n  - Verify: M-x eval-expression RET (treesit-language-available-p '<lang>) RET" file_path))))))
-                    (error (let* ((msg (error-message-string err))
-                                  (friendly (my/gptel--treesit-error-message msg file_path)))
-                             (or friendly
-                                 (format "Error executing Code_Map on %s: %s\n\nACTION: Check file permissions and try again." file_path msg))))))
+     :function #'gptel-tools-code--map-file
      :args (list '(:name "file_path" :type string :description "Path to the file to map"))
      :category "gptel-agent"
      :include t)
@@ -180,89 +311,17 @@ Always use this first to understand the structure of a file before editing."
      :name "Code_Inspect"
      :description "Extract the exact, perfectly balanced code block for a specific function or class by name. \
 If file_path is omitted, it will search the entire project to find the definition automatically."
-     :function (lambda (node_name &optional file_path)
-                 (condition-case err
-                     (with-timeout (10 (format "Error: Code_Inspect timed out for '%s'" node_name))
-                       (if file_path
-                           (with-current-buffer (find-file-noselect file_path)
-                             (treesit-agent--ensure-parser file_path)
-                              ;; Pre-flight check: Verify tree-sitter parser is available
-                              (if (not (treesit-parser-list))
-                                  (let ((lang (my/gptel--detect-treesit-language file_path)))
-                                    (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Read tool for this file" file_path (or lang "language") file_path (or lang "language")))
-                               (let ((text (treesit-agent-extract-node node_name)))
-                                 (if text
-                                     (format "Code block '%s' from %s:\n\n%s" node_name file_path text)
-                                   (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols in the file\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))
-                         ;; Search workspace if no file provided
-                         (let ((result (treesit-agent-find-workspace node_name)))
-                           (cond
-                            ((string-match-p "ripgrep.*not found\\|executable.*rg" result)
-                             (concat result "\n\nACTION: Install ripgrep (rg) for workspace search:\n  macOS:  brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Check:  rg --version\n\nAlternatively, provide file_path to search a specific file."))
-                            ((string-match-p "No structural definition found" result)
-                             (format "Error: Could not find '%s' anywhere in the project\n\nACTION:\n  1. Check spelling: '%s' may be misspelled\n  2. Symbol may not exist - use Code_Map to explore files\n  3. Symbol may be dynamically defined (not in AST)" node_name node_name))
-                            (t result)))))
-                    (error (let* ((msg (error-message-string err))
-                                  (friendly (my/gptel--treesit-error-message msg (or file_path ""))))
-                             (or friendly
-                                 (cond
-                                  ((string-match-p "ripgrep\\|rg" msg)
-                                   (concat msg "\n\nACTION: Install ripgrep:\n  macOS:  brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Check:  rg --version"))
-                                  ((string-match-p "timeout" msg)
-                                   (format "Error: Code_Inspect timed out after 10 seconds for '%s'\n\nACTION:\n  1. Provide explicit file_path to skip workspace search\n  2. Large project - search may take time\n  3. Try Code_Map on specific files first" node_name))
-                                   (t (format "Error executing Code_Inspect: %s\n\nACTION: Check symbol name and file path, then try again." msg))))))))
+     :function #'gptel-tools-code--inspect-node
      :args (list '(:name "node_name" :type string :description "Exact name of the function/class to read")
                  '(:name "file_path" :type string :optional t :description "Path to the file (optional)"))
      :category "gptel-agent"
      :include t)
 
-    ;; Tree-sitter powered replacement
     (gptel-make-tool
      :name "Code_Replace"
      :description "Surgically replace an exact function or class by name with new code. \
 GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of standard Edit when modifying existing functions."
-     :function (lambda (file_path node_name new_code)
-                 (condition-case err
-                     (with-timeout (5 (format "Error: Code_Replace timed out on %s" file_path))
-                       (with-current-buffer (find-file-noselect file_path)
-                         ;; Sync buffer with disk before operating — prevents
-                         ;; "changed since visited" prompts when multiple
-                         ;; Code_Replace calls target the same file in sequence.
-                         (when (and (buffer-file-name)
-                                    (file-exists-p (buffer-file-name))
-                                    (not (verify-visited-file-modtime)))
-                           (revert-buffer t t t))
-                         (treesit-agent--ensure-parser file_path)
-                          ;; Pre-flight check: Verify tree-sitter parser is available
-                          (if (not (treesit-parser-list))
-                              (let ((lang (my/gptel--detect-treesit-language file_path)))
-                                (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use Edit tool (manual paren balancing required)" file_path (or lang "language") file_path (or lang "language")))
-                           (let ((old-code (treesit-agent-extract-node node_name)))
-                             ;; Guard: reject likely-truncated replacements.
-                             ;; If old code is non-trivial (>5 lines) and new code
-                             ;; is <20% the size, the LLM probably sent just a
-                             ;; signature without the body.
-                             (if (and old-code
-                                      (> (length old-code) 200)
-                                      (< (length new_code) (* 0.2 (length old-code))))
-                                 (format "Error: Replacement rejected — new code (%d chars) is suspiciously shorter than original (%d chars).\nThis usually means the function body was truncated.\n\nACTION: Provide the COMPLETE replacement including the full function body."
-                                         (length new_code) (length old-code))
-                               (if (treesit-agent-replace-node node_name new_code)
-                                   (progn
-                                     ;; Suppress supersession warnings during save —
-                                     ;; we just synced the buffer above, so any disk
-                                     ;; change is from our own prior Code_Replace call.
-                                     (cl-letf (((symbol-function 'ask-user-about-supersession-threat) #'ignore))
-                                       (save-buffer))
-                                     (format "Successfully replaced '%s' in %s" node_name file_path))
-                              (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))))
-                    (error (let* ((msg (error-message-string err))
-                                  (friendly (my/gptel--treesit-error-message msg file_path)))
-                             (or friendly
-                                 (cond
-                                  ((string-match-p "syntax error\\|has-error" msg)
-                                   (format "Error: New code has syntax errors (unbalanced parentheses/brackets)\n\nACTION:\n  1. Check that all opening brackets have closing brackets\n  2. Verify indentation is correct\n  3. Test code in a REPL before replacing\n\nOriginal error: %s" msg))
-                                   (t (format "Error executing Code_Replace on %s: %s\n\nACTION: Check function name and new code syntax, then try again." file_path msg))))))))
+     :function #'gptel-tools-code--replace-node
      :args (list '(:name "file_path" :type string :description "Path to the file")
                  '(:name "node_name" :type string :description "Exact name of the function/class to replace")
                  '(:name "new_code" :type string :description "The perfectly balanced replacement code snippet"))
@@ -276,52 +335,7 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
 Falls back to CLI linters (ruff/eslint/cargo) when no LSP is available.
 
 With optional argument `all`, also collect notes and low-severity diagnostics."
-     :function (lambda (&optional all)
-                 (if (not (fboundp 'flymake--project-diagnostics))
-                     "Error: flymake--project-diagnostics not available.\n\nThis usually means Flymake is not initialized. Try opening a source file first."
-                   (let* ((proj (project-current))
-                          (dir (if proj (project-root proj) default-directory))
-                          (lsp-active (my/gptel--lsp-active-p))
-                          (diags (and proj (flymake--project-diagnostics proj)))
-                          ;; Filter by severity: :error and :warning by default,
-                          ;; include :note when `all' is non-nil.
-                          (high-severity '(:error :warning))
-                          (filtered
-                           (seq-filter
-                            (lambda (d)
-                              (let ((type (flymake-diagnostic-type d)))
-                                (or (memq type high-severity)
-                                    (and all (eq type :note)))))
-                            diags)))
-                     (if (not filtered)
-                         (if lsp-active
-                             "No compiler or LSP diagnostics found for the current project. (LSP server is running, code is clean)."
-                           ;; Fallback to CLI linter if no LSP
-                           (concat "Note: No LSP server running for this project.\nFalling back to CLI linter:\n\n"
-                                   (my/gptel--run-fallback-linter dir)))
-                       (let ((formatted
-                              (mapcar (lambda (d)
-                                        (let ((buf (flymake-diagnostic-buffer d))
-                                              (text (flymake-diagnostic-text d))
-                                              (type (flymake-diagnostic-type d))
-                                              (beg (flymake-diagnostic-beg d)))
-                                          (with-current-buffer buf
-                                            (save-excursion
-                                              (goto-char beg)
-                                              (let ((line-text
-                                                     (string-trim
-                                                      (buffer-substring-no-properties
-                                                       (line-beginning-position)
-                                                       (line-end-position)))))
-                                                (format "%s:%d [%s] %s\n  %s"
-                                                        (buffer-file-name buf)
-                                                        (line-number-at-pos)
-                                                        type text line-text))))))
-                                      filtered)))
-                         (format "Found %d diagnostic(s)%s:\n\n%s"
-                                 (length formatted)
-                                 (if all " (including notes)" "")
-                                 (string-join formatted "\n\n")))))))
+     :function #'gptel-tools-code--diagnostics
      :args (list '(:name "all"
                          :type boolean
                          :description "When true, also collect notes and low-severity diagnostics. Default: only errors and warnings."
