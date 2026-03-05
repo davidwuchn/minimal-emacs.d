@@ -73,13 +73,13 @@
     },
     "executor": {
       "model": "subagent",
-      "defaultModel": "dashscope/qwen3-coder-next",
+      "defaultModel": "github-copilot/gpt-5.3-codex",
       "description": "Versatile subagent for grunt work (Tests, Docs, Linting).",
       "systemPrompt": "Your primary responsibilities include writing/fixing unit tests, generating comprehensive documentation, and resolving linter/formatting errors. Analyze the user's prompt to determine which task you are executing."
     },
     "reviewer": {
       "mode": "subagent",
-      "defaultModel": "dashscope/qwen3.5-plus",
+      "defaultModel": "github-copilot/gpt-5.3-codex",
       "description": "Code reviewer for project changes, use it when asked to review code",
       "systemPrompt": "You are expert in code review, analyze the changes in git and be rigorous about the changes."
     },
