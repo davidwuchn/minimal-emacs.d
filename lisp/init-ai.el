@@ -42,9 +42,21 @@
   :vc (:url "https://github.com/editor-code-assistant/eca-emacs"
        :rev :newest)
   :custom
-  ;; Delay before triggering inline completion (in seconds)
   (eca-completion-idle-delay 0.5)
+  (eca-chat-use-side-window nil)
+  (eca-chat-custom-behavior nil)
+  (eca-chat-parent-mode 'markdown-mode)
+  (eca-api-response-timeout 15)
+  (eca-extra-args '("--log-level" "debug"))
   :config
+  ;; Disable markup hiding in ECA chat buffers
+  (defun my/eca-chat-disable-markup-hiding-h ()
+    "Ensure markup hiding is disabled in `eca-chat-mode' buffers."
+    (when (boundp 'markdown-hide-markup)
+      (setq-local markdown-hide-markup nil)
+      (when (fboundp 'font-lock-flush)
+        (font-lock-flush))))
+  (add-hook 'eca-chat-mode-hook #'my/eca-chat-disable-markup-hiding-h)
   ;; Enable inline ghost-text code completion in programming modes
   (add-hook 'prog-mode-hook #'eca-completion-mode))
 

@@ -22,23 +22,7 @@
           (add-hook 'kill-emacs-hook
                     (lambda () (when (file-exists-p tmp-file)
                                 (delete-file tmp-file)))))
-      (message "[eca-security] Warning: Failed to decrypt %s" authinfo-gpg)))
-
-  (setopt eca-chat-use-side-window nil
-          eca-chat-custom-behavior nil
-          eca-chat-parent-mode 'markdown-mode
-          eca-api-response-timeout 15
-          eca-extra-args '("--log-level" "debug"))
-
-  ;; Avoid hard dependency on a particular markdown-mode function at runtime.
-  (defun my/eca-chat-disable-markup-hiding-h ()
-    "Ensure markup hiding is disabled in `eca-chat-mode' buffers."
-    (when (boundp 'markdown-hide-markup)
-      (setq-local markdown-hide-markup nil)
-      (when (fboundp 'font-lock-flush)
-        (font-lock-flush))))
-
-  (add-hook 'eca-chat-mode-hook #'my/eca-chat-disable-markup-hiding-h))
+      (message "[eca-security] Warning: Failed to decrypt %s" authinfo-gpg))))
 
 ;;; Fast download overrides for eca-process
 ;; These run after eca-process is loaded (which happens when eca loads).
