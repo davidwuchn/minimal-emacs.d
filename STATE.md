@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-04 (tag v0.5.15)
+> Last updated: 2026-03-04 (tag v0.5.16)
 
 ## Architecture Overview
 
@@ -13,7 +13,6 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 | `gptel-ext-core.el` | Core advice/hooks: retry, FSM recovery, streaming, tool sanitization, progressive trimming, pre-send compaction | ~1790 |
 | `gptel-ext-backends.el` | Backend configuration (Moonshot, DashScope, DeepSeek, Gemini, OpenRouter, etc.) | ~111 |
 | `gptel-ext-context.el` | Context management extensions | |
-| `gptel-ext-learning.el` | Learning integration: auto-evolve instinct files on git commit via `git-commit-finish-hook` | ~144 |
 | `gptel-ext-security.el` | ACL router advice on gptel-make-tool | ~110 |
 | `gptel-tools.el` | Tool registration orchestrator, readonly/action tool lists | ~320 |
 | `gptel-tools-agent.el` | RunAgent tool + subagent delegation + upstream Agent deregistration | ~326 |
@@ -26,7 +25,7 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 | `gptel-tools-introspection.el` | Emacs introspection tools (describe_symbol, get_symbol_source, find_buffers_and_recent) | |
 | `gptel-tools-preview.el` | Unified Preview tool (diff display in side window) | ~290 |
 | `nucleus-analytics.el` | Usage analytics | |
-| `nucleus-mode-switch.el` | Plan/Agent mode switching | |
+| `nucleus-mode-switch.el` | Plan/Agent mode switching with system reminders | |
 | `nucleus-presets.el` | Preset management, agent patching, tool contract validation | ~360 |
 | `nucleus-prompts.el` | Prompt loading from assistant/prompts/ | ~280 |
 | `nucleus-tools.el` | Toolset definitions (nucleus-toolsets constant), tool filtering | ~600 |
@@ -137,6 +136,18 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Prompt caching (explicit cache headers) | **Skip** | OpenAI-compatible backends do server-side caching automatically; no client changes needed |
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
 | Per-tool output limits | **Skip** | Flat 4000-char truncation on subagents works fine |
+
+### Recent Changes (v0.5.17)
+
+- **Remove gptel-ext-learning.el** (⚒): Deleted elisp learning-integration module. AGENTS.md already instructs AI agents to run `λ(learn)`/`λ(observe)`/`λ(evolve)` via the continuous-learning OpenCode skill — the deterministic git-commit hook was redundant. Instinct evidence tracking now handled entirely by the AI agent on demand.
+- **Remove plan context auto-attach** (⚒): Stripped `gptel-context` auto-attach/detach of PLAN.md from `nucleus-mode-switch.el` (v2.0.0). AGENTS.md instructs AI to read PLAN.md before acting; OpenCode has tool access to do so. Mode transition system reminders (plan↔build) retained.
+
+### Recent Changes (v0.5.16)
+
+- **Plan auto-attach** (⚒): `nucleus-mode-switch.el` v1.1.0 auto-attaches PLAN.md to `gptel-context` on plan-mode entry, detaches on plan→agent transition. Configurable via `nucleus-plan-context-files` defcustom. Preserves user-added context. 15 tests.
+- **Learning traceability** (⚒): Added `learning-ref: LEARNING.md#ai-agent-sandboxing--security` to `nucleus-patterns.md` instinct. Trigger 2 of auto-evolve now fires when LEARNING.md is updated.
+- **Non-numeric evidence fix** (⊘): `my/learning--update-instinct` no longer duplicates `evidence:` field when value is non-numeric (e.g. "built-in").
+- **Unicode frontmatter fix** (⊘): `[a-zA-Z_-]` → `[[:alpha:]_-]` for Greek letter keys like φ in instinct YAML. 37 learning tests pass.
 
 ### Recent Changes (v0.5.15)
 

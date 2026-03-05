@@ -10,7 +10,6 @@
 (require 'gptel-ext-core)
 (require 'gptel-ext-backends)
 (require 'gptel-ext-context)
-(require 'gptel-ext-learning)
 (require 'gptel-ext-security)
 
 ;; Load split tool modules (replaces gptel-ext-tools.el)
