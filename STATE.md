@@ -10,10 +10,18 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 
 | Module | Purpose | Lines |
 |--------|---------|-------|
-| `gptel-ext-core.el` | Core advice/hooks: retry, FSM recovery, streaming, tool sanitization, progressive trimming, pre-send compaction | ~1710 |
+| `gptel-ext-core.el` | Residual core: temp dir, markdown compat, model config, mode hook, tool registry audit, curl hardening, content sanitizer | ~286 |
+| `gptel-ext-abort.el` | Curl timeouts, abort-generation, keyboard-quit advice, prompt marker helpers | ~185 |
 | `gptel-ext-backends.el` | Backend configuration (Moonshot, DashScope, DeepSeek, Gemini, OpenRouter, etc.) | ~93 |
 | `gptel-ext-context.el` | Context management extensions | |
+| `gptel-ext-fsm.el` | FSM recovery: fix-stuck-in-type, agent handler fixes, recover-on-error | ~82 |
+| `gptel-ext-reasoning.el` | Reasoning/thinking model support: key detection, capture, inject, noop tool, nil-tool strip | ~255 |
+| `gptel-ext-retry.el` | Auto-retry with exponential backoff, progressive trimming, pre-send compaction | ~386 |
 | `gptel-ext-security.el` | ACL router advice on gptel-make-tool | ~110 |
+| `gptel-ext-streaming.el` | Streaming flag, jit-lock protection during gptel responses | ~79 |
+| `gptel-ext-tool-confirm.el` | Enhanced tool confirmation UI (display-tool-calls override, permit-and-accept) | ~197 |
+| `gptel-ext-tool-sanitize.el` | Nil-tool filtering, tool-call sanitization, doom-loop detection, dedup | ~191 |
+| `gptel-ext-transient.el` | Transient menu extensions: suffix-system-message, filter-directive, crowdsourced prompts | ~195 |
 | `gptel-tools.el` | Tool registration orchestrator, readonly/action tool lists | ~320 |
 | `gptel-tools-agent.el` | RunAgent tool + subagent delegation + upstream Agent deregistration | ~326 |
 | `gptel-tools-apply.el` | ApplyPatch tool | |
@@ -59,14 +67,17 @@ Minibuffer dispatch: `y/n/k/a/i/p/q`. Upstream `n` = "defer" (FSM stays paused, 
 
 | Advice | Target | Type | File | Purpose |
 |--------|--------|------|------|---------|
-| `my/gptel--sanitize-tool-calls` | `gptel--handle-tool-use` | `:before` | gptel-ext-core.el | Pre-filter nil tool calls |
-| `my/gptel--detect-doom-loop` | `gptel--handle-tool-use` | `:before` | gptel-ext-core.el | Abort repeated identical tool calls |
-| `my/gptel--display-tool-calls` | `gptel--display-tool-calls` | `:override` | gptel-ext-core.el | Enhanced tool confirmation UI |
-| `my/gptel-auto-retry` | `gptel--fsm-transition` | `:around` | gptel-ext-core.el | Exponential backoff retry |
-| `my/gptel--compact-payload` | `gptel-curl-get-response` | `:before` | gptel-ext-core.el | Pre-send payload compaction |
-| `my/gptel-fix-fsm-stuck-in-type` | `gptel-curl--stream-cleanup` | `:around` | gptel-ext-core.el | Unstick FSM from TYPE state |
-| `my/gptel--stream-set-flag` | `gptel-curl--stream-insert-response` | `:before` | gptel-ext-core.el | Set streaming flag for jit-lock protection |
-| `my/gptel--jit-lock-safe` | `jit-lock-function` | `:around` | gptel-ext-core.el | Suppress jit-lock errors in gptel-mode buffers |
+| `my/gptel--sanitize-tool-calls` | `gptel--handle-tool-use` | `:before` | gptel-ext-tool-sanitize.el | Pre-filter nil tool calls |
+| `my/gptel--detect-doom-loop` | `gptel--handle-tool-use` | `:before` | gptel-ext-tool-sanitize.el | Abort repeated identical tool calls |
+| `my/gptel--dedup-tools-before-parse` | `gptel--parse-tools` | `:before` | gptel-ext-tool-sanitize.el | Deduplicate tool definitions |
+| `my/gptel--display-tool-calls` | `gptel--display-tool-calls` | `:override` | gptel-ext-tool-confirm.el | Enhanced tool confirmation UI |
+| `my/gptel-auto-retry` | `gptel--fsm-transition` | `:around` | gptel-ext-retry.el | Exponential backoff retry |
+| `my/gptel--compact-payload` | `gptel-curl-get-response` | `:before` | gptel-ext-retry.el | Pre-send payload compaction |
+| `my/gptel-fix-fsm-stuck-in-type` | `gptel-curl--stream-cleanup` | `:around` | gptel-ext-fsm.el | Unstick FSM from TYPE state |
+| `my/gptel--stream-set-flag` | `gptel-curl--stream-insert-response` | `:before` | gptel-ext-streaming.el | Set streaming flag for jit-lock protection |
+| `my/gptel--jit-lock-safe` | `jit-lock-function` | `:around` | gptel-ext-streaming.el | Suppress jit-lock errors in gptel-mode buffers |
+| `my/gptel--capture-tool-reasoning` | `gptel--parse-tool-results` | `:before` | gptel-ext-reasoning.el | Capture reasoning from tool responses |
+| `my/gptel--inject-prompt-patch-reasoning` | `gptel--request-data` | `:filter-return` | gptel-ext-reasoning.el | Inject reasoning into prompt data |
 | `my/gptel-agent--task-override` | `gptel-agent--task` | `:override` | gptel-tools-agent.el | Parent-buffer tracking, large-result truncation |
 | `my/gptel--deregister-upstream-agent` | `gptel-agent-update` | `:after` | gptel-tools-agent.el | Remove upstream "Agent" tool (RunAgent is superior) |
 
@@ -86,13 +97,13 @@ Layer 3 — Retry (retries=2+): my/gptel-auto-retry
   → Truncate ALL results + strip reasoning_content + reduce tools array
 ```
 
-Key functions in `gptel-ext-core.el`:
-- Lines 1119-1136: Retry defcustoms (`my/gptel-max-retries`, etc.)
-- Lines 1138-1185: `my/gptel--trim-tool-results-for-retry`
-- Lines 1187-1205: `my/gptel--trim-reasoning-content`
-- Lines 1207-1260: `my/gptel--reduce-tools-for-retry`
-- Lines 1262-1352: `my/gptel-auto-retry` (exponential backoff + progressive trimming)
-- Lines 1356-1470: `my/gptel--compact-payload` (pre-send estimation + 4-pass trim)
+Key functions in `gptel-ext-retry.el`:
+- `my/gptel-max-retries`, `my/gptel-retry-keep-tool-results`: Retry defcustoms
+- `my/gptel--trim-tool-results-for-retry`: Progressive tool-result truncation
+- `my/gptel--trim-reasoning-content`: Strip reasoning_content on retry 2+
+- `my/gptel--reduce-tools-for-retry`: Filter tools to only those called in history
+- `my/gptel-auto-retry`: Exponential backoff + progressive trimming advice
+- `my/gptel--compact-payload`: Pre-send estimation + 4-pass trim advice
 
 ### Code Tools Pipeline
 
@@ -137,6 +148,8 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Per-tool output limits | **Skip** | Flat 4000-char truncation on subagents works fine |
 
 ### Recent Changes (v0.5.17)
+
+- **Decompose gptel-ext-core.el** (⚒): Split monolithic 1707-line `gptel-ext-core.el` into 8 focused modules + ~286-line residual core. New modules: `gptel-ext-streaming` (jit-lock/streaming flag), `gptel-ext-tool-sanitize` (nil-tool/dedup/doom-loop), `gptel-ext-reasoning` (thinking model support), `gptel-ext-retry` (auto-retry/compaction), `gptel-ext-transient` (transient menu extensions), `gptel-ext-abort` (abort/prompt markers), `gptel-ext-tool-confirm` (tool confirmation UI), `gptel-ext-fsm` (FSM recovery). Each module self-registers its advice/hooks. `gptel-config.el` requires all 8. All 9 modules byte-compile cleanly. Fixed format-string bug in compact-payload message.
 
 - **Remove gptel-ext-learning.el** (⚒): Deleted elisp learning-integration module. AGENTS.md already instructs AI agents to run `λ(learn)`/`λ(observe)`/`λ(evolve)` via the continuous-learning OpenCode skill — the deterministic git-commit hook was redundant. Instinct evidence tracking now handled entirely by the AI agent on demand.
 - **Remove plan context auto-attach** (⚒): Stripped `gptel-context` auto-attach/detach of PLAN.md from `nucleus-mode-switch.el` (v2.0.0). AGENTS.md instructs AI to read PLAN.md before acting; OpenCode has tool access to do so. Mode transition system reminders (plan↔build) retained.
