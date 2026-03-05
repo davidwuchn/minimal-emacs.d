@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-04 (tag v0.5.16)
+> Last updated: 2026-03-05 (tag v0.5.17)
 
 ## Architecture Overview
 
