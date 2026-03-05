@@ -7,22 +7,22 @@
   ;; Decrypt ~/.authinfo.gpg to a temporary file and set ECA_NETRC_FILE
   ;; (mimics the eca-secure wrapper script behavior)
   (let* ((authinfo-gpg (expand-file-name "~/.authinfo.gpg"))
-         (tmp-file (make-temp-file "netrc-"))
-         (decrypted (with-output-to-string
-                      (with-current-buffer standard-output
-                        (if (zerop (call-process "gpg" nil t nil
-                                                  "-q" "--batch" "-d" authinfo-gpg))
-                            (buffer-string)
-                          (message "Warning: Failed to decrypt ~/.authinfo.gpg")
-                          nil)))))
-    (when decrypted
-      (write-region decrypted nil tmp-file nil 'silent)
-      (set-file-modes tmp-file #o600)
-      (setenv "ECA_NETRC_FILE" tmp-file)
-      ;; Clean up temp file on Emacs exit
-      (add-hook 'kill-emacs-hook
-                (lambda () (when (file-exists-p tmp-file)
-                            (delete-file tmp-file))))))
+         (decrypted (with-temp-buffer
+                      (if (and (file-exists-p authinfo-gpg)
+                               (zerop (call-process "gpg" nil t nil
+                                                    "-q" "--batch" "-d" authinfo-gpg)))
+                          (buffer-string)
+                        nil))))
+    (if (and decrypted (not (string-empty-p decrypted)))
+        (let ((tmp-file (make-temp-file "netrc-")))
+          (write-region decrypted nil tmp-file nil 'silent)
+          (set-file-modes tmp-file #o600)
+          (setenv "ECA_NETRC_FILE" tmp-file)
+          ;; Clean up temp file on Emacs exit
+          (add-hook 'kill-emacs-hook
+                    (lambda () (when (file-exists-p tmp-file)
+                                (delete-file tmp-file)))))
+      (message "[eca-security] Warning: Failed to decrypt %s" authinfo-gpg)))
 
   (setopt eca-chat-use-side-window nil
           eca-chat-custom-behavior nil
@@ -305,10 +305,10 @@ Progress is shown live in the *eca-update* buffer."
               (ignore-errors (delete-file old-path))
 
               ;; 9. Update version tracking
-              (let ((new-version (concat "v" latest)))
-                (write-region new-version nil
-                              eca-server-version-file-path nil 'silent)
-                (setq eca-process--latest-server-version new-version))
+              ;; Store bare semver (no "v" prefix) to match my/eca--resolve-version output
+              (write-region latest nil
+                            eca-server-version-file-path nil 'silent)
+              (setq eca-process--latest-server-version latest)
 
               (funcall log "\neca updated to v%s. Done." latest))))))))
 
