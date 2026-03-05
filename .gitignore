@@ -6,6 +6,7 @@
 !.LICENSE
 *.elc
 !lisp/
+!lisp/modules/
 lisp/*.elc
 lisp/modules/*.elc
 !pre-early-init.el
