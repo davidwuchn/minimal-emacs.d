@@ -148,10 +148,14 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | @-mention context selection | **Skip** | gptel-context + nucleus tools already provide this; agent can pull its own context via tools |
 | Prompt caching (explicit cache headers) | **Skip** | OpenAI-compatible backends do server-side caching automatically; no client changes needed |
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
-| Per-tool output limits | **Skip** | Flat 4000-char truncation on subagents works fine |
+| Per-tool output limits | **Skip** | `my/gptel-subagent-result-limit` truncation on subagents works fine |
 
 ### Recent Changes (v0.5.17)
 
+- **Fix theme-setting.el for Modus Themes 4.x** (⚒): Rewrote for Modus Themes v4 (Emacs 30.2). Removed 7 dead v3 options, replaced dead `with-eval-after-load` face overrides with `modus-themes-common-palette-overrides`, fixed headings/completions/prompts to v4-valid properties. `efs/` → `my/` prefix, `find-font` guards, named hook function.
+- **Update subagent models** (⚒): Executor/reviewer subagent models updated from DashScope to `github-copilot/gpt-5.3-codex` in `eca/config.json`.
+- **Remove gptel-ext-auto-plan.el** (⚒): Deleted 114-line auto-plan module — redundant with the planning skill and AGENTS.md workflow.
+- **Extract magic numbers into defcustoms** (⚒): Replaced 4 bare numeric literals with named `defcustom` variables across 3 tool modules: `my/gptel-subagent-result-limit` (4000), `my/gptel-subagent-progress-interval` (10), `my/gptel-glob-result-limit` (20000), `my/gptel-grep-max-count` (1000).
 - **Decompose gptel-ext-core.el** (⚒): Split monolithic 1707-line `gptel-ext-core.el` into 8 focused modules + ~286-line residual core. New modules: `gptel-ext-streaming` (jit-lock/streaming flag), `gptel-ext-tool-sanitize` (nil-tool/dedup/doom-loop), `gptel-ext-reasoning` (thinking model support), `gptel-ext-retry` (auto-retry/compaction), `gptel-ext-transient` (transient menu extensions), `gptel-ext-abort` (abort/prompt markers), `gptel-ext-tool-confirm` (tool confirmation UI), `gptel-ext-fsm` (FSM recovery). Each module self-registers its advice/hooks. `gptel-config.el` requires all 8. All 9 modules byte-compile cleanly. Fixed format-string bug in compact-payload message.
 
 - **Refactor long functions** (⚒): Extracted 12 named helpers from 5 long functions (>80 lines each) across 5 modules. `gptel-tools-code.el`: 6 inline lambdas → named defuns (`gptel-tools-code--no-parser-message`, `--map-file`, `--inspect-node`, `--replace-node`, `--format-diagnostic`, `--diagnostics`). `gptel-ext-tool-confirm.el`: split `my/gptel--display-tool-calls` into minibuffer + overlay dispatchers (`my/gptel--confirm-tool-calls-minibuffer`, `my/gptel--confirm-tool-calls-overlay`). `nucleus-presets.el`: extracted DRY preset override + buffer refresh (`nucleus--override-preset`, `nucleus--refresh-open-gptel-buffers`). `gptel-tools-bash.el`: extracted persistent shell setup + process filter (`my/gptel--ensure-persistent-bash`, `my/gptel--bash-process-filter`); timer stored on process plist. `gptel-ext-retry.el`: extracted transient-error predicate + partial-insertion cleanup (`my/gptel--transient-error-p`, `my/gptel--cleanup-partial-insertion`). All 5 files verify cleanly (byte-compile or check-parens).
@@ -218,4 +222,4 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 
 These were hallucinated by prior AI sessions — verified as non-issues:
 
-- `my/gptel--deliver-subagent-result` "truncation risk" — the 4000 char truncation IS the fix
+- `my/gptel--deliver-subagent-result` "truncation risk" — the `my/gptel-subagent-result-limit` truncation IS the fix
