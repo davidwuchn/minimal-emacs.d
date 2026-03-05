@@ -95,7 +95,8 @@ Returns the number of messages truncated, or 0 if nothing was done."
 
 Called on retry 2+ (retries >= 2) to remove chain-of-thought reasoning text
 that accumulates across tool-use rounds.  The :reasoning_content field is
-set to nil (removed from the plist) for all assistant messages.
+set to an empty string so it remains present in the serialized payload
+\(some APIs like Moonshot require the field to exist when thinking is enabled).
 
 Returns the number of messages whose reasoning_content was stripped."
   (let* ((data (plist-get info :data))
@@ -105,8 +106,9 @@ Returns the number of messages whose reasoning_content was stripped."
       (dotimes (i (length messages))
         (let ((msg (aref messages i)))
           (when (and (equal (plist-get msg :role) "assistant")
-                     (plist-get msg :reasoning_content))
-            (plist-put msg :reasoning_content nil)
+                     (plist-get msg :reasoning_content)
+                     (not (equal "" (plist-get msg :reasoning_content))))
+            (plist-put msg :reasoning_content "")
             (cl-incf stripped)))))
     stripped))
 

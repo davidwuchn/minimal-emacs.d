@@ -58,8 +58,9 @@ Progressive trimming based on :retries in INFO."
       (dotimes (i (length messages))
         (let ((msg (aref messages i)))
           (when (and (equal (plist-get msg :role) "assistant")
-                     (plist-get msg :reasoning_content))
-            (plist-put msg :reasoning_content nil)
+                     (plist-get msg :reasoning_content)
+                     (not (equal "" (plist-get msg :reasoning_content))))
+            (plist-put msg :reasoning_content "")
             (cl-incf stripped)))))
     stripped))
 
@@ -306,8 +307,8 @@ Progressive trimming based on :retries in INFO."
          (result (my/gptel--trim-reasoning-content info))
          (messages (plist-get (plist-get info :data) :messages)))
     (should (= 2 result))
-    (should (null (plist-get (aref messages 0) :reasoning_content)))
-    (should (null (plist-get (aref messages 1) :reasoning_content)))
+    (should (equal "" (plist-get (aref messages 0) :reasoning_content)))
+    (should (equal "" (plist-get (aref messages 1) :reasoning_content)))
     ;; Main content preserved
     (should (equal "Some response text" (plist-get (aref messages 0) :content)))
     (should (equal "Some response text" (plist-get (aref messages 1) :content)))))
@@ -384,8 +385,8 @@ Progressive trimming based on :retries in INFO."
     ;; Reasoning stripped on retry 2
     (let ((reasoning-stripped (my/gptel--trim-reasoning-content info)))
       (should (= 2 reasoning-stripped)))
-    (should (null (plist-get (aref messages 0) :reasoning_content)))
-    (should (null (plist-get (aref messages 2) :reasoning_content)))))
+    (should (equal "" (plist-get (aref messages 0) :reasoning_content)))
+    (should (equal "" (plist-get (aref messages 2) :reasoning_content)))))
 
 (ert-deftest integration/full-progressive-sequence ()
   "Simulates a full retry sequence: 3 retries with escalating trimming."
@@ -418,9 +419,9 @@ Progressive trimming based on :retries in INFO."
       (should (equal test--truncation-text (plist-get (aref messages 3) :content)))
       (should (equal test--truncation-text (plist-get (aref messages 5) :content)))
       ;; All reasoning gone
-      (should (null (plist-get (aref messages 0) :reasoning_content)))
-      (should (null (plist-get (aref messages 2) :reasoning_content)))
-      (should (null (plist-get (aref messages 4) :reasoning_content))))
+      (should (equal "" (plist-get (aref messages 0) :reasoning_content)))
+      (should (equal "" (plist-get (aref messages 2) :reasoning_content)))
+      (should (equal "" (plist-get (aref messages 4) :reasoning_content))))
     ;; Retry 3 (retries=3): same as retry 2, nothing left to trim
     (let* ((info (test--make-info (funcall make-fresh-msgs) 3))
            (messages (plist-get (plist-get info :data) :messages)))
@@ -898,8 +899,8 @@ Returns the number of items trimmed, or 0 if no compaction needed."
       (should (> trimmed 0))
       ;; Check reasoning was stripped
       (let ((messages (plist-get (plist-get info :data) :messages)))
-        (should (null (plist-get (aref messages 0) :reasoning_content)))
-        (should (null (plist-get (aref messages 2) :reasoning_content))))
+        (should (equal "" (plist-get (aref messages 0) :reasoning_content)))
+        (should (equal "" (plist-get (aref messages 2) :reasoning_content))))
       ;; Retries reset
       (should (= 0 (plist-get info :retries))))))
 

@@ -89,8 +89,8 @@ message, even when the model produced no visible reasoning for that turn.
 MESSAGES may be a list or vector of plist messages.  For each message with
 role=\"assistant\" and :tool_calls but missing REASONING-KEY, look up the first
 tool call's ID in REASONING-ALIST (an alist of id→string); if absent or empty
-string, inject :null, otherwise inject the stored value.  When REASONING-ALIST
-is nil the field is always set to :null."
+string, inject an empty string, otherwise inject the stored value.  When
+REASONING-ALIST is nil the field is always set to an empty string."
   (seq-doseq (msg messages)
     (when (and (listp msg)
                (equal (plist-get msg :role) "assistant")
@@ -106,7 +106,7 @@ is nil the field is always set to :null."
         (plist-put msg reasoning-key
                    (if (or (eq stored :absent)
                            (and (stringp stored) (string-empty-p stored)))
-                       :null
+                       ""
                      stored))))))
 
 (defun my/gptel--parse-buffer-inject-reasoning (orig backend &optional max-entries)
