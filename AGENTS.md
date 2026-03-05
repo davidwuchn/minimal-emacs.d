@@ -124,9 +124,6 @@ Use `gh api` to read files from `anomalyco/opencode` (branch: `dev`):
 - List files: `gh api 'repos/anomalyco/opencode/git/trees/dev?recursive=1' --jq '.tree[] | .path'`
 - Read a file: `gh api 'repos/anomalyco/opencode/contents/PATH?ref=dev' --jq '.content' | base64 -d`
 
-### Memory Protocol
-- Consult MEMENTUM.md for memory storage/recall rules
-
 ### Commit Format
 - Use symbols in the subject when relevant (e.g., ◈, Δ, λ)
 - Append nucleus tag block when required by policy

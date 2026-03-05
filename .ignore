@@ -1,0 +1,7 @@
+# Override .gitignore deny-all for ripgrep/search tools.
+# The .gitignore uses `*` (deny-all) + allowlist, which causes rg
+# to skip force-added files. This file restores search visibility.
+!*
+var/
+temp/
+*.elc

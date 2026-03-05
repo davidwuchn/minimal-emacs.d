@@ -134,7 +134,7 @@
     (string-trim (match-string 1 init-text))))
 
 (defun nucleus--build-init-prompt ()
-  "Build the init system prompt by composing nucleus, AGENTS.md, and MEMENTUM.md."
+  "Build the init system prompt by composing nucleus and AGENTS.md."
   (let* ((base (nucleus--resolve-prompts-dir))
          (init-path (and base (expand-file-name "init.md" base)))
          (init-text (and init-path (nucleus--read-file-if-exists init-path)))
@@ -145,11 +145,8 @@
          (agents-text
           (nucleus--read-file-if-exists
            (expand-file-name "AGENTS.md" (nucleus--project-root))))
-         (mementum-text
-          (nucleus--read-file-if-exists
-           (expand-file-name "MEMENTUM.md" (nucleus--project-root))))
          (parts (seq-filter #'identity
-                           (list nucleus-text agents-text mementum-text))))
+                           (list nucleus-text agents-text))))
     (when parts
       (string-join parts "\n\n"))))
 

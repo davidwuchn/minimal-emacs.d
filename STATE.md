@@ -141,6 +141,8 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 - **Remove gptel-ext-learning.el** (⚒): Deleted elisp learning-integration module. AGENTS.md already instructs AI agents to run `λ(learn)`/`λ(observe)`/`λ(evolve)` via the continuous-learning OpenCode skill — the deterministic git-commit hook was redundant. Instinct evidence tracking now handled entirely by the AI agent on demand.
 - **Remove plan context auto-attach** (⚒): Stripped `gptel-context` auto-attach/detach of PLAN.md from `nucleus-mode-switch.el` (v2.0.0). AGENTS.md instructs AI to read PLAN.md before acting; OpenCode has tool access to do so. Mode transition system reminders (plan↔build) retained.
 - **Remove nucleus-analytics.el** (⚒): Deleted experimental tool-usage analytics module. Never committed to git, 1 data point recorded total, no UI or consumers. Dead code.
+- **Remove MEMENTUM.md** (⚒): Deleted unused git-memory protocol. `memories/` directory was empty, zero memory commits ever made. Redundant with LEARNING.md + continuous-learning skill. Removed from system prompt injection (`nucleus-prompts.el`), AGENTS.md, and `.gitignore`.
+- **Add .ignore for ripgrep** (⊘): The `.gitignore` deny-all `*` pattern caused `rg` to skip force-added files under `lisp/modules/`. Added `.ignore` with `!*` override + exclusions for `var/`, `temp/`, `*.elc`.
 
 ### Recent Changes (v0.5.16)
 

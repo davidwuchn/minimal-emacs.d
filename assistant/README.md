@@ -76,7 +76,7 @@ The unified `Code_*` toolset provides KISS (Keep It Simple, Stupid) code intelli
 | `title.md` | `chatTitle` | Chat title generation |
 
 `init.md` uses a `nucleus: <file>` directive to compose the default system
-message from `init_AGENTS.md` + the project's `AGENTS.md` + `MEMENTUM.md`.
+message from `init_AGENTS.md` + the project's `AGENTS.md`.
 
 ### Tool Prompts (`assistant/prompts/tools/`)
 
