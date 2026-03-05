@@ -18,6 +18,8 @@
 (require 'gptel-ext-fsm)
 (require 'gptel-ext-backends)
 (require 'gptel-ext-context)
+(require 'gptel-ext-context-cache)
+(require 'gptel-ext-auto-plan)
 (require 'gptel-ext-security)
 
 ;; Load split tool modules (replaces gptel-ext-tools.el)
