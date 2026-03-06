@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-05 (tag v0.5.17)
+> Last updated: 2026-03-06 (tag v0.5.28)
 
 ## Architecture Overview
 
@@ -149,6 +149,10 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Prompt caching (explicit cache headers) | **Skip** | OpenAI-compatible backends do server-side caching automatically; no client changes needed |
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
 | Per-tool output limits | **Skip** | `my/gptel-subagent-result-limit` truncation on subagents works fine |
+
+### Recent Changes (v0.5.28)
+
+- **Restore JSON tree-sitter support** (⊘): Added `json` to `treesit-auto-langs` and defined an explicit `json-ts-mode` recipe pinned to ABI-14-safe `tree-sitter-json` `v0.24.8` in `lisp/init-treesit.el`. This fixes `config.json` opening without the intended syntax highlighting path.
 
 ### Recent Changes (v0.5.17)
 

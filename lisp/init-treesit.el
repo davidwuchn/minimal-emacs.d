@@ -2,7 +2,7 @@
 
 (require 'treesit-auto)
 
-(setq treesit-auto-langs '(python rust clojure elisp java c cpp lua))
+(setq treesit-auto-langs '(python rust clojure elisp java c cpp lua json))
 
 ;; Custom recipes with ABI14 revisions for Emacs 30 compatibility
 (setq my/python-tsauto-config
@@ -95,6 +95,17 @@
        :ext "\\.lua\\'"))
 
 (add-to-list 'treesit-auto-recipe-list my/lua-tsauto-config)
+
+(setq my/json-tsauto-config
+      (make-treesit-auto-recipe
+       :lang 'json
+       :ts-mode 'json-ts-mode
+       :remap '(js-json-mode)
+       :url "https://github.com/tree-sitter/tree-sitter-json"
+       :abi14-revision "v0.24.8"
+       :ext "\\.json\\'"))
+
+(add-to-list 'treesit-auto-recipe-list my/json-tsauto-config)
 
 (setq treesit-auto-install 'auto)
 (treesit-auto-add-to-auto-mode-alist 'all)
