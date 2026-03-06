@@ -18,39 +18,40 @@
 (defun nucleus--header-line-apply-preset-label (&rest _)
   "Set the gptel header-line to show the active preset with a toggle button.
 
-Only applies when a gptel--preset is active in the current buffer.
+Only applies when a nucleus preset (`gptel-plan' or `gptel-agent') is
+active in the current buffer.  Plain `gptel' buffers (no preset) are
+left alone so they keep the default gptel header-line.
 Skips special buffers like *Message* that may have gptel-mode enabled."
   (when (and (bound-and-true-p gptel-mode)
              (bound-and-true-p gptel-use-header-line)
              (consp header-line-format)
              (bound-and-true-p gptel--preset)
+             (memq gptel--preset '(gptel-plan gptel-agent))
              (not (string-match-p "^\\*Message" (buffer-name)))
              (not (string-match-p "^ \\*gptel" (buffer-name))))
     (setcar header-line-format
             '(:eval
-              (let* ((preset (if (and (boundp 'gptel--preset)
-                                     (memq gptel--preset '(gptel-plan gptel-agent)))
-                                gptel--preset
-                              'gptel-plan))
-                     (agent-mode (eq preset 'gptel-agent))
-                     (label (if agent-mode "[Agent]" "[Plan]"))
-                     (help (if agent-mode
-                               "Switch to Plan preset"
-                             "Switch to Agent preset"))
-                     (face (if agent-mode
-                               'font-lock-keyword-face
-                             'font-lock-doc-face)))
-                (concat
-                 (propertize " " 'display '(space :align-to 0))
-                 (format "%s"
-                         (if (fboundp 'gptel-backend-name)
-                             (gptel-backend-name gptel-backend)
-                           "gptel"))
-                 (propertize
-                  (if (fboundp 'buttonize)
-                      (buttonize label #'nucleus-header-toggle-preset nil help)
-                    label)
-                  'face face)))))))
+              (when (and (boundp 'gptel--preset)
+                         (memq gptel--preset '(gptel-plan gptel-agent)))
+                (let* ((agent-mode (eq gptel--preset 'gptel-agent))
+                       (label (if agent-mode "[Agent]" "[Plan]"))
+                       (help (if agent-mode
+                                 "Switch to Plan preset"
+                               "Switch to Agent preset"))
+                       (face (if agent-mode
+                                 'font-lock-keyword-face
+                               'font-lock-doc-face)))
+                  (concat
+                   (propertize " " 'display '(space :align-to 0))
+                   (format "%s"
+                           (if (fboundp 'gptel-backend-name)
+                               (gptel-backend-name gptel-backend)
+                             "gptel"))
+                   (propertize
+                    (if (fboundp 'buttonize)
+                        (buttonize label #'nucleus-header-toggle-preset nil help)
+                      label)
+                    'face face)))))))))
 
 (defun nucleus--agent-around (orig &optional project-dir agent-preset)
   "Around-advice for `gptel-agent': normalize args and fix header.

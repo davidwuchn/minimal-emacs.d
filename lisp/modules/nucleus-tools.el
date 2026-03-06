@@ -200,22 +200,20 @@ Returns non-nil if tools match, nil if mismatch or unavailable."
 (defun nucleus-sync-tool-profile (&optional preset)
   "Sync `gptel-tools` to match the active PRESET.
 
-Does nothing if a preset is already active (gptel--preset is set),
-to avoid overriding gptel's preset application.
+Does nothing if no nucleus preset is active — plain `gptel' buffers
+\(created via `M-x gptel') are left alone with no tools.
 
-Use in `gptel-mode-hook` to ensure correct tools on buffer load."
+Only syncs tools when `gptel--preset' is explicitly `gptel-plan' or
+`gptel-agent', or when PRESET is provided by the caller."
   (when (boundp 'gptel-tools)
-    ;; Don't override if gptel has already applied a preset
-    (if (and (boundp 'gptel--preset)
-             (memq gptel--preset '(gptel-plan gptel-agent)))
-        (when nucleus-tools-verbose
-          (message "[nucleus-tools] Tool profile left to preset: %S" gptel--preset))
-
-      ;; No preset yet - apply defaults based on nucleus-agent-default
-      (let ((active-preset (or preset
-                               (and (boundp 'nucleus-agent-default)
-                                    nucleus-agent-default)
-                               'gptel-plan)))
+    (let ((active-preset (or preset
+                             (and (boundp 'gptel--preset)
+                                  (memq gptel--preset '(gptel-plan gptel-agent))
+                                  gptel--preset))))
+      (if (not active-preset)
+          ;; No nucleus preset active — plain gptel buffer, leave tools alone
+          (when nucleus-tools-verbose
+            (message "[nucleus-tools] No nucleus preset active, skipping tool sync"))
         (pcase active-preset
           ('gptel-plan
            (setq-local gptel-tools (nucleus-get-tools :readonly))
