@@ -2,110 +2,73 @@
 
 (require 'treesit-auto)
 
-(setq treesit-auto-langs '(python rust clojure elisp java c cpp lua json))
+;; Languages to enable. This filters treesit-auto-recipe-list.
+(setq treesit-auto-langs '(python rust clojure elisp java c cpp lua json javascript))
 
-;; Custom recipes with ABI14 revisions for Emacs 30 compatibility
-(setq my/python-tsauto-config
-      (make-treesit-auto-recipe
-       :lang 'python
-       :ts-mode 'python-ts-mode
-       :remap '(python-mode)
-       :url "https://github.com/tree-sitter/tree-sitter-python"
-       :revision "master"
-       :abi14-revision "v0.21.0"
-       :ext "\\.py\\'"))
+;; Custom recipes with ABI14 revisions for Emacs 30 compatibility where known.
+;; Each entry: (lang ts-mode remap-list url ext &optional abi14-revision revision source-dir)
+(dolist (spec '((python     python-ts-mode      (python-mode)
+                "https://github.com/tree-sitter/tree-sitter-python"
+                "\\.py\\'" "v0.21.0")
 
-(setq my/rust-tsauto-config
-      (make-treesit-auto-recipe
-       :lang 'rust
-       :ts-mode 'rust-ts-mode
-       :remap '(rust-mode)
-       :url "https://github.com/tree-sitter/tree-sitter-rust"
-       :revision "master"
-       :abi14-revision "v0.21.0"
-       :ext "\\.rs\\'"))
+               (rust       rust-ts-mode         (rust-mode)
+                "https://github.com/tree-sitter/tree-sitter-rust"
+                "\\.rs\\'" "v0.21.0")
 
-(setq my/clojure-tsauto-config
-      (make-treesit-auto-recipe
-       :lang 'clojure
-       :ts-mode 'clojure-ts-mode
-       :remap '(clojure-mode)
-       :url "https://github.com/sogaiu/tree-sitter-clojure"
-       :revision "master"
-       :ext "\\.clj\\'"))
+               (clojure    clojure-ts-mode      (clojure-mode)
+                "https://github.com/sogaiu/tree-sitter-clojure"
+                "\\.clj\\'")
 
-(setq my/elisp-tsauto-config
-      (make-treesit-auto-recipe
-       :lang 'elisp
-       :ts-mode 'emacs-lisp-ts-mode
-       :remap '(emacs-lisp-mode)
-       :url "https://github.com/Wilfred/tree-sitter-elisp"
-       :revision "master"
-       :abi14-revision "1.2"
-       :ext "\\.el\\'"))
+               (elisp      emacs-lisp-ts-mode   (emacs-lisp-mode)
+                "https://github.com/Wilfred/tree-sitter-elisp"
+                "\\.el\\'" "1.2")
 
-(add-to-list 'treesit-auto-recipe-list my/python-tsauto-config)
-(add-to-list 'treesit-auto-recipe-list my/rust-tsauto-config)
-(add-to-list 'treesit-auto-recipe-list my/clojure-tsauto-config)
-(add-to-list 'treesit-auto-recipe-list my/elisp-tsauto-config)
+               (java       java-ts-mode         (java-mode)
+                "https://github.com/tree-sitter/tree-sitter-java"
+                "\\.java\\'")
 
-(setq my/java-tsauto-config
-      (make-treesit-auto-recipe
-       :lang 'java
-       :ts-mode 'java-ts-mode
-       :remap '(java-mode)
-       :url "https://github.com/tree-sitter/tree-sitter-java"
-       :revision "master"
-       :ext "\\.java\\'"))
+               (c          c-ts-mode            (c-mode)
+                "https://github.com/tree-sitter/tree-sitter-c"
+                "\\.c\\'" "v0.21.4")
 
-(add-to-list 'treesit-auto-recipe-list my/java-tsauto-config)
+               (cpp        c++-ts-mode          (c++-mode)
+                "https://github.com/tree-sitter/tree-sitter-cpp"
+                "\\.cpp\\'" "v0.22.3")
 
-(setq my/c-tsauto-config
-      (make-treesit-auto-recipe
-       :lang 'c
-       :ts-mode 'c-ts-mode
-       :remap '(c-mode)
-       :url "https://github.com/tree-sitter/tree-sitter-c"
-       :revision "master"
-       :abi14-revision "v0.21.4"
-       :ext "\\.c\\'"))
+               (lua        lua-ts-mode          (lua-mode)
+                "https://github.com/tree-sitter-grammars/tree-sitter-lua"
+                "\\.lua\\'" "v0.2.0")
 
-(add-to-list 'treesit-auto-recipe-list my/c-tsauto-config)
+               (json       json-ts-mode         (js-json-mode)
+                "https://github.com/tree-sitter/tree-sitter-json"
+                "\\.json\\'" "v0.24.8")
 
-(setq my/cpp-tsauto-config
-      (make-treesit-auto-recipe
-       :lang 'cpp
-       :ts-mode 'c++-ts-mode
-       :remap '(c++-mode)
-       :url "https://github.com/tree-sitter/tree-sitter-cpp"
-       :revision "master"
-       :abi14-revision "v0.22.3"
-       :ext "\\.cpp\\'"))
-
-(add-to-list 'treesit-auto-recipe-list my/cpp-tsauto-config)
-
-(setq my/lua-tsauto-config
-      (make-treesit-auto-recipe
-       :lang 'lua
-       :ts-mode 'lua-ts-mode
-       :remap '(lua-mode)
-       :url "https://github.com/tree-sitter-grammars/tree-sitter-lua"
-       :revision "master"
-       :abi14-revision "v0.2.0"
-       :ext "\\.lua\\'"))
-
-(add-to-list 'treesit-auto-recipe-list my/lua-tsauto-config)
-
-(setq my/json-tsauto-config
-      (make-treesit-auto-recipe
-       :lang 'json
-       :ts-mode 'json-ts-mode
-       :remap '(js-json-mode)
-       :url "https://github.com/tree-sitter/tree-sitter-json"
-       :abi14-revision "v0.24.8"
-       :ext "\\.json\\'"))
-
-(add-to-list 'treesit-auto-recipe-list my/json-tsauto-config)
+               ;; JavaScript needs explicit :revision and :source-dir
+               (javascript js-ts-mode           (js-mode javascript-mode js2-mode)
+                "https://github.com/tree-sitter/tree-sitter-javascript"
+                "\\.js\\'" nil "master" "src")))
+  (let ((lang           (nth 0 spec))
+        (ts-mode        (nth 1 spec))
+        (remap          (nth 2 spec))
+        (url            (nth 3 spec))
+        (ext            (nth 4 spec))
+        (abi14-revision (nth 5 spec))
+        (revision       (nth 6 spec))
+        (source-dir     (nth 7 spec)))
+    ;; Remove any existing recipe for this lang to avoid duplicates
+    (setq treesit-auto-recipe-list
+          (seq-remove (lambda (r) (eq (treesit-auto-recipe-lang r) lang))
+                      treesit-auto-recipe-list))
+    (add-to-list 'treesit-auto-recipe-list
+                 (make-treesit-auto-recipe
+                  :lang lang
+                  :ts-mode ts-mode
+                  :remap remap
+                  :url url
+                  :ext ext
+                  :abi14-revision abi14-revision
+                  :revision revision
+                  :source-dir source-dir))))
 
 (setq treesit-auto-install 'auto)
 (treesit-auto-add-to-auto-mode-alist 'all)
