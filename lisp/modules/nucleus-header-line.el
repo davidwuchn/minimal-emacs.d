@@ -51,7 +51,7 @@ Skips special buffers like *Message* that may have gptel-mode enabled."
                     (if (fboundp 'buttonize)
                         (buttonize label #'nucleus-header-toggle-preset nil help)
                       label)
-                    'face face)))))))))
+                    'face face))))))))
 
 (defun nucleus--agent-around (orig &optional project-dir agent-preset)
   "Around-advice for `gptel-agent': normalize args and fix header.
