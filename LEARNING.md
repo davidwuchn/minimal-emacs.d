@@ -84,5 +84,9 @@
 - **`minimal-emacs-user-directory`** = repo root (`~/.emacs.d/` = `~/workspace/minimal-emacs.d/`). This is the *original* `user-emacs-directory` before `pre-early-init.el` redirects it.
 - **`user-emacs-directory`** = `var/` (set by `pre-early-init.el`). All Emacs-generated data goes here.
 - **`package-user-dir`** = `var/elpa` (set by `pre-early-init.el`). ELPA packages install here.
-- **`treesit-extra-load-path`** = `var/tree-sitter` (set in `post-early-init.el` via `(expand-file-name "tree-sitter" user-emacs-directory)` — by this point `user-emacs-directory` is already `var/`).
+- **`treesit-extra-load-path`** = `var/tree-sitter` (set in `post-init.el` via `(expand-file-name "tree-sitter" user-emacs-directory)` — by this point `user-emacs-directory` is already `var/`).
 - **`custom-file`** = repo root `custom.el` (uses `minimal-emacs-user-directory`). This stays at root because it's version-controlled.
+
+## Discovery Pattern (λ)
+- **Iterative Discovery Loop**: `λ discover(x). ¬plan(x) → concrete(x) → observe(x) → deeper(x) → repeat` — when exploring the unknown, don't start with a plan. Make it concrete, observe what happens, go deeper, repeat. Each step reveals the next step.
+- **Work IS the Insight**: The work itself generates the insight. You don't pre-plan the answer; the answer emerges through the act of working. `each_step_reveals_next`.
