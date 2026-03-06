@@ -62,13 +62,13 @@
     },
     "executor": {
       "model": "subagent",
-      "defaultModel": "github-copilot/gpt-5.3-codex",
+      "defaultModel": "github-copilot/gpt-5.4",
       "description": "Versatile subagent for grunt work (Tests, Docs, Linting).",
       "systemPrompt": "Your primary responsibilities include writing/fixing unit tests, generating comprehensive documentation, and resolving linter/formatting errors. Analyze the user's prompt to determine which task you are executing."
     },
     "reviewer": {
       "mode": "subagent",
-      "defaultModel": "github-copilot/gpt-5.3-codex",
+      "defaultModel": "github-copilot/gpt-5.4",
       "description": "Code reviewer for project changes, use it when asked to review code",
       "systemPrompt": "You are expert in code review, analyze the changes in git and be rigorous about the changes."
     },
@@ -88,10 +88,10 @@
     }
   },
   "rewrite": {
-    "model": "github-copilot/gpt-5.3-codex"
+    "model": "github-copilot/gpt-5.4"
   },
   "completion": {
-    "model": "github-copilot/gpt-5.3-codex"
+    "model": "github-copilot/gpt-5.4"
   },
   "prompts": {
     "chat": "${file:prompts/code_agent.md}",
@@ -164,7 +164,7 @@
       "keyRc": "api.openrouter.com",
       "models": {
         "anthropic/claude-sonnet-4.6": {},
-        "openai/gpt-5.3-codex": {}
+        "openai/gpt-5.4": {}
       }
     },
     "deepseek": {
