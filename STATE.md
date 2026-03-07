@@ -152,6 +152,7 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 
 ### Recent Changes (v0.5.28)
 
+- **Repair init load-path + package autoload recovery** (⊘): `lisp/init-dev.el` now sets `lisp/` and `lisp/modules/` on `load-path` inside `eval-and-compile`, so compiled init code can still resolve local modules like `treesit-local-xref`. Added `my/package-repair-autoloads` in `lisp/init-files.el` to regenerate missing package `*-autoloads.el` files on demand and refresh `package-quickstart.el` when needed.
 - **Restore JSON tree-sitter support** (⊘): Added `json` to `treesit-auto-langs` and defined an explicit `json-ts-mode` recipe pinned to ABI-14-safe `tree-sitter-json` `v0.24.8` in `lisp/init-treesit.el`. This fixes `config.json` opening without the intended syntax highlighting path.
 
 ### Recent Changes (v0.5.17)
