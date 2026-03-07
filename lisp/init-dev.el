@@ -1,8 +1,16 @@
 ;;; init-dev.el --- Programming, LSP, Clojure, Elisp -*- lexical-binding: t; -*-
 
-;; Add lisp/ and lisp/modules/ to load-path for modular config
-(add-to-list 'load-path (file-name-directory load-file-name))
-(add-to-list 'load-path (expand-file-name "modules" (file-name-directory load-file-name)))
+;; Add lisp/ and lisp/modules/ to load-path for both load and byte-compile time.
+(eval-and-compile
+  (let* ((base-dir (or (and (boundp 'minimal-emacs-user-directory)
+                            minimal-emacs-user-directory)
+                       (and load-file-name
+                            (file-name-directory load-file-name))
+                       default-directory))
+         (lisp-dir (expand-file-name "lisp" base-dir))
+         (modules-dir (expand-file-name "lisp/modules" base-dir)))
+    (add-to-list 'load-path (file-truename lisp-dir))
+    (add-to-list 'load-path (file-truename modules-dir))))
 
 (provide 'init-dev)
 
@@ -37,7 +45,12 @@
 
 (use-package apheleia
   :ensure t
-  :hook ((prog-mode . apheleia-mode)))
+  :commands (apheleia-mode apheleia-global-mode)
+  :hook ((prog-mode . (lambda ()
+                        (when (require 'apheleia nil t)
+                          (apheleia-mode)))))
+  :config
+  (apheleia-global-mode +1))
 
 (use-package clojure-mode
   :ensure t

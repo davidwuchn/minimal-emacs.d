@@ -102,6 +102,38 @@
 ;; Package elpa directory already set in pre-early-init.el
 ;; Additional package-specific cleanup
 
+(defun my/package-repair-autoloads (&optional regenerate-all)
+  "Regenerate package autoload files under `package-user-dir'.
+
+With prefix argument REGENERATE-ALL, rebuild autoloads for every installed
+package.  Otherwise, only recreate missing `*-autoloads.el' files.  Refresh
+`package-quickstart-file' after any changes."
+  (interactive "P")
+  (require 'package)
+  (package-initialize)
+  (let ((generated 0)
+        (checked 0))
+    (dolist (entry package-alist)
+      (let* ((name (symbol-name (car entry)))
+             (desc (car (cdr entry)))
+             (dir (and desc (package-desc-dir desc)))
+             (autoload-file (and dir
+                                 (expand-file-name (format "%s-autoloads.el" name)
+                                                   dir))))
+        (when (and dir (file-directory-p dir))
+          (setq checked (1+ checked))
+          (when (or regenerate-all
+                    (not (file-exists-p autoload-file)))
+            (package-generate-autoloads name dir)
+            (setq generated (1+ generated))))))
+    (when (and (> generated 0)
+               (fboundp 'package-quickstart-refresh))
+      (package-quickstart-refresh))
+    (message "Autoload repair checked %d packages, regenerated %d%s"
+             checked
+             generated
+             (if regenerate-all " (full rebuild)" ""))))
+
 ;; Eshell history and directories
 (setq eshell-directory-name
       (expand-file-name "eshell/" user-emacs-directory))
