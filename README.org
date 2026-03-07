@@ -167,7 +167,9 @@ The generated prompt will include the function/region scope, visible file list, 
 
 - [[https://martinfowler.com/articles/exploring-gen-ai/context-engineering-coding-agents.html][Context Engineering for Coding Agents]], recommended by Martin Fowler.
 
-*** Build / Test Feedback Loop 
+*** Harness Engineering Practice
+
+**** Build / Test Feedback Loop
 
 Use the prompt suffix and TDD helpers to keep a tight build + test loop. This reduces context switching, shortens the time between a change and verified feedback, and lets the AI work more independently with less human-in-the-loop effort:
 
@@ -175,6 +177,8 @@ Use the prompt suffix and TDD helpers to keep a tight build + test loop. This re
 - `ai-code--tdd-red-green-stage`: Generates a single prompt for Red + Green with explicit test follow-up.
 - `ai-code--tdd-red-green-blue-stage`: Generates a single prompt for Red + Green + Blue (refactoring) with explicit test follow-up.
 - `ai-code-build-or-test-project`: Run the project build or test from the menu (`C-c a b`).
+
+- Relevant article: [[https://martinfowler.com/articles/exploring-gen-ai/harness-engineering.html][Harness Engineering]]
 
 *** Desktop Notifications (Experimental)
 
