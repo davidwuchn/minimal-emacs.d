@@ -2,17 +2,22 @@
 
 ;; Add lisp/ and lisp/modules/ to load-path for both load and byte-compile time.
 (eval-and-compile
-  (let* ((base-dir (or (and (boundp 'minimal-emacs-user-directory)
+  (let* ((source-dir (and load-file-name
+                          (file-name-directory load-file-name)))
+         (base-dir (or (and (boundp 'minimal-emacs-user-directory)
                             minimal-emacs-user-directory)
-                       (and load-file-name
-                            (file-name-directory load-file-name))
+                       (and source-dir
+                            (if (string= (file-name-nondirectory
+                                          (directory-file-name source-dir))
+                                         "lisp")
+                                (file-name-directory
+                                 (directory-file-name source-dir))
+                              source-dir))
                        default-directory))
          (lisp-dir (expand-file-name "lisp" base-dir))
          (modules-dir (expand-file-name "lisp/modules" base-dir)))
     (add-to-list 'load-path (file-truename lisp-dir))
     (add-to-list 'load-path (file-truename modules-dir))))
-
-(provide 'init-dev)
 
 ;; Markdown
 (use-package markdown-mode
@@ -110,3 +115,5 @@
          (lua-ts-mode . eglot-ensure))
   :custom
   (eglot-ignored-server-capabilities '(:documentHighlightProvider)))
+
+(provide 'init-dev)
