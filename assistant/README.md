@@ -60,6 +60,97 @@ The unified `Code_*` toolset provides KISS (Keep It Simple, Stupid) code intelli
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## Programmatic Tool
+
+`Programmatic` is an agent-only orchestration tool for collapsing several small,
+tightly-coupled tool calls into one turn. Instead of asking the model to emit a
+`Grep` call, wait, emit a `Read` call, wait, and so on, the model can write a
+small restricted Emacs Lisp program that runs those steps inside one tool use.
+
+### What It Is For
+
+- Reducing tool round trips for search -> read -> summarize workflows
+- Returning one final structured result instead of several intermediate tool results
+- Reusing existing ACL, timeout, confirmation, and preview behavior
+
+### What It Is Not For
+
+- Arbitrary Elisp evaluation
+- Nested `Bash` or raw process/network access
+- Replacing `RunAgent` for broad exploratory work
+- Bypassing confirmation for mutating tools
+
+### Current Safe Subset
+
+Supported forms in the restricted sandbox include:
+
+- `setq`, `result`, top-level `tool-call`
+- `if`, `when`, `unless`, `let`, `let*`
+- small data helpers such as `plist-get`, `alist-get`, `assoc`, `cons`
+
+Results can be returned as strings or structured values; structured values are
+pretty-printed before returning to the model.
+
+### Tool Access and Limits
+
+- Exposed only in the `:nucleus` / execution-agent toolset
+- Explicitly denied in plan mode
+- Default timeout: 15 seconds
+- Default max nested tool calls: 25
+- Final result size is truncated when it exceeds the configured limit
+- Nested tool recursion back into `Programmatic` is rejected
+
+### Nested Mutating Tools
+
+`Programmatic` is read-mostly by default, but preview-backed patch tools are
+allowed for controlled mutating flows:
+
+- `Edit`
+- `ApplyPatch`
+
+These still go through the normal confirmation UI. Nested Programmatic confirms
+reuse the regular minibuffer / overlay tool approval flow, and the underlying
+mutating tool keeps its own preview/apply path.
+
+### When to Prefer Programmatic
+
+Use `Programmatic` when all of the following are true:
+
+- the task needs 3+ tightly-coupled tool calls
+- the intermediate tool results do not need separate model turns
+- the work is orchestration rather than open-ended delegation
+
+Prefer direct tools for one-off actions, and prefer `RunAgent` when the task is
+wide-scope exploration or research.
+
+### Example
+
+```elisp
+(setq hits (tool-call "Grep" :regex "Programmatic" :path "lisp/modules"))
+(setq snippet (tool-call "Read" :file_path "lisp/modules/gptel-sandbox.el" :start_line 1 :end_line 40))
+(result (list :hits hits :snippet snippet))
+```
+
+### Benchmarking
+
+A small local benchmark harness compares ordinary multi-tool chaining against a
+single `Programmatic` orchestration run for a representative `Grep -> Read ->
+Read -> summarize` workflow.
+
+Run it with:
+
+```bash
+scripts/benchmark-programmatic.sh
+scripts/benchmark-programmatic.sh 500
+```
+
+The benchmark reports:
+
+- local execution time
+- simulated end-to-end time with per-turn model latency
+- tool round-trip count
+- transcript byte reduction
+
 ## Prompts (`assistant/prompts/`)
 
 | File | Directive key | Purpose |
@@ -160,7 +251,7 @@ Two presets, toggled with `nucleus-agent-toggle` (`M-x nucleus-agent-toggle` or 
 | Preset | Tools | System prompt |
 |--------|-------|---------------|
 | `gptel-plan` | Read-only: Glob, Grep, Read, WebSearch, WebFetch, YouTube, Agent, Skill, Eval, find_buffers, describe_symbol, get_symbol_source, **Code_Map, Code_Inspect, Code_Usages, Diagnostics** | `plan_agent.md` |
-| `gptel-agent` | Full toolset (25+ tools): Core tools + Preview/Skill helpers + Mutators, **Code_Map, Code_Inspect, Code_Replace, Code_Usages, Diagnostics, Bash, RunAgent** | `code_agent.md` |
+| `gptel-agent` | Full toolset (25+ tools): Core tools + Preview/Skill helpers + Mutators, **Programmatic, Code_Map, Code_Inspect, Code_Replace, Code_Usages, Diagnostics, Bash, RunAgent** | `code_agent.md` |
 
 Tool lists are strictly defined in `lisp/modules/nucleus-tools.el`:
 - `(:readonly . (...))`

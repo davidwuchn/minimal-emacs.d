@@ -193,7 +193,7 @@ Prefer existing tools when:
 - [x] Add ERT tests for allowed orchestration cases
 - [x] Add tests for timeout, call-count, and truncation behavior
 - [x] Add tests proving readonly presets cannot access `Programmatic`
-- [ ] Run targeted benchmarks against representative multi-tool workflows
+- [x] Run targeted benchmarks against representative multi-tool workflows
 
 ## Current Reality
 
@@ -212,6 +212,9 @@ Still open:
 
 - Aggregate preview for multi-step mutating runs
 - Benchmarking against ordinary multi-tool round trips
+  - Initial local benchmark harness added in `lisp/modules/gptel-programmatic-benchmark.el`
+  - Helper script added at `scripts/benchmark-programmatic.sh`
+  - Current representative workflow shows ~2.98x simulated end-to-end speedup and ~18.12% transcript reduction with one Programmatic turn versus three ordinary tool turns
 - Decide whether async orchestration beyond nested async tools is worthwhile
 
 ## Testing Matrix
