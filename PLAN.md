@@ -210,7 +210,7 @@ Prefer existing tools when:
 
 - [x] Update `assistant/prompts/code_agent.md` with decision rules and examples
 - [x] Add concise examples showing orchestration vs plain tool use
-- [~] Decide whether a dedicated preview is needed for multi-step mutating runs
+- [x] Decide whether a dedicated preview is needed for multi-step mutating runs
 - [x] Ensure failure messages teach the model how to recover
 
 ### Phase 4: Verification
@@ -239,6 +239,7 @@ Implemented in the current repo:
 Still open:
 
 - Aggregate preview for multi-step mutating runs
+  - Implemented as an aggregate confirmation summary before per-tool confirmations
 - Benchmarking against ordinary multi-tool round trips
   - Initial local benchmark harness added in `lisp/modules/gptel-programmatic-benchmark.el`
   - Helper script added at `scripts/benchmark-programmatic.sh`

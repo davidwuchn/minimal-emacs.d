@@ -59,6 +59,8 @@
          (my/gptel-programmatic-allowed-tools '("Read" "Grep"))
          (my/gptel-programmatic-confirming-tools '("Edit" "ApplyPatch" "Code_Replace"))
          (gptel-confirm-tool-calls 'auto)
+         (gptel-sandbox-aggregate-confirm-function (lambda (_plan callback)
+                                                     (funcall callback t)))
          (gptel-sandbox-confirm-function (lambda (_tool-spec _arg-values callback)
                                            (funcall callback t))))
      ,@body))
@@ -359,6 +361,62 @@
                (test-programmatic--run
                 "(setq result (tool-call \"Code_Replace\" :file_path \"foo.el\" :node_name \"my-fn\" :new_code \"(defun my-fn () 42)\"))
 (result result)"))))))
+
+(ert-deftest programmatic/shows-aggregate-preview-on-multi-step-mutating-plan ()
+  (let ((aggregate-count 0)
+        (seen nil))
+    (test-programmatic--with-tools
+        `(("Edit" . ,(test-programmatic--async-tool
+                       "Edit"
+                       (lambda (callback path &optional old new diffp)
+                         (push (list path old new diffp) seen)
+                         (funcall callback (format "edited:%s" path)))
+                       '((:name "path")
+                         (:name "old_str" :optional t)
+                         (:name "new_str_or_diff")
+                         (:name "diffp" :optional t))
+                       t)))
+      (let ((my/gptel-programmatic-allowed-tools '("Edit"))
+            (gptel-sandbox-aggregate-confirm-function
+             (lambda (plan callback)
+               (setq aggregate-count (1+ aggregate-count))
+               (should (= 2 (length plan)))
+               (should (string-match-p "Edit" (plist-get (car plan) :summary)))
+               (funcall callback t))))
+        (should
+         (equal
+          (test-programmatic--run
+           "(setq one (tool-call \"Edit\" :path \"a.el\" :new_str_or_diff \"patch-a\" :diffp t))
+(setq two (tool-call \"Edit\" :path \"b.el\" :new_str_or_diff \"patch-b\" :diffp t))
+(result (concat one \" | \" two))")
+          "edited:a.el | edited:b.el"))
+        (should (= 1 aggregate-count))
+        (should (= 2 (length seen)))))))
+
+(ert-deftest programmatic/can-reject-aggregate-preview-before-tool-confirm ()
+  (let ((confirm-count 0))
+    (test-programmatic--with-tools
+        `(("Edit" . ,(test-programmatic--async-tool
+                       "Edit"
+                       (lambda (callback &rest _args)
+                         (setq confirm-count (1+ confirm-count))
+                         (funcall callback "should-not-run"))
+                       '((:name "path")
+                         (:name "old_str" :optional t)
+                         (:name "new_str_or_diff")
+                         (:name "diffp" :optional t))
+                       t)))
+      (let ((my/gptel-programmatic-allowed-tools '("Edit"))
+            (gptel-sandbox-aggregate-confirm-function
+             (lambda (_plan callback)
+               (funcall callback nil))))
+        (should (string-match-p
+                 "aggregate preview rejected by user"
+                 (test-programmatic--run
+                  "(setq one (tool-call \"Edit\" :path \"a.el\" :new_str_or_diff \"patch-a\" :diffp t))
+(setq two (tool-call \"Edit\" :path \"b.el\" :new_str_or_diff \"patch-b\" :diffp t))
+(result (concat one \" | \" two))")))
+        (should (= 0 confirm-count))))))
 
 (provide 'test-programmatic)
 

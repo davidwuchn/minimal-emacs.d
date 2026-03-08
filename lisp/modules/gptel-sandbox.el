@@ -69,6 +69,12 @@ confirmation step."
 Called with TOOL-SPEC, ARG-VALUES, and CALLBACK. CALLBACK must be invoked with
 non-nil to continue or nil to reject.")
 
+(defvar gptel-sandbox-aggregate-confirm-function
+  #'gptel-sandbox--default-aggregate-confirm
+  "Function used to preview/confirm multi-step mutating Programmatic runs.
+Called with PLAN and CALLBACK. CALLBACK must be invoked with non-nil to
+continue or nil to reject.")
+
 (defvar gptel-sandbox-profile nil
   "Dynamic sandbox capability profile for Programmatic execution.
 When nil, `gptel-sandbox--current-profile' infers the profile from the active
@@ -324,6 +330,51 @@ supports a small, explicit whitelist of pure operations."
           'readonly
         'agent)))
 
+(defun gptel-sandbox--truncate-summary (value &optional width)
+  "Return a compact printable summary of VALUE up to WIDTH chars."
+  (let* ((width (or width 80))
+         (text (prin1-to-string value)))
+    (if (> (length text) width)
+        (concat (substring text 0 width) "...")
+      text)))
+
+(defun gptel-sandbox--statement-tool-call (statement)
+  "Return `(TOOL-NAME ARG-FORMS)' for top-level tool call STATEMENT, or nil."
+  (pcase statement
+    (`(setq ,_ (tool-call ,tool-name . ,arg-forms))
+     (list tool-name arg-forms))
+    (`(tool-call ,tool-name . ,arg-forms)
+     (list tool-name arg-forms))
+    (_ nil)))
+
+(defun gptel-sandbox--summarize-tool-call-plan (tool-name arg-forms)
+  "Build a human-readable summary for TOOL-NAME with ARG-FORMS."
+  (let (parts)
+    (while arg-forms
+      (let ((key (pop arg-forms))
+            (value (pop arg-forms)))
+        (push (format "%s=%s"
+                      (substring (symbol-name key) 1)
+                      (gptel-sandbox--truncate-summary value 60))
+              parts)))
+    (list :tool-name tool-name
+          :summary (if parts
+                       (format "%s %s" tool-name (mapconcat #'identity (nreverse parts) " "))
+                     tool-name))))
+
+(defun gptel-sandbox--collect-confirming-plan (forms)
+  "Collect static summaries for confirming tool calls in FORMS."
+  (let (plan)
+    (dolist (statement forms (nreverse plan))
+      (pcase-let ((`(,tool-name ,arg-forms)
+                   (or (gptel-sandbox--statement-tool-call statement)
+                       '(nil nil))))
+        (when (and tool-name
+                   (stringp tool-name)
+                   (member tool-name my/gptel-programmatic-confirming-tools))
+          (push (gptel-sandbox--summarize-tool-call-plan tool-name arg-forms)
+                plan))))))
+
 (defun gptel-sandbox--confirm-required-p (tool-spec arg-values)
   "Return non-nil when TOOL-SPEC with ARG-VALUES requires confirmation."
   (and (boundp 'gptel-confirm-tool-calls)
@@ -345,6 +396,30 @@ CALLBACK receives non-nil when approved and nil when rejected."
         (funcall callback t)
       (funcall callback
                (y-or-n-p (format "Programmatic wants to run %s. Continue? " formatted))))))
+
+(defun gptel-sandbox--default-aggregate-confirm (plan callback)
+  "Prompt for confirmation before multi-step mutating Programmatic PLAN.
+CALLBACK receives non-nil when approved and nil when rejected."
+  (let ((summary (mapconcat (lambda (step)
+                              (concat "- " (plist-get step :summary)))
+                            plan "\n")))
+    (funcall callback
+             (y-or-n-p (format "Programmatic wants to run this mutating plan:\n%s\nApprove aggregate preview? "
+                               summary)))))
+
+(defun gptel-sandbox--maybe-aggregate-confirm (state callback)
+  "Run aggregate mutating preview for STATE, then CALLBACK approval result."
+  (let ((plan (plist-get state :mutating-plan)))
+    (if (or (not (eq (gptel-sandbox--current-profile) 'agent))
+            (plist-get state :aggregate-preview-shown)
+            (<= (length plan) 1))
+        (funcall callback t)
+      (funcall gptel-sandbox-aggregate-confirm-function
+               plan
+               (lambda (approved)
+                 (when approved
+                   (setf (plist-get state :aggregate-preview-shown) t))
+                 (funcall callback approved))))))
 
 (defun gptel-sandbox--check-tool (tool-spec arg-values)
   "Validate TOOL-SPEC with ARG-VALUES for sandbox execution."
@@ -415,14 +490,20 @@ can consume lists, vectors, plists, and alists as readable data."
                                    (error (format "Error: %s" (error-message-string inner-err))))))
                      (funcall callback (gptel--to-string result)))))))
           (if (gptel-sandbox--confirm-required-p tool-spec arg-values)
-              (funcall gptel-sandbox-confirm-function
-                       tool-spec arg-values
-                       (lambda (approved)
-                         (if approved
-                             (funcall invoke-tool)
-                           (funcall callback
-                                    (format "Error: Programmatic tool call rejected by user: %s"
-                                            (gptel-tool-name tool-spec))))))
+              (gptel-sandbox--maybe-aggregate-confirm
+               state
+               (lambda (aggregate-approved)
+                 (if aggregate-approved
+                     (funcall gptel-sandbox-confirm-function
+                              tool-spec arg-values
+                              (lambda (approved)
+                                (if approved
+                                    (funcall invoke-tool)
+                                  (funcall callback
+                                           (format "Error: Programmatic tool call rejected by user: %s"
+                                                   (gptel-tool-name tool-spec))))))
+                   (funcall callback
+                            "Error: Programmatic aggregate preview rejected by user"))))
             (funcall invoke-tool)))
       (error
        (funcall callback (format "Error: %s" (error-message-string err)))))))
@@ -480,7 +561,6 @@ PROFILE is either `agent' or `readonly'."
   (let ((done nil)
         (timer nil)
         (env (gptel-sandbox--make-env))
-        (state (list :tool-count 0))
         (gptel-sandbox-profile (or profile gptel-sandbox-profile)))
     (cl-labels
         ((finish (result)
@@ -493,6 +573,10 @@ PROFILE is either `agent' or `readonly'."
           (progn
             (unless (and (stringp code) (not (string-empty-p (string-trim code))))
               (error "Programmatic code is empty"))
+            (let* ((forms (gptel-sandbox--parse-forms code))
+                   (state (list :tool-count 0
+                                :mutating-plan (gptel-sandbox--collect-confirming-plan forms)
+                                :aggregate-preview-shown nil)))
             (setq timer
                   (run-at-time
                    my/gptel-programmatic-timeout nil
@@ -500,9 +584,7 @@ PROFILE is either `agent' or `readonly'."
                      (finish
                       (format "Error: Programmatic timed out after %ss"
                               my/gptel-programmatic-timeout)))))
-            (gptel-sandbox--run-forms
-             (gptel-sandbox--parse-forms code)
-             env state #'finish))
+              (gptel-sandbox--run-forms forms env state #'finish)))
         (error
          (finish (format "Error: %s" (error-message-string err))))))))
 

@@ -13,6 +13,7 @@
 (defvar gptel-tool-call-actions-map) ; defined in gptel
 (defvar gptel--tool-preview-alist)   ; defined in gptel
 (defvar gptel-sandbox-confirm-function)
+(defvar gptel-sandbox-aggregate-confirm-function)
 
 ;; Forward declarations for gptel-ext-tool-permits.el functions
 (declare-function my/gptel-permit-tool "gptel-ext-tool-permits")
@@ -39,7 +40,15 @@ is found."
                     (let ((buf (process-buffer (car entry))))
                       (eq buf (current-buffer))))
                   gptel--request-alist))))
-      gptel--fsm-last))
+       gptel--fsm-last))
+
+(defun my/gptel--tool-spec-name (tool-spec)
+  "Return a displayable tool name for TOOL-SPEC.
+Supports normal gptel tool structs and lightweight plist specs used for
+aggregate Programmatic previews."
+  (or (ignore-errors (gptel-tool-name tool-spec))
+      (plist-get tool-spec :name)
+      (format "%s" tool-spec)))
 
 ;; --- Enhanced Tool Call Confirmation Context ---
 
@@ -49,7 +58,7 @@ is found."
   (when-let* ((ov (cdr-safe (get-char-property-and-overlay (point) 'gptel-tool)))
               (tool-calls (overlay-get ov 'gptel-tool)))
     (dolist (tc tool-calls)
-      (my/gptel-permit-tool (gptel-tool-name (car tc)))))
+      (my/gptel-permit-tool (my/gptel--tool-spec-name (car tc)))))
   (call-interactively #'gptel--accept-tool-calls))
 
 (defun my/gptel--programmatic-confirm-tool (tool-spec arg-values callback)
@@ -72,16 +81,41 @@ CALLBACK receives non-nil for approval and nil for rejection."
          (plist-get info :position)
          (plist-get info :tracking-marker))))))
 
+(defun my/gptel--programmatic-aggregate-confirm (plan callback)
+  "Show aggregate confirmation UI for multi-step mutating Programmatic PLAN.
+CALLBACK receives non-nil for approval and nil for rejection."
+  (let* ((summary (mapconcat (lambda (step)
+                               (concat "- " (plist-get step :summary)))
+                             plan "\n"))
+         (tool-calls
+          (list (list (list :name "Programmatic Plan")
+                      (list summary)
+                      callback)))
+        (info (list :buffer (current-buffer)
+                    :backend gptel-backend
+                    :position (point-marker)
+                    :tracking-marker (copy-marker (point) t)
+                    :programmatic-confirm t
+                    :programmatic-aggregate t)))
+    (if (or buffer-read-only
+            (get-char-property (point) 'read-only))
+        (my/gptel--confirm-tool-calls-minibuffer tool-calls info)
+      (my/gptel--confirm-tool-calls-overlay
+       tool-calls info
+       (plist-get info :position)
+       (plist-get info :tracking-marker)))))
+
 (defun my/gptel--confirm-tool-calls-minibuffer (tool-calls info)
   "Confirm TOOL-CALLS via minibuffer with per-tool permit support.
 Shows each tool call with arguments, offering inspect (i) and permit (p) actions."
   (let* ((minibuffer-allow-text-properties t)
          (backend-name (gptel-backend-name (plist-get info :backend)))
          (programmaticp (plist-get info :programmatic-confirm))
+         (aggregatep (plist-get info :programmatic-aggregate))
          (prompt (format "%s wants to run " backend-name)))
     (map-y-or-n-p
      (lambda (tool-call-spec)
-        (let* ((tool-name (gptel-tool-name (car tool-call-spec)))
+        (let* ((tool-name (my/gptel--tool-spec-name (car tool-call-spec)))
                (args (cadr tool-call-spec))
                (done-cb (nth 2 tool-call-spec))
                (permitted (my/gptel-tool-permitted-p tool-name))
@@ -98,7 +132,9 @@ Shows each tool call with arguments, offering inspect (i) and permit (p) actions
                     (funcall done-cb t)
                   (gptel--accept-tool-calls (list tool-call-spec) nil))
                 nil)
-            (concat prompt
+            (concat (if aggregatep
+                        (format "%s wants to run this Programmatic plan step " backend-name)
+                      prompt)
                     (propertize tool-name 'face 'font-lock-keyword-face)
                     (if (string-empty-p formatted-args) ""
                       (concat " " (propertize formatted-args 'face 'font-lock-constant-face)))
@@ -123,7 +159,7 @@ Shows each tool call with arguments, offering inspect (i) and permit (p) actions
                            (recursive-edit) nil)))
            "inspect call(s)")
         (?p ,(lambda (tool-call-spec)
-               (let ((name (gptel-tool-name (car tool-call-spec))))
+               (let ((name (my/gptel--tool-spec-name (car tool-call-spec))))
                  (my/gptel-permit-tool name)
                  (message "Permitted %s for this session" name))
                ;; Accept this tool call and continue
@@ -138,6 +174,7 @@ Shows each tool call with arguments, offering inspect (i) and permit (p) actions
 START-MARKER and TRACKING-MARKER delimit the response region."
   (let* ((backend-name (gptel-backend-name (plist-get info :backend)))
          (programmaticp (plist-get info :programmatic-confirm))
+         (aggregatep (plist-get info :programmatic-aggregate))
          (actions-string
            (concat (propertize "Run: " 'face 'font-lock-string-face)
                    (propertize "C-c C-c" 'face 'help-key-binding)
@@ -175,7 +212,9 @@ START-MARKER and TRACKING-MARKER delimit the response region."
                ;;preview-teardown func   preview-handle overlay/buffer
                (push (list (cadr funcs) (funcall (car funcs) arg-values info))
                      preview-handlers)
-            (push (gptel--format-tool-call (gptel-tool-name tool-spec) arg-values)
+            (push (if aggregatep
+                      (car arg-values)
+                    (gptel--format-tool-call (my/gptel--tool-spec-name tool-spec) arg-values))
                   confirm-strings)))
         (and confirm-strings (apply #'insert (nreverse confirm-strings)))
         ;; Only mark read-only if text was actually inserted (guard inverted range).
@@ -187,12 +226,13 @@ START-MARKER and TRACKING-MARKER delimit the response region."
         (overlay-put
          prompt-ov 'before-string
          (concat "\n"
-                 (propertize " " 'display `(space :align-to (- right ,(length actions-string) 2))
-                             'face '(:inherit font-lock-string-face :underline t :extend t))
-                 actions-string
-                 (format (propertize "\n%s wants to run:\n\n"
-                                     'face 'font-lock-string-face)
-                         backend-name)))
+                  (propertize " " 'display `(space :align-to (- right ,(length actions-string) 2))
+                              'face '(:inherit font-lock-string-face :underline t :extend t))
+                  actions-string
+                  (format (propertize "\n%s wants to run%s:\n\n"
+                                      'face 'font-lock-string-face)
+                          backend-name
+                          (if aggregatep " this Programmatic plan" ""))))
         (overlay-put
          prompt-ov 'after-string
          (concat (propertize "\n" 'face
@@ -220,8 +260,8 @@ auto-accepts without prompting.  Otherwise shows the standard confirmation
 with an additional `p' option to permit and remember a tool."
   ;; Fast path: if all tools are already permitted, auto-accept
   (if (and (bound-and-true-p my/gptel-permitted-tools)
-           (cl-every (lambda (tc) (my/gptel-tool-permitted-p (gptel-tool-name (car tc))))
-                     tool-calls))
+           (cl-every (lambda (tc) (my/gptel-tool-permitted-p (my/gptel--tool-spec-name (car tc))))
+                      tool-calls))
       (gptel--accept-tool-calls tool-calls nil)
     ;; Slow path: show confirmation UI
     (let* ((start-marker (plist-get info :position))
@@ -276,7 +316,8 @@ with an additional `p' option to permit and remember a tool."
 (advice-add 'gptel--reject-tool-calls :around #'my/gptel--around-reject-tool-calls)
 
 (with-eval-after-load 'gptel-sandbox
-  (setq gptel-sandbox-confirm-function #'my/gptel--programmatic-confirm-tool))
+  (setq gptel-sandbox-confirm-function #'my/gptel--programmatic-confirm-tool)
+  (setq gptel-sandbox-aggregate-confirm-function #'my/gptel--programmatic-aggregate-confirm))
 
 (provide 'gptel-ext-tool-confirm)
 ;;; gptel-ext-tool-confirm.el ends here

@@ -120,6 +120,10 @@ These still go through the normal confirmation UI. Nested Programmatic confirms
 reuse the regular minibuffer / overlay tool approval flow, and the underlying
 mutating tool keeps its own preview/apply path.
 
+When a Programmatic run includes multiple mutating steps, the agent now gets an
+aggregate preview/approval step first, summarizing the whole mutating plan
+before individual tool confirmations run.
+
 In `gptel-plan`, `Programmatic` is readonly-only and may call only readonly
 nested tools such as `Read`, `Grep`, `Glob`, `Code_Map`, `Code_Inspect`,
 `Code_Usages`, `Diagnostics`, and introspection helpers.

@@ -125,6 +125,29 @@ Search backward for PROPERTY equal to VALUE, optionally filtering with PREDICATE
         (should-not test-tool-confirm--rejected)
         (should-not (overlay-buffer ov))))))
 
+(ert-deftest tool-confirm/programmatic-aggregate-overlay-accept-callbacks ()
+  (let ((approved nil)
+        (test-tool-confirm--accepted nil))
+    (with-temp-buffer
+      (insert "assistant response")
+      (add-text-properties (point-min) (point-max) '(gptel response))
+      (goto-char (point-max))
+      (my/gptel--programmatic-aggregate-confirm
+       (list (list :tool-name "Edit" :summary "Edit path=a.el diffp=t")
+             (list :tool-name "ApplyPatch" :summary "ApplyPatch patch=..."))
+       (lambda (value) (setq approved value)))
+      (let ((ov (test-tool-confirm--programmatic-overlay)))
+        (should ov)
+        (should (overlay-get ov 'gptel-programmatic-confirm))
+        (gptel--accept-tool-calls
+         (list (list (list :name "Programmatic Plan")
+                     (list "- Edit path=a.el diffp=t\n- ApplyPatch patch=...")
+                     (lambda (value) (setq approved value))))
+         ov)
+        (should approved)
+        (should-not test-tool-confirm--accepted)
+        (should-not (overlay-buffer ov))))))
+
 (provide 'test-tool-confirm-programmatic)
 
 ;;; test-tool-confirm-programmatic.el ends here
