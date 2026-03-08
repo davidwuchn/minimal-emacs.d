@@ -85,8 +85,15 @@ small restricted Emacs Lisp program that runs those steps inside one tool use.
 Supported forms in the restricted sandbox include:
 
 - `setq`, `result`, top-level `tool-call`
-- `if`, `when`, `unless`, `let`, `let*`
+- `if`, `when`, `unless`, `not`, `and`, `or`, `progn`, `let`, `let*`
+- collection helpers `mapcar` and `filter`
 - small data helpers such as `plist-get`, `alist-get`, `assoc`, `cons`
+
+The current sandbox is still expression-oriented: it supports simple collection
+transforms, but not open-ended loops like `while`.
+
+That keeps common transform/filter cases ergonomic without opening the door to
+general looping semantics in v1.
 
 Results can be returned as strings or structured values; structured values are
 pretty-printed before returning to the model.
@@ -107,6 +114,7 @@ allowed for controlled mutating flows in agent mode:
 
 - `Edit`
 - `ApplyPatch`
+- `Code_Replace`
 
 These still go through the normal confirmation UI. Nested Programmatic confirms
 reuse the regular minibuffer / overlay tool approval flow, and the underlying

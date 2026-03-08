@@ -84,8 +84,9 @@ The currently implemented sandbox supports:
 
 - literals: strings, numbers, keywords, vectors, `t`, `nil`
 - variable lookup and `quote`
-- control flow: `if`, `when`, `unless`, `and`, `or`, `progn`
+- control flow: `if`, `when`, `unless`, `not`, `and`, `or`, `progn`
 - bindings and assignment: `let`, `let*`, `setq`
+- collection helpers: `mapcar`, `filter`
 - comparisons: `equal`, `string=`, `=`, `<`, `>`, `<=`, `>=`
 - data/string helpers: `concat`, `format`, `list`, `vector`, `append`, `length`,
   `car`, `cdr`, `nth`, `cons`, `assoc`, `alist-get`, `plist-get`,
@@ -97,7 +98,12 @@ Still intentionally unsupported:
 
 - arbitrary function calls / `eval`
 - nested `tool-call` in arbitrary expressions
+- open-ended looping constructs like `while`
 - direct process, network, file, or buffer mutation primitives
+
+Agent-mode mutating tools currently allowed inside `Programmatic` include the
+preview-backed editors `Edit`, `ApplyPatch`, and `Code_Replace`. Readonly plan
+mode excludes them.
 
 ### Safety Defaults
 

@@ -39,11 +39,11 @@ file."
 (defcustom my/gptel-programmatic-allowed-tools
   '("Read" "Grep" "Glob"
     "Edit" "ApplyPatch"
-    "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"
+    "Code_Map" "Code_Inspect" "Code_Replace" "Code_Usages" "Diagnostics"
     "describe_symbol" "get_symbol_source" "find_buffers_and_recent")
   "Tool names allowed inside Programmatic execution.
 The initial v1 slice focuses on read-mostly tools plus preview-backed patch
-editors (`Edit`, `ApplyPatch`)."
+editors (`Edit`, `ApplyPatch`, `Code_Replace`)."
   :type '(repeat string)
   :group 'gptel-sandbox)
 
@@ -57,7 +57,7 @@ This profile is used by `gptel-plan` and excludes mutating or confirming tools."
   :group 'gptel-sandbox)
 
 (defcustom my/gptel-programmatic-confirming-tools
-  '("Edit" "ApplyPatch")
+  '("Edit" "ApplyPatch" "Code_Replace")
   "Tool names allowed to request confirmation inside Programmatic.
 These tools keep their own preview/apply flow after the initial nested
 confirmation step."
@@ -158,6 +158,38 @@ When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
       (dolist (form body value)
         (setq value (gptel-sandbox--eval-expr form child-env))))))
 
+(defun gptel-sandbox--eval-map-like (expr env keep-original)
+  "Evaluate sandbox `mapcar' or `filter' EXPR in ENV.
+When KEEP-ORIGINAL is non-nil, keep original items whose body is truthy;
+otherwise collect each mapped result.
+
+Supported shape:
+  (mapcar (lambda (item) BODY...) LIST)
+  (filter (lambda (item) BODY...) LIST)"
+  (pcase expr
+    (`(,_ (lambda (,arg) . ,body) ,list-expr)
+     (unless (symbolp arg)
+       (error "Programmatic %s lambda arg must be a symbol"
+              (if keep-original "filter" "mapcar")))
+     (let ((items (gptel-sandbox--eval-expr list-expr env))
+           (results nil))
+       (unless (listp items)
+         (error "Programmatic %s expects a list input"
+                (if keep-original "filter" "mapcar")))
+       (dolist (item items (nreverse results))
+         (let ((child-env (gptel-sandbox--copy-env env))
+               (value nil))
+           (puthash arg item child-env)
+           (dolist (form body)
+             (setq value (gptel-sandbox--eval-expr form child-env)))
+           (if keep-original
+               (when value
+                 (push item results))
+             (push value results))))))
+    (_
+     (error "Programmatic %s requires (lambda (item) ...) and a list"
+            (if keep-original "filter" "mapcar")))))
+
 (defun gptel-sandbox--lookup (symbol env)
   "Look up SYMBOL in ENV or signal an error."
   (let ((marker (list 'missing))
@@ -207,6 +239,10 @@ supports a small, explicit whitelist of pure operations."
        (gptel-sandbox--eval-let (nth 1 expr) (cddr expr) env t))
       ('not
        (not (gptel-sandbox--eval-expr (nth 1 expr) env)))
+      ('mapcar
+       (gptel-sandbox--eval-map-like expr env nil))
+      ('filter
+       (gptel-sandbox--eval-map-like expr env t))
       ('and
        (let ((value t))
          (catch 'gptel-sandbox-short-circuit

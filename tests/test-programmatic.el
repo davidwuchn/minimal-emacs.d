@@ -57,7 +57,7 @@
          (my/gptel-programmatic-max-tool-calls 3)
          (my/gptel-programmatic-timeout 1)
          (my/gptel-programmatic-allowed-tools '("Read" "Grep"))
-         (my/gptel-programmatic-confirming-tools '("Edit" "ApplyPatch"))
+         (my/gptel-programmatic-confirming-tools '("Edit" "ApplyPatch" "Code_Replace"))
          (gptel-confirm-tool-calls 'auto)
          (gptel-sandbox-confirm-function (lambda (_tool-spec _arg-values callback)
                                            (funcall callback t))))
@@ -307,6 +307,57 @@
                "not allowed inside Programmatic readonly mode"
                (test-programmatic--run
                 "(setq result (tool-call \"Edit\" :path \"foo.el\" :new_str_or_diff \"patch\" :diffp t))
+(result result)"))))))
+
+(ert-deftest programmatic/supports-mapcar-and-filter ()
+  (test-programmatic--with-tools nil
+    (should
+     (equal
+      (test-programmatic--run
+       "(result
+ (let* ((items (list \"alpha\" \"be\" \"gamma\"))
+        (mapped (mapcar (lambda (item) (concat item \"!\")) items))
+        (filtered (filter (lambda (item) (> (length item) 3)) mapped)))
+   (string-join filtered \",\")))")
+      "alpha!,gamma!"))))
+
+(ert-deftest programmatic/allows-code-replace-with-approval ()
+  (let (seen)
+    (test-programmatic--with-tools
+        `(("Code_Replace" . ,(test-programmatic--async-tool
+                              "Code_Replace"
+                              (lambda (callback file-path node-name new-code)
+                                (setq seen (list file-path node-name new-code))
+                                (funcall callback (format "replaced:%s:%s" file-path node-name)))
+                              '((:name "file_path")
+                                (:name "node_name")
+                                (:name "new_code"))
+                              t)))
+      (let ((my/gptel-programmatic-allowed-tools '("Code_Replace"))
+            (gptel-sandbox-confirm-function (lambda (_tool-spec _arg-values callback)
+                                              (funcall callback t))))
+        (should
+         (equal
+          (test-programmatic--run
+           "(setq result (tool-call \"Code_Replace\" :file_path \"foo.el\" :node_name \"my-fn\" :new_code \"(defun my-fn () 42)\"))
+(result result)")
+          "replaced:foo.el:my-fn"))
+        (should (equal seen '("foo.el" "my-fn" "(defun my-fn () 42)")))))))
+
+(ert-deftest programmatic/readonly-profile-rejects-code-replace ()
+  (test-programmatic--with-tools
+      `(("Code_Replace" . ,(test-programmatic--sync-tool
+                            "Code_Replace"
+                            (lambda (&rest _args) "replaced")
+                            '((:name "file_path")
+                              (:name "node_name")
+                              (:name "new_code"))
+                            t)))
+    (let ((gptel--preset 'gptel-plan))
+      (should (string-match-p
+               "not allowed inside Programmatic readonly mode"
+               (test-programmatic--run
+                "(setq result (tool-call \"Code_Replace\" :file_path \"foo.el\" :node_name \"my-fn\" :new_code \"(defun my-fn () 42)\"))
 (result result)"))))))
 
 (provide 'test-programmatic)
