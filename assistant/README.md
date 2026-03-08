@@ -133,9 +133,11 @@ wide-scope exploration or research.
 
 ### Benchmarking
 
-A small local benchmark harness compares ordinary multi-tool chaining against a
-single `Programmatic` orchestration run for a representative `Grep -> Read ->
-Read -> summarize` workflow.
+A small local benchmark harness compares ordinary multi-tool chaining against
+single `Programmatic` orchestration runs for two representative workflows:
+
+- read-only `Grep -> Read -> Read -> summarize`
+- mutating preview-backed `Read -> Edit(diff)`
 
 Run it with:
 
@@ -150,6 +152,7 @@ The benchmark reports:
 - simulated end-to-end time with per-turn model latency
 - tool round-trip count
 - transcript byte reduction
+- separate read-only and mutating preview-backed workflow results
 
 ## Prompts (`assistant/prompts/`)
 

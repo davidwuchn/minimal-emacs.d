@@ -214,7 +214,8 @@ Still open:
 - Benchmarking against ordinary multi-tool round trips
   - Initial local benchmark harness added in `lisp/modules/gptel-programmatic-benchmark.el`
   - Helper script added at `scripts/benchmark-programmatic.sh`
-  - Current representative workflow shows ~2.98x simulated end-to-end speedup and ~18.12% transcript reduction with one Programmatic turn versus three ordinary tool turns
+  - Read-only workflow currently shows ~2.98x simulated end-to-end speedup and ~18.12% transcript reduction with one Programmatic turn versus three ordinary tool turns
+  - Mutating preview-backed workflow is also covered so benchmark results now include a representative `Read -> Edit(diff)` path, not only read-only orchestration
 - Decide whether async orchestration beyond nested async tools is worthwhile
 
 ## Testing Matrix
