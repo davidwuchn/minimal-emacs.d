@@ -47,8 +47,12 @@
             "Error: Command rejected by Emacs Eval Sandbox. Destructive Lisp functions are forbidden in Plan mode."
           nil)))
 
-     ;; Default Allow
-     (t nil))))
+      ;; RULE 3: Programmatic is agent-only in v1
+      ((and is-plan (equal tool-name "Programmatic"))
+       "Error: Programmatic is disabled in Plan mode. Use readonly tools directly, or switch to Agent mode for programmatic orchestration.")
+
+      ;; Default Allow
+      (t nil))))
 
 (defun my/gptel-tool-acl-needs-confirm (tool-name args)
   "Return t if the tool call should force a user confirmation."

@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-06 (tag v0.5.28)
+> Last updated: 2026-03-08 (tag v0.5.28)
 
 ## Architecture Overview
 
@@ -33,6 +33,8 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 | `gptel-tools-grep.el` | Async Grep tool | |
 | `gptel-tools-introspection.el` | Emacs introspection tools (describe_symbol, get_symbol_source, find_buffers_and_recent) | |
 | `gptel-tools-preview.el` | Unified Preview tool (diff display in side window) | ~270 |
+| `gptel-tools-programmatic.el` | Programmatic tool registration + restricted orchestration entrypoint | ~42 |
+| `gptel-sandbox.el` | Restricted evaluator for serial Programmatic tool orchestration | ~301 |
 | `nucleus-mode-switch.el` | Plan/Agent mode switching with system reminders | |
 | `nucleus-presets.el` | Preset management, agent patching, tool contract validation | ~344 |
 | `nucleus-prompts.el` | Prompt loading from assistant/prompts/ | ~280 |
@@ -59,7 +61,7 @@ Minibuffer dispatch: `y/n/k/a/i/p/q`. Upstream `n` = "defer" (FSM stays paused, 
 |-----|-------|---------|
 | `:readonly` | 18 | Plan mode, introspector subagent |
 | `:researcher` | 19 | Researcher subagent |
-| `:nucleus` | 30 | Agent mode, executor subagent |
+| `:nucleus` | 31 | Agent mode, executor subagent |
 | `:explorer` | 3 | Explorer subagent (Glob/Grep/Read) |
 | `:reviewer` | 3 | Reviewer subagent (Glob/Grep/Read) |
 | `:snippets` | (= `:nucleus`) | Derived from `:nucleus`; tools with supplemental prompts |
@@ -151,6 +153,14 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Per-tool output limits | **Skip** | `my/gptel-subagent-result-limit` truncation on subagents works fine |
 
 ### Recent Changes (v0.5.28)
+
+- **Add Programmatic v1 vertical slice** (⚒): Added `lisp/modules/gptel-sandbox.el` and `lisp/modules/gptel-tools-programmatic.el`. New `Programmatic` tool is agent-only and executes a tiny restricted Lisp subset (`setq`, `tool-call`, `result`, `if`, `when`, `unless`, `let`, `let*`, `plist-get`, `alist-get`, `assoc`, `cons`) to orchestrate existing tools in one turn. Initial nested-tool allowlist is read-mostly plus preview-backed patch editors (`Edit`, `ApplyPatch`), with max tool-call count, timeout, truncated final results, pretty-printed structured return values, and a nested confirmation hook for supported mutating tools.
+- **Route nested Programmatic confirms through native UI** (⚒): `lisp/modules/gptel-ext-tool-confirm.el` now installs `my/gptel--programmatic-confirm-tool` as the sandbox confirm hook, reusing the normal minibuffer/overlay confirmation path for nested Programmatic tool calls. Nested approvals/rejections flow back through callback-based wrappers around `gptel--accept-tool-calls` / `gptel--reject-tool-calls` instead of bypassing the chat UI.
+- **Add confirmation UI integration tests** (⊘): New `tests/test-tool-confirm-programmatic.el` exercises the callback-based native confirmation path for nested Programmatic calls: minibuffer acceptance, overlay acceptance, and overlay rejection. Verified together with the sandbox suite via `emacs --batch -Q -L . -L lisp -L lisp/modules -l tests/test-programmatic.el -l tests/test-tool-confirm-programmatic.el -f ert-run-tests-batch-and-exit`.
+- **Wire Programmatic into nucleus contracts** (⚒): Registered the tool in `lisp/modules/gptel-tools.el`, added it to `:nucleus` in `lisp/modules/nucleus-tools.el`, updated prompt guidance in `assistant/prompts/code_agent.md`, and added a defense-in-depth deny rule in `lisp/modules/gptel-ext-security.el` so Plan mode explicitly rejects `Programmatic`.
+- **Add Programmatic prompt examples** (⚒): Expanded `assistant/prompts/code_agent.md` with concrete `Programmatic` examples and explicit v1 constraints: serial orchestration only, no arbitrary Lisp or nested `Bash`, and a documented safe subset including control-flow/local-binding forms plus safe structured-data helpers. Prompt guidance now also allows preview-backed patch tools inside `Programmatic` when confirmation succeeds.
+- **Add mutating Programmatic examples** (⚒): Expanded `assistant/prompts/code_agent.md` with concrete nested `Edit` and `ApplyPatch` examples so the execution prompt now demonstrates the new preview-backed patch workflow inside `Programmatic`, not just read-only orchestration.
+- **Add Programmatic ERT coverage** (⊘): New `tests/test-programmatic.el` covers serial orchestration, async nested tools, supported confirming tools with approval/denial, disallowed-tool rejection, max-tool-call enforcement, unsupported-form rejection, structured-result rendering, safe control-flow/local-binding forms, safe structured-data helpers, and result truncation. Verified with `emacs --batch -Q -L . -L lisp -L lisp/modules -l tests/test-programmatic.el -f ert-run-tests-batch-and-exit`.
 
 - **Repair init load-path + package autoload recovery** (⊘): `lisp/init-dev.el` now sets `lisp/` and `lisp/modules/` on `load-path` inside `eval-and-compile`, so compiled init code can still resolve local modules like `treesit-local-xref`. Added `my/package-repair-autoloads` in `lisp/init-files.el` to regenerate missing package `*-autoloads.el` files on demand and refresh `package-quickstart.el` when needed.
 - **Restore JSON tree-sitter support** (⊘): Added `json` to `treesit-auto-langs` and defined an explicit `json-ts-mode` recipe pinned to ABI-14-safe `tree-sitter-json` `v0.24.8` in `lisp/init-treesit.el`. This fixes `config.json` opening without the intended syntax highlighting path.

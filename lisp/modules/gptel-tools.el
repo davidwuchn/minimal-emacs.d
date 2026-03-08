@@ -17,6 +17,7 @@
 (require 'gptel-tools-apply)
 (require 'gptel-tools-agent)
 (require 'gptel-tools-preview)
+(require 'gptel-tools-programmatic)
 ;; (require 'gptel-tools-lsp)  ; Deprecated, functionality merged into gptel-tools-code
 (require 'gptel-tools-introspection)
 ;; (require 'gptel-tools-ast)  ; Deprecated, functionality merged into gptel-tools-code
@@ -40,6 +41,7 @@ Call this after gptel-agent-tools loads."
   (gptel-tools-apply-register)
   (gptel-tools-agent-register)
   (gptel-tools-preview-register)
+  (gptel-tools-programmatic-register)
   ;; (gptel-tools-lsp-register)  ; Deprecated by gptel-tools-code
   (gptel-tools-introspection-register)
   ;; (gptel-tools-ast-register)  ; Deprecated by gptel-tools-code

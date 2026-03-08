@@ -12,6 +12,7 @@
 
 (defvar gptel-tool-call-actions-map) ; defined in gptel
 (defvar gptel--tool-preview-alist)   ; defined in gptel
+(defvar gptel-sandbox-confirm-function)
 
 ;; Forward declarations for gptel-ext-tool-permits.el functions
 (declare-function my/gptel-permit-tool "gptel-ext-tool-permits")
@@ -51,36 +52,65 @@ is found."
       (my/gptel-permit-tool (gptel-tool-name (car tc)))))
   (call-interactively #'gptel--accept-tool-calls))
 
+(defun my/gptel--programmatic-confirm-tool (tool-spec arg-values callback)
+  "Confirm nested Programmatic TOOL-SPEC with ARG-VALUES, then run CALLBACK.
+CALLBACK receives non-nil for approval and nil for rejection."
+  (let ((tool-call (list tool-spec arg-values callback))
+        (info (list :buffer (current-buffer)
+                    :backend gptel-backend
+                    :position (point-marker)
+                    :tracking-marker (copy-marker (point) t)
+                    :programmatic-confirm t)))
+    (if (and (bound-and-true-p my/gptel-permitted-tools)
+             (my/gptel-tool-permitted-p (gptel-tool-name tool-spec)))
+        (funcall callback t)
+      (if (or buffer-read-only
+              (get-char-property (point) 'read-only))
+          (my/gptel--confirm-tool-calls-minibuffer (list tool-call) info)
+        (my/gptel--confirm-tool-calls-overlay
+         (list tool-call) info
+         (plist-get info :position)
+         (plist-get info :tracking-marker))))))
+
 (defun my/gptel--confirm-tool-calls-minibuffer (tool-calls info)
   "Confirm TOOL-CALLS via minibuffer with per-tool permit support.
 Shows each tool call with arguments, offering inspect (i) and permit (p) actions."
   (let* ((minibuffer-allow-text-properties t)
          (backend-name (gptel-backend-name (plist-get info :backend)))
+         (programmaticp (plist-get info :programmatic-confirm))
          (prompt (format "%s wants to run " backend-name)))
     (map-y-or-n-p
      (lambda (tool-call-spec)
-       (let* ((tool-name (gptel-tool-name (car tool-call-spec)))
-              (args (cadr tool-call-spec))
-              (permitted (my/gptel-tool-permitted-p tool-name))
-              (formatted-args
-               (mapconcat (lambda (arg)
-                            (cond ((stringp arg)
-                                   (truncate-string-to-width arg 60 nil nil "..."))
+        (let* ((tool-name (gptel-tool-name (car tool-call-spec)))
+               (args (cadr tool-call-spec))
+               (done-cb (nth 2 tool-call-spec))
+               (permitted (my/gptel-tool-permitted-p tool-name))
+               (formatted-args
+                (mapconcat (lambda (arg)
+                             (cond ((stringp arg)
+                                    (truncate-string-to-width arg 60 nil nil "..."))
                                   (t (prin1-to-string arg))))
                           args " ")))
-         (if permitted
-             ;; Already permitted — auto-accept this one
-             (progn (gptel--accept-tool-calls (list tool-call-spec) nil) nil)
-           (concat prompt
-                   (propertize tool-name 'face 'font-lock-keyword-face)
-                   (if (string-empty-p formatted-args) ""
-                     (concat " " (propertize formatted-args 'face 'font-lock-constant-face)))
-                   ": "))))
-     (lambda (tcs) (gptel--accept-tool-calls (list tcs) nil))
+          (if permitted
+              ;; Already permitted — auto-accept this one
+              (progn
+                (if programmaticp
+                    (funcall done-cb t)
+                  (gptel--accept-tool-calls (list tool-call-spec) nil))
+                nil)
+            (concat prompt
+                    (propertize tool-name 'face 'font-lock-keyword-face)
+                    (if (string-empty-p formatted-args) ""
+                      (concat " " (propertize formatted-args 'face 'font-lock-constant-face)))
+                    ": "))))
+     (lambda (tcs)
+       (if programmaticp
+           (funcall (nth 2 tcs) t)
+         (gptel--accept-tool-calls (list tcs) nil)))
      tool-calls '("tool call" "tool calls" "run")
      `((?i ,(lambda (_) (save-window-excursion
-                         (with-selected-window
-                             (gptel--inspect-fsm (my/gptel--current-fsm))
+                          (with-selected-window
+                              (gptel--inspect-fsm (my/gptel--current-fsm))
                            (goto-char (point-min))
                            (when (search-forward-regexp "^:tool-use" nil t)
                              (forward-line 0) (hl-line-highlight))
@@ -92,23 +122,26 @@ Shows each tool call with arguments, offering inspect (i) and permit (p) actions
                              (current-local-map)))
                            (recursive-edit) nil)))
            "inspect call(s)")
-       (?p ,(lambda (tool-call-spec)
-              (let ((name (gptel-tool-name (car tool-call-spec))))
-                (my/gptel-permit-tool name)
-                (message "Permitted %s for this session" name))
-              ;; Accept this tool call and continue
-              (gptel--accept-tool-calls (list tool-call-spec) nil)
-              nil)
-           "permit & run (remember)")))))
+        (?p ,(lambda (tool-call-spec)
+               (let ((name (gptel-tool-name (car tool-call-spec))))
+                 (my/gptel-permit-tool name)
+                 (message "Permitted %s for this session" name))
+               ;; Accept this tool call and continue
+               (if programmaticp
+                   (funcall (nth 2 tool-call-spec) t)
+                 (gptel--accept-tool-calls (list tool-call-spec) nil))
+               nil)
+            "permit & run (remember)")))))
 
 (defun my/gptel--confirm-tool-calls-overlay (tool-calls info start-marker tracking-marker)
   "Confirm TOOL-CALLS via chat buffer overlay with previews and keybindings.
 START-MARKER and TRACKING-MARKER delimit the response region."
   (let* ((backend-name (gptel-backend-name (plist-get info :backend)))
+         (programmaticp (plist-get info :programmatic-confirm))
          (actions-string
-          (concat (propertize "Run: " 'face 'font-lock-string-face)
-                  (propertize "C-c C-c" 'face 'help-key-binding)
-                  (propertize ", Permit & run: " 'face 'font-lock-string-face)
+           (concat (propertize "Run: " 'face 'font-lock-string-face)
+                   (propertize "C-c C-c" 'face 'help-key-binding)
+                   (propertize ", Permit & run: " 'face 'font-lock-string-face)
                   (propertize "C-c C-p" 'face 'help-key-binding)
                   (propertize ", Cancel: " 'face 'font-lock-string-face)
                   (propertize "C-c C-k" 'face 'help-key-binding)
@@ -133,14 +166,15 @@ START-MARKER and TRACKING-MARKER delimit the response region."
     (when ov
       (save-excursion
         (goto-char (overlay-end ov))
-        (pcase-dolist (`(,tool-spec ,arg-values _) tool-calls)
+        (pcase-dolist (`(,tool-spec ,arg-values ,_) tool-calls)
           ;; Call tool-specific confirmation prompt
-          (if-let* ((funcs (cdr (assoc (gptel-tool-name tool-spec)
-                                       gptel--tool-preview-alist)))
+          (if-let* ((funcs (and (not programmaticp)
+                                (cdr (assoc (gptel-tool-name tool-spec)
+                                            gptel--tool-preview-alist))))
                     ((functionp (car-safe funcs))))
-              ;;preview-teardown func   preview-handle overlay/buffer
-              (push (list (cadr funcs) (funcall (car funcs) arg-values info))
-                    preview-handlers)
+               ;;preview-teardown func   preview-handle overlay/buffer
+               (push (list (cadr funcs) (funcall (car funcs) arg-values info))
+                     preview-handlers)
             (push (gptel--format-tool-call (gptel-tool-name tool-spec) arg-values)
                   confirm-strings)))
         (and confirm-strings (apply #'insert (nreverse confirm-strings)))
@@ -170,6 +204,7 @@ START-MARKER and TRACKING-MARKER delimit the response region."
         (when preview-handlers (overlay-put ov 'previews preview-handlers))
         (overlay-put ov 'mouse-face 'highlight)
         (overlay-put ov 'gptel-tool tool-calls)
+        (overlay-put ov 'gptel-programmatic-confirm programmaticp)
         (overlay-put ov 'help-echo
                      (concat "Tool call(s) requested: " actions-string))
         (let ((map (make-sparse-keymap)))
@@ -200,7 +235,48 @@ with an additional `p' option to permit and remember a tool."
           (my/gptel--confirm-tool-calls-minibuffer tool-calls info)
         (my/gptel--confirm-tool-calls-overlay
          tool-calls info start-marker tracking-marker))))))
+
+(defun my/gptel--programmatic-confirm-cleanup-overlay (ov)
+  "Remove confirmation UI for nested Programmatic overlay OV."
+  (when (and (overlayp ov) (overlay-buffer ov))
+    (with-current-buffer (overlay-buffer ov)
+      (when-let* ((prompt-ov (overlay-get ov 'prompt))
+                  ((overlay-buffer prompt-ov))
+                  (inhibit-read-only t))
+        (delete-region (overlay-start prompt-ov)
+                       (overlay-end prompt-ov))))
+    (delete-overlay ov)))
+
+(defun my/gptel--around-accept-tool-calls (orig &optional response ov)
+  "Handle nested Programmatic tool confirmations before normal acceptance."
+  (if (and response
+           (= (length response) 1)
+           (or (and (overlayp ov) (overlay-get ov 'gptel-programmatic-confirm))
+               (functionp (nth 2 (car response)))))
+      (let ((cb (nth 2 (car response))))
+        (when (functionp cb)
+          (funcall cb t))
+        (my/gptel--programmatic-confirm-cleanup-overlay ov))
+    (funcall orig response ov)))
+
+(defun my/gptel--around-reject-tool-calls (orig &optional response ov)
+  "Handle nested Programmatic tool rejections before normal cancellation."
+  (if (and response
+           (= (length response) 1)
+           (or (and (overlayp ov) (overlay-get ov 'gptel-programmatic-confirm))
+               (functionp (nth 2 (car response)))))
+      (let ((cb (nth 2 (car response))))
+        (when (functionp cb)
+          (funcall cb nil))
+        (my/gptel--programmatic-confirm-cleanup-overlay ov))
+    (funcall orig response ov)))
+
 (advice-add 'gptel--display-tool-calls :override #'my/gptel--display-tool-calls)
+(advice-add 'gptel--accept-tool-calls :around #'my/gptel--around-accept-tool-calls)
+(advice-add 'gptel--reject-tool-calls :around #'my/gptel--around-reject-tool-calls)
+
+(with-eval-after-load 'gptel-sandbox
+  (setq gptel-sandbox-confirm-function #'my/gptel--programmatic-confirm-tool))
 
 (provide 'gptel-ext-tool-confirm)
 ;;; gptel-ext-tool-confirm.el ends here

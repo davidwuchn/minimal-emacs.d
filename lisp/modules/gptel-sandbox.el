@@ -1,0 +1,445 @@
+;;; gptel-sandbox.el --- Restricted tool orchestration sandbox -*- lexical-binding: t; -*-
+
+;; Author: David Wu
+;; Version: 1.0.0
+;;
+;; Restricted evaluator for the Programmatic tool. It does not expose general
+;; Emacs Lisp evaluation. Instead it supports a tiny statement/expression subset
+;; for serial orchestration of existing non-confirming tools.
+
+(require 'cl-lib)
+(require 'pp)
+(require 'subr-x)
+
+(require 'gptel nil t)
+
+;;; Customization
+
+(defgroup gptel-sandbox nil
+  "Restricted sandbox for programmatic tool orchestration."
+  :group 'gptel)
+
+(defcustom my/gptel-programmatic-timeout 15
+  "Seconds before Programmatic execution is force-stopped."
+  :type 'integer
+  :group 'gptel-sandbox)
+
+(defcustom my/gptel-programmatic-max-tool-calls 25
+  "Maximum nested tool calls allowed in a Programmatic execution."
+  :type 'integer
+  :group 'gptel-sandbox)
+
+(defcustom my/gptel-programmatic-result-limit 4000
+  "Max characters to return inline from Programmatic execution.
+Results longer than this are truncated and the full text is saved to a temp
+file."
+  :type 'integer
+  :group 'gptel-sandbox)
+
+(defcustom my/gptel-programmatic-allowed-tools
+  '("Read" "Grep" "Glob"
+    "Edit" "ApplyPatch"
+    "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"
+    "describe_symbol" "get_symbol_source" "find_buffers_and_recent")
+  "Tool names allowed inside Programmatic execution.
+The initial v1 slice focuses on read-mostly tools plus preview-backed patch
+editors (`Edit`, `ApplyPatch`)."
+  :type '(repeat string)
+  :group 'gptel-sandbox)
+
+(defcustom my/gptel-programmatic-confirming-tools
+  '("Edit" "ApplyPatch")
+  "Tool names allowed to request confirmation inside Programmatic.
+These tools keep their own preview/apply flow after the initial nested
+confirmation step."
+  :type '(repeat string)
+  :group 'gptel-sandbox)
+
+(defvar gptel-sandbox-confirm-function #'gptel-sandbox--default-confirm-tool
+  "Function used to confirm nested Programmatic tool calls.
+Called with TOOL-SPEC, ARG-VALUES, and CALLBACK. CALLBACK must be invoked with
+non-nil to continue or nil to reject.")
+
+;;; Internal Helpers
+
+(defun gptel-sandbox--parse-forms (code)
+  "Parse CODE into a list of Lisp forms."
+  (let ((forms nil)
+        (pos 0)
+        (len (length code)))
+    (while (< pos len)
+      (if (string-match-p "[[:space:]]" (char-to-string (aref code pos)))
+          (setq pos (1+ pos))
+        (let* ((parsed (condition-case err
+                           (read-from-string code pos)
+                         (error
+                          (error "Invalid program syntax near offset %d: %s"
+                                 pos (error-message-string err)))))
+               (form (car parsed))
+               (next-pos (cdr parsed)))
+          (push form forms)
+          (setq pos next-pos))))
+    (nreverse forms)))
+
+(defun gptel-sandbox--make-env ()
+  "Create a fresh sandbox environment."
+  (let ((env (make-hash-table :test #'eq)))
+    (puthash 't t env)
+    (puthash 'nil nil env)
+    env))
+
+(defun gptel-sandbox--copy-env (env)
+  "Return a shallow copy of ENV."
+  (let ((copy (make-hash-table :test #'eq)))
+    (maphash (lambda (key value)
+               (puthash key value copy))
+             env)
+    copy))
+
+(defun gptel-sandbox--normalize-binding (binding)
+  "Normalize a let-style BINDING into `(SYMBOL VALUE-FORM)'."
+  (cond
+   ((symbolp binding)
+    (list binding nil))
+   ((and (consp binding)
+         (symbolp (car binding))
+         (null (cddr binding)))
+    binding)
+   (t
+    (error "Invalid binding in Programmatic sandbox: %S" binding))))
+
+(defun gptel-sandbox--eval-setq-pairs (pairs env)
+  "Evaluate setq PAIRS in ENV and return the final assigned value."
+  (unless (cl-evenp (length pairs))
+    (error "Programmatic setq requires symbol/value pairs"))
+  (let ((value nil))
+    (while pairs
+      (let ((symbol (pop pairs))
+            (value-form (pop pairs)))
+        (unless (symbolp symbol)
+          (error "Programmatic setq target must be a symbol, got: %S" symbol))
+        (setq value (gptel-sandbox--eval-expr value-form env))
+        (puthash symbol value env)
+        (puthash '_ value env)
+        (puthash 'it value env)))
+    value))
+
+(defun gptel-sandbox--eval-let (bindings body env sequentialp)
+  "Evaluate let-style BINDINGS and BODY in ENV.
+When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
+  (let ((child-env (gptel-sandbox--copy-env env)))
+    (if sequentialp
+        (dolist (binding bindings)
+          (pcase-let ((`(,symbol ,value-form)
+                       (gptel-sandbox--normalize-binding binding)))
+            (puthash symbol (gptel-sandbox--eval-expr value-form child-env) child-env)))
+      (let (resolved)
+        (dolist (binding bindings)
+          (pcase-let ((`(,symbol ,value-form)
+                       (gptel-sandbox--normalize-binding binding)))
+            (push (cons symbol (gptel-sandbox--eval-expr value-form env)) resolved)))
+        (dolist (entry resolved)
+          (puthash (car entry) (cdr entry) child-env))))
+    (let ((value nil))
+      (dolist (form body value)
+        (setq value (gptel-sandbox--eval-expr form child-env))))))
+
+(defun gptel-sandbox--lookup (symbol env)
+  "Look up SYMBOL in ENV or signal an error."
+  (let ((marker (list 'missing))
+        (value nil))
+    (setq value (gethash symbol env marker))
+    (if (eq value marker)
+        (error "Unknown symbol in Programmatic sandbox: %S" symbol)
+      value)))
+
+(defun gptel-sandbox--eval-expr (expr env)
+  "Evaluate pure sandbox expression EXPR in ENV.
+This evaluator intentionally excludes general function application and only
+supports a small, explicit whitelist of pure operations."
+  (cond
+   ((or (stringp expr) (numberp expr) (keywordp expr) (vectorp expr)) expr)
+   ((memq expr '(t nil)) expr)
+   ((symbolp expr) (gptel-sandbox--lookup expr env))
+   ((not (consp expr)) expr)
+   (t
+    (pcase (car expr)
+      ('quote
+       (cadr expr))
+      ('if
+       (if (gptel-sandbox--eval-expr (nth 1 expr) env)
+           (gptel-sandbox--eval-expr (nth 2 expr) env)
+         (gptel-sandbox--eval-expr (nth 3 expr) env)))
+      ('setq
+       (gptel-sandbox--eval-setq-pairs (cdr expr) env))
+      ('when
+       (when (gptel-sandbox--eval-expr (nth 1 expr) env)
+         (let ((value nil))
+           (dolist (form (cddr expr) value)
+             (setq value (gptel-sandbox--eval-expr form env))))))
+      ('unless
+       (unless (gptel-sandbox--eval-expr (nth 1 expr) env)
+         (let ((value nil))
+           (dolist (form (cddr expr) value)
+             (setq value (gptel-sandbox--eval-expr form env))))))
+      ('progn
+       (let ((value nil))
+         (dolist (form (cdr expr))
+           (setq value (gptel-sandbox--eval-expr form env)))
+         value))
+      ('let
+       (gptel-sandbox--eval-let (nth 1 expr) (cddr expr) env nil))
+      ('let*
+       (gptel-sandbox--eval-let (nth 1 expr) (cddr expr) env t))
+      ('not
+       (not (gptel-sandbox--eval-expr (nth 1 expr) env)))
+      ('and
+       (let ((value t))
+         (catch 'gptel-sandbox-short-circuit
+           (dolist (form (cdr expr) value)
+             (setq value (gptel-sandbox--eval-expr form env))
+             (unless value
+               (throw 'gptel-sandbox-short-circuit value))))))
+      ('or
+       (let ((value nil))
+         (catch 'gptel-sandbox-short-circuit
+           (dolist (form (cdr expr) value)
+             (setq value (gptel-sandbox--eval-expr form env))
+             (when value
+               (throw 'gptel-sandbox-short-circuit value))))))
+      ((or 'equal 'string= '= '< '> '<= '>=)
+       (apply (car expr)
+              (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env))
+                      (cdr expr))))
+      ((or 'concat 'format 'list 'vector 'append 'length 'car 'cdr 'nth
+           'cons 'assoc 'alist-get 'plist-get 'split-string 'string-join
+           'string-trim 'string-empty-p 'string-match-p 'substring)
+       (apply (car expr)
+              (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env))
+                      (cdr expr))))
+      ('tool-call
+       (error "tool-call is only allowed as a top-level statement or setq RHS"))
+      (_
+       (error "Unsupported expression form in Programmatic sandbox: %S" (car expr)))))))
+
+(defun gptel-sandbox--tool-arg-map (arg-pairs)
+  "Convert ARG-PAIRS plist into a keyword->value hash table."
+  (let ((table (make-hash-table :test #'eq)))
+    (while arg-pairs
+      (let ((key (pop arg-pairs))
+            (value (pop arg-pairs)))
+        (unless (keywordp key)
+          (error "Programmatic tool-call keys must be keywords, got: %S" key))
+        (puthash key value table)))
+    table))
+
+(defun gptel-sandbox--resolve-tool-args (tool-spec arg-forms env)
+  "Resolve TOOL-SPEC arguments from ARG-FORMS using ENV."
+  (unless (cl-evenp (length arg-forms))
+    (error "Programmatic tool-call requires keyword/value pairs"))
+  (let* ((arg-map (gptel-sandbox--tool-arg-map arg-forms))
+         (spec-args (gptel-tool-args tool-spec))
+         (values nil))
+    (dolist (arg spec-args (nreverse values))
+      (let* ((name (plist-get arg :name))
+             (key (intern (concat ":" name)))
+             (value-form (gethash key arg-map :gptel-sandbox-missing)))
+        (cond
+         ((eq value-form :gptel-sandbox-missing)
+          (if (plist-get arg :optional)
+              (push nil values)
+            (error "Missing required argument %s for tool %s"
+                   name (gptel-tool-name tool-spec))))
+         (t
+          (push (gptel-sandbox--eval-expr value-form env) values)))))))
+
+(defun gptel-sandbox--allowed-tool-p (tool-name)
+  "Return non-nil when TOOL-NAME may run inside Programmatic."
+  (member tool-name my/gptel-programmatic-allowed-tools))
+
+(defun gptel-sandbox--confirm-supported-p (tool-name)
+  "Return non-nil when TOOL-NAME may request confirmation in Programmatic."
+  (member tool-name my/gptel-programmatic-confirming-tools))
+
+(defun gptel-sandbox--confirm-required-p (tool-spec arg-values)
+  "Return non-nil when TOOL-SPEC with ARG-VALUES requires confirmation."
+  (and (boundp 'gptel-confirm-tool-calls)
+       gptel-confirm-tool-calls
+       (or (eq gptel-confirm-tool-calls t)
+           (and-let* ((confirm (gptel-tool-confirm tool-spec)))
+             (or (not (functionp confirm))
+                 (apply confirm arg-values))))))
+
+(defun gptel-sandbox--default-confirm-tool (tool-spec arg-values callback)
+  "Prompt for confirmation before nested TOOL-SPEC runs with ARG-VALUES.
+CALLBACK receives non-nil when approved and nil when rejected."
+  (let* ((tool-name (gptel-tool-name tool-spec))
+         (formatted (if (fboundp 'gptel--format-tool-call)
+                        (gptel--format-tool-call tool-name arg-values)
+                      (format "%s %s" tool-name (mapconcat #'prin1-to-string arg-values " ")))))
+    (if (and (fboundp 'my/gptel-tool-permitted-p)
+             (ignore-errors (my/gptel-tool-permitted-p tool-name)))
+        (funcall callback t)
+      (funcall callback
+               (y-or-n-p (format "Programmatic wants to run %s. Continue? " formatted))))))
+
+(defun gptel-sandbox--check-tool (tool-spec arg-values)
+  "Validate TOOL-SPEC with ARG-VALUES for sandbox execution."
+  (unless tool-spec
+    (error "Unknown tool requested by Programmatic"))
+  (let ((tool-name (gptel-tool-name tool-spec)))
+    (unless (gptel-sandbox--allowed-tool-p tool-name)
+      (error "Tool %s is not allowed inside Programmatic v1" tool-name))
+    (when (string= tool-name "Programmatic")
+      (error "Tool %s requires confirmation or recursion and is not supported inside Programmatic v1"
+             tool-name))
+    (when (and (gptel-sandbox--confirm-required-p tool-spec arg-values)
+               (not (gptel-sandbox--confirm-supported-p tool-name)))
+      (error "Tool %s requires confirmation and is not supported inside Programmatic v1"
+             tool-name))))
+
+(defun gptel-sandbox--truncate-result (text)
+  "Return TEXT, truncating and persisting to a temp file if needed."
+  (setq text (gptel-sandbox--render-result text))
+  (if (<= (length text) my/gptel-programmatic-result-limit)
+      text
+    (let ((temp-file (if (fboundp 'my/gptel-make-temp-file)
+                         (my/gptel-make-temp-file "programmatic-" nil ".txt")
+                       (make-temp-file "programmatic-" nil ".txt"))))
+      (with-temp-file temp-file
+        (insert text))
+      (format "%s\n...[Programmatic result truncated. Full result saved to: %s]..."
+              (substring text 0 my/gptel-programmatic-result-limit)
+              temp-file))))
+
+(defun gptel-sandbox--render-result (value)
+  "Render VALUE into the final string returned by Programmatic.
+Strings are returned directly. Structured values are pretty-printed so the LLM
+can consume lists, vectors, plists, and alists as readable data."
+  (cond
+   ((stringp value) value)
+   ((null value) "nil")
+   ((or (numberp value) (keywordp value) (symbolp value))
+    (format "%s" value))
+   (t
+    (string-trim-right
+     (let ((print-length nil)
+           (print-level nil)
+           (print-circle t))
+       (pp-to-string value))))))
+
+(defun gptel-sandbox--execute-tool (callback tool-name arg-forms env state)
+  "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
+  (let* ((tool-spec (and (fboundp 'gptel-get-tool) (gptel-get-tool tool-name)))
+         (arg-values (and tool-spec
+                          (gptel-sandbox--resolve-tool-args tool-spec arg-forms env))))
+    (gptel-sandbox--check-tool tool-spec arg-values)
+    (cl-incf (plist-get state :tool-count))
+    (when (> (plist-get state :tool-count) my/gptel-programmatic-max-tool-calls)
+      (error "Programmatic exceeded max nested tool calls (%d)"
+             my/gptel-programmatic-max-tool-calls))
+    (condition-case err
+        (let ((invoke-tool
+               (lambda ()
+                 (if (gptel-tool-async tool-spec)
+                     (apply (gptel-tool-function tool-spec)
+                            (lambda (result)
+                              (funcall callback (gptel--to-string result)))
+                            arg-values)
+                   (let ((result (condition-case inner-err
+                                     (apply (gptel-tool-function tool-spec) arg-values)
+                                   (error (format "Error: %s" (error-message-string inner-err))))))
+                     (funcall callback (gptel--to-string result)))))))
+          (if (gptel-sandbox--confirm-required-p tool-spec arg-values)
+              (funcall gptel-sandbox-confirm-function
+                       tool-spec arg-values
+                       (lambda (approved)
+                         (if approved
+                             (funcall invoke-tool)
+                           (funcall callback
+                                    (format "Error: Programmatic tool call rejected by user: %s"
+                                            (gptel-tool-name tool-spec))))))
+            (funcall invoke-tool)))
+      (error
+       (funcall callback (format "Error: %s" (error-message-string err)))))))
+
+(defun gptel-sandbox--eval-statement (statement env state callback)
+  "Evaluate sandbox STATEMENT with ENV and STATE, then CALLBACK.
+CALLBACK receives a plist with one of the keys `:continue' or `:result'."
+  (pcase statement
+    (`(setq ,symbol ,expr)
+     (unless (symbolp symbol)
+       (error "Programmatic setq target must be a symbol, got: %S" symbol))
+     (if (and (consp expr) (eq (car expr) 'tool-call))
+         (gptel-sandbox--execute-tool
+          (lambda (value)
+             (puthash symbol value env)
+             (puthash '_ value env)
+             (puthash 'it value env)
+             (funcall callback (list :continue t :done nil)))
+           (nth 1 expr) (cddr expr) env state)
+       (let ((value (gptel-sandbox--eval-expr expr env)))
+         (puthash symbol value env)
+         (puthash '_ value env)
+         (puthash 'it value env)
+         (funcall callback (list :continue t :done nil)))))
+    (`(tool-call ,tool-name . ,arg-forms)
+     (gptel-sandbox--execute-tool
+      (lambda (value)
+        (puthash '_ value env)
+        (puthash 'it value env)
+        (funcall callback (list :continue t :done nil)))
+      tool-name arg-forms env state))
+    (`(result ,expr)
+     (funcall callback (list :done t :result (gptel-sandbox--eval-expr expr env))))
+    (_
+     (error "Unsupported statement in Programmatic sandbox: %S"
+            (if (consp statement) (car statement) statement)))))
+
+(defun gptel-sandbox--run-forms (forms env state callback)
+  "Run sandbox FORMS with ENV and STATE, then CALLBACK final result."
+  (if (null forms)
+      (funcall callback "Error: Programmatic execution finished without calling result")
+    (gptel-sandbox--eval-statement
+     (car forms) env state
+     (lambda (outcome)
+       (if (plist-get outcome :done)
+           (funcall callback (gptel-sandbox--truncate-result
+                              (plist-get outcome :result)))
+         (gptel-sandbox--run-forms (cdr forms) env state callback))))))
+
+;;; Public API
+
+(defun gptel-sandbox-execute-async (callback code)
+  "Execute restricted Programmatic CODE and call CALLBACK with the result."
+  (let ((done nil)
+        (timer nil)
+        (env (gptel-sandbox--make-env))
+        (state (list :tool-count 0)))
+    (cl-labels
+        ((finish (result)
+           (unless done
+             (setq done t)
+             (when (timerp timer)
+               (cancel-timer timer))
+             (funcall callback result))))
+      (condition-case err
+          (progn
+            (unless (and (stringp code) (not (string-empty-p (string-trim code))))
+              (error "Programmatic code is empty"))
+            (setq timer
+                  (run-at-time
+                   my/gptel-programmatic-timeout nil
+                   (lambda ()
+                     (finish
+                      (format "Error: Programmatic timed out after %ss"
+                              my/gptel-programmatic-timeout)))))
+            (gptel-sandbox--run-forms
+             (gptel-sandbox--parse-forms code)
+             env state #'finish))
+        (error
+         (finish (format "Error: %s" (error-message-string err))))))))
+
+(provide 'gptel-sandbox)
+
+;;; gptel-sandbox.el ends here

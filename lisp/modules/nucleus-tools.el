@@ -52,11 +52,11 @@ When enabled, validates:
                      "list_skills" "load_skill"
                      "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"))
      (:nucleus . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
-                  "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
-                  "WebFetch" "WebSearch" "Write" "YouTube"
-                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                   "Preview"
-                   "list_skills" "load_skill" "create_skill"
+                   "Insert" "Mkdir" "Move" "Read" "RunAgent" "Skill" "TodoWrite"
+                   "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
+                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                    "Preview"
+                    "list_skills" "load_skill" "create_skill"
                    "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
      (:explorer . ("Glob" "Grep" "Read"))
      (:reviewer . ("Glob" "Grep" "Read")))
@@ -64,14 +64,14 @@ When enabled, validates:
 
 :readonly — Read-only subset for plan mode (18 tools)
 :researcher — Research: readonly + skill loading (19 tools, superset of :readonly)
-:nucleus — Full action tools + preview + skill management (30 tools)
+:nucleus — Full action tools + preview + skill management (31 tools)
 :explorer — Minimal read-only set for codebase exploration (3 tools)
 :reviewer — Minimal read-only set for code review (3 tools)
 
 :snippets is derived from :nucleus at runtime (see `nucleus-get-tools').
 
 Tool contracts enforced in `nucleus--override-gptel-agent-presets':
-  executor     → :nucleus     (30 tools) - code changes & execution
+  executor     → :nucleus     (31 tools) - code changes & execution
   researcher   → :researcher  (19 tools) - exploration & research
   introspector → :readonly    (18 tools) - Emacs introspection
   explorer     → :explorer     (3 tools) - read-only codebase exploration

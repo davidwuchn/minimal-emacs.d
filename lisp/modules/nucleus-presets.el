@@ -177,8 +177,8 @@ changed (e.g. RunAgent added after buffer was created)."
          (when (and (boundp 'nucleus-tools-strict-validation)
                     nucleus-tools-strict-validation)
            (nucleus--validate-agent-tool-contracts))
-         ;; Agent tool contracts (counts must match nucleus-toolsets):
-         ;; - executor:     :nucleus    (30 tools) - code changes & execution
+          ;; Agent tool contracts (counts must match nucleus-toolsets):
+          ;; - executor:     :nucleus    (31 tools) - code changes & execution
          ;; - researcher:   :researcher (19 tools) - exploration & research
          ;; - introspector: :readonly   (18 tools) - Emacs introspection
          ;; - explorer:     :explorer    (3 tools) - read-only codebase exploration
