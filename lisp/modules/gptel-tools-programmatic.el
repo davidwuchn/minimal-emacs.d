@@ -5,6 +5,7 @@
 ;;
 ;; Provides the Programmatic tool: a restricted Emacs Lisp orchestration layer
 ;; for chaining multiple existing tools inside one tool call.
+;; Supplemental prompt guidance lives in assistant/prompts/tools/programmatic.md.
 
 (require 'subr-x)
 
