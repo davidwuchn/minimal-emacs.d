@@ -1,48 +1,107 @@
 # minimal-emacs.d + gptel-nucleus
 
-A fork of [jamescherti/minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) extended with a full AI agent system built on [gptel](https://github.com/karthink/gptel).
+A fork of [jamescherti/minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d)
+extended with a full AI agent system built on
+[gptel](https://github.com/karthink/gptel).
 
-## What this adds
+## Before you use this repo
 
-**gptel** provides the LLM chat engine and FSM-based tool execution. **nucleus** layers on top with tool management, agent presets, security ACLs, prompt infrastructure, and payload resilience -- turning Emacs into an agentic coding environment comparable to Cursor or OpenCode, but running entirely inside Emacs.
+This setup expects the ECA config and wrapper paths below to exist before you
+use the project:
 
-### Key capabilities
-
-- **Agent & Plan modes** -- two presets with different tool permissions. Agent mode gets full read/write/execute tools; Plan mode is sandboxed to read-only exploration.
-- **30+ tools** -- Bash, Glob, Grep, Read, Write, Edit, ApplyPatch, Code_Map, Code_Inspect, Code_Replace, Code_Usages, Diagnostics, Preview, RunAgent, and Emacs introspection tools (describe_symbol, get_symbol_source, find_buffers_and_recent).
-- **Subagent delegation** -- RunAgent spawns subordinate agents (explorer, researcher, reviewer, executor) with scoped toolsets and independent conversations.
-- **Security ACL** -- hard tool filtering by preset. Plan mode physically cannot call Bash/Edit/Write regardless of what the LLM requests.
-- **Tool confirmation UI** -- 3 tiers (auto / normal / confirm-all) with minibuffer dispatch (`y/n/k/a/i/p/q`).
-- **Payload management** -- three-layer defense against oversized API payloads: pre-send compaction (byte estimation + 4-pass progressive trimming), retry-time tool result truncation, and aggressive reduction (strip reasoning, filter tools array to only used tools) on repeated failures.
-- **Resilience** -- exponential backoff retry, doom-loop detection (identical tool calls x3 = abort), nil/hallucinated tool call sanitization, FSM stuck-state recovery, curl timeout hardening.
-- **Thinking model support** -- reasoning_content injection for Moonshot/Kimi, DeepSeek, and other thinking-enabled models across multi-turn tool-calling conversations.
-- **Tree-sitter powered code tools** -- structural code map, node extraction, and replacement via tree-sitter AST, with workspace-wide search across 10+ languages.
-- **DRY backend config** -- single source of truth in `gptel-config.el`. Change one line to switch all presets, subagents, and tool routing to a different provider/model.
-
-### Architecture
-
+```bash
+scripts/setup-eca-links.sh
 ```
+
+Equivalent manual setup:
+
+```bash
+mkdir -p ~/.emacs.d ~/bin
+ln -sfn ~/.config/eca ~/.emacs.d/eca
+ln -sfn ~/.emacs.d/eca/eca-secure ~/bin/eca
+```
+
+Required path layout:
+
+- `~/.emacs.d/eca` -> `~/.config/eca`
+- `~/bin/eca` -> `~/.emacs.d/eca/eca-secure`
+
+Without these links, ECA-backed secure provider flows may not resolve the
+expected config and wrapper locations.
+
+## What this fork adds
+
+**gptel** provides the chat engine and FSM-based tool execution. **nucleus**
+adds tool management, preset routing, security ACLs, prompt infrastructure,
+payload resilience, and an agent workflow inside Emacs.
+
+## Key capabilities
+
+- **Agent and Plan modes** - separate presets with different capability
+  profiles. `gptel-agent` gets the full action toolset; `gptel-plan` stays
+  readonly but can still bundle readonly Programmatic workflows.
+- **31-tool nucleus stack** - Bash, Glob, Grep, Read, Write, Edit,
+  ApplyPatch, Preview, Programmatic, RunAgent, structural Code_* tools, and
+  Emacs introspection tools.
+- **Programmatic orchestration** - restricted Emacs Lisp programs can chain
+  multiple tools in one call. Agent mode supports preview-backed mutating runs;
+  plan mode gets a separate readonly profile.
+- **Aggregate mutating preview** - multi-step mutating Programmatic runs now
+  show one aggregate approval summary before the existing per-tool preview and
+  confirmation flow.
+- **Subagent delegation** - `RunAgent` can spawn explorer, researcher,
+  reviewer, and executor subagents with scoped toolsets.
+- **Security ACLs** - hard capability filtering by preset. Readonly plan mode
+  physically cannot reach mutating tools.
+- **Payload resilience** - pre-send payload compaction, retry-time tool-result
+  truncation, tool-array reduction, and reasoning repair for thinking-enabled
+  models like Moonshot/Kimi.
+- **Tree-sitter code tooling** - structural map, inspect, replace, usages, and
+  diagnostics across a multi-language workspace.
+- **Backend indirection** - one backend/model source of truth in
+  `lisp/gptel-config.el` for presets, subagents, and routing.
+- **CI and regression coverage** - dedicated suites for Programmatic flows,
+  confirmation UI, payload trimming, and nucleus tool validation.
+
+## Architecture
+
+```text
 lisp/modules/
-  gptel-ext-core.el        Core advice/hooks: retry, FSM recovery, streaming,
-                           tool sanitization, progressive trimming, pre-send compaction
-  gptel-ext-backends.el    Backend definitions (Moonshot, DashScope, DeepSeek, Gemini, etc.)
-  gptel-ext-security.el    ACL router advice on gptel-make-tool
-  gptel-tools.el           Tool registration orchestrator
-  gptel-tools-agent.el     RunAgent + subagent delegation
-  gptel-tools-*.el         Individual tool implementations
-  nucleus-tools.el         Toolset definitions and filtering
-  nucleus-presets.el       Preset management and tool contract validation
-  nucleus-prompts.el       Prompt loading from assistant/prompts/
-  nucleus-header-line.el     Header-line preset display
+  gptel-ext-backends.el      Backend definitions
+  gptel-ext-fsm.el           FSM recovery / stuck-state fixes
+  gptel-ext-reasoning.el     Thinking-model reasoning capture/injection
+  gptel-ext-retry.el         Retry logic + payload compaction
+  gptel-ext-security.el      Preset ACL routing
+  gptel-ext-streaming.el     Streaming safety helpers
+  gptel-ext-tool-confirm.el  Confirmation UI + permit memory
+  gptel-ext-tool-sanitize.el Nil-tool filtering / doom-loop detection
+  gptel-tools.el             Tool registration orchestrator
+  gptel-tools-agent.el       RunAgent + subagent delegation
+  gptel-tools-code.el        Code_Map / Inspect / Replace / Usages / Diagnostics
+  gptel-tools-preview.el     Unified diff preview layer
+  gptel-tools-programmatic.el
+                             Programmatic tool registration
+  gptel-sandbox.el           Restricted Programmatic evaluator
+  gptel-programmatic-benchmark.el
+                             Benchmark harness for Programmatic workflows
+  nucleus-tools.el           Toolset definitions and filtering
+  nucleus-presets.el         Preset management + contract validation
+  nucleus-prompts.el         Prompt loading from `assistant/prompts/`
 
-assistant/prompts/         System prompts and tool supplemental prompts
-tests/test-gptel-trim.el   51 ERT tests for payload trimming and compaction
+assistant/prompts/           Agent and plan system prompts
+tests/                      ERT suites for Programmatic, trim, and UI flows
+.github/workflows/ci.yml    Compile + Programmatic/trim/nucleus CI
 ```
 
-### Multi-backend support
+## Multi-backend support
 
-Configured for Moonshot/Kimi (default), DashScope (Qwen), DeepSeek, Gemini, OpenRouter, GitHub Copilot, MiniMax, and Cloudflare Workers AI. Backend/model selection is centralized -- presets and subagents inherit from the global default rather than hardcoding provider-specific values.
+Configured for Moonshot/Kimi (default), DashScope/Qwen, DeepSeek, Gemini,
+OpenRouter, GitHub Copilot, MiniMax, and Cloudflare Workers AI. Backend/model
+selection is centralized so presets and subagents inherit the active default
+instead of hardcoding provider-specific values.
 
 ---
 
-*This fork builds on [minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) by James Cherti. See the [upstream README](https://github.com/jamescherti/minimal-emacs.d#readme) for base Emacs configuration details.*
+This fork builds on
+[minimal-emacs.d](https://github.com/jamescherti/minimal-emacs.d) by James
+Cherti. See the upstream `README.md` for the base Emacs configuration.
