@@ -16,18 +16,21 @@ scripts/setup-eca-links.sh
 Equivalent manual setup:
 
 ```bash
-mkdir -p ~/.emacs.d ~/bin
-ln -sfn ~/.config/eca ~/.emacs.d/eca
+mkdir -p ~/.emacs.d ~/.config ~/bin
+ln -sfn ~/.emacs.d/eca ~/.config/eca
 ln -sfn ~/.emacs.d/eca/eca-secure ~/bin/eca
 ```
 
 Required path layout:
 
-- `~/.emacs.d/eca` -> `~/.config/eca`
+- `~/.config/eca` -> `~/.emacs.d/eca`
 - `~/bin/eca` -> `~/.emacs.d/eca/eca-secure`
 
 Without these links, ECA-backed secure provider flows may not resolve the
 expected config and wrapper locations.
+
+Important: `~/.emacs.d/eca` is the real directory used by this setup. The
+`~/.config/eca` path should be the symlink that points back to it.
 
 ## What this fork adds
 
