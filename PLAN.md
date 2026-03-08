@@ -1,6 +1,6 @@
 # PLAN: Programmatic Tool Calling (v0.6.0)
 
-## Status: 🚧 PLANNED
+## Status: ✓ MOSTLY IMPLEMENTED
 
 ## Goal
 
@@ -164,36 +164,55 @@ Prefer existing tools when:
 
 ### Phase 1: Sandbox Core
 
-- [ ] Create `lisp/modules/gptel-sandbox.el`
-- [ ] Define the restricted evaluation entrypoint
-- [ ] Implement wrapper helpers (`tool-call`, `result`, small data helpers)
-- [ ] Enforce timeout, max calls, and output truncation
-- [ ] Reject disallowed forms with explicit error messages
+- [x] Create `lisp/modules/gptel-sandbox.el`
+- [x] Define the restricted evaluation entrypoint
+- [x] Implement wrapper helpers (`tool-call`, `result`, small data helpers)
+- [x] Enforce timeout, max calls, and output truncation
+- [x] Reject disallowed forms with explicit error messages
 
 ### Phase 2: Tool Integration
 
-- [ ] Create `lisp/modules/gptel-tools-programmatic.el`
-- [ ] Register `Programmatic` from `lisp/modules/gptel-tools.el`
-- [ ] Add `Programmatic` to `:nucleus` in `lisp/modules/nucleus-tools.el`
-- [ ] Keep `Programmatic` out of `:readonly`, `:researcher`, `:explorer`, and
+- [x] Create `lisp/modules/gptel-tools-programmatic.el`
+- [x] Register `Programmatic` from `lisp/modules/gptel-tools.el`
+- [x] Add `Programmatic` to `:nucleus` in `lisp/modules/nucleus-tools.el`
+- [x] Keep `Programmatic` out of `:readonly`, `:researcher`, `:explorer`, and
   `:reviewer`
-- [ ] Confirm existing ACL/preview/confirm wrappers still apply transitively
+- [x] Confirm existing ACL/preview/confirm wrappers still apply transitively
 
 ### Phase 3: Prompt + UX
 
-- [ ] Update `assistant/prompts/code_agent.md` with decision rules and examples
-- [ ] Add concise examples showing orchestration vs plain tool use
-- [ ] Decide whether a dedicated preview is needed for multi-step mutating runs
-- [ ] Ensure failure messages teach the model how to recover
+- [x] Update `assistant/prompts/code_agent.md` with decision rules and examples
+- [x] Add concise examples showing orchestration vs plain tool use
+- [~] Decide whether a dedicated preview is needed for multi-step mutating runs
+- [x] Ensure failure messages teach the model how to recover
 
 ### Phase 4: Verification
 
-- [ ] Add `tests/test-programmatic.el`
-- [ ] Add ERT tests for sandbox rejection cases
-- [ ] Add ERT tests for allowed orchestration cases
-- [ ] Add tests for timeout, call-count, and truncation behavior
-- [ ] Add tests proving readonly presets cannot access `Programmatic`
+- [x] Add `tests/test-programmatic.el`
+- [x] Add ERT tests for sandbox rejection cases
+- [x] Add ERT tests for allowed orchestration cases
+- [x] Add tests for timeout, call-count, and truncation behavior
+- [x] Add tests proving readonly presets cannot access `Programmatic`
 - [ ] Run targeted benchmarks against representative multi-tool workflows
+
+## Current Reality
+
+Implemented in the current repo:
+
+- Restricted serial sandbox in `lisp/modules/gptel-sandbox.el`
+- Registered `Programmatic` tool in `lisp/modules/gptel-tools-programmatic.el`
+- Agent-only exposure via `:nucleus` toolset and plan-mode deny rules
+- Structured result rendering and a small safe expression/data subset
+- Native confirmation UI integration for nested Programmatic mutating calls
+- Prompt examples for read-only and preview-backed patch workflows
+- ERT coverage in `tests/test-programmatic.el` and
+  `tests/test-tool-confirm-programmatic.el`
+
+Still open:
+
+- Aggregate preview for multi-step mutating runs
+- Benchmarking against ordinary multi-tool round trips
+- Decide whether async orchestration beyond nested async tools is worthwhile
 
 ## Testing Matrix
 
