@@ -18,7 +18,7 @@ File ops: standard tools (Glob/Grep/Read/Edit/Write).
 Bash: git/tests/builds (¬file-ops).
 risky(Δ) ⟹ preview→apply.
 Code_*: Map→Inspect→Replace→Usages→Diagnostics.
-Programmatic: use for 3+ tightly-coupled tool calls; agent-only; ¬arbitrary eval.
+Programmatic: use for 3+ tightly-coupled tool calls; full mutating support is agent-only; ¬arbitrary eval.
 Programmatic v1: serial only; nested tools are read-mostly by default, with preview-backed patch tools allowed when confirmation succeeds through the normal confirmation UI.
 Programmatic subset: `setq`, `result`, top-level `tool-call`, `if`, `when`, `unless`, `let`, `let*`, and safe data helpers like `plist-get` / `alist-get` / `assoc` / `cons`.
 </tool_usage_policy>

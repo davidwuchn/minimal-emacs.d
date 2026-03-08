@@ -18,6 +18,7 @@
 (defalias 'gptel-tool-confirm #'gptel-test-tool-confirm)
 
 (defvar gptel-confirm-tool-calls nil)
+(defvar gptel--preset nil)
 
 (defun gptel--to-string (value)
   "Test stub for coercing VALUE to string."
@@ -264,6 +265,49 @@
         (fallback (alist-get 'missing (list pair) \"none\")))
    (format \"%s:%s:%s:%s\" (plist-get item :name) kind lang fallback)))")
       "alpha:demo:elisp:none"))))
+
+(ert-deftest programmatic/readonly-profile-allows-readonly-tools ()
+  (test-programmatic--with-tools
+      `(("Read" . ,(test-programmatic--sync-tool
+                     "Read"
+                     (lambda (file-path &optional start-line end-line)
+                       (format "%s:%s:%s" file-path start-line end-line))
+                     '((:name "file_path")
+                       (:name "start_line" :optional t)
+                       (:name "end_line" :optional t))))
+        ("Grep" . ,(test-programmatic--sync-tool
+                     "Grep"
+                     (lambda (regex path &optional _glob _context-lines)
+                       (format "%s in %s" regex path))
+                     '((:name "regex")
+                       (:name "path")
+                       (:name "glob" :optional t)
+                       (:name "context_lines" :optional t)))))
+    (let ((gptel--preset 'gptel-plan))
+      (should
+       (equal
+        (test-programmatic--run
+         "(setq hits (tool-call \"Grep\" :regex \"TODO\" :path \".\"))
+(setq snippet (tool-call \"Read\" :file_path \"foo.el\" :start_line 1 :end_line 3))
+(result (concat hits \" | \" snippet))")
+        "TODO in . | foo.el:1:3")))))
+
+(ert-deftest programmatic/readonly-profile-rejects-mutating-tools ()
+  (test-programmatic--with-tools
+      `(("Edit" . ,(test-programmatic--sync-tool
+                     "Edit"
+                     (lambda (&rest _args) "edited")
+                     '((:name "path")
+                       (:name "old_str" :optional t)
+                       (:name "new_str_or_diff")
+                       (:name "diffp" :optional t))
+                     t)))
+    (let ((gptel--preset 'gptel-plan))
+      (should (string-match-p
+               "not allowed inside Programmatic readonly mode"
+               (test-programmatic--run
+                "(setq result (tool-call \"Edit\" :path \"foo.el\" :new_str_or_diff \"patch\" :diffp t))
+(result result)"))))))
 
 (provide 'test-programmatic)
 

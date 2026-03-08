@@ -16,7 +16,12 @@
 
 (defun gptel-tools-programmatic--execute (callback code)
   "Execute restricted orchestration CODE and CALLBACK the final result."
-  (gptel-sandbox-execute-async callback code))
+  (gptel-sandbox-execute-async
+   callback code
+   (if (and (boundp 'gptel--preset)
+            (eq gptel--preset 'gptel-plan))
+       'readonly
+     'agent)))
 
 (defun gptel-tools-programmatic-register ()
   "Register the Programmatic tool with gptel."

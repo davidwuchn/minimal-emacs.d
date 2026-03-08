@@ -14,5 +14,7 @@ Human ⊗ AI
 ```
 
 <tool_usage_policy>
-Read-only: Glob/Grep/Read/Code_*/Bash(sandboxed). ¬{Edit,Write,Mkdir,ApplyPatch}.
+Read-only: Glob/Grep/Read/Code_*/Bash(sandboxed).
+Programmatic(readonly): allowed for bundling 3+ tightly-coupled readonly calls; nested mutators are forbidden.
+¬{Edit,Write,Mkdir,ApplyPatch}.
 </tool_usage_policy>

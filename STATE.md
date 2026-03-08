@@ -60,8 +60,8 @@ Minibuffer dispatch: `y/n/k/a/i/p/q`. Upstream `n` = "defer" (FSM stays paused, 
 
 | Set | Tools | Used by |
 |-----|-------|---------|
-| `:readonly` | 18 | Plan mode, introspector subagent |
-| `:researcher` | 19 | Researcher subagent |
+| `:readonly` | 19 | Plan mode, introspector subagent |
+| `:researcher` | 20 | Researcher subagent |
 | `:nucleus` | 31 | Agent mode, executor subagent |
 | `:explorer` | 3 | Explorer subagent (Glob/Grep/Read) |
 | `:reviewer` | 3 | Reviewer subagent (Glob/Grep/Read) |
@@ -155,7 +155,8 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 
 ### Recent Changes (v0.5.28)
 
-- **Add Programmatic v1 vertical slice** (⚒): Added `lisp/modules/gptel-sandbox.el` and `lisp/modules/gptel-tools-programmatic.el`. New `Programmatic` tool is agent-only and executes a tiny restricted Lisp subset (`setq`, `tool-call`, `result`, `if`, `when`, `unless`, `let`, `let*`, `plist-get`, `alist-get`, `assoc`, `cons`) to orchestrate existing tools in one turn. Initial nested-tool allowlist is read-mostly plus preview-backed patch editors (`Edit`, `ApplyPatch`), with max tool-call count, timeout, truncated final results, pretty-printed structured return values, and a nested confirmation hook for supported mutating tools.
+- **Add Programmatic v1 vertical slice** (⚒): Added `lisp/modules/gptel-sandbox.el` and `lisp/modules/gptel-tools-programmatic.el`. `Programmatic` now has two capability profiles: readonly in `gptel-plan`, and fuller agent-mode orchestration in `gptel-agent`. The sandbox still executes a tiny restricted Lisp subset (`setq`, `tool-call`, `result`, `if`, `when`, `unless`, `let`, `let*`, `plist-get`, `alist-get`, `assoc`, `cons`) with max tool-call count, timeout, truncated final results, and pretty-printed structured return values.
+- **Enable readonly Programmatic in plan mode** (⚒): Added `Programmatic` to the `:readonly` toolset and made `lisp/modules/gptel-sandbox.el` mode-aware. `gptel-plan` can now bundle readonly nested calls such as `Read`, `Grep`, `Glob`, `Code_*`, and introspection helpers in one turn, while mutating/confirming nested tools remain agent-only.
 - **Route nested Programmatic confirms through native UI** (⚒): `lisp/modules/gptel-ext-tool-confirm.el` now installs `my/gptel--programmatic-confirm-tool` as the sandbox confirm hook, reusing the normal minibuffer/overlay confirmation path for nested Programmatic tool calls. Nested approvals/rejections flow back through callback-based wrappers around `gptel--accept-tool-calls` / `gptel--reject-tool-calls` instead of bypassing the chat UI.
 - **Add confirmation UI integration tests** (⊘): New `tests/test-tool-confirm-programmatic.el` exercises the callback-based native confirmation path for nested Programmatic calls: minibuffer acceptance, overlay acceptance, and overlay rejection. Verified together with the sandbox suite via `emacs --batch -Q -L . -L lisp -L lisp/modules -l tests/test-programmatic.el -l tests/test-tool-confirm-programmatic.el -f ert-run-tests-batch-and-exit`.
 - **Add Programmatic benchmark harness** (⊘): Added `lisp/modules/gptel-programmatic-benchmark.el` and `scripts/benchmark-programmatic.sh` to compare ordinary multi-tool chaining against single Programmatic orchestration runs for both a representative read-only `Grep -> Read -> Read -> summarize` workflow and a preview-backed mutating `Read -> Edit(diff)` workflow. Current benchmark shows ~2.98x simulated end-to-end speedup and ~18.12% transcript-byte reduction for the read-only path, plus ~1.99x simulated speedup and ~10.81% transcript-byte reduction for the mutating preview-backed path.

@@ -47,6 +47,15 @@ editors (`Edit`, `ApplyPatch`)."
   :type '(repeat string)
   :group 'gptel-sandbox)
 
+(defcustom my/gptel-programmatic-readonly-tools
+  '("Read" "Grep" "Glob"
+    "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"
+    "describe_symbol" "get_symbol_source" "find_buffers_and_recent")
+  "Tool names allowed inside Programmatic when running in readonly mode.
+This profile is used by `gptel-plan` and excludes mutating or confirming tools."
+  :type '(repeat string)
+  :group 'gptel-sandbox)
+
 (defcustom my/gptel-programmatic-confirming-tools
   '("Edit" "ApplyPatch")
   "Tool names allowed to request confirmation inside Programmatic.
@@ -59,6 +68,11 @@ confirmation step."
   "Function used to confirm nested Programmatic tool calls.
 Called with TOOL-SPEC, ARG-VALUES, and CALLBACK. CALLBACK must be invoked with
 non-nil to continue or nil to reject.")
+
+(defvar gptel-sandbox-profile nil
+  "Dynamic sandbox capability profile for Programmatic execution.
+When nil, `gptel-sandbox--current-profile' infers the profile from the active
+gptel preset.")
 
 ;;; Internal Helpers
 
@@ -255,11 +269,24 @@ supports a small, explicit whitelist of pure operations."
 
 (defun gptel-sandbox--allowed-tool-p (tool-name)
   "Return non-nil when TOOL-NAME may run inside Programmatic."
-  (member tool-name my/gptel-programmatic-allowed-tools))
+  (member tool-name
+          (pcase (gptel-sandbox--current-profile)
+            ('readonly my/gptel-programmatic-readonly-tools)
+            (_ my/gptel-programmatic-allowed-tools))))
 
 (defun gptel-sandbox--confirm-supported-p (tool-name)
   "Return non-nil when TOOL-NAME may request confirmation in Programmatic."
-  (member tool-name my/gptel-programmatic-confirming-tools))
+  (and (eq (gptel-sandbox--current-profile) 'agent)
+       (member tool-name my/gptel-programmatic-confirming-tools)))
+
+(defun gptel-sandbox--current-profile ()
+  "Return the active Programmatic capability profile.
+`readonly' is used for `gptel-plan`; `agent' is the default everywhere else."
+  (or gptel-sandbox-profile
+      (if (and (boundp 'gptel--preset)
+               (eq gptel--preset 'gptel-plan))
+          'readonly
+        'agent)))
 
 (defun gptel-sandbox--confirm-required-p (tool-spec arg-values)
   "Return non-nil when TOOL-SPEC with ARG-VALUES requires confirmation."
@@ -289,14 +316,15 @@ CALLBACK receives non-nil when approved and nil when rejected."
     (error "Unknown tool requested by Programmatic"))
   (let ((tool-name (gptel-tool-name tool-spec)))
     (unless (gptel-sandbox--allowed-tool-p tool-name)
-      (error "Tool %s is not allowed inside Programmatic v1" tool-name))
+      (error "Tool %s is not allowed inside Programmatic %s mode"
+             tool-name (gptel-sandbox--current-profile)))
     (when (string= tool-name "Programmatic")
       (error "Tool %s requires confirmation or recursion and is not supported inside Programmatic v1"
              tool-name))
     (when (and (gptel-sandbox--confirm-required-p tool-spec arg-values)
                (not (gptel-sandbox--confirm-supported-p tool-name)))
-      (error "Tool %s requires confirmation and is not supported inside Programmatic v1"
-             tool-name))))
+      (error "Tool %s requires confirmation and is not supported inside Programmatic %s mode"
+             tool-name (gptel-sandbox--current-profile)))))
 
 (defun gptel-sandbox--truncate-result (text)
   "Return TEXT, truncating and persisting to a temp file if needed."
@@ -410,12 +438,14 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
 
 ;;; Public API
 
-(defun gptel-sandbox-execute-async (callback code)
-  "Execute restricted Programmatic CODE and call CALLBACK with the result."
+(defun gptel-sandbox-execute-async (callback code &optional profile)
+  "Execute restricted Programmatic CODE and call CALLBACK with the result.
+PROFILE is either `agent' or `readonly'."
   (let ((done nil)
         (timer nil)
         (env (gptel-sandbox--make-env))
-        (state (list :tool-count 0)))
+        (state (list :tool-count 0))
+        (gptel-sandbox-profile (or profile gptel-sandbox-profile)))
     (cl-labels
         ((finish (result)
            (unless done

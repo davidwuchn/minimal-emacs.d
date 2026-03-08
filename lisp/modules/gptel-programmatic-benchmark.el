@@ -319,6 +319,7 @@ preview-backed flows."
          (gptel-programmatic-benchmark--tools
           (gptel-programmatic-benchmark--make-tools))
          (my/gptel-programmatic-allowed-tools '("Grep" "Read" "Edit"))
+         (my/gptel-programmatic-readonly-tools '("Grep" "Read"))
          (my/gptel-programmatic-confirming-tools '("Edit"))
          (my/gptel-programmatic-max-tool-calls 10)
          (my/gptel-programmatic-timeout 5)

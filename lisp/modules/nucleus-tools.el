@@ -43,10 +43,11 @@ When enabled, validates:
 
 (defconst nucleus-toolsets
   '((:readonly . ("Bash" "Eval" "Glob" "Grep" "Read" "RunAgent" "Skill" "TodoWrite"
+                  "Programmatic"
                   "WebFetch" "WebSearch" "YouTube"
                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                  "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
-     (:researcher . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill"
+                   "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
+     (:researcher . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill" "Programmatic"
                      "WebFetch" "WebSearch" "YouTube"
                      "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                      "list_skills" "load_skill"
@@ -62,8 +63,8 @@ When enabled, validates:
      (:reviewer . ("Glob" "Grep" "Read")))
   "Canonical toolset definitions for nucleus.
 
-:readonly — Read-only subset for plan mode (18 tools)
-:researcher — Research: readonly + skill loading (19 tools, superset of :readonly)
+:readonly — Read-only subset for plan mode (19 tools)
+:researcher — Research: readonly + skill loading (20 tools, superset of :readonly)
 :nucleus — Full action tools + preview + skill management (31 tools)
 :explorer — Minimal read-only set for codebase exploration (3 tools)
 :reviewer — Minimal read-only set for code review (3 tools)
@@ -72,8 +73,8 @@ When enabled, validates:
 
 Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   executor     → :nucleus     (31 tools) - code changes & execution
-  researcher   → :researcher  (19 tools) - exploration & research
-  introspector → :readonly    (18 tools) - Emacs introspection
+  researcher   → :researcher  (20 tools) - exploration & research
+  introspector → :readonly    (19 tools) - Emacs introspection
   explorer     → :explorer     (3 tools) - read-only codebase exploration
   reviewer     → :reviewer     (3 tools) - read-only code review")
 

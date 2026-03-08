@@ -62,7 +62,7 @@ The unified `Code_*` toolset provides KISS (Keep It Simple, Stupid) code intelli
 
 ## Programmatic Tool
 
-`Programmatic` is an agent-only orchestration tool for collapsing several small,
+`Programmatic` is a restricted orchestration tool for collapsing several small,
 tightly-coupled tool calls into one turn. Instead of asking the model to emit a
 `Grep` call, wait, emit a `Read` call, wait, and so on, the model can write a
 small restricted Emacs Lisp program that runs those steps inside one tool use.
@@ -93,8 +93,8 @@ pretty-printed before returning to the model.
 
 ### Tool Access and Limits
 
-- Exposed only in the `:nucleus` / execution-agent toolset
-- Explicitly denied in plan mode
+- Exposed in both the `:nucleus` toolset and the readonly plan toolset
+- `gptel-plan` gets a readonly capability profile; `gptel-agent` gets the full agent profile
 - Default timeout: 15 seconds
 - Default max nested tool calls: 25
 - Final result size is truncated when it exceeds the configured limit
@@ -103,7 +103,7 @@ pretty-printed before returning to the model.
 ### Nested Mutating Tools
 
 `Programmatic` is read-mostly by default, but preview-backed patch tools are
-allowed for controlled mutating flows:
+allowed for controlled mutating flows in agent mode:
 
 - `Edit`
 - `ApplyPatch`
@@ -111,6 +111,10 @@ allowed for controlled mutating flows:
 These still go through the normal confirmation UI. Nested Programmatic confirms
 reuse the regular minibuffer / overlay tool approval flow, and the underlying
 mutating tool keeps its own preview/apply path.
+
+In `gptel-plan`, `Programmatic` is readonly-only and may call only readonly
+nested tools such as `Read`, `Grep`, `Glob`, `Code_Map`, `Code_Inspect`,
+`Code_Usages`, `Diagnostics`, and introspection helpers.
 
 ### When to Prefer Programmatic
 
@@ -122,6 +126,9 @@ Use `Programmatic` when all of the following are true:
 
 Prefer direct tools for one-off actions, and prefer `RunAgent` when the task is
 wide-scope exploration or research.
+
+In plan mode, prefer readonly `Programmatic` when the planning task needs 3+
+small readonly tool calls but should still remain in a single read-only turn.
 
 ### Example
 

@@ -27,7 +27,7 @@ multi-step workflows without creating a second unrestricted execution surface.
 
 ### In Scope (v1)
 
-- Agent-mode access only (`gptel-agent` / executor-style toolsets)
+- Agent-mode access plus readonly `gptel-plan` access with a separate readonly profile
 - Programmatic orchestration of existing nucleus tools
 - Restricted runtime with explicit capability wrappers
 - Timeouts, result truncation, and audit-friendly execution logs
@@ -35,8 +35,8 @@ multi-step workflows without creating a second unrestricted execution surface.
 
 ### Out of Scope (v1)
 
-- Plan-mode access
-- Readonly/introspector subagent access
+- Full mutating Programmatic access in plan mode
+- Readonly/introspector subagent mutating access
 - Arbitrary Elisp evaluation
 - Direct process, network, or file mutation primitives outside existing tools
 - Replacing `RunAgent` for delegation-heavy research tasks
@@ -56,7 +56,7 @@ text.
 
 ### Hard Constraints
 
-- Only expose `Programmatic` in agent/full toolsets, never readonly toolsets
+- Expose `Programmatic` in both readonly and agent toolsets, but switch capability profile by mode
 - Execute user-generated code in a dedicated sandbox entrypoint
 - Provide a narrow wrapper API that can call registered tools by name
 - Do **not** expose general `eval`, process, file, network, or buffer mutation
@@ -123,7 +123,7 @@ prompts/presets
 ### Existing Files to Update
 
 - `lisp/modules/gptel-tools.el` — require/register the new tool
-- `lisp/modules/nucleus-tools.el` — add `Programmatic` to `:nucleus` only
+- `lisp/modules/nucleus-tools.el` — add `Programmatic` to mode-appropriate toolsets
 - `lisp/modules/nucleus-presets.el` — ensure agent contracts stay correct
 - `lisp/modules/gptel-ext-security.el` — optional explicit deny rule for
   readonly presets as defense in depth
@@ -175,8 +175,8 @@ Prefer existing tools when:
 - [x] Create `lisp/modules/gptel-tools-programmatic.el`
 - [x] Register `Programmatic` from `lisp/modules/gptel-tools.el`
 - [x] Add `Programmatic` to `:nucleus` in `lisp/modules/nucleus-tools.el`
-- [x] Keep `Programmatic` out of `:readonly`, `:researcher`, `:explorer`, and
-  `:reviewer`
+- [x] Expose readonly `Programmatic` in `:readonly` while keeping it out of
+  `:researcher`, `:explorer`, and `:reviewer`
 - [x] Confirm existing ACL/preview/confirm wrappers still apply transitively
 
 ### Phase 3: Prompt + UX
@@ -192,7 +192,7 @@ Prefer existing tools when:
 - [x] Add ERT tests for sandbox rejection cases
 - [x] Add ERT tests for allowed orchestration cases
 - [x] Add tests for timeout, call-count, and truncation behavior
-- [x] Add tests proving readonly presets cannot access `Programmatic`
+- [x] Add tests proving readonly presets can access only readonly `Programmatic`
 - [x] Run targeted benchmarks against representative multi-tool workflows
 
 ## Current Reality
@@ -201,9 +201,10 @@ Implemented in the current repo:
 
 - Restricted serial sandbox in `lisp/modules/gptel-sandbox.el`
 - Registered `Programmatic` tool in `lisp/modules/gptel-tools-programmatic.el`
-- Agent-only exposure via `:nucleus` toolset and plan-mode deny rules
+- Mode-aware exposure via `:readonly` and `:nucleus` toolsets with separate readonly/agent capability profiles
 - Structured result rendering and a small safe expression/data subset
 - Native confirmation UI integration for nested Programmatic mutating calls
+- Readonly Programmatic support in `gptel-plan` with a separate readonly tool allowlist
 - Prompt examples for read-only and preview-backed patch workflows
 - ERT coverage in `tests/test-programmatic.el` and
   `tests/test-tool-confirm-programmatic.el`
