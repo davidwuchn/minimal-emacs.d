@@ -69,7 +69,7 @@ text.
 Generated code should orchestrate through explicit helper functions such as:
 
 ```elisp
-(tool-call "Grep" :pattern "TODO" :path ".")
+(tool-call "Grep" :regex "TODO" :path ".")
 (tool-call "Read" :file_path "foo.el" :start_line 1 :end_line 80)
 (result "Final synthesized answer")
 ```
@@ -77,6 +77,27 @@ Generated code should orchestrate through explicit helper functions such as:
 The generated program does not receive raw access to Emacs primitives. It only
 receives the orchestrator helpers and inert data utilities needed to compose
 results.
+
+### Current Expression Subset
+
+The currently implemented sandbox supports:
+
+- literals: strings, numbers, keywords, vectors, `t`, `nil`
+- variable lookup and `quote`
+- control flow: `if`, `when`, `unless`, `and`, `or`, `progn`
+- bindings and assignment: `let`, `let*`, `setq`
+- comparisons: `equal`, `string=`, `=`, `<`, `>`, `<=`, `>=`
+- data/string helpers: `concat`, `format`, `list`, `vector`, `append`, `length`,
+  `car`, `cdr`, `nth`, `cons`, `assoc`, `alist-get`, `plist-get`,
+  `split-string`, `string-join`, `string-trim`, `string-empty-p`,
+  `string-match-p`, `substring`
+- orchestration statements: top-level `tool-call`, `result`
+
+Still intentionally unsupported:
+
+- arbitrary function calls / `eval`
+- nested `tool-call` in arbitrary expressions
+- direct process, network, file, or buffer mutation primitives
 
 ### Safety Defaults
 

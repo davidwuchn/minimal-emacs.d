@@ -108,9 +108,45 @@ Returns the number of messages whose reasoning_content was stripped."
           (when (and (equal (plist-get msg :role) "assistant")
                      (plist-get msg :reasoning_content)
                      (not (equal "" (plist-get msg :reasoning_content))))
-            (plist-put msg :reasoning_content "")
-            (cl-incf stripped)))))
+             (plist-put msg :reasoning_content "")
+             (cl-incf stripped)))))
     stripped))
+
+(defun my/gptel--repair-thinking-tool-call-messages (info)
+  "Ensure thinking-enabled assistant tool-call messages stay API-valid.
+
+When the active model/backend requires a reasoning field (for example Moonshot's
+`reasoning_content`), every assistant message with `:tool_calls` must carry that
+field, even if it is the empty string.  Returns the number of messages repaired."
+  (let* ((model (plist-get info :model))
+         (backend (plist-get info :backend))
+         (reasoning-key (and (fboundp 'my/gptel--reasoning-key-for-model)
+                             (my/gptel--reasoning-key-for-model model backend)))
+         (data (plist-get info :data))
+         (messages (and data (plist-get data :messages)))
+         (gptel-buf (plist-get info :buffer))
+         (reasoning-alist
+          (and gptel-buf (buffer-live-p gptel-buf)
+               (boundp 'my/gptel--tool-reasoning-alist)
+               (buffer-local-value 'my/gptel--tool-reasoning-alist gptel-buf)))
+         (repaired 0))
+    (when (and reasoning-key messages (> (length messages) 0))
+      (dotimes (i (length messages))
+        (let ((msg (aref messages i)))
+          (when (and (equal (plist-get msg :role) "assistant")
+                     (plist-get msg :tool_calls)
+                     (not (plist-member msg reasoning-key)))
+            (let* ((tool-calls (plist-get msg :tool_calls))
+                   (tc (and (vectorp tool-calls)
+                            (> (length tool-calls) 0)
+                            (aref tool-calls 0)))
+                   (id (and tc (plist-get tc :id)))
+                   (stored (and id reasoning-alist
+                                (alist-get id reasoning-alist :absent nil #'equal))))
+              (plist-put msg reasoning-key
+                         (if (or (eq stored :absent) (null stored)) "" stored))
+              (cl-incf repaired))))))
+    repaired))
 
 (defun my/gptel--reduce-tools-for-retry (info)
   "Reduce the tools array in INFO to only tools referenced in conversation.
@@ -249,21 +285,24 @@ Skips retries for subagent FSMs (they have their own timeout handler)."
              ;; used in the conversation, removing ~60-80% of definitions.
              (let ((trimmed (my/gptel--trim-tool-results-for-retry info))
                    (new-retries (plist-get info :retries)))
-               (when (> trimmed 0)
-                 (message "gptel: Trimmed %d old tool result(s) to reduce payload (retry %d, keeping %d recent)"
-                          trimmed new-retries
-                          (max 0 (- my/gptel-retry-keep-recent-tool-results new-retries))))
-               (when (>= new-retries 2)
+                (when (> trimmed 0)
+                  (message "gptel: Trimmed %d old tool result(s) to reduce payload (retry %d, keeping %d recent)"
+                           trimmed new-retries
+                           (max 0 (- my/gptel-retry-keep-recent-tool-results new-retries))))
+                (when (>= new-retries 2)
                  (let ((reasoning-stripped (my/gptel--trim-reasoning-content info)))
                    (when (> reasoning-stripped 0)
                      (message "gptel: Stripped reasoning_content from %d assistant message(s)" reasoning-stripped)))
-                 (let ((tools-removed (my/gptel--reduce-tools-for-retry info)))
-                   (when (> tools-removed 0)
-                     (message "gptel: Removed %d unused tool definition(s) from payload" tools-removed)))))
-           
-           ;; Schedule the FSM transition asynchronously (non-blocking exponential backoff)
-           (run-at-time delay nil
-                       (lambda (m f-orig)
+                  (let ((tools-removed (my/gptel--reduce-tools-for-retry info)))
+                    (when (> tools-removed 0)
+                      (message "gptel: Removed %d unused tool definition(s) from payload" tools-removed)))
+                  (let ((repaired (my/gptel--repair-thinking-tool-call-messages info)))
+                    (when (> repaired 0)
+                      (message "gptel: Restored empty reasoning field on %d tool-call message(s)" repaired)))))
+            
+            ;; Schedule the FSM transition asynchronously (non-blocking exponential backoff)
+            (run-at-time delay nil
+                        (lambda (m f-orig)
                          (funcall f-orig m 'WAIT))
                        machine orig-fn)
           ;; Return nil to abort the current transition to ERRS and let the timer take over
@@ -338,14 +377,17 @@ Applies trimming progressively until under limit or nothing left to trim:
     (let* ((info (gptel-fsm-info fsm))
            (retries (or (plist-get info :retries) 0)))
       ;; Only compact on first send — retries have their own trimming
-      (when (= retries 0)
-        (let ((limit (my/gptel--effective-byte-limit info))
-              (bytes (my/gptel--estimate-payload-bytes info))
-              (trimmed-total 0)
-              (pass 0))
-          (when (> bytes limit)
-            (message "gptel: Payload %dKB exceeds %dKB limit, compacting..."
-                     (/ bytes 1024) (/ limit 1024))
+       (when (= retries 0)
+         (let ((limit (my/gptel--effective-byte-limit info))
+               (repaired (my/gptel--repair-thinking-tool-call-messages info))
+               (bytes (my/gptel--estimate-payload-bytes info))
+               (trimmed-total 0)
+               (pass 0))
+           (when (> repaired 0)
+             (message "gptel: Repaired reasoning field on %d tool-call message(s) before compaction" repaired))
+           (when (> bytes limit)
+             (message "gptel: Payload %dKB exceeds %dKB limit, compacting..."
+                      (/ bytes 1024) (/ limit 1024))
             ;; Pass 1: trim tool results (keep 2 recent)
             (let ((my/gptel-retry-keep-recent-tool-results 2))
               (plist-put info :retries 1)  ; simulate retry 1 for keep count
@@ -357,14 +399,16 @@ Applies trimming progressively until under limit or nothing left to trim:
                   (message "gptel: Pass 1: trimmed %d tool result(s), now %dKB"
                            n (/ bytes 1024)))))
             ;; Pass 2: strip reasoning (if still over)
-            (when (> bytes limit)
-              (let ((n (my/gptel--trim-reasoning-content info)))
-                (cl-incf trimmed-total n)
-                (setq bytes (my/gptel--estimate-payload-bytes info))
-                (setq pass 2)
-                (when (> n 0)
-                  (message "gptel: Pass 2: stripped reasoning from %d message(s), now %dKB"
-                           n (/ bytes 1024)))))
+             (when (> bytes limit)
+               (let ((n (my/gptel--trim-reasoning-content info)))
+                 (cl-incf trimmed-total n)
+                 (setq repaired (my/gptel--repair-thinking-tool-call-messages info))
+                 (cl-incf trimmed-total repaired)
+                 (setq bytes (my/gptel--estimate-payload-bytes info))
+                 (setq pass 2)
+                 (when (or (> n 0) (> repaired 0))
+                   (message "gptel: Pass 2: stripped reasoning from %d message(s), repaired %d tool-call message(s), now %dKB"
+                            n repaired (/ bytes 1024)))))
             ;; Pass 3: reduce tools array (if still over)
             (when (> bytes limit)
               (let ((n (my/gptel--reduce-tools-for-retry info)))

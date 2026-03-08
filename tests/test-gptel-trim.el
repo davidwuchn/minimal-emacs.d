@@ -60,9 +60,52 @@ Progressive trimming based on :retries in INFO."
           (when (and (equal (plist-get msg :role) "assistant")
                      (plist-get msg :reasoning_content)
                      (not (equal "" (plist-get msg :reasoning_content))))
-            (plist-put msg :reasoning_content "")
-            (cl-incf stripped)))))
+             (plist-put msg :reasoning_content "")
+             (cl-incf stripped)))))
     stripped))
+
+(defun my/gptel--reasoning-key-for-model (model &optional _backend)
+  "Test stub: return the reasoning key for MODEL."
+  (when (stringp model)
+    (setq model (intern model)))
+  (pcase model
+    ('kimi-k2\.5 :reasoning_content)
+    ('moonshot :reasoning_content)
+    ('deepseek-reasoner :reasoning)
+    (_ nil)))
+
+(defvar-local my/gptel--tool-reasoning-alist nil
+  "Test stub buffer-local reasoning store.")
+
+(defun my/gptel--repair-thinking-tool-call-messages (info)
+  "Ensure thinking-enabled assistant tool-call messages carry a reasoning field."
+  (let* ((model (plist-get info :model))
+         (backend (plist-get info :backend))
+         (reasoning-key (my/gptel--reasoning-key-for-model model backend))
+         (data (plist-get info :data))
+         (messages (and data (plist-get data :messages)))
+         (gptel-buf (plist-get info :buffer))
+         (reasoning-alist
+          (and gptel-buf (buffer-live-p gptel-buf)
+               (buffer-local-value 'my/gptel--tool-reasoning-alist gptel-buf)))
+         (repaired 0))
+    (when (and reasoning-key messages (> (length messages) 0))
+      (dotimes (i (length messages))
+        (let ((msg (aref messages i)))
+          (when (and (equal (plist-get msg :role) "assistant")
+                     (plist-get msg :tool_calls)
+                     (not (plist-member msg reasoning-key)))
+            (let* ((tool-calls (plist-get msg :tool_calls))
+                   (tc (and (vectorp tool-calls)
+                            (> (length tool-calls) 0)
+                            (aref tool-calls 0)))
+                   (id (and tc (plist-get tc :id)))
+                   (stored (and id reasoning-alist
+                                (alist-get id reasoning-alist :absent nil #'equal))))
+              (plist-put msg reasoning-key
+                         (if (or (eq stored :absent) (null stored)) "" stored))
+              (cl-incf repaired))))))
+    repaired))
 
 ;;; ---- Test helpers ----
 
@@ -345,6 +388,63 @@ Progressive trimming based on :retries in INFO."
          (info (test--make-info (list msg1))))
     (should (= 1 (my/gptel--trim-reasoning-content info)))
     (should (= 0 (my/gptel--trim-reasoning-content info)))))
+
+(ert-deftest trim-reasoning/repair-thinking-tool-call-message-with-empty-string ()
+  "Thinking-enabled assistant tool-call messages keep an empty reasoning field."
+  (let* ((tool-id "call_123")
+         (assistant (list :role "assistant"
+                          :content ""
+                          :tool_calls (vector (list :id tool-id :type "function"
+                                                    :function (list :name "Read" :arguments "{}")))))
+         (info (test--make-info (list assistant))))
+    (plist-put info :model 'moonshot)
+    (should (= 1 (my/gptel--repair-thinking-tool-call-messages info)))
+    (let ((messages (plist-get (plist-get info :data) :messages)))
+      (should (plist-member (aref messages 0) :reasoning_content))
+      (should (equal "" (plist-get (aref messages 0) :reasoning_content))))))
+
+(ert-deftest trim-reasoning/repair-thinking-tool-call-message-from-buffer-store ()
+  "Repair uses stored reasoning when available for tool-call history."
+  (let* ((tool-id "call_456")
+         (assistant (list :role "assistant"
+                          :content ""
+                          :tool_calls (vector (list :id tool-id :type "function"
+                                                    :function (list :name "Read" :arguments "{}")))))
+         (info (test--make-info (list assistant))))
+    (plist-put info :model 'moonshot)
+    (with-temp-buffer
+      (setq-local my/gptel--tool-reasoning-alist `((,tool-id . "stored reasoning")))
+      (plist-put info :buffer (current-buffer))
+      (should (= 1 (my/gptel--repair-thinking-tool-call-messages info))))
+    (let ((messages (plist-get (plist-get info :data) :messages)))
+      (should (equal "stored reasoning"
+                     (plist-get (aref messages 0) :reasoning_content))))))
+
+(ert-deftest trim-reasoning/repair-noop-for-non-thinking-models ()
+  "Non-thinking models are left unchanged by repair pass."
+  (let* ((assistant (list :role "assistant"
+                          :content ""
+                          :tool_calls (vector (list :id "call_789" :type "function"
+                                                    :function (list :name "Read" :arguments "{}")))))
+         (info (test--make-info (list assistant))))
+    (plist-put info :model 'plain-model)
+    (should (= 0 (my/gptel--repair-thinking-tool-call-messages info)))
+    (let ((messages (plist-get (plist-get info :data) :messages)))
+      (should-not (plist-member (aref messages 0) :reasoning_content)))))
+
+(ert-deftest trim-reasoning/repair-thinking-tool-call-message-with-string-model ()
+  "Thinking-model detection still works when INFO carries a string model name."
+  (let* ((tool-id "call_string_model")
+         (assistant (list :role "assistant"
+                          :content ""
+                          :tool_calls (vector (list :id tool-id :type "function"
+                                                    :function (list :name "Read" :arguments "{}")))))
+         (info (test--make-info (list assistant))))
+    (plist-put info :model "moonshot")
+    (should (= 1 (my/gptel--repair-thinking-tool-call-messages info)))
+    (let ((messages (plist-get (plist-get info :data) :messages)))
+      (should (plist-member (aref messages 0) :reasoning_content))
+      (should (equal "" (plist-get (aref messages 0) :reasoning_content))))))
 
 ;;; ===========================================================================
 ;;; Integration: progressive trimming + reasoning trim together
@@ -759,6 +859,7 @@ Returns the number of items trimmed, or 0 if no compaction needed."
         (when (> bytes limit)
           (let ((n (my/gptel--trim-reasoning-content info)))
             (cl-incf trimmed-total n)
+            (cl-incf trimmed-total (my/gptel--repair-thinking-tool-call-messages info))
             (setq bytes (my/gptel--estimate-payload-bytes info))))
         ;; Pass 3: reduce tools array (if still over)
         (when (> bytes limit)
@@ -903,6 +1004,49 @@ Returns the number of items trimmed, or 0 if no compaction needed."
         (should (equal "" (plist-get (aref messages 2) :reasoning_content))))
       ;; Retries reset
       (should (= 0 (plist-get info :retries))))))
+
+(ert-deftest compact/repairs-tool-call-reasoning-after-strip ()
+  "Compaction preserves empty reasoning field on assistant tool-call messages.
+This matches Moonshot/Kimi's requirement when thinking is enabled." 
+  (let* ((my/gptel-payload-byte-limit 400)
+         (assistant (list :role "assistant"
+                          :content ""
+                          :tool_calls (vector (list :id "call_repair" :type "function"
+                                                    :function (list :name "Read" :arguments "{}")))
+                          :reasoning_content (make-string 2000 ?r)))
+         (tool-msg (test--make-large-tool-result 2000))
+         (info (test--make-info (list assistant tool-msg) 0)))
+    (plist-put info :model 'moonshot)
+    (should (> (test--compact-payload-on-info info) 0))
+    (let ((messages (plist-get (plist-get info :data) :messages)))
+      (should (plist-member (aref messages 0) :reasoning_content))
+      (should (equal "" (plist-get (aref messages 0) :reasoning_content))))))
+
+(ert-deftest compact/pass-3-and-4-keep-tool-call-reasoning-valid ()
+  "Even when compaction reaches later passes, tool-call reasoning remains present.
+This covers the real failure shape: pass 2 strips reasoning, then pass 3/4 still
+run because payload is oversized." 
+  (let* ((my/gptel-payload-byte-limit 120)
+         (assistant (list :role "assistant"
+                          :content ""
+                          :tool_calls (vector (list :id "call_late" :type "function"
+                                                    :function (list :name "Read" :arguments "{}")))
+                          :reasoning_content (make-string 2000 ?r)))
+         (tool-msg-1 (test--make-large-tool-result 4000))
+         (tool-msg-2 (test--make-large-tool-result 4000))
+         (tools (vconcat (mapcar #'test--make-tool-def
+                                 '("Read" "Edit" "Write" "Glob" "Grep" "Diagnostics"
+                                   "Code_Map" "Code_Inspect" "Code_Usages" "RunAgent"))))
+         (info (list :data (list :messages (vector assistant tool-msg-1 tool-msg-2)
+                                 :tools tools)
+                     :retries 0
+                     :model 'moonshot)))
+    (should (> (test--compact-payload-on-info info) 0))
+    (let* ((data (plist-get info :data))
+           (messages (plist-get data :messages))
+           (assistant-msg (aref messages 0)))
+      (should (plist-member assistant-msg :reasoning_content))
+      (should (equal "" (plist-get assistant-msg :reasoning_content))))))
 
 (ert-deftest compact/respects-model-specific-limit ()
   "Uses model-specific limit when smaller than global."

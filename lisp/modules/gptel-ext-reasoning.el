@@ -39,6 +39,8 @@ when re-serializing the conversation for APIs that require it (e.g. Moonshot).")
 Returns :reasoning_content for models with :thinking param (Moonshot),
 :reasoning for models with :reasoning param (OpenRouter/DeepSeek).
 When BACKEND is non-nil, only returns a key for gptel-openai backends."
+  (when (stringp model)
+    (setq model (intern model)))
   (when (fboundp 'gptel--model-request-params)
     (when (or (null backend) (cl-typep backend 'gptel-openai))
       (let ((params (gptel--model-request-params model)))
