@@ -42,3 +42,20 @@ jobs:
           LISP_ERR_ON_WARN="(setq byte-compile-error-on-warn t) (setq byte-compile-warnings '(not obsolete free-vars))"
           emacs -batch -L . --eval "(progn $LISP_ERR_ON_WARN )"  -f batch-byte-compile early-init.el
           emacs -batch -L . --eval "(progn $LISP_ERR_ON_WARN (load \"early-init.el\" nil t t) )" -f batch-byte-compile init.el
+
+      - name: Run Programmatic Tests
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-programmatic.el \
+            -l tests/test-tool-confirm-programmatic.el \
+            -f ert-run-tests-batch-and-exit
+
+      - name: Run Trim Tests
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-gptel-trim.el \
+            -f ert-run-tests-batch-and-exit
+
+      - name: Verify Nucleus Tool Contracts
+        run: |
+          ./scripts/verify-nucleus.sh
