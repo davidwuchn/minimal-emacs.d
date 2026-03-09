@@ -19,7 +19,41 @@ Produce a skill that:
 - stays lean enough to load reliably
 - includes evals only when they help
 
+## First: Find the Current Stage
+
+Before doing anything else, identify where the user is in the lifecycle:
+
+- **New skill** - they have an idea but no draft
+- **Draft refinement** - they already have a `SKILL.md`
+- **Eval and review** - they want to test or benchmark behavior
+- **Description tuning** - the skill works, but triggering is weak
+- **Lightweight collaboration** - they want to sketch or "vibe" before formalizing
+
+Jump to the stage that helps most instead of forcing a full start-to-finish process every time.
+
+## Communicate for the User in Front of You
+
+Default to plain language.
+
+- Use terms like "test prompt" and "review" freely.
+- Use terms like `JSON`, `assertion`, or `benchmark` only when the user seems comfortable with them, or explain them briefly.
+- Prefer quick concrete examples over abstract methodology.
+
+If the user already sounds technical, be concise and direct.
+If they do not, keep the workflow understandable without jargon.
+
 ## 1. Capture Intent
+
+First extract what you can from the conversation itself.
+
+Look for:
+- the workflow the user is trying to capture
+- tools or steps they already used
+- corrections they made
+- expected input/output shapes
+- examples already present in the discussion
+
+Only ask for the missing parts.
 
 Clarify four things:
 
@@ -30,6 +64,8 @@ Clarify four things:
 
 Use evals for deterministic tasks like transforms, extraction, or structured generation.
 Skip hard assertions for subjective tasks like style, taste, or open-ended ideation.
+
+If the user already has a draft skill, review it before asking broad questions.
 
 ## 2. Draft `SKILL.md`
 
@@ -56,6 +92,8 @@ Prefer imperative instructions.
 Explain why constraints exist.
 Avoid ritual language that adds tokens without changing behavior.
 
+If the user mainly wants help refining an existing draft, edit the draft first and only expand structure where the current file is actually weak.
+
 ## 3. Keep Structure Proportional
 
 Default structure:
@@ -80,6 +118,8 @@ Rules:
 ## 4. Add Evals Only When Useful
 
 If the skill is testable, create 2-3 realistic prompts in `evals/evals.json`.
+
+Before running them, show the proposed prompts to the user and confirm they are representative enough. Keep this lightweight; a quick check is enough.
 
 Use the repo's actual runner format:
 
@@ -129,7 +169,22 @@ Examples:
 
 If the task is subjective, prefer human review notes over fake precision.
 
+When useful, give each eval a short descriptive `name` so results are easier to scan later.
+
 ## 5. Run Evaluations
+
+Organize results consistently. A good default workspace is:
+
+```text
+<skill-name>-workspace/
+└── iteration-1/
+    └── eval-1/
+        ├── with_skill/
+        └── baseline/
+```
+
+Do not promise viewers or automated grading that the repo does not currently provide.
+Use the actual outputs, timing files, and benchmark data that exist.
 
 Use the repo's actual runner:
 
@@ -160,6 +215,12 @@ Current runner behavior to remember:
 
 Read the actual outputs, not just pass/fail.
 
+Good review order:
+1. inspect the generated outputs
+2. compare with baseline if present
+3. read timing or benchmark artifacts if they exist
+4. summarize what improved, what regressed, and what is still unclear
+
 Review along three axes:
 - trigger quality: did the skill fit the prompt?
 - output quality: was the answer better, clearer, or more reliable?
@@ -178,6 +239,7 @@ When improving the skill:
 - remove instructions that do not change outcomes
 - promote repeated deterministic work into helper scripts
 - tighten the description if triggering is weak or noisy
+- explain the why behind important constraints instead of piling on rigid rules
 
 Stop when one of these is true:
 - the skill is consistently useful
@@ -203,6 +265,8 @@ description: >
 
 If you want to test trigger quality, create a small set of should-trigger and should-not-trigger prompts and review them manually. Do not claim automated optimization unless you have actually run it.
 
+If no real experiment was run, describe the result as a proposal or recommendation, not an optimization benchmark.
+
 ## 9. Package the Skill
 
 Use the repo's actual packaging script:
@@ -225,6 +289,8 @@ Common issues:
   - simplify them or switch to human review
 - skill keeps growing
   - move bulky material into `references/` or delete weak instructions
+- the prompt becomes process-heavy
+  - keep only instructions that visibly change output quality or trigger accuracy
 - packaging fails
   - validate `SKILL.md` frontmatter and check `evals/evals.json` is valid JSON
 
