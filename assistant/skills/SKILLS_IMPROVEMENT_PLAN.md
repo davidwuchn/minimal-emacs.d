@@ -248,14 +248,14 @@ Human ⊗ AI ⊗ REPL
 | The Three Questions | AGENTS.md | "The Three Questions" section |
 | REPL-first workflow | clojure-expert | "REPL-First Development" section |
 | OODA loop | AGENTS.md | "Control Loops" section |
-| Eight Keys definition | SIMPLICITY.md | Complete table |
+| Eight Keys definition | skill-local section | Keep only skill-specific application where useful |
 | λ-calculus syntax | LAMBDA_PATTERNS.md | Pattern reference |
 
 ### Duplicate Content to Remove
 
 - **Three Questions** in clojure-expert → Reference AGENTS.md
 - **OODA loop** in planning → Reference AGENTS.md
-- **Eight Keys definitions** in nucleus-tutor → Reference SIMPLICITY.md
+- **Eight Keys definitions** in nucleus-tutor → either keep a local application table or trim the section entirely
 
 **Action**: Keep skill-specific applications, remove conceptual explanations.
 
@@ -267,7 +267,7 @@ Human ⊗ AI ⊗ REPL
 
 **Add**:
 - Context7 integration section (already there, good)
-- Research citations (link to RESEARCH_BASE.md)
+- Research citations only if a real repo source exists
 
 **Remove**:
 - Duplicate "Three Questions" → Reference AGENTS.md
@@ -281,7 +281,7 @@ Human ⊗ AI ⊗ REPL
 ### planning
 
 **Add**:
-- Research citations (link to RESEARCH_BASE.md)
+- Research citations only if a real repo source exists
 - Integration with other skills section
 
 **Compress**:
@@ -302,7 +302,7 @@ Human ⊗ AI ⊗ REPL
 
 **Add**:
 - Integration with nucleus-tutor (shared quality gate)
-- Research citations (link to RESEARCH_BASE.md)
+- Research citations only if a real repo source exists
 
 ---
 
@@ -318,7 +318,7 @@ Human ⊗ AI ⊗ REPL
 
 | Don't | Do Instead |
 |-------|-----------|
-| Duplicate core framework concepts | Reference AGENTS.md, SIMPLICITY.md |
+| Duplicate core framework concepts | Reference AGENTS.md or local skill guidance that actually exists |
 | Exceed 350 lines | Split or compress |
 | Missing version in frontmatter | Always include version |
 | Empty skill-specific column in Eight Keys | Fill in with applications |

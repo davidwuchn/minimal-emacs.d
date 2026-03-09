@@ -262,7 +262,7 @@ evidence: simplicity-md
 ---
 
 ## λ(e): Action
-Apply SIMPLICITY.md heuristics to reduce complexity. Question: "What's the simplest thing that could work?"
+Apply simplicity-first heuristics to reduce complexity. Question: "What's the simplest thing that could work?"
 
 ## λ(φ): Why
 Complexity is the root of bugs. Simplicity enables maintainability.

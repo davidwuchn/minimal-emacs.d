@@ -189,7 +189,7 @@ Every skill MUST have:
 | The Three Questions | AGENTS.md | "The Three Questions" section |
 | REPL-first workflow | clojure-expert | "REPL-First Development" section |
 | OODA loop | AGENTS.md | "Control Loops" section |
-| Eight Keys definition | SIMPLICITY.md | Complete table |
+| Eight Keys definition | skill-local section | Keep only skill-specific application where needed |
 | λ-calculus syntax | LAMBDA_PATTERNS.md | Pattern reference |
 
 ### Action Required
@@ -197,7 +197,7 @@ Every skill MUST have:
 **Remove duplicate content**:
 - The Three Questions in clojure-expert → Reference AGENTS.md
 - OODA loop in planning → Reference AGENTS.md
-- Eight Keys definitions in nucleus-tutor → Reference SIMPLICITY.md
+- Eight Keys definitions in nucleus-tutor → either keep the local application table or trim the section entirely
 
 **Keep skill-specific applications**:
 - How clojure-expert applies Eight Keys to REPL workflow

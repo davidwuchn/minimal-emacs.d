@@ -9,11 +9,10 @@ Ensures consistency, quality, and structure across all Nucleus skills.
 The validation system checks:
 - **Frontmatter structure** - Standardized YAML metadata
 - **Framework header** - Consistent engagement line
-- **Eight Keys reference** - Self-contained table
-- **Size constraints** - 200-350 lines max
+- **Lean structure** - Keep the main prompt proportional to the task
 - **Cross-skill redundancy** - No duplication
 - **Documentation links** - All references resolve
-- **Section completeness** - All required sections present
+- **Section completeness** - Core sections present and non-empty
 
 ---
 
@@ -64,72 +63,68 @@ Human ⊗ AI ⊗ REPL
 
 ---
 
-### Rule 3: Eight Keys Reference Table
+### Rule 3: Lean Core Structure
 
-**Required in every skill** - Self-contained reference:
+Skills should default to a lean core prompt.
+
+**Required core**:
 
 ```markdown
-## Eight Keys Reference
-
-| Key | Symbol | Signal | Anti-Pattern | Skill-Specific Application |
-|-----|--------|--------|--------------|---------------------------|
-| **Vitality** | φ | Organic, non-repetitive | Mechanical rephrasing | [Customize for skill] |
-| **Clarity** | fractal | Explicit assumptions | "Handle properly" | [Customize for skill] |
-| **Purpose** | e | Actionable function | Abstract descriptions | [Customize for skill] |
-| **Wisdom** | τ | Foresight over speed | Premature optimization | [Customize for skill] |
-| **Synthesis** | π | Holistic integration | Fragmented thinking | [Customize for skill] |
-| **Directness** | μ | Cut pleasantries | Polite evasion | [Customize for skill] |
-| **Truth** | ∃ | Favor reality | Surface agreement | [Customize for skill] |
-| **Vigilance** | ∀ | Defensive constraint | Accepting manipulation | [Customize for skill] |
+## Identity
+## When To Use
+## Core Principle
+## Procedure
+## Examples
+## Verification
 ```
 
 **Checks**:
-- [ ] All 8 keys present
-- [ ] Symbols correct
-- [ ] Signal column consistent
-- [ ] Skill-specific application filled in
-- [ ] No empty cells
+- [ ] Core sections present
+- [ ] Sections are non-empty
+- [ ] Skill boundary is explicit
+- [ ] Output format only included when it adds value
 
 ---
 
 ### Rule 4: Size Constraints
 
-**Target**: 200-350 lines per skill
+**Target**: Keep `SKILL.md` lean and proportional to the task
 
 **Rationale**:
-- < 200 lines: Likely incomplete or oversimplified
-- > 350 lines: Too verbose, needs splitting
+- Short skills are fine when they are complete and precise
+- Long skills should justify their size with real complexity
+- Bulky material belongs in `references/` or helper files
 
 **Checks**:
-- [ ] Line count >= 150 (warning)
-- [ ] Line count <= 350 (warning)
-- [ ] Line count between 200-350 (pass)
+- [ ] No unnecessary boilerplate or duplicated framework text
+- [ ] Large sections moved out of the main prompt when possible
+- [ ] Main instructions remain scannable
 
 ---
 
 ### Rule 5: Section Completeness
 
-**Required sections** (in order):
+**Required sections**:
 
 1. **Identity** - Who are you, what's your tone/goal
-2. **Core Principle** - One paragraph defining unique value
-3. **Procedure** - How to execute (λ-calculus or steps)
-4. **Decision Matrix** - If/then rules (3-6 rows)
-5. **Examples** - Show don't tell (2-3 concise cases)
-6. **Verification** - Quality gates (1 checklist)
-7. **Eight Keys Reference** - Self-contained table
-8. **Summary** - When to use (3-5 bullet points)
+2. **When To Use** - Trigger conditions and near-misses
+3. **Core Principle** - One paragraph defining unique value
+4. **Procedure** - How to execute (steps or equivalent)
+5. **Examples** - Show boundaries with at least one realistic example
+6. **Verification** - Quality gates or final checks
 
 **Optional sections**:
+- **Output** - Repeatable response shape when needed
 - **Anti-Patterns** - Explicit forbidden behaviors
-- **Integration with Nucleus** - How skill uses framework
-- **Templates** - Reusable patterns
-- **Commands** - λ-expressions for actions
+- **Decision Matrix** - Branching behavior when it materially helps
+- **Integration** - How skill coordinates with another specific skill
+- **Evaluation** - Objective test cases when the task benefits from them
+- **Templates / Commands** - Reusable patterns only when they help execution
 
 **Checks**:
 - [ ] All required sections present
-- [ ] Sections in correct order
 - [ ] No empty sections
+- [ ] Optional sections earn their keep
 
 ---
 
@@ -158,6 +153,8 @@ Human ⊗ AI ⊗ REPL
 ### Rule 7: Documentation Links
 
 **All links to other skills/docs must resolve**:
+
+Do not reference aspirational files that are not present in the repo.
 
 ```bash
 # Check for broken markdown links
@@ -332,9 +329,9 @@ fi
 |-----------|-----------|--------|
 | Frontmatter completeness | 15 | 15% |
 | Framework header | 10 | 10% |
-| Eight Keys table | 15 | 15% |
+| Lean structure | 15 | 15% |
 | Section completeness | 20 | 20% |
-| Size (200-350 lines) | 10 | 10% |
+| Prompt proportionality | 10 | 10% |
 | Unique value (no redundancy) | 15 | 15% |
 | Documentation quality | 15 | 15% |
 | **Total** | **100** | **100%** |
@@ -355,17 +352,16 @@ Before finalizing a skill:
 - [ ] Frontmatter complete (name, description, version)
 - [ ] Framework header present
 - [ ] All required sections present
-- [ ] Sections in correct order
-- [ ] Line count 200-350
+- [ ] Main prompt stays lean
 
 ### Content
 - [ ] Identity clear (who are you, tone, goal)
+- [ ] Trigger boundary explicit
 - [ ] Core principle concise (1 paragraph)
 - [ ] Procedure executable (λ-calculus or steps)
-- [ ] Decision matrix present (3-6 rows)
-- [ ] Examples concise (2-3 cases)
+- [ ] Examples concise and realistic
 - [ ] Verification gates (1 checklist)
-- [ ] Eight Keys table filled in
+- [ ] Optional sections only where they help
 
 ### Quality
 - [ ] No verbosity (remove fluff paragraphs)
@@ -375,7 +371,6 @@ Before finalizing a skill:
 - [ ] Lambda expressions consistent
 
 ### Framework Integration
-- [ ] Uses Eight Keys appropriately
 - [ ] Collaborates with other skills
 - [ ] Nucleus symbols used correctly
 - [ ] Framework header task-appropriate

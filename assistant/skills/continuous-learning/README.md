@@ -174,7 +174,7 @@ See `instincts/library/nucleus-patterns.md` for foundational Nucleus instincts:
 - **Contextual Awareness** (φ:0.8) - OODA loop
 - **Prefer Native Tools** (φ:0.75) - Local over external
 - **Document via Examples** (φ:0.7) - Examples over descriptions
-- **Simplicity First** (φ:0.85) - SIMPLICITY.md heuristics
+- **Simplicity First** (φ:0.85) - simplicity-first instinct heuristics
 - **Tensor Product Execution** (φ:1.0) - Human ⊗ AI ⊗ REPL
 
 ## Best Practices
