@@ -38,6 +38,29 @@ Important: `~/.emacs.d/eca` is the real directory used by this setup. The
 adds tool management, preset routing, security ACLs, prompt infrastructure,
 payload resilience, and an agent workflow inside Emacs.
 
+## Upstream init chain note
+
+Recent upstream `minimal-emacs.d` now exposes four startup-stage toggles:
+
+- `minimal-emacs-load-pre-early-init`
+- `minimal-emacs-load-post-early-init`
+- `minimal-emacs-load-pre-init`
+- `minimal-emacs-load-post-init`
+
+These let you temporarily skip hook files while debugging startup issues or
+bisecting configuration problems. In practice, `pre-early-init.el` is the best
+place to disable the later three stages:
+
+```elisp
+(setq minimal-emacs-load-post-early-init nil
+      minimal-emacs-load-pre-init nil
+      minimal-emacs-load-post-init nil)
+```
+
+Important caveat: `minimal-emacs-load-pre-early-init` is checked before
+`pre-early-init.el` itself is loaded, so it only helps if you set it from an
+earlier external startup path.
+
 ## Key capabilities
 
 - **Agent and Plan modes** - separate presets with different capability

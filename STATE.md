@@ -155,6 +155,8 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 
 ### Recent Changes (v0.5.28)
 
+- **Document upstream hook-stage toggles** (◈): Reviewed upstream commit `41424f2` / merge `e8ba410`, which added `minimal-emacs-load-pre-early-init`, `minimal-emacs-load-post-early-init`, `minimal-emacs-load-pre-init`, and `minimal-emacs-load-post-init` to let users selectively skip startup hook files. Updated `INTRO.md` to explain the practical debugging use-case and captured the constraint in `LEARNING.md` that `minimal-emacs-load-pre-early-init` itself must be set before `early-init.el` runs.
+
 - **Normalize wrapped gptel FSM values** (⊘): Added shared helper module `lisp/modules/gptel-ext-fsm-utils.el` with `my/gptel--coerce-fsm`, overrode the broken upstream `gptel--inspect-fsm` path in `lisp/modules/gptel-ext-tool-confirm.el`, and patched other consumers (`gptel-ext-fsm`, `gptel-ext-abort`, `gptel-tools-agent`, `gptel-tools-preview`) to tolerate runtime values like `(FSM . CLEANUP)` or full request-alist entries instead of assuming `gptel--fsm-last` is always a bare struct.
 - **Add wrapped-FSM regression coverage** (⊘): Expanded `tests/test-tool-confirm-programmatic.el` with an inspect regression and added `tests/test-wrapped-fsm.el` for recovery, prompt-marker, and preview callback cases. Verified with `emacs --batch -Q -L . -L lisp -L lisp/modules -l tests/test-tool-confirm-programmatic.el -l tests/test-wrapped-fsm.el -f ert-run-tests-batch-and-exit`.
 
