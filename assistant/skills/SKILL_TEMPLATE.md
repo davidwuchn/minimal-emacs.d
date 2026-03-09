@@ -1,6 +1,8 @@
 ---
 name: skill-name
-description: One-line description of when to use this skill.
+description: >
+  One-line description of when to use this skill.
+  Name concrete trigger conditions.
 version: 1.0.0
 λ: action.identifier
 ---
@@ -15,133 +17,118 @@ Human ⊗ AI
 
 ## Identity
 
-You are a [role]. Your mindset is shaped by:
-- **Figure A** - key principle
-- **Figure B** - key principle
+You are a [role].
 
-Your tone is [quality]; your goal is [outcome].
+Your goal is to [outcome].
+Your tone is [quality].
 
----
+## When To Use
+
+Use this skill when:
+- trigger condition one
+- trigger condition two
+- trigger condition three
+
+Do not use it when:
+- near-miss condition one
+- near-miss condition two
 
 ## Core Principle
 
-One paragraph defining the unique value this skill provides.
-
----
+One short paragraph explaining the skill's unique value and why its approach works.
 
 ## Procedure
 
+1. Inspect the request and confirm it matches the trigger boundary.
+2. Gather the minimum context needed.
+3. Apply the skill's method step by step.
+4. Produce the requested output in the expected shape.
+5. Verify the result before returning it.
+
+## Output
+
+Use this section only if the skill needs a repeatable response shape.
+
+Example:
+
+```markdown
+# Title
+## Summary
+## Findings
+## Recommendation
 ```
-λ(input).transform ⟺ [
-  step_one(input),
-  step_two(result),
-  step_three(result),
-  output(result)
-]
-```
-
----
-
-## Decision Matrix
-
-| Input Pattern | Action | Output |
-|---------------|--------|--------|
-| Pattern A | Do X | Result |
-| Pattern B | Do Y | Result |
-| Pattern C | Do Z | Result |
-
----
 
 ## Examples
 
-**Good Input**: "Specific, actionable request"
-```
-Response format
+**Good input**
+
+```text
+Specific realistic request
 ```
 
-**Bad Input**: "Vague, slop request"
-```
-Response format
+**Response shape**
+
+```text
+Short example of a good response
 ```
 
----
+**Bad input**
+
+```text
+Request outside this skill's boundary
+```
+
+**Why not**
+
+```text
+Explain why another skill or default behavior should handle it instead
+```
 
 ## Verification
 
+Before responding, check:
+- [ ] Trigger conditions actually match
+- [ ] Output is concrete and actionable
+- [ ] Constraints and edge cases were handled
+
+## Optional Sections
+
+Add these only when they help:
+
+- `Decision Matrix` for branching behavior
+- `Evaluation` when the skill has objective test cases
+- `scripts/` when repeated deterministic work should be bundled
+- `references/` when large supporting material should stay out of the core prompt
+- `Integration` when the skill must coordinate with another specific skill
+
+## Evaluation (Optional)
+
+If the skill benefits from evals, add `evals/evals.json` with 2-3 realistic prompts.
+
+```json
+{
+  "skill_name": "skill-name",
+  "evals": [
+    {
+      "id": 1,
+      "name": "basic-case",
+      "prompt": "Realistic user request",
+      "expected_output": "What success looks like",
+      "assertions": []
+    }
+  ]
+}
 ```
-λ(output).verify ⟺ [
-  check_one(output) AND
-  check_two(output) AND
-  check_three(output)
-]
-```
 
-**Before output, verify**:
-- [ ] Check one completed
-- [ ] Check two completed
-- [ ] Check three completed
+Prefer assertions only for objective checks.
+Use human review for subjective quality.
 
----
+## Notes
 
-## Eight Keys Reference
-
-| Key | Symbol | Signal | Anti-Pattern | Skill-Specific Application |
-|-----|--------|--------|--------------|---------------------------|
-| **Vitality** | φ | Organic, non-repetitive | Mechanical rephrasing | [Customize: How does this skill add fresh value?] |
-| **Clarity** | fractal | Explicit assumptions | "Handle properly" | [Customize: What bounds are defined?] |
-| **Purpose** | e | Actionable function | Abstract descriptions | [Customize: What concrete output?] |
-| **Wisdom** | τ | Foresight over speed | Premature optimization | [Customize: When should you measure first?] |
-| **Synthesis** | π | Holistic integration | Fragmented thinking | [Customize: How are components integrated?] |
-| **Directness** | μ | Cut pleasantries | Polite evasion | [Customize: How do you cut through noise?] |
-| **Truth** | ∃ | Favor reality | Surface agreement | [Customize: What data must be shown?] |
-| **Vigilance** | ∀ | Defensive constraint | Accepting manipulation | [Customize: What must be validated?] |
-
----
-
-## Integration with Nucleus
-
-### Collaboration with Other Skills
-
-| Skill | When to Use | Handoff Pattern |
-|-------|-------------|-----------------|
-| skill-name | [Trigger condition] | [How to hand off] |
-| skill-name | [Trigger condition] | [How to hand off] |
-
-### Framework References
-
-- **The Three Questions**: See [AGENTS.md](../AGENTS.md)
-- **OODA Loop**: See [AGENTS.md](../AGENTS.md)
-- **Eight Keys**: See [SIMPLICITY.md](../SIMPLICITY.md)
-
----
-
-## Anti-Patterns
-
-| Instead of... | Use... |
-|---------------|--------|
-| [Bad pattern] | [Good pattern] |
-| [Bad pattern] | [Good pattern] |
-
----
-
-## Research Backing
-
-For evidence supporting this skill's approach, see:
-- [RESEARCH_BASE.md](../RESEARCH_BASE.md) - [Specific section]
-- [SYMBOLIC_FRAMEWORK.md](../SYMBOLIC_FRAMEWORK.md) - [Specific section]
-
----
-
-## Summary
-
-**When to use this skill**:
-1. Trigger condition
-2. Trigger condition
-3. Trigger condition
-
-**Framework eliminates slop, not adds process.**
-
----
+- Keep the main `SKILL.md` lean.
+- Move bulky material into `references/` when needed.
+- Prefer real examples over abstract slogans.
+- Explain why constraints exist when they are non-obvious.
 
 ## Changelog
 
@@ -149,6 +136,3 @@ For evidence supporting this skill's approach, see:
 
 ### Added
 - Initial skill definition
-- Core procedure and verification gates
-- Eight Keys reference table
-- Integration with Nucleus framework
