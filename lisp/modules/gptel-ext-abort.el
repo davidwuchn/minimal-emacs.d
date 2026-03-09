@@ -10,6 +10,7 @@
 
 (require 'cl-lib)
 (require 'gptel)
+(require 'gptel-ext-fsm-utils)
 
 ;; --- Always-Interruptable Requests ---
 
@@ -159,8 +160,9 @@ START and END are the response region positions passed by
              ;; In some buffers/sentinels, `gptel--fsm' may not be bound.
              ;; Never error from a post-response hook.
              (not (condition-case nil
-                      (let* ((fsm (buffer-local-value 'gptel--fsm-last (current-buffer)))
-                             (info (and fsm (gptel-fsm-info fsm))))
+                       (let* ((fsm (my/gptel--coerce-fsm
+                                    (buffer-local-value 'gptel--fsm-last (current-buffer))))
+                              (info (and fsm (gptel-fsm-info fsm))))
                         (plist-get info :error))
                     (error nil))))
     (save-excursion

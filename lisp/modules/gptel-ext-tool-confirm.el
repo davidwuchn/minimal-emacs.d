@@ -9,9 +9,12 @@
 
 (require 'cl-lib)
 (require 'gptel)
+(require 'gptel-ext-fsm-utils)
 
 (defvar gptel-tool-call-actions-map) ; defined in gptel
 (defvar gptel--tool-preview-alist)   ; defined in gptel
+(defvar gptel--request-alist)        ; defined in gptel-request
+(defvar gptel--fsm-last)             ; defined in gptel
 (defvar gptel-sandbox-confirm-function)
 (defvar gptel-sandbox-aggregate-confirm-function)
 
@@ -21,26 +24,89 @@
 (defvar my/gptel-permitted-tools)
 
 ;; --- FSM Lookup Helper ---
-;; Upstream `gptel--inspect-fsm' has a bug: when called with nil FSM arg, it
-;; falls back to `(cdr-safe (cl-find-if pred gptel--request-alist))' which
-;; yields (FSM . CLEANUP-FN) — a cons cell, not a bare gptel-fsm struct.
-;; This helper does the extraction correctly.
+;; Upstream `gptel--inspect-fsm' has two bugs in the unreleased FSM build used
+;; here: the default lookup returns a wrapped request entry instead of a bare
+;; struct, and the type check validates `gptel--fsm-last' instead of the FSM
+;; argument that was actually resolved.
 
 (defun my/gptel--current-fsm ()
   "Return the current gptel-fsm struct for the active request.
 
-Looks up the FSM from `gptel--request-alist' using the correct
-extraction: (car (cdr entry)) to unwrap the (FSM . CLEANUP-FN)
-cons cell.  Falls back to `gptel--fsm-last' if no active request
-is found."
+Looks up the FSM from `gptel--request-alist' and unwraps any request-entry
+container shape used by the running gptel build.  Falls back to
+`gptel--fsm-last' if no active request is found."
   (or (and (bound-and-true-p gptel--request-alist)
-           (car (cdr-safe
-                 (cl-find-if
-                  (lambda (entry)
-                    (let ((buf (process-buffer (car entry))))
-                      (eq buf (current-buffer))))
-                  gptel--request-alist))))
-       gptel--fsm-last))
+           (my/gptel--coerce-fsm
+            (cl-find-if
+             (lambda (entry)
+               (let ((buf (ignore-errors (process-buffer (car entry)))))
+                 (eq buf (current-buffer))))
+             gptel--request-alist)))
+      (my/gptel--coerce-fsm gptel--fsm-last)))
+
+(defun my/gptel--inspect-fsm (&optional fsm)
+  "Inspect gptel request state FSM.
+
+FSM defaults to the active request in the current buffer.  Unlike upstream,
+this accepts wrapped request entries and validates the resolved FSM itself."
+  (setq fsm (or (my/gptel--coerce-fsm fsm)
+                (my/gptel--current-fsm)))
+  (unless (my/gptel--fsm-p fsm)
+    (user-error "No gptel request log in this buffer yet!"))
+  (require 'tabulated-list)
+  (with-current-buffer (get-buffer-create "*gptel-diagnostic*")
+    (setq tabulated-list-format [("Request attribute" 30 t)
+                                 ("Value" 30)])
+    (let* ((pb (lambda (s) (propertize s 'face 'font-lock-builtin-face)))
+           (ps (lambda (s) (propertize s 'face 'font-lock-string-face)))
+           (fmt (lambda (s)
+                  (cond ((memq (car-safe s) '(closure lambda))
+                         (format "#<lambda %#x>" (sxhash s)))
+                        ((byte-code-function-p s)
+                         (format "#<compiled %#x>" (sxhash s)))
+                        ((stringp s) (string-replace "\n" "? " s))
+                        (t (prin1-to-string s)))))
+           (inhibit-read-only t)
+           (info (gptel-fsm-info fsm))
+           (entries-info
+            (cl-loop
+             for idx upfrom 3
+             for (key val) on info by #'cddr
+             unless (memq key '(:data :history :tools :partial_text :partial_json))
+             collect
+             (list idx `[,(funcall pb (symbol-name key))
+                         ,(funcall ps (funcall fmt val))])))
+           (entries-data
+            (cl-loop
+             for idx upfrom 50
+             for (key val) on (plist-get info :data) by #'cddr
+             unless (memq key '(:messages :stream :contents :query))
+             collect
+             (list idx `[,(funcall pb (symbol-name key))
+                         ,(funcall ps (funcall fmt val))]))))
+      (setq tabulated-list-entries
+            (nconc (list `(2 [,(funcall pb ":state")
+                              ,(funcall ps
+                                        (mapconcat
+                                         fmt
+                                         (reverse (cons (gptel-fsm-state fsm)
+                                                        (plist-get info :history)))
+                                         " -> "))]))
+                   entries-info
+                   entries-data))
+      (tabulated-list-print)
+      (tabulated-list-mode)
+      (tabulated-list-init-header)
+      (hl-line-mode 1)
+      (display-buffer
+       (current-buffer)
+       '((display-buffer-in-side-window)
+         (side . bottom)
+         (window-height . fit-window-to-buffer)
+         (slot . 10)
+         (body-function . select-window))))))
+
+(advice-add 'gptel--inspect-fsm :override #'my/gptel--inspect-fsm)
 
 (defun my/gptel--tool-spec-name (tool-spec)
   "Return a displayable tool name for TOOL-SPEC.

@@ -3,6 +3,9 @@
 (require 'ert)
 (require 'cl-lib)
 
+(cl-defstruct (gptel-fsm (:constructor gptel-make-fsm))
+  state info)
+
 ;;; Minimal gptel stubs before loading the module
 
 (cl-defstruct (gptel-test-tool (:constructor gptel-test-tool-create))
@@ -12,6 +15,8 @@
 
 (defvar gptel-tool-call-actions-map (make-sparse-keymap))
 (defvar gptel--tool-preview-alist nil)
+(defvar gptel--request-alist nil)
+(defvar gptel--fsm-last nil)
 (defvar gptel-backend 'stub-backend)
 (defvar my/gptel-permitted-tools (make-hash-table :test 'equal))
 (defvar test-tool-confirm--accepted nil)
@@ -28,6 +33,25 @@
 (defun gptel--inspect-fsm (&rest _args)
   "No-op inspect stub for tests."
   (selected-window))
+
+(define-derived-mode test-tabulated-list-mode special-mode "TestTabulated")
+
+(defvar tabulated-list-format nil)
+(defvar tabulated-list-entries nil)
+
+(defun tabulated-list-mode ()
+  "Stub tabulated list mode for tests."
+  (test-tabulated-list-mode))
+
+(defun tabulated-list-init-header ()
+  "Stub header init for tests."
+  nil)
+
+(defun tabulated-list-print ()
+  "Stub printer for tests."
+  (erase-buffer)
+  (dolist (entry tabulated-list-entries)
+    (insert (format "%S\n" entry))))
 
 (defun text-property-search-backward (property value &optional predicate)
   "Tiny compatibility stub for test buffers.
@@ -144,9 +168,22 @@ Search backward for PROPERTY equal to VALUE, optionally filtering with PREDICATE
                      (list "- Edit path=a.el diffp=t\n- ApplyPatch patch=...")
                      (lambda (value) (setq approved value))))
          ov)
-        (should approved)
-        (should-not test-tool-confirm--accepted)
-        (should-not (overlay-buffer ov))))))
+         (should approved)
+         (should-not test-tool-confirm--accepted)
+         (should-not (overlay-buffer ov))))))
+
+(ert-deftest tool-confirm/inspect-fsm-coerces-wrapped-fsm-last ()
+  (with-temp-buffer
+    (let* ((fsm (gptel-make-fsm :state 'WAIT
+                                :info '(:buffer nil :history (INIT WAIT))))
+           (wrapped (cons fsm #'ignore)))
+      (setf (gptel-fsm-info fsm)
+            (plist-put (gptel-fsm-info fsm) :buffer (current-buffer)))
+      (setq-local gptel--fsm-last wrapped)
+      (setq gptel--request-alist nil)
+      (my/gptel--inspect-fsm)
+      (with-current-buffer "*gptel-diagnostic*"
+        (should (string-match-p ":state" (buffer-string)))))))
 
 (provide 'test-tool-confirm-programmatic)
 

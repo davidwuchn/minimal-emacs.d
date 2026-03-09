@@ -9,6 +9,7 @@
 ;;; Code:
 
 (require 'gptel)
+(require 'gptel-ext-fsm-utils)
 
 (defvar gptel-agent-request--handlers) ; defined in gptel-agent-tools.el
 
@@ -63,7 +64,7 @@ This advice forces the final transition."
 START and END are the response positions (ignored).
 This handles the case where malformed JSON leaves FSM in limbo."
   (when (boundp 'gptel--fsm-last)
-    (let* ((fsm gptel--fsm-last)
+    (let* ((fsm (my/gptel--coerce-fsm gptel--fsm-last))
            (info (and fsm (gptel-fsm-info fsm)))
            (error-msg (plist-get info :error))
            (stop-reason (plist-get info :stop-reason)))

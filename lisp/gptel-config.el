@@ -9,6 +9,7 @@
 
 (require 'gptel-ext-core)
 (require 'gptel-ext-streaming)
+(require 'gptel-ext-fsm-utils)
 (require 'gptel-ext-tool-sanitize)
 (require 'gptel-ext-reasoning)
 (require 'gptel-ext-retry)
@@ -59,4 +60,3 @@
 (provide 'gptel-config)
 
 ;;; gptel-config.el ends here
-

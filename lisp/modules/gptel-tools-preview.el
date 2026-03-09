@@ -11,6 +11,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'diff-mode)
+(require 'gptel-ext-fsm-utils)
 
 ;;; Customization
 
@@ -37,7 +38,8 @@ Set to nil to disable the timeout."
 Saves the current `gptel--fsm-last' from BUFFER and returns a function
 that, on first invocation only, restores the FSM state and calls CALLBACK
 with its argument.  Subsequent calls are no-ops."
-  (let ((parent-fsm (buffer-local-value 'gptel--fsm-last buffer))
+  (let ((parent-fsm (my/gptel--coerce-fsm
+                     (buffer-local-value 'gptel--fsm-last buffer)))
         (cb-called nil))
     (lambda (result)
       (unless cb-called

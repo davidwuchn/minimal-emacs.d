@@ -42,6 +42,8 @@ Change the default in `gptel-config.el' to switch everywhere."
   (require 'gptel nil t)
   (require 'gptel-agent nil t))
 
+(require 'gptel-ext-fsm-utils)
+
 ;; Fallback macro definition removed in favor of explicit cl-progv scoping
 
 
@@ -61,10 +63,11 @@ and large-result truncation via `my/gptel--deliver-subagent-result'."
          (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
     (cl-progv syms vals
       (gptel--apply-preset preset)
-      (let* ((info (gptel-fsm-info gptel--fsm-last))
-             (parent-buf (plist-get info :buffer))
-             (where (or (plist-get info :tracking-marker)
-                        (plist-get info :position)))
+      (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
+             (info (and parent-fsm (gptel-fsm-info parent-fsm)))
+              (parent-buf (plist-get info :buffer))
+              (where (or (plist-get info :tracking-marker)
+                         (plist-get info :position)))
              (tracking-marker (let ((m (copy-marker where)))
                                 (set-marker-insertion-type m t)
                                 (set-marker m (marker-position where) parent-buf)
