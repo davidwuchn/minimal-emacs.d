@@ -96,14 +96,16 @@
 
   ;; Keep a couple of modes in Emacs state even when evil is enabled.
   (evil-set-initial-state 'vterm-mode 'emacs)
-  (evil-set-initial-state 'eca-chat-mode 'emacs)
-  (evil-set-initial-state 'ai-code-mode 'emacs)
-  (evil-set-initial-state 'ai-code-chat-mode 'emacs))
+  (evil-set-initial-state 'eca-chat-mode 'emacs))
 
-;; Ensure ESC is passed through to vterm and not captured by evil
+;; Keep vterm in Emacs state and let ESC reach the terminal unchanged.
+(defun my-vterm-evil-setup ()
+  "Keep `vterm' in Emacs state and do not let Evil intercept ESC."
+  (setq-local evil-inhibit-esc t)
+  (setq-local evil-move-cursor-back nil)
+  (when (and (fboundp 'evil-emacs-state)
+             (bound-and-true-p evil-local-mode))
+    (evil-emacs-state)))
+
 (with-eval-after-load 'vterm
-  (add-hook 'vterm-mode-hook
-            (lambda ()
-              (setq-local evil-move-cursor-back nil)
-              (evil-emacs-state)
-              (define-key vterm-mode-map [escape] #'vterm-send-escape))))
+  (add-hook 'vterm-mode-hook #'my-vterm-evil-setup))
