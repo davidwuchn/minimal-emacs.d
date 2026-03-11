@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-08 (tag v0.5.34)
+> Last updated: 2026-03-11 (tag v0.6.6)
 
 ## Architecture Overview
 
@@ -152,6 +152,11 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Prompt caching (explicit cache headers) | **Skip** | OpenAI-compatible backends do server-side caching automatically; no client changes needed |
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
 | Per-tool output limits | **Skip** | `my/gptel-subagent-result-limit` truncation on subagents works fine |
+
+### Recent Changes (v0.6.6)
+
+- **Fix Moonshot thinking payload compaction** (⊘): Hardened `lisp/modules/gptel-ext-reasoning.el` so assistant tool-call history is repaired not only when `reasoning_content` is missing, but also when compaction/replay leaves an invalid non-string sentinel such as `nil` or `:null`. `lisp/modules/gptel-ext-retry.el` now reuses the same repair path during retry/compaction, preventing Moonshot/Kimi 400s like `thinking is enabled but reasoning_content is missing in assistant tool call message` after aggressive payload trimming.
+- **Add invalid-reasoning regression coverage** (⊘): Expanded `tests/test-gptel-trim.el` with regression cases for `:null` and `nil` reasoning payloads on assistant tool-call history, alongside the existing compaction tests. Verified with `emacs --batch -Q -L . -L lisp -L lisp/modules -l tests/test-gptel-trim.el -f ert-run-tests-batch-and-exit`.
 
 ### Recent Changes (v0.5.28)
 

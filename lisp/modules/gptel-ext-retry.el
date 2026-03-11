@@ -130,22 +130,11 @@ field, even if it is the empty string.  Returns the number of messages repaired.
                (boundp 'my/gptel--tool-reasoning-alist)
                (buffer-local-value 'my/gptel--tool-reasoning-alist gptel-buf)))
          (repaired 0))
-    (when (and reasoning-key messages (> (length messages) 0))
-      (dotimes (i (length messages))
-        (let ((msg (aref messages i)))
-          (when (and (equal (plist-get msg :role) "assistant")
-                     (plist-get msg :tool_calls)
-                     (not (plist-member msg reasoning-key)))
-            (let* ((tool-calls (plist-get msg :tool_calls))
-                   (tc (and (vectorp tool-calls)
-                            (> (length tool-calls) 0)
-                            (aref tool-calls 0)))
-                   (id (and tc (plist-get tc :id)))
-                   (stored (and id reasoning-alist
-                                (alist-get id reasoning-alist :absent nil #'equal))))
-              (plist-put msg reasoning-key
-                         (if (or (eq stored :absent) (null stored)) "" stored))
-              (cl-incf repaired))))))
+    (when (and reasoning-key messages (> (length messages) 0)
+               (fboundp 'my/gptel--ensure-reasoning-on-messages))
+      (setq repaired
+            (my/gptel--ensure-reasoning-on-messages
+             messages reasoning-key reasoning-alist)))
     repaired))
 
 (defun my/gptel--reduce-tools-for-retry (info)

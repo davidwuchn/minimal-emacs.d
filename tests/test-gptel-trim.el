@@ -77,6 +77,37 @@ Progressive trimming based on :retries in INFO."
 (defvar-local my/gptel--tool-reasoning-alist nil
   "Test stub buffer-local reasoning store.")
 
+(defun my/gptel--valid-reasoning-value-p (value)
+  "Test stub: return non-nil when VALUE is a valid serialized reasoning field."
+  (stringp value))
+
+(defun my/gptel--fallback-reasoning-value (tool-calls reasoning-alist)
+  "Test stub: return stored reasoning for TOOL-CALLS, or empty string."
+  (let* ((tc (and (vectorp tool-calls)
+                  (> (length tool-calls) 0)
+                  (aref tool-calls 0)))
+         (id (and tc (plist-get tc :id)))
+         (stored (if (and reasoning-alist id)
+                     (alist-get id reasoning-alist :absent nil #'equal)
+                   :absent)))
+    (if (stringp stored) stored "")))
+
+(defun my/gptel--ensure-reasoning-on-messages (messages reasoning-key &optional reasoning-alist)
+  "Test stub: ensure assistant tool-call messages carry a valid reasoning field."
+  (let ((repaired 0))
+    (seq-doseq (msg messages)
+      (when (and (listp msg)
+                 (equal (plist-get msg :role) "assistant")
+                 (plist-get msg :tool_calls)
+                 (let ((value (plist-get msg reasoning-key)))
+                   (or (not (plist-member msg reasoning-key))
+                       (not (my/gptel--valid-reasoning-value-p value)))))
+        (plist-put msg reasoning-key
+                   (my/gptel--fallback-reasoning-value
+                    (plist-get msg :tool_calls) reasoning-alist))
+        (cl-incf repaired)))
+    repaired))
+
 (defun my/gptel--repair-thinking-tool-call-messages (info)
   "Ensure thinking-enabled assistant tool-call messages carry a reasoning field."
   (let* ((model (plist-get info :model))
@@ -90,21 +121,9 @@ Progressive trimming based on :retries in INFO."
                (buffer-local-value 'my/gptel--tool-reasoning-alist gptel-buf)))
          (repaired 0))
     (when (and reasoning-key messages (> (length messages) 0))
-      (dotimes (i (length messages))
-        (let ((msg (aref messages i)))
-          (when (and (equal (plist-get msg :role) "assistant")
-                     (plist-get msg :tool_calls)
-                     (not (plist-member msg reasoning-key)))
-            (let* ((tool-calls (plist-get msg :tool_calls))
-                   (tc (and (vectorp tool-calls)
-                            (> (length tool-calls) 0)
-                            (aref tool-calls 0)))
-                   (id (and tc (plist-get tc :id)))
-                   (stored (and id reasoning-alist
-                                (alist-get id reasoning-alist :absent nil #'equal))))
-              (plist-put msg reasoning-key
-                         (if (or (eq stored :absent) (null stored)) "" stored))
-              (cl-incf repaired))))))
+      (setq repaired
+            (my/gptel--ensure-reasoning-on-messages
+             messages reasoning-key reasoning-alist)))
     repaired))
 
 ;;; ---- Test helpers ----
@@ -444,6 +463,34 @@ Progressive trimming based on :retries in INFO."
     (should (= 1 (my/gptel--repair-thinking-tool-call-messages info)))
     (let ((messages (plist-get (plist-get info :data) :messages)))
       (should (plist-member (aref messages 0) :reasoning_content))
+      (should (equal "" (plist-get (aref messages 0) :reasoning_content))))))
+
+(ert-deftest trim-reasoning/repair-thinking-tool-call-message-with-null-sentinel ()
+  "Null reasoning sentinel is normalized to an empty string."
+  (let* ((tool-id "call_null")
+         (assistant (list :role "assistant"
+                          :content ""
+                          :tool_calls (vector (list :id tool-id :type "function"
+                                                    :function (list :name "Read" :arguments "{}")))
+                          :reasoning_content :null))
+         (info (test--make-info (list assistant))))
+    (plist-put info :model 'moonshot)
+    (should (= 1 (my/gptel--repair-thinking-tool-call-messages info)))
+    (let ((messages (plist-get (plist-get info :data) :messages)))
+      (should (equal "" (plist-get (aref messages 0) :reasoning_content))))))
+
+(ert-deftest trim-reasoning/repair-thinking-tool-call-message-with-nil-value ()
+  "Nil reasoning values are normalized to an empty string."
+  (let* ((tool-id "call_nil")
+         (assistant (list :role "assistant"
+                          :content ""
+                          :tool_calls (vector (list :id tool-id :type "function"
+                                                    :function (list :name "Read" :arguments "{}")))
+                          :reasoning_content nil))
+         (info (test--make-info (list assistant))))
+    (plist-put info :model 'moonshot)
+    (should (= 1 (my/gptel--repair-thinking-tool-call-messages info)))
+    (let ((messages (plist-get (plist-get info :data) :messages)))
       (should (equal "" (plist-get (aref messages 0) :reasoning_content))))))
 
 ;;; ===========================================================================

@@ -86,30 +86,41 @@ message, even when the model produced no visible reasoning for that turn.
               (setf (alist-get id my/gptel--tool-reasoning-alist nil nil #'equal)
                     reasoning))))))))
 
+(defun my/gptel--valid-reasoning-value-p (value)
+  "Return non-nil when VALUE is an API-valid reasoning payload."
+  (stringp value))
+
+(defun my/gptel--fallback-reasoning-value (tool-calls reasoning-alist)
+  "Return stored reasoning for TOOL-CALLS from REASONING-ALIST, or empty string."
+  (let* ((tc (and (vectorp tool-calls)
+                  (> (length tool-calls) 0)
+                  (aref tool-calls 0)))
+         (id (and tc (plist-get tc :id)))
+         (stored (if (and reasoning-alist id)
+                     (alist-get id reasoning-alist :absent nil #'equal)
+                   :absent)))
+    (if (stringp stored) stored "")))
+
 (defun my/gptel--ensure-reasoning-on-messages (messages reasoning-key &optional reasoning-alist)
   "Ensure every assistant+tool_calls message in MESSAGES carries REASONING-KEY.
-MESSAGES may be a list or vector of plist messages.  For each message with
-role=\"assistant\" and :tool_calls but missing REASONING-KEY, look up the first
-tool call's ID in REASONING-ALIST (an alist of id→string); if absent or empty
-string, inject an empty string, otherwise inject the stored value.  When
-REASONING-ALIST is nil the field is always set to an empty string."
-  (seq-doseq (msg messages)
-    (when (and (listp msg)
-               (equal (plist-get msg :role) "assistant")
-               (plist-get msg :tool_calls)
-               (not (plist-get msg reasoning-key)))
-      (let* ((tc  (and (vectorp (plist-get msg :tool_calls))
-                       (> (length (plist-get msg :tool_calls)) 0)
-                       (aref (plist-get msg :tool_calls) 0)))
-             (id  (and tc (plist-get tc :id)))
-             (stored (if (and reasoning-alist id)
-                         (alist-get id reasoning-alist :absent nil #'equal)
-                       :absent)))
+MESSAGES may be a list or vector of plist messages.  For each assistant
+tool-call message, repair missing or invalid reasoning values using
+REASONING-ALIST, defaulting to the empty string.
+
+Returns the number of messages repaired."
+  (let ((repaired 0))
+    (seq-doseq (msg messages)
+      (when (and (listp msg)
+                 (equal (plist-get msg :role) "assistant")
+                 (plist-get msg :tool_calls)
+                 (let ((value (plist-get msg reasoning-key)))
+                   (or (not (plist-member msg reasoning-key))
+                       (not (my/gptel--valid-reasoning-value-p value)))))
         (plist-put msg reasoning-key
-                   (if (or (eq stored :absent)
-                           (and (stringp stored) (string-empty-p stored)))
-                       ""
-                     stored))))))
+                   (my/gptel--fallback-reasoning-value
+                    (plist-get msg :tool_calls) reasoning-alist))
+        (cl-incf repaired)))
+    repaired))
 
 (defun my/gptel--parse-buffer-inject-reasoning (orig backend &optional max-entries)
   "Around-advice on `gptel--parse-buffer': inject reasoning_content into tool-call messages.
