@@ -25,6 +25,34 @@
   (require 'gptel-config)
   (require 'nucleus-config))
 
+(defcustom my/ai-code-gptel-helper-backend 'gptel--dashscope
+  "Backend used for ai-code's synchronous gptel helper requests."
+  :type 'symbol
+  :group 'gptel)
+
+(defcustom my/ai-code-gptel-helper-model 'qwen3-coder-next
+  "Fast non-reasoning model used for ai-code helper requests."
+  :type 'symbol
+  :group 'gptel)
+
+(defun my/ai-code--helper-backend-value ()
+  "Return the backend value configured for ai-code helper requests."
+  (and my/ai-code-gptel-helper-backend
+       (boundp my/ai-code-gptel-helper-backend)
+       (symbol-value my/ai-code-gptel-helper-backend)))
+
+(defun my/ai-code--ensure-gptel-helper-model (orig question)
+  "Run ai-code gptel helper calls with a fast local backend/model." 
+  (unless (featurep 'gptel)
+    (unless (require 'gptel nil t)
+      (user-error "GPTel package is required for AI helper generation")))
+  (let ((gptel-backend (or (my/ai-code--helper-backend-value) gptel-backend))
+        (gptel-model (or my/ai-code-gptel-helper-model gptel-model)))
+    (funcall orig question)))
+
+(with-eval-after-load 'ai-code-prompt-mode
+  (advice-add 'ai-code-call-gptel-sync :around #'my/ai-code--ensure-gptel-helper-model))
+
 ;;; ============================================================================== 
 ;;; EDITOR CODE ASSISTANT (ECA)
 ;;; ============================================================================== 
