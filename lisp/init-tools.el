@@ -41,6 +41,9 @@
 
 (use-package dirvish
   :ensure t
+  :init
+  (with-eval-after-load 'dirvish
+    (setq dirvish-emacs-bin (concat invocation-directory invocation-name)))
   :hook (after-init . dirvish-override-dired-mode)
   :bind (:map dired-mode-map
               ("TAB" . dirvish-toggle-subtree)
@@ -59,5 +62,4 @@
   :config
   (eat-eshell-mode)
   (eat-eshell-visual-command-mode))
-
 
