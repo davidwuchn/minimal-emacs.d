@@ -25,6 +25,16 @@
   (require 'gptel-config)
   (require 'nucleus-config))
 
+(defun my/ai-code--ensure-gptel-loaded (orig question)
+  "Load gptel on demand before calling ORIG with QUESTION."
+  (unless (featurep 'gptel)
+    (unless (require 'gptel nil t)
+      (user-error "GPTel package is required for AI command generation")))
+  (funcall orig question))
+
+(with-eval-after-load 'ai-code-prompt-mode
+  (advice-add 'ai-code-call-gptel-sync :around #'my/ai-code--ensure-gptel-loaded))
+
 ;;; ============================================================================== 
 ;;; EDITOR CODE ASSISTANT (ECA)
 ;;; ============================================================================== 
@@ -38,6 +48,7 @@
   :custom
   (ai-code-use-gptel-headline t)
   (ai-code-use-gptel-classify-prompt t)
+  (ai-code-auto-test-type 'ask-me)
   (ai-code-notes-use-gptel-headline t)
   (ai-code-task-use-gptel-filename t)
   :config
