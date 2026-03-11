@@ -155,6 +155,7 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 
 ### Recent Changes (v0.6.6)
 
+- **Enable ai-code's existing gptel integration** (⚒): `lisp/init-ai.el` now actually turns on ai-code's built-in gptel-assisted helpers instead of merely installing both packages side-by-side. Headline generation, prompt classification for auto-test routing, note-title generation, and task filename generation now all use the existing `ai-code-call-gptel-sync` bridge, while ai-code itself stays on the `opencode` backend for primary execution.
 - **Fix Moonshot thinking payload compaction** (⊘): Hardened `lisp/modules/gptel-ext-reasoning.el` so assistant tool-call history is repaired not only when `reasoning_content` is missing, but also when compaction/replay leaves an invalid non-string sentinel such as `nil` or `:null`. `lisp/modules/gptel-ext-retry.el` now reuses the same repair path during retry/compaction, preventing Moonshot/Kimi 400s like `thinking is enabled but reasoning_content is missing in assistant tool call message` after aggressive payload trimming.
 - **Add invalid-reasoning regression coverage** (⊘): Expanded `tests/test-gptel-trim.el` with regression cases for `:null` and `nil` reasoning payloads on assistant tool-call history, alongside the existing compaction tests. Verified with `emacs --batch -Q -L . -L lisp -L lisp/modules -l tests/test-gptel-trim.el -f ert-run-tests-batch-and-exit`.
 

@@ -25,9 +25,24 @@
   (require 'gptel-config)
   (require 'nucleus-config))
 
-;;; ==============================================================================
+;;; ============================================================================== 
 ;;; EDITOR CODE ASSISTANT (ECA)
-;;; ==============================================================================
+;;; ============================================================================== 
+
+(use-package ai-code
+  :ensure t
+  :commands (ai-code-menu
+             ai-code-send-command
+             ai-code-cli-switch-to-buffer-or-hide
+             ai-code-select-backend)
+  :custom
+  (ai-code-use-gptel-headline t)
+  (ai-code-use-gptel-classify-prompt t)
+  (ai-code-notes-use-gptel-headline t)
+  (ai-code-task-use-gptel-filename t)
+  :config
+  (ai-code-set-backend 'opencode)
+  (global-set-key (kbd "C-c a") #'ai-code-menu))
 
 (use-package buttercup
   :ensure t
