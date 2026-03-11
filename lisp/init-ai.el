@@ -26,11 +26,44 @@
   (require 'nucleus-config))
 
 (defun my/ai-code--ensure-gptel-loaded (orig question)
-  "Load gptel on demand before calling ORIG with QUESTION."
+  "Load ai-code's gptel bridge on demand before calling ORIG with QUESTION."
+  (unless (fboundp 'ai-code-call-gptel-sync)
+    (require 'ai-code-prompt-mode nil t))
   (unless (featurep 'gptel)
     (unless (require 'gptel nil t)
       (user-error "GPTel package is required for AI command generation")))
   (funcall orig question))
+
+(defun my/ai-code--shell-command-fallback-input (orig &optional initial-input)
+  "Let `ai-code-shell-cmd' use `default-directory' from ordinary buffers.
+When INITIAL-INPUT is nil and the current buffer is neither Dired nor a shell,
+pass an empty string so ai-code still prompts, but uses the current
+`default-directory' as the working directory.  This preserves `:' prompts so
+GPTel can generate the actual shell command."
+  (if (or initial-input
+          (derived-mode-p 'dired-mode)
+          (memq major-mode '(shell-mode eshell-mode)))
+      (funcall orig initial-input)
+    (funcall orig "")))
+
+(defun my/ai-code--prefer-shell-command-from-non-file-buffers (orig &rest args)
+  "Fallback to `ai-code-shell-cmd' when no current file is available.
+This keeps the `!` ai-code action useful in scratch, prompt, and other
+directory-backed buffers, where users still expect `:' input to route through
+GPTel shell-command generation instead of erroring on a missing file."
+  (if (or (derived-mode-p 'dired-mode)
+          (memq major-mode '(shell-mode eshell-mode))
+          (use-region-p)
+          (buffer-file-name))
+      (apply orig args)
+    (ai-code-shell-cmd "")))
+
+(with-eval-after-load 'ai-code-file
+  (unless (fboundp 'ai-code-call-gptel-sync)
+    (require 'ai-code-prompt-mode nil t))
+  (advice-add 'ai-code-shell-cmd :around #'my/ai-code--shell-command-fallback-input)
+  (advice-add 'ai-code-run-current-file-or-shell-cmd :around
+              #'my/ai-code--prefer-shell-command-from-non-file-buffers))
 
 (with-eval-after-load 'ai-code-prompt-mode
   (advice-add 'ai-code-call-gptel-sync :around #'my/ai-code--ensure-gptel-loaded))
