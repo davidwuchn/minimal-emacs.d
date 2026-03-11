@@ -37,8 +37,8 @@
 (require 'gptel-ext-tool-permits)
 
 ;; --- Configuration Defaults ---
-(setq gptel-backend gptel--moonshot
-      gptel-model 'kimi-k2.5)
+(setq gptel-backend gptel--dashscope
+      gptel-model 'glm-5)
 
 ;; Tool confirmation: auto (default) / confirm-all (kill switch).
 ;; Use M-x my/gptel-toggle-confirm to switch modes.

@@ -30,6 +30,11 @@
   :type 'symbol
   :group 'gptel)
 
+(defcustom ai-code-backends-infra-use-side-window nil
+  "Use regular pop-to-buffer instead of side window for ai-code backends."
+  :type 'boolean
+  :group 'ai-code)
+
 (defcustom my/ai-code-gptel-helper-model 'qwen3-coder-next
   "Fast non-reasoning model used for ai-code helper requests."
   :type 'symbol
