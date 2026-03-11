@@ -98,4 +98,12 @@
   (evil-set-initial-state 'vterm-mode 'emacs)
   (evil-set-initial-state 'eca-chat-mode 'emacs)
   (evil-set-initial-state 'ai-code-mode 'emacs)
-  (evil-set-initial-state 'ai-code-chat-mode 'emacs))
+  (evil-set-initial-state 'ai-code-chat-mode 'emacs)
+
+  ;; Disable evil-mode in vterm to prevent ESC key capture
+  (add-to-list 'evil-emacs-state-modes 'vterm-mode))
+
+;; Ensure ESC is passed through to vterm and not captured by evil
+(with-eval-after-load 'vterm
+  (define-key vterm-mode-map (kbd "<escape>") nil)
+  (define-key vterm-mode-map (kbd "ESC") nil))
