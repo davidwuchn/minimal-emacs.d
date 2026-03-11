@@ -26,8 +26,7 @@
 
 ;; Environment Variable Synchronization (Essential for macOS users)
 (use-package exec-path-from-shell
-  :if (and (or (display-graphic-p) (daemonp))
-           (eq system-type 'darwin))
+:if (or (display-graphic-p) (daemonp))
   :ensure t
   :demand t
   :functions exec-path-from-shell-initialize
