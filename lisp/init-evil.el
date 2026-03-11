@@ -98,14 +98,36 @@
   (evil-set-initial-state 'vterm-mode 'emacs)
   (evil-set-initial-state 'eca-chat-mode 'emacs))
 
+(defun my-vterm-evil-ensure-emacs-state ()
+  "Force `vterm-mode' buffers back into Emacs state after Evil initializes."
+  (when (and (derived-mode-p 'vterm-mode)
+             (fboundp 'evil-emacs-state)
+             (bound-and-true-p evil-local-mode))
+    (evil-emacs-state)))
+
+(defun my-vterm-evil-ensure-emacs-state-later (&optional buffer)
+  "Force `vterm-mode' BUFFER into Emacs state on the next event loop turn."
+  (run-at-time
+   0 nil
+   (lambda (buf)
+     (when (buffer-live-p buf)
+       (with-current-buffer buf
+         (my-vterm-evil-ensure-emacs-state))))
+   (or buffer (current-buffer))))
+
 ;; Keep vterm in Emacs state and let ESC reach the terminal unchanged.
 (defun my-vterm-evil-setup ()
   "Keep `vterm' in Emacs state and do not let Evil intercept ESC."
   (setq-local evil-inhibit-esc t)
   (setq-local evil-move-cursor-back nil)
-  (when (and (fboundp 'evil-emacs-state)
-             (bound-and-true-p evil-local-mode))
-    (evil-emacs-state)))
+  (my-vterm-evil-ensure-emacs-state)
+  (my-vterm-evil-ensure-emacs-state-later))
+
+(with-eval-after-load 'evil
+  (add-hook 'evil-local-mode-hook #'my-vterm-evil-ensure-emacs-state-later))
 
 (with-eval-after-load 'vterm
   (add-hook 'vterm-mode-hook #'my-vterm-evil-setup))
+
+(with-eval-after-load 'evil-collection-vterm
+  (evil-set-initial-state 'vterm-mode 'emacs))
