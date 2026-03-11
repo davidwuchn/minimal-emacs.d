@@ -105,4 +105,5 @@
   (add-hook 'vterm-mode-hook
             (lambda ()
               (setq-local evil-move-cursor-back nil)
+              (evil-emacs-state)
               (define-key vterm-mode-map [escape] #'vterm-send-escape))))
