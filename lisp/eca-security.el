@@ -154,10 +154,10 @@ fast-download.clj).  Falls back to wget then curl when aria2c is absent."
 
   (advice-add 'eca--curl-download-file :override #'my/eca--curl-download-file)
 
-  ;; 4. Interactive update command
+  ;; 4. Interactive update command & buffer
   ;; Checks GitHub releases/latest, compares with installed version,
   ;; downloads + verifies + installs the new binary synchronously.
-  (defun my/eca-update ()
+  (defun my/eca-update (&optional silent)
     "Check for a newer eca binary and update if available.
 
 Compares the installed version against the latest GitHub release.
@@ -165,22 +165,25 @@ If an update is available, downloads the platform-appropriate zip,
 verifies SHA256 (warns but continues when unavailable), installs the
 new binary into `eca-server-install-path', and updates the version file.
 
-Progress is shown live in the *eca-update* buffer."
-    (interactive)
-    (let* ((buf (get-buffer-create "*eca-update*"))
+Progress is shown live in the *eca-update* buffer.
+With prefix arg or when SILent is non-nil, suppress the buffer."
+    (interactive "P")
+    (let* ((buf (and (not silent) (get-buffer-create "*eca-update*")))
            (log (lambda (fmt &rest args)
-                  (with-current-buffer buf
-                    (goto-char (point-max))
-                    (insert (apply #'format fmt args) "\n")
-                    (when-let* ((win (get-buffer-window buf t)))
-                      (set-window-point win (point-max))))
+                  (when buf
+                    (with-current-buffer buf
+                      (goto-char (point-max))
+                      (insert (apply #'format fmt args) "\n")
+                      (when-let* ((win (get-buffer-window buf t)))
+                        (set-window-point win (point-max)))))
                   ;; Also echo brief status
                   (apply #'message fmt args))))
-      (with-current-buffer buf
-        (erase-buffer)
-        (insert "=== eca update ===\n\n"))
-      (display-buffer buf)
-      (let* ((curl (or (executable-find "curl") (executable-find "curl.exe"))))
+      (when buf
+        (with-current-buffer buf
+          (erase-buffer)
+          (insert "=== eca update ===\n\n"))
+        (display-buffer buf))
+      (let ((curl (or (executable-find "curl") (executable-find "curl.exe"))))
         (unless curl (user-error "my/eca-update: curl not found"))
 
         ;; 1. Fetch latest version from GitHub API
@@ -290,16 +293,18 @@ Progress is shown live in the *eca-update* buffer."
 
               ;; 9. Update version tracking
               ;; Store bare semver (no "v" prefix) to match my/eca--resolve-version output
-              (write-region latest nil
-                            eca-server-version-file-path nil 'silent)
-              (setq eca-process--latest-server-version latest)
+                (write-region latest nil
+                              eca-server-version-file-path nil 'silent)
+                (setq eca-process--latest-server-version latest)
 
-              (funcall log "\neca updated to v%s. Done." latest))))))))
+                (funcall log "\neca updated to v%s. Done." latest)))))))
+
+)
 
 ;; 5. Daily auto-update check
 ;; Runs once per Emacs session, after 30 s of idle, at most once per day.
 ;; Uses a timestamp file so repeated restarts don't re-check until tomorrow.
-(defcustom my/eca-auto-update-enabled t
+(defcustom my/eca-auto-update-enabled nil
   "When non-nil, check for eca updates once per day at idle."
   :type 'boolean
   :group 'eca)
@@ -335,8 +340,44 @@ Progress is shown live in the *eca-update* buffer."
                (cons '("\\*eca-update\\*" (display-buffer-no-window))
                      display-buffer-alist)))
           (my/eca-update))
-      (error (message "eca auto-update check failed: %s"
-                      (error-message-string err))))))
+(error (message "eca auto-update check failed: %s"
+                       (error-message-string err))))))
+
+(defun my/eca-update-show ()
+  "Show eca update status and offer manual update.
+Pops up a buffer with current version info and buttons to check/update."
+  (interactive)
+  (let* ((installed (my/eca--resolve-version))
+         (buf (get-buffer-create "*eca-update*")))
+    (with-current-buffer buf
+      (erase-buffer)
+      (insert "=== eca Update ===\n\n")
+      (insert (format "Installed version: %s\n\n" installed))
+      (insert "Actions:\n")
+      (insert-text-button "Check for updates"
+                          'action (lambda (_)
+                                    (call-interactively #'my/eca-update))
+                          'follow-link t
+                          'help-echo "Click to check and update eca")
+      (insert "\n")
+      (insert-text-button "Force re-download"
+                          'action (lambda (_)
+                                    (when (yes-or-no-p "Re-download even if up to date? ")
+                                      (call-interactively #'my/eca-update)))
+                          'follow-link t
+                          'help-echo "Force re-download and reinstall")
+      (insert "\n\n")
+      (insert "Auto-update is currently: ")
+      (insert-text-button (if my/eca-auto-update-enabled "ENABLED" "DISABLED")
+                          'action (lambda (_)
+                                    (customize-set-variable 'my/eca-auto-update-enabled
+                                                            (not my/eca-auto-update-enabled))
+                                    (my/eca-update-show))
+                          'follow-link t
+                          'help-echo "Click to toggle auto-update")
+      (insert "\n")
+      (goto-char (point-min)))
+    (display-buffer buf '(display-buffer-same-window))))
 
 (with-eval-after-load 'eca-process
   (run-with-idle-timer my/eca-auto-update-idle-seconds nil
