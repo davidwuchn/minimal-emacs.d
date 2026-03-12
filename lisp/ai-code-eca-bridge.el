@@ -28,6 +28,7 @@
 (declare-function eca-chat-open "eca-chat" (session))
 (declare-function eca-chat-send-prompt "eca-chat" (session message))
 (declare-function eca-chat--get-last-buffer "eca-chat" (session))
+(declare-function ai-code-read-string "ai-code-input" (prompt &optional initial-input candidate-list))
 
 ;;;###autoload
 (defun ai-code-eca-start (&optional arg)
@@ -50,7 +51,8 @@ This function satisfies ai-code's :switch backend contract."
   (interactive "P")
   (ai-code-eca--ensure-available)
   (when arg
-    (ai-code-eca-start arg))
+    (ai-code-eca-start arg)
+    (message "Started new ECA session"))
   (let ((session (eca-session)))
     (if session
         (progn
@@ -92,9 +94,7 @@ This function satisfies ai-code's :resume backend contract."
             (message "Resumed ECA session"))
         ;; No existing session, start a new one
         (ai-code-eca-start)
-        (message "No existing ECA session, started new one")))))
-
-(declare-function ai-code-read-string "ai-code-input" (prompt &optional initial-input candidate-list))
+        (message "Started new ECA session")))))
 
 ;;;###autoload
 (defun ai-code-eca--ensure-available ()
@@ -136,6 +136,21 @@ and installing the latest version of ECA."
     (message "Upgrade cancelled")))
 
 ;;;###autoload
+(defun ai-code-eca-verify ()
+  "Verify ECA backend is functional.
+
+Returns non-nil if ECA is available and responsive, nil otherwise.
+This function satisfies ai-code's :verify backend contract."
+  (condition-case nil
+      (progn
+        (ai-code-eca--ensure-available)
+        (let ((session (eca-session)))
+          (and session
+               (eca-chat--get-last-buffer session)
+               t)))
+    (error nil)))
+
+;;;###autoload
 (defun ai-code-eca-install-skills ()
   "Install skills for ECA by prompting for a skills repo URL.
 Ask the ECA session to clone and set up the skills from the given
@@ -170,22 +185,23 @@ via `ai-code-select-backend'."
   (interactive)
   (ai-code-eca--ensure-available)
   
-  ;; Check if already registered
-  (unless (assoc 'eca ai-code-backends)
-    (add-to-list 'ai-code-backends
-                 '(eca
-                   :label "ECA (Editor Code Assistant)"
-                   :require ai-code-eca-bridge
-                   :start ai-code-eca-start
-                   :switch ai-code-eca-switch
-                   :send ai-code-eca-send
-                   :resume ai-code-eca-resume
-                   :config "~/.config/eca/config.json"  ; ECA global config
-                   :agent-file "AGENTS.md"              ; Standard agent instructions
-                   :upgrade ai-code-eca-upgrade         ; Upgrade via package.el
-                   :cli nil                             ; ECA is an Emacs package, not a CLI binary
-                   :install-skills ai-code-eca-install-skills)  ; Skills installation function
-                 t)  ; Append to end of list
+   ;; Check if already registered
+   (unless (assoc 'eca ai-code-backends)
+     (add-to-list 'ai-code-backends
+                  '(eca
+                    :label "ECA (Editor Code Assistant)"
+                    :require ai-code-eca-bridge
+                    :start ai-code-eca-start
+                    :switch ai-code-eca-switch
+                    :send ai-code-eca-send
+                    :resume ai-code-eca-resume
+                    :verify ai-code-eca-verify           ; Health check
+                    :config "~/.config/eca/config.json"  ; ECA global config
+                    :agent-file "AGENTS.md"              ; Standard agent instructions
+                    :upgrade ai-code-eca-upgrade         ; Upgrade via package.el
+                    :cli nil                             ; ECA is an Emacs package, not a CLI binary
+                    :install-skills ai-code-eca-install-skills)  ; Skills installation function
+                  t)  ; Append to end of list
     (message "ECA backend registered with ai-code"))
   
   (when (called-interactively-p 'interactive)
@@ -206,7 +222,10 @@ via `ai-code-select-backend'."
 ;; Automatically register ECA backend when both ai-code-backends and eca are loaded
 (with-eval-after-load 'ai-code-backends
   (with-eval-after-load 'eca
-    (ai-code-eca-register-backend)))
+    (condition-case err
+        (ai-code-eca-register-backend)
+      (error
+       (message "ECA backend auto-registration failed: %s" err)))))
 
 (provide 'ai-code-eca-bridge)
 
