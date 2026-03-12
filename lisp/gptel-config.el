@@ -38,7 +38,7 @@
 
 ;; --- Configuration Defaults ---
 (setq gptel-backend gptel--dashscope
-      gptel-model 'glm-5)
+      gptel-model 'qwen3.5-plus)
 
 ;; Tool confirmation: auto (default) / confirm-all (kill switch).
 ;; Use M-x my/gptel-toggle-confirm to switch modes.

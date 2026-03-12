@@ -30,11 +30,6 @@
   :type 'symbol
   :group 'gptel)
 
-(defcustom ai-code-backends-infra-use-side-window nil
-  "Use regular pop-to-buffer instead of side window for ai-code backends."
-  :type 'boolean
-  :group 'ai-code)
-
 (defcustom my/ai-code-gptel-helper-model 'qwen3-coder-next
   "Fast non-reasoning model used for ai-code helper requests."
   :type 'symbol
@@ -58,9 +53,11 @@
 (with-eval-after-load 'ai-code-prompt-mode
   (advice-add 'ai-code-call-gptel-sync :around #'my/ai-code--ensure-gptel-helper-model))
 
-;;; ============================================================================== 
-;;; EDITOR CODE ASSISTANT (ECA)
-;;; ============================================================================== 
+(use-package vterm
+  :ensure t
+  :defer t
+  :custom
+  (vterm-max-scrollback 100000))
 
 (use-package ai-code
   :ensure t
@@ -69,6 +66,8 @@
              ai-code-cli-switch-to-buffer-or-hide
              ai-code-select-backend)
   :custom
+  (ai-code-backends-infra-terminal-backend 'vterm)
+  (ai-code-backends-infra-use-side-window nil)
   (ai-code-use-gptel-headline t)
   (ai-code-use-gptel-classify-prompt t)
   (ai-code-auto-test-type 'ask-me)
