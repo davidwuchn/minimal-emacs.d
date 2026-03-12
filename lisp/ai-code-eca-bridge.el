@@ -31,34 +31,32 @@
 
 ;;;###autoload
 (defun ai-code-eca-start (&optional arg)
-  "Start or reuse an ECA session.
+  "Start a new ECA session.
 
-With prefix ARG, force new session.
+With prefix ARG, prompt for additional ECA arguments.
 This function satisfies ai-code's :start backend contract."
   (interactive "P")
   (ai-code-eca--ensure-available)
   (let ((current-prefix-arg arg))
-    (call-interactively #'eca)))
+    (call-interactively #'eca))
+  (message "ECA session started"))
 
 ;;;###autoload
-(defun ai-code-eca-switch (&optional force-prompt)
+(defun ai-code-eca-switch (&optional arg)
   "Switch to ECA chat buffer.
 
-With FORCE-PROMPT (prefix arg), force new session before switching.
+With prefix ARG, force new session before switching.
 This function satisfies ai-code's :switch backend contract."
   (interactive "P")
   (ai-code-eca--ensure-available)
-  (if force-prompt
-      ;; Force new session with C-u prefix
-      (let ((current-prefix-arg '(16)))
-        (call-interactively #'eca))
-    ;; Switch to existing session
-    (let ((session (eca-session)))
-      (if session
-          (progn
-            (eca-chat-open session)
-            (pop-to-buffer (eca-chat--get-last-buffer session)))
-        (user-error "No ECA session. Run M-x ai-code-eca-start first")))))
+  (when arg
+    (ai-code-eca-start arg))
+  (let ((session (eca-session)))
+    (if session
+        (progn
+          (eca-chat-open session)
+          (pop-to-buffer (eca-chat--get-last-buffer session)))
+      (user-error "No ECA session. Run M-x ai-code-eca-start first"))))
 
 ;;;###autoload
 (defun ai-code-eca-send (line)
@@ -76,14 +74,25 @@ This function satisfies ai-code's :send backend contract."
 
 ;;;###autoload
 (defun ai-code-eca-resume (&optional arg)
-  "Resume an ECA session.
+  "Resume an existing ECA session.
 
 With prefix ARG, force new session instead of resuming.
 This function satisfies ai-code's :resume backend contract."
   (interactive "P")
   (ai-code-eca--ensure-available)
-  (let ((current-prefix-arg arg))
-    (call-interactively #'eca)))
+  (if arg
+      ;; Force new session with C-u prefix
+      (ai-code-eca-start arg)
+    ;; Resume existing session
+    (let ((session (eca-session)))
+      (if session
+          (progn
+            (eca-chat-open session)
+            (pop-to-buffer (eca-chat--get-last-buffer session))
+            (message "Resumed ECA session"))
+        ;; No existing session, start a new one
+        (ai-code-eca-start)
+        (message "No existing ECA session, started new one")))))
 
 (declare-function ai-code-read-string "ai-code-input" (prompt &optional initial-input candidate-list))
 
@@ -99,7 +108,6 @@ Signals user-error if ECA cannot be used."
       (user-error "ECA backend missing required function: %s" fn))))
 
 ;;;###autoload
-;;;###autoload
 (defun ai-code-eca-version ()
   "Return ECA version string."
   (interactive)
@@ -111,6 +119,21 @@ Signals user-error if ECA cannot be used."
     (if (called-interactively-p 'interactive)
         (message "ECA version: %s" version)
       version)))
+
+;;;###autoload
+(defun ai-code-eca-upgrade ()
+  "Upgrade ECA package via package.el.
+
+Prompts for confirmation before refreshing package archives
+and installing the latest version of ECA."
+  (interactive)
+  (ai-code-eca--ensure-available)
+  (if (y-or-n-p "Refresh package archives and upgrade ECA? ")
+      (progn
+        (package-refresh-contents)
+        (package-install 'eca)
+        (message "ECA upgraded successfully"))
+    (message "Upgrade cancelled")))
 
 ;;;###autoload
 (defun ai-code-eca-install-skills ()
@@ -159,8 +182,8 @@ via `ai-code-select-backend'."
                    :resume ai-code-eca-resume
                    :config "~/.config/eca/config.json"  ; ECA global config
                    :agent-file "AGENTS.md"              ; Standard agent instructions
-                   :upgrade nil                         ; ECA self-manages server binary (or set to actual upgrade command)
-                   :cli "eca"                           ; Server binary name
+                   :upgrade ai-code-eca-upgrade         ; Upgrade via package.el
+                   :cli nil                             ; ECA is an Emacs package, not a CLI binary
                    :install-skills ai-code-eca-install-skills)  ; Skills installation function
                  t)  ; Append to end of list
     (message "ECA backend registered with ai-code"))
