@@ -37,17 +37,18 @@ Set to nil to disable the timeout."
 
 Saves the current `gptel--fsm-last' from BUFFER and returns a function
 that, on first invocation only, restores the FSM state and calls CALLBACK
-with its argument.  Subsequent calls are no-ops."
+with its argument in the buffer context.  Subsequent calls are no-ops."
   (let ((parent-fsm (my/gptel--coerce-fsm
                      (buffer-local-value 'gptel--fsm-last buffer)))
         (cb-called nil))
     (lambda (result)
       (unless cb-called
         (setq cb-called t)
-        (when (buffer-live-p buffer)
-          (with-current-buffer buffer
-            (setq-local gptel--fsm-last parent-fsm)))
-        (funcall callback result)))))
+        (if (buffer-live-p buffer)
+            (with-current-buffer buffer
+              (setq-local gptel--fsm-last parent-fsm)
+              (funcall callback result))
+          (funcall callback result))))))
 
 (defun my/gptel--setup-preview-keys (buffer on-confirm on-abort)
   "Set up local keys in preview BUFFER for confirmation.
