@@ -98,6 +98,16 @@
   (evil-set-initial-state 'vterm-mode 'emacs)
   (evil-set-initial-state 'eca-chat-mode 'emacs))
 
+;; ==============================================================================
+;; VTERM
+;; ==============================================================================
+
+(use-package vterm
+  :ensure t
+  :defer t
+  :custom
+  (vterm-max-scrollback 100000))
+
 (defun my-vterm-evil-ensure-emacs-state ()
   "Force `vterm-mode' buffers back into Emacs state after Evil initializes."
   (when (and (derived-mode-p 'vterm-mode)

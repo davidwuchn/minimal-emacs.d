@@ -53,12 +53,6 @@
 (with-eval-after-load 'ai-code-prompt-mode
   (advice-add 'ai-code-call-gptel-sync :around #'my/ai-code--ensure-gptel-helper-model))
 
-(use-package vterm
-  :ensure t
-  :defer t
-  :custom
-  (vterm-max-scrollback 100000))
-
 (use-package ai-code
   :ensure t
   :commands (ai-code-menu
