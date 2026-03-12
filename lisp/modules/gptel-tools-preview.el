@@ -55,7 +55,8 @@ with its argument.  Subsequent calls are no-ops."
 ON-CONFIRM and ON-ABORT are called with no arguments when the user
 presses n/y or q respectively."
   (with-current-buffer buffer
-    (let ((map (make-sparse-keymap)))
+    (let ((inhibit-read-only t)
+          (map (make-sparse-keymap)))
       (set-keymap-parent map (current-local-map))
       (define-key map (kbd "n") (lambda () (interactive) (funcall on-confirm) (kill-buffer buffer)))
       (define-key map (kbd "y") (lambda () (interactive) (funcall on-confirm) (kill-buffer buffer)))
