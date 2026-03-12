@@ -85,6 +85,9 @@ This function satisfies ai-code's :resume backend contract."
   (let ((current-prefix-arg arg))
     (call-interactively #'eca)))
 
+(declare-function ai-code-read-string "ai-code-input" (prompt &optional initial-input candidate-list))
+
+;;;###autoload
 (defun ai-code-eca--ensure-available ()
   "Ensure `eca' package and required functions are available.
 
@@ -95,6 +98,7 @@ Signals user-error if ECA cannot be used."
     (unless (fboundp fn)
       (user-error "ECA backend missing required function: %s" fn))))
 
+;;;###autoload
 ;;;###autoload
 (defun ai-code-eca-version ()
   "Return ECA version string."
@@ -108,12 +112,32 @@ Signals user-error if ECA cannot be used."
         (message "ECA version: %s" version)
       version)))
 
+;;;###autoload
+(defun ai-code-eca-install-skills ()
+  "Install skills for ECA by prompting for a skills repo URL.
+Ask the ECA session to clone and set up the skills from the given
+repository.  ECA manages skills as files under ~/.eca/ or project
+.eca/ directory, so the CLI itself handles the installation details."
+  (interactive)
+  (ai-code-eca--ensure-available)
+  (let* ((url (read-string
+               "Skills repo URL for ECA: "
+               nil nil "https://github.com/obra/superpowers"))
+         (default-prompt
+          (format
+           "Install the skill from %s for this ECA session. Read the repository README to understand the installation instructions and follow them. Set up the skill files under the appropriate directory (e.g. ~/.eca/ or the project .eca/ directory) so they are available in future sessions."
+           url))
+         (prompt (if (called-interactively-p 'interactive)
+                     (ai-code-read-string
+                      "Edit install-skills prompt for ECA: "
+                      default-prompt)
+                   default-prompt)))
+    (ai-code-eca-send prompt)))
+
 ;;; ==============================================================================
 ;;; Backend Registration
 ;;; ==============================================================================
 
-;;;###autoload
-;;;###autoload
 ;;;###autoload
 (defun ai-code-eca-register-backend ()
   "Register ECA as an ai-code backend.
@@ -135,9 +159,9 @@ via `ai-code-select-backend'."
                    :resume ai-code-eca-resume
                    :config "~/.config/eca/config.json"  ; ECA global config
                    :agent-file "AGENTS.md"              ; Standard agent instructions
-                   :upgrade nil                         ; ECA self-manages server binary
+                   :upgrade nil                         ; ECA self-manages server binary (or set to actual upgrade command)
                    :cli "eca"                           ; Server binary name
-                   :install-skills nil)                 ; No skills system
+                   :install-skills ai-code-eca-install-skills)  ; Skills installation function
                  t)  ; Append to end of list
     (message "ECA backend registered with ai-code"))
   
