@@ -102,4 +102,14 @@
   ;; Enable inline ghost-text code completion in programming modes
   (add-hook 'prog-mode-hook #'eca-completion-mode))
 
+;;; ==============================================================================
+;;; ECA + ai-code BRIDGE
+;;; ==============================================================================
+
+;; Load the bridge that registers ECA as an ai-code backend
+;; This allows switching to ECA via M-x ai-code-select-backend
+(with-eval-after-load 'ai-code
+  (with-eval-after-load 'eca
+    (require 'ai-code-eca-bridge)))
+
 ;;; init-ai.el ends here
