@@ -82,7 +82,19 @@ Must be `defvar' (not `let') so the `setq' in the cache file reaches it
 under `lexical-binding: t'.")
 
 (defvar my/gptel--known-model-context-windows
-  '(;; OpenAI
+  '(;; Qwen (Alibaba) - NOTE: Qwen3.5-Plus and Qwen3-Max have 1M context!
+    ("qwen3.5-plus" . 1000000)
+    ("qwen3.5-flash" . 1000000)
+    ("qwen3-max" . 262144)
+    ("qwen-plus" . 1000000)      ; Qwen3-Plus has 1M context
+    ("qwen-flash" . 1000000)     ; Qwen3-Flash has 1M context
+    ("qwen-max" . 131072)
+    ("qwen2.5-max" . 131072)
+    ("qwen2.5-72b" . 131072)
+    ("qwen2.5-32b" . 131072)
+    ("qwen2.5-14b" . 131072)
+    ("qwen2.5-7b" . 131072)
+    ;; OpenAI
     ("openai/gpt-4o" . 128000)
     ("openai/gpt-4o-mini" . 128000)
     ("openai/gpt-4-turbo" . 128000)
@@ -117,12 +129,12 @@ under `lexical-binding: t'.")
     ("mistralai/mixtral-8x22b-instruct" . 65536)
     ;; DeepSeek
     ("deepseek/deepseek-chat" . 64000)
-    ("deepseek/deepseek-coder" . 16384)
-    ;; Qwen
-    ("qwen/qwen-2-72b-instruct" . 131072)
-    ("qwen/qwen-2-7b-instruct" . 131072))
+    ("deepseek/deepseek-coder" . 16384))
   "Known model context windows (tokens) for popular models.
-Used as fallback when provider metadata is unavailable.")
+Used as fallback when provider metadata is unavailable.
+
+IMPORTANT: Keep this updated! If you don't know a model's context window,
+check the provider's documentation first before assuming defaults.")
 
 ;;; Helpers
 
