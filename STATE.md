@@ -153,12 +153,18 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
 | Per-tool output limits | **Skip** | `my/gptel-subagent-result-limit` truncation on subagents works fine |
 
+### Recent Changes (v0.6.27-v0.6.30)
+
+- **Fix load-order issue** (⊘): Tools missing from FSM due to `nucleus-get-tools` filtering out unregistered tools. Added `gptel-tools-after-register-hook` to refresh presets after registration.
+- **Refactor ECA bridge** (⚒): Unified session affinity with `ai-code--repo-backend-alist`, simplified git worktree delegation, enabled 60s context sync default, removed dead menu code.
+- **Remove misleading menu code** (⊘): `ai-code-eca--build-menu-items` was never displayed. ECA integrates via backend system (`ai-code-select-backend`), not separate menu.
+
 ### Recent Changes (v0.6.22-v0.6.26)
 
 - **Align tool argument names with upstream** (⚒): Standardized argument naming convention: `file_path` for file operations (Read, Edit, Insert), `path` for directory paths (Write, Glob, Grep). Edit tool: `path` → `file_path`, `new_str_or_diff` → `new_str`. Insert tool: `path` → `file_path`.
 - **Consolidate permit/confirm workflow** (⚒): Two-layer system with clear responsibilities: (1) Tool confirm UI controlled by `my/gptel-permitted-tools`, (2) Preview diff controlled by `gptel-tools-preview-enabled`. Preview NO LONGER checks permits (safety net should always show). "!" in preview adds tool to permits.
 - **Fix ECA bridge declarations** (⊘): Added proper `declare-function` for `eca--session-workspace-folders`, `eca--session-add-workspace-folder`. Fixed function calls to use correct ECA internal APIs. Added `hash-table-p` safety check.
-- **Complete ECA integration** (⚒): Menu integration (15 ECA-specific items via `ai-code-eca--build-menu-items`), context synchronization (`ai-code-eca-sync-context` with optional auto-timer), session multiplexing (`ai-code-eca-list-sessions`), error handling macro, keybindings (`ai-code-eca-keymap` with C-c e prefix).
+- **Complete ECA integration** (⚒): Keybindings (`ai-code-eca-keymap` with C-c e prefix), context synchronization (`ai-code-eca-sync-context` with 60s auto-timer), session affinity (via `ai-code--repo-backend-alist`), health check (`ai-code-eca-verify-health`), VC-aware upgrade (`ai-code-eca-upgrade-vc`), unload cleanup.
 - **Add test coverage** (⊘): 383 tests passing across P0 security, agent core, treesit, introspection, edit/apply, programmatic. New test files: `test-gptel-ext-tool-sanitize.el` (31 tests), `test-gptel-tools-agent-core.el` (49 tests), `test-treesit-agent-tools-core.el` (47 tests).
 
 ### Recent Changes (v0.6.6)

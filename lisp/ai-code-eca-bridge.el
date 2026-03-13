@@ -357,37 +357,6 @@ With PREFIX (for example C-u), call `magit-worktree-status'."
 ;;; Menu Integration
 ;;; ==============================================================================
 
-(defvar ai-code-eca-menu-items nil
-  "ECA-specific menu items for ai-code.")
-
-(defun ai-code-eca--build-menu-items ()
-  "Build ECA-specific menu items for ai-code."
-  `(["Start ECA Session" ai-code-eca-start
-     :active (fboundp 'eca)]
-    ["Switch to ECA" ai-code-eca-switch
-     :active (eca-session)]
-    ["Add File Context" ai-code-eca-add-file-context
-     :active (and (eca-session) buffer-file-name)]
-    ["Add Cursor Context" ai-code-eca-add-cursor-context
-     :active (and (eca-session) buffer-file-name)]
-    ["Add Repo Map" ai-code-eca-add-repo-map-context
-     :active (eca-session)]
-    ["Add Clipboard Context" ai-code-eca-add-clipboard-context
-     :active (eca-session)]
-    "--"
-    ["List Sessions" ai-code-eca-list-sessions
-     :active (fboundp 'eca-list-sessions)]
-    ["Switch Session" ai-code-eca-switch-session
-     :active (fboundp 'eca-switch-to-session)]
-    "--"
-    ["Git Worktree: New Branch" ai-code-eca-git-worktree-branch
-     :active (fboundp 'magit-get-current-branch)]
-    ["Git Worktree: Attach" ai-code-eca-git-worktree-detect-and-attach]
-    "--"
-    ["ECA Version" ai-code-eca-version]
-    ["Verify ECA" ai-code-eca-verify]
-    ["Upgrade ECA" ai-code-eca-upgrade]))
-
 ;;;###autoload
 (defun ai-code-eca-list-sessions ()
   "Display list of active ECA sessions."
