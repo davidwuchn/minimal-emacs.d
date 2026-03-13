@@ -378,6 +378,167 @@ With PREFIX (for example C-u), call `magit-worktree-status'."
     (define-key eca-chat-mode-map (kbd "C-c W") #'ai-code-eca-git-worktree-detect-and-attach)))
 
 ;;; ==============================================================================
+;;; Menu Integration
+;;; ==============================================================================
+
+(defvar ai-code-eca-menu-items nil
+  "ECA-specific menu items for ai-code.")
+
+(defun ai-code-eca--build-menu-items ()
+  "Build ECA-specific menu items for ai-code."
+  `(["Start ECA Session" ai-code-eca-start
+     :active (fboundp 'eca)]
+    ["Switch to ECA" ai-code-eca-switch
+     :active (eca-session)]
+    ["Add File Context" ai-code-eca-add-file-context
+     :active (and (eca-session) buffer-file-name)]
+    ["Add Cursor Context" ai-code-eca-add-cursor-context
+     :active (and (eca-session) buffer-file-name)]
+    ["Add Repo Map" ai-code-eca-add-repo-map-context
+     :active (eca-session)]
+    ["Add Clipboard Context" ai-code-eca-add-clipboard-context
+     :active (eca-session)]
+    "--"
+    ["List Sessions" ai-code-eca-list-sessions
+     :active (fboundp 'eca-list-sessions)]
+    ["Switch Session" ai-code-eca-switch-session
+     :active (fboundp 'eca-switch-to-session)]
+    "--"
+    ["Git Worktree: New Branch" ai-code-eca-git-worktree-branch
+     :active (fboundp 'magit-get-current-branch)]
+    ["Git Worktree: Attach" ai-code-eca-git-worktree-detect-and-attach]
+    "--"
+    ["ECA Version" ai-code-eca-version]
+    ["Verify ECA" ai-code-eca-verify]
+    ["Upgrade ECA" ai-code-eca-upgrade]))
+
+;;;###autoload
+(defun ai-code-eca-list-sessions ()
+  "Display list of active ECA sessions."
+  (interactive)
+  (ai-code-eca--ensure-available)
+  (let ((sessions (ai-code-eca-get-sessions)))
+    (if sessions
+        (message "ECA Sessions: %s"
+                 (string-join (mapcar #'cdr sessions) " | "))
+      (message "No active ECA sessions"))))
+
+;;; ==============================================================================
+;;; Context Synchronization
+;;; ==============================================================================
+
+(defvar ai-code-eca-context-sync-timer nil
+  "Timer for automatic context synchronization.")
+
+(defcustom ai-code-eca-context-sync-interval nil
+  "Seconds between automatic context sync. nil to disable."
+  :type '(choice (const :tag "Disabled" nil)
+          (integer :tag "Seconds"))
+  :group 'ai-code)
+
+;;;###autoload
+(defun ai-code-eca-sync-context ()
+  "Sync current buffer context to ECA session.
+
+Adds file and cursor context if buffer has a file."
+  (interactive)
+  (ai-code-eca--ensure-available)
+  (let ((session (eca-session)))
+    (when (and session buffer-file-name)
+      (condition-case err
+          (progn
+            (when (fboundp 'eca-chat-add-file-context)
+              (eca-chat-add-file-context session buffer-file-name))
+            (when (fboundp 'eca-chat-add-cursor-context)
+              (eca-chat-add-cursor-context session buffer-file-name (point)))
+            (when (called-interactively-p 'interactive)
+              (message "Synced context: %s:%d" buffer-file-name (point))))
+        (error
+         (message "Context sync failed: %s" (error-message-string err)))))))
+
+;;;###autoload
+(defun ai-code-eca-context-sync-start ()
+  "Start automatic context synchronization."
+  (interactive)
+  (when ai-code-eca-context-sync-timer
+    (cancel-timer ai-code-eca-context-sync-timer))
+  (when ai-code-eca-context-sync-interval
+    (setq ai-code-eca-context-sync-timer
+          (run-at-time t ai-code-eca-context-sync-interval
+                       #'ai-code-eca-sync-context))
+    (message "ECA context sync started (%ds)" ai-code-eca-context-sync-interval)))
+
+;;;###autoload
+(defun ai-code-eca-context-sync-stop ()
+  "Stop automatic context synchronization."
+  (interactive)
+  (when ai-code-eca-context-sync-timer
+    (cancel-timer ai-code-eca-context-sync-timer)
+    (setq ai-code-eca-context-sync-timer nil)
+    (message "ECA context sync stopped")))
+
+;;; ==============================================================================
+;;; Error Handling
+;;; ==============================================================================
+
+(defun ai-code-eca--wrap-with-error-handler (fn &rest args)
+  "Call FN with ARGS, catching and reporting errors."
+  (condition-case err
+      (apply fn args)
+    (user-error
+     (message "ECA: %s" (error-message-string err)))
+    (error
+     (message "ECA error: %s" (error-message-string err))
+     nil)))
+
+(defmacro ai-code-eca--with-error-handling (&rest body)
+  "Execute BODY with error handling."
+  `(condition-case err
+       (progn ,@body)
+     (user-error
+      (message "ECA: %s" (error-message-string err)))
+     (error
+      (message "ECA error: %s" (error-message-string err))
+      nil)))
+
+;;; ==============================================================================
+;;; Keybindings
+;;; ==============================================================================
+
+(defvar ai-code-eca-keymap
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "s") #'ai-code-eca-start)
+    (define-key map (kbd "S") #'ai-code-eca-switch)
+    (define-key map (kbd "r") #'ai-code-eca-resume)
+    (define-key map (kbd "f") #'ai-code-eca-add-file-context)
+    (define-key map (kbd "c") #'ai-code-eca-add-cursor-context)
+    (define-key map (kbd "m") #'ai-code-eca-add-repo-map-context)
+    (define-key map (kbd "y") #'ai-code-eca-add-clipboard-context)
+    (define-key map (kbd "l") #'ai-code-eca-list-sessions)
+    (define-key map (kbd "w") #'ai-code-eca-git-worktree-action)
+    (define-key map (kbd "v") #'ai-code-eca-verify)
+    map)
+  "Keymap for ECA commands.")
+
+;;;###autoload
+(defun ai-code-eca-setup-keybindings ()
+  "Set up ECA keybindings in relevant maps."
+  (interactive)
+  ;; ECA chat mode keybindings
+  (when (boundp 'eca-chat-mode-map)
+    (define-key eca-chat-mode-map (kbd "C-c C-f") #'ai-code-eca-add-file-context)
+    (define-key eca-chat-mode-map (kbd "C-c C-c") #'ai-code-eca-add-cursor-context)
+    (define-key eca-chat-mode-map (kbd "C-c C-m") #'ai-code-eca-add-repo-map-context)
+    (define-key eca-chat-mode-map (kbd "C-c C-y") #'ai-code-eca-add-clipboard-context)
+    (define-key eca-chat-mode-map (kbd "C-c C-w") #'ai-code-eca-git-worktree-action))
+  
+  ;; Global keybinding prefix
+  (when (boundp 'ai-code-mode-map)
+    (define-key ai-code-mode-map (kbd "C-c e") ai-code-eca-keymap))
+  
+  (message "ECA keybindings configured"))
+
+;;; ==============================================================================
 ;;; Backend Registration
 ;;; ==============================================================================
 
@@ -489,7 +650,8 @@ via `ai-code-select-backend'."
     (condition-case err
         (progn
           (ai-code-eca-register-backend)
-          (ai-code-eca--setup-worktree-keybindings))
+          (ai-code-eca--setup-worktree-keybindings)
+          (ai-code-eca-setup-keybindings))
       (error
        (message "ECA backend auto-registration failed: %s" err)))))
 
