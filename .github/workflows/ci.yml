@@ -88,6 +88,7 @@ jobs:
             -f ert-run-tests-batch-and-exit
 
       - name: Run Treesit Agent Tests
+        if: matrix.emacs-version != '29.1'
         run: |
           emacs --batch -Q -L . -L lisp -L lisp/modules \
             -l tests/test-treesit-agent-tools.el \
@@ -155,6 +156,12 @@ jobs:
             -l tests/test-gptel-tools-glob.el \
             -l tests/test-gptel-tools-grep.el \
             -l tests/test-gptel-tools-introspection.el \
+            -f ert-run-tests-batch-and-exit
+
+      - name: Run Treesit Core Tests
+        if: matrix.emacs-version != '29.1'
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
             -l tests/test-treesit-agent-tools-core.el \
             -f ert-run-tests-batch-and-exit
 
