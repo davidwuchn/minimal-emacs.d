@@ -84,6 +84,13 @@ jobs:
         run: |
           emacs --batch -Q -L . -L lisp -L lisp/modules \
             -l tests/test-gptel-trim.el \
+            -l tests/test-gptel-ext-reasoning.el \
+            -f ert-run-tests-batch-and-exit
+
+      - name: Run Treesit Agent Tests
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-treesit-agent-tools.el \
             -f ert-run-tests-batch-and-exit
 
       - name: Run ECA Tests
@@ -125,6 +132,7 @@ jobs:
       - name: Run Core/Preview/Programmatic Tool Tests
         run: |
           emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-gptel-tools.el \
             -l tests/test-gptel-tools-core.el \
             -l tests/test-gptel-tools-preview.el \
             -l tests/test-gptel-tools-programmatic.el \
