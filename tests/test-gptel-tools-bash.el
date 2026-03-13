@@ -44,43 +44,47 @@ MODE is 'plan or 'agent (defaults to `test-gptel-bash--mode`)."
       (error "Unknown bash mode: %s" current-mode)))))
 
 (defun test-gptel-bash--plan-mode-execute (command)
-  "Execute COMMAND in Plan Mode with sandbox restrictions."
-  (let ((forbidden-chars '(">" "<" "&" "$" "`"))
-        (forbidden-cmds '("sed" "rm" "mv" "cp" "chmod" "sudo"))
-        (cmd (string-trim command))
-        (base-cmd nil)
-        (blocked nil)
-        (block-reason nil))
-    ;; Check for forbidden characters
-    (catch 'found-forbidden
-      (dolist (char forbidden-chars)
-        (when (string-match-p (regexp-quote char) cmd)
-          (setq blocked t)
-          (setq block-reason (format "Forbidden character in Plan Mode: %s" char))
-          (throw 'found-forbidden nil))))
-    ;; Check for forbidden commands
-    (unless blocked
-      (setq base-cmd (car (split-string cmd)))
-      (when (member base-cmd forbidden-cmds)
-        (setq blocked t)
-        (setq block-reason (format "Forbidden command in Plan Mode: %s" base-cmd))))
-    ;; Return result
-    (if blocked
-        (list :status "blocked"
-              :reason block-reason
-              :command cmd)
-      (setq base-cmd (or base-cmd (car (split-string cmd))))
-      (if (member base-cmd test-gptel-bash--whitelist)
-          (list :status "allowed"
-                :mode "plan"
-                :command cmd
-                :output (format "[mock output for: %s]" cmd))
-        (list :status "blocked"
-              :reason (format "Command not in whitelist: %s" base-cmd)
-              :command cmd)))))
+  "Execute COMMAND in Plan Mode with sandbox restrictions.
+Read-only whitelist: git/ls/cat/grep/find/test runners.
+Forbidden: >, <, sed -i, &, $(), backticks, pipes to destructive commands."
+  (let ((forbidden-patterns
+         '(">"                      ; Output redirection
+           "<"                      ; Input redirection
+           "sed.*-i"                ; In-place sed
+           "&"                      ; Background process
+           "\\$("                    ; Command substitution $(
+           "`"                      ; Backtick substitution
+           "|.*rm"                  ; Pipe to rm
+           "|.*mv"                  ; Pipe to mv
+           "|.*cp"                  ; Pipe to cp
+           "rm.*-rf"                ; Recursive force rm
+           "chmod"                  ; Permission changes
+           "sudo"                   ; Sudo commands
+           ))
+        (cmd (string-trim command)))
+    ;; Check for forbidden patterns
+    (let ((blocked nil))
+      (dolist (pattern forbidden-patterns)
+        (when (string-match-p pattern cmd)
+          (setq blocked (list :status "blocked"
+                              :reason (format "Forbidden pattern in Plan Mode: %s" pattern)
+                              :command cmd))))
+      (if blocked
+          blocked
+        ;; Check if command starts with whitelisted command
+        (let ((base-cmd (car (split-string cmd))))
+          (if (member base-cmd test-gptel-bash--whitelist)
+              (list :status "allowed"
+                    :mode "plan"
+                    :command cmd
+                    :output (format "[mock output for: %s]" cmd))
+            (list :status "blocked"
+                  :reason (format "Command not in whitelist: %s" base-cmd)
+                  :command cmd)))))))
 
 (defun test-gptel-bash--agent-mode-execute (command)
-  "Execute COMMAND in Agent Mode (unrestricted)."
+  "Execute COMMAND in Agent Mode (unrestricted).
+All commands allowed but still tracked for audit."
   (list :status "allowed"
         :mode "agent"
         :command command
@@ -134,7 +138,7 @@ MODE is 'plan or 'agent (defaults to `test-gptel-bash--mode`)."
   (let ((test-gptel-bash--mode 'plan))
     (let ((result (test-gptel-bash--execute "ls > output.txt")))
       (should (equal (plist-get result :status) "blocked"))
-      (should (string-match-p "Forbidden" (plist-get result :reason))))))
+      (should (string-match-p "Forbidden pattern" (plist-get result :reason))))))
 
 (ert-deftest test-gptel-bash-plan-mode-blocks-input-redirection ()
   "Test Plan Mode blocks input redirection (<)."
@@ -142,12 +146,12 @@ MODE is 'plan or 'agent (defaults to `test-gptel-bash--mode`)."
     (let ((result (test-gptel-bash--execute "cat < input.txt")))
       (should (equal (plist-get result :status) "blocked")))))
 
-(ert-deftest test-gptel-bash-plan-mode-blocks-sed ()
-  "Test Plan Mode blocks sed command."
+(ert-deftest test-gptel-bash-plan-mode-blocks-sed-i ()
+  "Test Plan Mode blocks sed -i (in-place edit)."
   (let ((test-gptel-bash--mode 'plan))
-    (let ((result (test-gptel-bash--execute "sed 's/old/new/g' file.txt")))
+    (let ((result (test-gptel-bash--execute "sed -i 's/old/new/g' file.txt")))
       (should (equal (plist-get result :status) "blocked"))
-      (should (string-match-p "Forbidden" (plist-get result :reason))))))
+      (should (string-match-p "sed" (plist-get result :reason))))))
 
 (ert-deftest test-gptel-bash-plan-mode-blocks-background-process ()
   "Test Plan Mode blocks background process (&)."
@@ -155,11 +159,12 @@ MODE is 'plan or 'agent (defaults to `test-gptel-bash--mode`)."
     (let ((result (test-gptel-bash--execute "git status &")))
       (should (equal (plist-get result :status) "blocked")))))
 
-(ert-deftest test-gptel-bash-plan-mode-blocks-command-substitution ()
+(ert-deftest test-gptel-bash-plan-mode-blocks-command-substitution-paren ()
   "Test Plan Mode blocks $() command substitution."
   (let ((test-gptel-bash--mode 'plan))
     (let ((result (test-gptel-bash--execute "echo $(pwd)")))
-      (should (equal (plist-get result :status) "blocked")))))
+      (should (equal (plist-get result :status) "blocked"))
+      (should (string-match-p "\\$(" (plist-get result :reason))))))
 
 (ert-deftest test-gptel-bash-plan-mode-blocks-backtick-substitution ()
   "Test Plan Mode blocks backtick command substitution."
@@ -167,8 +172,14 @@ MODE is 'plan or 'agent (defaults to `test-gptel-bash--mode`)."
     (let ((result (test-gptel-bash--execute "echo `pwd`")))
       (should (equal (plist-get result :status) "blocked")))))
 
-(ert-deftest test-gptel-bash-plan-mode-blocks-rm ()
-  "Test Plan Mode blocks rm command."
+(ert-deftest test-gptel-bash-plan-mode-blocks-pipe-to-rm ()
+  "Test Plan Mode blocks pipe to rm."
+  (let ((test-gptel-bash--mode 'plan))
+    (let ((result (test-gptel-bash--execute "ls | rm file.txt")))
+      (should (equal (plist-get result :status) "blocked")))))
+
+(ert-deftest test-gptel-bash-plan-mode-blocks-rm-rf ()
+  "Test Plan Mode blocks rm -rf."
   (let ((test-gptel-bash--mode 'plan))
     (let ((result (test-gptel-bash--execute "rm -rf /tmp/test")))
       (should (equal (plist-get result :status) "blocked")))))
@@ -208,10 +219,10 @@ MODE is 'plan or 'agent (defaults to `test-gptel-bash--mode`)."
     (let ((result (test-gptel-bash--execute "echo test > file.txt")))
       (should (equal (plist-get result :status) "allowed")))))
 
-(ert-deftest test-gptel-bash-agent-mode-allows-sed ()
-  "Test Agent Mode allows sed."
+(ert-deftest test-gptel-bash-agent-mode-allows-sed-i ()
+  "Test Agent Mode allows sed -i."
   (let ((test-gptel-bash--mode 'agent))
-    (let ((result (test-gptel-bash--execute "sed 's/old/new/g' file.txt")))
+    (let ((result (test-gptel-bash--execute "sed -i 's/old/new/g' file.txt")))
       (should (equal (plist-get result :status) "allowed")))))
 
 (ert-deftest test-gptel-bash-agent-mode-allows-command-substitution ()
@@ -224,7 +235,7 @@ MODE is 'plan or 'agent (defaults to `test-gptel-bash--mode`)."
   "Test Agent Mode warns on destructive commands."
   (let ((test-gptel-bash--mode 'agent))
     (let ((result (test-gptel-bash--execute "rm -rf /tmp/test")))
-      (should (string-match-p "Destructive" (plist-get result :warning))))))
+      (should (string-match-p "Destructive command" (plist-get result :warning))))))
 
 (ert-deftest test-gptel-bash-agent-mode-no-warning-safe ()
   "Test Agent Mode has no warning for safe commands."
@@ -238,6 +249,7 @@ MODE is 'plan or 'agent (defaults to `test-gptel-bash--mode`)."
   "Test Bash handles empty command."
   (let ((test-gptel-bash--mode 'agent))
     (let ((result (test-gptel-bash--execute "")))
+      ;; Should handle gracefully
       (should result))))
 
 (ert-deftest test-gptel-bash-whitespace-command ()
@@ -260,8 +272,10 @@ MODE is 'plan or 'agent (defaults to `test-gptel-bash--mode`)."
 
 (ert-deftest test-gptel-bash-mode-switch ()
   "Test switching between Plan and Agent modes."
+  ;; Start in Plan Mode
   (let ((test-gptel-bash--mode 'plan))
     (should (equal (plist-get (test-gptel-bash--execute "git status") :mode) "plan")))
+  ;; Switch to Agent Mode
   (let ((test-gptel-bash--mode 'agent))
     (should (equal (plist-get (test-gptel-bash--execute "git status") :mode) "agent"))))
 
