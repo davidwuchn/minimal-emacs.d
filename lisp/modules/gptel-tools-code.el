@@ -7,6 +7,10 @@
 (require 'project)
 (require 'eglot)
 (require 'xref)
+(require 'checkdoc)
+(require 'bytecomp)
+
+(declare-function package-lint-buffer "package-lint")
 
 (defun my/gptel--lsp-active-p ()
   "Check if an LSP server is active for the current buffer."
@@ -92,23 +96,45 @@ Reports which backend (LSP or ripgrep) was used."
                 (string-join (nreverse usages) "\n"))
       (format "No usages found for '%s' in %s" symbol-name root))))
 
-(defun my/gptel--run-fallback-linter (dir)
-  "Run a fallback linter (flake8, eslint, etc) if LSP is not available in DIR.
+(defun my/gptel--run-fallback-linter (dir &optional file-path)
+  "Run a fallback linter in DIR if LSP is not available.
+If FILE-PATH is provided, check only that file.
 Reports what was checked, even if no standard project files found."
   ;; Build regex at runtime to avoid check-parens confusion with \\
   (let ((default-directory dir)
-        (py-ext (concat "\\.py" (char-to-string 39))))
+        (py-ext (concat "\\.py" (char-to-string 39)))
+        (el-ext (concat "\\.el" (char-to-string 39))))
     (cond
+     ;; Emacs Lisp - use built-in checkdoc/byte-compile + optional package-lint
+     ((or (and file-path (string-match-p el-ext file-path))
+          (directory-files dir nil el-ext))
+      (if file-path
+          (gptel-tools-code--elisp-diagnostics file-path)
+        ;; Project-wide: check all .el files in lisp/ and init files
+        (let ((el-files (append
+                         (directory-files dir t el-ext t)
+                         (when (file-directory-p (expand-file-name "lisp" dir))
+                           (directory-files-recursively
+                            (expand-file-name "lisp" dir) el-ext)))))
+          (if el-files
+              (mapconcat
+               (lambda (f) (format "=== %s ===\n%s" f
+                                   (gptel-tools-code--elisp-diagnostics f)))
+               (seq-take el-files 10) "\n\n")
+            "No .el files found in project"))))
+     ;; JavaScript/TypeScript
      ((file-exists-p "package.json")
       (let ((res (shell-command-to-string "npm run lint --silent 2>/dev/null || npx eslint . 2>/dev/null")))
         (if (string-empty-p (string-trim res))
             "✓ No linter errors (ESLint) - checked package.json (JavaScript/Node.js)"
           res)))
+     ;; Python
      ((or (file-exists-p "pyproject.toml") (file-exists-p "setup.py") (directory-files dir nil py-ext))
       (let ((res (shell-command-to-string "ruff check . 2>/dev/null || flake8 . 2>/dev/null")))
         (if (string-empty-p (string-trim res))
             "✓ No linter errors (ruff/flake8) - checked Python project (pyproject.toml/setup.py)"
           res)))
+     ;; Rust
      ((file-exists-p "Cargo.toml")
       (let ((res (shell-command-to-string "cargo check 2>&1")))
         (if (string-match-p "Finished\\|Compiling" res)
@@ -116,8 +142,9 @@ Reports what was checked, even if no standard project files found."
           res)))
      (t
       ;; No standard project files found - report what we looked for
-      (concat "Note: No standard project files found (package.json, pyproject.toml, Cargo.toml).\n"
-              "Searched for: JavaScript (package.json), Python (pyproject.toml or setup.py or *.py files), Rust (Cargo.toml).\n"
+      (concat "Note: No standard project files found (package.json, pyproject.toml, Cargo.toml, *.el).\n"
+              "Searched for: JavaScript (package.json), Python (pyproject.toml/setup.py/*.py), "
+              "Rust (Cargo.toml), Emacs Lisp (*.el).\n"
               "If this is a different language, configure a linter or use LSP for diagnostics.")))))
 
 (defun my/gptel--detect-treesit-language (file-path)
@@ -146,6 +173,89 @@ MSG is the original error message, FILE-PATH is the file being operated on."
    ((string-match-p "No such file\\|does not exist" msg)
     (format "Error: File not found: %s\n\nACTION: Check the file path and try again." file-path))
    (t nil)))
+
+;;; Emacs Lisp Diagnostics
+
+(defun gptel-tools-code--elisp-checkdoc (file-path)
+  "Run checkdoc on FILE-PATH and return issues as a string."
+  (with-temp-buffer
+    (insert-file-contents file-path)
+    (emacs-lisp-mode)
+    (let ((checkdoc-arguments-in-order-flag nil)
+          (checkdoc-force-docstrings-flag nil)
+          (issues nil))
+      (condition-case nil
+          (checkdoc-with-point
+           (goto-char (point-min))
+           (while (and (not (eobp)) (< (length issues) 50))
+             (let ((err (checkdoc-next-error)))
+               (when err
+                 (let ((line (line-number-at-pos)))
+                   (push (format "%s:%d: %s"
+                                 file-path line
+                                 (if (stringp err) err (car err)))
+                         issues))))))
+        (error nil))
+      (if issues
+          (mapconcat #'identity (nreverse issues) "\n")
+        "✓ No checkdoc issues"))))
+
+(defun gptel-tools-code--elisp-byte-compile (file-path)
+  "Run byte-compile on FILE-PATH and return warnings/errors as a string."
+  (let ((byte-compile-error-on-warn nil)
+        (byte-compile-warnings '(not obsolete free-vars unresolved))
+        (warnings nil)
+        (output-buffer (get-buffer-create " *elisp-byte-compile*")))
+    (with-current-buffer output-buffer
+      (erase-buffer))
+    (byte-compile-file file-path output-buffer)
+    (with-current-buffer output-buffer
+      (goto-char (point-min))
+      (while (not (eobp))
+        (let ((line (buffer-substring-no-properties
+                     (line-beginning-position) (line-end-position))))
+          (when (and (not (string-empty-p (string-trim line)))
+                     (string-match-p "[Ww]arning\\|[Ee]rror" line))
+            (push line warnings)))
+        (forward-line 1)))
+    (if warnings
+        (mapconcat #'identity (nreverse warnings) "\n")
+      "✓ No byte-compile warnings")))
+
+(defun gptel-tools-code--elisp-package-lint (file-path)
+  "Run package-lint on FILE-PATH and return issues as a string."
+  (if (not (require 'package-lint nil t))
+      "⊘ package-lint not available (install from MELPA)"
+    (with-temp-buffer
+      (insert-file-contents file-path)
+      (emacs-lisp-mode)
+      (let ((issues (package-lint-buffer)))
+        (if issues
+            (mapconcat
+             (lambda (issue)
+               (pcase-let ((`(,line ,col ,type ,message) issue))
+                 (format "%s:%d:%d [%s] %s"
+                         file-path line col type message)))
+             issues "\n")
+          "✓ No package-lint issues")))))
+
+(defun gptel-tools-code--elisp-diagnostics (file-path &optional checks)
+  "Run Emacs Lisp diagnostics on FILE-PATH.
+CHECKS is a list of symbols: \\='checkdoc, \\='byte-compile, \\='package-lint."
+  (let* ((all-checks '(checkdoc byte-compile package-lint))
+         (selected (or checks all-checks))
+         (results nil))
+    (when (memq 'checkdoc selected)
+      (push (cons "checkdoc" (gptel-tools-code--elisp-checkdoc file-path)) results))
+    (when (memq 'byte-compile selected)
+      (push (cons "byte-compile" (gptel-tools-code--elisp-byte-compile file-path)) results))
+    (when (memq 'package-lint selected)
+      (push (cons "package-lint" (gptel-tools-code--elisp-package-lint file-path)) results))
+    (if results
+        (mapconcat
+         (lambda (pair) (format "=== %s ===\n%s" (car pair) (cdr pair)))
+         (nreverse results) "\n\n")
+      "No checks specified")))
 
 (defun gptel-tools-code--no-parser-message (file-path lang action-fallback)
   "Format a user-friendly error when no tree-sitter parser is active.
@@ -265,10 +375,20 @@ Syncs buffer with disk, validates parser, guards against truncation."
                   (line-number-at-pos)
                   type text line-text))))))
 
-(defun gptel-tools-code--diagnostics (&optional all)
-  "Collect project-wide diagnostics via LSP/Flymake.
-Falls back to CLI linters when no LSP is available.
-When ALL is non-nil, include notes and low-severity diagnostics."
+(defun gptel-tools-code--diagnostics (&optional all file-path)
+  "Collect diagnostics via LSP/Flymake or CLI linters.
+
+If FILE-PATH is provided, check only that file.
+Otherwise, check the entire project.
+When ALL is non-nil, include notes and low-severity diagnostics.
+
+For .el files, uses checkdoc/byte-compile/package-lint instead of LSP."
+  ;; Handle .el files specially
+  (when (and file-path (string-match-p "\\.el\\'" file-path))
+    (cl-return-from gptel-tools-code--diagnostics
+      (gptel-tools-code--elisp-diagnostics file-path)))
+  
+  ;; Non-elisp files: use LSP or CLI fallback
   (if (not (fboundp 'flymake--project-diagnostics))
       "Error: flymake--project-diagnostics not available.\n\nThis usually means Flymake is not initialized. Try opening a source file first."
     (let* ((proj (project-current))
@@ -287,7 +407,7 @@ When ALL is non-nil, include notes and low-severity diagnostics."
           (if lsp-active
               "No compiler or LSP diagnostics found for the current project. (LSP server is running, code is clean)."
             (concat "Note: No LSP server running for this project.\nFalling back to CLI linter:\n\n"
-                    (my/gptel--run-fallback-linter dir)))
+                    (my/gptel--run-fallback-linter dir file-path)))
         (let ((formatted (mapcar #'gptel-tools-code--format-diagnostic filtered)))
           (format "Found %d diagnostic(s)%s:\n\n%s"
                   (length formatted)
@@ -331,15 +451,28 @@ GUARANTEES perfectly balanced parentheses/brackets. You MUST use this instead of
 
     (gptel-make-tool
      :name "Diagnostics"
-     :description "Collect project-wide diagnostics (errors and warnings) via LSP/Flymake. \
-Falls back to CLI linters (ruff/eslint/cargo) when no LSP is available.
+     :description "Collect diagnostics (errors and warnings) via LSP/Flymake or CLI linters.
 
-With optional argument `all`, also collect notes and low-severity diagnostics."
+For .el files: runs checkdoc, byte-compile, and package-lint.
+For other files: uses LSP diagnostics or falls back to CLI linters.
+
+Arguments:
+- file_path (optional): Check only this file. If omitted, checks entire project.
+- all (optional): Include notes and low-severity diagnostics.
+
+Examples:
+  Diagnostics{file_path: \"lisp/eca-ext.el\"}  ; Check single .el file
+  Diagnostics{}                                  ; Project-wide check
+  Diagnostics{all: true}                        ; Include notes"
      :function #'gptel-tools-code--diagnostics
-     :args (list '(:name "all"
+     :args (list '(:name "file_path"
+                         :type string
+                         :optional t
+                         :description "Path to check. If omitted, checks entire project. For .el files, runs checkdoc/byte-compile/package-lint.")
+                 '(:name "all"
                          :type boolean
-                         :description "When true, also collect notes and low-severity diagnostics. Default: only errors and warnings."
-                         :optional t))
+                         :optional t
+                         :description "When true, also collect notes and low-severity diagnostics. Default: only errors and warnings."))
      :category "gptel-agent"
      :include t)
 

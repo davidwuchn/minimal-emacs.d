@@ -184,23 +184,47 @@ Code_Usages{node_name: "calculate_totals"}
 
 ## Diagnostics
 
-**Purpose**: Get project-wide diagnostics/errors to verify your changes haven't broken the build.
+**Purpose**: Get diagnostics (errors and warnings) for a file or entire project.
 
 ### Usage
 ```json
-Diagnostics{}
+Diagnostics{file_path: "lisp/eca-ext.el"}  ; Single file
+Diagnostics{}                                ; Entire project
+Diagnostics{all: true}                      ; Include notes
 ```
 
 ### Returns
 Formatted list of all diagnostics with `file:line:type:message` format.
 
-### Example
+### Examples
+
+**Single Emacs Lisp file:**
+```
+Diagnostics{file_path: "lisp/eca-ext.el"}
+→ === checkdoc ===
+  lisp/eca-ext.el:45: First sentence should ...
+  === byte-compile ===
+  ✓ No byte-compile warnings
+  === package-lint ===
+  ✓ No package-lint issues
+```
+
+**Project-wide:**
 ```
 Diagnostics{}
 → src/utils.py:42 [Error] Undefined variable 'undefined_var'
   src/main.py:15 [Warning] Unused import 'os'
-  src/core.rs:28 [Error] Mismatched types: expected `i32`, found `String`
 ```
+
+### Smart Language Detection
+
+| File Type | Linter Chain |
+|-----------|-------------|
+| `.el` | checkdoc → byte-compile → package-lint |
+| `.py` | LSP → ruff → flake8 |
+| `.js/.ts` | LSP → npm run lint → eslint |
+| `.rs` | LSP → cargo check |
+| Other | LSP diagnostics |
 
 ### ⚠️ Smart Fallback Chain
 1. **LSP Diagnostics** (if eglot server is running)
@@ -211,12 +235,14 @@ Diagnostics{}
    - Python: `ruff check .` → `flake8 .`
    - JavaScript: `npm run lint` → `npx eslint .`
    - Rust: `cargo check`
+   - Emacs Lisp: checkdoc + byte-compile + package-lint
    - Reports: "No linter errors (ToolName)" if clean
 
 ### Notes
-- Automatically detects project type (Python, JS, Rust, etc.)
-- Returns "No compiler or LSP diagnostics found" if code is clean
-- Works even without LSP (falls back to CLI linters)
+- Pass `file_path` for single-file diagnostics
+- Omit `file_path` for project-wide diagnostics
+- For `.el` files, always uses built-in checkdoc/byte-compile
+- Returns "No diagnostics found" if code is clean
 
 ---
 
