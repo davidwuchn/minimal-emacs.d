@@ -31,6 +31,8 @@
 (declare-function eca-chat--get-last-buffer "eca-chat" (session))
 (declare-function eca-info "eca-util" (format-string &rest args))
 (declare-function eca--session-status "eca-util" (session))
+(declare-function eca--session-workspace-folders "eca-util" (session))
+(declare-function eca--session-add-workspace-folder "eca-util" (session folder))
 (declare-function eca-list-sessions "eca-ext" ())
 (declare-function eca-switch-to-session "eca-ext" (&optional session-id))
 (declare-function eca-chat-add-file-context "eca-ext" (session file-path))
@@ -38,6 +40,10 @@
 (declare-function eca-chat-add-cursor-context "eca-ext" (session file-path position))
 (declare-function eca-chat-add-clipboard-context "eca-ext" (session content))
 (declare-function ai-code-read-string "ai-code-input" (prompt &optional initial-input candidate-list))
+
+;; Internal ECA variables (not officially exported but referenced)
+(defvar eca--sessions nil
+  "Hash table of ECA sessions. Internal to eca-util.el.")
 
 (defvar ai-code-eca--config-warned nil
   "Non-nil if missing config warning has already been shown.")
@@ -271,7 +277,8 @@ Returns the session if found, nil otherwise."
             (catch 'found
               (dolist (session-info existing-sessions)
                 (let* ((session-id (plist-get session-info :id))
-                       (session (gethash session-id eca--sessions nil))
+                       (session (when (hash-table-p eca--sessions)
+                                  (gethash session-id eca--sessions)))
                        (workspace-folders (plist-get session-info :workspace-folders)))
                   (when session
                     (dolist (folder workspace-folders)
@@ -286,12 +293,10 @@ Returns the session if found, nil otherwise."
 This allows a single ECA session to manage multiple worktrees from the same repo."
   (when (and session worktree-root)
     (condition-case nil
-        (let ((workspace-folders
-               (gethash (plist-get (eca--session-info session) :id)
-                        eca--session-workspace-folders nil)))
+        (let ((workspace-folders (eca--session-workspace-folders session)))
           (unless (member worktree-root workspace-folders)
-            (when (fboundp 'eca-ext-add-workspace-folder)
-              (eca-ext-add-workspace-folder session worktree-root)
+            (when (fboundp 'eca--session-add-workspace-folder)
+              (eca--session-add-workspace-folder session worktree-root)
               (eca-info "Added worktree to session: %s" worktree-root))))
       (error nil))))
 
