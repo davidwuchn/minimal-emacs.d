@@ -191,6 +191,41 @@ Returns the number of tool definitions removed, or 0 if nothing changed."
             (setq removed (- original-count new-count))))))
     removed))
 
+(defcustom my/gptel-truncate-old-messages-keep 6
+  "Number of recent messages to keep when truncating old messages.
+Pass 5 of compaction removes older user/assistant messages beyond this count.
+Set to nil to disable old message truncation."
+  :type '(choice (const :tag "Disabled" nil) integer)
+  :group 'gptel)
+
+(defun my/gptel--truncate-old-messages (info)
+  "Truncate old user/assistant messages in INFO to reduce payload.
+
+Removes message content from older messages (beyond `my/gptel-truncate-old-messages-keep'),
+replacing with a truncation marker. Keeps the message structure intact for API compatibility.
+
+Returns the number of messages truncated, or 0 if nothing was done."
+  (if (null my/gptel-truncate-old-messages-keep)
+      0
+    (let* ((data (plist-get info :data))
+           (messages (and data (plist-get data :messages)))
+           (keep my/gptel-truncate-old-messages-keep)
+           (truncated 0)
+           (truncation-text "[Earlier conversation truncated to reduce payload size]"))
+      (when (and messages (> (length messages) keep))
+        (let ((cutoff (- (length messages) keep)))
+          (dotimes (i cutoff)
+            (let* ((msg (aref messages i))
+                   (role (plist-get msg :role))
+                   (content (plist-get msg :content)))
+              ;; Only truncate user and assistant messages, not system/tool
+              (when (and (member role '("user" "assistant"))
+                         (stringp content)
+                         (> (length content) (length truncation-text)))
+                (plist-put msg :content truncation-text)
+                (cl-incf truncated))))))
+      truncated)))
+
 (defun my/gptel--transient-error-p (error-data http-status)
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error.
 Matches network failures, overload responses, rate limits, and common
@@ -418,6 +453,15 @@ Applies trimming progressively until under limit or nothing left to trim:
                   (when (> n 0)
                     (message "gptel: Pass 4: truncated %d remaining tool results, now %dKB"
                              n (/ bytes 1024))))))
+            ;; Pass 5: truncate old user/assistant messages
+            (when (> bytes limit)
+              (let ((n (my/gptel--truncate-old-messages info)))
+                (cl-incf trimmed-total n)
+                (setq bytes (my/gptel--estimate-payload-bytes info))
+                (setq pass 5)
+                (when (> n 0)
+                  (message "gptel: Pass 5: truncated %d old message(s), now %dKB"
+                           n (/ bytes 1024)))))
             ;; Reset retries to 0 (we simulated retries for trim functions)
             (plist-put info :retries 0)
             (if (> bytes limit)
