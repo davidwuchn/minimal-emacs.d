@@ -219,15 +219,17 @@
 
 (ert-deftest preview/register/registers-tool ()
   "gptel-tools-preview-register should register Preview tool."
-  (let ((result (gptel-tools-preview-register)))
-    (should (string= "Preview" result))))
+  (let ((gptel-tools-preview--registered nil))
+    (gptel-tools-preview-register)
+    (should gptel-tools-preview--registered)))
 
 (ert-deftest preview/register/idempotent ()
   "gptel-tools-preview-register should be idempotent."
-  (let ((result1 (gptel-tools-preview-register))
-        (result2 (gptel-tools-preview-register)))
-    (should (string= "Preview" result1))
-    (should (string= "Preview" result2))))
+  (let ((gptel-tools-preview--registered nil))
+    (gptel-tools-preview-register)
+    (should gptel-tools-preview--registered)
+    (gptel-tools-preview-register)
+    (should gptel-tools-preview--registered)))
 
 ;;; Tests for my/gptel--preview-file-change (bypass paths)
 
