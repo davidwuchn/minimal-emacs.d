@@ -23,8 +23,11 @@
   :type 'boolean
   :group 'my/gptel-auto-compact)
 
-(defcustom my/gptel-auto-compact-threshold 0.75
-  "Fraction of context window at which to compact."
+(defcustom my/gptel-auto-compact-threshold 0.80
+  "Fraction of context window at which to compact.
+
+Default 0.80 means compact when tokens reach 80% of context window.
+This leaves 20% headroom for response generation."
   :type 'number
   :group 'my/gptel-auto-compact)
 
@@ -59,16 +62,26 @@ Default is 5 minutes to avoid frequent compaction cycles."
              (>= elapsed my/gptel-auto-compact-min-interval)))))
 
 (defun my/gptel--auto-compact-needed-p ()
-  "Return non-nil when current buffer should be compacted."
+  "Return non-nil when current buffer should be compacted.
+
+Only returns t when tokens >= threshold% of context window.
+The interval check is a secondary safeguard, not the primary control."
   (let* ((chars (buffer-size))
          (tokens (my/gptel--estimate-tokens chars))
          (window (my/gptel--context-window))
-         (threshold (* window my/gptel-auto-compact-threshold)))
-    (and my/gptel-auto-compact-enabled
-         (bound-and-true-p gptel-mode)
-         (my/gptel--compact-safe-p)
-         (>= chars my/gptel-auto-compact-min-chars)
-         (>= tokens threshold))))
+         (threshold (* window my/gptel-auto-compact-threshold))
+         (needed (and my/gptel-auto-compact-enabled
+                      (bound-and-true-p gptel-mode)
+                      (>= chars my/gptel-auto-compact-min-chars)
+                      (>= tokens threshold))))
+    (when (and my/gptel-auto-compact-enabled
+               (bound-and-true-p gptel-mode)
+               (>= chars my/gptel-auto-compact-min-chars))
+      (message "[compact] Check: %d tokens vs %d threshold (window: %d, %.0f%%) → %s"
+               (round tokens) (round threshold) window
+               (* 100 (/ (float tokens) window))
+               (if needed "NEEDED" "skipped")))
+    needed))
 
 (defun my/gptel--directive-text (sym)
   "Resolve directive SYM to a string."
@@ -82,7 +95,8 @@ Default is 5 minutes to avoid frequent compaction cycles."
 
 (defun my/gptel-auto-compact (_start _end)
   "Compact current gptel buffer when it grows too large."
-  (when (my/gptel--auto-compact-needed-p)
+  (when (and (my/gptel--compact-safe-p)
+              (my/gptel--auto-compact-needed-p))
     (let ((system (my/gptel--directive-text 'compact))
           (buf (current-buffer))
           (chars-before (buffer-size))

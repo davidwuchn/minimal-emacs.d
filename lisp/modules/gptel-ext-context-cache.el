@@ -21,11 +21,14 @@
   "Context-window caching for gptel models."
   :group 'gptel)
 
-(defcustom my/gptel-default-context-window 32768
+(defcustom my/gptel-default-context-window 128000
   "Fallback context window (tokens) when model metadata is unavailable.
 
 gptel does not always know the model's true context window (especially via
-OpenRouter).  Auto-compaction uses this value to estimate when to compact."
+OpenRouter). Auto-compaction uses this value to estimate when to compact.
+
+Default is 128k tokens, which is common for modern models (GPT-4, Claude 3, etc).
+Set lower if you use models with smaller context windows."
   :type 'integer
   :group 'my/gptel-context-cache)
 
