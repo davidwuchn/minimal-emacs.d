@@ -86,6 +86,7 @@ under `lexical-binding: t'.")
     ("qwen3.5-plus" . 1000000)
     ("qwen3.5-flash" . 1000000)
     ("qwen3-max" . 262144)
+    ("qwen3-coder" . 131072)
     ("qwen-plus" . 1000000)      ; Qwen3-Plus has 1M context
     ("qwen-flash" . 1000000)     ; Qwen3-Flash has 1M context
     ("qwen-max" . 131072)
@@ -94,47 +95,60 @@ under `lexical-binding: t'.")
     ("qwen2.5-32b" . 131072)
     ("qwen2.5-14b" . 131072)
     ("qwen2.5-7b" . 131072)
-    ;; OpenAI
-    ("openai/gpt-4o" . 128000)
-    ("openai/gpt-4o-mini" . 128000)
-    ("openai/gpt-4-turbo" . 128000)
-    ("openai/gpt-4" . 8192)
-    ("openai/gpt-4-32k" . 32768)
-    ("openai/gpt-3.5-turbo" . 16385)
-    ("openai/gpt-3.5-turbo-16k" . 16385)
-    ;; Anthropic
-    ("anthropic/claude-3.5-sonnet" . 200000)
-    ("anthropic/claude-3.5-haiku" . 200000)
-    ("anthropic/claude-3-opus" . 200000)
-    ("anthropic/claude-3-sonnet" . 200000)
-    ("anthropic/claude-3-haiku" . 200000)
-    ("anthropic/claude-2.1" . 200000)
-    ("anthropic/claude-2" . 100000)
-    ;; Google
-    ("google/gemini-pro-1.5" . 1048576)
-    ("google/gemini-1.5-pro" . 1048576)
-    ("google/gemini-1.5-flash" . 1048576)
-    ("google/gemini-pro" . 32760)
-    ;; Meta
-    ("meta-llama/llama-3.1-405b-instruct" . 131072)
-    ("meta-llama/llama-3.1-70b-instruct" . 131072)
-    ("meta-llama/llama-3.1-8b-instruct" . 131072)
-    ("meta-llama/llama-3-70b-instruct" . 8192)
-    ("meta-llama/llama-3-8b-instruct" . 8192)
-    ;; Mistral
-    ("mistralai/mistral-large" . 128000)
-    ("mistralai/mistral-medium" . 32000)
-    ("mistralai/mistral-small" . 32000)
-    ("mistralai/mixtral-8x7b-instruct" . 32768)
-    ("mistralai/mixtral-8x22b-instruct" . 65536)
+    ;; Gemini (Google)
+    ("gemini-3" . 1048576)       ; Gemini 3 series has 1M
+    ("gemini-2.5" . 1048576)     ; Gemini 2.5 Pro has 1M
+    ("gemini-1.5" . 1048576)     ; Gemini 1.5 Pro/Flash has 1M
+    ("gemini-pro" . 32760)
+    ;; Anthropic Claude
+    ("claude-4" . 200000)        ; Claude 4 series
+    ("claude-sonnet-4" . 200000)
+    ("claude-3.5" . 200000)      ; Claude 3.5 series
+    ("claude-3" . 200000)        ; Claude 3 series
+    ("claude-2.1" . 200000)
+    ("claude-2" . 100000)
+    ;; OpenAI GPT
+    ("gpt-5" . 128000)           ; GPT-5 series
+    ("gpt-4o" . 128000)
+    ("gpt-4-turbo" . 128000)
+    ("gpt-4" . 8192)
+    ("gpt-4-32k" . 32768)
+    ("gpt-3.5" . 16385)
     ;; DeepSeek
-    ("deepseek/deepseek-chat" . 64000)
-    ("deepseek/deepseek-coder" . 16384))
+    ("deepseek-chat" . 163840)   ; DeepSeek V3
+    ("deepseek-reasoner" . 163840)
+    ("deepseek-coder" . 16384)
+    ;; MiniMax
+    ("minimax-m2.5" . 196608)
+    ("minimax-m2.1" . 196608)
+    ;; Kimi/Moonshot
+    ("kimi-k2.5" . 131072)
+    ("kimi-for-coding" . 131072)
+    ;; GLM (Zhipu AI)
+    ("glm-5" . 131072)
+    ("glm-4.7" . 131072)
+    ;; Meta Llama
+    ("llama-3.1" . 131072)       ; Llama 3.1 series
+    ("llama-3-70b" . 8192)
+    ("llama-3-8b" . 8192)
+    ;; Mistral
+    ("mistral-large" . 128000)
+    ("mistral-medium" . 32000)
+    ("mistral-small" . 32000)
+    ("mixtral-8x7b" . 32768)
+    ("mixtral-8x22b" . 65536))
   "Known model context windows (tokens) for popular models.
 Used as fallback when provider metadata is unavailable.
 
 IMPORTANT: Keep this updated! If you don't know a model's context window,
-check the provider's documentation first before assuming defaults.")
+check the provider's documentation first before assuming defaults.
+
+Sources:
+- Qwen: https://help.aliyun.com/zh/model-studio/getting-started/models
+- Gemini: https://openrouter.ai/models/google/gemini-2.5-pro-preview
+- Claude: https://openrouter.ai/models/anthropic/claude-sonnet-4
+- DeepSeek: https://openrouter.ai/models/deepseek/deepseek-chat
+- MiniMax: https://openrouter.ai/models/minimax/minimax-m2.5")
 
 ;;; Helpers
 
