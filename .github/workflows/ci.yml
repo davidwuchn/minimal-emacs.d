@@ -86,6 +86,26 @@ jobs:
             -l tests/test-gptel-trim.el \
             -f ert-run-tests-batch-and-exit
 
+      - name: Run ECA Tests
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-eca-ext.el \
+            -l tests/test-eca-security.el \
+            -f ert-run-tests-batch-and-exit
+
+      - name: Run Edit/Apply Tool Tests
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-gptel-tools-edit.el \
+            -l tests/test-gptel-tools-apply.el \
+            -f ert-run-tests-batch-and-exit
+
+      - name: Run Wrapped FSM Tests
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-wrapped-fsm.el \
+            -f ert-run-tests-batch-and-exit
+
       - name: Verify Nucleus Tool Contracts
         run: |
           ./scripts/verify-nucleus.sh
