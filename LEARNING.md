@@ -103,3 +103,25 @@
 ## Discovery Pattern (λ)
 - **Iterative Discovery Loop**: `λ discover(x). ¬plan(x) → concrete(x) → observe(x) → deeper(x) → repeat` — when exploring the unknown, don't start with a plan. Make it concrete, observe what happens, go deeper, repeat. Each step reveals the next step.
 - **Work IS the Insight**: The work itself generates the insight. You don't pre-plan the answer; the answer emerges through the act of working. `each_step_reveals_next`.
+
+## Tool Argument Naming Conventions
+- **`file_path` vs `path`**: Establish clear convention early. `file_path` for file operations (Read, Edit, Insert), `path` for directory operations (Write, Glob, Grep). LLMs hallucinate less when conventions are consistent.
+- **Upstream alignment matters**: Match upstream gptel-agent tool argument names. Divergent naming (`path` vs `file_path`) causes LLM confusion and user friction.
+- **Breaking changes require coordination**: When renaming arguments, update all call sites: tool definitions, benchmark mocks, example prompts.
+
+## Confirmation UI Architecture
+- **Two-layer safety net**: Tool confirm (permission to execute) is separate from Preview (review changes before applying). Permits control the first layer, preview settings control the second. Never bypass preview based on permits — preview is the final safety check for mutating operations.
+- **Single source of truth**: `my/gptel-permitted-tools` hash table is the ONLY permit storage. Avoid multiple permit-like flags (e.g., `never-ask-again`) that create confusion.
+- **"!" means permit, not bypass**: When user types "!" in preview, add the tool to permits AND apply. This teaches the system for future calls while still applying the current change.
+
+## ECA Bridge Integration Patterns
+- **Use internal APIs, don't create new ones**: `eca--session-add-workspace-folder` exists in `eca-util.el`. Don't invent `eca-ext-add-workspace-folder`. Check upstream source before assuming functions don't exist.
+- **Declare internal variables**: ECA's `eca--sessions` is a hash table, not exported. Bridge code that references it needs `defvar` with documentation noting it's internal.
+- **Guard hash-table access**: `(gethash key table)` errors if `table` isn't a hash table. Always `(when (hash-table-p table) (gethash ...))` for safety.
+- **Keybinding race conditions**: If setting up keybindings in `with-eval-after-load`, call the setup function from auto-registration too. Both paths may execute; both should be idempotent.
+
+## TDD Refactoring Workflow
+- **Fix tests before refactoring**: When tests fail in batch but pass in isolation, fix them first. Refactoring with failing tests masks new breakages.
+- **P0 > P1 > P2 priority**: Fix critical gaps first. High-risk untested code is a bomb waiting to go off.
+- **Mock vs integration tests**: Mocks are fast but don't catch real bugs. Balance: mock for unit tests, real implementations for integration tests.
+- **Test pollution exists**: Some tests pass in isolation but fail when loaded together. Isolate and fix, or document known limitation.

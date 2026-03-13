@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-11 (tag v0.6.6)
+> Last updated: 2026-03-13 (tag v0.6.26)
 
 ## Architecture Overview
 
@@ -152,6 +152,14 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Prompt caching (explicit cache headers) | **Skip** | OpenAI-compatible backends do server-side caching automatically; no client changes needed |
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
 | Per-tool output limits | **Skip** | `my/gptel-subagent-result-limit` truncation on subagents works fine |
+
+### Recent Changes (v0.6.22-v0.6.26)
+
+- **Align tool argument names with upstream** (⚒): Standardized argument naming convention: `file_path` for file operations (Read, Edit, Insert), `path` for directory paths (Write, Glob, Grep). Edit tool: `path` → `file_path`, `new_str_or_diff` → `new_str`. Insert tool: `path` → `file_path`.
+- **Consolidate permit/confirm workflow** (⚒): Two-layer system with clear responsibilities: (1) Tool confirm UI controlled by `my/gptel-permitted-tools`, (2) Preview diff controlled by `gptel-tools-preview-enabled`. Preview NO LONGER checks permits (safety net should always show). "!" in preview adds tool to permits.
+- **Fix ECA bridge declarations** (⊘): Added proper `declare-function` for `eca--session-workspace-folders`, `eca--session-add-workspace-folder`. Fixed function calls to use correct ECA internal APIs. Added `hash-table-p` safety check.
+- **Complete ECA integration** (⚒): Menu integration (15 ECA-specific items via `ai-code-eca--build-menu-items`), context synchronization (`ai-code-eca-sync-context` with optional auto-timer), session multiplexing (`ai-code-eca-list-sessions`), error handling macro, keybindings (`ai-code-eca-keymap` with C-c e prefix).
+- **Add test coverage** (⊘): 383 tests passing across P0 security, agent core, treesit, introspection, edit/apply, programmatic. New test files: `test-gptel-ext-tool-sanitize.el` (31 tests), `test-gptel-tools-agent-core.el` (49 tests), `test-treesit-agent-tools-core.el` (47 tests).
 
 ### Recent Changes (v0.6.6)
 
