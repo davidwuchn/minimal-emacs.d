@@ -131,3 +131,11 @@
 - **Use existing session affinity**: `ai-code--repo-backend-alist` already tracks preferred backend per repo. Don't create a separate hash table for the same purpose.
 - **Delegate, don't duplicate**: If `ai-code-git-worktree-branch` exists, use it. Don't copy its logic into the bridge.
 - **Aspirational vs actual**: STATE.md should document what IS, not what could be. Claiming "menu integration" when menu items are never displayed is documentation debt.
+
+## Context Window Detection & Auto-Compact
+- **`gptel-max-tokens` ≠ context window**: `gptel-max-tokens` is response length, NOT context window size. Using it as fallback causes auto-compact to trigger at 8k tokens instead of 128k+. Never include it in context window fallback chain.
+- **Provider documentation is authoritative**: Model context windows vary wildly (8k → 1M tokens). Don't assume defaults. Research provider docs: Qwen3.5-Plus = 1M, DeepSeek V3 = 163k, MiniMax M2.5 = 196k. OpenRouter model pages show context length.
+- **Case-insensitive partial matching**: Model IDs vary (`qwen3.5-plus`, `openai/gpt-4o`, `qwen-plus-2025-12-01`). Match on partial substring to handle version suffixes and provider prefixes.
+- **Pre-seed popular models**: Don't wait for async API fetch. Seed `my/gptel--known-model-context-windows` with correct values for models you use. Async fetch is unreliable (no API key, network issues).
+- **Auto-compact threshold, not interval**: Primary control should be token percentage (80% of context window), not elapsed time. Interval is a secondary safeguard against rapid re-compact cycles.
+- **Debug command for users**: `M-x my/gptel-context-window-show` shows model, context window, threshold, current usage. Essential for diagnosing "why is it compacting?" questions.
