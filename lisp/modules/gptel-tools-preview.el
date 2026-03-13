@@ -133,6 +133,21 @@ Returns the unified diff output as a string."
 Uses a random suffix to avoid conflicts when multiple previews run concurrently."
   (format "%s-%s" base (format-time-string "%H%M%S" (current-time))))
 
+(defun my/gptel--display-preview-buffer (buffer)
+  "Display preview BUFFER in a window.
+
+Uses `gptel-tools-preview-window-height' for window height.
+Returns the window displaying the buffer."
+  (let ((window (display-buffer buffer '(display-buffer-below-selected
+                                          (window-height . fit-window-to-buffer)
+                                          (body-function . (lambda (_)
+                                                             (goto-char (point-min))))))))
+    (when window
+      (with-selected-window window
+        (fit-window-to-buffer nil
+                              (truncate (* (frame-height) gptel-tools-preview-window-height)))))
+    window))
+
 (defun my/gptel--prompt-for-confirmation (buffer on-confirm on-abort)
   "Prompt user for confirmation in minibuffer.
 
