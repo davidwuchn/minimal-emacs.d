@@ -27,5 +27,4 @@ Preview shows diff in a buffer, then prompts in minibuffer:
 ## Configuration
 
 - `gptel-tools-preview-enabled` (default `t`): Set to `nil` to auto-apply without preview
-- `gptel-tools-preview-style` (default `buffer`): `buffer`, `overlay`, or `minibuffer`
 - `M-x gptel-tools-preview-reset-confirmation`: Re-enable confirmations after "N"

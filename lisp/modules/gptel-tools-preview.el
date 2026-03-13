@@ -57,27 +57,6 @@ Re-enables preview confirmations for the rest of this session."
   :type 'float
   :group 'gptel-tools-preview)
 
-(defcustom gptel-tools-preview-style 'buffer
-  "Preview display style.
-
-  `buffer'    - Show in a separate buffer with diff-mode (default)
-                Best for large diffs and multi-file changes
-  `overlay'   - Show inline overlay in the target buffer
-                Best for small, localized edits (single file only)
-  `minibuffer' - Quick confirmation in minibuffer (no diff display)
-                Best for simple y/n confirmations
-
-The `buffer' style is recommended for most use cases as it provides
-full diff navigation and works with patches of any size.
-
-Confirmation always happens via minibuffer prompt, not keybindings.
-
-Has no effect when `gptel-tools-preview-enabled' is nil."
-  :type '(choice (const :tag "Separate buffer with diff-mode" buffer)
-                 (const :tag "Inline overlay in target buffer" overlay)
-                 (const :tag "Minibuffer confirmation" minibuffer))
-  :group 'gptel-tools-preview)
-
 ;;; Core Preview Functions
 
 (defun my/gptel--make-preview-callback (buffer callback)
@@ -163,86 +142,26 @@ This is a blocking call - user must respond before Emacs continues."
         (let ((prompt (format "Apply changes? [y=apply, n=abort, N=never ask again, q=quit]: ")))
           (condition-case err
               (let* ((result (read-from-minibuffer prompt))
-                     (accepted (member result '("y" "n" "Y" "N" "")))
+                     (confirm (member result '("y" "Y" "")))
+                     (abort (member result '("n" "N" "q" "Q")))
                      (never-again (member result '("N" "never" "Never"))))
-                (when never-again
+                (cond
+                 (never-again
                   (setq gptel-tools-preview--never-ask-again t)
-                  (message "Preview confirmations disabled for this session. M-x gptel-tools-preview-reset-confirmation to re-enable."))
-                (if (or accepted never-again)
-                    (funcall on-confirm)
-                  (funcall on-abort)))
+                  (message "Preview confirmations disabled for this session. M-x gptel-tools-preview-reset-confirmation to re-enable.")
+                  (funcall on-confirm))
+                 (confirm
+                  (funcall on-confirm))
+                 (abort
+                  (funcall on-abort))
+                 (t
+                  (funcall on-abort))))
             (quit
              (funcall on-abort))
             (error
              (funcall on-abort))))
       (when (buffer-live-p buffer)
         (kill-buffer buffer)))))
-
-;;; Overlay-based Preview (alternative to buffer)
-
-(defvar my/gptel--preview-overlay nil
-  "Current preview overlay, if any.")
-
-(defun my/gptel--preview-overlay-show (buffer path original replacement callback)
-  "Show preview overlay in BUFFER for file at PATH.
-
-Displays ORIGINAL text with strikethrough and REPLACEMENT with highlight.
-CALLBACK is called when user confirms or aborts.
-
-This style works best for small, localized changes in a single file."
-  (condition-case err
-      (with-current-buffer (or (find-buffer-visiting path)
-                               (find-file-noselect path))
-        (setq my/gptel--preview-overlay
-              (list :buffer (current-buffer)
-                    :original original
-                    :replacement replacement
-                    :callback callback))
-        ;; Show minibuffer prompt with keybinding hint
-        (let ((result (read-from-minibuffer
-                       (format "Preview: %s [n/y=apply, q=abort] " path))))
-          (if (member result '("n" "y" ""))
-              (progn
-                (setq my/gptel--preview-overlay nil)
-                (funcall callback "Preview confirmed."))
-            (progn
-              (setq my/gptel--preview-overlay nil)
-              (funcall callback "Preview aborted.")))))
-    (error
-     (funcall callback (format "Overlay preview error: %s" (error-message-string err))))))
-
-;;; Minibuffer-based Preview (quick confirmation)
-
-(defun my/gptel--preview-minibuffer (path callback)
-  "Quick minibuffer confirmation for changes to PATH.
-
-CALLBACK is called when user confirms or aborts.
-No diff display - use for simple y/n confirmations."
-  (condition-case err
-      (let ((result (read-from-minibuffer
-                     (format "Apply changes to %s? [n/y=apply, q=abort] " path))))
-        (if (member result '("n" "y" ""))
-            (funcall callback "Confirmed.")
-          (funcall callback "Aborted.")))
-    (error
-     (funcall callback (format "Minibuffer preview error: %s" (error-message-string err))))))
-
-(defun my/gptel--display-preview-buffer (buffer &optional height)
-  "Display BUFFER with HEIGHT as fraction of frame.
-
-Returns the window displaying the buffer."
-  (display-buffer buffer
-                  `(display-buffer-reuse-window
-                    display-buffer-below-selected
-                    (window-height . ,(or height gptel-tools-preview-window-height)))))
-
-(defun my/gptel--run-diff (temp1 temp2)
-  "Run diff between TEMP1 and TEMP2 files.
-
-Returns the diff output string."
-  (with-temp-buffer
-    (apply #'call-process "diff" nil t nil (list "-u" temp1 temp2))
-    (buffer-string)))
 
 ;;; File Change Preview (path + original + replacement → diff)
 
@@ -260,37 +179,31 @@ confirms immediately (use with caution)."
       ;; Preview disabled - auto-confirm
       (funcall callback "Preview disabled, auto-confirmed.")
     ;; Preview enabled - show diff and prompt
-    (pcase gptel-tools-preview-style
-      ('minibuffer
-       (my/gptel--preview-minibuffer path callback))
-      ('overlay
-       (my/gptel--preview-overlay-show buffer path original replacement callback))
-      (_  ; 'buffer or default
-       (condition-case err
-           (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-                  (temp1 (my/gptel-make-temp-file "orig"))
-                  (temp2 (my/gptel-make-temp-file "new"))
-                  (diff-output
-                   (progn
-                     (write-region original nil temp1 nil 'silent)
-                     (write-region replacement nil temp2 nil 'silent)
-                     (my/gptel--run-diff temp1 temp2))))
-             (unwind-protect
-                 (let ((diff-buf (my/gptel--create-diff-buffer
-                                  "*gptel-preview*"
-                                  (format "Preview: %s" path)
-                                  diff-output
-                                  #'diff-mode)))
-                   (my/gptel--insert-preview-instructions)
-                   (my/gptel--display-preview-buffer diff-buf)
-                   (my/gptel--setup-preview-keys
-                    diff-buf
-                    (lambda () (funcall wrapped-cb "Preview confirmed."))
-                    (lambda () (funcall wrapped-cb "Preview aborted."))))
-               (delete-file temp1)
-               (delete-file temp2)))
-         (error
-          (funcall callback (format "Preview error: %s" (error-message-string err)))))))))
+    (condition-case err
+        (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
+               (temp1 (my/gptel-make-temp-file "orig"))
+               (temp2 (my/gptel-make-temp-file "new"))
+               (diff-output
+                (progn
+                  (write-region original nil temp1 nil 'silent)
+                  (write-region replacement nil temp2 nil 'silent)
+                  (my/gptel--run-diff temp1 temp2))))
+          (unwind-protect
+              (let ((diff-buf (my/gptel--create-diff-buffer
+                               "*gptel-preview*"
+                               (format "Preview: %s" path)
+                               diff-output
+                               #'diff-mode)))
+                (my/gptel--insert-preview-instructions)
+                (my/gptel--display-preview-buffer diff-buf)
+                (my/gptel--setup-preview-keys
+                 diff-buf
+                 (lambda () (funcall wrapped-cb "Preview confirmed."))
+                 (lambda () (funcall wrapped-cb "Preview aborted."))))
+            (delete-file temp1)
+            (delete-file temp2)))
+      (error
+       (funcall callback (format "Preview error: %s" (error-message-string err)))))))
 
 ;;; Patch Preview (raw unified diff)
 
