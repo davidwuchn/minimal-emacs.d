@@ -14,6 +14,7 @@
 
 (declare-function my/gptel--model-id-string "gptel-ext-context-cache")
 (declare-function my/gptel--context-window "gptel-ext-context-cache")
+(defvar my/gptel--context-window-cache)
 
 ;;; Customization
 
@@ -92,10 +93,19 @@ The interval check is a secondary safeguard, not the primary control."
   (let* ((window (my/gptel--context-window))
          (model gptel-model)
          (model-id (my/gptel--model-id-string model))
-         (cached (and model-id (gethash model-id my/gptel--context-window-cache))))
-    (message "Context window: %d tokens\nModel: %s\nModel ID: %s\nCached: %s"
-             window model model-id
-             (if cached (format "yes (%d)" cached) "no"))))
+         (cached (and model-id (gethash model-id my/gptel--context-window-cache)))
+         (threshold (* window my/gptel-auto-compact-threshold))
+         (chars (buffer-size))
+         (tokens (my/gptel--estimate-tokens chars)))
+    (message "Context window: %d tokens (threshold: %d, %.0f%%)
+Model: %s
+Model ID: %s
+Cached: %s
+Current: %d chars, ~%d tokens (%.0f%% of window)"
+             window threshold (* 100 my/gptel-auto-compact-threshold)
+             model model-id
+             (if cached (format "yes (%d)" cached) "no")
+             chars (round tokens) (* 100 (/ (float tokens) window)))))
 
 (defun my/gptel--directive-text (sym)
   "Resolve directive SYM to a string."

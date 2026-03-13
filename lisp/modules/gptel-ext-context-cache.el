@@ -81,6 +81,49 @@ OpenRouter-hosted model ids)."
 Must be `defvar' (not `let') so the `setq' in the cache file reaches it
 under `lexical-binding: t'.")
 
+(defvar my/gptel--known-model-context-windows
+  '(;; OpenAI
+    ("openai/gpt-4o" . 128000)
+    ("openai/gpt-4o-mini" . 128000)
+    ("openai/gpt-4-turbo" . 128000)
+    ("openai/gpt-4" . 8192)
+    ("openai/gpt-4-32k" . 32768)
+    ("openai/gpt-3.5-turbo" . 16385)
+    ("openai/gpt-3.5-turbo-16k" . 16385)
+    ;; Anthropic
+    ("anthropic/claude-3.5-sonnet" . 200000)
+    ("anthropic/claude-3.5-haiku" . 200000)
+    ("anthropic/claude-3-opus" . 200000)
+    ("anthropic/claude-3-sonnet" . 200000)
+    ("anthropic/claude-3-haiku" . 200000)
+    ("anthropic/claude-2.1" . 200000)
+    ("anthropic/claude-2" . 100000)
+    ;; Google
+    ("google/gemini-pro-1.5" . 1048576)
+    ("google/gemini-1.5-pro" . 1048576)
+    ("google/gemini-1.5-flash" . 1048576)
+    ("google/gemini-pro" . 32760)
+    ;; Meta
+    ("meta-llama/llama-3.1-405b-instruct" . 131072)
+    ("meta-llama/llama-3.1-70b-instruct" . 131072)
+    ("meta-llama/llama-3.1-8b-instruct" . 131072)
+    ("meta-llama/llama-3-70b-instruct" . 8192)
+    ("meta-llama/llama-3-8b-instruct" . 8192)
+    ;; Mistral
+    ("mistralai/mistral-large" . 128000)
+    ("mistralai/mistral-medium" . 32000)
+    ("mistralai/mistral-small" . 32000)
+    ("mistralai/mixtral-8x7b-instruct" . 32768)
+    ("mistralai/mixtral-8x22b-instruct" . 65536)
+    ;; DeepSeek
+    ("deepseek/deepseek-chat" . 64000)
+    ("deepseek/deepseek-coder" . 16384)
+    ;; Qwen
+    ("qwen/qwen-2-72b-instruct" . 131072)
+    ("qwen/qwen-2-7b-instruct" . 131072))
+  "Known model context windows (tokens) for popular models.
+Used as fallback when provider metadata is unavailable.")
+
 ;;; Helpers
 
 (defun my/gptel--model-id-string (&optional model)
@@ -264,32 +307,39 @@ Runs asynchronously; returns nil immediately."
 
 Fallback order:
 1. Cached context window for model-id
-2. gptel model tables (OpenAI, Gemini, etc.)
-3. OpenRouter API fetch (if using OpenRouter)
-4. my/gptel-default-context-window (128k default)
+2. Known models table (popular models pre-seeded)
+3. gptel model tables (OpenAI, Gemini, etc.)
+4. OpenRouter API fetch (if using OpenRouter)
+5. my/gptel-default-context-window (128k default)
 
 Note: We do NOT use gptel-max-tokens as it's for response length, not context window."
   (let* ((model gptel-model)
          (model-id (my/gptel--model-id-string model))
+         (model-id-lower (and (stringp model-id) (downcase model-id)))
          (window nil))
     ;; 1) Prefer our cache (for OpenRouter-style model ids).
     (when (and (stringp model-id)
                (gethash model-id my/gptel--context-window-cache))
       (setq window (gethash model-id my/gptel--context-window-cache)))
-    ;; 2) Check gptel model tables
+    ;; 2) Check known models table (case-insensitive partial match)
+    (when (and (not window) model-id-lower)
+      (dolist (entry my/gptel--known-model-context-windows)
+        (when (string-match-p (regexp-quote (car entry)) model-id-lower)
+          (setq window (cdr entry)))))
+    ;; 3) Check gptel model tables
     (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
       (when (and (boundp var) (not window))
         (let ((entry (assq model (symbol-value var))))
           (when entry
             (setq window (my/gptel--normalize-context-window
                           (plist-get (cdr entry) :context-window)))))))
-    ;; 3) If OpenRouter is in use and no metadata/cached value, fetch it.
+    ;; 4) If OpenRouter is in use and no metadata/cached value, fetch it.
     (when (and (not window)
                (boundp 'gptel--openrouter)
                (eq gptel-backend gptel--openrouter)
                (stringp model-id))
       (my/gptel--openrouter-fetch-context-window model))
-    ;; 4) Fall back to default (NOT gptel-max-tokens which is response length)
+    ;; 5) Fall back to default (NOT gptel-max-tokens which is response length)
     (or window
         my/gptel-default-context-window)))
 
