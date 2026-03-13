@@ -110,6 +110,7 @@ jobs:
             -l tests/test-gptel-ext-tool-confirm.el \
             -l tests/test-gptel-ext-tool-permits.el \
             -l tests/test-gptel-ext-fsm.el \
+            -l tests/test-gptel-ext-tool-sanitize.el \
             -f ert-run-tests-batch-and-exit
 
       - name: Run Context/Core Tests

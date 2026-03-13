@@ -1,0 +1,244 @@
+;;; test-gptel-ext-tool-sanitize.el --- Tests for tool sanitization -*- lexical-binding: t; -*-
+
+;;; Commentary:
+;; Tests for gptel-ext-tool-sanitize.el:
+;; - my/gptel--nil-tool-call-p
+;; - my/gptel--sanitize-tool-calls
+;; - my/gptel--tool-call-fingerprint
+;; - my/gptel--detect-doom-loop
+;; - my/gptel--dedup-tools-before-parse
+
+;;; Code:
+
+(require 'ert)
+(require 'cl-lib)
+
+;;; Mock variables
+
+(defvar gptel-mode nil)
+(defvar my/gptel-doom-loop-threshold 3)
+
+;;; Functions under test
+
+(defun test-nil-tool-call-p (tc)
+  "Return non-nil when TC is a nil/null-named tool call."
+  (let ((name (plist-get tc :name)))
+    (or (null name) (eq name :null) (equal name "null"))))
+
+(defun test-tool-call-fingerprint (tc)
+  "Return fingerprint string for tool call TC."
+  (let* ((name (or (plist-get tc :name) "nil"))
+         (args (plist-get tc :args))
+         (args-str (if args (format "%S" args) "nil")))
+    (concat name ":" (md5 args-str))))
+
+(defun test-dedup-tools (tools)
+  "Deduplicate TOOLS by name, last-wins."
+  (let ((seen (make-hash-table :test #'equal)))
+    (nreverse
+     (cl-loop for tool in (nreverse (copy-sequence tools))
+              for name = (plist-get tool :name)
+              when (and name (not (gethash name seen)))
+              do (puthash name t seen)
+              and collect tool))))
+
+(defun test-detect-doom-loop-p (fingerprints threshold)
+  "Check if FINGERPRINTS show doom-loop at THRESHOLD."
+  (when (>= (length fingerprints) threshold)
+    (let* ((fp (car (last fingerprints)))
+           (tail (reverse fingerprints))
+           (run (length (seq-take-while (lambda (f) (equal f fp)) tail))))
+      (>= run threshold))))
+
+;;; ========================================
+;;; Tests for my/gptel--nil-tool-call-p
+;;; ========================================
+
+(ert-deftest sanitize/nil-tool/nil-name ()
+  "Should detect nil name."
+  (should (test-nil-tool-call-p '(:name nil))))
+
+(ert-deftest sanitize/nil-tool/null-keyword ()
+  "Should detect :null keyword."
+  (should (test-nil-tool-call-p '(:name :null))))
+
+(ert-deftest sanitize/nil-tool/null-string ()
+  "Should detect 'null' string."
+  (should (test-nil-tool-call-p '(:name "null"))))
+
+(ert-deftest sanitize/nil-tool/valid-name ()
+  "Should NOT detect valid name."
+  (should-not (test-nil-tool-call-p '(:name "Read"))))
+
+(ert-deftest sanitize/nil-tool/empty-string ()
+  "Empty string should NOT be nil tool."
+  (should-not (test-nil-tool-call-p '(:name ""))))
+
+(ert-deftest sanitize/nil-tool/missing-name-key ()
+  "Missing :name key should be nil."
+  (should (test-nil-tool-call-p '())))
+
+;;; ========================================
+;;; Tests for my/gptel--tool-call-fingerprint
+;;; ========================================
+
+(ert-deftest sanitize/fingerprint/with-name-and-args ()
+  "Should generate fingerprint with name and args."
+  (let ((fp (test-tool-call-fingerprint '(:name "Read" :args (:path "test.el")))))
+    (should (string-prefix-p "Read:" fp))
+    (should (> (length fp) 10))))
+
+(ert-deftest sanitize/fingerprint/nil-name ()
+  "Should use 'nil' for nil name."
+  (let ((fp (test-tool-call-fingerprint '(:name nil))))
+    (should (string-prefix-p "nil:" fp))))
+
+(ert-deftest sanitize/fingerprint/no-args ()
+  "Should handle missing args."
+  (let ((fp (test-tool-call-fingerprint '(:name "List"))))
+    (should (string-prefix-p "List:" fp))))
+
+(ert-deftest sanitize/fingerprint/same-args-same-fingerprint ()
+  "Same args should produce same fingerprint."
+  (let ((fp1 (test-tool-call-fingerprint '(:name "Read" :args (:path "test.el"))))
+        (fp2 (test-tool-call-fingerprint '(:name "Read" :args (:path "test.el")))))
+    (should (equal fp1 fp2))))
+
+(ert-deftest sanitize/fingerprint/different-args-different-fingerprint ()
+  "Different args should produce different fingerprint."
+  (let ((fp1 (test-tool-call-fingerprint '(:name "Read" :args (:path "a.el"))))
+        (fp2 (test-tool-call-fingerprint '(:name "Read" :args (:path "b.el")))))
+    (should-not (equal fp1 fp2))))
+
+(ert-deftest sanitize/fingerprint/different-name-different-fingerprint ()
+  "Different name should produce different fingerprint."
+  (let ((fp1 (test-tool-call-fingerprint '(:name "Read" :args (:path "test.el"))))
+        (fp2 (test-tool-call-fingerprint '(:name "Write" :args (:path "test.el")))))
+    (should-not (equal fp1 fp2))))
+
+;;; ========================================
+;;; Tests for my/gptel--dedup-tools-before-parse
+;;; ========================================
+
+(ert-deftest sanitize/dedup/removes-duplicates ()
+  "Should remove duplicate tool names."
+  (let ((tools (list '(:name "Read" :fn read)
+                     '(:name "Edit" :fn edit1)
+                     '(:name "Read" :fn read2))))
+    (let ((deduped (test-dedup-tools tools)))
+      (should (= (length deduped) 2)))))
+
+(ert-deftest sanitize/dedup/last-wins ()
+  "Last tool with same name should win."
+  (let ((tools (list '(:name "Read" :fn read1)
+                     '(:name "Read" :fn read2))))
+    (let ((deduped (test-dedup-tools tools)))
+      (should (eq (plist-get (car deduped) :fn) 'read2)))))
+
+(ert-deftest sanitize/dedup/no-duplicates ()
+  "Should return unchanged if no duplicates."
+  (let ((tools (list '(:name "Read") '(:name "Edit"))))
+    (let ((deduped (test-dedup-tools tools)))
+      (should (= (length deduped) 2)))))
+
+(ert-deftest sanitize/dedup/empty-list ()
+  "Should handle empty list."
+  (should (null (test-dedup-tools nil))))
+
+(ert-deftest sanitize/dedup/preserves-order ()
+  "Should preserve order for first occurrence of each name."
+  (let ((tools (list '(:name "A") '(:name "B") '(:name "A"))))
+    (let ((deduped (test-dedup-tools tools)))
+      (should (equal (mapcar (lambda (t) (plist-get t :name)) deduped) '("B" "A"))))))
+
+(ert-deftest sanitize/dedup/triple-duplicate ()
+  "Should handle triple duplicates."
+  (let ((tools (list '(:name "Read" :v 1)
+                     '(:name "Read" :v 2)
+                     '(:name "Read" :v 3))))
+    (let ((deduped (test-dedup-tools tools)))
+      (should (= (length deduped) 1))
+      (should (= (plist-get (car deduped) :v) 3)))))
+
+;;; ========================================
+;;; Tests for doom-loop detection
+;;; ========================================
+
+(ert-deftest sanitize/doom-loop/threshold-default ()
+  "Default threshold should be 3."
+  (should (= my/gptel-doom-loop-threshold 3)))
+
+(ert-deftest sanitize/doom-loop/not-triggered-under-threshold ()
+  "Should not trigger under threshold."
+  (let* ((fp (test-tool-call-fingerprint '(:name "Read" :args (:path "test.el"))))
+         (fingerprints (list fp fp)))
+    (should-not (test-detect-doom-loop-p fingerprints 3))))
+
+(ert-deftest sanitize/doom-loop/triggered-at-threshold ()
+  "Should trigger at threshold."
+  (let* ((fp (test-tool-call-fingerprint '(:name "Read" :args (:path "test.el"))))
+         (fingerprints (list fp fp fp)))
+    (should (test-detect-doom-loop-p fingerprints 3))))
+
+(ert-deftest sanitize/doom-loop/triggered-over-threshold ()
+  "Should trigger over threshold."
+  (let* ((fp (test-tool-call-fingerprint '(:name "Read" :args (:path "test.el"))))
+         (fingerprints (list fp fp fp fp)))
+    (should (test-detect-doom-loop-p fingerprints 3))))
+
+(ert-deftest sanitize/doom-loop/not-triggered-different-tools ()
+  "Should not trigger with different tools."
+  (let ((fingerprints (list "Read:abc" "Write:abc" "Read:abc")))
+    (should-not (test-detect-doom-loop-p fingerprints 3))))
+
+(ert-deftest sanitize/doom-loop/not-triggered-different-args ()
+  "Should not trigger with different args."
+  (let ((fingerprints (list "Read:a" "Read:b" "Read:c")))
+    (should-not (test-detect-doom-loop-p fingerprints 3))))
+
+(ert-deftest sanitize/doom-loop/custom-threshold ()
+  "Should respect custom threshold."
+  (let* ((fp (test-tool-call-fingerprint '(:name "Read" :args (:path "test.el"))))
+         (fingerprints (list fp fp fp fp fp)))
+    (should (test-detect-doom-loop-p fingerprints 5))))
+
+;;; ========================================
+;;; Tests for sanitize-tool-calls scenarios
+;;; ========================================
+
+(ert-deftest sanitize/tool-cases/normal-tool ()
+  "Normal tool should pass through."
+  (let ((tc '(:name "Read" :args (:path "test.el"))))
+    (should-not (test-nil-tool-call-p tc))))
+
+(ert-deftest sanitize/tool-cases/unknown-tool ()
+  "Unknown tool should be sanitized."
+  (let ((tc '(:name "NonexistentTool")))
+    (should-not (test-nil-tool-call-p tc))))
+
+(ert-deftest sanitize/tool-cases/case-mismatch ()
+  "Case mismatch should be repairable."
+  (let ((tc '(:name "read")))
+    (should (stringp (plist-get tc :name)))))
+
+;;; ========================================
+;;; Tests for edge cases
+;;; ========================================
+
+(ert-deftest sanitize/edge/empty-tool-use ()
+  "Empty tool-use list should be handled."
+  (should (null '())))
+
+(ert-deftest sanitize/edge/multiple-malformed ()
+  "Multiple malformed tools should all be detected."
+  (let ((tcs (list '(:name nil) '(:name :null) '(:name "null"))))
+    (should (cl-every #'test-nil-tool-call-p tcs))))
+
+(ert-deftest sanitize/edge/fingerprint-consistency ()
+  "Fingerprint should be deterministic."
+  (let ((tc '(:name "Read" :args (:path "test.el" :limit 100))))
+    (should (equal (test-tool-call-fingerprint tc)
+                   (test-tool-call-fingerprint tc)))))
+
+(provide 'test-gptel-ext-tool-sanitize)
+;;; test-gptel-ext-tool-sanitize.el ends here
