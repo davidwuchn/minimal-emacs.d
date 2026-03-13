@@ -18,6 +18,9 @@ $EMACS -Q --batch \
        -l "$DIR/early-init.el" \
        --eval "(progn
          (package-initialize)
+         (unless (package-installed-p 'gptel)
+           (package-refresh-contents)
+           (package-install 'gptel))
          (add-to-list 'load-path (expand-file-name \"lisp\" \"$DIR\"))
          (add-to-list 'load-path (expand-file-name \"lisp/modules\" \"$DIR\"))
          (require 'gptel-config)
