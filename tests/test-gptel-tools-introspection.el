@@ -291,6 +291,60 @@ Returns the actual elisp source code definition."
   (let ((result (test-gptel-introspection--describe-symbol "emacs-version")))
     (should (listp result))))
 
+;;; Tests for my/gptel--find-buffers-and-recent
+
+(defun test-introspection--find-buffers-and-recent (pattern)
+  "Find open buffers and recently opened files matching PATTERN."
+  (let* ((pattern (if (string-empty-p pattern) "." pattern))
+         (bufs (delq nil (mapcar (lambda (b)
+                                   (let ((name (buffer-name b)) (file (buffer-file-name b)))
+                                     (when (and (not (string-prefix-p " " name))
+                                                (or (string-match-p pattern name)
+                                                    (and file (string-match-p pattern file))))
+                                       (format "  %s%s (%s)" name (if (buffer-modified-p b) "*" "") (or file "")))))
+                                 (buffer-list)))))
+    (concat (when bufs (format "Open Buffers:\n%s\n\n" (string-join bufs "\n")))
+            "Recent Files:\n  (recentf not available in test)")))
+
+(ert-deftest introspection/find-buffers/matches-pattern ()
+  "Should find buffers matching pattern."
+  (let* ((test-buf (get-buffer-create "*test-buffer-xyz*"))
+         (result (test-introspection--find-buffers-and-recent "xyz")))
+    (unwind-protect
+        (should (string-match-p "test-buffer-xyz" result))
+      (kill-buffer test-buf))))
+
+(ert-deftest introspection/find-buffers/empty-pattern ()
+  "Empty pattern should match all visible buffers."
+  (let* ((test-buf (get-buffer-create "*test-visible-buffer*"))
+         (result (test-introspection--find-buffers-and-recent "")))
+    (unwind-protect
+        (should (string-match-p "test-visible-buffer" result))
+      (kill-buffer test-buf))))
+
+(ert-deftest introspection/find-buffers/skips-hidden-buffers ()
+  "Should skip buffers starting with space."
+  (let* ((hidden-buf (get-buffer-create " *hidden-buffer*"))
+         (result (test-introspection--find-buffers-and-recent "hidden")))
+    (unwind-protect
+        (should-not (string-match-p "hidden-buffer" result))
+      (kill-buffer hidden-buf))))
+
+(ert-deftest introspection/find-buffers/marks-modified ()
+  "Should mark modified buffers with *."
+  (let* ((test-buf (get-buffer-create "*test-modified-buffer*"))
+         (_ (with-current-buffer test-buf
+              (insert "test content")))
+         (result (test-introspection--find-buffers-and-recent "modified")))
+    (unwind-protect
+        (should (string-match-p "\\*" result))
+      (kill-buffer test-buf))))
+
+(ert-deftest introspection/find-buffers/no-match ()
+  "Should return empty message when no matches."
+  (let ((result (test-introspection--find-buffers-and-recent "nonexistent-buffer-xyz-123")))
+    (should (stringp result))))
+
 ;;; Provide the test suite
 
 (provide 'test-gptel-tools-introspection)

@@ -101,6 +101,13 @@ jobs:
             -l tests/test-gptel-tools-agent-integration.el \
             -f ert-run-tests-batch-and-exit
 
+      - name: Run Security Tests
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-gptel-ext-security.el \
+            -l tests/test-gptel-sandbox.el \
+            -f ert-run-tests-batch-and-exit
+
       - name: Run ECA Tests
         run: |
           emacs --batch -Q -L . -L lisp -L lisp/modules \
