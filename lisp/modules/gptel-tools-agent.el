@@ -31,6 +31,15 @@ to a temp file."
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defcustom my/gptel-subagent-temp-file-ttl 300
+  "Seconds before subagent temp files are auto-deleted.
+Set to 0 to disable auto-cleanup."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defvar my/gptel--subagent-temp-files nil
+  "List of temp files created by subagent results.")
+
 (defcustom my/gptel-subagent-model nil
   "Model to use for delegated subagents.
 nil means use `gptel-model' (the global default).
@@ -118,6 +127,15 @@ and large-result truncation via `my/gptel--deliver-subagent-result'."
                                 temp-file)))
         (with-temp-file temp-file
           (insert result))
+        (push temp-file my/gptel--subagent-temp-files)
+        (when (> my/gptel-subagent-temp-file-ttl 0)
+          (run-at-time my/gptel-subagent-temp-file-ttl nil
+                       (lambda (f)
+                         (when (file-exists-p f)
+                           (delete-file f))
+                         (setq my/gptel--subagent-temp-files
+                               (delete f my/gptel--subagent-temp-files)))
+                       temp-file))
         (funcall callback trunc-msg))
     (funcall callback result)))
 

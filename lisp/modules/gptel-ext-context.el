@@ -83,20 +83,38 @@
   "Compact current gptel buffer when it grows too large."
   (when (my/gptel--auto-compact-needed-p)
     (let ((system (my/gptel--directive-text 'compact))
-          (buf (current-buffer)))
+          (buf (current-buffer))
+          (chars-before (buffer-size))
+          (tokens-before (my/gptel--estimate-tokens (buffer-size))))
       (when system
         (setq my/gptel-auto-compact-running t)
+        (message "[compact] Starting: %d chars, ~%d tokens"
+                 chars-before (round tokens-before))
         (gptel-request (buffer-string)
           :system system
           :buffer buf
-          :callback (lambda (response _info)
-                      (with-current-buffer buf
-                        (setq my/gptel-auto-compact-running nil)
-                        (setq my/gptel-auto-compact-last-run (current-time))
-                        (when (stringp response)
-                          (let ((inhibit-read-only t))
-                            (erase-buffer)
-                            (insert response))))))))))
+          :callback
+          (lambda (response _info)
+            (condition-case err
+                (with-current-buffer buf
+                  (setq my/gptel-auto-compact-running nil)
+                  (setq my/gptel-auto-compact-last-run (current-time))
+                  (if (not (stringp response))
+                      (message "[compact] Error: No valid response")
+                    (let* ((inhibit-read-only t)
+                           (point-before (point))
+                           (chars-after (length response))
+                           (tokens-after (my/gptel--estimate-tokens chars-after)))
+                      (erase-buffer)
+                      (insert response)
+                      (goto-char (min point-before (point-max)))
+                      (message "[compact] Done: %d → %d chars (~%d → ~%d tokens, %.0f%% reduction)"
+                               chars-before chars-after
+                               (round tokens-before) (round tokens-after)
+                               (* 100 (- 1 (/ (float chars-after) chars-before)))))))
+              (error
+               (setq my/gptel-auto-compact-running nil)
+               (message "[compact] Error: %s" (error-message-string err))))))))))
 
 ;;; Hook Registration
 

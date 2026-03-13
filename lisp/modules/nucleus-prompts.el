@@ -265,6 +265,12 @@ Idempotent: only registers and logs once per session."
             (setf (alist-get 'nucleus-gptel-plan
                             gptel-directives nil nil #'eq)
                   plan-sys))
+          ;; Add compact directive for auto-compaction
+          (setf (alist-get 'compact
+                          gptel-directives nil nil #'eq)
+                "Summarize this conversation history for LLM context continuity.
+Keep all key information: decisions made, files modified, commands run, errors encountered.
+Format as a structured brief with: [progress] [decisions] [next_steps] [tech_details]")
           (nucleus--log "Registered %d directives"
                        (length gptel-directives))
           (setq nucleus--directives-registered t))))))
