@@ -12,6 +12,7 @@
 (require 'subr-x)
 (require 'diff-mode)
 (require 'gptel-ext-fsm-utils)
+(require 'gptel-ext-core)  ; for my/gptel-make-temp-file
 
 ;;; Customization
 
@@ -117,6 +118,20 @@ Confirmation happens in the minibuffer, not via keybindings."
     (insert "  y = apply    n = abort    ! = apply all    q = quit\n")
     (insert "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")))
 
+(defun my/gptel--run-diff (file1 file2)
+  "Run diff between FILE1 and FILE2.
+
+Returns the unified diff output as a string."
+  (with-temp-buffer
+    (apply #'call-process "diff" nil t nil (list "-u" file1 file2))
+    (buffer-string)))
+
+(defun my/gptel--unique-preview-buffer-name (base)
+  "Generate a unique buffer name based on BASE.
+
+Uses a random suffix to avoid conflicts when multiple previews run concurrently."
+  (format "%s-%s" base (format-time-string "%H%M%S" (current-time))))
+
 (defun my/gptel--prompt-for-confirmation (buffer on-confirm on-abort)
   "Prompt user for confirmation in minibuffer.
 
@@ -181,8 +196,8 @@ confirms immediately (use with caution)."
     ;; Preview enabled - show diff and prompt
     (condition-case err
         (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-               (temp1 (my/gptel-make-temp-file "orig"))
-               (temp2 (my/gptel-make-temp-file "new"))
+               (temp1 (my/gptel-make-temp-file "gptel-preview-orig-"))
+               (temp2 (my/gptel-make-temp-file "gptel-preview-new-"))
                (diff-output
                 (progn
                   (write-region original nil temp1 nil 'silent)
@@ -190,7 +205,7 @@ confirms immediately (use with caution)."
                   (my/gptel--run-diff temp1 temp2))))
           (unwind-protect
               (let ((diff-buf (my/gptel--create-diff-buffer
-                               "*gptel-preview*"
+                               (my/gptel--unique-preview-buffer-name "*gptel-preview*")
                                (format "Preview: %s" path)
                                diff-output
                                #'diff-mode)))
@@ -225,7 +240,7 @@ confirms immediately (use with caution)."
     ;; Preview enabled
     (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
            (diff-buf (my/gptel--create-diff-buffer
-                      "*gptel-patch-preview*"
+                      (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
                       header
                       patch
                       #'diff-mode)))
@@ -256,7 +271,7 @@ ON-CONFIRM immediately (use with caution)."
     ;; Preview enabled
     (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
            (diff-buf (my/gptel--create-diff-buffer
-                      "*gptel-patch-preview*"
+                      (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
                       header
                       patch
                       #'diff-mode)))
