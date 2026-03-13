@@ -1,13 +1,19 @@
 ;;; gptel-tools.el --- Tool registry for gptel -*- lexical-binding: t; -*-
 
 ;; Author: David Wu
-;; Version: 1.0.0
+;; Version: 1.1.0
 ;;
 ;; Main tool registry that loads and registers all gptel tools.
 
 (require 'cl-lib)
 (require 'subr-x)
 (require 'seq)
+
+;;; Hooks
+
+(defvar gptel-tools-after-register-hook nil
+  "Hook run after `gptel-tools-register-all' completes.
+Use this to refresh presets or update buffers that depend on tool availability.")
 
 ;; Load individual tool modules
 (require 'gptel-tools-bash)
@@ -260,8 +266,10 @@ Call this after gptel-agent-tools loads."
 (defun gptel-tools-setup ()
   "Setup gptel tools.
 
-Call this after gptel-agent-tools loads."
-  (gptel-tools-register-all))
+Call this after gptel-agent-tools loads.
+Runs `gptel-tools-after-register-hook' after registration."
+  (gptel-tools-register-all)
+  (run-hooks 'gptel-tools-after-register-hook))
 
 ;;; Footer
 

@@ -335,7 +335,17 @@ Call this after gptel-agent loads."
     (advice-add 'gptel--apply-preset :after  #'nucleus--after-apply-preset))
   (when (fboundp 'gptel--transform-apply-preset)
     (advice-add 'gptel--transform-apply-preset :after
-                #'nucleus--after-transform-apply-preset)))
+                #'nucleus--after-transform-apply-preset))
+  
+  ;; Fix load-order issue: refresh open buffers after tools are registered
+  ;; This ensures presets have access to all registered tools
+  (when (boundp 'gptel-tools-after-register-hook)
+    (add-hook 'gptel-tools-after-register-hook #'nucleus--refresh-open-gptel-buffers))
+  ;; Also refresh now in case tools already registered
+  (when (and (boundp 'gptel--known-tools)
+             (hash-table-p gptel--known-tools)
+             (> (hash-table-count gptel--known-tools) 0))
+    (nucleus--refresh-open-gptel-buffers)))
 
 ;;; Footer
 
