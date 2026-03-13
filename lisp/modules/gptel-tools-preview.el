@@ -12,7 +12,8 @@
 (require 'subr-x)
 (require 'diff-mode)
 (require 'gptel-ext-fsm-utils)
-(require 'gptel-ext-core)  ; for my/gptel-make-temp-file
+
+(declare-function my/gptel-make-temp-file "gptel-ext-core")
 
 ;;; Customization
 

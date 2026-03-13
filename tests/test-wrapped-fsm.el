@@ -31,7 +31,28 @@
   "Minimal toggle for tests."
   (setq-local gptel-mode (if (null arg) t (> (prefix-numeric-value arg) 0))))
 
+(defun my/gptel-make-temp-file (prefix &optional dir-flag suffix)
+  "Stub for tests - creates temp file."
+  (make-temp-file (concat "gptel-test-" prefix) dir-flag suffix))
+
+(defun my/gptel--fsm-p (object)
+  "Return non-nil when OBJECT behaves like a `gptel-fsm'."
+  (ignore-errors
+    (gptel-fsm-state object)
+    t))
+
+(defun my/gptel--coerce-fsm (object)
+  "Return the first `gptel-fsm' found inside OBJECT."
+  (cond
+   ((my/gptel--fsm-p object) object)
+   ((consp object)
+    (or (my/gptel--coerce-fsm (car object))
+        (my/gptel--coerce-fsm (cdr object))))
+   (t nil)))
+
 (provide 'gptel)
+(provide 'gptel-ext-core)
+(provide 'gptel-ext-fsm-utils)
 
 (load-file (expand-file-name "lisp/modules/gptel-ext-fsm.el"
                              (expand-file-name ".." (file-name-directory load-file-name))))
