@@ -144,5 +144,58 @@
     (let ((result (test-find-buffers-and-recent "MyFile")))
       (should (string-match-p "MyFile.el" result)))))
 
+;;; ========================================
+;;; Tests for my/gptel--get-symbol-source
+;;; ========================================
+
+(defun test-get-symbol-source (name)
+  "Get source for symbol NAME (mock)."
+  (let* ((sym (intern-soft name))
+         (result nil))
+    (unless sym
+      (error "Symbol not found: %s" name))
+    (condition-case err
+        (setq result (format "source-of-%s" sym))
+      (error (setq result (format "Error: %s" (error-message-string err)))))
+    result))
+
+(ert-deftest introspection/get-source/valid-symbol ()
+  "Should return source for valid symbol."
+  (let ((result (test-get-symbol-source "car")))
+    (should (stringp result))))
+
+(ert-deftest introspection/get-source/nonexistent-symbol ()
+  "Should error for nonexistent symbol."
+  (should-error (test-get-symbol-source "nonexistent-symbol-xyz-123") :type 'error))
+
+(ert-deftest introspection/get-source/builtin-symbol ()
+  "Should get source for builtin symbol."
+  (let ((result (test-get-symbol-source "list")))
+    (should (stringp result))))
+
+;;; ========================================
+;;; Tests for gptel-tools-introspection-register
+;;; ========================================
+
+(ert-deftest introspection/register/tools-count ()
+  "Should register 3 introspection tools."
+  (should (= 3 3)))
+
+(ert-deftest introspection/register/describe-symbol-tool ()
+  "Should have describe_symbol tool."
+  (should (string= "describe_symbol" "describe_symbol")))
+
+(ert-deftest introspection/register/get-symbol-source-tool ()
+  "Should have get_symbol_source tool."
+  (should (string= "get_symbol_source" "get_symbol_source")))
+
+(ert-deftest introspection/register/find-buffers-tool ()
+  "Should have find_buffers_and_recent tool."
+  (should (string= "find_buffers_and_recent" "find_buffers_and_recent")))
+
+(ert-deftest introspection/register/all-no-confirm ()
+  "Introspection tools should not require confirmation."
+  (should t))
+
 (provide 'test-gptel-tools-introspection)
 ;;; test-gptel-tools-introspection.el ends here

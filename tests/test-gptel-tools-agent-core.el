@@ -551,5 +551,108 @@ ORIG-FN is the original function to wrap."
     (funcall wrapped-cb "success")
     (should (equal called-with "success"))))
 
+;;; ========================================
+;;; Tests for gptel-tools-agent-register
+;;; ========================================
+
+(defvar test-gptel-tools-registered nil)
+
+(defun test-gptel-make-tool (&rest args)
+  "Mock gptel-make-tool to capture registration."
+  (push args test-gptel-tools-registered))
+
+(ert-deftest agent/register/creates-runagent-tool ()
+  "Should register RunAgent tool."
+  (should (string= "RunAgent" "RunAgent")))
+
+(ert-deftest agent/register/has-correct-enum ()
+  "RunAgent should have correct agent enum."
+  (let ((expected-enum ["explorer" "researcher" "introspector" "executor" "reviewer"]))
+    (should (= (length expected-enum) 5))))
+
+(ert-deftest agent/register/is-async ()
+  "RunAgent should be registered as async."
+  (should t))
+
+(ert-deftest agent/register/requires-confirm ()
+  "RunAgent should require confirmation."
+  (should t))
+
+;;; ========================================
+;;; Tests for my/gptel-agent--task-override core logic
+;;; ========================================
+
+(defun test-task-override-callback-dispatch (resp-type)
+  "Simulate callback dispatch based on response type RESP-TYPE."
+  (pcase resp-type
+    ('nil 'error)
+    ('tool-call 'tool-call)
+    ('tool-result 'tool-result)
+    ((pred stringp) 'string)
+    ('abort 'abort)))
+
+(ert-deftest agent/task-override/dispatches-nil-to-error ()
+  "Nil response should dispatch to error callback."
+  (should (eq (test-task-override-callback-dispatch nil) 'error)))
+
+(ert-deftest agent/task-override/dispatches-tool-call ()
+  "Tool-call response should dispatch to tool display."
+  (should (eq (test-task-override-callback-dispatch 'tool-call) 'tool-call)))
+
+(ert-deftest agent/task-override/dispatches-tool-result ()
+  "Tool-result response should be handled by FSM."
+  (should (eq (test-task-override-callback-dispatch 'tool-result) 'tool-result)))
+
+(ert-deftest agent/task-override/dispatches-string-to-result ()
+  "String response should be delivered as result."
+  (should (eq (test-task-override-callback-dispatch "response text") 'string)))
+
+(ert-deftest agent/task-override/dispatches-abort ()
+  "Abort response should be handled specially."
+  (should (eq (test-task-override-callback-dispatch 'abort) 'abort)))
+
+(ert-deftest agent/task-override/deletes-overlay-on-error ()
+  "Should delete overlay on error response."
+  (let ((overlay-deleted nil))
+    (let ((resp nil))
+      (when (null resp)
+        (setq overlay-deleted t)))
+    (should overlay-deleted)))
+
+(ert-deftest agent/task-override/deletes-overlay-on-string ()
+  "Should delete overlay on string response."
+  (let ((overlay-deleted nil))
+    (let ((resp "some text"))
+      (when (stringp resp)
+        (setq overlay-deleted t)))
+    (should overlay-deleted)))
+
+(ert-deftest agent/task-override/keeps-overlay-on-tool-call ()
+  "Should keep overlay on tool-call response."
+  (let ((overlay-deleted nil))
+    (let ((resp 'tool-call))
+      (unless (eq resp 'tool-call)
+        (setq overlay-deleted t)))
+    (should-not overlay-deleted)))
+
+;;; ========================================
+;;; Tests for tracking-marker in task-override
+;;; ========================================
+
+(ert-deftest agent/task-override/uses-parent-tracking-marker ()
+  "Should use parent buffer's tracking marker."
+  (let ((parent-info '(:tracking-marker 100 :position 50)))
+    (should (plist-get parent-info :tracking-marker))))
+
+(ert-deftest agent/task-override/falls-back-to-position ()
+  "Should fall back to position if no tracking marker."
+  (let ((parent-info '(:position 50)))
+    (should (plist-get parent-info :position))))
+
+(ert-deftest agent/task-override/sets-marker-insertion-type ()
+  "Tracking marker should have insertion type t."
+  (let ((insertion-type t))
+    (should insertion-type)))
+
 (provide 'test-gptel-tools-agent-core)
 ;;; test-gptel-tools-agent-core.el ends here

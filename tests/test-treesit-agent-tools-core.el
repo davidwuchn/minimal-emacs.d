@@ -448,5 +448,124 @@
   "Should return nil for unknown node type."
   (should-not (test-get-defun-name-fallback "unknown_type" "my_func" 'rust)))
 
+;;; ========================================
+;;; Tests for treesit-agent--find-defun core logic
+;;; ========================================
+
+(defun test-find-defun-core (nodes name)
+  "Core defun lookup logic - find NAME in NODES."
+  (catch 'found
+    (dolist (node nodes)
+      (when (equal (plist-get node :name) name)
+        (throw 'found node)))))
+
+(ert-deftest treesit/find-defun-core/finds-by-name ()
+  "Should find node by name."
+  (let ((nodes (list '(:name "foo" :type "defun")
+                     '(:name "bar" :type "defun"))))
+    (should (plist-get (test-find-defun-core nodes "foo") :name))))
+
+(ert-deftest treesit/find-defun-core/returns-nil-if-not-found ()
+  "Should return nil if name not found."
+  (let ((nodes (list '(:name "foo" :type "defun"))))
+    (should-not (test-find-defun-core nodes "nonexistent"))))
+
+(ert-deftest treesit/find-defun-core/returns-first-match ()
+  "Should return first matching node."
+  (let ((nodes (list '(:name "foo" :id 1)
+                     '(:name "foo" :id 2))))
+    (should (= (plist-get (test-find-defun-core nodes "foo") :id) 1))))
+
+;;; ========================================
+;;; Tests for treesit-agent-get-file-map core logic
+;;; ========================================
+
+(defun test-get-file-map-core (nodes filter-fn)
+  "Get file map from NODES using FILTER-FN."
+  (delq nil
+        (mapcar (lambda (n)
+                  (when (funcall filter-fn n)
+                    (plist-get n :name)))
+                nodes)))
+
+(ert-deftest treesit/file-map-core/extracts-names ()
+  "Should extract names from filtered nodes."
+  (let ((nodes (list '(:name "foo" :valid t)
+                     '(:name "bar" :valid nil)
+                     '(:name "baz" :valid t)))
+        (filter (lambda (n) (plist-get n :valid))))
+    (should (equal (test-get-file-map-core nodes filter) '("foo" "baz")))))
+
+(ert-deftest treesit/file-map-core/handles-empty-nodes ()
+  "Should handle empty node list."
+  (let ((filter (lambda (_) t)))
+    (should (null (test-get-file-map-core nil filter)))))
+
+(ert-deftest treesit/file-map-core/handles-all-filtered ()
+  "Should return empty list when all filtered out."
+  (let ((nodes (list '(:name "foo" :valid nil)))
+        (filter (lambda (n) (plist-get n :valid))))
+    (should (null (test-get-file-map-core nodes filter)))))
+
+;;; ========================================
+;;; Tests for treesit-agent--ensure-parser
+;;; ========================================
+
+(defun test-ensure-parser-extension (ext)
+  "Map extension EXT to language."
+  (cond
+   ((member ext '("el" "elisp")) 'elisp)
+   ((member ext '("py" "pyw")) 'python)
+   ((member ext '("rs")) 'rust)
+   ((member ext '("clj" "cljs" "cljc" "edn")) 'clojure)
+   ((member ext '("js" "mjs")) 'javascript)
+   ((member ext '("ts")) 'typescript)
+   ((member ext '("tsx")) 'tsx)
+   ((member ext '("rb")) 'ruby)
+   ((member ext '("go")) 'go)
+   ((member ext '("c" "h")) 'c)
+   ((member ext '("cpp" "cc" "cxx" "hpp")) 'cpp)
+   ((member ext '("java")) 'java)
+   ((member ext '("lua")) 'lua)
+   (t nil)))
+
+(ert-deftest treesit/ensure-parser/elisp ()
+  "Should map .el to elisp."
+  (should (eq (test-ensure-parser-extension "el") 'elisp)))
+
+(ert-deftest treesit/ensure-parser/python ()
+  "Should map .py to python."
+  (should (eq (test-ensure-parser-extension "py") 'python)))
+
+(ert-deftest treesit/ensure-parser/rust ()
+  "Should map .rs to rust."
+  (should (eq (test-ensure-parser-extension "rs") 'rust)))
+
+(ert-deftest treesit/ensure-parser/clojure ()
+  "Should map .clj to clojure."
+  (should (eq (test-ensure-parser-extension "clj") 'clojure)))
+
+(ert-deftest treesit/ensure-parser/java ()
+  "Should map .java to java."
+  (should (eq (test-ensure-parser-extension "java") 'java)))
+
+(ert-deftest treesit/ensure-parser/c ()
+  "Should map .c and .h to c."
+  (should (eq (test-ensure-parser-extension "c") 'c))
+  (should (eq (test-ensure-parser-extension "h") 'c)))
+
+(ert-deftest treesit/ensure-parser/cpp ()
+  "Should map .cpp/.hpp to cpp."
+  (should (eq (test-ensure-parser-extension "cpp") 'cpp))
+  (should (eq (test-ensure-parser-extension "hpp") 'cpp)))
+
+(ert-deftest treesit/ensure-parser/lua ()
+  "Should map .lua to lua."
+  (should (eq (test-ensure-parser-extension "lua") 'lua)))
+
+(ert-deftest treesit/ensure-parser/unknown ()
+  "Should return nil for unknown extension."
+  (should-not (test-ensure-parser-extension "xyz")))
+
 (provide 'test-treesit-agent-tools-core)
 ;;; test-treesit-agent-tools-core.el ends here
