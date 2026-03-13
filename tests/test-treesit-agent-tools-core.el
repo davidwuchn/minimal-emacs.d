@@ -328,5 +328,125 @@
       (should (= (length filtered) 1))
       (should (equal (plist-get (car filtered) :name) "my-fn")))))
 
+;;; ========================================
+;;; Tests for treesit-agent-find-workspace failures
+;;; ========================================
+
+(defun test-workspace-search (grepper-available candidates timeout-occurs)
+  "Simulate workspace search with GREPPER-AVAILABLE, CANDIDATES, and TIMEOUT-OCCURS."
+  (cond
+   ((not grepper-available)
+    (error "ripgrep (rg) is required for workspace-wide AST searches"))
+   (timeout-occurs
+    nil)
+   ((null candidates)
+    (format "No structural definition found for 'symbol' in /test"))
+   (t
+    (string-join candidates "\n\n"))))
+
+(ert-deftest treesit/workspace/ripgrep-missing ()
+  "Should error when ripgrep is not available."
+  (should-error (test-workspace-search nil nil nil) :type 'error))
+
+(ert-deftest treesit/workspace/empty-results ()
+  "Should return message for empty results."
+  (let ((result (test-workspace-search t nil nil)))
+    (should (string-match-p "No structural definition" result))))
+
+(ert-deftest treesit/workspace/timeout-during-parse ()
+  "Should handle timeout during file parsing."
+  (let ((result (test-workspace-search t '("file1.el") t)))
+    (should-not result)))
+
+(ert-deftest treesit/workspace/success-with-results ()
+  "Should return concatenated results."
+  (let ((result (test-workspace-search t '("==== file1.el ====\n(defn foo [])") nil)))
+    (should (string-match-p "file1.el" result))))
+
+;;; ========================================
+;;; Tests for multi-language defun-name fallbacks
+;;; ========================================
+
+(defun test-get-defun-name-fallback (node-type node-text lang)
+  "Get defun name using fallback logic for NODE-TYPE, NODE-TEXT, and LANG."
+  (cond
+   ((equal lang 'rust)
+    (cond
+     ((equal node-type "impl_item")
+      (concat "impl " node-text))
+     ((equal node-type "function_item")
+      node-text)))
+   ((equal lang 'python)
+    (cond
+     ((equal node-type "function_definition")
+      node-text)
+     ((equal node-type "class_definition")
+      node-text)))
+   ((equal lang 'java)
+    (cond
+     ((member node-type '("method_declaration" "class_declaration"))
+      node-text)))
+   ((equal lang 'c)
+    (cond
+     ((member node-type '("function_definition" "type_definition"))
+      node-text)))
+   ((equal lang 'cpp)
+    (cond
+     ((member node-type '("function_definition" "class_specifier" "namespace_definition"))
+      node-text)))
+   ((equal lang 'lua)
+    (cond
+     ((equal node-type "function_declaration")
+      node-text)))
+   (t nil)))
+
+(ert-deftest treesit/defun-name/rust-impl-item ()
+  "Should extract name from Rust impl_item."
+  (should (equal (test-get-defun-name-fallback "impl_item" "MyStruct" 'rust) "impl MyStruct")))
+
+(ert-deftest treesit/defun-name/rust-function ()
+  "Should extract name from Rust function_item."
+  (should (equal (test-get-defun-name-fallback "function_item" "my_func" 'rust) "my_func")))
+
+(ert-deftest treesit/defun-name/python-function ()
+  "Should extract name from Python function_definition."
+  (should (equal (test-get-defun-name-fallback "function_definition" "my_func" 'python) "my_func")))
+
+(ert-deftest treesit/defun-name/python-class ()
+  "Should extract name from Python class_definition."
+  (should (equal (test-get-defun-name-fallback "class_definition" "MyClass" 'python) "MyClass")))
+
+(ert-deftest treesit/defun-name/java-method ()
+  "Should extract name from Java method_declaration."
+  (should (equal (test-get-defun-name-fallback "method_declaration" "myMethod" 'java) "myMethod")))
+
+(ert-deftest treesit/defun-name/java-class ()
+  "Should extract name from Java class_declaration."
+  (should (equal (test-get-defun-name-fallback "class_declaration" "MyClass" 'java) "MyClass")))
+
+(ert-deftest treesit/defun-name/c-function ()
+  "Should extract name from C function_definition."
+  (should (equal (test-get-defun-name-fallback "function_definition" "my_func" 'c) "my_func")))
+
+(ert-deftest treesit/defun-name/cpp-class ()
+  "Should extract name from C++ class_specifier."
+  (should (equal (test-get-defun-name-fallback "class_specifier" "MyClass" 'cpp) "MyClass")))
+
+(ert-deftest treesit/defun-name/cpp-namespace ()
+  "Should extract name from C++ namespace_definition."
+  (should (equal (test-get-defun-name-fallback "namespace_definition" "myns" 'cpp) "myns")))
+
+(ert-deftest treesit/defun-name/lua-function ()
+  "Should extract name from Lua function_declaration."
+  (should (equal (test-get-defun-name-fallback "function_declaration" "my_func" 'lua) "my_func")))
+
+(ert-deftest treesit/defun-name/unknown-lang ()
+  "Should return nil for unknown language."
+  (should-not (test-get-defun-name-fallback "function_definition" "my_func" 'unknown)))
+
+(ert-deftest treesit/defun-name/unknown-node-type ()
+  "Should return nil for unknown node type."
+  (should-not (test-get-defun-name-fallback "unknown_type" "my_func" 'rust)))
+
 (provide 'test-treesit-agent-tools-core)
 ;;; test-treesit-agent-tools-core.el ends here

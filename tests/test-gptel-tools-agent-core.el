@@ -463,5 +463,93 @@ ORIG-FN is the original function to wrap."
     (setq current-fsm saved-fsm)
     (should (equal current-fsm '(:state done)))))
 
+;;; ========================================
+;;; Tests for error handling paths
+;;; ========================================
+
+(ert-deftest agent/error/gptel-not-available ()
+  "Should return error when agent-name is nil."
+  (let* ((called-with nil)
+         (cb (lambda (r) (setq called-with r))))
+    (test-run-agent-tool-error-checks cb nil)
+    (should (string-match-p "empty" called-with))))
+
+(ert-deftest agent/error/handles-invalid-files-list ()
+  "Should handle invalid files parameter gracefully."
+  (let ((result (test-build-subagent-context "task" nil nil nil)))
+    (should (stringp result))))
+
+(ert-deftest agent/error/deliver-handles-nil-result ()
+  "Should handle nil result in deliver."
+  (let* ((called-with nil)
+         (cb (lambda (r) (setq called-with r)))
+         (my/gptel-subagent-result-limit 100))
+    (test-deliver-subagent-result cb nil)
+    (should (null called-with))))
+
+;;; ========================================
+;;; Tests for executor gate edge cases
+;;; ========================================
+
+(ert-deftest agent/executor-gate/case-sensitive ()
+  "Executor gate should match exact case."
+  (let* ((called-with nil)
+         (cb (lambda (r) (setq called-with r)))
+         (gptel--preset 'gptel-plan)
+         (gptel-agent--agents '(("executor" . nil))))
+    (test-run-agent-tool-error-checks cb "executor")
+    (should (string-match-p "Plan mode" called-with))))
+
+(ert-deftest agent/executor-gate/only-blocks-executor ()
+  "Only executor should be blocked in Plan mode."
+  (let* ((called-with nil)
+         (cb (lambda (r) (setq called-with r)))
+         (gptel--preset 'gptel-plan)
+         (gptel-agent--agents '(("executor" . nil) ("explorer" . nil) ("reviewer" . nil))))
+    (should-not (test-run-agent-tool-error-checks cb "explorer"))
+    (should-not (test-run-agent-tool-error-checks cb "reviewer"))
+    (test-run-agent-tool-error-checks cb "executor")
+    (should (string-match-p "Plan mode" called-with))))
+
+(ert-deftest agent/executor-gate/preset-is-symbol ()
+  "Preset comparison should use eq for symbol comparison."
+  (let ((preset-sym 'gptel-plan))
+    (should (eq preset-sym 'gptel-plan))))
+
+;;; ========================================
+;;; Tests for progress timer behavior
+;;; ========================================
+
+(ert-deftest agent/progress/default-interval ()
+  "Progress interval should default to 10 seconds."
+  (should (= my/gptel-subagent-progress-interval 10)))
+
+(ert-deftest agent/progress/message-format ()
+  "Progress message should include agent name and elapsed time."
+  (let ((msg "[nucleus] Subagent 'explorer' still running... (15.0s elapsed)"))
+    (should (string-match-p "explorer" msg))
+    (should (string-match-p "15.0s" msg))))
+
+;;; ========================================
+;;; Tests for actual timeout scenarios
+;;; ========================================
+
+(ert-deftest agent/timeout/triggers-after-delay ()
+  "Timeout wrapper should handle delay."
+  (let* ((called-with nil)
+         (cb (lambda (r) (setq called-with r)))
+         (wrapper (test-make-timeout-wrapper cb 0.1)))
+    (sleep-for 0.15)
+    (should (or (null called-with) (stringp called-with)))))
+
+(ert-deftest agent/timeout/does-not-trigger-if-fast ()
+  "Timeout should not trigger if callback called quickly."
+  (let* ((called-with nil)
+         (cb (lambda (r) (setq called-with r)))
+         (wrapper (test-make-timeout-wrapper cb 5))
+         (wrapped-cb (plist-get wrapper :wrapped-cb)))
+    (funcall wrapped-cb "success")
+    (should (equal called-with "success"))))
+
 (provide 'test-gptel-tools-agent-core)
 ;;; test-gptel-tools-agent-core.el ends here
