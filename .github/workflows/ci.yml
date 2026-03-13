@@ -99,6 +99,7 @@ jobs:
         run: |
           emacs --batch -Q -L . -L lisp -L lisp/modules \
             -l tests/test-gptel-tools-agent-integration.el \
+            -l tests/test-gptel-tools-agent-core.el \
             -f ert-run-tests-batch-and-exit
 
       - name: Run Security Tests
