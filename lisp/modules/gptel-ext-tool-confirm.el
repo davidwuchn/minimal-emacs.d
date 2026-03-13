@@ -245,7 +245,7 @@ START-MARKER and TRACKING-MARKER delimit the response region."
            (concat (propertize "Run: " 'face 'font-lock-string-face)
                    (propertize "C-c C-c" 'face 'help-key-binding)
                    (propertize ", Permit & run: " 'face 'font-lock-string-face)
-                  (propertize "C-c C-p" 'face 'help-key-binding)
+                  (propertize "C-c C-." 'face 'help-key-binding)
                   (propertize ", Cancel: " 'face 'font-lock-string-face)
                   (propertize "C-c C-k" 'face 'help-key-binding)
                   (propertize ", Inspect: " 'face 'font-lock-string-face)
@@ -315,7 +315,7 @@ START-MARKER and TRACKING-MARKER delimit the response region."
                      (concat "Tool call(s) requested: " actions-string))
         (let ((map (make-sparse-keymap)))
           (set-keymap-parent map gptel-tool-call-actions-map)
-          (define-key map (kbd "C-c C-p") #'my/gptel--permit-and-accept-tool-calls)
+          (define-key map (kbd "C-c C-.") #'my/gptel--permit-and-accept-tool-calls)
           (overlay-put ov 'keymap map))))))
 
 (defun my/gptel--display-tool-calls (tool-calls info &optional use-minibuffer)

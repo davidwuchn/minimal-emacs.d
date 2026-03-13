@@ -1,14 +1,14 @@
-;;; gptel-ext-tool-permits.el --- Tool confirmation: auto + kill-switch -*- no-byte-compile: t; lexical-binding: t -*-
+;;; gptel-ext-tool-permits.el --- Tool confirmation modes -*- no-byte-compile: t; lexical-binding: t -*-
 
 ;;; Commentary:
-;; Simple & stupid tool confirmation.
+;; Tool confirmation system with per-tool permit memory.
 ;;
 ;; Two modes:
 ;;   auto        → gptel-confirm-tool-calls nil   (no confirmation)
 ;;   confirm-all → gptel-confirm-tool-calls t     (confirm every call)
 ;;
 ;; Per-tool permit memory: once you approve a tool in confirm-all mode,
-;; it's remembered for the Emacs session.  Toggle clears permits.
+;; it's remembered for the Emacs session. Toggle clears permits.
 
 ;;; Code:
 
@@ -75,6 +75,40 @@ Switching to confirm-all clears all per-tool permits."
     (message "Permitted tools: %s (mode: %s)"
              (string-join (hash-table-keys my/gptel-permitted-tools) ", ")
              my/gptel-confirm-mode)))
+
+;;;###autoload
+(defun my/gptel-emergency-stop ()
+  "Emergency stop: abort all requests, clear permits, switch to confirm-all.
+
+Use this when the agent is misbehaving or you need immediate control back."
+  (interactive)
+  (my/gptel-clear-permits)
+  (setq my/gptel-confirm-mode 'confirm-all)
+  (my/gptel--sync-to-upstream)
+  (when (fboundp 'my/gptel-abort-here)
+    (my/gptel-abort-here))
+  (message "EMERGENCY STOP - Permits cleared, confirm-all mode, requests aborted"))
+
+;;;###autoload
+(defun my/gptel-health-check ()
+  "Show tool system status: mode, permits, preset, registered tools."
+  (interactive)
+  (let* ((mode my/gptel-confirm-mode)
+         (permits (hash-table-count my/gptel-permitted-tools))
+         (preset (and (boundp 'gptel--preset) gptel--preset))
+         (tools (and (boundp 'gptel-tools) (length gptel-tools)))
+         (active-procs
+          (cl-count-if (lambda (p)
+                         (and (process-live-p p)
+                              (or (process-get p 'my/gptel-managed)
+                                  (string-prefix-p "gptel-" (process-name p)))))
+                       (process-list))))
+    (message "Tool Health: %s | Permits: %d | Preset: %s | Tools: %s | Active: %d"
+             (if (eq mode 'auto) "AUTO" "CONFIRM")
+             permits
+             (or preset "none")
+             (or tools 0)
+             active-procs)))
 
 ;;; --- Setup ---
 
