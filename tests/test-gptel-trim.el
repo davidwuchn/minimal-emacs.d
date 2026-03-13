@@ -152,6 +152,15 @@ Progressive trimming based on :retries in INFO."
       (plist-put info :retries retries))
     info))
 
+(defun my/gptel--transient-error-p (error-data http-status)
+  "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error."
+  (or (and (stringp error-data)
+           (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
+      (and (numberp http-status) (memq http-status '(408 429 500 502 503 504)))
+      (and (listp error-data)
+           (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
+                           (downcase (or (plist-get error-data :message) ""))))))
+
 (defconst test--truncation-text
   "[Content truncated to reduce context size for retry]"
   "Expected truncation replacement text.")
@@ -1105,6 +1114,104 @@ run because payload is oversized."
     (let ((trimmed (test--compact-payload-on-info info)))
       ;; Should compact because model limit is 50000 < payload
       (should (> trimmed 0)))))
+
+;;; Tests for transient-error-p
+
+(ert-deftest transient-error/timeout-string ()
+  "Should detect timeout in error string."
+  (should (my/gptel--transient-error-p "Timeout connecting to server" nil)))
+
+(ert-deftest transient-error/overloaded-string ()
+  "Should detect overloaded in error string."
+  (should (my/gptel--transient-error-p "Server is overloaded" nil)))
+
+(ert-deftest transient-error/rate-limit-string ()
+  "Should detect rate limit in error string."
+  (should (my/gptel--transient-error-p "Too Many Requests" nil)))
+
+(ert-deftest transient-error/bad-gateway-string ()
+  "Should detect Bad Gateway in error string."
+  (should (my/gptel--transient-error-p "Bad Gateway" nil)))
+
+(ert-deftest transient-error/service-unavailable-string ()
+  "Should detect Service Unavailable in error string."
+  (should (my/gptel--transient-error-p "Service Unavailable" nil)))
+
+(ert-deftest transient-error/gateway-timeout-string ()
+  "Should detect Gateway Timeout in error string."
+  (should (my/gptel--transient-error-p "Gateway Timeout" nil)))
+
+(ert-deftest transient-error/curl-error-28 ()
+  "Should detect curl timeout error."
+  (should (my/gptel--transient-error-p "curl: (28) Operation timed out" nil)))
+
+(ert-deftest transient-error/curl-error-6 ()
+  "Should detect curl DNS error."
+  (should (my/gptel--transient-error-p "curl: (6) Could not resolve host" nil)))
+
+(ert-deftest transient-error/curl-error-7 ()
+  "Should detect curl connection error."
+  (should (my/gptel--transient-error-p "curl: (7) Failed to connect" nil)))
+
+(ert-deftest transient-error/http-408 ()
+  "Should detect HTTP 408 as transient."
+  (should (my/gptel--transient-error-p nil 408)))
+
+(ert-deftest transient-error/http-429 ()
+  "Should detect HTTP 429 as transient."
+  (should (my/gptel--transient-error-p nil 429)))
+
+(ert-deftest transient-error/http-500 ()
+  "Should detect HTTP 500 as transient."
+  (should (my/gptel--transient-error-p nil 500)))
+
+(ert-deftest transient-error/http-502 ()
+  "Should detect HTTP 502 as transient."
+  (should (my/gptel--transient-error-p nil 502)))
+
+(ert-deftest transient-error/http-503 ()
+  "Should detect HTTP 503 as transient."
+  (should (my/gptel--transient-error-p nil 503)))
+
+(ert-deftest transient-error/http-504 ()
+  "Should detect HTTP 504 as transient."
+  (should (my/gptel--transient-error-p nil 504)))
+
+(ert-deftest transient-error/http-400-not-transient ()
+  "Should NOT detect HTTP 400 as transient."
+  (should-not (my/gptel--transient-error-p nil 400)))
+
+(ert-deftest transient-error/http-401-not-transient ()
+  "Should NOT detect HTTP 401 as transient."
+  (should-not (my/gptel--transient-error-p nil 401)))
+
+(ert-deftest transient-error/http-403-not-transient ()
+  "Should NOT detect HTTP 403 as transient."
+  (should-not (my/gptel--transient-error-p nil 403)))
+
+(ert-deftest transient-error/http-404-not-transient ()
+  "Should NOT detect HTTP 404 as transient."
+  (should-not (my/gptel--transient-error-p nil 404)))
+
+(ert-deftest transient-error/plist-overloaded ()
+  "Should detect overloaded from plist error."
+  (should (my/gptel--transient-error-p '(:message "Server overloaded") nil)))
+
+(ert-deftest transient-error/plist-rate-limit ()
+  "Should detect rate limit from plist error."
+  (should (my/gptel--transient-error-p '(:message "Rate limit exceeded") nil)))
+
+(ert-deftest transient-error/plist-timeout ()
+  "Should detect timeout from plist error."
+  (should (my/gptel--transient-error-p '(:message "Request timeout") nil)))
+
+(ert-deftest transient-error/non-transient-string ()
+  "Should NOT detect non-transient errors."
+  (should-not (my/gptel--transient-error-p "Invalid API key" nil)))
+
+(ert-deftest transient-error/non-transient-plist ()
+  "Should NOT detect non-transient plist errors."
+  (should-not (my/gptel--transient-error-p '(:message "Invalid authentication") nil)))
 
 (provide 'test-gptel-trim)
 ;;; test-gptel-trim.el ends here
