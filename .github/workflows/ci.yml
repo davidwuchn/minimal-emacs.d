@@ -92,6 +92,7 @@ jobs:
           emacs --batch -Q -L . -L lisp -L lisp/modules \
             -l tests/test-treesit-agent-tools.el \
             -l tests/test-treesit-agent-integration.el \
+            -l tests/test-treesit-agent-tools-workspace.el \
             -f ert-run-tests-batch-and-exit
 
       - name: Run Agent Integration Tests

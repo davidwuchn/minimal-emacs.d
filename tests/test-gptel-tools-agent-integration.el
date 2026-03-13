@@ -193,6 +193,80 @@
       (delete-file temp1)
       (delete-file temp2))))
 
+(ert-deftest integration/build-context/file-paths-included ()
+  "File paths should be included in context."
+  (let* ((temp-file (make-temp-file "test-path" nil ".txt"))
+         (_ (with-temp-file temp-file (insert "content")))
+         (result (my/gptel--build-subagent-context
+                  "Task" (list temp-file) nil nil)))
+    (unwind-protect
+        (should (string-match-p (file-name-nondirectory temp-file) result))
+      (delete-file temp-file))))
+
+(ert-deftest integration/build-context/xml-tags ()
+  "Files should be wrapped in XML tags."
+  (let* ((temp-file (make-temp-file "test-xml" nil ".txt"))
+         (_ (with-temp-file temp-file (insert "data")))
+         (result (my/gptel--build-subagent-context
+                  "Task" (list temp-file) nil nil)))
+    (unwind-protect
+        (progn
+          (should (string-match-p "<file path=" result))
+          (should (string-match-p "</file>" result))
+          (should (string-match-p "<files>" result))
+          (should (string-match-p "</files>" result)))
+      (delete-file temp-file))))
+
+(ert-deftest integration/build-context/task-label ()
+  "Task label should be added when context is non-empty."
+  (let* ((temp-file (make-temp-file "test-task" nil ".txt"))
+         (_ (with-temp-file temp-file (insert "x")))
+         (result (my/gptel--build-subagent-context
+                  "Do something" (list temp-file) nil nil)))
+    (unwind-protect
+        (should (string-match-p "Task:" result))
+      (delete-file temp-file))))
+
+(ert-deftest integration/build-context/no-task-label-when-empty ()
+  "Task label should not be added when context is empty."
+  (let ((result (my/gptel--build-subagent-context
+                 "Do something" nil nil nil)))
+    (should-not (string-match-p "Task:" result))))
+
+;;; Tests for edge cases
+
+(ert-deftest integration/deliver-result/unicode ()
+  "Unicode characters should be handled correctly."
+  (let* ((my/gptel-subagent-result-limit 10)
+         (unicode-result "日本語テスト")
+         (delivered nil))
+    (my/gptel--deliver-subagent-result
+     (lambda (r) (setq delivered r))
+     unicode-result)
+    (should (stringp delivered))))
+
+(ert-deftest integration/deliver-result/newlines ()
+  "Newlines should be preserved."
+  (let* ((my/gptel-subagent-result-limit 100)
+         (multiline-result "line1\nline2\nline3")
+         (delivered nil))
+    (my/gptel--deliver-subagent-result
+     (lambda (r) (setq delivered r))
+     multiline-result)
+    (should (equal delivered multiline-result))))
+
+(ert-deftest integration/deliver-result/very-large-result ()
+  "Very large results should truncate correctly."
+  (let* ((my/gptel-subagent-result-limit 100)
+         (large-result (make-string 100000 ?x))
+         (delivered nil))
+    (my/gptel--deliver-subagent-result
+     (lambda (r) (setq delivered r))
+     large-result)
+    (should (string-match-p "truncated" delivered))
+    ;; Should have kept first 100 chars
+    (should (string-match-p (make-string 100 ?x) delivered))))
+
 ;;; Footer
 
 (provide 'test-gptel-tools-agent-integration)
