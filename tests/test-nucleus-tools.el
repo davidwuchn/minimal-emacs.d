@@ -1,0 +1,140 @@
+;;; test-nucleus-tools.el --- Tests for nucleus-tools.el -*- lexical-binding: t; -*-
+
+;; Author: David Wu
+
+;;; Commentary:
+
+;; Tests for nucleus toolset definitions and validation.
+
+;;; Code:
+
+(require 'ert)
+(require 'cl-lib)
+(require 'nucleus-tools)
+
+(defvar nucleus-toolsets)
+(defvar nucleus-agent-tool-contracts)
+(declare-function nucleus-get-tools "nucleus-tools")
+
+;;; Test Fixtures
+
+(defvar test-nucleus--toolsets-backup nil)
+
+(defmacro test-nucleus-with-mock-tools (&rest body)
+  "Execute BODY with mock gptel--tools."
+  `(let ((gptel--tools (list (gptel-make-tool "Read" :args '(("path" . t)) :function #'ignore)
+                             (gptel-make-tool "Bash" :args '(("command" . t)) :function #'ignore)
+                             (gptel-make-tool "Edit" :args '(("file_path" . t)) :function #'ignore)))
+         (nucleus-toolsets
+          '((:readonly . ("Read" "Bash"))
+            (:nucleus . ("Read" "Bash" "Edit")))))
+     ,@body))
+
+;;; Toolset Definition Tests
+
+(ert-deftest test-nucleus-toolsets-defined ()
+  "Test that nucleus-toolsets is defined and non-empty."
+  (should (boundp 'nucleus-toolsets))
+  (should (listp nucleus-toolsets))
+  (should (> (length nucleus-toolsets) 0)))
+
+(ert-deftest test-nucleus-toolsets-all-lists ()
+  "Test that all toolset values are lists of strings."
+  (dolist (entry nucleus-toolsets)
+    (let ((tools (cdr entry)))
+      (should (listp tools))
+      (dolist (tool tools)
+        (should (stringp tool))))))
+
+(ert-deftest test-nucleus-toolsets-readonly-subset ()
+  "Test that :readonly is subset of :nucleus."
+  (let ((readonly (alist-get :readonly nucleus-toolsets))
+        (nucleus (alist-get :nucleus nucleus-toolsets)))
+    (dolist (tool readonly)
+      (should (member tool nucleus)))))
+
+(ert-deftest test-nucleus-toolsets-explorer-subset ()
+  "Test that :explorer is subset of :readonly."
+  (let ((explorer (alist-get :explorer nucleus-toolsets))
+        (readonly (alist-get :readonly nucleus-toolsets)))
+    (dolist (tool explorer)
+      (should (member tool readonly)))))
+
+(ert-deftest test-nucleus-toolsets-reviewer-subset ()
+  "Test that :reviewer is subset of :readonly."
+  (let ((reviewer (alist-get :reviewer nucleus-toolsets))
+        (readonly (alist-get :readonly nucleus-toolsets)))
+    (dolist (tool reviewer)
+      (should (member tool readonly)))))
+
+(ert-deftest test-nucleus-toolsets-no-duplicates ()
+  "Test that no toolset has duplicate tools."
+  (dolist (entry nucleus-toolsets)
+    (let ((tools (cdr entry)))
+      (should (= (length tools)
+                 (length (delete-dups (copy-sequence tools))))))))
+
+;;; Agent Tool Contracts Tests
+
+(ert-deftest test-nucleus-agent-tool-contracts-defined ()
+  "Test that nucleus-agent-tool-contracts is defined."
+  (require 'nucleus-tools)
+  (should (boundp 'nucleus-agent-tool-contracts))
+  (should (listp nucleus-agent-tool-contracts)))
+
+(ert-deftest test-nucleus-agent-tool-contracts-valid-keys ()
+  "Test that agent names are strings."
+  (require 'nucleus-tools)
+  (dolist (entry nucleus-agent-tool-contracts)
+    (should (stringp (car entry)))
+    (should (symbolp (cdr entry)))))
+
+(ert-deftest test-nucleus-agent-tool-contracts-valid-toolsets ()
+  "Test that all contract toolsets exist in nucleus-toolsets."
+  (require 'nucleus-tools)
+  (dolist (entry nucleus-agent-tool-contracts)
+    (let ((toolset-key (cdr entry)))
+      (should (assq toolset-key nucleus-toolsets)))))
+
+;;; nucleus-get-tools Tests
+
+(ert-deftest test-nucleus-get-tools-symbol ()
+  "Test nucleus-get-tools with a toolset symbol."
+  (require 'nucleus-tools)
+  (let ((tools (nucleus-get-tools :readonly)))
+    (should (listp tools))
+    (should (> (length tools) 0))
+    (dolist (tool tools)
+      (should (stringp tool)))))
+
+(ert-deftest test-nucleus-get-tools-list ()
+  "Test nucleus-get-tools with a list of tools."
+  (require 'nucleus-tools)
+  (let ((tools (nucleus-get-tools '("Read" "Bash"))))
+    (should (equal tools '("Read" "Bash")))))
+
+(ert-deftest test-nucleus-get-tools-snippets ()
+  "Test that :snippets returns same tools as :nucleus."
+  (require 'nucleus-tools)
+  (let ((snippets (nucleus-get-tools :snippets))
+        (nucleus (nucleus-get-tools :nucleus)))
+    (should (equal snippets nucleus))))
+
+;;; Tool Count Tests
+
+(ert-deftest test-nucleus-toolset-counts ()
+  "Test expected tool counts per toolset."
+  (let ((counts '((:readonly . 19)
+                  (:researcher . 19)
+                  (:nucleus . 30)
+                  (:explorer . 3)
+                  (:reviewer . 3))))
+    (dolist (entry counts)
+      (let ((tools (alist-get (car entry) nucleus-toolsets)))
+        (should (= (length tools) (cdr entry)))))))
+
+;;; Provide
+
+(provide 'test-nucleus-tools)
+
+;;; test-nucleus-tools.el ends here
