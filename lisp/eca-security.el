@@ -38,17 +38,23 @@
   ;; Prevents string-version-lessp(nil, latest)=t triggering a re-download
   ;; on every startup when the system eca binary is absent.
   ;;
+  ;; The tag_name from GitHub has no "v" prefix (e.g. "0.106.0"); we normalise
+  ;; everything to "X.Y.Z" to match the format expected by the version file.
+  ;;
   ;; Version resolution order (stops at first success):
   ;;   a) Installed binary  (`eca --version` → "eca X.Y.Z")
   ;;   b) GitHub tags API   (api.github.com/repos/.../releases/latest → tag_name)
-  ;;   c) Pinned fallback   (updated manually when a releases changes format)
+  ;;   c) Package version   (from eca-pkg.el if installed via package.el)
+  ;;   d) Pinned fallback   (updated manually when above sources fail)
   ;;
-  ;; The tag_name from GitHub has no "v" prefix (e.g. "0.106.0"); we normalise
-  ;; everything to "X.Y.Z" to match the format expected by the version file.
+  (defvar my/eca--pinned-version "0.106.0"
+    "Pinned fallback version when binary and GitHub API are unavailable.
+Update this when ECA releases change format or GitHub API is unreachable.")
+
   (defun my/eca--resolve-version ()
     "Return the current eca version string as \"X.Y.Z\".
 Tries the installed binary, then the GitHub releases/latest API, then
-falls back to a pinned constant."
+package.el version, then falls back to a pinned constant."
     (cl-flet ((parse-semver (raw)
                 (and (stringp raw)
                      (string-match "\\([0-9]+\\.[0-9]+\\.[0-9]+\\)" raw)
@@ -71,8 +77,13 @@ falls back to a pinned constant."
                    ;; tag_name field: "0.106.0" (no v prefix on this repo)
                    ((string-match "\"tag_name\"\\s-*:\\s-*\"\\([^\"]+\\)\"" raw)))
          (parse-semver (match-string 1 raw)))
-       ;; (c) pinned fallback — update when the above two sources change format
-       "0.106.0")))
+       ;; (c) package.el version (if installed via package.el)
+       (when (featurep 'package)
+         (when-let* ((pkg-desc (assq 'eca package-alist))
+                     (ver-list (package-desc-version (cadr pkg-desc))))
+           (package-version-join ver-list)))
+       ;; (d) pinned fallback — update when the above sources change format
+       my/eca--pinned-version)))
 
   (let* ((vfile (or (bound-and-true-p eca-server-version-file-path)
                     (expand-file-name "eca/eca-version" (if (boundp 'minimal-emacs-user-directory) minimal-emacs-user-directory user-emacs-directory))))
@@ -340,8 +351,8 @@ With prefix arg or when SILent is non-nil, suppress the buffer."
                (cons '("\\*eca-update\\*" (display-buffer-no-window))
                      display-buffer-alist)))
           (my/eca-update))
-(error (message "eca auto-update check failed: %s"
-                       (error-message-string err))))))
+      (error (message "eca auto-update check failed: %s"
+                      (error-message-string err))))))
 
 (defun my/eca-update-show ()
   "Show eca update status and offer manual update.

@@ -189,7 +189,7 @@ The content is saved to a temporary file and added as context."
       (make-directory tmp-subdir t))
     (with-temp-file temp-file
       (insert content))
-    (eca--register-temp-file temp-file)
+    (eca--register-temp-file temp-file session)
     (eca-chat--with-current-buffer (eca-chat--get-last-buffer session)
       (eca-chat--add-context (list :type "file" :path temp-file))
       (eca-chat-open session))
@@ -211,35 +211,85 @@ The content is saved to a temporary file and added as context."
 
 (defvar eca--context-temp-files nil
   "List of temporary context files created by eca-ext.
-Used for cleanup on session end or Emacs exit.")
+Used for cleanup on session end or Emacs exit.
+
+Format: ((session-id . (file-path1 file-path2 ...)) ...)")
+
+(defvar eca--temp-file-max-age (* 24 3600)
+  "Max age in seconds before temp files are considered stale.
+Default: 24 hours.  Set to nil to disable age-based cleanup.")
 
 (defun eca--cleanup-temp-context-files ()
   "Clean up all temporary context files created by eca-ext."
-  (let ((count (length eca--context-temp-files)))
-    (dolist (file eca--context-temp-files)
-      (condition-case nil
-          (when (and file (file-exists-p file))
-            (delete-file file))
-        (error nil)))
+  (let ((count 0))
+    (dolist (entry eca--context-temp-files)
+      (dolist (file (cdr entry))
+        (condition-case nil
+            (when (and file (file-exists-p file))
+              (delete-file file)
+              (cl-incf count))
+          (error nil))))
     (setq eca--context-temp-files nil)
     (when (and (fboundp 'eca-info) (> count 0))
       (eca-info "Cleaned up %d temporary context files" count))))
 
+(defun eca--cleanup-stale-temp-files ()
+  "Clean up temp files older than `eca--temp-file-max-age'."
+  (when eca--temp-file-max-age
+    (let ((now (float-time))
+          (count 0))
+      (dolist (entry eca--context-temp-files)
+        (setcdr entry
+                (cl-remove-if
+                 (lambda (file)
+                   (when (and file (file-exists-p file))
+                     (let ((age (- now (float-time (nth 5 (file-attributes file))))))
+                       (when (> age eca--temp-file-max-age)
+                         (condition-case nil
+                             (delete-file file)
+                           (error nil))
+                         (cl-incf count)
+                         t))))
+                 (cdr entry))))
+      (when (and (fboundp 'eca-info) (> count 0))
+        (eca-info "Cleaned up %d stale temp files (older than %d hours)"
+                  count (/ eca--temp-file-max-age 3600))))))
+
 (add-hook 'kill-emacs-hook #'eca--cleanup-temp-context-files)
+(run-with-timer 3600 3600 #'eca--cleanup-stale-temp-files)
 
 ;;;###autoload
-(defun eca--register-temp-file (file-path)
-  "Register FILE-PATH for cleanup on Emacs exit.
-Returns FILE-PATH.  Only registers if file exists."
+(defun eca--register-temp-file (file-path &optional session)
+  "Register FILE-PATH for cleanup on Emacs exit or session end.
+SESSION defaults to current session.  Only registers if file exists."
   (when (and file-path (file-exists-p file-path))
-    (push file-path eca--context-temp-files)
+    (let* ((sid (if session
+                    (if (numberp session) session (eca--session-id session))
+                  (when (boundp 'eca--session-id-cache)
+                    eca--session-id-cache)))
+           (entry (assoc sid eca--context-temp-files)))
+      (if entry
+          (push file-path (cdr entry))
+        (push (cons sid (list file-path)) eca--context-temp-files)))
     file-path))
 
 ;;;###autoload
-(defun eca--cleanup-session-temp-files (_session)
-  "Clean up temp files associated with SESSION.
-Currently a no-op; future enhancement: track files per-session."
-  nil)
+(defun eca--cleanup-session-temp-files (session)
+  "Clean up temp files associated with SESSION."
+  (let* ((sid (if (numberp session) session (eca--session-id session)))
+         (entry (assoc sid eca--context-temp-files))
+         (files (cdr entry))
+         (count 0))
+    (when files
+      (dolist (file files)
+        (condition-case nil
+            (when (and file (file-exists-p file))
+              (delete-file file)
+              (cl-incf count))
+          (error nil)))
+      (setq eca--context-temp-files (assq-delete-all sid eca--context-temp-files))
+      (when (and (fboundp 'eca-info) (> count 0))
+        (eca-info "Cleaned up %d temp files for session %s" count sid)))))
 
 (provide 'eca-ext)
 
