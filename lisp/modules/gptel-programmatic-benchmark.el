@@ -123,23 +123,23 @@ tool round trips and transcript chatter, not necessarily raw local CPU time."
                   (:name "end_line" :optional t))
           :async nil
           :confirm nil))
-   (cons "Edit"
-         (gptel-programmatic-benchmark-tool-create
-          :name "Edit"
-          :function (lambda (path &optional old-str new-str-or-diff diffp)
-                      (let* ((payload (or new-str-or-diff ""))
-                             (digest (substring payload 0 (min 48 (length payload)))))
-                        (format "edited:%s:%s:%s:%s"
-                                path
-                                (if diffp "diff" "text")
-                                (or old-str "nil")
-                                digest)))
-          :args '((:name "path")
-                  (:name "old_str" :optional t)
-                  (:name "new_str_or_diff")
-                  (:name "diffp" :optional t))
-          :async nil
-          :confirm t))))
+(cons "Edit"
+          (gptel-programmatic-benchmark-tool-create
+           :name "Edit"
+           :function (lambda (file_path &optional old_str new_str diffp)
+                       (let* ((payload (or new_str ""))
+                              (digest (substring payload 0 (min 48 (length payload)))))
+                         (format "edited:%s:%s:%s:%s"
+                                 file_path
+                                 (if diffp "diff" "text")
+                                 (or old_str "nil")
+                                 digest)))
+           :args '((:name "file_path")
+                   (:name "old_str" :optional t)
+                   (:name "new_str")
+                   (:name "diffp" :optional t))
+           :async nil
+           :confirm t))))
 
 (defconst gptel-programmatic-benchmark--read-only-program
   (mapconcat
@@ -156,7 +156,7 @@ tool round trips and transcript chatter, not necessarily raw local CPU time."
    #'identity
    '("(setq original (tool-call \"Read\" :file_path \"foo.el\" :start_line 1 :end_line 20))"
      "(setq patch \"--- a/foo.el\n+++ b/foo.el\n@@ -10,1 +10,1 @@\n-old-value\n+new-value\n\")"
-     "(setq edit-result (tool-call \"Edit\" :path \"foo.el\" :new_str_or_diff patch :diffp t))"
+     "(setq edit-result (tool-call \"Edit\" :file_path \"foo.el\" :new_str patch :diffp t))"
      "(result (list :original original :edit edit-result))")
    "\n")
   "Representative preview-backed mutating Programmatic workflow.")

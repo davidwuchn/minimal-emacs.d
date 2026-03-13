@@ -83,7 +83,7 @@ Call this after gptel-agent-tools loads."
      :name "Insert"
      :function #'gptel-agent--insert-in-file
      :description "Insert text at a line number in a file."
-     :args '((:name "path" :type string)
+     :args '((:name "file_path" :type string :description "Path to the file")
              (:name "line_number" :type integer)
              (:name "new_str" :type string))
      :category "gptel-agent"

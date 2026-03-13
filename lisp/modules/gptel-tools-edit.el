@@ -36,7 +36,7 @@
 
 ;;; Edit Tool Implementation
 
-(defun my/gptel--agent-edit-async (callback path &optional old-str new-str-or-diff diffp)
+(defun my/gptel--agent-edit-async (callback file_path &optional old_str new_str diffp)
   "Async replacement for gptel-agent's `Edit' tool.
 
 This is only truly async/interruptible for patch mode (DIFFP true).
@@ -52,24 +52,24 @@ CALLBACK is called exactly once unless the buffer has been aborted."
               (setq done t)
               ;; Always deliver error results so the FSM doesn't hang.
               (when (or (and (stringp result) (string-prefix-p "Error" result))
-                        (and (buffer-live-p origin)
-                             (with-current-buffer origin
-                               (= gen my/gptel--abort-generation))))
+                         (and (buffer-live-p origin)
+                              (with-current-buffer origin
+                                (= gen my/gptel--abort-generation))))
                 (funcall callback result))))))
     (condition-case err
         (progn
-          (unless (file-readable-p path)
-            (error "File or directory %s is not readable" path))
-          (unless new-str-or-diff
+          (unless (file-readable-p file_path)
+            (error "File or directory %s is not readable" file_path))
+          (unless new_str
             (error "Required argument `new_str' missing"))
           (let ((patch-mode (and diffp (not (eq diffp :json-false)))))
             (if (not patch-mode)
                 (funcall finish
-                         (gptel-agent--edit-files path old-str new-str-or-diff diffp))
+                         (gptel-agent--edit-files file_path old_str new_str diffp))
               (unless (executable-find "patch")
                 (error "Command \"patch\" not available, cannot apply diffs"))
-              (let* ((target (expand-file-name path))
-                     (patch-text (my/gptel--agent--strip-diff-fences new-str-or-diff))
+              (let* ((target (expand-file-name file_path))
+                     (patch-text (my/gptel--agent--strip-diff-fences new_str))
                      (patch-text (if (string-suffix-p "\n" patch-text)
                                      patch-text
                                    (concat patch-text "\n"))))
@@ -148,16 +148,20 @@ This is the core patch application logic for preview integration."
      :description "Replace text or apply a unified diff (async)."
      :function #'my/gptel--agent-edit-async
      :async t
-     :args '((:name "path"
-                    :type string)
+     :args '((:name "file_path"
+                    :type string
+                    :description "Path to the file to edit")
              (:name "old_str"
                     :type string
-                    :optional t)
-             (:name "new_str_or_diff"
-                    :type string)
+                    :optional t
+                    :description "Text to replace (omit for patch mode)")
+             (:name "new_str"
+                    :type string
+                    :description "Replacement text or unified diff")
              (:name "diffp"
                     :type boolean
-                    :optional t))
+                    :optional t
+                    :description "Set true if new_str is a diff"))
      :category "gptel-agent"
      :confirm t
      :include t)))
