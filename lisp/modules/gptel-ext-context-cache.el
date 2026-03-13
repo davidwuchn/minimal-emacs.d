@@ -69,7 +69,13 @@ OpenRouter-hosted model ids)."
 ;;; Internal Variables
 
 (defvar my/gptel--context-window-cache (make-hash-table :test 'equal)
-  "Hash table mapping model id string to context window tokens.")
+  "Hash table mapping model id string to context window tokens.
+Legacy cache - use `my/gptel--model-metadata-cache' for full metadata.")
+
+(defvar my/gptel--model-metadata-cache (make-hash-table :test 'equal)
+  "Hash table mapping model id string to metadata plist.
+Keys include: :context-window, :pricing-input, :pricing-output,
+:max-output, :provider, :description.")
 
 (defvar my/gptel--context-window-cache-last-refresh nil
   "Time (as a float) when the cache was last refreshed.")
@@ -87,8 +93,8 @@ under `lexical-binding: t'.")
     ("qwen3.5-flash" . 1000000)
     ("qwen3-max" . 262144)
     ("qwen3-coder" . 131072)
-    ("qwen-plus" . 1000000)      ; Qwen3-Plus has 1M context
-    ("qwen-flash" . 1000000)     ; Qwen3-Flash has 1M context
+    ("qwen-plus" . 1000000)
+    ("qwen-flash" . 1000000)
     ("qwen-max" . 131072)
     ("qwen2.5-max" . 131072)
     ("qwen2.5-72b" . 131072)
@@ -96,26 +102,26 @@ under `lexical-binding: t'.")
     ("qwen2.5-14b" . 131072)
     ("qwen2.5-7b" . 131072)
     ;; Gemini (Google)
-    ("gemini-3" . 1048576)       ; Gemini 3 series has 1M
-    ("gemini-2.5" . 1048576)     ; Gemini 2.5 Pro has 1M
-    ("gemini-1.5" . 1048576)     ; Gemini 1.5 Pro/Flash has 1M
+    ("gemini-3" . 1048576)
+    ("gemini-2.5" . 1048576)
+    ("gemini-1.5" . 1048576)
     ("gemini-pro" . 32760)
     ;; Anthropic Claude
-    ("claude-4" . 200000)        ; Claude 4 series
+    ("claude-4" . 200000)
     ("claude-sonnet-4" . 200000)
-    ("claude-3.5" . 200000)      ; Claude 3.5 series
-    ("claude-3" . 200000)        ; Claude 3 series
+    ("claude-3.5" . 200000)
+    ("claude-3" . 200000)
     ("claude-2.1" . 200000)
     ("claude-2" . 100000)
     ;; OpenAI GPT
-    ("gpt-5" . 128000)           ; GPT-5 series
+    ("gpt-5" . 128000)
     ("gpt-4o" . 128000)
     ("gpt-4-turbo" . 128000)
     ("gpt-4" . 8192)
     ("gpt-4-32k" . 32768)
     ("gpt-3.5" . 16385)
     ;; DeepSeek
-    ("deepseek-chat" . 163840)   ; DeepSeek V3
+    ("deepseek-chat" . 163840)
     ("deepseek-reasoner" . 163840)
     ("deepseek-coder" . 16384)
     ;; MiniMax
@@ -128,7 +134,7 @@ under `lexical-binding: t'.")
     ("glm-5" . 131072)
     ("glm-4.7" . 131072)
     ;; Meta Llama
-    ("llama-3.1" . 131072)       ; Llama 3.1 series
+    ("llama-3.1" . 131072)
     ("llama-3-70b" . 8192)
     ("llama-3-8b" . 8192)
     ;; Mistral
@@ -149,6 +155,82 @@ Sources:
 - Claude: https://openrouter.ai/models/anthropic/claude-sonnet-4
 - DeepSeek: https://openrouter.ai/models/deepseek/deepseek-chat
 - MiniMax: https://openrouter.ai/models/minimax/minimax-m2.5")
+
+(defvar my/gptel--known-model-metadata
+  '(;; Qwen (Alibaba via DashScope)
+    ("qwen3.5-plus"
+     :context-window 1000000
+     :pricing-input 0.8 :pricing-output 4.8
+     :max-output 65536
+     :description "Qwen3.5 Plus - 1M context, thinking mode")
+    ("qwen3.5-flash"
+     :context-window 1000000
+     :pricing-input 0.2 :pricing-output 2.0
+     :max-output 65536
+     :description "Qwen3.5 Flash - fast, 1M context")
+    ("qwen3-max"
+     :context-window 262144
+     :pricing-input 2.5 :pricing-output 10.0
+     :max-output 32768
+     :description "Qwen3 Max - best quality, 256k context")
+    ;; Gemini
+    ("gemini-2.5-pro"
+     :context-window 1048576
+     :pricing-input 1.25 :pricing-output 5.0
+     :max-output 65536
+     :description "Gemini 2.5 Pro - 1M context, thinking")
+    ("gemini-2.5-flash"
+     :context-window 1048576
+     :pricing-input 0.075 :pricing-output 0.3
+     :max-output 65536
+     :description "Gemini 2.5 Flash - fast, 1M context")
+    ;; Claude
+    ("claude-sonnet-4"
+     :context-window 200000
+     :pricing-input 3.0 :pricing-output 15.0
+     :max-output 16384
+     :description "Claude Sonnet 4 - balanced, 200k context")
+    ("claude-opus-4"
+     :context-window 200000
+     :pricing-input 15.0 :pricing-output 75.0
+     :max-output 16384
+     :description "Claude Opus 4 - best, 200k context")
+    ;; DeepSeek
+    ("deepseek-chat"
+     :context-window 163840
+     :pricing-input 0.27 :pricing-output 1.1
+     :max-output 8192
+     :description "DeepSeek V3 - 163k context, great value")
+    ("deepseek-reasoner"
+     :context-window 163840
+     :pricing-input 0.55 :pricing-output 2.19
+     :max-output 8192
+     :description "DeepSeek R1 - reasoning model")
+    ;; MiniMax
+    ("minimax-m2.5"
+     :context-window 196608
+     :pricing-input 0.27 :pricing-output 0.95
+     :max-output 16384
+     :description "MiniMax M2.5 - 196k context, SWE-bench 80.2%")
+    ;; GPT
+    ("gpt-4o"
+     :context-window 128000
+     :pricing-input 2.5 :pricing-output 10.0
+     :max-output 16384
+     :description "GPT-4o - 128k context, multimodal")
+    ("gpt-4o-mini"
+     :context-window 128000
+     :pricing-input 0.15 :pricing-output 0.6
+     :max-output 16384
+     :description "GPT-4o Mini - fast, cheap")
+    ;; Kimi
+    ("kimi-k2.5"
+     :context-window 131072
+     :pricing-input nil :pricing-output nil
+     :max-output 16384
+     :description "Kimi K2.5 - reasoning, 131k context"))
+  "Pre-seeded model metadata with context window, pricing, and descriptions.
+Pricing is in USD per million tokens (input/output).")
 
 ;;; Helpers
 
@@ -325,6 +407,219 @@ Runs asynchronously; returns nil immediately."
   "Refresh (fetch) the current model's context window into the cache."
   (interactive)
   (my/gptel--openrouter-fetch-context-window gptel-model))
+
+(defun my/gptel-fetch-all-model-metadata ()
+  "Fetch ALL model metadata from OpenRouter and cache it.
+Run asynchronously. Use for bulk cache warming."
+  (interactive)
+  (let ((url "https://openrouter.ai/api/v1/models"))
+    (when (and (not my/gptel--openrouter-context-window-fetch-inflight)
+               (executable-find "curl"))
+      (setq my/gptel--openrouter-context-window-fetch-inflight t)
+      (let* ((key (ignore-errors (gptel-api-key-from-auth-source "api.openrouter.com" "api")))
+             (buf (generate-new-buffer " *gptel-openrouter-all-models*")))
+        (if (not (and (stringp key) (not (string-empty-p key))))
+            (progn
+              (setq my/gptel--openrouter-context-window-fetch-inflight nil)
+              (when (buffer-live-p buf) (kill-buffer buf))
+              (message "OpenRouter: no API key found"))
+          (let* ((cmd (list "curl"
+                            "--silent" "--show-error" "--fail"
+                            "--connect-timeout" "10"
+                            "--max-time" "120"
+                            "--http1.1"
+                            "-H" (concat "Authorization: Bearer " key)
+                            "-H" "Accept: application/json"
+                            url))
+                 (proc
+                  (make-process
+                   :name "gptel-openrouter-all-models"
+                   :buffer buf
+                   :command cmd
+                   :noquery t
+                   :connection-type 'pipe
+                   :sentinel
+                   (lambda (p _event)
+                     (when (memq (process-status p) '(exit signal))
+                       (setq my/gptel--openrouter-context-window-fetch-inflight nil)
+                       (unwind-protect
+                           (when (= (process-exit-status p) 0)
+                             (with-current-buffer buf
+                               (goto-char (point-min))
+                               (condition-case err
+                                   (let* ((json-object-type 'alist)
+                                          (json-array-type 'list)
+                                          (json-key-type 'symbol)
+                                          (obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
+                                          (data (alist-get 'data obj))
+                                          (count 0))
+                                     (dolist (entry data)
+                                       (let* ((id (alist-get 'id entry))
+                                              (cw (alist-get 'context_length entry))
+                                              (pricing (alist-get 'pricing entry))
+                                              (input-price (and pricing (alist-get 'prompt pricing)))
+                                              (output-price (and pricing (alist-get 'completion pricing))))
+                                         (when (and (stringp id) (integerp cw) (> cw 0))
+                                           (puthash id cw my/gptel--context-window-cache)
+                                           (puthash id (list :context-window cw
+                                                             :pricing-input (and (numberp input-price) (* input-price 1000000))
+                                                             :pricing-output (and (numberp output-price) (* output-price 1000000)))
+                                                    my/gptel--model-metadata-cache)
+                                           (cl-incf count))))
+                                     (message "OpenRouter: cached %d models" count))
+                                 (error
+                                  (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
+                         (when (buffer-live-p buf) (kill-buffer buf))))))))
+            (process-put proc 'my/gptel-managed t)
+            (message "OpenRouter: fetching all models...")))))))
+
+(defun my/gptel-get-model-metadata (model-id)
+  "Get metadata for MODEL-ID from cache.
+Returns plist with :context-window, :pricing-input, :pricing-output, etc."
+  (let* ((model-id (if (stringp model-id) model-id (my/gptel--model-id-string model-id)))
+         (cached (gethash model-id my/gptel--model-metadata-cache)))
+    (or cached
+        ;; Try partial match in known metadata
+        (let ((id-lower (downcase model-id))
+              (result nil))
+          (dolist (entry my/gptel--known-model-metadata)
+            (when (string-match-p (regexp-quote (car entry)) id-lower)
+              (setq result (cdr entry))))
+          result))))
+
+(defun my/gptel-show-model-info (model-id)
+  "Show detailed info for MODEL-ID."
+  (interactive
+   (list (completing-read "Model: "
+                          (hash-table-keys my/gptel--model-metadata-cache)
+                          nil nil
+                          (my/gptel--model-id-string gptel-model))))
+  (let* ((meta (my/gptel-get-model-metadata model-id))
+         (ctx (plist-get meta :context-window))
+         (pi (plist-get meta :pricing-input))
+         (po (plist-get meta :pricing-output))
+         (max-out (plist-get meta :max-output))
+         (desc (plist-get meta :description)))
+    (message "Model: %s
+Context: %s tokens
+Pricing: $%.4f/$%.4f per 1M (in/out)
+Max Output: %s
+Description: %s"
+             model-id
+             (or ctx "unknown")
+             (or pi 0) (or po 0)
+             (or max-out "unknown")
+             (or desc "N/A"))))
+
+;;; Provider Usage Contracts
+;; Documentation of rate limits, pricing tiers, and feature constraints per provider
+
+(defvar my/gptel-provider-contracts
+  '((openrouter
+     :description "OpenRouter - unified API for 300+ models"
+     :rate-limit "Varies by provider, generally 200-500 req/min"
+     :pricing-model "Per-model, passthrough pricing"
+     :features (streaming tools reasoning)
+     :notes "Use --http1.1 for curl, some models support reasoning tokens")
+
+    (dashscope
+     :description "Alibaba DashScope - Qwen models"
+     :rate-limit "60 req/min (free tier), higher for paid"
+     :pricing-model "Per-model, tiered by context length"
+     :features (streaming tools reasoning)
+     :notes "Qwen3.5-Plus has 1M context. Reasoning models need streaming or fast response."
+     :context-windows
+     ((qwen3.5-plus . 1000000)
+      (qwen3.5-flash . 1000000)
+      (qwen3-max . 262144)))
+
+    (deepseek
+     :description "DeepSeek - V3 and R1 models"
+     :rate-limit "Varies, check dashboard"
+     :pricing-model "Per-token, V3 very cheap"
+     :features (streaming tools)
+     :notes "V3: 163k context, $0.27/1M input. R1: reasoning model."
+     :context-windows
+     ((deepseek-chat . 163840)
+      (deepseek-reasoner . 163840)))
+
+    (moonshot
+     :description "Moonshot AI - Kimi models"
+     :rate-limit "Varies by tier"
+     :pricing-model "Per-token, K2.5 competitive"
+     :features (streaming tools reasoning)
+     :notes "K2.5 supports high reasoning effort. Use :thinking enabled."
+     :context-windows
+     ((kimi-k2.5 . 131072)))
+
+    (openai
+     :description "OpenAI - GPT series"
+     :rate-limit "Tier-based: Free 3/min, Tier1 500/min, Tier2 5000/min"
+     :pricing-model "Per-token, GPT-4o cheaper than GPT-4"
+     :features (streaming tools vision)
+     :notes "GPT-4o: 128k context. GPT-4: 8k or 32k."
+     :context-windows
+     ((gpt-4o . 128000)
+      (gpt-4o-mini . 128000)
+      (gpt-4 . 8192)))
+
+    (anthropic
+     :description "Anthropic - Claude series"
+     :rate-limit "Tier-based, see console"
+     :pricing-model "Per-token, Sonnet cheaper than Opus"
+     :features (streaming tools vision)
+     :notes "Claude 4: 200k context. Use prompt caching for long context."
+     :context-windows
+     ((claude-4 . 200000)
+      (claude-sonnet-4 . 200000)))
+
+    (google
+     :description "Google AI - Gemini series"
+     :rate-limit "15 RPM (free), 2000 RPM (paid)"
+     :pricing-model "Per-token, Flash much cheaper than Pro"
+     :features (streaming tools vision)
+     :notes "Gemini 1.5/2.5: 1M context! Flash is fastest/cheapest."
+     :context-windows
+     ((gemini-2.5-pro . 1048576)
+      (gemini-2.5-flash . 1048576)))
+
+    (minimax
+     :description "MiniMax - M2.5 models"
+     :rate-limit "Check console"
+     :pricing-model "Per-token, competitive pricing"
+     :features (streaming tools)
+     :notes "M2.5: 196k context, 80.2% SWE-Bench. Good for coding."
+     :context-windows
+     ((minimax-m2.5 . 196608))))
+
+  "Provider usage contracts: rate limits, pricing models, features, and notes.
+Use `my/gptel-show-provider-contract' to query.")
+
+(defun my/gptel-show-provider-contract (provider)
+  "Show usage contract for PROVIDER."
+  (interactive
+   (list (completing-read "Provider: "
+                          (mapcar #'car my/gptel-provider-contracts)
+                          nil t)))
+  (let* ((contract (alist-get (if (stringp provider) (intern provider) provider)
+                              my/gptel-provider-contracts))
+         (desc (plist-get contract :description))
+         (rate (plist-get contract :rate-limit))
+         (pricing (plist-get contract :pricing-model))
+         (features (plist-get contract :features))
+         (notes (plist-get contract :notes))
+         (ctx-windows (plist-get contract :context-windows)))
+    (with-output-to-temp-buffer "*gptel-provider-contract*"
+      (princ (format "Provider: %s\n\n" provider))
+      (princ (format "Description: %s\n" (or desc "N/A")))
+      (princ (format "Rate Limit: %s\n" (or rate "Unknown")))
+      (princ (format "Pricing: %s\n" (or pricing "Unknown")))
+      (princ (format "Features: %s\n" (or (and features (mapconcat #'symbol-name features " ")) "Unknown")))
+      (princ (format "\nNotes:\n%s\n" (or notes "None")))
+      (when ctx-windows
+        (princ "\nKnown Context Windows:\n")
+        (dolist (cw ctx-windows)
+          (princ (format "  %s: %d tokens\n" (car cw) (cdr cw))))))))
 
 ;;; Public Query API
 
