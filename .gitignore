@@ -24,3 +24,5 @@ lisp/modules/*.elc
 !.ignore
 !tests/
 !tests/*.el
+!scripts/
+!scripts/*.sh
