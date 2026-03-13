@@ -21,11 +21,6 @@
   :type 'integer
   :group 'gptel-tools-edit)
 
-(defcustom my/gptel-edit-auto-preview t
-  "When non-nil, show preview and wait for confirmation before applying diff."
-  :type 'boolean
-  :group 'gptel-tools-edit)
-
 ;;; Helper Functions
 
 (defun my/gptel--agent--strip-diff-fences (text)
@@ -86,13 +81,11 @@ CALLBACK is called exactly once unless the buffer has been aborted."
                   (when (fboundp 'gptel-agent--fix-patch-headers)
                     (gptel-agent--fix-patch-headers))
                   (setq patch-text (buffer-string)))
-                (if my/gptel-edit-auto-preview
-                    (my/gptel--preview-patch-async
-                     patch-text (current-buffer) finish
-                     (lambda (cb) (my/gptel--agent-edit-apply-patch cb target patch-text))
-                     (lambda (cb) (funcall cb "Error: Preview aborted by user."))
-                     "Edit patch preview — n apply    q abort")
-                  (my/gptel--agent-edit-apply-patch finish target patch-text))))))
+                (my/gptel--preview-patch-async
+                 patch-text (current-buffer) finish
+                 (lambda (cb) (my/gptel--agent-edit-apply-patch cb target patch-text))
+                 (lambda (cb) (funcall cb "Error: Preview aborted by user."))
+                 "Edit patch preview — n apply    q abort")))))
        (error
         (funcall finish (format "Error: %s" (error-message-string err)))))))
 
