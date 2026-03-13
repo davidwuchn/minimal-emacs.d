@@ -40,6 +40,9 @@
 (declare-function eca-chat-add-cursor-context "eca-ext" (session file-path position))
 (declare-function eca-chat-add-clipboard-context "eca-ext" (session content))
 (declare-function ai-code-read-string "ai-code-input" (prompt &optional initial-input candidate-list))
+(declare-function ai-code-git-worktree-branch "ai-code-git" (branch start-point))
+(declare-function ai-code--repo-backend-for-root "ai-code-backends" (git-root))
+(declare-function ai-code--remember-repo-backend "ai-code-backends" (git-root backend))
 
 ;; Internal ECA variables (not officially exported but referenced)
 (defvar eca--sessions nil
@@ -187,14 +190,14 @@ Returns an alist of (session-id . session-info) for integration with ai-code-men
 ;;;###autoload
 (defun ai-code-eca-switch-session (&optional session-id)
   "Switch to ECA session SESSION-ID or prompt for selection.
-Returns the selected session or nil if cancelled."
+Saves session affinity after switching."
   (interactive)
   (ai-code-eca--ensure-available)
   (unless (fboundp 'eca-switch-to-session)
     (user-error "Session multiplexing requires eca-ext.el (add to load-path)"))
   (eca-switch-to-session session-id)
   ;; Save session affinity after switching
-  (run-at-time 0.5 nil #'ai-code-eca-save-session-affinity))
+  (run-at-time 0.5 nil #'ai-code-eca--save-session-affinity))
 
 ;;;###autoload
 (defun ai-code-eca-resume (&optional arg)
@@ -251,10 +254,8 @@ Warns if ECA config file is missing (non-fatal)."
 ;;; Git Worktree Integration
 ;;; ==============================================================================
 
-(defvar ai-code-eca-git-worktree-root nil
-  "Directory used to host centralized Git worktrees for ECA sessions.
-When nil, falls back to ai-code-git-worktree-root if available,
-or uses default ~/.emacs.d/eca-worktrees/.")
+;; Delegates to ai-code-git when available.
+;; Worktree root configured via ai-code-git-worktree-root.
 
 (defun ai-code-eca--git-common-dir (dir)
   "Return the common git directory for DIR, handling worktrees.
@@ -325,38 +326,16 @@ as a workspace folder."
 ;;;###autoload
 (defun ai-code-eca-git-worktree-branch (branch start-point)
   "Create BRANCH and check it out in a new centralized worktree.
-Delegates to ai-code-git-worktree-branch if available.
-The worktree path is `ai-code-eca-git-worktree-root/REPO-NAME/BRANCH'."
+Delegates to `ai-code-git-worktree-branch'."
   (interactive
-   (let ((default-branch (magit-get-current-branch)))
-     (list (read-string "Branch name: " (format "feature/%s-wt" default-branch))
+   (let ((default-branch (when (fboundp 'magit-get-current-branch)
+                           (magit-get-current-branch))))
+     (list (read-string "Branch name: " (format "feature/%s-wt" (or default-branch "main")))
            (or default-branch "HEAD"))))
   (ai-code-eca--ensure-available)
   (if (fboundp 'ai-code-git-worktree-branch)
-      ;; Use ai-code's implementation
       (ai-code-git-worktree-branch branch start-point)
-    ;; Fallback: manual worktree creation
-    (let* ((git-root (condition-case nil
-                         (string-trim (shell-command-to-string "git rev-parse --show-toplevel"))
-                       (error (user-error "Not in a git repository"))))
-           (repo-name (file-name-nondirectory (directory-file-name git-root)))
-           (worktree-dir (expand-file-name
-                          repo-name
-                          (or ai-code-eca-git-worktree-root
-                              ai-code-git-worktree-root
-                              (expand-file-name "eca-worktrees" user-emacs-directory))))
-           (worktree-path (expand-file-name branch worktree-dir)))
-      (unless (file-directory-p worktree-dir)
-        (make-directory worktree-dir t))
-      (if (zerop (shell-command
-                   (format "git worktree add -b %s %s %s"
-                           (shell-quote-argument branch)
-                           (shell-quote-argument worktree-path)
-                           (shell-quote-argument start-point))))
-          (progn
-            (find-file worktree-path)
-            (message "Created worktree at %s" worktree-path))
-        (user-error "Failed to create worktree: %s" worktree-path)))))
+    (user-error "ai-code-git-worktree-branch not available. Install ai-code-git.")))
 
 ;;;###autoload
 (defun ai-code-eca-git-worktree-action (&optional prefix)
@@ -364,14 +343,9 @@ The worktree path is `ai-code-eca-git-worktree-root/REPO-NAME/BRANCH'."
 Without PREFIX, call `ai-code-eca-git-worktree-branch'.
 With PREFIX (for example C-u), call `magit-worktree-status'."
   (interactive "P")
-  (let ((worktree-root (or ai-code-eca-git-worktree-root
-                           (bound-and-true-p ai-code-git-worktree-root)
-                           (expand-file-name "eca-worktrees" user-emacs-directory))))
-    (unless (and (stringp worktree-root) (> (length worktree-root) 0))
-      (user-error "Please configure `ai-code-eca-git-worktree-root` first"))
-    (if prefix
-        (call-interactively #'magit-worktree-status)
-      (call-interactively #'ai-code-eca-git-worktree-branch))))
+  (if prefix
+      (call-interactively #'magit-worktree-status)
+    (call-interactively #'ai-code-eca-git-worktree-branch)))
 
 (defun ai-code-eca--setup-worktree-keybindings ()
   "Add worktree keybindings to ECA chat mode."
@@ -432,8 +406,9 @@ With PREFIX (for example C-u), call `magit-worktree-status'."
 (defvar ai-code-eca-context-sync-timer nil
   "Timer for automatic context synchronization.")
 
-(defcustom ai-code-eca-context-sync-interval nil
-  "Seconds between automatic context sync. nil to disable."
+(defcustom ai-code-eca-context-sync-interval 60
+  "Seconds between automatic context sync. nil to disable.
+Default 60 seconds provides reasonable sync without excessive overhead."
   :type '(choice (const :tag "Disabled" nil)
           (integer :tag "Seconds"))
   :group 'ai-code)
@@ -643,14 +618,14 @@ via `ai-code-select-backend'."
   (message "ECA backend unregistered from ai-code"))
 
 ;;; ==============================================================================
-;;; Session Affinity
+;;; Session Affinity (via ai-code--repo-backend-alist)
 ;;; ==============================================================================
 
-(defvar ai-code-eca-session-affinity (make-hash-table :test 'equal)
-  "Hash table mapping project roots to preferred session IDs.
+;; Use ai-code's built-in repo-backend-alist for session affinity
+;; This unifies with ai-code-select-backend behavior
 
-Keys are project root directories, values are session IDs.
-This allows resuming the same session when switching back to a project.")
+(declare-function ai-code--repo-backend-for-root "ai-code-backends" (git-root))
+(declare-function ai-code--remember-repo-backend "ai-code-backends" (git-root backend))
 
 (defun ai-code-eca--project-root ()
   "Return project root for session affinity."
@@ -660,36 +635,38 @@ This allows resuming the same session when switching back to a project.")
         (ignore-errors (project-root (project-current))))
       default-directory))
 
-(defun ai-code-eca-save-session-affinity ()
-  "Save current session as preferred for current project."
+(defun ai-code-eca--save-session-affinity ()
+  "Save current ECA session as preferred for current project.
+Uses ai-code--repo-backend-alist for unified session management."
   (when-let* ((root (ai-code-eca--project-root))
-              (session (eca-session))
-              (session-id (when (hash-table-p eca--sessions)
-                            (cl-find session (hash-table-keys eca--sessions)))))
-    (when session-id
-      (puthash root session-id ai-code-eca-session-affinity)
-      (message "ECA session affinity: %s → session %s" root session-id))))
+              ((fboundp 'ai-code--remember-repo-backend)))
+    ;; Store 'eca as the preferred backend for this repo
+    (ai-code--remember-repo-backend root 'eca)))
 
-(defun ai-code-eca-get-affinity-session ()
-  "Get preferred session ID for current project."
-  (when-let* ((root (ai-code-eca--project-root)))
-    (gethash root ai-code-eca-session-affinity)))
+(defun ai-code-eca--get-session-for-project ()
+  "Return 'eca if ECA is the preferred backend for current project."
+  (when-let* ((root (ai-code-eca--project-root))
+              ((fboundp 'ai-code--repo-backend-for-root)))
+    (let ((preferred (ai-code--repo-backend-for-root root)))
+      (when (eq preferred 'eca) 'eca))))
 
 ;;;###autoload
 (defun ai-code-eca-resume-affinity ()
   "Resume ECA session with affinity for current project.
 
-If a session was previously associated with this project, switch to it.
-Otherwise start a new session."
+If ECA is the preferred backend for this project, resume or start.
+Otherwise just start a new session."
   (interactive)
   (ai-code-eca--ensure-available)
-  (if-let* ((session-id (ai-code-eca-get-affinity-session))
-            ((fboundp 'eca-switch-to-session)))
-      (progn
-        (eca-switch-to-session session-id)
-        (message "Resumed ECA session %s for %s" session-id (ai-code-eca--project-root)))
-    (ai-code-eca-start)
-    (message "Started new ECA session (no affinity)")))
+  (let ((session (eca-session)))
+    (if session
+        (progn
+          (pop-to-buffer (ai-code-eca--ensure-chat-buffer session))
+          (ai-code-eca--save-session-affinity)
+          (message "Resumed ECA session"))
+      (ai-code-eca-start)
+      (ai-code-eca--save-session-affinity)
+      (message "Started new ECA session"))))
 
 ;;; ==============================================================================
 ;;; Improved Health Check
