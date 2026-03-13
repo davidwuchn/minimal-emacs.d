@@ -48,6 +48,11 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 
 3 tiers mapping to upstream `gptel-confirm-tool-calls`:
 
+- **my/gptel-toggle-confirm** — Toggle between auto and confirm-all modes
+- **my/gptel-show-permits** — Show currently permitted tools
+- **my/gptel-emergency-stop** — Abort all requests, clear permits, switch to confirm-all
+- **my/gptel-health-check** — Show tool system status
+
 | Level | Upstream value | Behavior |
 |-------|---------------|----------|
 | `auto` | `nil` | No confirmation ever |

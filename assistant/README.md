@@ -338,6 +338,14 @@ Nucleus implements task-specific model routing to optimize cost and capability (
   placement.
 - **C-g abort** — Remapped to `my/gptel-keyboard-quit`, which kills all
   gptel-managed processes before quitting.
+- **C-c C-k** — Abort active request (same as C-g).
+- **C-c C-p** — Add project files to context.
+- **C-c C-.** — Permit and run tool (remember for session).
+- **C-c C-x** — Toggle tool profile (readonly/nucleus).
+- **M-x my/gptel-emergency-stop** — Emergency stop: abort all requests, clear
+  permits, switch to confirm-all mode.
+- **M-x my/gptel-health-check** — Show tool system status: mode, permits,
+  preset, registered tools, active processes.
 - **Context window cache** — OpenRouter model context windows are fetched
   asynchronously and cached to disk; refreshed in the background at most once
   per `my/gptel-context-window-auto-refresh-interval-days` days.
