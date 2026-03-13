@@ -57,6 +57,19 @@ When nil (default), buffer is replaced with compacted content."
   :type 'boolean
   :group 'my/gptel-auto-compact)
 
+(defcustom my/gptel-auto-compact-max-attempts 5
+  "Maximum compactions per buffer session before disabling.
+Prevents runaway compaction loops. Set to 0 for unlimited."
+  :type 'integer
+  :group 'my/gptel-auto-compact)
+
+(defcustom my/gptel-auto-compact-confirm nil
+  "When non-nil, ask for confirmation before destructive compaction.
+Only applies when `my/gptel-auto-compact-preview' is nil.
+Preview mode never requires confirmation since original is preserved."
+  :type 'boolean
+  :group 'my/gptel-auto-compact)
+
 ;;; Internal Variables
 
 (defvar-local my/gptel-auto-compact-running nil
@@ -68,16 +81,25 @@ When nil (default), buffer is replaced with compacted content."
 (defvar-local my/gptel-auto-compact-request-id nil
   "Unique ID for current compaction request to prevent race conditions.")
 
+(defvar-local my/gptel-auto-compact-attempts 0
+  "Number of compactions performed in this buffer session.")
+
 ;;; Helpers
 
 (defun my/gptel--compact-safe-p ()
   "Return non-nil if auto-compact is safe for the current buffer."
   (let ((elapsed (and my/gptel-auto-compact-last-run
                       (float-time (time-subtract (current-time)
-                                                 my/gptel-auto-compact-last-run)))))
+                                                 my/gptel-auto-compact-last-run))))
+        (attempts-ok (or (zerop my/gptel-auto-compact-max-attempts)
+                         (< my/gptel-auto-compact-attempts my/gptel-auto-compact-max-attempts))))
+    (when (and (not attempts-ok)
+               my/gptel-auto-compact-enabled)
+      (message "[compact] Max attempts (%d) reached for this buffer" my/gptel-auto-compact-max-attempts))
     (and (not my/gptel-auto-compact-running)
          (or (null elapsed)
-             (>= elapsed my/gptel-auto-compact-min-interval)))))
+             (>= elapsed my/gptel-auto-compact-min-interval))
+         attempts-ok)))
 
 (defun my/gptel--auto-compact-needed-p ()
   "Return non-nil when current buffer should be compacted.
@@ -135,8 +157,9 @@ Returns nil if directive is missing or invalid, and logs a warning."
 
 ;;; Core
 
-(defun my/gptel-auto-compact (_start _end)
-  "Compact current gptel buffer when it grows too large."
+(defun my/gptel-auto-compact (_response _info)
+  "Compact current gptel buffer when it grows too large.
+Hook for `gptel-post-response-functions'."
   (when (and (my/gptel--compact-safe-p)
               (my/gptel--auto-compact-needed-p))
     (let ((system (my/gptel--directive-text 'compact))
@@ -145,8 +168,19 @@ Returns nil if directive is missing or invalid, and logs a warning."
           (tokens-before (my/gptel--estimate-tokens (buffer-size)))
           (window (my/gptel--context-window))
           (request-id (format "%s-%d" (buffer-name) (float-time))))
-      (if (not system)
-          (message "[compact] Skipping: no 'compact directive configured")
+      (cond
+       ((not system)
+        (message "[compact] Skipping: no 'compact directive configured"))
+       ((and my/gptel-auto-compact-confirm
+             (not my/gptel-auto-compact-preview)
+             (not (y-or-n-p (format "Compact buffer? %d chars -> ~%d tokens (attempt %d/%d) "
+                                    chars-before (round tokens-before)
+                                    (1+ my/gptel-auto-compact-attempts)
+                                    (if (zerop my/gptel-auto-compact-max-attempts)
+                                        "unlimited"
+                                      my/gptel-auto-compact-max-attempts)))))
+        (message "[compact] Skipped by user"))
+       (t
         (setq my/gptel-auto-compact-request-id request-id)
         (setq my/gptel-auto-compact-running t)
         (message "[compact] Starting: %d chars, ~%d tokens (window: %d, threshold: %d)"
@@ -166,6 +200,7 @@ Returns nil if directive is missing or invalid, and logs a warning."
                   (setq my/gptel-auto-compact-last-run (current-time))
                   (if (not (stringp response))
                       (message "[compact] Error: No valid response")
+                    (cl-incf my/gptel-auto-compact-attempts)
                     (let* ((inhibit-read-only t)
                            (point-before (point))
                            (chars-after (length response))
@@ -195,7 +230,7 @@ Returns nil if directive is missing or invalid, and logs a warning."
               (error
                (with-current-buffer buf
                  (setq my/gptel-auto-compact-running nil))
-               (message "[compact] Error: %s" (error-message-string err)))))))))))
+               (message "[compact] Error: %s" (error-message-string err))))))))))))
 
 ;;; Hook Registration
 
