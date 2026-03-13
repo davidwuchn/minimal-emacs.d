@@ -112,4 +112,9 @@
   (with-eval-after-load 'eca
     (require 'ai-code-eca-bridge)))
 
+;; Optional: Auto-start context sync
+;; Uncomment and set to number of seconds to enable periodic context sync
+;; (setq ai-code-eca-context-sync-interval 30)
+;; (add-hook 'eca-chat-mode-hook #'ai-code-eca-context-sync-start)
+
 ;;; init-ai.el ends here

@@ -192,7 +192,9 @@ Returns the selected session or nil if cancelled."
   (ai-code-eca--ensure-available)
   (unless (fboundp 'eca-switch-to-session)
     (user-error "Session multiplexing requires eca-ext.el (add to load-path)"))
-  (eca-switch-to-session session-id))
+  (eca-switch-to-session session-id)
+  ;; Save session affinity after switching
+  (run-at-time 0.5 nil #'ai-code-eca-save-session-affinity))
 
 ;;;###autoload
 (defun ai-code-eca-resume (&optional arg)
@@ -619,12 +621,12 @@ via `ai-code-select-backend'."
                    :start ai-code-eca-start
                    :switch ai-code-eca-switch
                    :send ai-code-eca-send
-                   :resume ai-code-eca-resume
-                   :verify ai-code-eca-verify           ; Health check
-                   :config "~/.config/eca/config.json"  ; ECA global config
-                   :agent-file "AGENTS.md"              ; Standard agent instructions
-                   :upgrade ai-code-eca-upgrade         ; Upgrade via package.el
-                   :cli nil                             ; ECA is an Emacs package, not a CLI binary
+                   :resume ai-code-eca-resume-affinity    ; Uses session affinity
+                   :verify ai-code-eca-verify-health      ; Improved health check
+                   :config "~/.config/eca/config.json"    ; ECA global config
+                   :agent-file "AGENTS.md"                ; Standard agent instructions
+                   :upgrade ai-code-eca-upgrade-vc        ; VC-aware upgrade
+                   :cli nil                               ; ECA is an Emacs package, not a CLI binary
                    :install-skills ai-code-eca-install-skills)  ; Skills installation function
                  t)  ; Append to end of list
     (message "ECA backend registered with ai-code"))
@@ -639,6 +641,145 @@ via `ai-code-select-backend'."
   (interactive)
   (setq ai-code-backends (assq-delete-all 'eca ai-code-backends))
   (message "ECA backend unregistered from ai-code"))
+
+;;; ==============================================================================
+;;; Session Affinity
+;;; ==============================================================================
+
+(defvar ai-code-eca-session-affinity (make-hash-table :test 'equal)
+  "Hash table mapping project roots to preferred session IDs.
+
+Keys are project root directories, values are session IDs.
+This allows resuming the same session when switching back to a project.")
+
+(defun ai-code-eca--project-root ()
+  "Return project root for session affinity."
+  (or (when (fboundp 'projectile-project-root)
+        (ignore-errors (projectile-project-root)))
+      (when (fboundp 'project-root)
+        (ignore-errors (project-root (project-current))))
+      default-directory))
+
+(defun ai-code-eca-save-session-affinity ()
+  "Save current session as preferred for current project."
+  (when-let* ((root (ai-code-eca--project-root))
+              (session (eca-session))
+              (session-id (when (hash-table-p eca--sessions)
+                            (cl-find session (hash-table-keys eca--sessions)))))
+    (when session-id
+      (puthash root session-id ai-code-eca-session-affinity)
+      (message "ECA session affinity: %s → session %s" root session-id))))
+
+(defun ai-code-eca-get-affinity-session ()
+  "Get preferred session ID for current project."
+  (when-let* ((root (ai-code-eca--project-root)))
+    (gethash root ai-code-eca-session-affinity)))
+
+;;;###autoload
+(defun ai-code-eca-resume-affinity ()
+  "Resume ECA session with affinity for current project.
+
+If a session was previously associated with this project, switch to it.
+Otherwise start a new session."
+  (interactive)
+  (ai-code-eca--ensure-available)
+  (if-let* ((session-id (ai-code-eca-get-affinity-session))
+            ((fboundp 'eca-switch-to-session)))
+      (progn
+        (eca-switch-to-session session-id)
+        (message "Resumed ECA session %s for %s" session-id (ai-code-eca--project-root)))
+    (ai-code-eca-start)
+    (message "Started new ECA session (no affinity)")))
+
+;;; ==============================================================================
+;;; Improved Health Check
+;;; ==============================================================================
+
+(defcustom ai-code-eca-verify-timeout 5
+  "Seconds to wait for ECA server response during verify."
+  :type 'integer
+  :group 'ai-code)
+
+;;;###autoload
+(defun ai-code-eca-verify-health ()
+  "Verify ECA server is responsive with a ping.
+
+Returns t if server responds within `ai-code-eca-verify-timeout' seconds."
+  (interactive)
+  (ai-code-eca--ensure-available)
+  (let* ((session (eca-session))
+         (start-time (current-time))
+         (responsive nil))
+    (if session
+        (progn
+          ;; Check session status
+          (when (fboundp 'eca--session-status)
+            (let ((status (eca--session-status session)))
+              (setq responsive (memq status '(ready idle)))))
+          ;; Try a minimal operation
+          (when (and responsive (fboundp 'eca--session-workspace-folders))
+            (condition-case nil
+                (let ((folders (eca--session-workspace-folders session)))
+                  (setq responsive (and folders (listp folders))))
+              (error (setq responsive nil))))
+          (let ((elapsed (float-time (time-subtract (current-time) start-time))))
+            (if responsive
+                (prog1 t
+                  (message "ECA healthy (responded in %.2fs)" elapsed))
+              (message "ECA not responding (session status: %s)"
+                       (if (fboundp 'eca--session-status)
+                           (eca--session-status session)
+                         "unknown"))
+              nil)))
+      (message "No ECA session active")
+      nil)))
+
+;;; ==============================================================================
+;;; VC Package Upgrade
+;;; ==============================================================================
+
+;;;###autoload
+(defun ai-code-eca-upgrade-vc ()
+  "Upgrade ECA if installed via package-vc.
+
+Fetches latest from VC repository and rebuilds."
+  (interactive)
+  (if (and (featurep 'package-vc)
+           (alist-get 'eca package-vc-selected-packages))
+      (progn
+        (message "Upgrading ECA via package-vc...")
+        (package-vc-upgrade 'eca)
+        (message "ECA upgraded. Restart Emacs or re-evaluate for changes."))
+    (if (package-installed-p 'eca)
+        (progn
+          (package-refresh-contents)
+          (package-install 'eca)
+          (message "ECA upgraded via package.el"))
+      (user-error "ECA is not installed"))))
+
+;;; ==============================================================================
+;;; Unload Hook
+;;; ==============================================================================
+
+(defun ai-code-eca--unload-function ()
+  "Cleanup when unloading ai-code-eca-bridge."
+  ;; Stop context sync timer
+  (when ai-code-eca-context-sync-timer
+    (cancel-timer ai-code-eca-context-sync-timer))
+  ;; Remove keybindings
+  (when (boundp 'eca-chat-mode-map)
+    (define-key eca-chat-mode-map (kbd "C-c C-f") nil)
+    (define-key eca-chat-mode-map (kbd "C-c C-c") nil)
+    (define-key eca-chat-mode-map (kbd "C-c C-m") nil)
+    (define-key eca-chat-mode-map (kbd "C-c C-y") nil)
+    (define-key eca-chat-mode-map (kbd "C-c C-w") nil))
+  ;; Unregister backend
+  (setq ai-code-backends (assq-delete-all 'eca ai-code-backends))
+  ;; Remove advice
+  (ignore-errors
+    (advice-remove 'gptel-agent #'ai-code-eca--setup-worktree-keybindings)))
+
+(add-hook 'ai-code-eca-bridge-unload-hook #'ai-code-eca--unload-function)
 
 ;;; ==============================================================================
 ;;; Auto-registration
