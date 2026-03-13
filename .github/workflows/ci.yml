@@ -111,6 +111,14 @@ jobs:
             -l tests/test-gptel-ext-fsm.el \
             -f ert-run-tests-batch-and-exit
 
+      - name: Run Context/Core Tests
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-gptel-ext-context.el \
+            -l tests/test-gptel-ext-core.el \
+            -l tests/test-gptel-ext-context-cache.el \
+            -f ert-run-tests-batch-and-exit
+
       - name: Run ECA Tests
         run: |
           emacs --batch -Q -L . -L lisp -L lisp/modules \
