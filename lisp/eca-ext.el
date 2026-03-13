@@ -13,9 +13,12 @@
 ;;
 ;; Context Management:
 ;;   (eca-chat-add-file-context session file-path)
-;;   (eca-chat-add-repo-map-context session)
+;;   (eca-chat-add-repo-map-context session)  ; Requires backend support
 ;;   (eca-chat-add-cursor-context session file-path position)
 ;;   (eca-chat-add-clipboard-context session content)
+;;
+;; Note: Context types depend on ECA backend support. The repo-map context
+;; requests the backend to generate a repository structure overview.
 
 ;;; Code:
 
@@ -137,7 +140,13 @@ This is a programmatic interface for adding file context."
 
 ;;;###autoload
 (defun eca-chat-add-repo-map-context (session)
-  "Add repository map context to SESSION."
+  "Add repository map context to SESSION.
+
+This sends a :type \"repoMap\" context to ECA, which requests the
+backend to generate a repository map (code structure overview).
+
+Note: Requires ECA backend support for repoMap context type.
+If the backend doesn't support this, the context may be ignored."
   (eca-assert-session-running session)
   (eca-chat--with-current-buffer (eca-chat--get-last-buffer session)
     (eca-chat--add-context (list :type "repoMap"))
