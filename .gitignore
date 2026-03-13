@@ -20,6 +20,7 @@ lisp/modules/*.elc
 !LEARNING.md
 !CHANGELOG.md
 !INTRO.md
+!SECURITY.md
 !assistant/
 !.ignore
 !tests/
