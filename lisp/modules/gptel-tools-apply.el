@@ -69,19 +69,20 @@ CALLBACK is called with the result string."
     (if (my/gptel--patch-looks-like-envelope-p clean)
         (funcall callback "Error: Envelope format not yet implemented in split module.")
       ;; Unified diff: preview if requested, otherwise apply directly
-      (if my/gptel-applypatch-auto-preview
-          (my/gptel--preview-patch-async
-           clean
-           (current-buffer)
-           callback
-           ;; on-confirm
-           (lambda (cb)
-             (my/gptel--apply-patch-core cb clean))
-           ;; on-abort
-           (lambda (cb)
-             (funcall cb "Error: Preview aborted by user."))
-           "ApplyPatch preview — n apply patch    q abort")
-        (my/gptel--apply-patch-core callback clean)))))
+(if my/gptel-applypatch-auto-preview
+           (my/gptel--preview-patch-async
+            clean
+            (current-buffer)
+            callback
+            ;; on-confirm
+            (lambda (cb)
+              (my/gptel--apply-patch-core cb clean))
+            ;; on-abort
+            (lambda (cb)
+              (funcall cb "Error: Preview aborted by user."))
+            "ApplyPatch preview — n apply patch    q abort"
+            "ApplyPatch")
+         (my/gptel--apply-patch-core callback clean)))))
 
 (defun my/gptel--apply-patch-core (callback patch)
   "Apply PATCH (unified diff) at the Emacs project root asynchronously.

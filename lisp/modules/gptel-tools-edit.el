@@ -83,7 +83,8 @@ CALLBACK is called exactly once unless the buffer has been aborted."
                  patch-text (current-buffer) finish
                  (lambda (cb) (my/gptel--agent-edit-apply-patch cb target patch-text))
                  (lambda (cb) (funcall cb "Error: Preview aborted by user."))
-                 "Edit patch preview — n apply    q abort")))))
+                 "Edit patch preview — n apply    q abort"
+                 "Edit")))))
       (error
        (funcall finish (format "Error: %s" (error-message-string err)))))))
 

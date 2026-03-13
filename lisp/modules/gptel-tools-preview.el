@@ -14,6 +14,8 @@
 (require 'gptel-ext-fsm-utils)
 
 (declare-function my/gptel-make-temp-file "gptel-ext-core")
+(declare-function my/gptel-tool-permitted-p "gptel-ext-tool-permits")
+(defvar my/gptel-permitted-tools)
 
 ;;; Customization
 
@@ -66,10 +68,32 @@ Re-enables preview confirmations for the rest of this session."
 (defun my/gptel--preview-bypass-p ()
   "Return non-nil if preview should be bypassed.
 
-Checks both `gptel-tools-preview-enabled' and
-`gptel-tools-preview--never-ask-again'."
+Checks in order:
+1. `gptel-tools-preview-enabled' is nil
+2. `gptel-tools-preview--never-ask-again' is t
+3. Current tool is in `my/gptel-permitted-tools' (if available)"
   (or (not gptel-tools-preview-enabled)
-      gptel-tools-preview--never-ask-again))
+      gptel-tools-preview--never-ask-again
+      (and (boundp 'my/gptel-permitted-tools)
+           (my/gptel--tool-permitted-in-preview-p))))
+
+(defun my/gptel--tool-permitted-in-preview-p ()
+  "Check if current tool being previewed is permitted.
+
+Returns non-nil if the tool that triggered this preview is in
+`my/gptel-permitted-tools'.  This allows the permit system to
+skip preview for trusted tools."
+  (when-let* ((tool-name (my/gptel--get-preview-tool-name)))
+    (my/gptel-tool-permitted-p tool-name)))
+
+(defun my/gptel--get-preview-tool-name ()
+  "Get the tool name that triggered the current preview.
+
+Returns nil if called outside a preview context."
+  (bound-and-true-p my/gptel--preview-tool-name))
+
+(defvar my/gptel--preview-tool-name nil
+  "Bound during preview to the tool name that triggered it.")
 
 (defun my/gptel--make-preview-callback (buffer callback)
   "Wrap CALLBACK as an idempotent, FSM-restoring preview callback.
@@ -269,7 +293,7 @@ Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
        (lambda () (funcall wrapped-cb "Patch confirmed."))
        (lambda () (funcall wrapped-cb "Patch aborted."))))))
 
-(defun my/gptel--preview-patch-async (patch buffer callback on-confirm on-abort header)
+(defun my/gptel--preview-patch-async (patch buffer callback on-confirm on-abort header &optional tool-name)
   "Show patch preview asynchronously for ApplyPatch/Edit tool integration.
 
 PATCH is the unified diff content.
@@ -278,22 +302,26 @@ CALLBACK is called with the result.
 ON-CONFIRM is called with wrapped callback when user confirms.
 ON-ABORT is called with wrapped callback when user aborts.
 HEADER is the prompt to show.
+TOOL-NAME is the name of the calling tool (for permit integration).
 
-Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
-  (if (my/gptel--preview-bypass-p)
-      (funcall on-confirm callback)
-    (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-           (diff-buf (my/gptel--create-diff-buffer
-                      (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
-                      header
-                      patch
-                      #'diff-mode)))
-      (my/gptel--insert-preview-instructions diff-buf)
-      (my/gptel--display-preview-buffer diff-buf)
-      (my/gptel--prompt-for-preview-action
-       diff-buf
-       (lambda () (funcall on-confirm wrapped-cb))
-       (lambda () (funcall on-abort wrapped-cb))))))
+Skips preview when:
+1. `my/gptel--preview-bypass-p' returns non-nil, OR
+2. TOOL-NAME is in `my/gptel-permitted-tools'"
+  (let ((my/gptel--preview-tool-name tool-name))
+    (if (my/gptel--preview-bypass-p)
+        (funcall on-confirm callback)
+      (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
+             (diff-buf (my/gptel--create-diff-buffer
+                        (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
+                        header
+                        patch
+                        #'diff-mode)))
+        (my/gptel--insert-preview-instructions diff-buf)
+        (my/gptel--display-preview-buffer diff-buf)
+        (my/gptel--prompt-for-preview-action
+         diff-buf
+         (lambda () (funcall on-confirm wrapped-cb))
+         (lambda () (funcall on-abort wrapped-cb)))))))
 
 ;;; Tool Registration
 
