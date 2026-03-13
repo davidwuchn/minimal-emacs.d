@@ -46,6 +46,12 @@ Default is 5 minutes to avoid frequent compaction cycles."
   :type 'integer
   :group 'my/gptel-auto-compact)
 
+(defcustom my/gptel-auto-compact-preview nil
+  "When non-nil, show what will be compacted before executing.
+User must confirm before buffer is erased."
+  :type 'boolean
+  :group 'my/gptel-auto-compact)
+
 ;;; Internal Variables
 
 (defvar-local my/gptel-auto-compact-running nil
@@ -53,6 +59,9 @@ Default is 5 minutes to avoid frequent compaction cycles."
 
 (defvar-local my/gptel-auto-compact-last-run nil
   "Time of the last auto-compaction for this buffer.")
+
+(defvar-local my/gptel-auto-compact-request-id nil
+  "Unique ID for current compaction request to prevent race conditions.")
 
 ;;; Helpers
 
@@ -108,12 +117,17 @@ Current: %d chars, ~%d tokens (%.0f%% of window)"
              chars (round tokens) (* 100 (/ (float tokens) window)))))
 
 (defun my/gptel--directive-text (sym)
-  "Resolve directive SYM to a string."
+  "Resolve directive SYM to a string.
+Returns nil if directive is missing or invalid, and logs a warning."
   (let ((val (alist-get sym gptel-directives)))
     (cond
      ((functionp val) (funcall val))
      ((stringp val) val)
-     (t nil))))
+     (t
+      (when my/gptel-auto-compact-enabled
+        (message "[compact] Warning: Directive '%s' not found in gptel-directives. \
+Add (compact . \"summary prompt\") to gptel-directives." sym))
+      nil))))
 
 ;;; Core
 
@@ -125,37 +139,84 @@ Current: %d chars, ~%d tokens (%.0f%% of window)"
           (buf (current-buffer))
           (chars-before (buffer-size))
           (tokens-before (my/gptel--estimate-tokens (buffer-size)))
-          (window (my/gptel--context-window)))
-      (when system
-        (setq my/gptel-auto-compact-running t)
-        (message "[compact] Starting: %d chars, ~%d tokens (window: %d, threshold: %d)"
-                 chars-before (round tokens-before) window
-                 (round (* window my/gptel-auto-compact-threshold)))
-        (gptel-request (buffer-string)
-          :system system
-          :buffer buf
-          :callback
-          (lambda (response _info)
-            (condition-case err
-                (with-current-buffer buf
-                  (setq my/gptel-auto-compact-running nil)
-                  (setq my/gptel-auto-compact-last-run (current-time))
-                  (if (not (stringp response))
-                      (message "[compact] Error: No valid response")
-                    (let* ((inhibit-read-only t)
-                           (point-before (point))
-                           (chars-after (length response))
-                           (tokens-after (my/gptel--estimate-tokens chars-after)))
-                      (erase-buffer)
-                      (insert response)
-                      (goto-char (min point-before (point-max)))
-                      (message "[compact] Done: %d → %d chars (~%d → ~%d tokens, %.0f%% reduction)"
-                               chars-before chars-after
-                               (round tokens-before) (round tokens-after)
-                               (* 100 (- 1 (/ (float chars-after) chars-before)))))))
-              (error
-               (setq my/gptel-auto-compact-running nil)
-               (message "[compact] Error: %s" (error-message-string err))))))))))
+          (window (my/gptel--context-window))
+          (request-id (format "%s-%d" (buffer-name) (float-time))))
+      ;; Validate directive
+      (unless system
+        (message "[compact] Skipping: no 'compact directive configured")
+        (cl-return-from my/gptel-auto-compact nil))
+      ;; Store request ID for race condition protection
+      (setq my/gptel-auto-compact-request-id request-id)
+      (setq my/gptel-auto-compact-running t)
+      ;; Preview mode
+      (if my/gptel-auto-compact-preview
+          (my/gptel--compact-with-preview buf system request-id
+                                          chars-before tokens-before window)
+        (my/gptel--compact-execute buf system request-id
+                                   chars-before tokens-before window)))))
+
+(defun my/gptel--compact-with-preview (buf system request-id chars-before tokens-before window)
+  "Show preview before compacting.
+BUF, SYSTEM, REQUEST-ID, CHARS-BEFORE, TOKENS-BEFORE, WINDOW are passed through."
+  (let ((content (buffer-string)))
+    (with-current-buffer (get-buffer-create "*gptel-compact-preview*")
+      (erase-buffer)
+      (insert "=== COMPACT PREVIEW ===\n\n")
+      (insert (format "Buffer: %s\n" (buffer-name buf)))
+      (insert (format "Before: %d chars (~%d tokens)\n" chars-before (round tokens-before)))
+      (insert (format "Context window: %d tokens (%.0f%% used)\n\n" window
+                      (* 100 (/ tokens-before window))))
+      (insert "=== BUFFER CONTENT (will be replaced) ===\n\n")
+      (insert content)
+      (goto-char (point-min)))
+    (display-buffer "*gptel-compact-preview*")
+    (let ((confirm (read-char-choice
+                    "Compact this buffer? (y/n) "
+                    '(?y ?Y ?n ?N))))
+      (if (member confirm '(?y ?Y))
+          (with-current-buffer buf
+            (my/gptel--compact-execute buf system request-id
+                                       chars-before tokens-before window))
+        (with-current-buffer buf
+          (setq my/gptel-auto-compact-running nil)
+          (message "[compact] Cancelled by user"))))))
+
+(defun my/gptel--compact-execute (buf system request-id chars-before tokens-before window)
+  "Execute compaction.
+BUF, SYSTEM, REQUEST-ID, CHARS-BEFORE, TOKENS-BEFORE, WINDOW are passed through."
+  (with-current-buffer buf
+    (message "[compact] Starting: %d chars, ~%d tokens (window: %d, threshold: %d)"
+             chars-before (round tokens-before) window
+             (round (* window my/gptel-auto-compact-threshold)))
+    (gptel-request (buffer-string)
+      :system system
+      :buffer buf
+      :callback
+      (lambda (response _info)
+        (condition-case err
+            (with-current-buffer buf
+              ;; Race condition check: only process if request ID matches
+              (unless (equal my/gptel-auto-compact-request-id request-id)
+                (message "[compact] Skipping stale callback (race condition)"))
+              (setq my/gptel-auto-compact-running nil)
+              (setq my/gptel-auto-compact-last-run (current-time))
+              (if (not (stringp response))
+                  (message "[compact] Error: No valid response")
+                (let* ((inhibit-read-only t)
+                       (point-before (point))
+                       (chars-after (length response))
+                       (tokens-after (my/gptel--estimate-tokens chars-after)))
+                  (erase-buffer)
+                  (insert response)
+                  (goto-char (min point-before (point-max)))
+                  (message "[compact] Done: %d → %d chars (~%d → ~%d tokens, %.0f%% reduction)"
+                           chars-before chars-after
+                           (round tokens-before) (round tokens-after)
+                           (* 100 (- 1 (/ (float chars-after) chars-before)))))))
+          (error
+           (with-current-buffer buf
+             (setq my/gptel-auto-compact-running nil))
+           (message "[compact] Error: %s" (error-message-string err))))))))
 
 ;;; Hook Registration
 

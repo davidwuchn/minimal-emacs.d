@@ -256,8 +256,30 @@ raw tokens."
    (t (round n))))
 
 (defun my/gptel--estimate-tokens (chars)
-  "Estimate token count from CHARS. Rough heuristic: 4 chars/token."
-  (/ (float chars) 4.0))
+  "Estimate token count from CHARS.
+
+Uses language-aware heuristics:
+- Code (high symbol density): ~3 chars/token
+- Prose (English text): ~4 chars/token
+- Mixed (default): ~3.5 chars/token
+
+For buffers with current buffer, analyzes content type."
+  (let ((ratio 3.5))
+    ;; Check if we have buffer context
+    (when (and (buffer-live-p (current-buffer))
+               (buffer-file-name))
+      (let ((ext (file-name-extension (buffer-file-name))))
+        (cond
+         ;; Code files - higher token density
+         ((member ext '("el" "clj" "cljs" "py" "js" "ts" "rs" "go" "java" "c" "cpp" "h"))
+          (setq ratio 3.0))
+         ;; Prose/documentation
+         ((member ext '("md" "txt" "org" "rst" "adoc"))
+          (setq ratio 4.0))
+         ;; Config/JSON - very dense
+         ((member ext '("json" "yaml" "yml" "toml" "ini"))
+          (setq ratio 2.5)))))
+    (/ (float chars) ratio)))
 
 ;;; Cache Persistence
 
