@@ -14,8 +14,7 @@
 (require 'gptel-ext-fsm-utils)
 
 (declare-function my/gptel-make-temp-file "gptel-ext-core")
-(declare-function my/gptel-tool-permitted-p "gptel-ext-tool-permits")
-(defvar my/gptel-permitted-tools)
+(declare-function my/gptel-permit-tool "gptel-ext-tool-permits")
 
 ;;; Customization
 
@@ -44,17 +43,18 @@ without user confirmation. Use with caution in production environments."
 (defvar gptel-tools-preview--never-ask-again nil
   "If non-nil, skip all future preview confirmations this session.
 
-Set to t when user answers 'N' (never ask again) to a preview prompt.
-Resets to nil when Emacs restarts or when user manually resets via
-`gptel-tools-preview-reset-confirmation'.
-
-See also `gptel-tools-preview-enabled' for permanent disable.")
+DEPRECATED: Use `my/gptel-permit-tool' instead for explicit per-tool permits.
+This variable is kept for backward compatibility.")
 
 (defun gptel-tools-preview-reset-confirmation ()
   "Reset the 'never ask again' flag.
-Re-enables preview confirmations for the rest of this session."
+Re-enables preview confirmations for the rest of this session.
+
+DEPRECATED: Use `my/gptel-clear-permits' instead."
   (interactive)
   (setq gptel-tools-preview--never-ask-again nil)
+  (when (fboundp 'my/gptel-clear-permits)
+    (my/gptel-clear-permits))
   (message "Preview confirmations re-enabled for this session."))
 
 (defcustom gptel-tools-preview-window-height 0.4
@@ -68,32 +68,15 @@ Re-enables preview confirmations for the rest of this session."
 (defun my/gptel--preview-bypass-p ()
   "Return non-nil if preview should be bypassed.
 
-Checks in order:
-1. `gptel-tools-preview-enabled' is nil
-2. `gptel-tools-preview--never-ask-again' is t
-3. Current tool is in `my/gptel-permitted-tools' (if available)"
+Preview is a safety net for mutating operations.  It should normally
+ALWAYS show.  Only bypass when:
+1. `gptel-tools-preview-enabled' is nil (global disable)
+2. `gptel-tools-preview--never-ask-again' is t (deprecated, for backward compat)
+
+Permits are NOT checked here - they control the tool confirm UI,
+not the preview.  Preview is the final safety check before applying changes."
   (or (not gptel-tools-preview-enabled)
-      gptel-tools-preview--never-ask-again
-      (and (boundp 'my/gptel-permitted-tools)
-           (my/gptel--tool-permitted-in-preview-p))))
-
-(defun my/gptel--tool-permitted-in-preview-p ()
-  "Check if current tool being previewed is permitted.
-
-Returns non-nil if the tool that triggered this preview is in
-`my/gptel-permitted-tools'.  This allows the permit system to
-skip preview for trusted tools."
-  (when-let* ((tool-name (my/gptel--get-preview-tool-name)))
-    (my/gptel-tool-permitted-p tool-name)))
-
-(defun my/gptel--get-preview-tool-name ()
-  "Get the tool name that triggered the current preview.
-
-Returns nil if called outside a preview context."
-  (bound-and-true-p my/gptel--preview-tool-name))
-
-(defvar my/gptel--preview-tool-name nil
-  "Bound during preview to the tool name that triggered it.")
+      gptel-tools-preview--never-ask-again))
 
 (defun my/gptel--make-preview-callback (buffer callback)
   "Wrap CALLBACK as an idempotent, FSM-restoring preview callback.
@@ -151,7 +134,7 @@ Confirmation happens in the minibuffer, not via keybindings."
       (forward-line 1)
       (insert "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
       (insert "Diff Preview - Confirm in minibuffer\n")
-      (insert "  y = apply    n = abort    ! = apply all    q = quit\n")
+      (insert "  y = apply    n = abort    ! = permit+apply    q = quit\n")
       (insert "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"))))
 
 (defun my/gptel--run-diff (file1 file2)
@@ -184,6 +167,9 @@ Returns the window displaying the buffer."
                               (truncate (* (frame-height) gptel-tools-preview-window-height)))))
     window))
 
+(defvar my/gptel--preview-tool-name nil
+  "Dynamically bound to the tool name that triggered the current preview.")
+
 (defun my/gptel--prompt-for-confirmation (buffer on-confirm on-abort)
   "Prompt user for confirmation in minibuffer.
 
@@ -194,28 +180,34 @@ ON-ABORT is called if user rejects.
 Prompts in minibuffer: 'Apply changes? (y/n/!/q)'
   y - Yes, apply this change
   n - No, abort this change
-  ! - Apply all (never ask again this session)
+  ! - Permit this tool and apply (adds to my/gptel-permitted-tools)
   q - Quit (same as n)
 
 This is a blocking call - user must respond before Emacs continues."
   (if gptel-tools-preview--never-ask-again
-      ;; Never-ask-again was set earlier - auto-confirm
+      ;; Never-ask-again was set earlier - auto-confirm (backward compat)
       (progn
         (when (buffer-live-p buffer)
           (kill-buffer buffer))
         (funcall on-confirm))
     ;; Normal flow - prompt user
     (unwind-protect
-        (let ((prompt (format "Apply changes? [y=yes, n=no, !=all, q=quit]: ")))
+        (let ((prompt (format "Apply changes? [y=yes, n=no, !=permit+apply, q=quit]: ")))
           (condition-case err
               (let* ((result (read-from-minibuffer prompt))
                      (confirm (member result '("y" "Y" "")))
                      (abort (member result '("n" "N" "q" "Q")))
-                     (apply-all (member result '("!" "a" "A"))))
+                     (permit-and-apply (member result '("!" "a" "A"))))
                 (cond
-                 (apply-all
+                 (permit-and-apply
+                  ;; Add tool to permits for future calls
+                  (when (and my/gptel--preview-tool-name
+                             (fboundp 'my/gptel-permit-tool))
+                    (my/gptel-permit-tool my/gptel--preview-tool-name)
+                    (message "Tool '%s' permitted for this session. Future calls will skip confirm UI."
+                             my/gptel--preview-tool-name))
+                  ;; Also set legacy flag for preview
                   (setq gptel-tools-preview--never-ask-again t)
-                  (message "Preview confirmations disabled for this session. M-x gptel-tools-preview-reset-confirmation to re-enable.")
                   (funcall on-confirm))
                  (confirm
                   (funcall on-confirm))
@@ -302,11 +294,10 @@ CALLBACK is called with the result.
 ON-CONFIRM is called with wrapped callback when user confirms.
 ON-ABORT is called with wrapped callback when user aborts.
 HEADER is the prompt to show.
-TOOL-NAME is the name of the calling tool (for permit integration).
+TOOL-NAME is the name of the calling tool (for \"!\" permit action).
 
-Skips preview when:
-1. `my/gptel--preview-bypass-p' returns non-nil, OR
-2. TOOL-NAME is in `my/gptel-permitted-tools'"
+Skips preview when `my/gptel--preview-bypass-p' returns non-nil.
+When user types \"!\", TOOL-NAME is added to `my/gptel-permitted-tools'."
   (let ((my/gptel--preview-tool-name tool-name))
     (if (my/gptel--preview-bypass-p)
         (funcall on-confirm callback)
