@@ -139,7 +139,8 @@ Returns the unified diff output as a string."
 (defun my/gptel--unique-preview-buffer-name (base)
   "Generate a unique buffer name based on BASE.
 
-Uses a random suffix to avoid conflicts when multiple previews run concurrently."
+Uses a timestamp suffix to avoid conflicts when multiple previews
+run concurrently.  Format: BASE-HHMMSS."
   (format "%s-%s" base (format-time-string "%H%M%S" (current-time))))
 
 (defun my/gptel--display-preview-buffer (buffer)
@@ -294,6 +295,9 @@ Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
 
 ;;; Tool Registration
 
+(defvar gptel-tools-preview--registered nil
+  "Non-nil when Preview tool has been registered with gptel.")
+
 (defun gptel-tools-preview-register ()
   "Register the unified Preview tool with gptel.
 
@@ -301,72 +305,75 @@ Accepts either:
   - path + replacement (optional original) → generates and shows diff
   - patch (raw unified diff) → shows diff directly
 
-Auto-detects mode from which arguments are provided."
-  (when (fboundp 'gptel-make-tool)
-    (gptel-make-tool
-     :name "Preview"
-     :async t
-     :category "gptel-agent"
-     :function (lambda (callback &optional path original replacement patch)
-                 (cond
-                  ;; Mode 1: raw patch (unified diff)
-                  ((and patch (stringp patch) (not (string-empty-p patch)))
-                   (my/gptel--preview-patch
-                    patch
-                    (current-buffer)
-                    callback
-                    (format "Preview: %s — n reviewed    q abort"
-                            (or path "patch"))))
+Auto-detects mode from which arguments are provided.
+Idempotent - safe to call multiple times."
+  (unless gptel-tools-preview--registered
+    (when (fboundp 'gptel-make-tool)
+      (setq gptel-tools-preview--registered t)
+      (gptel-make-tool
+       :name "Preview"
+       :async t
+       :category "gptel-agent"
+       :function (lambda (callback &optional path original replacement patch)
+                   (cond
+                    ;; Mode 1: raw patch (unified diff)
+                    ((and patch (stringp patch) (not (string-empty-p patch)))
+                     (my/gptel--preview-patch
+                      patch
+                      (current-buffer)
+                      callback
+                      (format "Preview: %s — n reviewed    q abort"
+                              (or path "patch"))))
 
-                  ;; Mode 2: path + replacement → generate diff
-                  ((and path replacement)
-                   (let* ((full-path (expand-file-name path))
-                          (orig (or original
-                                    (when (file-readable-p full-path)
-                                      (with-temp-buffer
-                                        (insert-file-contents full-path)
-                                        (buffer-string)))))
-                          (new (or replacement "")))
-                     (if (not orig)
-                         (funcall callback
-                                  (format "Error: Cannot read original content for %s" path))
-                       (my/gptel--preview-file-change
-                        (current-buffer) path orig new callback))))
+                    ;; Mode 2: path + replacement → generate diff
+                    ((and path replacement)
+                     (let* ((full-path (expand-file-name path))
+                            (orig (or original
+                                      (when (file-readable-p full-path)
+                                        (with-temp-buffer
+                                          (insert-file-contents full-path)
+                                          (buffer-string)))))
+                            (new (or replacement "")))
+                       (if (not orig)
+                           (funcall callback
+                                    (format "Error: Cannot read original content for %s" path))
+                         (my/gptel--preview-file-change
+                          (current-buffer) path orig new callback))))
 
-                  ;; Error: insufficient arguments
-                  (t
-                   (funcall callback
-                            (concat "Error: Invalid Preview arguments.\n"
-                                    "Required one of:\n"
-                                    "  1. path + replacement (file change mode)\n"
-                                    "  2. patch (unified diff mode)\n"
-                                    "Received: "
-                                    (cond
-                                     ((and path (not replacement))
-                                      "path without replacement")
-                                     ((and replacement (not path))
-                                      "replacement without path")
-                                     ((and original (or (not path) (not replacement)))
-                                      "original but missing path/replacement")
-                                     (t "no valid argument combination")))))))
-     :description "Preview file changes or patches with diff view. Provide either path+replacement or a unified diff patch."
-     :args '((:name "path"
-              :type string
-              :description "Target file path (for file change mode)"
-              :optional t)
-             (:name "original"
-              :type string
-              :description "Original content (auto-read from file if omitted)"
-              :optional t)
-             (:name "replacement"
-              :type string
-              :description "Replacement content (for file change mode)"
-              :optional t)
-             (:name "patch"
-              :type string
-              :description "Unified diff content (for patch mode)"
-              :optional t))
-     :confirm t)))
+                    ;; Error: insufficient arguments
+                    (t
+                     (funcall callback
+                              (concat "Error: Invalid Preview arguments.\n"
+                                      "Required one of:\n"
+                                      "  1. path + replacement (file change mode)\n"
+                                      "  2. patch (unified diff mode)\n"
+                                      "Received: "
+                                      (cond
+                                       ((and path (not replacement))
+                                        "path without replacement")
+                                       ((and replacement (not path))
+                                        "replacement without path")
+                                       ((and original (or (not path) (not replacement)))
+                                        "original but missing path/replacement")
+                                       (t "no valid argument combination")))))))
+       :description "Preview file changes or patches with diff view. Provide either path+replacement or a unified diff patch."
+       :args '((:name "path"
+                :type string
+                :description "Target file path (for file change mode)"
+                :optional t)
+               (:name "original"
+                :type string
+                :description "Original content (auto-read from file if omitted)"
+                :optional t)
+               (:name "replacement"
+                :type string
+                :description "Replacement content (for file change mode)"
+                :optional t)
+               (:name "patch"
+                :type string
+                :description "Unified diff content (for patch mode)"
+                :optional t))
+       :confirm t))))
 
 ;;; Footer
 
