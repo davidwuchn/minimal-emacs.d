@@ -157,80 +157,98 @@ Returns nil if directive is missing or invalid, and logs a warning."
 
 ;;; Core
 
+(defun my/gptel--do-compact (&optional force-preview)
+  "Perform compaction on current gptel buffer.
+If FORCE-PREVIEW is non-nil, use preview mode regardless of `my/gptel-auto-compact-preview'.
+Returns non-nil if compaction was initiated."
+  (let ((system (my/gptel--directive-text 'compact))
+        (buf (current-buffer))
+        (chars-before (buffer-size))
+        (tokens-before (my/gptel--estimate-tokens (buffer-size)))
+        (window (my/gptel--context-window))
+        (use-preview (or force-preview my/gptel-auto-compact-preview))
+        (request-id (format "%s-%d" (buffer-name) (float-time))))
+    (cond
+     ((not system)
+      (message "[compact] No 'compact directive configured")
+      nil)
+     ((and my/gptel-auto-compact-confirm
+           (not use-preview)
+           (not (y-or-n-p (format "Compact buffer? %d chars -> ~%d tokens "
+                                  chars-before (round tokens-before)))))
+      (message "[compact] Skipped by user")
+      nil)
+     (t
+      (setq my/gptel-auto-compact-request-id request-id)
+      (setq my/gptel-auto-compact-running t)
+      (message "[compact] Starting: %d chars, ~%d tokens (window: %d)"
+               chars-before (round tokens-before) window)
+      (gptel-request (buffer-string)
+        :system system
+        :buffer buf
+        :callback
+        (lambda (response _info)
+          (condition-case err
+              (with-current-buffer buf
+                (unless (equal my/gptel-auto-compact-request-id request-id)
+                  (message "[compact] Skipping stale callback (race condition)")
+                  (cl-return))
+                (setq my/gptel-auto-compact-running nil)
+                (setq my/gptel-auto-compact-last-run (current-time))
+                (if (not (stringp response))
+                    (message "[compact] Error: No valid response")
+                  (cl-incf my/gptel-auto-compact-attempts)
+                  (let* ((inhibit-read-only t)
+                         (point-before (point))
+                         (chars-after (length response))
+                         (tokens-after (my/gptel--estimate-tokens chars-after))
+                         (backup (buffer-string)))
+                    (if use-preview
+                        (progn
+                          (goto-char (point-max))
+                          (insert "\n\n")
+                          (insert (propertize "═══════════════════════════════════════════════════════════════\n"
+                                              'face '(:foreground "yellow" :weight bold))
+                          (insert (propertize (format "COMPACTED: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction)\n"
+                                                      chars-before chars-after
+                                                      (round tokens-before) (round tokens-after)
+                                                      (* 100 (- 1 (/ (float chars-after) chars-before))))
+                                              'face '(:foreground "green" :weight bold)))
+                          (insert (propertize "═══════════════════════════════════════════════════════════════\n\n"
+                                              'face '(:foreground "yellow" :weight bold)))
+                          (insert (propertize response 'face '(:foreground "cyan")))
+                          (message "[compact] Preview appended (original kept)"))
+                      (kill-new backup)
+                      (erase-buffer)
+                      (insert response)
+                      (goto-char (min point-before (point-max)))
+                      (message "[compact] Done: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction) [backup in kill-ring]"
+                               chars-before chars-after
+                               (round tokens-before) (round tokens-after)
+                               (* 100 (- 1 (/ (float chars-after) chars-before))))))))
+            (error
+             (with-current-buffer buf
+               (setq my/gptel-auto-compact-running nil))
+             (message "[compact] Error: %s" (error-message-string err))))))
+      t)))))
+
+(defun my/gptel-manual-compact (&optional arg)
+  "Manually compact current gptel buffer.
+With prefix ARG, use preview mode (append instead of replace).
+Compaction is done via LLM using the 'compact directive."
+  (interactive "P")
+  (if (not (bound-and-true-p gptel-mode))
+      (message "Not in a gptel buffer")
+    (if my/gptel-auto-compact-running
+        (message "[compact] Already in progress")
+      (my/gptel--do-compact arg))))
+
 (defun my/gptel-auto-compact (_response _info)
   "Compact current gptel buffer when it grows too large.
 Hook for `gptel-post-response-functions'."
   (when (and (my/gptel--compact-safe-p)
               (my/gptel--auto-compact-needed-p))
-    (let ((system (my/gptel--directive-text 'compact))
-          (buf (current-buffer))
-          (chars-before (buffer-size))
-          (tokens-before (my/gptel--estimate-tokens (buffer-size)))
-          (window (my/gptel--context-window))
-          (request-id (format "%s-%d" (buffer-name) (float-time))))
-      (cond
-       ((not system)
-        (message "[compact] Skipping: no 'compact directive configured"))
-       ((and my/gptel-auto-compact-confirm
-             (not my/gptel-auto-compact-preview)
-             (not (y-or-n-p (format "Compact buffer? %d chars -> ~%d tokens (attempt %d/%d) "
-                                    chars-before (round tokens-before)
-                                    (1+ my/gptel-auto-compact-attempts)
-                                    (if (zerop my/gptel-auto-compact-max-attempts)
-                                        "unlimited"
-                                      my/gptel-auto-compact-max-attempts)))))
-        (message "[compact] Skipped by user"))
-       (t
-        (setq my/gptel-auto-compact-request-id request-id)
-        (setq my/gptel-auto-compact-running t)
-        (message "[compact] Starting: %d chars, ~%d tokens (window: %d, threshold: %d)"
-                 chars-before (round tokens-before) window
-                 (round (* window my/gptel-auto-compact-threshold)))
-        (gptel-request (buffer-string)
-          :system system
-          :buffer buf
-          :callback
-          (lambda (response _info)
-            (condition-case err
-                (with-current-buffer buf
-                  (unless (equal my/gptel-auto-compact-request-id request-id)
-                    (message "[compact] Skipping stale callback (race condition)")
-                    (cl-return))
-                  (setq my/gptel-auto-compact-running nil)
-                  (setq my/gptel-auto-compact-last-run (current-time))
-                  (if (not (stringp response))
-                      (message "[compact] Error: No valid response")
-                    (cl-incf my/gptel-auto-compact-attempts)
-                    (let* ((inhibit-read-only t)
-                           (point-before (point))
-                           (chars-after (length response))
-                           (tokens-after (my/gptel--estimate-tokens chars-after)))
-                      (if my/gptel-auto-compact-preview
-                          (progn
-                            (goto-char (point-max))
-                            (insert "\n\n")
-                            (insert (propertize "═══════════════════════════════════════════════════════════════\n"
-                                                'face '(:foreground "yellow" :weight bold))
-                            (insert (propertize (format "COMPACTED: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction)\n"
-                                                        chars-before chars-after
-                                                        (round tokens-before) (round tokens-after)
-                                                        (* 100 (- 1 (/ (float chars-after) chars-before))))
-                                            'face '(:foreground "green" :weight bold)))
-                            (insert (propertize "═══════════════════════════════════════════════════════════════\n\n"
-                                                'face '(:foreground "yellow" :weight bold)))
-                            (insert (propertize response 'face '(:foreground "cyan")))
-                            (message "[compact] Preview appended (original kept)"))
-                        (erase-buffer)
-                        (insert response)
-                        (goto-char (min point-before (point-max)))
-                        (message "[compact] Done: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction)"
-                                 chars-before chars-after
-                                 (round tokens-before) (round tokens-after)
-                                 (* 100 (- 1 (/ (float chars-after) chars-before))))))))
-              (error
-               (with-current-buffer buf
-                 (setq my/gptel-auto-compact-running nil))
-               (message "[compact] Error: %s" (error-message-string err))))))))))))
+    (my/gptel--do-compact)))
 
 ;;; Hook Registration
 
