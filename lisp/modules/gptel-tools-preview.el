@@ -19,6 +19,23 @@
   "Preview tool for gptel-agent."
   :group 'gptel)
 
+(defcustom gptel-tools-preview-enabled t
+  "Whether to show preview before applying changes.
+
+When non-nil (default), shows a diff preview and prompts for confirmation.
+When nil, applies changes immediately without preview or confirmation.
+
+Set to nil for:
+  - Trusted environments (local development)
+  - CI/CD pipelines
+  - Power users who prefer speed over safety
+  - Batch operations where preview is tedious
+
+Warning: Disabling preview means changes are applied immediately
+without user confirmation. Use with caution in production environments."
+  :type 'boolean
+  :group 'gptel-tools-preview)
+
 (defcustom gptel-tools-preview-window-height 0.4
   "Height of preview windows as fraction of frame."
   :type 'float
@@ -37,7 +54,9 @@
 The `buffer' style is recommended for most use cases as it provides
 full diff navigation and works with patches of any size.
 
-Confirmation always happens via minibuffer prompt, not keybindings."
+Confirmation always happens via minibuffer prompt, not keybindings.
+
+Has no effect when `gptel-tools-preview-enabled' is nil."
   :type '(choice (const :tag "Separate buffer with diff-mode" buffer)
                  (const :tag "Inline overlay in target buffer" overlay)
                  (const :tag "Minibuffer confirmation" minibuffer))
@@ -200,41 +219,43 @@ Returns the diff output string."
 Shows diff between ORIGINAL and REPLACEMENT for PATH.
 CALLBACK is called when user confirms or aborts.
 
-Uses `gptel-tools-preview-style' to determine display method:
-  - `buffer': Separate buffer with diff-mode (default, best for large diffs)
-  - `overlay': Inline in target buffer (best for small changes)
-  - `minibuffer': Quick y/n confirmation (no diff display)"
-  (pcase gptel-tools-preview-style
-    ('minibuffer
-     (my/gptel--preview-minibuffer path callback))
-    ('overlay
-     (my/gptel--preview-overlay-show buffer path original replacement callback))
-    (_  ; 'buffer or default
-     (condition-case err
-         (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-                (temp1 (my/gptel-make-temp-file "orig"))
-                (temp2 (my/gptel-make-temp-file "new"))
-                (diff-output
-                 (progn
-                   (write-region original nil temp1 nil 'silent)
-                   (write-region replacement nil temp2 nil 'silent)
-                   (my/gptel--run-diff temp1 temp2))))
-(unwind-protect
-                (let ((diff-buf (my/gptel--create-diff-buffer
-                                 "*gptel-preview*"
-                                 (format "Preview: %s" path)
-                                 diff-output
-                                 #'diff-mode)))
-                  (my/gptel--insert-preview-instructions)
-                  (my/gptel--display-preview-buffer diff-buf)
-                  (my/gptel--setup-preview-keys
-                   diff-buf
-                   (lambda () (funcall wrapped-cb "Preview confirmed."))
-                   (lambda () (funcall wrapped-cb "Preview aborted."))))
-              (delete-file temp1)
-              (delete-file temp2)))
-       (error
-        (funcall callback (format "Preview error: %s" (error-message-string err))))))))
+When `gptel-tools-preview-enabled' is nil, skips preview and confirms
+immediately (use with caution)."
+  (if (not gptel-tools-preview-enabled)
+      ;; Preview disabled - auto-confirm
+      (funcall callback "Preview disabled, auto-confirmed.")
+    ;; Preview enabled - show diff and prompt
+    (pcase gptel-tools-preview-style
+      ('minibuffer
+       (my/gptel--preview-minibuffer path callback))
+      ('overlay
+       (my/gptel--preview-overlay-show buffer path original replacement callback))
+      (_  ; 'buffer or default
+       (condition-case err
+           (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
+                  (temp1 (my/gptel-make-temp-file "orig"))
+                  (temp2 (my/gptel-make-temp-file "new"))
+                  (diff-output
+                   (progn
+                     (write-region original nil temp1 nil 'silent)
+                     (write-region replacement nil temp2 nil 'silent)
+                     (my/gptel--run-diff temp1 temp2))))
+             (unwind-protect
+                 (let ((diff-buf (my/gptel--create-diff-buffer
+                                  "*gptel-preview*"
+                                  (format "Preview: %s" path)
+                                  diff-output
+                                  #'diff-mode)))
+                   (my/gptel--insert-preview-instructions)
+                   (my/gptel--display-preview-buffer diff-buf)
+                   (my/gptel--setup-preview-keys
+                    diff-buf
+                    (lambda () (funcall wrapped-cb "Preview confirmed."))
+                    (lambda () (funcall wrapped-cb "Preview aborted."))))
+               (delete-file temp1)
+               (delete-file temp2)))
+         (error
+          (funcall callback (format "Preview error: %s" (error-message-string err)))))))))
 
 ;;; Patch Preview (raw unified diff)
 
@@ -244,19 +265,26 @@ Uses `gptel-tools-preview-style' to determine display method:
 PATCH is the unified diff content.
 BUFFER is the originating buffer.
 CALLBACK is called with the result.
-HEADER is the prompt to show."
-  (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-         (diff-buf (my/gptel--create-diff-buffer
-                    "*gptel-patch-preview*"
-                    header
-                    patch
-                    #'diff-mode)))
-    (my/gptel--insert-preview-instructions)
-    (my/gptel--display-preview-buffer diff-buf)
-    (my/gptel--setup-preview-keys
-     diff-buf
-     (lambda () (funcall wrapped-cb "Patch confirmed."))
-     (lambda () (funcall wrapped-cb "Patch aborted.")))))
+HEADER is the prompt to show.
+
+When `gptel-tools-preview-enabled' is nil, skips preview and confirms
+immediately (use with caution)."
+  (if (not gptel-tools-preview-enabled)
+      ;; Preview disabled - auto-confirm
+      (funcall callback "Preview disabled, auto-confirmed.")
+    ;; Preview enabled
+    (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
+           (diff-buf (my/gptel--create-diff-buffer
+                      "*gptel-patch-preview*"
+                      header
+                      patch
+                      #'diff-mode)))
+      (my/gptel--insert-preview-instructions)
+      (my/gptel--display-preview-buffer diff-buf)
+      (my/gptel--setup-preview-keys
+       diff-buf
+       (lambda () (funcall wrapped-cb "Patch confirmed."))
+       (lambda () (funcall wrapped-cb "Patch aborted."))))))
 
 (defun my/gptel--preview-patch-async (patch buffer callback on-confirm on-abort header)
   "Show patch preview asynchronously for ApplyPatch/Edit tool integration.
@@ -266,19 +294,26 @@ BUFFER is the originating buffer.
 CALLBACK is called with the result.
 ON-CONFIRM is called with wrapped callback when user confirms.
 ON-ABORT is called with wrapped callback when user aborts.
-HEADER is the prompt to show."
-  (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-         (diff-buf (my/gptel--create-diff-buffer
-                    "*gptel-patch-preview*"
-                    header
-                    patch
-                    #'diff-mode)))
-    (my/gptel--insert-preview-instructions)
-    (my/gptel--display-preview-buffer diff-buf)
-    (my/gptel--setup-preview-keys
-     diff-buf
-     (lambda () (funcall on-confirm wrapped-cb))
-     (lambda () (funcall on-abort wrapped-cb)))))
+HEADER is the prompt to show.
+
+When `gptel-tools-preview-enabled' is nil, skips preview and calls
+ON-CONFIRM immediately (use with caution)."
+  (if (not gptel-tools-preview-enabled)
+      ;; Preview disabled - auto-confirm
+      (funcall on-confirm callback)
+    ;; Preview enabled
+    (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
+           (diff-buf (my/gptel--create-diff-buffer
+                      "*gptel-patch-preview*"
+                      header
+                      patch
+                      #'diff-mode)))
+      (my/gptel--insert-preview-instructions)
+      (my/gptel--display-preview-buffer diff-buf)
+      (my/gptel--setup-preview-keys
+       diff-buf
+       (lambda () (funcall on-confirm wrapped-cb))
+       (lambda () (funcall on-abort wrapped-cb))))))
 
 ;;; Tool Registration
 
