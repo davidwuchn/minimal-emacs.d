@@ -32,7 +32,7 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 | `gptel-tools-glob.el` | Async Glob tool | |
 | `gptel-tools-grep.el` | Async Grep tool | |
 | `gptel-tools-introspection.el` | Emacs introspection tools (describe_symbol, get_symbol_source, find_buffers_and_recent) | |
-| `gptel-tools-preview.el` | Unified Preview tool (diff display in side window) | ~270 |
+| `gptel-tools-preview.el` | Unified Preview tool (minibuffer confirm, never-ask-again option) | ~400 |
 | `gptel-tools-programmatic.el` | Programmatic tool registration + restricted orchestration entrypoint | ~42 |
 | `gptel-programmatic-benchmark.el` | Local benchmark harness for Programmatic vs ordinary tool chaining | ~250 |
 | `gptel-sandbox.el` | Restricted evaluator for serial Programmatic tool orchestration | ~301 |

@@ -269,6 +269,53 @@ Tree-sitter grammars are configured in `post-early-init.el`:
 ### Tool Registration
 Tools are registered in `lisp/modules/gptel-tools-code.el` and included in nucleus toolsets (`lisp/modules/nucleus-tools.el`).
 
+---
+
+## Preview
+
+**Purpose**: Preview file changes or patches with a diff view before applying.
+
+### Usage
+```json
+// File change mode
+Preview{path: "src/utils.py", replacement: "new content"}
+
+// Patch mode (raw unified diff)
+Preview{patch: "--- a/file\n+++ b/file\n..."}
+```
+
+### Parameters
+- `path` (optional): Target file path (file change mode)
+- `original` (optional): Original content (auto-read from file if omitted)
+- `replacement` (optional): Replacement content (file change mode)
+- `patch` (optional): Unified diff content (patch mode)
+
+### Confirmation
+
+After displaying the diff, prompts in minibuffer:
+
+| Key | Action |
+|-----|--------|
+| `y` | Apply this change |
+| `n` | Abort this change |
+| `N` | Never ask again (auto-apply rest of session) |
+| `q` | Quit |
+
+### Configuration
+
+```elisp
+;; Disable preview entirely (auto-apply all changes)
+(setq gptel-tools-preview-enabled nil)
+
+;; Re-enable confirmations after "N"
+M-x gptel-tools-preview-reset-confirmation
+```
+
+### Use Cases
+- Review AI-suggested changes before applying
+- Batch operations: answer "N" after first few reviews
+- CI/CD: set `gptel-tools-preview-enabled` to `nil`
+
 ## See Also
 - [AGENTS.md](../AGENTS.md) — Bootstrap principles
 - [STATE.md](../STATE.md) — Current configuration status

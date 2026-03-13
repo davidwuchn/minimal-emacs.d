@@ -320,10 +320,16 @@ Nucleus implements task-specific model routing to optimize cost and capability (
 - **`Preview`** — Unified async preview tool. Two modes: (1) file change
   (`path` + `replacement`) generates and shows unified diff; (2) patch mode
   (`patch` param) shows raw unified diff. Both display in `diff-mode` with
-  `n`/`y` to confirm, `q` to abort. The FSM waits for user response.
-- **`ApplyPatch`** — Shows `*gptel-patch-preview*` in `diff-mode` and waits for
-  `n` (apply) or `q` (abort) before running `git apply`. Gated by
-  `my/gptel-applypatch-auto-preview` (default `t`); set to `nil` for headless use.
+  minibuffer confirmation: `y` apply, `n` abort, `N` never ask again, `q` quit.
+- **`ApplyPatch`** — Shows `*gptel-patch-preview*` in `diff-mode` and prompts
+  in minibuffer before running `git apply`. Gated by
+  `gptel-tools-preview-enabled` (default `t`); set to `nil` to auto-apply.
+- **Confirmation options**:
+  - `y` — Apply this change
+  - `n` — Abort this change
+  - `N` — Never ask again (auto-apply rest of session)
+  - `q` — Quit (same as n)
+  - `M-x gptel-tools-preview-reset-confirmation` — Re-enable confirmations
 
 ### Infrastructure
 - **Auto-compaction** — Buffers are summarized via `compact.md` when they
