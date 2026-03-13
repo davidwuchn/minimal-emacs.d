@@ -22,11 +22,12 @@
 ;;; Code:
 
 (require 'ai-code-backends)
+(require 'eca-ext nil t)
 
 (declare-function eca "eca" (&optional arg))
 (declare-function eca-session "eca-util" ())
 (declare-function eca-chat-open "eca-chat" (session))
-(declare-function eca-chat-send-prompt "eca-chat" (prompt))
+(declare-function eca-chat-send-prompt "eca-chat" (session message))
 (declare-function eca-chat--get-last-buffer "eca-chat" (session))
 (declare-function eca-assert-session-running "eca-util" (session))
 (declare-function eca-chat--add-context "eca-chat" (context-plist))
@@ -91,8 +92,8 @@ This function satisfies ai-code's :send backend contract."
   (let ((session (eca-session)))
     (if session
         (progn
-          (eca-chat-open session)  ; Ensure buffer exists
-          (eca-chat-send-prompt line))
+          (eca-chat-open session)
+          (eca-chat-send-prompt session line))
       (user-error "No ECA session. Run M-x ai-code-eca-start first"))))
 
 ;;;###autoload
@@ -100,6 +101,8 @@ This function satisfies ai-code's :send backend contract."
   "Add FILE-PATH as context to current ECA session."
   (interactive "fAdd file context: ")
   (ai-code-eca--ensure-available)
+  (unless (fboundp 'eca-chat-add-file-context)
+    (user-error "eca-ext not loaded. Session context features unavailable."))
   (let ((session (eca-session)))
     (if session
         (progn
@@ -113,6 +116,8 @@ This function satisfies ai-code's :send backend contract."
   "Add clipboard contents as context to current ECA session."
   (interactive)
   (ai-code-eca--ensure-available)
+  (unless (fboundp 'eca-chat-add-clipboard-context)
+    (user-error "eca-ext not loaded. Session context features unavailable."))
   (let ((session (eca-session)))
     (if session
         (let ((clip-content (current-kill 0 t)))
@@ -129,6 +134,8 @@ This function satisfies ai-code's :send backend contract."
   "Add current cursor position as context to ECA session."
   (interactive)
   (ai-code-eca--ensure-available)
+  (unless (fboundp 'eca-chat-add-cursor-context)
+    (user-error "eca-ext not loaded. Session context features unavailable."))
   (let ((session (eca-session)))
     (if session
         (if buffer-file-name
@@ -144,13 +151,17 @@ This function satisfies ai-code's :send backend contract."
   "Return list of active ECA sessions for ai-code menu display.
 Returns an alist of (session-id . session-info) for integration with ai-code-menu."
   (ai-code-eca--ensure-available)
-  (mapcar (lambda (session-info)
-            (cons (plist-get session-info :id)
-                  (format "Session %d: %s (%d chats)"
-                          (plist-get session-info :id)
-                          (mapconcat #'identity (plist-get session-info :workspace-folders) ", ")
-                          (plist-get session-info :chat-count))))
-          (eca-list-sessions)))
+  (unless (fboundp 'eca-list-sessions)
+    (user-error "eca-ext not loaded. Session multiplexing unavailable."))
+  (condition-case nil
+      (mapcar (lambda (session-info)
+                (cons (plist-get session-info :id)
+                      (format "Session %d: %s (%d chats)"
+                              (plist-get session-info :id)
+                              (mapconcat #'identity (plist-get session-info :workspace-folders) ", ")
+                              (plist-get session-info :chat-count))))
+              (eca-list-sessions))
+    (error nil)))
 
 ;;;###autoload
 (defun ai-code-eca-switch-session (&optional session-id)
@@ -158,6 +169,8 @@ Returns an alist of (session-id . session-info) for integration with ai-code-men
 Returns the selected session or nil if cancelled."
   (interactive)
   (ai-code-eca--ensure-available)
+  (unless (fboundp 'eca-switch-to-session)
+    (user-error "eca-ext not loaded. Session multiplexing unavailable."))
   (eca-switch-to-session session-id))
 
 ;;;###autoload

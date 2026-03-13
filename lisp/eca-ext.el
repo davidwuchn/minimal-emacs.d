@@ -19,9 +19,9 @@
 
 ;;; Code:
 
-(require 'eca)
-(require 'eca-util)
-(require 'eca-chat)
+(require 'eca nil t)
+(require 'eca-util nil t)
+(require 'eca-chat nil t)
 
 ;;; Session Multiplexing
 
@@ -29,6 +29,8 @@
 (defun eca-list-sessions ()
   "Return a list of all active ECA sessions.
 Each element is a plist with :id, :status, :workspace-folders, :chat-count."
+  (unless (boundp 'eca--sessions)
+    (user-error "ECA not initialized"))
   (mapcar (lambda (pair)
             (let ((session (cdr pair)))
               (list :id (eca--session-id session)
@@ -61,7 +63,11 @@ When called interactively, prompts for session selection."
                                          sessions)))
                     (completing-read "Select ECA session: " choices nil t)))))))
     (when session-id
-      (let ((session (eca-get eca--sessions session-id)))
+      (unless (boundp 'eca--sessions)
+        (user-error "ECA not initialized"))
+      (let ((session (condition-case nil
+                         (eca-get eca--sessions session-id)
+                       (error nil))))
         (if session
             (progn
               (setq-local eca--session-id-cache session-id)
@@ -140,10 +146,14 @@ POSITION is a buffer position (integer)."
   "Add CLIPBOARD CONTENT as a temporary file context to SESSION.
 The content is saved to a temporary file and added as context."
   (eca-assert-session-running session)
-  (let* ((temp-dir (file-name-as-directory (expand-file-name "~/.eca/tmp")))
-         (temp-file (expand-file-name (format "clipboard-%d.txt" (emacs-pid)) temp-dir)))
-    (unless (file-directory-p temp-dir)
-      (make-directory temp-dir t))
+  (let* ((temp-dir (file-name-as-directory
+                    (or (bound-and-true-p eca-config-directory)
+                        (expand-file-name "~/.eca"))))
+         (tmp-subdir (expand-file-name "tmp" temp-dir))
+         (temp-file (eca--register-temp-file
+                     (expand-file-name (format "clipboard-%d-%d.txt" (emacs-pid) (random 10000)) tmp-subdir))))
+    (unless (file-directory-p tmp-subdir)
+      (make-directory tmp-subdir t))
     (with-temp-file temp-file
       (insert content))
     (eca-chat--with-current-buffer (eca-chat--get-last-buffer session)
@@ -164,5 +174,28 @@ The content is saved to a temporary file and added as context."
       (user-error "No ECA session active"))))
 
 (provide 'eca-ext)
+
+;;; Temp File Management
+
+(defvar eca--context-temp-files nil
+  "List of temporary context files created by eca-ext.
+Used for cleanup on session end or Emacs exit.")
+
+(defun eca--cleanup-temp-context-files ()
+  "Clean up all temporary context files created by eca-ext."
+  (dolist (file eca--context-temp-files)
+    (when (file-exists-p file)
+      (delete-file file)))
+  (setq eca--context-temp-files nil)
+  (eca-info "Cleaned up %d temporary context files" (length eca--context-temp-files)))
+
+(add-hook 'kill-emacs-hook #'eca--cleanup-temp-context-files)
+
+;;;###autoload
+(defun eca--register-temp-file (file-path)
+  "Register FILE-PATH for cleanup on Emacs exit.
+Returns FILE-PATH."
+  (push file-path eca--context-temp-files)
+  file-path)
 
 ;;; eca-ext.el ends here
