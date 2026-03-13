@@ -46,16 +46,17 @@
 ;;;###autoload
 (defun eca-list-sessions ()
   "Return a list of all active ECA sessions.
-Each element is a plist with :id, :status, :workspace-folders, :chat-count."
-  (unless (boundp 'eca--sessions)
-    (user-error "ECA not initialized"))
-  (mapcar (lambda (pair)
-            (let ((session (cdr pair)))
-              (list :id (eca--session-id session)
-                    :status (eca--session-status session)
-                    :workspace-folders (eca--session-workspace-folders session)
-                    :chat-count (length (eca--session-chats session)))))
-          eca--sessions))
+Each element is a plist with :id, :status, :workspace-folders, :chat-count.
+Returns nil if ECA is not initialized or has no sessions."
+  (and (boundp 'eca--sessions)
+       eca--sessions
+       (mapcar (lambda (pair)
+                 (let ((session (cdr pair)))
+                   (list :id (eca--session-id session)
+                         :status (eca--session-status session)
+                         :workspace-folders (eca--session-workspace-folders session)
+                         :chat-count (length (eca--session-chats session)))))
+               eca--sessions)))
 
 ;;;###autoload
 (defun eca-select-session (&optional session-id)
@@ -64,7 +65,8 @@ Returns the selected session or nil if cancelled.
 When called interactively, prompts for session selection."
   (interactive)
   (let* ((sessions (eca-list-sessions))
-         (choices (and (> (length sessions) 1)
+         (choices (and sessions
+                       (> (length sessions) 1)
                        (mapcar (lambda (s)
                                  (cons (format "Session %d: %s (%s) - %d chats"
                                                (plist-get s :id)
@@ -84,18 +86,16 @@ When called interactively, prompts for session selection."
                   (cdr (assoc (completing-read "Select ECA session: " choices nil t)
                               choices)))))))
     (when session-id
-      (unless (boundp 'eca--sessions)
-        (user-error "ECA not initialized"))
       (let ((session (condition-case nil
-                         (eca-get eca--sessions session-id)
-                        (error nil))))
+                           (eca-get eca--sessions session-id)
+                         (error nil))))
         (if session
             (progn
               (setq eca--session-id-cache session-id)
               (when (called-interactively-p 'interactive)
                 (eca-info "Switched to session %d" session-id))
               session)
-          (user-error "Session %s not found" session-id))))))
+          (user-error "Session %s not found (may have been deleted)" session-id))))))
 
 ;;;###autoload
 (defun eca-switch-to-session (&optional session-id)
@@ -114,6 +114,9 @@ When called interactively, prompts for session selection."
 Returns the new session."
   (interactive (list (list (read-directory-name "Workspace root: "))))
   (let ((session (eca-create-session workspace-roots)))
+    (unless session
+      (user-error "Failed to create ECA session for %s"
+                  (mapconcat #'identity workspace-roots ", ")))
     (eca-info "Created session %d for %s"
               (eca--session-id session)
               (mapconcat #'identity workspace-roots ", "))

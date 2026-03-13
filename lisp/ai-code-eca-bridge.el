@@ -52,6 +52,14 @@
 (declare-function eca-chat-add-clipboard-context "eca-ext" (session content))
 (declare-function ai-code-read-string "ai-code-input" (prompt &optional initial-input candidate-list))
 
+(defun ai-code-eca--ensure-chat-buffer (session)
+  "Ensure ECA chat buffer for SESSION exists and return it.
+Only calls eca-chat-open if buffer doesn't exist or isn't visible."
+  (let ((buf (eca-chat--get-last-buffer session)))
+    (unless (and buf (get-buffer-window buf))
+      (eca-chat-open session))
+    buf))
+
 ;;;###autoload
 (defun ai-code-eca-start (&optional arg)
   "Start a new ECA session.
@@ -77,10 +85,8 @@ This function satisfies ai-code's :switch backend contract."
     (message "Started new ECA session"))
   (let ((session (eca-session)))
     (if session
-        (progn
-          (eca-chat-open session)
-          (pop-to-buffer (eca-chat--get-last-buffer session)))
-      (user-error "No ECA session. Run M-x ai-code-eca-start first"))))
+        (pop-to-buffer (ai-code-eca--ensure-chat-buffer session))
+      (user-error "No ECA session (M-x ai-code-eca-start to create one)"))))
 
 ;;;###autoload
 (defun ai-code-eca-send (line)
@@ -92,9 +98,9 @@ This function satisfies ai-code's :send backend contract."
   (let ((session (eca-session)))
     (if session
         (progn
-          (eca-chat-open session)
+          (ai-code-eca--ensure-chat-buffer session)
           (eca-chat-send-prompt session line))
-      (user-error "No ECA session. Run M-x ai-code-eca-start first"))))
+      (user-error "No ECA session (M-x ai-code-eca-start to create one)"))))
 
 ;;;###autoload
 (defun ai-code-eca-add-file-context (file-path)
@@ -102,14 +108,14 @@ This function satisfies ai-code's :send backend contract."
   (interactive "fAdd file context: ")
   (ai-code-eca--ensure-available)
   (unless (fboundp 'eca-chat-add-file-context)
-    (user-error "eca-ext not loaded. Session context features unavailable."))
+    (user-error "Context features require eca-ext.el (add to load-path)"))
   (let ((session (eca-session)))
     (if session
         (progn
-          (eca-chat-open session)
+          (ai-code-eca--ensure-chat-buffer session)
           (eca-chat-add-file-context session file-path)
           (eca-info "Added file context: %s" file-path))
-      (user-error "No ECA session"))))
+      (user-error "No ECA session. Start one with M-x ai-code-eca-start"))))
 
 ;;;###autoload
 (defun ai-code-eca-add-clipboard-context ()
@@ -117,17 +123,17 @@ This function satisfies ai-code's :send backend contract."
   (interactive)
   (ai-code-eca--ensure-available)
   (unless (fboundp 'eca-chat-add-clipboard-context)
-    (user-error "eca-ext not loaded. Session context features unavailable."))
+    (user-error "Context features require eca-ext.el (add to load-path)"))
   (let ((session (eca-session)))
     (if session
         (let ((clip-content (current-kill 0 t)))
           (if (and clip-content (not (string-empty-p clip-content)))
               (progn
-                (eca-chat-open session)
+                (ai-code-eca--ensure-chat-buffer session)
                 (eca-chat-add-clipboard-context session clip-content)
                 (eca-info "Added clipboard context (%d chars)" (length clip-content)))
             (message "Clipboard is empty")))
-      (user-error "No ECA session"))))
+      (user-error "No ECA session. Start one with M-x ai-code-eca-start"))))
 
 ;;;###autoload
 (defun ai-code-eca-add-cursor-context ()
@@ -135,16 +141,16 @@ This function satisfies ai-code's :send backend contract."
   (interactive)
   (ai-code-eca--ensure-available)
   (unless (fboundp 'eca-chat-add-cursor-context)
-    (user-error "eca-ext not loaded. Session context features unavailable."))
+    (user-error "Context features require eca-ext.el (add to load-path)"))
   (let ((session (eca-session)))
     (if session
         (if buffer-file-name
             (progn
-              (eca-chat-open session)
+              (ai-code-eca--ensure-chat-buffer session)
               (eca-chat-add-cursor-context session buffer-file-name (point))
               (eca-info "Added cursor context: %s:%d" buffer-file-name (point)))
           (message "No buffer file"))
-      (user-error "No ECA session"))))
+      (user-error "No ECA session. Start one with M-x ai-code-eca-start"))))
 
 ;;;###autoload
 (defun ai-code-eca-get-sessions ()
@@ -152,7 +158,7 @@ This function satisfies ai-code's :send backend contract."
 Returns an alist of (session-id . session-info) for integration with ai-code-menu."
   (ai-code-eca--ensure-available)
   (unless (fboundp 'eca-list-sessions)
-    (user-error "eca-ext not loaded. Session multiplexing unavailable."))
+    (user-error "Session multiplexing requires eca-ext.el (add to load-path)"))
   (condition-case nil
       (mapcar (lambda (session-info)
                 (cons (plist-get session-info :id)
@@ -170,7 +176,7 @@ Returns the selected session or nil if cancelled."
   (interactive)
   (ai-code-eca--ensure-available)
   (unless (fboundp 'eca-switch-to-session)
-    (user-error "eca-ext not loaded. Session multiplexing unavailable."))
+    (user-error "Session multiplexing requires eca-ext.el (add to load-path)"))
   (eca-switch-to-session session-id))
 
 ;;;###autoload
@@ -188,8 +194,7 @@ This function satisfies ai-code's :resume backend contract."
     (let ((session (eca-session)))
       (if session
           (progn
-            (eca-chat-open session)
-            (pop-to-buffer (eca-chat--get-last-buffer session))
+            (pop-to-buffer (ai-code-eca--ensure-chat-buffer session))
             (message "Resumed ECA session"))
         ;; No existing session, start a new one
         (ai-code-eca-start)
@@ -201,10 +206,10 @@ This function satisfies ai-code's :resume backend contract."
 
 Signals user-error if ECA cannot be used."
   (unless (require 'eca nil t)
-    (user-error "ECA backend not available. Please install eca package."))
+    (user-error "ECA backend not available (package not loaded). Install with: M-x package-install RET eca RET"))
   (dolist (fn '(eca eca-session eca-chat-open eca-chat-send-prompt eca-chat--get-last-buffer))
     (unless (fboundp fn)
-      (user-error "ECA backend missing required function: %s" fn))))
+      (user-error "ECA backend incomplete: function '%s' missing. Reinstall eca package" fn))))
 
 ;;;###autoload
 (defun ai-code-eca-version ()
