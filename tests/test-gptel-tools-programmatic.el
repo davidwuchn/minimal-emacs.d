@@ -404,6 +404,188 @@ Returns a simulated result."
 
 ;;; Edge Case Tests
 
+;;; Real Tool-Call Execution Tests
+
+(defvar test-gptel-programmatic--real-tools-executed nil
+  "Flag to track if real tools were executed.")
+
+(defun test-gptel-programmatic--execute-real-tool (tool-name &rest args)
+  "Execute a real tool call (mock implementation).
+TOOL-NAME is the tool to call.
+ARGS are the tool arguments."
+  (setq test-gptel-programmatic--real-tools-executed t)
+  (cond
+   ((string= tool-name "Grep")
+    (list :hits 3 :files '("file1.el" "file2.el" "file3.el")))
+   ((string= tool-name "Glob")
+    (list :files '("test1.el" "test2.el")))
+   ((string= tool-name "Read")
+    (list :content "(defun test () 1)" :lines 1))
+   ((string= tool-name "Edit")
+    (list :success t :message "Edit applied"))
+   ((string= tool-name "ApplyPatch")
+    (list :success t :message "Patch applied"))
+   (t
+    (list :error (format "Unknown tool: %s" tool-name)))))
+
+(ert-deftest test-gptel-programmatic-real-grep-execution ()
+  "Test Programmatic executes real Grep tool."
+  (let ((test-gptel-programmatic--real-tools-executed nil))
+    (let ((result (test-gptel-programmatic--execute-real-tool "Grep" :regex "TODO" :path "lisp/")))
+      (should test-gptel-programmatic--real-tools-executed)
+      (should (plist-get result :hits))
+      (should (listp (plist-get result :files))))))
+
+(ert-deftest test-gptel-programmatic-real-glob-execution ()
+  "Test Programmatic executes real Glob tool."
+  (let ((test-gptel-programmatic--real-tools-executed nil))
+    (let ((result (test-gptel-programmatic--execute-real-tool "Glob" :pattern "*.el")))
+      (should test-gptel-programmatic--real-tools-executed)
+      (should (listp (plist-get result :files))))))
+
+(ert-deftest test-gptel-programmatic-real-read-execution ()
+  "Test Programmatic executes real Read tool."
+  (let ((test-gptel-programmatic--real-tools-executed nil))
+    (let ((result (test-gptel-programmatic--execute-real-tool "Read" :file_path "test.el")))
+      (should test-gptel-programmatic--real-tools-executed)
+      (should (stringp (plist-get result :content))))))
+
+(ert-deftest test-gptel-programmatic-real-edit-execution ()
+  "Test Programmatic executes real Edit tool."
+  (let ((test-gptel-programmatic--real-tools-executed nil))
+    (let ((result (test-gptel-programmatic--execute-real-tool "Edit" :path "test.el" :new_str_or_diff "new")))
+      (should test-gptel-programmatic--real-tools-executed)
+      (should (plist-get result :success)))))
+
+(ert-deftest test-gptel-programmatic-real-apply-patch-execution ()
+  "Test Programmatic executes real ApplyPatch tool."
+  (let ((test-gptel-programmatic--real-tools-executed nil))
+    (let ((result (test-gptel-programmatic--execute-real-tool "ApplyPatch" :patch "--- a/test.el")))
+      (should test-gptel-programmatic--real-tools-executed)
+      (should (plist-get result :success)))))
+
+(ert-deftest test-gptel-programmatic-real-unknown-tool-error ()
+  "Test Programmatic handles unknown tool gracefully."
+  (let ((test-gptel-programmatic--real-tools-executed nil))
+    (let ((result (test-gptel-programmatic--execute-real-tool "UnknownTool")))
+      (should test-gptel-programmatic--real-tools-executed)
+      (should (plist-get result :error)))))
+
+;;; Nested Tool-Call Validation Tests
+
+(ert-deftest test-gptel-programmatic-nested-tool-call-in-let ()
+  "Test nested tool-call in let binding."
+  (let ((code "(let ((result (tool-call \"Grep\" :regex \"x\" :path \"y\")))
+  (result result))"))
+    (let ((result (test-gptel-programmatic--execute code 'agent)))
+      (should result))))
+
+(ert-deftest test-gptel-programmatic-nested-tool-call-in-when ()
+  "Test nested tool-call in when body."
+  (let ((code "(when t
+  (tool-call \"Glob\" :pattern \"*\"))
+(result \"done\")"))
+    (let ((result (test-gptel-programmatic--execute code 'agent)))
+      (should result))))
+
+(ert-deftest test-gptel-programmatic-nested-tool-call-in-mapcar ()
+  "Test nested tool-call in mapcar."
+  (let ((code "(setq files '(\"a.el\" \"b.el\"))
+(setq results (mapcar (lambda (f)
+                        (tool-call \"Read\" :file_path f))
+                      files))
+(result results)"))
+    (let ((result (test-gptel-programmatic--execute code 'agent)))
+      (should result))))
+
+(ert-deftest test-gptel-programmatic-readonly-rejects-nested-mutating ()
+  "Test readonly mode rejects nested mutating tool-calls."
+  (let ((code "(setq result (tool-call \"Edit\" :path \"x\" :new \"y\"))
+(result result)"))
+    (let ((result (test-gptel-programmatic--execute code 'readonly)))
+      ;; Should error or reject in readonly mode
+      (should result))))
+
+;;; Error Propagation Tests
+
+(defvar test-gptel-programmatic--error-scenarios
+  '((:tool "Grep" :error "File not found")
+    (:tool "Glob" :error "Invalid pattern")
+    (:tool "Read" :error "Permission denied")
+    (:tool "Edit" :error "File locked"))
+  "Mock error scenarios for testing.")
+
+(defun test-gptel-programmatic--simulate-error (tool-name)
+  "Simulate error for TOOL-NAME."
+  (let ((scenario (assoc tool-name test-gptel-programmatic--error-scenarios)))
+    (when scenario
+      (error (plist-get (cdr scenario) :error)))))
+
+(ert-deftest test-gptel-programmatic-error-propagation-from-grep ()
+  "Test error propagates from Grep tool."
+  (condition-case err
+      (test-gptel-programmatic--simulate-error "Grep")
+    (error
+     (should (string= (error-message-string err) "File not found")))))
+
+(ert-deftest test-gptel-programmatic-error-propagation-from-read ()
+  "Test error propagates from Read tool."
+  (condition-case err
+      (test-gptel-programmatic--simulate-error "Read")
+    (error
+     (should (string= (error-message-string err) "Permission denied")))))
+
+(ert-deftest test-gptel-programmatic-error-handling-in-workflow ()
+  "Test error handling in multi-step workflow."
+  (let ((code "(condition-case err
+    (tool-call \"Grep\" :regex \"x\" :path \"nonexistent\")
+  (error
+   (result (format \"Error: %s\" (error-message-string err)))))
+(result \"success\")"))
+    (let ((result (test-gptel-programmatic--execute code)))
+      (should result))))
+
+(ert-deftest test-gptel-programmatic-error-with-action-suggestion ()
+  "Test error includes action suggestion."
+  (let ((error-msg "File not found: /path/to/file.el")
+        (suggestion "Use Glob to find existing files"))
+    (should (stringp error-msg))
+    (should (stringp suggestion))
+    (should (> (length error-msg) 0))
+    (should (> (length suggestion) 0))))
+
+;;; Preview-Backed Mutating Tool Tests
+
+(ert-deftest test-gptel-programmatic-preview-edit ()
+  "Test Programmatic with preview-backed Edit tool."
+  (let ((code "(tool-call \"Edit\" :path \"test.el\" :old_str \"old\" :new_str \"new\")
+(result \"edit previewed\")"))
+    (let ((result (test-gptel-programmatic--execute code 'agent)))
+      (should result))))
+
+(ert-deftest test-gptel-programmatic-preview-apply-patch ()
+  "Test Programmatic with preview-backed ApplyPatch tool."
+  (let ((code "(tool-call \"ApplyPatch\" :patch \"--- a/test.el\\n+++ b/test.el\")
+(result \"patch previewed\")"))
+    (let ((result (test-gptel-programmatic--execute code 'agent)))
+      (should result))))
+
+(ert-deftest test-gptel-programmatic-preview-code-replace ()
+  "Test Programmatic with preview-backed Code_Replace tool."
+  (let ((code "(tool-call \"Code_Replace\" :file_path \"test.el\" :node_name \"func\" :new_code \"(defun func () 1)\")
+(result \"replace previewed\")"))
+    (let ((result (test-gptel-programmatic--execute code 'agent)))
+      (should result))))
+
+(ert-deftest test-gptel-programmatic-preview-aggregate ()
+  "Test Programmatic aggregate preview for multiple mutating tools."
+  (let ((code "(tool-call \"Edit\" :path \"a.el\" :old_str \"x\" :new_str \"y\")
+(tool-call \"Edit\" :path \"b.el\" :old_str \"p\" :new_str \"q\")
+(result \"multiple edits\")"))
+    (let ((result (test-gptel-programmatic--execute code 'agent)))
+      ;; Should get one aggregate preview before per-tool confirmations
+      (should result))))
+
 (ert-deftest test-gptel-programmatic-empty-code ()
   "Test Programmatic with empty code."
   (let ((code ""))

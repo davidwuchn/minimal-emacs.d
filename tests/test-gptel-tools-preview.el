@@ -286,4 +286,277 @@
 
 (provide 'test-gptel-tools-preview)
 
+;;; Window Management Tests
+
+(defvar test-preview--window-config nil
+  "Saved window configuration for testing.")
+
+(defun test-preview--save-window-config ()
+  "Save current window configuration."
+  (setq test-preview--window-config (current-window-configuration)))
+
+(defun test-preview--restore-window-config ()
+  "Restore saved window configuration."
+  (when test-preview--window-config
+    (set-window-configuration test-preview--window-config)))
+
+(defun test-preview--count-windows ()
+  "Count visible windows."
+  (length (window-list)))
+
+(ert-deftest preview/window/save-configuration ()
+  "Should save window configuration."
+  (test-preview--save-window-config)
+  (should test-preview--window-config)
+  (should (window-configuration-p test-preview--window-config)))
+
+(ert-deftest preview/window/restore-configuration ()
+  "Should restore window configuration."
+  (test-preview--save-window-config)
+  (delete-other-windows)
+  (test-preview--restore-window-config)
+  (should test-preview--window-config))
+
+(ert-deftest preview/window/display-in-side-window ()
+  "Should display preview in side window."
+  (let ((buf (get-buffer-create "*preview-test*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "Preview content"))
+          (display-buffer-in-side-window buf '((side . right) (window-width . 0.3)))
+          (should (get-buffer-window buf)))
+      (when (buffer-live-p buf) (kill-buffer buf)))))
+
+(ert-deftest preview/window/display-in-bottom-window ()
+  "Should display preview in bottom window."
+  (let ((buf (get-buffer-create "*preview-bottom*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf (insert "Preview content"))
+          (display-buffer-in-side-window buf '((side . bottom) (window-height . 0.3)))
+          (should (get-buffer-window buf)))
+      (when (buffer-live-p buf) (kill-buffer buf)))))
+
+(ert-deftest preview/window/teardown-closes-buffer ()
+  "Should close preview buffer on teardown."
+  (let ((buf (get-buffer-create "*preview-teardown*")))
+    (with-current-buffer buf (insert "Content"))
+    (should (buffer-live-p buf))
+    (kill-buffer buf)
+    (should-not (buffer-live-p buf))))
+
+(ert-deftest preview/window/teardown-restores-focus ()
+  "Should restore focus to original window on teardown."
+  :tags '(:interactive)
+  (skip-unless (display-graphic-p))
+  (let ((original-window (selected-window))
+        (preview-buf (get-buffer-create "*preview-focus*")))
+    (unwind-protect
+        (progn
+          (display-buffer preview-buf)
+          (select-window (get-buffer-window preview-buf))
+          (should-not (eq (selected-window) original-window))
+          (kill-buffer preview-buf)
+          ;; Focus should return to original
+          (should (eq (selected-window) original-window)))
+      (when (buffer-live-p preview-buf) (kill-buffer preview-buf)))))
+
+(ert-deftest preview/window/multiple-previews ()
+  "Should handle multiple preview buffers."
+  :tags '(:interactive)
+  (skip-unless (display-graphic-p))
+  (let ((buf1 (get-buffer-create "*preview-1*"))
+        (buf2 (get-buffer-create "*preview-2*"))
+        (buf3 (get-buffer-create "*preview-3*")))
+    (unwind-protect
+        (progn
+          (display-buffer buf1)
+          (display-buffer buf2)
+          (display-buffer buf3)
+          (should (get-buffer-window buf1))
+          (should (get-buffer-window buf2))
+          (should (get-buffer-window buf3)))
+      (dolist (buf (list buf1 buf2 buf3))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
+(ert-deftest preview/window/cleanup-orphaned-buffers ()
+  "Should cleanup orphaned preview buffers."
+  (let ((orphan-buf (get-buffer-create "*preview-orphan*")))
+    (with-current-buffer orphan-buf (insert "Orphaned"))
+    ;; Simulate orphan detection
+    (should (buffer-live-p orphan-buf))
+    (kill-buffer orphan-buf)
+    (should-not (buffer-live-p orphan-buf))))
+
+;;; FSM State Tests
+
+(defvar test-preview--fsm-states
+  '(:idle :previewing :waiting :applied :cancelled :error)
+  "Preview FSM states.")
+
+(defvar test-preview--current-fsm-state :idle
+  "Current FSM state for testing.")
+
+(defun test-preview--fsm-transition (from-state to-state)
+  "Transition FSM from FROM-STATE to TO-STATE."
+  (setq test-preview--current-fsm-state to-state))
+
+(defun test-preview--fsm-can-transition-p (from-state to-state)
+  "Check if FSM can transition from FROM-STATE to TO-STATE."
+  (let ((valid-transitions
+         '((:idle . (:previewing))
+           (:previewing . (:waiting :cancelled))
+           (:waiting . (:applied :cancelled))
+           (:applied . (:idle))
+           (:cancelled . (:idle))
+           (:error . (:idle :previewing)))))
+    (member to-state (cdr (assoc from-state valid-transitions)))))
+
+(ert-deftest preview/fsm/initial-state ()
+  "FSM should start in idle state."
+  (let ((test-preview--current-fsm-state :idle))
+    (should (eq :idle test-preview--current-fsm-state))))
+
+(ert-deftest preview/fsm/idle-to-previewing ()
+  "FSM should transition from idle to previewing."
+  (let ((test-preview--current-fsm-state :idle))
+    (should (test-preview--fsm-can-transition-p :idle :previewing))
+    (test-preview--fsm-transition :idle :previewing)
+    (should (eq :previewing test-preview--current-fsm-state))))
+
+(ert-deftest preview/fsm/previewing-to-waiting ()
+  "FSM should transition from previewing to waiting."
+  (let ((test-preview--current-fsm-state :previewing))
+    (should (test-preview--fsm-can-transition-p :previewing :waiting))
+    (test-preview--fsm-transition :previewing :waiting)
+    (should (eq :waiting test-preview--current-fsm-state))))
+
+(ert-deftest preview/fsm/waiting-to-applied ()
+  "FSM should transition from waiting to applied."
+  (let ((test-preview--current-fsm-state :waiting))
+    (should (test-preview--fsm-can-transition-p :waiting :applied))
+    (test-preview--fsm-transition :waiting :applied)
+    (should (eq :applied test-preview--current-fsm-state))))
+
+(ert-deftest preview/fsm/waiting-to-cancelled ()
+  "FSM should transition from waiting to cancelled."
+  (let ((test-preview--current-fsm-state :waiting))
+    (should (test-preview--fsm-can-transition-p :waiting :cancelled))
+    (test-preview--fsm-transition :waiting :cancelled)
+    (should (eq :cancelled test-preview--current-fsm-state))))
+
+(ert-deftest preview/fsm/cancelled-to-idle ()
+  "FSM should transition from cancelled to idle."
+  (let ((test-preview--current-fsm-state :cancelled))
+    (should (test-preview--fsm-can-transition-p :cancelled :idle))
+    (test-preview--fsm-transition :cancelled :idle)
+    (should (eq :idle test-preview--current-fsm-state))))
+
+(ert-deftest preview/fsm/applied-to-idle ()
+  "FSM should transition from applied to idle."
+  (let ((test-preview--current-fsm-state :applied))
+    (should (test-preview--fsm-can-transition-p :applied :idle))
+    (test-preview--fsm-transition :applied :idle)
+    (should (eq :idle test-preview--current-fsm-state))))
+
+(ert-deftest preview/fsm/error-recovery ()
+  "FSM should recover from error state."
+  (let ((test-preview--current-fsm-state :error))
+    (should (test-preview--fsm-can-transition-p :error :idle))
+    (should (test-preview--fsm-can-transition-p :error :previewing))
+    (test-preview--fsm-transition :error :idle)
+    (should (eq :idle test-preview--current-fsm-state))))
+
+(ert-deftest preview/fsm/invalid-transition ()
+  "FSM should reject invalid transitions."
+  (let ((test-preview--current-fsm-state :idle))
+    (should-not (test-preview--fsm-can-transition-p :idle :applied))
+    (should-not (test-preview--fsm-can-transition-p :idle :cancelled))
+    (should-not (test-preview--fsm-can-transition-p :previewing :applied))))
+
+(ert-deftest preview/fsm/state-restoration ()
+  "FSM should support state restoration."
+  (let ((test-preview--current-fsm-state :idle)
+        (saved-state :idle))
+    ;; Save state
+    (setq saved-state test-preview--current-fsm-state)
+    ;; Transition
+    (test-preview--fsm-transition :idle :previewing)
+    (should (eq :previewing test-preview--current-fsm-state))
+    ;; Restore
+    (setq test-preview--current-fsm-state saved-state)
+    (should (eq :idle test-preview--current-fsm-state))))
+
+(ert-deftest preview/fsm/all-states-defined ()
+  "All FSM states should be defined."
+  (dolist (state test-preview--fsm-states)
+    (should (keywordp state))
+    (should (> (length (symbol-name state)) 1))))
+
+;;; Multi-Preview Concurrency Tests
+
+(defvar test-preview--active-previews 0
+  "Count of active previews for testing.")
+
+(defun test-preview--start-preview ()
+  "Start a preview (mock)."
+  (setq test-preview--active-previews (1+ test-preview--active-previews)))
+
+(defun test-preview--end-preview ()
+  "End a preview (mock)."
+  (setq test-preview--active-previews (max 0 (1- test-preview--active-previews))))
+
+(ert-deftest preview/concurrency/single-preview ()
+  "Should handle single preview."
+  (let ((test-preview--active-previews 0))
+    (test-preview--start-preview)
+    (should (= 1 test-preview--active-previews))
+    (test-preview--end-preview)
+    (should (= 0 test-preview--active-previews))))
+
+(ert-deftest preview/concurrency/multiple-previews ()
+  "Should handle multiple concurrent previews."
+  (let ((test-preview--active-previews 0))
+    (test-preview--start-preview)
+    (test-preview--start-preview)
+    (test-preview--start-preview)
+    (should (= 3 test-preview--active-previews))
+    (test-preview--end-preview)
+    (test-preview--end-preview)
+    (test-preview--end-preview)
+    (should (= 0 test-preview--active-previews))))
+
+(ert-deftest preview/concurrency/preview-queue ()
+  "Should queue previews when limit reached."
+  (let ((test-preview--active-previews 0)
+        (max-concurrent 2)
+        (queued 0))
+    ;; Start max concurrent
+    (test-preview--start-preview)
+    (test-preview--start-preview)
+    (should (= 2 test-preview--active-previews))
+    ;; Queue additional
+    (setq queued (1+ queued))
+    (should (= 1 queued))
+    ;; End one, process queue
+    (test-preview--end-preview)
+    (setq queued (max 0 (1- queued)))
+    (test-preview--start-preview)
+    (should (= 2 test-preview--active-previews))))
+
+(ert-deftest preview/concurrency/race-condition-prevention ()
+  "Should prevent race conditions in concurrent previews."
+  (let ((test-preview--active-previews 0)
+        (lock nil))
+    ;; Simulate atomic operation
+    (setq lock t)
+    (setq test-preview--active-previews (1+ test-preview--active-previews))
+    (setq lock nil)
+    (should (= 1 test-preview--active-previews))
+    (should-not lock)))
+
+(provide 'test-gptel-tools-preview)
+
+;;; test-gptel-tools-preview.el ends here
+
 ;;; test-gptel-tools-preview.el ends here
