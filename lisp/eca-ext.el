@@ -23,6 +23,24 @@
 (require 'eca-util nil t)
 (require 'eca-chat nil t)
 
+(defvar eca--sessions nil)
+(defvar eca--session-id-cache nil)
+(defvar eca-config-directory nil)
+
+(declare-function eca-session "eca-util" ())
+(declare-function eca-get "eca-util" (alist key))
+(declare-function eca-info "eca-util" (format-string &rest args))
+(declare-function eca-create-session "eca-util" (workspace-folders))
+(declare-function eca-assert-session-running "eca-util" (session))
+(declare-function eca--session-id "eca-util" (session))
+(declare-function eca--session-status "eca-util" (session))
+(declare-function eca--session-workspace-folders "eca-util" (session))
+(declare-function eca--session-chats "eca-util" (session))
+(declare-function eca-chat-open "eca-chat" (session))
+(declare-function eca-chat--get-last-buffer "eca-chat" (session))
+(declare-function eca-chat--add-context "eca-chat" (context-plist))
+(declare-function eca-chat--with-current-buffer "eca-chat" (&rest body))
+
 ;;; Session Multiplexing
 
 ;;;###autoload
@@ -46,6 +64,15 @@ Returns the selected session or nil if cancelled.
 When called interactively, prompts for session selection."
   (interactive)
   (let* ((sessions (eca-list-sessions))
+         (choices (and (> (length sessions) 1)
+                       (mapcar (lambda (s)
+                                 (cons (format "Session %d: %s (%s) - %d chats"
+                                               (plist-get s :id)
+                                               (mapconcat #'identity (plist-get s :workspace-folders) ", ")
+                                               (plist-get s :status)
+                                               (plist-get s :chat-count))
+                                       (plist-get s :id)))
+                               sessions)))
          (session-id
           (or session-id
               (if (null sessions)
@@ -54,23 +81,17 @@ When called interactively, prompts for session selection."
                     nil)
                 (if (= (length sessions) 1)
                     (plist-get (car sessions) :id)
-                  (let ((choices (mapcar (lambda (s)
-                                           (format "Session %d: %s (%s) - %d chats"
-                                                   (plist-get s :id)
-                                                   (mapconcat #'identity (plist-get s :workspace-folders) ", ")
-                                                   (plist-get s :status)
-                                                   (plist-get s :chat-count)))
-                                         sessions)))
-                    (completing-read "Select ECA session: " choices nil t)))))))
+                  (cdr (assoc (completing-read "Select ECA session: " choices nil t)
+                              choices)))))))
     (when session-id
       (unless (boundp 'eca--sessions)
         (user-error "ECA not initialized"))
       (let ((session (condition-case nil
                          (eca-get eca--sessions session-id)
-                       (error nil))))
+                        (error nil))))
         (if session
             (progn
-              (setq-local eca--session-id-cache session-id)
+              (setq eca--session-id-cache session-id)
               (when (called-interactively-p 'interactive)
                 (eca-info "Switched to session %d" session-id))
               session)
@@ -133,7 +154,7 @@ POSITION is a buffer position (integer)."
              (start-line (line-number-at-pos start))
              (end-line (line-number-at-pos end))
              (start-char (- position start))
-             (end-char (- end position)))
+             (end-char (- end start)))
         (eca-chat--add-context
          (list :type "cursor"
                :path (expand-file-name file-path)
@@ -173,8 +194,6 @@ The content is saved to a temporary file and added as context."
             (message "Clipboard is empty")))
       (user-error "No ECA session active"))))
 
-(provide 'eca-ext)
-
 ;;; Temp File Management
 
 (defvar eca--context-temp-files nil
@@ -183,11 +202,13 @@ Used for cleanup on session end or Emacs exit.")
 
 (defun eca--cleanup-temp-context-files ()
   "Clean up all temporary context files created by eca-ext."
-  (dolist (file eca--context-temp-files)
-    (when (file-exists-p file)
-      (delete-file file)))
-  (setq eca--context-temp-files nil)
-  (eca-info "Cleaned up %d temporary context files" (length eca--context-temp-files)))
+  (let ((count (length eca--context-temp-files)))
+    (dolist (file eca--context-temp-files)
+      (when (file-exists-p file)
+        (delete-file file)))
+    (setq eca--context-temp-files nil)
+    (when (fboundp 'eca-info)
+      (eca-info "Cleaned up %d temporary context files" count))))
 
 (add-hook 'kill-emacs-hook #'eca--cleanup-temp-context-files)
 
@@ -197,5 +218,7 @@ Used for cleanup on session end or Emacs exit.")
 Returns FILE-PATH."
   (push file-path eca--context-temp-files)
   file-path)
+
+(provide 'eca-ext)
 
 ;;; eca-ext.el ends here
