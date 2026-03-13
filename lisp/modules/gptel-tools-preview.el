@@ -115,18 +115,20 @@ Returns the buffer."
       (setq-local buffer-read-only t))
     buf))
 
-(defun my/gptel--insert-preview-instructions ()
+(defun my/gptel--insert-preview-instructions (&optional buffer)
   "Insert preview instructions at the top of the preview buffer.
 
+BUFFER is the buffer to insert into (defaults to current buffer).
 Adds a separator line to make the diff content more readable.
 Confirmation happens in the minibuffer, not via keybindings."
-  (let ((inhibit-read-only t))
-    (goto-char (point-min))
-    (forward-line 1)
-    (insert "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-    (insert "Diff Preview - Confirm in minibuffer\n")
-    (insert "  y = apply    n = abort    ! = apply all    q = quit\n")
-    (insert "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")))
+  (with-current-buffer (or buffer (current-buffer))
+    (let ((inhibit-read-only t))
+      (goto-char (point-min))
+      (forward-line 1)
+      (insert "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+      (insert "Diff Preview - Confirm in minibuffer\n")
+      (insert "  y = apply    n = abort    ! = apply all    q = quit\n")
+      (insert "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"))))
 
 (defun my/gptel--run-diff (file1 file2)
   "Run diff between FILE1 and FILE2.
@@ -225,13 +227,13 @@ Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
                   (write-region replacement nil temp2 nil 'silent)
                   (my/gptel--run-diff temp1 temp2))))
           (unwind-protect
-              (let ((diff-buf (my/gptel--create-diff-buffer
-                               (my/gptel--unique-preview-buffer-name "*gptel-preview*")
-                               (format "Preview: %s" path)
-                               diff-output
-                               #'diff-mode)))
-                (my/gptel--insert-preview-instructions)
-                (my/gptel--display-preview-buffer diff-buf)
+(let ((diff-buf (my/gptel--create-diff-buffer
+                                (my/gptel--unique-preview-buffer-name "*gptel-preview*")
+                                (format "Preview: %s" path)
+                                diff-output
+                                #'diff-mode)))
+                 (my/gptel--insert-preview-instructions diff-buf)
+                 (my/gptel--display-preview-buffer diff-buf)
                 (my/gptel--prompt-for-preview-action
                  diff-buf
                  (lambda () (funcall wrapped-cb "Preview confirmed."))
@@ -260,7 +262,7 @@ Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
                       header
                       patch
                       #'diff-mode)))
-      (my/gptel--insert-preview-instructions)
+      (my/gptel--insert-preview-instructions diff-buf)
       (my/gptel--display-preview-buffer diff-buf)
       (my/gptel--prompt-for-preview-action
        diff-buf
@@ -286,7 +288,7 @@ Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
                       header
                       patch
                       #'diff-mode)))
-      (my/gptel--insert-preview-instructions)
+      (my/gptel--insert-preview-instructions diff-buf)
       (my/gptel--display-preview-buffer diff-buf)
       (my/gptel--prompt-for-preview-action
        diff-buf
