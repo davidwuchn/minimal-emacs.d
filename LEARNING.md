@@ -125,3 +125,9 @@
 - **P0 > P1 > P2 priority**: Fix critical gaps first. High-risk untested code is a bomb waiting to go off.
 - **Mock vs integration tests**: Mocks are fast but don't catch real bugs. Balance: mock for unit tests, real implementations for integration tests.
 - **Test pollution exists**: Some tests pass in isolation but fail when loaded together. Isolate and fix, or document known limitation.
+
+## Backend Integration Patterns
+- **Don't create parallel infrastructure**: If integrating with a system (like ai-code), use its existing mechanisms. ECA integrates via `ai-code-select-backend`, not a separate menu. Dead code claiming "menu integration" is misleading.
+- **Use existing session affinity**: `ai-code--repo-backend-alist` already tracks preferred backend per repo. Don't create a separate hash table for the same purpose.
+- **Delegate, don't duplicate**: If `ai-code-git-worktree-branch` exists, use it. Don't copy its logic into the bridge.
+- **Aspirational vs actual**: STATE.md should document what IS, not what could be. Claiming "menu integration" when menu items are never displayed is documentation debt.
