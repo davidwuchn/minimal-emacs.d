@@ -29,28 +29,18 @@
 (declare-function eca-chat-open "eca-chat" (session))
 (declare-function eca-chat-send-prompt "eca-chat" (session message))
 (declare-function eca-chat--get-last-buffer "eca-chat" (session))
-(declare-function eca-assert-session-running "eca-util" (session))
-(declare-function eca-chat--add-context "eca-chat" (context-plist))
-(declare-function eca-chat--with-current-buffer "eca-chat" (&rest body))
-(declare-function eca-chat--get-context "eca-chat" ())
 (declare-function eca-info "eca-util" (format-string &rest args))
-(declare-function eca-get "eca-util" (alist key))
-(declare-function eca--session-id "eca-util" (session))
 (declare-function eca--session-status "eca-util" (session))
-(declare-function eca--session-workspace-folders "eca-util" (session))
-(declare-function eca--session-chats "eca-util" (session))
-(declare-function eca--session-id-cache "eca-util" ())
-(declare-function eca-create-session "eca-util" (workspace-folders))
-(declare-function eca-delete-session "eca-util" (session))
 (declare-function eca-list-sessions "eca-ext" ())
-(declare-function eca-select-session "eca-ext" (&optional session-id))
 (declare-function eca-switch-to-session "eca-ext" (&optional session-id))
-(declare-function eca-create-session-for-workspace "eca-ext" (workspace-roots))
 (declare-function eca-chat-add-file-context "eca-ext" (session file-path))
 (declare-function eca-chat-add-repo-map-context "eca-ext" (session))
 (declare-function eca-chat-add-cursor-context "eca-ext" (session file-path position))
 (declare-function eca-chat-add-clipboard-context "eca-ext" (session content))
 (declare-function ai-code-read-string "ai-code-input" (prompt &optional initial-input candidate-list))
+
+(defvar ai-code-eca--config-warned nil
+  "Non-nil if missing config warning has already been shown.")
 
 (defun ai-code-eca--ensure-chat-buffer (session)
   "Ensure ECA chat buffer for SESSION exists and return it.
@@ -176,7 +166,7 @@ Returns an alist of (session-id . session-info) for integration with ai-code-men
   (ai-code-eca--ensure-available)
   (unless (fboundp 'eca-list-sessions)
     (user-error "Session multiplexing requires eca-ext.el (add to load-path)"))
-  (condition-case nil
+  (condition-case err
       (mapcar (lambda (session-info)
                 (cons (plist-get session-info :id)
                       (format "Session %d: %s (%d chats)"
@@ -184,7 +174,9 @@ Returns an alist of (session-id . session-info) for integration with ai-code-men
                               (mapconcat #'identity (plist-get session-info :workspace-folders) ", ")
                               (plist-get session-info :chat-count))))
               (eca-list-sessions))
-    (error nil)))
+    (error
+     (message "[ai-code-eca] Warning: Failed to list sessions: %s" (error-message-string err))
+     nil)))
 
 ;;;###autoload
 (defun ai-code-eca-switch-session (&optional session-id)
@@ -230,8 +222,8 @@ Warns if ECA config file is missing (non-fatal)."
       (user-error "ECA backend incomplete: function '%s' missing. Reinstall eca package" fn)))
   (let ((config-file (expand-file-name "~/.config/eca/config.json")))
     (when (and (not (file-exists-p config-file))
-               (not (get 'ai-code-eca--config-warned 'warned)))
-      (put 'ai-code-eca--config-warned 'warned t)
+               (not ai-code-eca--config-warned))
+      (setq ai-code-eca--config-warned t)
       (message "Note: ECA config file not found at %s (optional)" config-file))))
 
 ;;;###autoload
