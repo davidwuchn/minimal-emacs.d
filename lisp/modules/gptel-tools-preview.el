@@ -36,6 +36,22 @@ without user confirmation. Use with caution in production environments."
   :type 'boolean
   :group 'gptel-tools-preview)
 
+(defvar gptel-tools-preview--never-ask-again nil
+  "If non-nil, skip all future preview confirmations this session.
+
+Set to t when user answers 'N' (never ask again) to a preview prompt.
+Resets to nil when Emacs restarts or when user manually resets via
+`gptel-tools-preview-reset-confirmation'.
+
+See also `gptel-tools-preview-enabled' for permanent disable.")
+
+(defun gptel-tools-preview-reset-confirmation ()
+  "Reset the 'never ask again' flag.
+Re-enables preview confirmations for the rest of this session."
+  (interactive)
+  (setq gptel-tools-preview--never-ask-again nil)
+  (message "Preview confirmations re-enabled for this session."))
+
 (defcustom gptel-tools-preview-window-height 0.4
   "Height of preview windows as fraction of frame."
   :type 'float
@@ -119,6 +135,7 @@ Confirmation happens in the minibuffer, not via keybindings."
     (forward-line 1)
     (insert "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
     (insert "Diff Preview - Confirm in minibuffer\n")
+    (insert "  y = apply    n = abort    N = never ask again    q = quit\n")
     (insert "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")))
 
 (defun my/gptel--prompt-for-confirmation (buffer on-confirm on-abort)
@@ -128,22 +145,38 @@ BUFFER is the preview buffer being shown.
 ON-CONFIRM is called if user accepts.
 ON-ABORT is called if user rejects.
 
-Prompts in minibuffer: 'Apply changes? (n/y/q)'
+Prompts in minibuffer: 'Apply changes? (y/n/N/q)'
+  y - Yes, apply this change
+  n - No, abort this change
+  N - Never ask again (apply this and all future changes this session)
+  q - Quit (same as n)
+
 This is a blocking call - user must respond before Emacs continues."
-  (unwind-protect
-      (let ((prompt (format "Apply changes? [n/y=apply, q=abort]: ")))
-        (condition-case err
-            (let* ((result (read-from-minibuffer prompt))
-                   (accepted (member result '("n" "y" ""))))
-              (if accepted
-                  (funcall on-confirm)
-                (funcall on-abort)))
-          (quit
-           (funcall on-abort))
-          (error
-           (funcall on-abort))))
-    (when (buffer-live-p buffer)
-      (kill-buffer buffer))))
+  (if gptel-tools-preview--never-ask-again
+      ;; Never-ask-again was set earlier - auto-confirm
+      (progn
+        (when (buffer-live-p buffer)
+          (kill-buffer buffer))
+        (funcall on-confirm))
+    ;; Normal flow - prompt user
+    (unwind-protect
+        (let ((prompt (format "Apply changes? [y=apply, n=abort, N=never ask again, q=quit]: ")))
+          (condition-case err
+              (let* ((result (read-from-minibuffer prompt))
+                     (accepted (member result '("y" "n" "Y" "N" "")))
+                     (never-again (member result '("N" "never" "Never"))))
+                (when never-again
+                  (setq gptel-tools-preview--never-ask-again t)
+                  (message "Preview confirmations disabled for this session. M-x gptel-tools-preview-reset-confirmation to re-enable."))
+                (if (or accepted never-again)
+                    (funcall on-confirm)
+                  (funcall on-abort)))
+            (quit
+             (funcall on-abort))
+            (error
+             (funcall on-abort))))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
 
 ;;; Overlay-based Preview (alternative to buffer)
 
@@ -219,9 +252,11 @@ Returns the diff output string."
 Shows diff between ORIGINAL and REPLACEMENT for PATH.
 CALLBACK is called when user confirms or aborts.
 
-When `gptel-tools-preview-enabled' is nil, skips preview and confirms
-immediately (use with caution)."
-  (if (not gptel-tools-preview-enabled)
+When `gptel-tools-preview-enabled' is nil, or when
+`gptel-tools-preview--never-ask-again' is t, skips preview and
+confirms immediately (use with caution)."
+  (if (or (not gptel-tools-preview-enabled)
+           gptel-tools-preview--never-ask-again)
       ;; Preview disabled - auto-confirm
       (funcall callback "Preview disabled, auto-confirmed.")
     ;; Preview enabled - show diff and prompt
@@ -267,9 +302,11 @@ BUFFER is the originating buffer.
 CALLBACK is called with the result.
 HEADER is the prompt to show.
 
-When `gptel-tools-preview-enabled' is nil, skips preview and confirms
-immediately (use with caution)."
-  (if (not gptel-tools-preview-enabled)
+When `gptel-tools-preview-enabled' is nil, or when
+`gptel-tools-preview--never-ask-again' is t, skips preview and
+confirms immediately (use with caution)."
+  (if (or (not gptel-tools-preview-enabled)
+           gptel-tools-preview--never-ask-again)
       ;; Preview disabled - auto-confirm
       (funcall callback "Preview disabled, auto-confirmed.")
     ;; Preview enabled
@@ -296,9 +333,11 @@ ON-CONFIRM is called with wrapped callback when user confirms.
 ON-ABORT is called with wrapped callback when user aborts.
 HEADER is the prompt to show.
 
-When `gptel-tools-preview-enabled' is nil, skips preview and calls
+When `gptel-tools-preview-enabled' is nil, or when
+`gptel-tools-preview--never-ask-again' is t, skips preview and calls
 ON-CONFIRM immediately (use with caution)."
-  (if (not gptel-tools-preview-enabled)
+  (if (or (not gptel-tools-preview-enabled)
+           gptel-tools-preview--never-ask-again)
       ;; Preview disabled - auto-confirm
       (funcall on-confirm callback)
     ;; Preview enabled
