@@ -171,12 +171,14 @@ The content is saved to a temporary file and added as context."
                     (or (bound-and-true-p eca-config-directory)
                         (expand-file-name "~/.eca"))))
          (tmp-subdir (expand-file-name "tmp" temp-dir))
-         (temp-file (eca--register-temp-file
-                     (expand-file-name (format "clipboard-%d-%d.txt" (emacs-pid) (random 10000)) tmp-subdir))))
+         (temp-file (expand-file-name
+                     (format "clipboard-%d-%d-%d.txt" (emacs-pid) (floor (float-time)) (random 1000000))
+                     tmp-subdir)))
     (unless (file-directory-p tmp-subdir)
       (make-directory tmp-subdir t))
     (with-temp-file temp-file
       (insert content))
+    (eca--register-temp-file temp-file)
     (eca-chat--with-current-buffer (eca-chat--get-last-buffer session)
       (eca-chat--add-context (list :type "file" :path temp-file))
       (eca-chat-open session))
@@ -204,10 +206,12 @@ Used for cleanup on session end or Emacs exit.")
   "Clean up all temporary context files created by eca-ext."
   (let ((count (length eca--context-temp-files)))
     (dolist (file eca--context-temp-files)
-      (when (file-exists-p file)
-        (delete-file file)))
+      (condition-case nil
+          (when (and file (file-exists-p file))
+            (delete-file file))
+        (error nil)))
     (setq eca--context-temp-files nil)
-    (when (fboundp 'eca-info)
+    (when (and (fboundp 'eca-info) (> count 0))
       (eca-info "Cleaned up %d temporary context files" count))))
 
 (add-hook 'kill-emacs-hook #'eca--cleanup-temp-context-files)
@@ -215,9 +219,16 @@ Used for cleanup on session end or Emacs exit.")
 ;;;###autoload
 (defun eca--register-temp-file (file-path)
   "Register FILE-PATH for cleanup on Emacs exit.
-Returns FILE-PATH."
-  (push file-path eca--context-temp-files)
-  file-path)
+Returns FILE-PATH.  Only registers if file exists."
+  (when (and file-path (file-exists-p file-path))
+    (push file-path eca--context-temp-files)
+    file-path))
+
+;;;###autoload
+(defun eca--cleanup-session-temp-files (_session)
+  "Clean up temp files associated with SESSION.
+Currently a no-op; future enhancement: track files per-session."
+  nil)
 
 (provide 'eca-ext)
 
