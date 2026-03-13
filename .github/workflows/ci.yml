@@ -172,6 +172,7 @@ jobs:
             -l tests/test-gptel-tools-core.el \
             -l tests/test-gptel-tools-preview.el \
             -l tests/test-gptel-tools-programmatic.el \
+            -l tests/test-nucleus-tools.el \
             -f ert-run-tests-batch-and-exit
 
       - name: Verify Nucleus Tool Contracts
