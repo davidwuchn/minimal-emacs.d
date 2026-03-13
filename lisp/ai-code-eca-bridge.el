@@ -68,8 +68,10 @@ With prefix ARG, prompt for additional ECA arguments.
 This function satisfies ai-code's :start backend contract."
   (interactive "P")
   (ai-code-eca--ensure-available)
-  (let ((current-prefix-arg arg))
-    (call-interactively #'eca))
+  (if arg
+      (let ((current-prefix-arg arg))
+        (funcall-interactively #'eca))
+    (funcall #'eca))
   (message "ECA session started"))
 
 ;;;###autoload
@@ -219,12 +221,18 @@ This function satisfies ai-code's :resume backend contract."
 (defun ai-code-eca--ensure-available ()
   "Ensure `eca' package and required functions are available.
 
-Signals user-error if ECA cannot be used."
+Signals user-error if ECA cannot be used.
+Warns if ECA config file is missing (non-fatal)."
   (unless (require 'eca nil t)
     (user-error "ECA backend not available (package not loaded). Install with: M-x package-install RET eca RET"))
   (dolist (fn '(eca eca-session eca-chat-open eca-chat-send-prompt eca-chat--get-last-buffer))
     (unless (fboundp fn)
-      (user-error "ECA backend incomplete: function '%s' missing. Reinstall eca package" fn))))
+      (user-error "ECA backend incomplete: function '%s' missing. Reinstall eca package" fn)))
+  (let ((config-file (expand-file-name "~/.config/eca/config.json")))
+    (when (and (not (file-exists-p config-file))
+               (not (get 'ai-code-eca--config-warned 'warned)))
+      (put 'ai-code-eca--config-warned 'warned t)
+      (message "Note: ECA config file not found at %s (optional)" config-file))))
 
 ;;;###autoload
 (defun ai-code-eca-version ()
@@ -259,12 +267,15 @@ and installing the latest version of ECA."
   "Verify ECA backend is functional.
 
 Returns non-nil if ECA is available and responsive, nil otherwise.
+Checks that session exists and is in a responsive state.
 This function satisfies ai-code's :verify backend contract."
   (condition-case nil
       (progn
         (ai-code-eca--ensure-available)
         (let ((session (eca-session)))
           (and session
+               (or (not (fboundp 'eca--session-status))
+                   (eq (eca--session-status session) 'ready))
                (eca-chat--get-last-buffer session)
                t)))
     (error nil)))
