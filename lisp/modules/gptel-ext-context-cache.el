@@ -260,9 +260,15 @@ Runs asynchronously; returns nil immediately."
 ;;; Public Query API
 
 (defun my/gptel--context-window ()
-  "Return model context window if available, else fall back to gptel-max-tokens.
+  "Return model context window if available, else fall back to defaults.
 
-Fallback is approximate and may be smaller than actual context."
+Fallback order:
+1. Cached context window for model-id
+2. gptel model tables (OpenAI, Gemini, etc.)
+3. OpenRouter API fetch (if using OpenRouter)
+4. my/gptel-default-context-window (128k default)
+
+Note: We do NOT use gptel-max-tokens as it's for response length, not context window."
   (let* ((model gptel-model)
          (model-id (my/gptel--model-id-string model))
          (window nil))
@@ -270,20 +276,21 @@ Fallback is approximate and may be smaller than actual context."
     (when (and (stringp model-id)
                (gethash model-id my/gptel--context-window-cache))
       (setq window (gethash model-id my/gptel--context-window-cache)))
+    ;; 2) Check gptel model tables
     (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
       (when (and (boundp var) (not window))
         (let ((entry (assq model (symbol-value var))))
           (when entry
             (setq window (my/gptel--normalize-context-window
                           (plist-get (cdr entry) :context-window)))))))
-    ;; 2) If OpenRouter is in use and no metadata/cached value, fetch it.
+    ;; 3) If OpenRouter is in use and no metadata/cached value, fetch it.
     (when (and (not window)
                (boundp 'gptel--openrouter)
                (eq gptel-backend gptel--openrouter)
                (stringp model-id))
       (my/gptel--openrouter-fetch-context-window model))
+    ;; 4) Fall back to default (NOT gptel-max-tokens which is response length)
     (or window
-        gptel-max-tokens
         my/gptel-default-context-window)))
 
 ;;; Auto-refresh Timer
