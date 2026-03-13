@@ -153,6 +153,21 @@ This function satisfies ai-code's :send backend contract."
       (user-error "No ECA session. Start one with M-x ai-code-eca-start"))))
 
 ;;;###autoload
+(defun ai-code-eca-add-repo-map-context ()
+  "Add repository map context to ECA session."
+  (interactive)
+  (ai-code-eca--ensure-available)
+  (unless (fboundp 'eca-chat-add-repo-map-context)
+    (user-error "Context features require eca-ext.el (add to load-path)"))
+  (let ((session (eca-session)))
+    (if session
+        (progn
+          (ai-code-eca--ensure-chat-buffer session)
+          (eca-chat-add-repo-map-context session)
+          (eca-info "Added repo map context"))
+      (user-error "No ECA session. Start one with M-x ai-code-eca-start"))))
+
+;;;###autoload
 (defun ai-code-eca-get-sessions ()
   "Return list of active ECA sessions for ai-code menu display.
 Returns an alist of (session-id . session-info) for integration with ai-code-menu."
