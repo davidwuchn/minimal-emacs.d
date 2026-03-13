@@ -22,3 +22,5 @@ lisp/modules/*.elc
 !INTRO.md
 !assistant/
 !.ignore
+!tests/
+!tests/*.el

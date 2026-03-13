@@ -1,0 +1,186 @@
+;;; test-eca-ext.el --- Tests for eca-ext.el -*- lexical-binding: t; no-byte-compile: t; -*-
+
+(require 'ert)
+(require 'cl-lib)
+
+;; Stub ECA functions/variables
+(defvar eca--sessions nil)
+(defvar eca--session-id-cache nil)
+(defvar eca-config-directory nil)
+(defvar eca--context-temp-files nil)
+
+(defun eca-session () nil)
+(defun eca-get (alist key) (cdr (assoc key alist)))
+(defun eca-info (fmt &rest args) (apply #'message fmt args))
+(defun eca-assert-session-running (session) t)
+(defun eca--session-id (session) session)
+(defun eca--session-status (session) 'running)
+(defun eca--session-workspace-folders (session) '("/test"))
+(defun eca--session-chats (session) nil)
+(defun eca-chat-open (session) nil)
+(defun eca-chat--get-last-buffer (session) (current-buffer))
+(defun eca-chat--add-context (ctx) nil)
+(defmacro eca-chat--with-current-buffer (buf &rest body) `(progn ,@body))
+
+;; Load the module
+(load-file (expand-file-name "../lisp/eca-ext.el" (file-name-directory load-file-name)))
+
+;;; Session listing tests
+
+(ert-deftest eca-ext/list-sessions-returns-nil-when-empty ()
+  "eca-list-sessions returns nil when no sessions exist."
+  (let ((eca--sessions nil))
+    (should (null (eca-list-sessions)))))
+
+(ert-deftest eca-ext/list-sessions-returns-nil-when-unbound ()
+  "eca-list-sessions returns nil when eca--sessions is unbound."
+  (should (null (let ((eca--sessions (default-value 'eca--sessions)))
+                  (makunbound 'eca--sessions)
+                  (eca-list-sessions)))))
+
+(ert-deftest eca-ext/list-sessions-returns-plist ()
+  "eca-list-sessions returns list of plists with expected keys."
+  (let ((eca--sessions '((1 . mock-session))))
+    (cl-letf (((symbol-function 'eca--session-id) (lambda (_) 1))
+              ((symbol-function 'eca--session-status) (lambda (_) 'running))
+              ((symbol-function 'eca--session-workspace-folders) (lambda (_) '("/tmp")))
+              ((symbol-function 'eca--session-chats) (lambda (_) nil)))
+      (let ((sessions (eca-list-sessions)))
+        (should (listp sessions))
+        (should (= (length sessions) 1))
+        (let ((s (car sessions)))
+          (should (plist-get s :id))
+          (should (plist-get s :status))
+          (should (plist-get s :workspace-folders))
+          (should (plist-get s :chat-count)))))))
+
+;;; Temp file management tests
+
+(ert-deftest eca-ext/temp-file-tracking-per-session ()
+  "Temp files are tracked per session."
+  (let ((eca--context-temp-files nil)
+        (tmp-dir (make-temp-file "eca-test" t)))
+    (unwind-protect
+        (let ((file1 (expand-file-name "file1.txt" tmp-dir))
+              (file2 (expand-file-name "file2.txt" tmp-dir))
+              (file3 (expand-file-name "file3.txt" tmp-dir)))
+          ;; Create files
+          (write-region "test" nil file1)
+          (write-region "test" nil file2)
+          (write-region "test" nil file3)
+          
+          ;; Register files for different sessions
+          (eca--register-temp-file file1 1)
+          (eca--register-temp-file file2 1)
+          (eca--register-temp-file file3 2)
+          
+          ;; Verify structure
+          (should (listp eca--context-temp-files))
+          (should (= (length eca--context-temp-files) 2))
+          
+          ;; Verify files for session 1
+          (let ((entry1 (assoc 1 eca--context-temp-files)))
+            (should entry1)
+            (should (= (length (cdr entry1)) 2)))
+          
+          ;; Verify files for session 2
+          (let ((entry2 (assoc 2 eca--context-temp-files)))
+            (should entry2)
+            (should (= (length (cdr entry2)) 1))))
+      (when (file-directory-p tmp-dir)
+        (delete-directory tmp-dir t)))))
+
+(ert-deftest eca-ext/register-temp-file-skips-nonexistent ()
+  "eca--register-temp-file returns nil for non-existent files."
+  (let ((eca--context-temp-files nil))
+    (should (null (eca--register-temp-file "/nonexistent/file.txt")))
+    (should (null eca--context-temp-files))))
+
+(ert-deftest eca-ext/register-temp-file-uses-current-session ()
+  "eca--register-temp-file uses current session when not specified."
+  (let ((eca--context-temp-files nil)
+        (eca--session-id-cache 99))
+    ;; Create a real temp file
+    (let ((tmp-file (make-temp-file "eca-test")))
+      (unwind-protect
+          (progn
+            (should (eca--register-temp-file tmp-file))
+            (let ((entry (assoc 99 eca--context-temp-files)))
+              (should entry)
+              (should (member tmp-file (cdr entry)))))
+        (when (file-exists-p tmp-file)
+          (delete-file tmp-file))))))
+
+(ert-deftest eca-ext/cleanup-session-temp-files ()
+  "eca--cleanup-session-temp-files removes session's files."
+  (let ((eca--context-temp-files nil)
+        (tmp-dir (make-temp-file "eca-test-dir" t)))
+    (unwind-protect
+        (let ((file1 (expand-file-name "test1.txt" tmp-dir))
+              (file2 (expand-file-name "test2.txt" tmp-dir))
+              (file3 (expand-file-name "other.txt" tmp-dir)))
+          ;; Create files
+          (write-region "test" nil file1)
+          (write-region "test" nil file2)
+          (write-region "test" nil file3)
+          
+          ;; Register them
+          (eca--register-temp-file file1 1)
+          (eca--register-temp-file file2 1)
+          (eca--register-temp-file file3 2)
+          
+          ;; Cleanup session 1
+          (eca--cleanup-session-temp-files 1)
+          
+          ;; Verify session 1 files deleted
+          (should-not (file-exists-p file1))
+          (should-not (file-exists-p file2))
+          
+          ;; Verify session 1 entry removed
+          (should-not (assoc 1 eca--context-temp-files))
+          
+          ;; Verify other session still tracked
+          (should (assoc 2 eca--context-temp-files)))
+      ;; Cleanup
+      (when (file-directory-p tmp-dir)
+        (delete-directory tmp-dir t)))))
+
+(ert-deftest eca-ext/cleanup-all-temp-files ()
+  "eca--cleanup-temp-context-files removes all tracked files."
+  (let ((eca--context-temp-files nil)
+        (tmp-dir (make-temp-file "eca-test-dir" t)))
+    (unwind-protect
+        (let ((file1 (expand-file-name "test1.txt" tmp-dir))
+              (file2 (expand-file-name "test2.txt" tmp-dir)))
+          (write-region "test" nil file1)
+          (write-region "test" nil file2)
+          
+          (eca--register-temp-file file1 1)
+          (eca--register-temp-file file2 2)
+          
+          (should (file-exists-p file1))
+          (should (file-exists-p file2))
+          
+          (eca--cleanup-temp-context-files)
+          
+          (should-not (file-exists-p file1))
+          (should-not (file-exists-p file2))
+          (should (null eca--context-temp-files)))
+      (when (file-directory-p tmp-dir)
+        (delete-directory tmp-dir t)))))
+
+;;; Session creation validation tests
+
+(ert-deftest eca-ext/create-session-validates-result ()
+  "eca-create-session-for-workspace validates session creation."
+  (let ((called-with nil))
+    (cl-letf (((symbol-function 'eca-create-session)
+               (lambda (roots) (setq called-with roots) nil)))
+      (condition-case err
+          (eca-create-session-for-workspace '("/test"))
+        (user-error
+         (should (string-match-p "Failed to create" (error-message-string err))))))))
+
+(provide 'test-eca-ext)
+
+;;; test-eca-ext.el ends here
