@@ -36,7 +36,8 @@ Set to nil for:
 Warning: Disabling preview means changes are applied immediately
 without user confirmation. Use with caution in production environments."
   :type 'boolean
-  :group 'gptel-tools-preview)
+  :group 'gptel-tools-preview
+  :version "3.1.0")
 
 (defvar gptel-tools-preview--never-ask-again nil
   "If non-nil, skip all future preview confirmations this session.
@@ -57,9 +58,18 @@ Re-enables preview confirmations for the rest of this session."
 (defcustom gptel-tools-preview-window-height 0.4
   "Height of preview windows as fraction of frame."
   :type 'float
-  :group 'gptel-tools-preview)
+  :group 'gptel-tools-preview
+  :version "3.1.0")
 
 ;;; Core Preview Functions
+
+(defun my/gptel--preview-bypass-p ()
+  "Return non-nil if preview should be bypassed.
+
+Checks both `gptel-tools-preview-enabled' and
+`gptel-tools-preview--never-ask-again'."
+  (or (not gptel-tools-preview-enabled)
+      gptel-tools-preview--never-ask-again))
 
 (defun my/gptel--make-preview-callback (buffer callback)
   "Wrap CALLBACK as an idempotent, FSM-restoring preview callback.
@@ -79,15 +89,14 @@ with its argument in the buffer context.  Subsequent calls are no-ops."
               (funcall callback result))
           (funcall callback result))))))
 
-(defun my/gptel--setup-preview-keys (buffer on-confirm on-abort)
-  "Set up confirmation for preview BUFFER.
+(defun my/gptel--prompt-for-preview-action (buffer on-confirm on-abort)
+  "Prompt for preview action in BUFFER.
 
 ON-CONFIRM and ON-ABORT are called with no arguments when the user
 confirms or aborts respectively.
 
 Confirmation happens via minibuffer prompt, not keybindings.
 This keeps the preview buffer focused on the diff content."
-  ;; Display the buffer first, then prompt
   (my/gptel--prompt-for-confirmation buffer on-confirm on-abort))
 
 (defun my/gptel--create-diff-buffer (name header &optional content mode)
@@ -202,14 +211,9 @@ This is a blocking call - user must respond before Emacs continues."
 Shows diff between ORIGINAL and REPLACEMENT for PATH.
 CALLBACK is called when user confirms or aborts.
 
-When `gptel-tools-preview-enabled' is nil, or when
-`gptel-tools-preview--never-ask-again' is t, skips preview and
-confirms immediately (use with caution)."
-  (if (or (not gptel-tools-preview-enabled)
-           gptel-tools-preview--never-ask-again)
-      ;; Preview disabled - auto-confirm
+Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
+  (if (my/gptel--preview-bypass-p)
       (funcall callback "Preview disabled, auto-confirmed.")
-    ;; Preview enabled - show diff and prompt
     (condition-case err
         (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
                (temp1 (my/gptel-make-temp-file "gptel-preview-orig-"))
@@ -227,7 +231,7 @@ confirms immediately (use with caution)."
                                #'diff-mode)))
                 (my/gptel--insert-preview-instructions)
                 (my/gptel--display-preview-buffer diff-buf)
-                (my/gptel--setup-preview-keys
+                (my/gptel--prompt-for-preview-action
                  diff-buf
                  (lambda () (funcall wrapped-cb "Preview confirmed."))
                  (lambda () (funcall wrapped-cb "Preview aborted."))))
@@ -246,14 +250,9 @@ BUFFER is the originating buffer.
 CALLBACK is called with the result.
 HEADER is the prompt to show.
 
-When `gptel-tools-preview-enabled' is nil, or when
-`gptel-tools-preview--never-ask-again' is t, skips preview and
-confirms immediately (use with caution)."
-  (if (or (not gptel-tools-preview-enabled)
-           gptel-tools-preview--never-ask-again)
-      ;; Preview disabled - auto-confirm
+Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
+  (if (my/gptel--preview-bypass-p)
       (funcall callback "Preview disabled, auto-confirmed.")
-    ;; Preview enabled
     (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
            (diff-buf (my/gptel--create-diff-buffer
                       (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
@@ -262,7 +261,7 @@ confirms immediately (use with caution)."
                       #'diff-mode)))
       (my/gptel--insert-preview-instructions)
       (my/gptel--display-preview-buffer diff-buf)
-      (my/gptel--setup-preview-keys
+      (my/gptel--prompt-for-preview-action
        diff-buf
        (lambda () (funcall wrapped-cb "Patch confirmed."))
        (lambda () (funcall wrapped-cb "Patch aborted."))))))
@@ -277,14 +276,9 @@ ON-CONFIRM is called with wrapped callback when user confirms.
 ON-ABORT is called with wrapped callback when user aborts.
 HEADER is the prompt to show.
 
-When `gptel-tools-preview-enabled' is nil, or when
-`gptel-tools-preview--never-ask-again' is t, skips preview and calls
-ON-CONFIRM immediately (use with caution)."
-  (if (or (not gptel-tools-preview-enabled)
-           gptel-tools-preview--never-ask-again)
-      ;; Preview disabled - auto-confirm
+Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
+  (if (my/gptel--preview-bypass-p)
       (funcall on-confirm callback)
-    ;; Preview enabled
     (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
            (diff-buf (my/gptel--create-diff-buffer
                       (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
@@ -293,7 +287,7 @@ ON-CONFIRM immediately (use with caution)."
                       #'diff-mode)))
       (my/gptel--insert-preview-instructions)
       (my/gptel--display-preview-buffer diff-buf)
-      (my/gptel--setup-preview-keys
+      (my/gptel--prompt-for-preview-action
        diff-buf
        (lambda () (funcall on-confirm wrapped-cb))
        (lambda () (funcall on-abort wrapped-cb))))))
@@ -342,7 +336,19 @@ Auto-detects mode from which arguments are provided."
                   ;; Error: insufficient arguments
                   (t
                    (funcall callback
-                            "Error: Preview requires either (path + replacement) or (patch)."))))
+                            (concat "Error: Invalid Preview arguments.\n"
+                                    "Required one of:\n"
+                                    "  1. path + replacement (file change mode)\n"
+                                    "  2. patch (unified diff mode)\n"
+                                    "Received: "
+                                    (cond
+                                     ((and path (not replacement))
+                                      "path without replacement")
+                                     ((and replacement (not path))
+                                      "replacement without path")
+                                     ((and original (or (not path) (not replacement)))
+                                      "original but missing path/replacement")
+                                     (t "no valid argument combination")))))))
      :description "Preview file changes or patches with diff view. Provide either path+replacement or a unified diff patch."
      :args '((:name "path"
               :type string
