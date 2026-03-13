@@ -97,6 +97,7 @@ This is the core patch application logic for preview integration."
   (let* ((out-buf (generate-new-buffer " *gptel-patch*"))
          (default-directory (file-name-directory target))
          (patch-options '("--forward" "--verbose" "--batch"))
+         (cb-called nil)
          (proc
           (make-process
            :name "gptel-patch"
@@ -107,27 +108,32 @@ This is the core patch application logic for preview integration."
            :sentinel
            (lambda (p _event)
              (when (memq (process-status p) '(exit signal))
-               (let* ((status (process-exit-status p))
-                      (out (with-current-buffer out-buf (buffer-string))))
-                 (when (buffer-live-p out-buf) (kill-buffer out-buf))
-                 (if (= status 0)
+               (unless cb-called
+                 (setq cb-called t)
+                 (let* ((status (process-exit-status p))
+                        (out (with-current-buffer out-buf (buffer-string))))
+                   (when (buffer-live-p out-buf) (kill-buffer out-buf))
+                   (if (= status 0)
+                       (funcall callback
+                                (format "Diff successfully applied to %s.\nPatch STDOUT:\n%s"
+                                        target (string-trim out)))
                      (funcall callback
-                              (format "Diff successfully applied to %s.\nPatch STDOUT:\n%s"
-                                      target (string-trim out)))
-                   (funcall callback
-                            (format "Error: Failed to apply diff to %s (exit %s).\nPatch STDOUT:\n%s"
-                                    target status (string-trim out))))))))))
+                              (format "Error: Failed to apply diff to %s (exit %s).\nPatch STDOUT:\n%s"
+                                      target status (string-trim out)))))))))))
     (process-put proc 'my/gptel-managed t)
     (process-send-string proc patch-text)
     (process-send-eof proc)
     (run-at-time my/gptel-edit-timeout nil
                  (lambda (p buf)
-                   (when (process-live-p p)
-                     (ignore-errors (set-process-filter p #'ignore))
-                     (ignore-errors (set-process-sentinel p #'ignore))
-                     (delete-process p))
-                   (when (buffer-live-p buf) (kill-buffer buf))
-                   (funcall callback "Error: edit/patch timed out."))
+                   (unless cb-called
+                     (when (process-live-p p)
+                       (message "gptel-edit: patch timed out, cleaning up process")
+                       (ignore-errors (set-process-filter p #'ignore))
+                       (ignore-errors (set-process-sentinel p #'ignore))
+                       (delete-process p))
+                     (when (buffer-live-p buf) (kill-buffer buf))
+                     (setq cb-called t)
+                     (funcall callback "Error: edit/patch timed out.")))
                  proc out-buf)))
 
 ;;; Tool Registration
