@@ -710,16 +710,19 @@ Fetches latest from VC repository and rebuilds."
   ;; Stop context sync timer
   (when ai-code-eca-context-sync-timer
     (cancel-timer ai-code-eca-context-sync-timer))
-  ;; Remove keybindings
+  ;; Remove keybindings from eca-chat-mode-map
   (when (boundp 'eca-chat-mode-map)
     (define-key eca-chat-mode-map (kbd "C-c C-f") nil)
     (define-key eca-chat-mode-map (kbd "C-c C-c") nil)
     (define-key eca-chat-mode-map (kbd "C-c C-m") nil)
     (define-key eca-chat-mode-map (kbd "C-c C-y") nil)
-    (define-key eca-chat-mode-map (kbd "C-c C-w") nil))
+    (define-key eca-chat-mode-map (kbd "C-c C-w") nil)
+    (define-key eca-chat-mode-map (kbd "C-c W") nil))
   ;; Unregister backend
   (setq ai-code-backends (assq-delete-all 'eca ai-code-backends))
   ;; Remove advice
+  (ignore-errors
+    (advice-remove 'ai-code-context-action #'ai-code-eca--around-context-action))
   (ignore-errors
     (advice-remove 'gptel-agent #'ai-code-eca--setup-worktree-keybindings)))
 

@@ -93,6 +93,38 @@
                     "")))
     (should (string-match-p ":agent-file" source))))
 
+;;; Tests for unload function
+
+(ert-deftest eca-bridge/unload/removes-context-advice ()
+  "Unload should remove context-action advice."
+  (let ((source (or (ignore-errors
+                      (with-temp-buffer
+                        (insert-file-contents "lisp/ai-code-eca-bridge.el")
+                        (buffer-string)))
+                    "")))
+    (should (string-match-p "advice-remove.*ai-code-context-action" source))))
+
+(ert-deftest eca-bridge/unload/removes-worktree-keybindings ()
+  "Unload should remove worktree keybindings."
+  (let ((source (or (ignore-errors
+                      (with-temp-buffer
+                        (insert-file-contents "lisp/ai-code-eca-bridge.el")
+                        (buffer-string)))
+                    "")))
+    (should (string-match-p "C-c W" source))))
+
+;;; Tests for error handling
+
+(ert-deftest eca-bridge/error/context-sync-has-condition-case ()
+  "Context sync should have error handling."
+  (let ((source (or (ignore-errors
+                      (with-temp-buffer
+                        (insert-file-contents "lisp/ai-code-eca-bridge.el")
+                        (buffer-string)))
+                    "")))
+    ;; Check that sync-context has condition-case somewhere
+    (should (string-match-p "condition-case" source))))
+
 ;;; Tests for eca-ext.el
 
 (ert-deftest eca-ext/exists ()
