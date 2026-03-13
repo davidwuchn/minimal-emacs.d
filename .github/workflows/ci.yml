@@ -106,6 +106,30 @@ jobs:
             -l tests/test-wrapped-fsm.el \
             -f ert-run-tests-batch-and-exit
 
+      - name: Run Agent/Bash/Code Tool Tests
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-gptel-tools-agent.el \
+            -l tests/test-gptel-tools-bash.el \
+            -l tests/test-gptel-tools-code.el \
+            -f ert-run-tests-batch-and-exit
+
+      - name: Run Glob/Grep/Introspection Tests
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-gptel-tools-glob.el \
+            -l tests/test-gptel-tools-grep.el \
+            -l tests/test-gptel-tools-introspection.el \
+            -f ert-run-tests-batch-and-exit
+
+      - name: Run Core/Preview/Programmatic Tool Tests
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-gptel-tools-core.el \
+            -l tests/test-gptel-tools-preview.el \
+            -l tests/test-gptel-tools-programmatic.el \
+            -f ert-run-tests-batch-and-exit
+
       - name: Verify Nucleus Tool Contracts
         run: |
           ./scripts/verify-nucleus.sh
