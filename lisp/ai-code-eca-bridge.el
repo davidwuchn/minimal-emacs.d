@@ -559,19 +559,18 @@ via `ai-code-select-backend'."
   ;; Check if already registered
   (unless (assoc 'eca ai-code-backends)
     (add-to-list 'ai-code-backends
-                 '(eca
-                   :label "ECA (Editor Code Assistant)"
-                   :require ai-code-eca-bridge
-                   :start ai-code-eca-start
-                   :switch ai-code-eca-switch
-                   :send ai-code-eca-send
-                   :resume ai-code-eca-resume-affinity    ; Uses session affinity
-                   :verify ai-code-eca-verify-health      ; Improved health check
-                   :config "~/.config/eca/config.json"    ; ECA global config
-                   :agent-file "AGENTS.md"                ; Standard agent instructions
-                   :upgrade ai-code-eca-upgrade-vc        ; VC-aware upgrade
-                   :cli nil                               ; ECA is an Emacs package, not a CLI binary
-                   :install-skills ai-code-eca-install-skills)  ; Skills installation function
+'(eca
+                    :label "ECA (Editor Code Assistant)"
+                    :require ai-code-eca-bridge
+                    :start ai-code-eca-start
+                    :switch ai-code-eca-switch
+                    :send ai-code-eca-send
+                    :resume ai-code-eca-resume-affinity
+                    :config "~/.config/eca/config.json"
+                    :agent-file "AGENTS.md"
+                    :upgrade ai-code-eca-upgrade-vc
+                    :cli "eca"
+                    :install-skills ai-code-eca-install-skills)
                  t)  ; Append to end of list
     (message "ECA backend registered with ai-code"))
   
@@ -624,17 +623,16 @@ Uses ai-code--repo-backend-alist for unified session management."
   "Resume ECA session with affinity for current project.
 
 If ECA is the preferred backend for this project, resume or start.
-Otherwise just start a new session."
+Otherwise just start a new session.
+Does NOT save affinity - use explicit switch for that."
   (interactive)
   (ai-code-eca--ensure-available)
   (let ((session (eca-session)))
     (if session
         (progn
           (pop-to-buffer (ai-code-eca--ensure-chat-buffer session))
-          (ai-code-eca--save-session-affinity)
           (message "Resumed ECA session"))
       (ai-code-eca-start)
-      (ai-code-eca--save-session-affinity)
       (message "Started new ECA session"))))
 
 ;;; ==============================================================================
@@ -728,6 +726,22 @@ Fetches latest from VC repository and rebuilds."
 (add-hook 'ai-code-eca-bridge-unload-hook #'ai-code-eca--unload-function)
 
 ;;; ==============================================================================
+;;; Context Integration with ai-code
+;;; ==============================================================================
+
+(defun ai-code-eca--around-context-action (orig &rest args)
+  "Advice for `ai-code-context-action' to add ECA context support.
+ORIG is the original function, ARGS are its arguments."
+  (if (and (derived-mode-p 'gptel-mode)
+            (eq gptel--preset 'eca)
+            (eca-session))
+      (progn
+        (when buffer-file-name
+          (ai-code-eca-add-file-context buffer-file-name))
+        (message "Added file context to ECA session"))
+    (apply orig args)))
+
+;;; ==============================================================================
 ;;; Auto-registration
 ;;; ==============================================================================
 
@@ -741,6 +755,10 @@ Fetches latest from VC repository and rebuilds."
           (ai-code-eca-setup-keybindings))
       (error
        (message "ECA backend auto-registration failed: %s" err)))))
+
+;; Integrate with ai-code-context-action
+(with-eval-after-load 'ai-code
+  (advice-add 'ai-code-context-action :around #'ai-code-eca--around-context-action))
 
 (provide 'ai-code-eca-bridge)
 
