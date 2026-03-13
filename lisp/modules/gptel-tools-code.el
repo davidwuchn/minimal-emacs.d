@@ -100,10 +100,9 @@ Reports which backend (LSP or ripgrep) was used."
   "Run a fallback linter in DIR if LSP is not available.
 If FILE-PATH is provided, check only that file.
 Reports what was checked, even if no standard project files found."
-  ;; Build regex at runtime to avoid check-parens confusion with \\
   (let ((default-directory dir)
-        (py-ext (concat "\\.py" (char-to-string 39)))
-        (el-ext (concat "\\.el" (char-to-string 39))))
+        (py-ext "\\.py\\'")
+        (el-ext "\\.el\\'"))
     (cond
      ;; Emacs Lisp - use built-in checkdoc/byte-compile + optional package-lint
      ((or (and file-path (string-match-p el-ext file-path))
@@ -151,10 +150,10 @@ Reports what was checked, even if no standard project files found."
   "Detect tree-sitter language for FILE-PATH from extension.
 Returns a symbol like \\='python, \\='elisp, etc., or \\='unknown."
   (or (and (boundp 'treesit--language) treesit--language)
-      (let ((py-rx (concat "\\.py" (char-to-string 39)))
-            (el-rx (concat "\\.el" (char-to-string 39)))
-            (clj-rx (concat "\\.clj" (char-to-string 39)))
-            (rs-rx (concat "\\.rs" (char-to-string 39))))
+      (let ((py-rx "\\.py\\'")
+            (el-rx "\\.el\\'")
+            (clj-rx "\\.clj\\'")
+            (rs-rx "\\.rs\\'"))
         (cond
          ((string-match-p py-rx file-path) 'python)
          ((string-match-p el-rx file-path) 'elisp)
