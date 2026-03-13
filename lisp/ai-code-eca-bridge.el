@@ -239,6 +239,143 @@ Warns if ECA config file is missing (non-fatal)."
         (message "ECA version: %s" version)
       version)))
 
+;;; ==============================================================================
+;;; Git Worktree Integration
+;;; ==============================================================================
+
+(defvar ai-code-eca-git-worktree-root nil
+  "Directory used to host centralized Git worktrees for ECA sessions.
+When nil, falls back to ai-code-git-worktree-root if available,
+or uses default ~/.emacs.d/eca-worktrees/.")
+
+(defun ai-code-eca--git-common-dir (dir)
+  "Return the common git directory for DIR, handling worktrees.
+Uses `git rev-parse --git-common-dir` to detect if DIR is a worktree
+sharing a .git directory with other worktrees."
+  (when (and dir (file-directory-p dir))
+    (condition-case nil
+        (let ((default-directory dir))
+          (string-trim (shell-command-to-string "git rev-parse --git-common-dir 2>/dev/null")))
+      (error nil))))
+
+(defun ai-code-eca--session-for-worktree (worktree-root)
+  "Find existing ECA session for a worktree sharing the same git repo.
+WORKTREE-ROOT is the root directory of the worktree.
+Returns the session if found, nil otherwise."
+  (let ((common-dir (ai-code-eca--git-common-dir worktree-root)))
+    (when common-dir
+      (condition-case nil
+          (let ((existing-sessions
+                 (when (fboundp 'eca-list-sessions)
+                   (eca-list-sessions))))
+            (catch 'found
+              (dolist (session-info existing-sessions)
+                (let* ((session-id (plist-get session-info :id))
+                       (session (gethash session-id eca--sessions nil))
+                       (workspace-folders (plist-get session-info :workspace-folders)))
+                  (when session
+                    (dolist (folder workspace-folders)
+                      (let ((folder-common (ai-code-eca--git-common-dir folder)))
+                        (when (and folder-common
+                                   (string= folder-common common-dir))
+                          (throw 'found session)))))))))
+        (error nil)))))
+
+(defun ai-code-eca--add-worktree-to-session (session worktree-root)
+  "Add WORKTREE-ROOT as a workspace folder to SESSION if not already present.
+This allows a single ECA session to manage multiple worktrees from the same repo."
+  (when (and session worktree-root)
+    (condition-case nil
+        (let ((workspace-folders
+               (gethash (plist-get (eca--session-info session) :id)
+                        eca--session-workspace-folders nil)))
+          (unless (member worktree-root workspace-folders)
+            (when (fboundp 'eca-ext-add-workspace-folder)
+              (eca-ext-add-workspace-folder session worktree-root)
+              (eca-info "Added worktree to session: %s" worktree-root))))
+      (error nil))))
+
+;;;###autoload
+(defun ai-code-eca-git-worktree-detect-and-attach ()
+  "Detect if current buffer is in a git worktree and attach to existing session.
+If the current buffer's directory is a worktree sharing a .git directory
+with an existing ECA session, attach to that session and add the worktree
+as a workspace folder."
+  (interactive)
+  (ai-code-eca--ensure-available)
+  (let* ((current-dir (when buffer-file-name (file-name-directory buffer-file-name)))
+         (worktree-session (when current-dir
+                             (ai-code-eca--session-for-worktree current-dir))))
+    (if worktree-session
+        (progn
+          (ai-code-eca--add-worktree-to-session worktree-session current-dir)
+          (eca-info "Attached worktree %s to existing session" current-dir)
+          worktree-session)
+      (when (called-interactively-p 'interactive)
+        (message "Not in a worktree or no existing session found"))
+      nil)))
+
+;;;###autoload
+(defun ai-code-eca-git-worktree-branch (branch start-point)
+  "Create BRANCH and check it out in a new centralized worktree.
+Delegates to ai-code-git-worktree-branch if available.
+The worktree path is `ai-code-eca-git-worktree-root/REPO-NAME/BRANCH'."
+  (interactive
+   (let ((default-branch (magit-get-current-branch)))
+     (list (read-string "Branch name: " (format "feature/%s-wt" default-branch))
+           (or default-branch "HEAD"))))
+  (ai-code-eca--ensure-available)
+  (if (fboundp 'ai-code-git-worktree-branch)
+      ;; Use ai-code's implementation
+      (ai-code-git-worktree-branch branch start-point)
+    ;; Fallback: manual worktree creation
+    (let* ((git-root (condition-case nil
+                         (string-trim (shell-command-to-string "git rev-parse --show-toplevel"))
+                       (error (user-error "Not in a git repository"))))
+           (repo-name (file-name-nondirectory (directory-file-name git-root)))
+           (worktree-dir (expand-file-name
+                          repo-name
+                          (or ai-code-eca-git-worktree-root
+                              ai-code-git-worktree-root
+                              (expand-file-name "eca-worktrees" user-emacs-directory))))
+           (worktree-path (expand-file-name branch worktree-dir)))
+      (unless (file-directory-p worktree-dir)
+        (make-directory worktree-dir t))
+      (if (zerop (shell-command
+                   (format "git worktree add -b %s %s %s"
+                           (shell-quote-argument branch)
+                           (shell-quote-argument worktree-path)
+                           (shell-quote-argument start-point))))
+          (progn
+            (find-file worktree-path)
+            (message "Created worktree at %s" worktree-path))
+        (user-error "Failed to create worktree: %s" worktree-path)))))
+
+;;;###autoload
+(defun ai-code-eca-git-worktree-action (&optional prefix)
+  "Dispatch worktree action by PREFIX.
+Without PREFIX, call `ai-code-eca-git-worktree-branch'.
+With PREFIX (for example C-u), call `magit-worktree-status'."
+  (interactive "P")
+  (let ((worktree-root (or ai-code-eca-git-worktree-root
+                           (bound-and-true-p ai-code-git-worktree-root)
+                           (expand-file-name "eca-worktrees" user-emacs-directory))))
+    (unless (and (stringp worktree-root) (> (length worktree-root) 0))
+      (user-error "Please configure `ai-code-eca-git-worktree-root` first"))
+    (if prefix
+        (call-interactively #'magit-worktree-status)
+      (call-interactively #'ai-code-eca-git-worktree-branch))))
+
+(defun ai-code-eca--setup-worktree-keybindings ()
+  "Add worktree keybindings to ECA chat mode."
+  (when (boundp 'eca-chat-mode-map)
+    (define-key eca-chat-mode-map (kbd "C-c w") #'ai-code-eca-git-worktree-action)
+    (define-key eca-chat-mode-map (kbd "C-c W") #'ai-code-eca-git-worktree-detect-and-attach)))
+
+;;; ==============================================================================
+;;; Backend Registration
+;;; ==============================================================================
+
 ;;;###autoload
 (defun ai-code-eca-upgrade ()
   "Upgrade ECA package via package.el.
@@ -345,7 +482,9 @@ via `ai-code-select-backend'."
 (with-eval-after-load 'ai-code-backends
   (with-eval-after-load 'eca
     (condition-case err
-        (ai-code-eca-register-backend)
+        (progn
+          (ai-code-eca-register-backend)
+          (ai-code-eca--setup-worktree-keybindings))
       (error
        (message "ECA backend auto-registration failed: %s" err)))))
 
