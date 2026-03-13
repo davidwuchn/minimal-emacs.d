@@ -24,3 +24,16 @@
 ## Mutating runs
 - Agent mode allows preview-backed mutating tools: `Edit`, `ApplyPatch`, `Code_Replace`
 - Multi-step mutating runs get one aggregate preview/approval summary before per-tool confirmations
+
+## Limits
+- Timeout: 15 seconds (`my/gptel-programmatic-timeout`)
+- Max tool calls: 25 (`my/gptel-programmatic-max-tool-calls`)
+- Result limit: 4000 chars (`my/gptel-programmatic-result-limit`)
+
+## Error recovery
+Use `condition-case` to handle tool failures gracefully:
+```elisp
+(condition-case err
+    (tool-call "Edit" :file_path "file.el" :new_str "content")
+  (error (result (format "Edit failed: %s" err))))
+```

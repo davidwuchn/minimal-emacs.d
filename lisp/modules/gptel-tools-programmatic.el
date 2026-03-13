@@ -30,15 +30,13 @@
     (gptel-make-tool
      :name "Programmatic"
      :description
-      (concat
-       "Execute restricted Emacs Lisp that orchestrates multiple existing tool calls. "
-       "Use for tightly-coupled multi-step workflows; call tools as (tool-call \"ToolName\" :arg value ...); end the program with (result <expr>); not for arbitrary eval.")
+     "Execute restricted Emacs Lisp that orchestrates multiple existing tool calls. Use for tightly-coupled multi-step workflows; call tools as (tool-call \"ToolName\" :arg value ...); end the program with (result <expr>); not for arbitrary eval."
      :function #'gptel-tools-programmatic--execute
      :async t
      :args '((:name "code"
               :type string
               :description
-               "Restricted Emacs Lisp program. Tool-call syntax is (tool-call \"ToolName\" :arg value ...). Must end with (result <expr>). Supported forms include setq, result, top-level tool-call, if/when/unless/not/and/or/progn, let/let*, mapcar/filter, comparisons, and small list/string helpers like list/vector/append/length/car/cdr/nth/cons/assoc/alist-get/plist-get/concat/format."))
+              "Restricted Emacs Lisp program. Tool-call syntax is (tool-call \"ToolName\" :arg value ...). Must end with (result <expr>). Supported forms: setq, result, top-level tool-call, if/when/unless/not/and/or/progn, let/let*, mapcar, filter (sandbox-specific), comparisons. Data helpers: list/vector/append/length/car/cdr/nth/cons/assoc/alist-get/plist-get. String helpers: concat/format/split-string/string-join/string-trim/string-empty-p/string-match-p/substring."))
      :category "gptel-agent"
      :confirm t
      :include t)))

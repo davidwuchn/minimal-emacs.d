@@ -8,13 +8,17 @@
 ;;; Commentary:
 
 ;; Unit tests for the Programmatic tool in gptel-tools-programmatic.el.
+;;
+;; NOTE: This file uses MOCK implementations. For integration tests that
+;; exercise the real gptel-sandbox.el, see tests/test-programmatic.el.
+;;
 ;; Tests cover:
-;; - Restricted Emacs Lisp interpreter
+;; - Restricted Emacs Lisp interpreter (mocked)
 ;; - Tool-call syntax validation
 ;; - Supported forms (setq, result, tool-call, if, when, let, etc.)
 ;; - Unsupported forms (arbitrary eval, while loops)
-;; - Nested tool orchestration
-;; - Preview-backed mutating tools
+;; - Nested tool orchestration (mocked)
+;; - Preview-backed mutating tools (mocked)
 
 ;;; Code:
 
