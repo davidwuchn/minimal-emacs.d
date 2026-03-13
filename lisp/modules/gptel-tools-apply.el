@@ -1,7 +1,7 @@
 ;;; gptel-tools-apply.el --- ApplyPatch tool for gptel -*- lexical-binding: t; -*-
 
 ;; Author: David Wu
-;; Version: 1.0.0
+;; Version: 1.1.0
 ;;
 ;; ApplyPatch tool with support for unified diff and OpenCode envelope formats.
 
@@ -51,42 +51,197 @@
 (defun my/gptel--extract-patch (text)
   "Extract patch content from TEXT, stripping markdown fences if present."
   (let ((clean text))
-    ;; Strip opening fence (```diff, ```patch, or ```)
     (when (string-match-p "^\\s-*```\\(diff\\|patch\\)?\\s-*" clean)
       (setq clean (replace-regexp-in-string "^\\s-*```\\(diff\\|patch\\)?\\s-*\\n?" "" clean)))
-    ;; Strip closing fence (``` at end of string, with optional whitespace)
     (when (string-match-p "```\\s-*\\'" clean)
       (setq clean (replace-regexp-in-string "\\n?\\s-*```\\s-*\\'" "" clean)))
     (string-trim clean)))
+
+;;; Envelope Format Parser
+
+(cl-defstruct (gptel-envelope-hunk (:constructor gptel-envelope-hunk-create))
+  type path contents chunks move-path)
+
+(defun my/gptel--parse-envelope-patch (text)
+  "Parse OpenCode envelope format patch TEXT into a list of hunks.
+
+Returns a list of `gptel-envelope-hunk' structures.
+Each hunk has :type (add, delete, or update), :path, and type-specific fields.
+
+Envelope format:
+  *** Begin Patch
+  *** Add File: path/to/file
+  +content lines...
+  *** Delete File: path/to/file
+  *** Update File: path/to/file
+  *** Move to: new/path
+  @@ context
+   unchanged
+  -removed
+  +added
+  *** End of File
+  *** End Patch"
+  (let ((lines (split-string text "\n"))
+        (hunks nil)
+        (i 0))
+    (while (and (< i (length lines))
+                (not (string-match-p "^\\*\\*\\* Begin Patch" (nth i lines))))
+      (setq i (1+ i)))
+    (setq i (1+ i))
+    (while (and (< i (length lines))
+                (not (string-match-p "^\\*\\*\\* End Patch" (nth i lines))))
+      (let ((line (nth i lines)))
+        (cond
+         ((string-match "^\\*\\*\\* Add File: \\(.+\\)$" line)
+          (let ((path (match-string 1 line))
+                (contents nil)
+                (j (1+ i)))
+            (while (and (< j (length lines))
+                        (not (string-match-p "^\\*\\*\\*" (nth j lines))))
+              (let ((content-line (nth j lines)))
+                (when (string-match "^\\+\\(.*\\)$" content-line)
+                  (push (match-string 1 content-line) contents)))
+              (setq j (1+ j)))
+            (push (gptel-envelope-hunk-create
+                   :type 'add
+                   :path path
+                   :contents (string-join (nreverse contents) "\n"))
+                  hunks)
+            (setq i j)))
+         ((string-match "^\\*\\*\\* Delete File: \\(.+\\)$" line)
+          (push (gptel-envelope-hunk-create
+                 :type 'delete
+                 :path (match-string 1 line))
+                hunks)
+          (setq i (1+ i)))
+         ((string-match "^\\*\\*\\* Update File: \\(.+\\)$" line)
+          (let ((path (match-string 1 line))
+                (move-path nil)
+                (chunks nil)
+                (j (1+ i)))
+            (when (and (< j (length lines))
+                       (string-match "^\\*\\*\\* Move to: \\(.+\\)$" (nth j lines)))
+              (setq move-path (match-string 1 (nth j lines)))
+              (setq j (1+ j)))
+            (while (and (< j (length lines))
+                        (not (string-match-p "^\\*\\*\\* End Patch" (nth j lines)))
+                        (not (string-match-p "^\\*\\*\\* \\(Add\\|Delete\\|Update\\) File:" (nth j lines))))
+              (let ((chunk-line (nth j lines)))
+                (cond
+                 ((string-match "^@@" chunk-line)
+                  (push (list :context (substring chunk-line 2)) chunks))
+                 ((string-match-p "^\\*\\*\\* End of File" chunk-line)
+                  nil)
+                 ((string-match "^ " chunk-line)
+                  (push (list 'keep (substring chunk-line 1))
+                        (alist-get :lines (car chunks))))
+                 ((string-match "^-" chunk-line)
+                  (push (list 'remove (substring chunk-line 1))
+                        (alist-get :lines (car chunks))))
+                 ((string-match "^\\+" chunk-line)
+                  (push (list 'add (substring chunk-line 1))
+                        (alist-get :lines (car chunks))))))
+              (setq j (1+ j)))
+            (push (gptel-envelope-hunk-create
+                   :type 'update
+                   :path path
+                   :chunks (nreverse chunks)
+                   :move-path move-path)
+                  hunks)
+            (setq i j)))
+         (t (setq i (1+ i))))))
+    (nreverse hunks)))
+
+(defun my/gptel--apply-envelope-hunks (hunks callback)
+  "Apply envelope HUNKS to the filesystem asynchronously.
+CALLBACK is called with the result string."
+  (let ((added 0)
+        (modified 0)
+        (deleted 0)
+        (errors nil)
+        (root (or (when-let ((proj (project-current nil)))
+                    (expand-file-name (project-root proj)))
+                  default-directory))
+        (idx 0))
+    (while (< idx (length hunks))
+      (let* ((hunk (nth idx hunks))
+             (path (expand-file-name (gptel-envelope-hunk-path hunk) root)))
+        (condition-case err
+            (pcase (gptel-envelope-hunk-type hunk)
+              ('add
+               (make-directory (file-name-directory path) 'parents)
+               (with-temp-file path
+                 (insert (gptel-envelope-hunk-contents hunk)))
+               (cl-incf added))
+              ('delete
+               (delete-file path)
+               (cl-incf deleted))
+              ('update
+               (let* ((chunks (gptel-envelope-hunk-chunks hunk))
+                      (move-path (gptel-envelope-hunk-move-path hunk))
+                      (content (when (file-exists-p path)
+                                 (with-temp-buffer
+                                   (insert-file-contents path)
+                                   (buffer-string)))))
+                 (dolist (chunk chunks)
+                   (let ((lines (alist-get :lines chunk)))
+                     (when lines
+                       (setq content (string-join
+                                      (mapcar #'cadr (seq-filter
+                                                      (lambda (l) (memq (car l) '(keep add)))
+                                                      lines))
+                                      "\n")))))
+                 (let ((dest-path (if move-path
+                                       (expand-file-name move-path root)
+                                     path)))
+                   (when move-path
+                     (make-directory (file-name-directory dest-path) 'parents))
+                   (with-temp-file dest-path
+                     (insert (or content "")))
+                   (when (and move-path (file-exists-p path))
+                     (delete-file path))
+                   (cl-incf modified)))))
+          (error
+           (push (format "Error processing %s: %s" path (error-message-string err)) errors))))
+      (cl-incf idx))
+    (if errors
+        (funcall callback
+                 (format "Envelope applied with errors.\nAdded: %d, Modified: %d, Deleted: %d\nErrors:\n%s"
+                         added modified deleted (string-join errors "\n")))
+      (funcall callback
+               (format "Envelope applied successfully.\nAdded: %d, Modified: %d, Deleted: %d"
+                       added modified deleted)))))
 
 ;;; ApplyPatch Implementation
 
 (defun my/gptel--apply-patch-dispatch (callback patch)
   "Dispatch PATCH to either envelope or unified diff handler.
-
 CALLBACK is called with the result string."
-  (let* ((clean (my/gptel--extract-patch patch)))
+  (let ((clean (my/gptel--extract-patch patch)))
     (if (my/gptel--patch-looks-like-envelope-p clean)
-        (funcall callback "Error: Envelope format not yet implemented in split module.")
-      ;; Unified diff: preview if requested, otherwise apply directly
-(if my/gptel-applypatch-auto-preview
-           (my/gptel--preview-patch-async
-            clean
-            (current-buffer)
-            callback
-            ;; on-confirm
-            (lambda (cb)
-              (my/gptel--apply-patch-core cb clean))
-            ;; on-abort
-            (lambda (cb)
-              (funcall cb "Error: Preview aborted by user."))
-            "ApplyPatch preview — n apply patch    q abort"
-            "ApplyPatch")
-         (my/gptel--apply-patch-core callback clean)))))
+        (condition-case err
+            (let ((hunks (my/gptel--parse-envelope-patch clean)))
+              (if (null hunks)
+                  (funcall callback "Error: No valid hunks found in envelope patch.")
+                (if my/gptel-applypatch-auto-preview
+                    (my/gptel--preview-patch-async
+                     clean (current-buffer) callback
+                     (lambda (cb) (my/gptel--apply-envelope-hunks hunks cb))
+                     (lambda (cb) (funcall cb "Error: Preview aborted by user."))
+                     "ApplyPatch (envelope) preview" "ApplyPatch")
+                  (my/gptel--apply-envelope-hunks hunks callback))))
+          (error
+           (funcall callback (format "Error parsing envelope: %s" (error-message-string err)))))
+      (if my/gptel-applypatch-auto-preview
+          (my/gptel--preview-patch-async
+           clean (current-buffer) callback
+           (lambda (cb) (my/gptel--apply-patch-core cb clean))
+           (lambda (cb) (funcall cb "Error: Preview aborted by user."))
+           "ApplyPatch preview" "ApplyPatch")
+        (my/gptel--apply-patch-core callback clean)))))
 
 (defun my/gptel--apply-patch-core (callback patch)
   "Apply PATCH (unified diff) at the Emacs project root asynchronously.
-
 Prefers `git apply` if in a git repository; otherwise uses `patch`."
   (condition-case err
       (progn
@@ -94,12 +249,11 @@ Prefers `git apply` if in a git repository; otherwise uses `patch`."
           (error "neither 'git' nor 'patch' executable found"))
         (unless (and (stringp patch) (not (string-empty-p (string-trim patch))))
           (error "patch text is empty"))
-
         (let* ((clean-patch (my/gptel--extract-patch patch))
                (patch-file (my/gptel-make-temp-file "gptel-patch-"))
-               (root (if-let ((proj (project-current nil)))
-                         (expand-file-name (project-root proj))
-                       (expand-file-name default-directory)))
+               (root (or (when-let ((proj (project-current nil)))
+                           (expand-file-name (project-root proj)))
+                         (expand-file-name default-directory)))
                (default-directory (file-name-as-directory root))
                (is-git (and (executable-find "git")
                             (file-exists-p (expand-file-name ".git" root))))
@@ -115,21 +269,16 @@ Prefers `git apply` if in a git repository; otherwise uses `patch`."
                     (when (buffer-live-p buf) (kill-buffer buf))
                     (when (file-exists-p patch-file) (delete-file patch-file))
                     (funcall callback msg)))))
-
-          ;; Validation
           (when (string-match-p "^\\*\\*\\* Begin Patch" clean-patch)
             (error "patch expects unified diff, not envelope format"))
           (unless (my/gptel--patch-looks-like-unified-diff-p clean-patch)
             (error "patch does not look like a unified diff"))
           (when (my/gptel--patch-has-absolute-paths-p clean-patch)
             (error "patch contains absolute paths"))
-
           (with-temp-file patch-file (insert clean-patch))
-
           (let ((apply-args (if is-git
                                 (list "apply" "--verbose" "--whitespace=fix" patch-file)
                               (list "--batch" "-p1" "-N" "-i" patch-file))))
-            ;; Apply the patch
             (let ((proc
                    (make-process
                     :name (format "gptel-%s-apply" backend)

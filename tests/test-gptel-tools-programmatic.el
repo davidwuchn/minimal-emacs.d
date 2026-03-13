@@ -94,7 +94,7 @@ Returns a simulated result."
 
 (ert-deftest test-gptel-programmatic-tool-call ()
   "Test Programmatic supports tool-call."
-  (let ((code "(tool-call \"Grep\" :regex \"TODO\" :path \"lisp/\")
+  (let ((code "(tool-call \"Grep\" :regex \"TODO\" :file_path \"lisp/\")
 (result \"done\")"))
     (let ((result (test-gptel-programmatic--execute code)))
       (should result))))
@@ -323,14 +323,14 @@ Returns a simulated result."
 
 (ert-deftest test-gptel-programmatic-readonly-mode ()
   "Test Programmatic in readonly mode."
-  (let ((code "(tool-call \"Grep\" :regex \"TODO\" :path \"lisp/\")
+  (let ((code "(tool-call \"Grep\" :regex \"TODO\" :file_path \"lisp/\")
 (result \"grep done\")"))
     (let ((result (test-gptel-programmatic--execute code 'readonly)))
       (should result))))
 
 (ert-deftest test-gptel-programmatic-agent-mode ()
   "Test Programmatic in agent mode."
-  (let ((code "(tool-call \"Edit\" :path \"file.el\" :new_str_or_diff \"patch\")
+  (let ((code "(tool-call \"Edit\" :file_path \"file.el\" :new_str \"patch\")
 (result \"edit done\")"))
     (let ((result (test-gptel-programmatic--execute code 'agent)))
       (should result))))
@@ -346,15 +346,15 @@ Returns a simulated result."
 
 (ert-deftest test-gptel-programmatic-sequential-tool-calls ()
   "Test Programmatic sequential tool calls."
-  (let ((code "(setq grep-result (tool-call \"Grep\" :regex \"TODO\" :path \"lisp/\"))
-(setq glob-result (tool-call \"Glob\" :pattern \"*.el\" :path \"lisp/\"))
+  (let ((code "(setq grep-result (tool-call \"Grep\" :regex \"TODO\" :file_path \"lisp/\"))
+(setq glob-result (tool-call \"Glob\" :pattern \"*.el\" :file_path \"lisp/\"))
 (result (list :grep grep-result :glob glob-result))"))
     (let ((result (test-gptel-programmatic--execute code)))
       (should result))))
 
 (ert-deftest test-gptel-programmatic-conditional-workflow ()
   "Test Programmatic conditional workflow."
-  (let ((code "(setq files (tool-call \"Glob\" :pattern \"*.el\" :path \"tests/\"))
+  (let ((code "(setq files (tool-call \"Glob\" :pattern \"*.el\" :file_path \"tests/\"))
 (when (> (length files) 0)
   (result \"tests found\"))
 (result \"no tests\")"))
@@ -373,7 +373,7 @@ Returns a simulated result."
 
 (ert-deftest test-gptel-programmatic-find-and-read ()
   "Test Programmatic find files then read workflow."
-  (let ((code "(setq files (tool-call \"Glob\" :pattern \"*.el\" :path \"lisp/modules/\"))
+  (let ((code "(setq files (tool-call \"Glob\" :pattern \"*.el\" :file_path \"lisp/modules/\"))
 (setq first-file (car files))
 (when first-file
   (setq content (tool-call \"Read\" :file_path first-file)))
@@ -383,7 +383,7 @@ Returns a simulated result."
 
 (ert-deftest test-gptel-programmatic-grep-then-map ()
   "Test Programmatic grep then process workflow."
-  (let ((code "(setq hits (tool-call \"Grep\" :regex \"TODO\" :path \"lisp/\"))
+  (let ((code "(setq hits (tool-call \"Grep\" :regex \"TODO\" :file_path \"lisp/\"))
 (setq count (length hits))
 (when (> count 0)
   (result (format \"Found %d TODOs\" count)))
@@ -431,7 +431,7 @@ ARGS are the tool arguments."
 (ert-deftest test-gptel-programmatic-real-grep-execution ()
   "Test Programmatic executes real Grep tool."
   (let ((test-gptel-programmatic--real-tools-executed nil))
-    (let ((result (test-gptel-programmatic--execute-real-tool "Grep" :regex "TODO" :path "lisp/")))
+    (let ((result (test-gptel-programmatic--execute-real-tool "Grep" :regex "TODO" :file_path "lisp/")))
       (should test-gptel-programmatic--real-tools-executed)
       (should (plist-get result :hits))
       (should (listp (plist-get result :files))))))
@@ -453,7 +453,7 @@ ARGS are the tool arguments."
 (ert-deftest test-gptel-programmatic-real-edit-execution ()
   "Test Programmatic executes real Edit tool."
   (let ((test-gptel-programmatic--real-tools-executed nil))
-    (let ((result (test-gptel-programmatic--execute-real-tool "Edit" :path "test.el" :new_str_or_diff "new")))
+    (let ((result (test-gptel-programmatic--execute-real-tool "Edit" :file_path "test.el" :new_str "new")))
       (should test-gptel-programmatic--real-tools-executed)
       (should (plist-get result :success)))))
 
@@ -475,7 +475,7 @@ ARGS are the tool arguments."
 
 (ert-deftest test-gptel-programmatic-nested-tool-call-in-let ()
   "Test nested tool-call in let binding."
-  (let ((code "(let ((result (tool-call \"Grep\" :regex \"x\" :path \"y\")))
+  (let ((code "(let ((result (tool-call \"Grep\" :regex \"x\" :file_path \"y\")))
   (result result))"))
     (let ((result (test-gptel-programmatic--execute code 'agent)))
       (should result))))
@@ -500,7 +500,7 @@ ARGS are the tool arguments."
 
 (ert-deftest test-gptel-programmatic-readonly-rejects-nested-mutating ()
   "Test readonly mode rejects nested mutating tool-calls."
-  (let ((code "(setq result (tool-call \"Edit\" :path \"x\" :new \"y\"))
+  (let ((code "(setq result (tool-call \"Edit\" :file_path \"x\" :new \"y\"))
 (result result)"))
     (let ((result (test-gptel-programmatic--execute code 'readonly)))
       ;; Should error or reject in readonly mode
@@ -538,7 +538,7 @@ ARGS are the tool arguments."
 (ert-deftest test-gptel-programmatic-error-handling-in-workflow ()
   "Test error handling in multi-step workflow."
   (let ((code "(condition-case err
-    (tool-call \"Grep\" :regex \"x\" :path \"nonexistent\")
+    (tool-call \"Grep\" :regex \"x\" :file_path \"nonexistent\")
   (error
    (result (format \"Error: %s\" (error-message-string err)))))
 (result \"success\")"))
@@ -558,7 +558,7 @@ ARGS are the tool arguments."
 
 (ert-deftest test-gptel-programmatic-preview-edit ()
   "Test Programmatic with preview-backed Edit tool."
-  (let ((code "(tool-call \"Edit\" :path \"test.el\" :old_str \"old\" :new_str \"new\")
+  (let ((code "(tool-call \"Edit\" :file_path \"test.el\" :old_str \"old\" :new_str \"new\")
 (result \"edit previewed\")"))
     (let ((result (test-gptel-programmatic--execute code 'agent)))
       (should result))))
@@ -579,8 +579,8 @@ ARGS are the tool arguments."
 
 (ert-deftest test-gptel-programmatic-preview-aggregate ()
   "Test Programmatic aggregate preview for multiple mutating tools."
-  (let ((code "(tool-call \"Edit\" :path \"a.el\" :old_str \"x\" :new_str \"y\")
-(tool-call \"Edit\" :path \"b.el\" :old_str \"p\" :new_str \"q\")
+  (let ((code "(tool-call \"Edit\" :file_path \"a.el\" :old_str \"x\" :new_str \"y\")
+(tool-call \"Edit\" :file_path \"b.el\" :old_str \"p\" :new_str \"q\")
 (result \"multiple edits\")"))
     (let ((result (test-gptel-programmatic--execute code 'agent)))
       ;; Should get one aggregate preview before per-tool confirmations
@@ -611,7 +611,7 @@ ARGS are the tool arguments."
 (ert-deftest test-gptel-programmatic-nested-tool-call-readonly ()
   "Test Programmatic nested tool-call in readonly mode."
   (let ((code "(setq result (if t
-    (tool-call \"Grep\" :regex \"x\" :path \"y\")
+    (tool-call \"Grep\" :regex \"x\" :file_path \"y\")
   (tool-call \"Glob\" :pattern \"*\")))
 (result result)"))
     (let ((result (test-gptel-programmatic--execute code 'readonly)))

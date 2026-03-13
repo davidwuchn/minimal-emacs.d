@@ -51,7 +51,7 @@ Example 3 (preview-backed patch edit):
 +new line
  unchanged
  ")
-(setq outcome (tool-call "Edit" :path "foo.el" :new_str_or_diff patch :diffp t))
+(setq outcome (tool-call "Edit" :file_path "foo.el" :new_str patch :diffp t))
 (result outcome)
 ```
 

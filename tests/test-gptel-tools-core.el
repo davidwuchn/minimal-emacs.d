@@ -39,7 +39,7 @@
                :async nil
                :mode :readonly))
     ("Edit" . (:description "Replace text or apply diff"
-               :parameters (:path :old_str :new_str_or_diff :diffp)
+               :parameters (:file_path :old_str :new_str :diffp)
                :async nil
                :mode :agent))
     ("ApplyPatch" . (:description "Apply unified diff patch"

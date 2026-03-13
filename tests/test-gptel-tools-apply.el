@@ -148,6 +148,86 @@
   "Should handle nil input."
   (should-not (my/gptel--patch-looks-like-envelope-p nil)))
 
+;;; Tests for my/gptel--parse-envelope-patch
+
+(ert-deftest apply/parse-envelope/add-file ()
+  "Should parse Add File hunk."
+  (let* ((patch "*** Begin Patch
+*** Add File: test.txt
++Hello World
++Line 2
+*** End Patch")
+         (hunks (my/gptel--parse-envelope-patch patch)))
+    (should (= 1 (length hunks)))
+    (let ((hunk (car hunks)))
+      (should (eq 'add (gptel-envelope-hunk-type hunk)))
+      (should (string= "test.txt" (gptel-envelope-hunk-path hunk)))
+      (should (string= "Hello World\nLine 2" (gptel-envelope-hunk-contents hunk))))))
+
+(ert-deftest apply/parse-envelope/delete-file ()
+  "Should parse Delete File hunk."
+  (let* ((patch "*** Begin Patch
+*** Delete File: old.txt
+*** End Patch")
+         (hunks (my/gptel--parse-envelope-patch patch)))
+    (should (= 1 (length hunks)))
+    (let ((hunk (car hunks)))
+      (should (eq 'delete (gptel-envelope-hunk-type hunk)))
+      (should (string= "old.txt" (gptel-envelope-hunk-path hunk))))))
+
+(ert-deftest apply/parse-envelope/update-file ()
+  "Should parse Update File hunk."
+  (let* ((patch "*** Begin Patch
+*** Update File: existing.txt
+@@
+ old line
+-removed line
++added line
+*** End Patch")
+         (hunks (my/gptel--parse-envelope-patch patch)))
+    (should (= 1 (length hunks)))
+    (let ((hunk (car hunks)))
+      (should (eq 'update (gptel-envelope-hunk-type hunk)))
+      (should (string= "existing.txt" (gptel-envelope-hunk-path hunk))))))
+
+(ert-deftest apply/parse-envelope/move-file ()
+  "Should parse Move to directive."
+  (let* ((patch "*** Begin Patch
+*** Update File: old-name.txt
+*** Move to: new-name.txt
+@@
+ content
+*** End Patch")
+         (hunks (my/gptel--parse-envelope-patch patch)))
+    (should (= 1 (length hunks)))
+    (let ((hunk (car hunks)))
+      (should (eq 'update (gptel-envelope-hunk-type hunk)))
+      (should (string= "old-name.txt" (gptel-envelope-hunk-path hunk)))
+      (should (string= "new-name.txt" (gptel-envelope-hunk-move-path hunk))))))
+
+(ert-deftest apply/parse-envelope/multiple-hunks ()
+  "Should parse multiple hunks."
+  (let* ((patch "*** Begin Patch
+*** Add File: new.txt
++content
+*** Delete File: old.txt
+*** Update File: existing.txt
+@@
+ line
+*** End Patch")
+         (hunks (my/gptel--parse-envelope-patch patch)))
+    (should (= 3 (length hunks)))
+    (should (eq 'add (gptel-envelope-hunk-type (nth 0 hunks))))
+    (should (eq 'delete (gptel-envelope-hunk-type (nth 1 hunks))))
+    (should (eq 'update (gptel-envelope-hunk-type (nth 2 hunks))))))
+
+(ert-deftest apply/parse-envelope/empty-patch ()
+  "Should handle empty envelope patch."
+  (let* ((patch "*** Begin Patch
+*** End Patch")
+         (hunks (my/gptel--parse-envelope-patch patch)))
+    (should (null hunks))))
+
 ;;; Tests for my/gptel--patch-has-absolute-paths-p
 
 (ert-deftest apply/absolute-paths-p/unified-diff-absolute ()

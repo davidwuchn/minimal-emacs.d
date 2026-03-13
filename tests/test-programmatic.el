@@ -155,13 +155,13 @@
     (test-programmatic--with-tools
         `(("Edit" . ,(test-programmatic--async-tool
                        "Edit"
-                       (lambda (callback path &optional old new diffp)
-                         (setq seen (list path old new diffp))
-                         (funcall callback (format "edited:%s" path)))
-                       '((:name "path")
-                         (:name "old_str" :optional t)
-                         (:name "new_str_or_diff")
-                         (:name "diffp" :optional t))
+(lambda (callback file_path &optional old new diffp)
+                          (setq seen (list file_path old new diffp))
+                          (funcall callback (format "edited:%s" file_path)))
+'((:name "file_path")
+                          (:name "old_str" :optional t)
+                          (:name "new_str")
+                          (:name "diffp" :optional t))
                        t)))
       (let ((my/gptel-programmatic-allowed-tools '("Edit"))
             (gptel-sandbox-confirm-function (lambda (_tool-spec _arg-values callback)
@@ -169,7 +169,7 @@
         (should
          (equal
           (test-programmatic--run
-           "(setq result (tool-call \"Edit\" :path \"foo.el\" :new_str_or_diff \"patch\" :diffp t))
+           "(setq result (tool-call \"Edit\" :file_path \"foo.el\" :new_str \"patch\" :diffp t))
 (result result)")
           "edited:foo.el"))
         (should (equal seen '("foo.el" nil "patch" t)))))))
@@ -180,10 +180,10 @@
                      "Edit"
                      (lambda (callback &rest _args)
                        (funcall callback "should-not-run"))
-                     '((:name "path")
-                       (:name "old_str" :optional t)
-                       (:name "new_str_or_diff")
-                       (:name "diffp" :optional t))
+'((:name "file_path")
+                        (:name "old_str" :optional t)
+                        (:name "new_str")
+                        (:name "diffp" :optional t))
                      t)))
     (let ((my/gptel-programmatic-allowed-tools '("Edit"))
           (gptel-confirm-tool-calls t)
@@ -192,7 +192,7 @@
       (should (string-match-p
                "rejected by user: Edit"
                (test-programmatic--run
-                "(setq result (tool-call \"Edit\" :path \"foo.el\" :new_str_or_diff \"patch\" :diffp t))
+                "(setq result (tool-call \"Edit\" :file_path \"foo.el\" :new_str \"patch\" :diffp t))
 (result result)"))))))
 
 (ert-deftest programmatic/enforces-max-tool-calls ()
@@ -299,16 +299,16 @@
       `(("Edit" . ,(test-programmatic--sync-tool
                      "Edit"
                      (lambda (&rest _args) "edited")
-                     '((:name "path")
-                       (:name "old_str" :optional t)
-                       (:name "new_str_or_diff")
-                       (:name "diffp" :optional t))
+'((:name "file_path")
+                        (:name "old_str" :optional t)
+                        (:name "new_str")
+                        (:name "diffp" :optional t))
                      t)))
     (let ((gptel--preset 'gptel-plan))
       (should (string-match-p
                "not allowed inside Programmatic readonly mode"
                (test-programmatic--run
-                "(setq result (tool-call \"Edit\" :path \"foo.el\" :new_str_or_diff \"patch\" :diffp t))
+                "(setq result (tool-call \"Edit\" :file_path \"foo.el\" :new_str \"patch\" :diffp t))
 (result result)"))))))
 
 (ert-deftest programmatic/supports-mapcar-and-filter ()
@@ -368,13 +368,13 @@
     (test-programmatic--with-tools
         `(("Edit" . ,(test-programmatic--async-tool
                        "Edit"
-                       (lambda (callback path &optional old new diffp)
-                         (push (list path old new diffp) seen)
-                         (funcall callback (format "edited:%s" path)))
-                       '((:name "path")
-                         (:name "old_str" :optional t)
-                         (:name "new_str_or_diff")
-                         (:name "diffp" :optional t))
+(lambda (callback file_path &optional old new diffp)
+                          (push (list file_path old new diffp) seen)
+                          (funcall callback (format "edited:%s" file_path)))
+'((:name "file_path")
+                          (:name "old_str" :optional t)
+                          (:name "new_str")
+                          (:name "diffp" :optional t))
                        t)))
       (let ((my/gptel-programmatic-allowed-tools '("Edit"))
             (gptel-sandbox-aggregate-confirm-function
@@ -386,8 +386,8 @@
         (should
          (equal
           (test-programmatic--run
-           "(setq one (tool-call \"Edit\" :path \"a.el\" :new_str_or_diff \"patch-a\" :diffp t))
-(setq two (tool-call \"Edit\" :path \"b.el\" :new_str_or_diff \"patch-b\" :diffp t))
+           "(setq one (tool-call \"Edit\" :file_path \"a.el\" :new_str \"patch-a\" :diffp t))
+(setq two (tool-call \"Edit\" :file_path \"b.el\" :new_str \"patch-b\" :diffp t))
 (result (concat one \" | \" two))")
           "edited:a.el | edited:b.el"))
         (should (= 1 aggregate-count))
@@ -401,10 +401,10 @@
                        (lambda (callback &rest _args)
                          (setq confirm-count (1+ confirm-count))
                          (funcall callback "should-not-run"))
-                       '((:name "path")
-                         (:name "old_str" :optional t)
-                         (:name "new_str_or_diff")
-                         (:name "diffp" :optional t))
+'((:name "file_path")
+                          (:name "old_str" :optional t)
+                          (:name "new_str")
+                          (:name "diffp" :optional t))
                        t)))
       (let ((my/gptel-programmatic-allowed-tools '("Edit"))
             (gptel-sandbox-aggregate-confirm-function
@@ -413,8 +413,8 @@
         (should (string-match-p
                  "aggregate preview rejected by user"
                  (test-programmatic--run
-                  "(setq one (tool-call \"Edit\" :path \"a.el\" :new_str_or_diff \"patch-a\" :diffp t))
-(setq two (tool-call \"Edit\" :path \"b.el\" :new_str_or_diff \"patch-b\" :diffp t))
+                  "(setq one (tool-call \"Edit\" :file_path \"a.el\" :new_str \"patch-a\" :diffp t))
+(setq two (tool-call \"Edit\" :file_path \"b.el\" :new_str \"patch-b\" :diffp t))
 (result (concat one \" | \" two))")))
         (should (= 0 confirm-count))))))
 
