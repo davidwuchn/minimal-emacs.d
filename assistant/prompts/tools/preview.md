@@ -21,10 +21,13 @@ Preview shows diff in a buffer, then prompts in minibuffer:
 |-----|--------|
 | `y` | Yes, apply this change |
 | `n` | No, abort this change |
-| `!` | Apply all (never ask again this session) |
+| `!` | Permit tool for session, then apply (use `my/gptel-clear-permits` to reset) |
 | `q` | Quit (same as n) |
 
 ## Configuration
 
 - `gptel-tools-preview-enabled` (default `t`): Set to `nil` to auto-apply without preview
-- `M-x gptel-tools-preview-reset-confirmation`: Re-enable confirmations after "N"
+- `my/gptel-edit-auto-preview` (default `t`): Preview toggle for Edit tool patch mode
+- `my/gptel-applypatch-auto-preview` (default `t`): Preview toggle for ApplyPatch tool
+- `M-x my/gptel-clear-permits`: Clear all permitted tools
+- `M-x my/gptel-show-permits`: Show currently permitted tools
