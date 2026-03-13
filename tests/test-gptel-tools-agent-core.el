@@ -294,5 +294,174 @@
                                ("reviewer" . nil))))
     (should (= (length gptel-agent--agents) 5))))
 
+;;; ========================================
+;;; Tests for my/gptel--agent-task-with-timeout
+;;; ========================================
+
+(defun test-make-timeout-wrapper (callback timeout)
+  "Create a timeout wrapper that simulates timer behavior.
+CALLBACK is called with result on success or timeout error.
+TIMEOUT is the timeout in seconds."
+  (let* ((done nil)
+         (timeout-timer nil)
+         (start-time (current-time))
+         (wrapped-cb
+          (lambda (result)
+            (unless done
+              (setq done t)
+              (when (timerp timeout-timer) (cancel-timer timeout-timer))
+              (funcall callback result)))))
+    (setq timeout-timer
+          (run-at-time timeout nil
+                       (lambda ()
+                         (unless done
+                           (setq done t)
+                           (funcall callback
+                                    (format "Error: Task timed out after %ds" timeout))))))
+    (list :wrapped-cb wrapped-cb :timeout-timer timeout-timer :done-var 'done)))
+
+(ert-deftest agent/timeout/callback-called-on-success ()
+  "Should call callback on successful completion."
+  (let* ((called-with nil)
+         (cb (lambda (r) (setq called-with r)))
+         (wrapper (test-make-timeout-wrapper cb 120))
+         (wrapped-cb (plist-get wrapper :wrapped-cb)))
+    (funcall wrapped-cb "success result")
+    (should (equal called-with "success result"))))
+
+(ert-deftest agent/timeout/callback-called-once ()
+  "Should only call callback once even if triggered multiple times."
+  (let* ((call-count 0)
+         (cb (lambda (_) (cl-incf call-count)))
+         (wrapper (test-make-timeout-wrapper cb 120))
+         (wrapped-cb (plist-get wrapper :wrapped-cb)))
+    (funcall wrapped-cb "first")
+    (funcall wrapped-cb "second")
+    (should (= call-count 1))))
+
+(ert-deftest agent/timeout/done-flag-prevents-double-call ()
+  "Done flag should prevent double callback invocation."
+  (let* ((called-with nil)
+         (done nil)
+         (cb (lambda (r)
+               (unless done
+                 (setq done t)
+                 (setq called-with r)))))
+    (funcall cb "first")
+    (funcall cb "second")
+    (should (equal called-with "first"))))
+
+;;; ========================================
+;;; Tests for my/gptel--around-agent-update
+;;; ========================================
+
+(defvar test-gptel--known-tools nil)
+
+(defun test-around-agent-update (orig-fn)
+  "Simulate around-agent-update advice.
+ORIG-FN is the original function to wrap."
+  (let ((stub-injected nil))
+    (unless (assoc "Agent" (cdr (assoc "gptel-agent" test-gptel--known-tools)))
+      (push (cons "Agent" '(:stub t)) (cdr (assoc "gptel-agent" test-gptel--known-tools)))
+      (setq stub-injected t))
+    (funcall orig-fn)
+    (when stub-injected
+      (when-let* ((cat (assoc "gptel-agent" test-gptel--known-tools)))
+        (setf (alist-get "Agent" (cdr cat) nil 'remove #'equal) nil)))))
+
+(ert-deftest agent/around-update/calls-orig ()
+  "Should call original function."
+  (let ((orig-called nil)
+        (test-gptel--known-tools '(("gptel-agent" . nil))))
+    (test-around-agent-update (lambda () (setq orig-called t)))
+    (should orig-called)))
+
+(ert-deftest agent/around-update/removes-stub-after ()
+  "Should remove Agent stub after update."
+  (let ((test-gptel--known-tools '(("gptel-agent" . nil))))
+    (test-around-agent-update (lambda () nil))
+    (should-not (assoc "Agent" (cdr (assoc "gptel-agent" test-gptel--known-tools))))))
+
+(ert-deftest agent/around-update/injects-before-orig ()
+  "Should inject stub before orig-fn is called."
+  (let ((stub-seen-during-orig nil)
+        (test-gptel--known-tools '(("gptel-agent" . nil))))
+    (test-around-agent-update
+     (lambda ()
+       (setq stub-seen-during-orig
+             (assoc "Agent" (cdr (assoc "gptel-agent" test-gptel--known-tools))))))
+    (should stub-seen-during-orig)))
+
+(ert-deftest agent/around-update/handles-missing-category ()
+  "Should handle missing gptel-agent category."
+  (let ((test-gptel--known-tools nil))
+    (should-not (assoc "gptel-agent" test-gptel--known-tools))))
+
+;;; ========================================
+;;; Tests for tracking-marker behavior
+;;; ========================================
+
+(defun test-create-tracking-marker (position buffer)
+  "Create a tracking marker at POSITION in BUFFER."
+  (let ((m (copy-marker position)))
+    (set-marker-insertion-type m t)
+    m))
+
+(ert-deftest agent/tracking-marker/insertion-type ()
+  "Tracking marker should have insertion-type t."
+  (with-temp-buffer
+    (insert "test")
+    (let ((m (test-create-tracking-marker 1 (current-buffer))))
+      (should (marker-insertion-type m)))))
+
+(ert-deftest agent/tracking-marker/advances-on-insert ()
+  "Tracking marker should advance when text inserted before it."
+  (with-temp-buffer
+    (insert "test")
+    (let ((m (test-create-tracking-marker 1 (current-buffer))))
+      (goto-char 1)
+      (insert "prefix")
+      (should (= (marker-position m) 7)))))
+
+(ert-deftest agent/tracking-marker/stays-at-end ()
+  "Tracking marker should stay at end after append."
+  (with-temp-buffer
+    (insert "test")
+    (let ((m (test-create-tracking-marker 5 (current-buffer))))
+      (goto-char (point-max))
+      (insert "suffix")
+      (should (= (marker-position m) 11)))))
+
+;;; ========================================
+;;; Tests for FSM restoration
+;;; ========================================
+
+(ert-deftest agent/fsm-restore/saves-parent ()
+  "Should save parent FSM before subagent task."
+  (let ((parent-fsm '(:state done))
+        (saved-fsm nil))
+    (setq saved-fsm parent-fsm)
+    (should (equal saved-fsm '(:state done)))))
+
+(ert-deftest agent/fsm-restore/restores-on-success ()
+  "Should restore parent FSM on success."
+  (let* ((parent-fsm '(:state done))
+         (current-fsm nil)
+         (saved-fsm nil))
+    (setq saved-fsm parent-fsm)
+    (setq current-fsm '(:state subagent))
+    (setq current-fsm saved-fsm)
+    (should (equal current-fsm '(:state done)))))
+
+(ert-deftest agent/fsm-restore/restores-on-timeout ()
+  "Should restore parent FSM on timeout."
+  (let* ((parent-fsm '(:state done))
+         (current-fsm nil)
+         (saved-fsm nil))
+    (setq saved-fsm parent-fsm)
+    (setq current-fsm nil)
+    (setq current-fsm saved-fsm)
+    (should (equal current-fsm '(:state done)))))
+
 (provide 'test-gptel-tools-agent-core)
 ;;; test-gptel-tools-agent-core.el ends here

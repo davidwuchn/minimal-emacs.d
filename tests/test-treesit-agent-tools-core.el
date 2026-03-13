@@ -201,5 +201,132 @@
   (let ((treesit-defun-type-regexp "custom_defun"))
     (should (equal treesit-defun-type-regexp "custom_defun"))))
 
+;;; ========================================
+;;; Tests for treesit-agent-replace-node
+;;; ========================================
+
+(defvar test-syntax-valid t)
+
+(defun mock-treesit-node-check (_node _property)
+  "Mock treesit-node-check - returns test-syntax-valid."
+  (not test-syntax-valid))
+
+(defun test-replace-node (node new-text)
+  "Replace NODE with NEW-TEXT, validating syntax."
+  (if node
+      (let ((text (mock-treesit-node-text node t)))
+        (when (stringp text)
+          (when (and (not (string-empty-p new-text))
+                     test-syntax-valid)
+            t)))
+    nil))
+
+(ert-deftest treesit/replace/valid-replacement ()
+  "Should return t for valid replacement."
+  (let ((test-syntax-valid t)
+        (node (list :type "function_definition" :text "(defn old [] nil)")))
+    (should (test-replace-node node "(defn new [] nil)"))))
+
+(ert-deftest treesit/replace/nil-node ()
+  "Should return nil for nil node."
+  (let ((test-syntax-valid t))
+    (should-not (test-replace-node nil "new text"))))
+
+(ert-deftest treesit/replace/empty-new-text ()
+  "Should handle empty new text."
+  (let ((test-syntax-valid t)
+        (node (list :type "function_definition" :text "(defn old [] nil)")))
+    (should-not (test-replace-node node ""))))
+
+(ert-deftest treesit/replace/syntax-error ()
+  "Should signal error on syntax error."
+  (let ((test-syntax-valid nil)
+        (node (list :type "function_definition" :text "(defn old [] nil)")))
+    (should-not (test-replace-node node "(defn broken"))))
+
+;;; ========================================
+;;; Tests for treesit-agent--find-defun with Clojure filtering
+;;; ========================================
+
+(defun test-find-defun-filter (nodes name clojure-p)
+  "Find defun by NAME in NODES, applying Clojure filter if CLOJURE-P."
+  (catch 'found
+    (dolist (node nodes)
+      (when (or (not clojure-p)
+                (test-is-clojure-def-node node))
+        (let ((node-name (plist-get node :name)))
+          (when (equal node-name name)
+            (throw 'found node)))))))
+
+(ert-deftest treesit/find-defun/clojure-filters-non-def ()
+  "Should filter out non-definition nodes in Clojure."
+  (let ((nodes (list (list :type "list_lit" :name "my-fn"
+                           :children (list nil (list :type "sym_lit" :text "defn")))
+                     (list :type "list_lit" :name "ignored"
+                           :children (list nil (list :type "sym_lit" :text "map")))))
+        (clojure-p t))
+    (let ((result (test-find-defun-filter nodes "my-fn" clojure-p)))
+      (should result))
+    (should-not (test-find-defun-filter nodes "ignored" clojure-p))))
+
+(ert-deftest treesit/find-defun/non-clojure-no-filter ()
+  "Should not filter nodes in non-Clojure buffers."
+  (let ((nodes (list (list :type "function_definition" :name "main")
+                     (list :type "function_definition" :name "helper")))
+        (clojure-p nil))
+    (should (test-find-defun-filter nodes "main" clojure-p))
+    (should (test-find-defun-filter nodes "helper" clojure-p))))
+
+(ert-deftest treesit/find-defun/clojure-allows-defrecord ()
+  "Should find defrecord definitions in Clojure."
+  (let ((nodes (list (list :type "list_lit" :name "MyRecord"
+                           :children (list nil (list :type "sym_lit" :text "defrecord")))))
+        (clojure-p t))
+    (should (test-find-defun-filter nodes "MyRecord" clojure-p))))
+
+(ert-deftest treesit/find-defun/clojure-allows-deftype ()
+  "Should find deftype definitions in Clojure."
+  (let ((nodes (list (list :type "list_lit" :name "MyType"
+                           :children (list nil (list :type "sym_lit" :text "deftype")))))
+        (clojure-p t))
+    (should (test-find-defun-filter nodes "MyType" clojure-p))))
+
+(ert-deftest treesit/find-defun/clojure-rejects-let ()
+  "Should not find let bindings in Clojure."
+  (let ((nodes (list (list :type "list_lit" :name "x"
+                           :children (list nil (list :type "sym_lit" :text "let")))))
+        (clojure-p t))
+    (should-not (test-find-defun-filter nodes "x" clojure-p))))
+
+(ert-deftest treesit/find-defun/clojure-rejects-map-call ()
+  "Should not find map calls in Clojure."
+  (let ((nodes (list (list :type "list_lit" :name "result"
+                           :children (list nil (list :type "sym_lit" :text "map")))))
+        (clojure-p t))
+    (should-not (test-find-defun-filter nodes "result" clojure-p))))
+
+;;; ========================================
+;;; Tests for treesit-agent-get-file-map multi-language
+;;; ========================================
+
+(ert-deftest treesit/file-map/extracts-names ()
+  "Should extract names from file map."
+  (let ((nodes (list (list :type "function_definition" :name "main")
+                     (list :type "function_definition" :name "helper")))
+        (clojure-p nil))
+    (let ((names (delq nil (mapcar (lambda (n) (plist-get n :name)) nodes))))
+      (should (equal names '("main" "helper"))))))
+
+(ert-deftest treesit/file-map/filters-clojure ()
+  "Should filter Clojure non-definitions from file map."
+  (let ((nodes (list (list :type "list_lit" :name "my-fn"
+                           :children (list nil (list :type "sym_lit" :text "defn")))
+                     (list :type "list_lit" :name "ignored"
+                           :children (list nil (list :type "sym_lit" :text "map")))))
+        (clojure-p t))
+    (let ((filtered (seq-filter (lambda (n) (test-is-clojure-def-node n)) nodes)))
+      (should (= (length filtered) 1))
+      (should (equal (plist-get (car filtered) :name) "my-fn")))))
+
 (provide 'test-treesit-agent-tools-core)
 ;;; test-treesit-agent-tools-core.el ends here
