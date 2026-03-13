@@ -114,7 +114,7 @@ Confirmation happens in the minibuffer, not via keybindings."
     (forward-line 1)
     (insert "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
     (insert "Diff Preview - Confirm in minibuffer\n")
-    (insert "  y = apply    n = abort    N = never ask again    q = quit\n")
+    (insert "  y = apply    n = abort    ! = apply all    q = quit\n")
     (insert "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")))
 
 (defun my/gptel--prompt-for-confirmation (buffer on-confirm on-abort)
@@ -124,10 +124,10 @@ BUFFER is the preview buffer being shown.
 ON-CONFIRM is called if user accepts.
 ON-ABORT is called if user rejects.
 
-Prompts in minibuffer: 'Apply changes? (y/n/N/q)'
+Prompts in minibuffer: 'Apply changes? (y/n/!/q)'
   y - Yes, apply this change
   n - No, abort this change
-  N - Never ask again (apply this and all future changes this session)
+  ! - Apply all (never ask again this session)
   q - Quit (same as n)
 
 This is a blocking call - user must respond before Emacs continues."
@@ -139,14 +139,14 @@ This is a blocking call - user must respond before Emacs continues."
         (funcall on-confirm))
     ;; Normal flow - prompt user
     (unwind-protect
-        (let ((prompt (format "Apply changes? [y=apply, n=abort, N=never ask again, q=quit]: ")))
+        (let ((prompt (format "Apply changes? [y=yes, n=no, !=all, q=quit]: ")))
           (condition-case err
               (let* ((result (read-from-minibuffer prompt))
                      (confirm (member result '("y" "Y" "")))
                      (abort (member result '("n" "N" "q" "Q")))
-                     (never-again (member result '("N" "never" "Never"))))
+                     (apply-all (member result '("!" "a" "A"))))
                 (cond
-                 (never-again
+                 (apply-all
                   (setq gptel-tools-preview--never-ask-again t)
                   (message "Preview confirmations disabled for this session. M-x gptel-tools-preview-reset-confirmation to re-enable.")
                   (funcall on-confirm))

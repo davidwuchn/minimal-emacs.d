@@ -19,9 +19,9 @@ Preview shows diff in a buffer, then prompts in minibuffer:
 
 | Key | Action |
 |-----|--------|
-| `y` | Apply this change |
-| `n` | Abort this change |
-| `N` | Never ask again (auto-apply rest of session) |
+| `y` | Yes, apply this change |
+| `n` | No, abort this change |
+| `!` | Apply all (never ask again this session) |
 | `q` | Quit (same as n) |
 
 ## Configuration
