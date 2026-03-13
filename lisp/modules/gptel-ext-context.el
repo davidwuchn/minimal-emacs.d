@@ -33,8 +33,9 @@
   :type 'integer
   :group 'my/gptel-auto-compact)
 
-(defcustom my/gptel-auto-compact-min-interval 45
-  "Minimum seconds between auto-compactions per buffer."
+(defcustom my/gptel-auto-compact-min-interval 300
+  "Minimum seconds between auto-compactions per buffer.
+Default is 5 minutes to avoid frequent compaction cycles."
   :type 'integer
   :group 'my/gptel-auto-compact)
 
@@ -85,11 +86,13 @@
     (let ((system (my/gptel--directive-text 'compact))
           (buf (current-buffer))
           (chars-before (buffer-size))
-          (tokens-before (my/gptel--estimate-tokens (buffer-size))))
+          (tokens-before (my/gptel--estimate-tokens (buffer-size)))
+          (window (my/gptel--context-window)))
       (when system
         (setq my/gptel-auto-compact-running t)
-        (message "[compact] Starting: %d chars, ~%d tokens"
-                 chars-before (round tokens-before))
+        (message "[compact] Starting: %d chars, ~%d tokens (window: %d, threshold: %d)"
+                 chars-before (round tokens-before) window
+                 (round (* window my/gptel-auto-compact-threshold)))
         (gptel-request (buffer-string)
           :system system
           :buffer buf
