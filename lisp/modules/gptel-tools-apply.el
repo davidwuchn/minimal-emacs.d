@@ -51,8 +51,12 @@
 (defun my/gptel--extract-patch (text)
   "Extract patch content from TEXT, stripping markdown fences if present."
   (let ((clean text))
-    (when (string-match "^```\\(?:diff\\|patch\\)?\n\\(.*\n\\)```$" text)
-      (setq clean (match-string 1 text)))
+    ;; Strip opening fence (```diff, ```patch, or ```)
+    (when (string-match-p "^\\s-*```\\(diff\\|patch\\)?\\s-*" clean)
+      (setq clean (replace-regexp-in-string "^\\s-*```\\(diff\\|patch\\)?\\s-*\\n?" "" clean)))
+    ;; Strip closing fence (``` at end of string, with optional whitespace)
+    (when (string-match-p "```\\s-*\\'" clean)
+      (setq clean (replace-regexp-in-string "\\n?\\s-*```\\s-*\\'" "" clean)))
     (string-trim clean)))
 
 ;;; ApplyPatch Implementation
@@ -169,8 +173,8 @@ Prefers `git apply` if in a git repository; otherwise uses `patch`."
        :function #'my/gptel--apply-patch-dispatch
        :async t
        :args '((:name "patch"
-                :type string
-                :description "Unified diff content"))
+                      :type string
+                      :description "Unified diff content"))
        :category "gptel-agent"
        :confirm t
        :include t))))

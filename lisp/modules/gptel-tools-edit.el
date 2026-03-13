@@ -25,16 +25,14 @@
 
 (defun my/gptel--agent--strip-diff-fences (text)
   "Strip leading/trailing fenced code block markers from TEXT, if present."
-  (with-temp-buffer
-    (insert text)
-    (goto-char (point-min))
-    (when (looking-at-p "^ *```\\(diff\\|patch\\)?\\s-*$")
-      (delete-line))
-    (goto-char (point-max))
-    (forward-line -1)
-    (when (looking-at-p "^ *```\\s-*$")
-      (delete-line))
-    (string-trim-right (buffer-string))))
+  (let ((result text))
+    ;; Strip opening fence (```diff, ```patch, or ```)
+    (when (string-match-p "^\\s-*```\\(diff\\|patch\\)?\\s-*" result)
+      (setq result (replace-regexp-in-string "^\\s-*```\\(diff\\|patch\\)?\\s-*\\n?" "" result)))
+    ;; Strip closing fence (``` at end of string, with optional whitespace)
+    (when (string-match-p "```\\s-*\\'" result)
+      (setq result (replace-regexp-in-string "\\n?\\s-*```\\s-*\\'" "" result)))
+    (string-trim result)))
 
 ;;; Edit Tool Implementation
 
@@ -86,8 +84,8 @@ CALLBACK is called exactly once unless the buffer has been aborted."
                  (lambda (cb) (my/gptel--agent-edit-apply-patch cb target patch-text))
                  (lambda (cb) (funcall cb "Error: Preview aborted by user."))
                  "Edit patch preview — n apply    q abort")))))
-       (error
-        (funcall finish (format "Error: %s" (error-message-string err)))))))
+      (error
+       (funcall finish (format "Error: %s" (error-message-string err)))))))
 
 (defun my/gptel--agent-edit-apply-patch (callback target patch-text)
   "Apply PATCH-TEXT to TARGET file asynchronously.
@@ -96,7 +94,8 @@ CALLBACK is called with the result.
 This is the core patch application logic for preview integration."
   (let* ((out-buf (generate-new-buffer " *gptel-patch*"))
          (default-directory (file-name-directory target))
-         (patch-options '("--forward" "--verbose" "--batch"))
+         ;; Use -p1 to strip a/ and b/ prefixes from git diff output
+         (patch-options '("-p1" "--forward" "--verbose" "--batch"))
          (cb-called nil)
          (proc
           (make-process
@@ -150,15 +149,15 @@ This is the core patch application logic for preview integration."
      :function #'my/gptel--agent-edit-async
      :async t
      :args '((:name "path"
-              :type string)
-            (:name "old_str"
-              :type string
-              :optional t)
-            (:name "new_str_or_diff"
-              :type string)
-            (:name "diffp"
-              :type boolean
-              :optional t))
+                    :type string)
+             (:name "old_str"
+                    :type string
+                    :optional t)
+             (:name "new_str_or_diff"
+                    :type string)
+             (:name "diffp"
+                    :type boolean
+                    :optional t))
      :category "gptel-agent"
      :confirm t
      :include t)))

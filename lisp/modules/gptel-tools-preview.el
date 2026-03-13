@@ -149,9 +149,9 @@ run concurrently.  Format: BASE-HHMMSS."
 Uses `gptel-tools-preview-window-height' for window height.
 Returns the window displaying the buffer."
   (let ((window (display-buffer buffer '(display-buffer-below-selected
-                                          (window-height . fit-window-to-buffer)
-                                          (body-function . (lambda (_)
-                                                             (goto-char (point-min))))))))
+                                         (window-height . fit-window-to-buffer)
+                                         (body-function . (lambda (_)
+                                                            (goto-char (point-min))))))))
     (when window
       (with-selected-window window
         (fit-window-to-buffer nil
@@ -358,22 +358,22 @@ Idempotent - safe to call multiple times."
                                        (t "no valid argument combination")))))))
        :description "Preview file changes or patches with diff view. Provide either path+replacement or a unified diff patch."
        :args '((:name "path"
-                :type string
-                :description "Target file path (for file change mode)"
-                :optional t)
+                      :type string
+                      :description "Target file path (for file change mode)"
+                      :optional t)
                (:name "original"
-                :type string
-                :description "Original content (auto-read from file if omitted)"
-                :optional t)
+                      :type string
+                      :description "Original content (auto-read from file if omitted)"
+                      :optional t)
                (:name "replacement"
-                :type string
-                :description "Replacement content (for file change mode)"
-                :optional t)
-               (:name "patch"
-                :type string
-                :description "Unified diff content (for patch mode)"
-                :optional t))
-       :confirm t))))
+                      :type string
+                      :description "Replacement content (for file change mode)"
+                      :optional t)
+(:name "patch"
+                       :type string
+                       :description "Unified diff content (for patch mode)"
+                       :optional t))
+        :confirm t))))
 
 ;;; Footer
 
