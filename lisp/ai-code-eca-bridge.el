@@ -12,11 +12,9 @@
 ;;   - Workspace management (list, add, remove, sync projects)
 ;;   - Context commands (file, cursor, repo-map, clipboard)
 ;;   - Shared context (cross-session sharing)
-;;   - Auto session-project affinity
-;;   - Keybindings integration
-;;   - Health verification
-;;   - Context synchronization
+;;   - Multi-Project Mode (auto-switch, auto-sync, mode-line)
 ;;   - ai-code-menu integration (transient)
+;;   - Health verification and context synchronization
 ;;
 ;; Upstream ai-code-eca.el provides:
 ;;   - ai-code-eca-start, ai-code-eca-switch, ai-code-eca-send, ai-code-eca-resume
@@ -26,19 +24,37 @@
 ;;   - eca--session-add-workspace-folder (internal)
 ;;   - eca--session-for-worktree (worktree detection)
 ;;
+;; MULTI-PROJECT WORKFLOWS:
+;;
+;; Two approaches for working with multiple projects:
+;;
+;; 1. SINGLE SESSION, MULTIPLE WORKSPACES (recommended):
+;;    - All projects in one ECA session
+;;    - AI sees context from all projects
+;;    - Use: M-x ai-code-eca-multi-project-mode to enable auto-switch/sync
+;;    - Use: M-x ai-code-eca-add-workspace-folder to add projects
+;;
+;; 2. MULTIPLE SESSIONS:
+;;    - Separate ECA session per project
+;;    - Isolated context per project
+;;    - Use: M-x ai-code-eca-switch-session to switch between sessions
+;;    - Share common context: M-x ai-code-eca-share-file
+;;
 ;; ai-code-menu Integration (primary UX):
 ;;   All commands accessible via M-x ai-code-menu (C-c a) when ECA is selected:
 ;;
 ;;   ECA Workspace              ECA Context         ECA Shared Context
-;;     wa - Add folder            cf - File           F - Share file
-;;     wA - Add to ALL            cc - Cursor         M - Share repo map
-;;     wl - List folders          cm - Repo map       p - Apply shared
-;;     wr - Remove folder         cy - Clipboard      c - Clear shared
-;;     ws - Sync projects         cs - Start sync
-;;     wd - Dashboard             cS - Stop sync
+;;     wm - Multi-Project Mode    cf - File           F - Share file
+;;     wa - Add folder            cc - Cursor         M - Share repo map
+;;     wA - Add to ALL            cm - Repo map       p - Apply shared
+;;     wl - List folders          cy - Clipboard      c - Clear shared
+;;     wr - Remove folder         cs - Start sync
+;;     ws - Sync projects         cS - Stop sync
+;;     wd - Dashboard
 ;;     wt - Toggle auto-switch
 ;;
 ;;   ECA Sessions
+;;     s? - Which session?
 ;;     sl - List sessions
 ;;     ss - Switch session
 ;;     sv - Verify health
@@ -46,14 +62,15 @@
 ;;
 ;; Auto-Detection (configurable):
 ;;   - eca-auto-add-workspace-folder: Add project on file open (default: t)
-;;   - eca-auto-switch-session: Switch session by project (default: nil)
+;;   - eca-auto-switch-session: Switch session by project (default: 'prompt)
 ;;   - eca-auto-create-session: Create session for new projects (default: nil)
 ;;   - eca-auto-sync-workspace: Sync workspace on project switch (default: t)
-;;   - ai-code-eca-auto-switch-backend: Set backend to ECA (default: t)
+;;   - ai-code-eca-mode-line-indicator: Show session in mode-line (default: t)
 ;;
 ;; Usage:
 ;;   (require 'ai-code-eca-bridge)
 ;;   M-x ai-code-menu (when ECA is selected)
+;;   M-x ai-code-eca-multi-project-mode (enable multi-project workflows)
 
 ;;; Code:
 
@@ -268,24 +285,51 @@ Useful for shared libraries that should be available in all projects."
 
 ;;; Gap 1: Auto Session-Project Affinity
 
-(defcustom ai-code-eca-auto-switch-session nil
-  "If non-nil, automatically switch ECA session when project changes.
-Delegates to `eca-auto-switch-session' in eca-ext.el.
-If 'prompt, ask before switching.
-If nil, do nothing."
-  :type '(choice (const :tag "Auto switch" t)
-                 (const :tag "Prompt before switching" prompt)
-                 (const :tag "Disabled" nil))
-  :group 'ai-code)
-
 ;;;###autoload
 (defun ai-code-eca-toggle-auto-switch ()
-  "Toggle auto session switching based on project."
+  "Toggle auto session switching based on project.
+Cycles through: disabled → prompt → auto → disabled."
   (interactive)
   (setq eca-auto-switch-session
-        (not eca-auto-switch-session))
+        (cond
+         ((null eca-auto-switch-session) 'prompt)
+         ((eq eca-auto-switch-session 'prompt) t)
+         (t nil)))
   (message "ECA auto session switching: %s"
-           (if eca-auto-switch-session "enabled" "disabled")))
+           (pcase eca-auto-switch-session
+             ('prompt "prompt (asks before switching)")
+             ('t "auto (switches automatically)")
+             (_ "disabled"))))
+
+;;; Multi-Project Mode Toggle
+
+;;;###autoload
+(defun ai-code-eca-multi-project-mode (&optional arg)
+  "Toggle Multi-Project Mode for ECA.
+With ARG, turn on if positive, off if negative.
+
+When enabled:
+- Auto-switch session when project changes (prompt mode)
+- Auto-sync workspace folders
+- Auto-add projects to workspace
+- Show session info in mode-line"
+  (interactive "P")
+  (let ((enable (if arg
+                    (> (prefix-numeric-value arg) 0)
+                  (not (and eca-auto-switch-session
+                            eca-auto-sync-workspace
+                            eca-auto-add-workspace-folder)))))
+    (if enable
+        (progn
+          (setq eca-auto-switch-session 'prompt)
+          (setq eca-auto-sync-workspace t)
+          (setq eca-auto-add-workspace-folder t)
+          (setq ai-code-eca-mode-line-indicator t)
+          (message "ECA Multi-Project Mode enabled"))
+      (setq eca-auto-switch-session nil)
+      (setq eca-auto-sync-workspace nil)
+      (setq eca-auto-add-workspace-folder nil)
+      (message "ECA Multi-Project Mode disabled"))))
 
 ;;; Gap 3: Cross-Session Context Sharing
 
@@ -558,11 +602,12 @@ Displays session ID, status, and workspace folders."
     (define-key map (kbd "s") #'ai-code-eca-switch-session)
     (define-key map (kbd "d") #'ai-code-eca-dashboard)
     (define-key map (kbd "?") #'ai-code-eca-which-session)
+    (define-key map (kbd "m") #'ai-code-eca-multi-project-mode)
     (define-key map (kbd "f") #'ai-code-eca-add-file-context)
     (define-key map (kbd "F") #'ai-code-eca-share-file)
     (define-key map (kbd "c") #'ai-code-eca-add-cursor-context)
-    (define-key map (kbd "m") #'ai-code-eca-add-repo-map-context)
-    (define-key map (kbd "M") #'ai-code-eca-share-repo-map)
+    (define-key map (kbd "r") #'ai-code-eca-add-repo-map-context)
+    (define-key map (kbd "R") #'ai-code-eca-share-repo-map)
     (define-key map (kbd "y") #'ai-code-eca-add-clipboard-context)
     (define-key map (kbd "a") #'ai-code-eca-add-workspace-folder)
     (define-key map (kbd "w") #'ai-code-eca-list-workspace-folders)
@@ -660,6 +705,7 @@ Displays session ID, status, and workspace folders."
             ["ECA Workspace"
              (:info #'ai-code-eca--session-status-description)
              (:info #'ai-code-eca--workspace-status-description)
+             ("wm" "Multi-Project Mode" ai-code-eca-multi-project-mode)
              ("wa" "Add workspace folder" ai-code-eca-add-workspace-folder)
              ("wA" "Add to ALL sessions" ai-code-eca-add-workspace-folder-all-sessions)
              ("wl" "List workspace folders" ai-code-eca-list-workspace-folders)

@@ -234,6 +234,22 @@ AI Code Menu (C-c a)
 
 **No prefix key memorization needed** - all commands discoverable in menu.
 
+### Multi-Project Mode
+
+Quick toggle for multi-project workflows:
+
+```
+M-x ai-code-eca-multi-project-mode
+```
+
+Enables all auto-detection features at once:
+- `eca-auto-switch-session` → `'prompt`
+- `eca-auto-sync-workspace` → `t`
+- `eca-auto-add-workspace-folder` → `t`
+- `ai-code-eca-mode-line-indicator` → `t`
+
+Available in menu: `wm` (ECA Workspace → Multi-Project Mode)
+
 ### Auto-Detection
 
 Configure automatic behaviors:
