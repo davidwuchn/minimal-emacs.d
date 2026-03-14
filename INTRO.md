@@ -194,44 +194,47 @@ In `init-ai.el`:
 
 **Primary UX**: All ECA commands accessible via `M-x ai-code-menu` (typically `C-c a`).
 
-When ECA is selected as the backend:
+When ECA is selected as the backend, press **E** to open the ECA submenu:
 
 ```
 AI Code Menu (C-c a)
 │
-├── ECA Workspace
-│   │ Session 1 (ready)           ← Dynamic status
-│   │ Workspace (2 folders)       ← Dynamic status
-│   │
-│   │ wm  Multi-Project Mode
-│   │ wa  Add workspace folder
-│   │ wA  Add to ALL sessions
-│   │ wl  List workspace folders
-│   │ wr  Remove workspace folder
-│   │ ws  Sync project roots
-│   │ wd  Session dashboard
-│   └ wt  Toggle auto-switch
+│ ...existing menu items...
+│ N   Toggle notifications
 │
-├── ECA Context
-│   │ cf  Add file context
-│   │ cc  Add cursor context
-│   │ cr  Add repo map
-│   │ cy  Add clipboard
-│   │ cs  Start context sync
-│   └ cS  Stop context sync
-│
-├── ECA Shared Context
-│   │ F   Share file
-│   │ R   Share repo map
-│   │ p   Apply shared context
-│   └ c   Clear shared context
-│
-└── ECA Sessions
-    │ s?  Which session?
-    │ sl  List sessions
-    │ ss  Switch session
-    │ sv  Verify health
-    └ su  Upgrade ECA
+└─E   ECA commands ─────────────────────┐
+                                        │
+                    ┌───────────────────┘
+                    │
+                    ▼
+              ECA Commands
+              ┌─ Workspace ─────────────────────
+              │ m   Multi-Project Mode
+              │ a   Add workspace folder
+              │ A   Add to ALL sessions
+              │ l   List workspace folders
+              │ r   Remove workspace folder
+              │ s   Sync project roots
+              │ d   Session dashboard
+              │ t   Toggle auto-switch
+              ├─ Context ───────────────────────
+              │ f   Add file context
+              │ c   Add cursor context
+              │ M   Add repo map
+              │ y   Add clipboard
+              │ S   Start context sync
+              │ X   Stop context sync
+              ├─ Shared Context ────────────────
+              │ F   Share file
+              │ R   Share repo map
+              │ p   Apply shared context
+              │ C   Clear shared context
+              └─ Sessions ──────────────────────
+                ?   Which session?
+                L   List sessions
+                w   Switch session
+                v   Verify health
+                u   Upgrade ECA
 ```
 
 **No prefix key memorization needed** - all commands discoverable in menu.

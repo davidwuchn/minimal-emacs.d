@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-14 (tag v0.6.45)
+> Last updated: 2026-03-14 (tag v0.6.68)
 
 ## Architecture Overview
 
@@ -158,7 +158,9 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
 | Per-tool output limits | **Skip** | `my/gptel-subagent-result-limit` truncation on subagents works fine |
 
-### Recent Changes (v0.6.65)
+### Recent Changes (v0.6.68)
+
+- **Refactor ECA menu into submenu** (⚒): Replaced 23 flat menu items with single "E" entry that opens `ai-code-eca-menu` transient. Solves "Other Tools" menu overflow. Groups: Workspace, Context, Shared Context, Sessions. Added `(require 'transient)` for `transient-define-prefix` macro.
 
 - **Fix hook function signatures** (⊘): `window-buffer-change-functions` passes frame as argument. Functions `ai-code-eca--update-mode-line`, `eca--auto-switch-session-hook`, `eca--auto-sync-workspace-hook` declared with `()` signature caused `wrong-number-of-arguments` errors. Fixed to accept `(&optional _frame)`.
 
