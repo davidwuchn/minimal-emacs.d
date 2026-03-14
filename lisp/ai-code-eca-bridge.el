@@ -558,21 +558,15 @@ Displays session ID, status, and workspace folders."
 ;;; Upgrade
 
 ;;;###autoload
-(defun ai-code-eca-upgrade-vc ()
-  "Upgrade ECA if installed via package-vc."
+(defun ai-code-eca-upgrade ()
+  "Upgrade ECA package."
   (interactive)
-  (if (and (featurep 'package-vc)
-           (alist-get 'eca package-vc-selected-packages))
+  (if (package-installed-p 'eca)
       (progn
-        (message "Upgrading ECA via package-vc...")
-        (package-vc-upgrade 'eca)
+        (package-refresh-contents)
+        (package-install 'eca)
         (message "ECA upgraded. Restart Emacs or re-evaluate."))
-    (if (package-installed-p 'eca)
-        (progn
-          (package-refresh-contents)
-          (package-install 'eca)
-          (message "ECA upgraded via package.el"))
-      (user-error "ECA is not installed"))))
+    (user-error "ECA is not installed")))
 
 ;;; Install Skills
 

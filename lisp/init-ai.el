@@ -81,8 +81,6 @@
 
 (use-package eca
   :ensure t
-  :vc (:url "https://github.com/editor-code-assistant/eca-emacs"
-       :rev :newest)
   :custom
   (eca-completion-idle-delay 0.5)
   (eca-chat-use-side-window nil)
