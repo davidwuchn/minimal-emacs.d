@@ -701,9 +701,9 @@ Displays session ID, status, and workspace folders."
              (featurep 'transient))
     (condition-case err
         (progn
-          ;; Append ECA groups after "Other Tools" group
-          ;; Using group name as LOC: "Other Tools"
-          (transient-append-suffix 'ai-code-menu "Other Tools"
+          ;; Append ECA groups after last item in "Other Tools": "N" key
+          ;; LOC must be a key/command, not a group name
+          (transient-append-suffix 'ai-code-menu "N"
             ["ECA Workspace"
              (:info #'ai-code-eca--session-status-description)
              (:info #'ai-code-eca--workspace-status-description)
@@ -715,7 +715,8 @@ Displays session ID, status, and workspace folders."
              ("ws" "Sync project roots" ai-code-eca-sync-project-workspaces)
              ("wd" "Session dashboard" ai-code-eca-dashboard)
              ("wt" "Toggle auto-switch" ai-code-eca-toggle-auto-switch)])
-          (transient-append-suffix 'ai-code-menu "ECA Workspace"
+          ;; Append after last item in ECA Workspace: "wt" key
+          (transient-append-suffix 'ai-code-menu "wt"
             ["ECA Context"
              ("cf" "Add file context" ai-code-eca-add-file-context)
              ("cc" "Add cursor context" ai-code-eca-add-cursor-context)
@@ -723,13 +724,16 @@ Displays session ID, status, and workspace folders."
              ("cy" "Add clipboard" ai-code-eca-add-clipboard-context)
              ("cs" "Start context sync" ai-code-eca-context-sync-start)
              ("cS" "Stop context sync" ai-code-eca-context-sync-stop)])
-          (transient-append-suffix 'ai-code-menu "ECA Context"
+          ;; Append after last item in ECA Context: "cS" key
+          (transient-append-suffix 'ai-code-menu "cS"
             ["ECA Shared Context"
              ("F" "Share file" ai-code-eca-share-file)
              ("R" "Share repo map" ai-code-eca-share-repo-map)
              ("p" "Apply shared context" ai-code-eca-apply-shared-context)
              ("c" "Clear shared context" eca-clear-shared-context)])
-          (transient-append-suffix 'ai-code-menu "ECA Shared Context"
+          ;; Append after last item in ECA Shared Context: "c" key - but that conflicts
+          ;; Use "p" instead (second to last)
+          (transient-append-suffix 'ai-code-menu "p"
             ["ECA Sessions"
              ("s?" "Which session?" ai-code-eca-which-session)
              ("sl" "List sessions" ai-code-eca-list-sessions)
@@ -747,10 +751,11 @@ Displays session ID, status, and workspace folders."
              (featurep 'transient))
     (condition-case err
         (progn
-          (transient-remove-suffix 'ai-code-menu "ECA Workspace")
-          (transient-remove-suffix 'ai-code-menu "ECA Context")
-          (transient-remove-suffix 'ai-code-menu "ECA Shared Context")
-          (transient-remove-suffix 'ai-code-menu "ECA Sessions")
+          ;; Remove by key of first item in each group
+          (transient-remove-suffix 'ai-code-menu "wm")
+          (transient-remove-suffix 'ai-code-menu "cf")
+          (transient-remove-suffix 'ai-code-menu "F")
+          (transient-remove-suffix 'ai-code-menu "s?")
           (setq ai-code-eca--menu-suffixes-added nil))
       (error
        (message "Failed to remove ECA menu items: %s" (error-message-string err))))))
