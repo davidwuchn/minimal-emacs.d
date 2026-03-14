@@ -482,12 +482,13 @@ Triggered when opening files outside current workspace."
 
 ;;; Gap 1: Auto Session-Project Affinity
 
-(defcustom eca-auto-switch-session nil
+(defcustom eca-auto-switch-session 'prompt
   "If non-nil, automatically switch to session matching current project.
 When switching to a buffer in a different project, ECA will switch to
 the session that owns that project's workspace.
 
-If 'prompt, ask before switching.
+If 'prompt, ask before switching (default).
+If t, switch automatically without prompting.
 If nil, do nothing (manual switching only)."
   :type '(choice (const :tag "Auto switch" t)
                  (const :tag "Prompt before switching" prompt)

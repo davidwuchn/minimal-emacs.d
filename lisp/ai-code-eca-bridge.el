@@ -411,6 +411,54 @@ ensure `ai-code-selected-backend' is set to 'eca."
 (advice-add 'eca-switch-to-session :after
             (lambda (&rest _) (ai-code-eca--ensure-backend-selected)))
 
+;;; Gap 2: Visual Indicator of Active Project Context
+
+(defcustom ai-code-eca-mode-line-indicator t
+  "If non-nil, show ECA session info in mode-line.
+Displays session ID and folder count when in a project with active session."
+  :type 'boolean
+  :group 'ai-code)
+
+(defvar ai-code-eca--mode-line-string nil
+  "Mode-line string showing current ECA session context.")
+
+(defun ai-code-eca--update-mode-line ()
+  "Update mode-line string with current session info."
+  (when ai-code-eca-mode-line-indicator
+    (let* ((session (when (featurep 'eca) (eca-session)))
+           (folders (when session (eca--session-workspace-folders session)))
+           (session-id (when session (eca--session-id session)))
+           (project (ai-code-eca--project-root)))
+      (setq ai-code-eca--mode-line-string
+            (if (and session folders)
+                (format " ECA:%d[%d]" session-id (length folders))
+              "")))))
+
+(defun ai-code-eca-mode-line ()
+  "Return mode-line string for ECA context."
+  (ai-code-eca--update-mode-line)
+  (or ai-code-eca--mode-line-string ""))
+
+;; Add to mode-line
+(add-hook 'find-file-hook #'ai-code-eca--update-mode-line)
+(add-hook 'window-buffer-change-functions #'ai-code-eca--update-mode-line)
+
+;;;###autoload
+(defun ai-code-eca-which-session ()
+  "Show which ECA session the current project belongs to.
+Displays session ID, status, and workspace folders."
+  (interactive)
+  (let* ((session (when (featurep 'eca) (eca-session)))
+         (project (ai-code-eca--project-root))
+         (folders (when session (eca--session-workspace-folders session)))
+         (session-id (when session (eca--session-id session)))
+         (status (when session (eca--session-status session))))
+    (if session
+        (message "ECA Session %d (%s) for %s | Workspace: %s"
+                 session-id status project
+                 (string-join folders ", "))
+      (message "No ECA session for %s" project))))
+
 ;;; Health Verification
 
 (defcustom ai-code-eca-verify-timeout 5
@@ -509,6 +557,7 @@ ensure `ai-code-selected-backend' is set to 'eca."
     (define-key map (kbd "l") #'ai-code-eca-list-sessions)
     (define-key map (kbd "s") #'ai-code-eca-switch-session)
     (define-key map (kbd "d") #'ai-code-eca-dashboard)
+    (define-key map (kbd "?") #'ai-code-eca-which-session)
     (define-key map (kbd "f") #'ai-code-eca-add-file-context)
     (define-key map (kbd "F") #'ai-code-eca-share-file)
     (define-key map (kbd "c") #'ai-code-eca-add-cursor-context)
@@ -637,6 +686,7 @@ ensure `ai-code-selected-backend' is set to 'eca."
           ;; Add ECA Session group
           (transient-append-suffix 'ai-code-menu '("F")
             ["ECA Sessions"
+             ("s?" "Which session?" ai-code-eca-which-session)
              ("sl" "List sessions" ai-code-eca-list-sessions)
              ("ss" "Switch session" ai-code-eca-switch-session)
              ("sv" "Verify health" ai-code-eca-verify-health)

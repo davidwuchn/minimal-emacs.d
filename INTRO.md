@@ -242,8 +242,11 @@ Configure automatic behaviors:
 ;; Auto-add project to workspace on file open (default: t)
 (setq eca-auto-add-workspace-folder t)
 
-;; Auto-switch session when project changes (default: nil)
-(setq eca-auto-switch-session t)
+;; Auto-switch session when project changes (default: 'prompt)
+;; 'prompt = ask before switching (recommended)
+;; t = switch automatically
+;; nil = disabled
+(setq eca-auto-switch-session 'prompt)
 
 ;; Auto-create session for new projects (default: nil)
 (setq eca-auto-create-session t)
@@ -254,8 +257,20 @@ Configure automatic behaviors:
 
 These settings enable "just work" multi-project workflows:
 - Open a file → project auto-added to workspace
-- Switch to another project → session switches automatically
+- Switch to another project → prompted to switch session
 - Open file in new project → session created automatically
+
+### Visual Indicators
+
+**Mode-line**: When `ai-code-eca-mode-line-indicator` is enabled (default), the mode-line shows:
+```
+ECA:1[2]  ; Session 1 with 2 workspace folders
+```
+
+**Which session?**: `M-x ai-code-eca-which-session` or `C-c e ?` shows:
+```
+ECA Session 1 (ready) for /path/to/project | Workspace: /project, /shared-lib
+```
 
 ### Keybindings (Alternative)
 

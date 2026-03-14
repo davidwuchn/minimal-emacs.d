@@ -102,6 +102,25 @@
                     "")))
     (should (string-match-p "defun ai-code-eca-toggle-auto-switch" source))))
 
+(ert-deftest eca-bridge/extensions/which-session ()
+  "Bridge should provide which-session command."
+  (let ((source (or (ignore-errors
+                      (with-temp-buffer
+                        (insert-file-contents "lisp/ai-code-eca-bridge.el")
+                        (buffer-string)))
+                    "")))
+    (should (string-match-p "defun ai-code-eca-which-session" source))))
+
+(ert-deftest eca-bridge/extensions/mode-line-indicator ()
+  "Bridge should provide mode-line indicator."
+  (let ((source (or (ignore-errors
+                      (with-temp-buffer
+                        (insert-file-contents "lisp/ai-code-eca-bridge.el")
+                        (buffer-string)))
+                    "")))
+    (should (string-match-p "defun ai-code-eca-mode-line" source))
+    (should (string-match-p "defcustom ai-code-eca-mode-line-indicator" source))))
+
 (ert-deftest eca-bridge/menu-integration/has-status-functions ()
   "Bridge should provide menu status description functions."
   (let ((source (or (ignore-errors
