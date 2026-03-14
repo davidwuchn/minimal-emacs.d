@@ -158,6 +158,10 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
 | Per-tool output limits | **Skip** | `my/gptel-subagent-result-limit` truncation on subagents works fine |
 
+### Recent Changes (v0.6.65)
+
+- **Fix hook function signatures** (⊘): `window-buffer-change-functions` passes frame as argument. Functions `ai-code-eca--update-mode-line`, `eca--auto-switch-session-hook`, `eca--auto-sync-workspace-hook` declared with `()` signature caused `wrong-number-of-arguments` errors. Fixed to accept `(&optional _frame)`.
+
 ### Recent Changes (v0.6.63)
 
 - **Fix transient-append-suffix bug** (⊘): ECA menu items were not appearing because `transient-append-suffix` was called with list format `'("s")` instead of string format `"s"`. Error was silently swallowed by `condition-case nil`. Now logs errors for debugging. Fixed all 4 suffix calls. ECA menu items now appear in `ai-code-menu` when ECA is selected.
