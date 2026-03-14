@@ -158,9 +158,13 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
 | Per-tool output limits | **Skip** | `my/gptel-subagent-result-limit` truncation on subagents works fine |
 
+### Recent Changes (v0.6.58)
+
+- **ai-code-menu transient integration** (⚒): All ECA workspace/context/session commands now accessible via main `M-x ai-code-menu`. Dynamic status display (session ID, folder count). No need to remember `C-c e` prefix. Menu groups: ECA Workspace, ECA Context, ECA Shared Context, ECA Sessions.
+
 ### Recent Changes (v0.6.57)
 
-- **Complete multi-project workspace support** (⚒): Fixed all 5 identified gaps. Gap 1: Added `eca-auto-switch-session` for automatic session switching based on project. Gap 3: Added cross-session context sharing (`eca-share-file-context`, `eca-share-repo-map-context`). Gap 4: Added `eca-session-dashboard` for visual session management. Gap 5: Added `ai-code-eca-auto-switch-backend` to auto-set backend on session switch. New keybindings: `C-c e d` (dashboard), `C-c e F/M/p` (shared context), `C-c e t` (toggle auto-switch). 60 tests passing.
+- **Complete multi-project workspace support** (⚒): Fixed all 5 identified gaps. Gap 1: Added `eca-auto-switch-session` for automatic session switching based on project. Gap 3: Added cross-session context sharing (`eca-share-file-context`, `eca-share-repo-map-context`). Gap 4: Added `eca-session-dashboard` for visual session management. Gap 5: Added `ai-code-eca-auto-switch-backend` to auto-set backend on session switch. 60 tests passing.
 
 ### Recent Changes (v0.6.56)
 

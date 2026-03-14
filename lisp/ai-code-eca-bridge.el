@@ -662,12 +662,10 @@ ensure `ai-code-selected-backend' is set to 'eca."
               (when (and (boundp 'ai-code-selected-backend)
                          (eq ai-code-selected-backend 'eca))
                 (ai-code-eca--add-menu-suffixes))))
-  
-  ;; Also add when backend is switched to ECA
   (advice-add 'ai-code-set-backend :after
               (lambda (backend)
                 (when (eq backend 'eca)
-                  (ai-code-eca--add-menu-suffixes))))))
+                  (ai-code-eca--add-menu-suffixes)))))
 
 (provide 'ai-code-eca-bridge)
 
