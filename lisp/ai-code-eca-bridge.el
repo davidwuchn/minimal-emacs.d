@@ -24,12 +24,11 @@
 ;;   - eca--session-for-worktree (worktree detection)
 ;;
 ;; Usage:
-;;   (require 'ai-code-eca-bridge)
-;;   ;; Extensions are auto-loaded
+;;   The extensions load automatically when ai-code-eca is loaded.
+;;   Or manually: (require 'ai-code-eca-bridge)
 
 ;;; Code:
 
-(require 'ai-code-backends)
 (require 'eca-ext nil t)
 
 (declare-function eca-session "eca-util" ())
@@ -70,6 +69,7 @@
 
 ;;; Session Management (via eca-ext)
 
+;;;###autoload
 (defun ai-code-eca-get-sessions ()
   "Return list of active ECA sessions for display."
   (require 'eca-ext nil t)
@@ -84,6 +84,7 @@
                 (eca-list-sessions))
       (error nil))))
 
+;;;###autoload
 (defun ai-code-eca-switch-session (&optional session-id)
   "Switch to ECA session SESSION-ID or prompt for selection."
   (interactive)
@@ -93,6 +94,7 @@
   (eca-switch-to-session session-id)
   (run-at-time 0.5 nil #'ai-code-eca--save-session-affinity))
 
+;;;###autoload
 (defun ai-code-eca-list-sessions ()
   "Display list of active ECA sessions."
   (interactive)
@@ -103,6 +105,7 @@
 
 ;;; Context Commands (via eca-ext)
 
+;;;###autoload
 (defun ai-code-eca-add-file-context (file-path)
   "Add FILE-PATH as context to current ECA session."
   (interactive "fAdd file context: ")
@@ -117,6 +120,7 @@
           (eca-info "Added file context: %s" file-path))
       (user-error "No ECA session"))))
 
+;;;###autoload
 (defun ai-code-eca-add-cursor-context ()
   "Add current cursor position as context to ECA session."
   (interactive)
@@ -133,6 +137,7 @@
           (message "No buffer file"))
       (user-error "No ECA session"))))
 
+;;;###autoload
 (defun ai-code-eca-add-repo-map-context ()
   "Add repository map context to ECA session."
   (interactive)
@@ -147,6 +152,7 @@
           (eca-info "Added repo map context"))
       (user-error "No ECA session"))))
 
+;;;###autoload
 (defun ai-code-eca-add-clipboard-context ()
   "Add clipboard contents as context to current ECA session."
   (interactive)
@@ -164,6 +170,7 @@
             (message "Clipboard is empty")))
       (user-error "No ECA session"))))
 
+;;;###autoload
 (defun ai-code-eca-add-workspace-folder ()
   "Add workspace folder using upstream eca-chat-add-workspace-root."
   (interactive)
@@ -181,6 +188,7 @@
                  (integer :tag "Seconds"))
   :group 'ai-code)
 
+;;;###autoload
 (defun ai-code-eca-sync-context ()
   "Sync current buffer context to ECA session."
   (interactive)
@@ -196,6 +204,7 @@
               (message "Synced context: %s:%d" buffer-file-name (point))))
         (error (message "Context sync failed: %s" (error-message-string err)))))))
 
+;;;###autoload
 (defun ai-code-eca-context-sync-start ()
   "Start automatic context synchronization."
   (interactive)
@@ -206,6 +215,7 @@
           (run-at-time t ai-code-eca-context-sync-interval #'ai-code-eca-sync-context))
     (message "ECA context sync started (%ds)" ai-code-eca-context-sync-interval)))
 
+;;;###autoload
 (defun ai-code-eca-context-sync-stop ()
   "Stop automatic context synchronization."
   (interactive)
@@ -250,6 +260,7 @@
                t)))
     (error nil)))
 
+;;;###autoload
 (defun ai-code-eca-verify-health ()
   "Verify ECA server is responsive."
   (interactive)
@@ -281,6 +292,7 @@
 
 ;;; Upgrade
 
+;;;###autoload
 (defun ai-code-eca-upgrade-vc ()
   "Upgrade ECA if installed via package-vc."
   (interactive)
@@ -299,6 +311,7 @@
 
 ;;; Install Skills
 
+;;;###autoload
 (defun ai-code-eca-install-skills ()
   "Install skills for ECA by prompting for a skills repo URL."
   (interactive)
@@ -333,6 +346,7 @@
     map)
   "Keymap for ECA extension commands.")
 
+;;;###autoload
 (defun ai-code-eca-setup-keybindings ()
   "Set up ECA keybindings in relevant maps."
   (interactive)
@@ -362,6 +376,8 @@
 (add-hook 'ai-code-eca-bridge-unload-hook #'ai-code-eca--unload-function)
 
 ;;; Auto-setup
+;; Keybindings are set up when ECA loads
+;; The bridge should be loaded via user config (see init-ai.el)
 
 (with-eval-after-load 'eca
   (ai-code-eca-setup-keybindings))
