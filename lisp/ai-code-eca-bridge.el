@@ -45,8 +45,8 @@
 ;;
 ;;   ECA Workspace              ECA Context         ECA Shared Context
 ;;     wm - Multi-Project Mode    cf - File           F - Share file
-;;     wa - Add folder            cc - Cursor         M - Share repo map
-;;     wA - Add to ALL            cm - Repo map       p - Apply shared
+;;     wa - Add folder            cc - Cursor         R - Share repo map
+;;     wA - Add to ALL            cr - Repo map       p - Apply shared
 ;;     wl - List folders          cy - Clipboard      c - Clear shared
 ;;     wr - Remove folder         cs - Start sync
 ;;     ws - Sync projects         cS - Stop sync
@@ -698,10 +698,10 @@ Displays session ID, status, and workspace folders."
              (eq ai-code-selected-backend 'eca)
              (not ai-code-eca--menu-suffixes-added)
              (featurep 'transient))
-    (condition-case nil
+    (condition-case err
         (progn
           ;; Add ECA Workspace group after AI CLI session group
-          (transient-append-suffix 'ai-code-menu '("s")
+          (transient-append-suffix 'ai-code-menu "s"
             ["ECA Workspace"
              (:info #'ai-code-eca--session-status-description)
              (:info #'ai-code-eca--workspace-status-description)
@@ -714,42 +714,44 @@ Displays session ID, status, and workspace folders."
              ("wd" "Session dashboard" ai-code-eca-dashboard)
              ("wt" "Toggle auto-switch" ai-code-eca-toggle-auto-switch)])
           ;; Add ECA Context group (file, cursor, repo-map, clipboard)
-          (transient-append-suffix 'ai-code-menu '("wa")
+          (transient-append-suffix 'ai-code-menu "wa"
             ["ECA Context"
              ("cf" "Add file context" ai-code-eca-add-file-context)
              ("cc" "Add cursor context" ai-code-eca-add-cursor-context)
-             ("cm" "Add repo map" ai-code-eca-add-repo-map-context)
+             ("cr" "Add repo map" ai-code-eca-add-repo-map-context)
              ("cy" "Add clipboard" ai-code-eca-add-clipboard-context)
              ("cs" "Start context sync" ai-code-eca-context-sync-start)
              ("cS" "Stop context sync" ai-code-eca-context-sync-stop)])
           ;; Add ECA Shared Context items
-          (transient-append-suffix 'ai-code-menu '("cf")
+          (transient-append-suffix 'ai-code-menu "cf"
             ["ECA Shared Context"
              ("F" "Share file" ai-code-eca-share-file)
-             ("M" "Share repo map" ai-code-eca-share-repo-map)
+             ("R" "Share repo map" ai-code-eca-share-repo-map)
              ("p" "Apply shared context" ai-code-eca-apply-shared-context)
              ("c" "Clear shared context" eca-clear-shared-context)])
           ;; Add ECA Session group
-          (transient-append-suffix 'ai-code-menu '("F")
+          (transient-append-suffix 'ai-code-menu "F"
             ["ECA Sessions"
              ("s?" "Which session?" ai-code-eca-which-session)
              ("sl" "List sessions" ai-code-eca-list-sessions)
              ("ss" "Switch session" ai-code-eca-switch-session)
              ("sv" "Verify health" ai-code-eca-verify-health)
              ("su" "Upgrade ECA" ai-code-eca-upgrade-vc)])
-          (setq ai-code-eca--menu-suffixes-added t))
-      (error nil))))
+          (setq ai-code-eca--menu-suffixes-added t)
+          (message "ECA menu items added to ai-code-menu"))
+      (error
+       (message "Failed to add ECA menu items: %s" (error-message-string err))))))
 
 (defun ai-code-eca--remove-menu-suffixes ()
   "Remove ECA workspace items from ai-code-menu."
   (when (and ai-code-eca--menu-suffixes-added
              (featurep 'transient))
-    (condition-case nil
+    (condition-case err
         (progn
-          (transient-remove-suffix 'ai-code-menu '("wa"))
-          (transient-remove-suffix 'ai-code-menu '("F"))
+          (transient-remove-suffix 'ai-code-menu "s")
           (setq ai-code-eca--menu-suffixes-added nil))
-      (error nil))))
+      (error
+       (message "Failed to remove ECA menu items: %s" (error-message-string err))))))
 
 ;; Hook into ai-code-menu to add ECA items conditionally
 (with-eval-after-load 'ai-code

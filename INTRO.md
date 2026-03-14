@@ -203,6 +203,7 @@ AI Code Menu (C-c a)
 │   │ Session 1 (ready)           ← Dynamic status
 │   │ Workspace (2 folders)       ← Dynamic status
 │   │
+│   │ wm  Multi-Project Mode
 │   │ wa  Add workspace folder
 │   │ wA  Add to ALL sessions
 │   │ wl  List workspace folders
@@ -214,18 +215,19 @@ AI Code Menu (C-c a)
 ├── ECA Context
 │   │ cf  Add file context
 │   │ cc  Add cursor context
-│   │ cm  Add repo map
+│   │ cr  Add repo map
 │   │ cy  Add clipboard
 │   │ cs  Start context sync
 │   └ cS  Stop context sync
 │
 ├── ECA Shared Context
 │   │ F   Share file
-│   │ M   Share repo map
+│   │ R   Share repo map
 │   │ p   Apply shared context
 │   └ c   Clear shared context
 │
 └── ECA Sessions
+    │ s?  Which session?
     │ sl  List sessions
     │ ss  Switch session
     │ sv  Verify health
