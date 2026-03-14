@@ -8,11 +8,12 @@
 
 ;;; Commentary:
 ;; This file EXTENDS the upstream ai-code-eca.el with additional features:
-;;   - Session management (list, switch, create)
+;;   - Session management (list, switch, create, dashboard)
 ;;   - Workspace management (list, add, remove, sync projects)
 ;;   - Context commands (file, cursor, repo-map, clipboard)
+;;   - Shared context (cross-session sharing)
+;;   - Auto session-project affinity
 ;;   - Keybindings integration
-;;   - Session affinity
 ;;   - Health verification
 ;;   - Context synchronization
 ;;
@@ -31,10 +32,18 @@
 ;;   C-c e W   - Remove workspace folder from current session
 ;;   C-c e S   - Sync project roots to workspace
 ;;
-;; Auto-detection (configurable via `eca-auto-add-workspace-folder'):
-;;   - Automatically adds file's project to session when opening
-;;   - Set to 'prompt to ask before adding
-;;   - Set to nil to disable
+;; Shared Context (Gap 3 fix):
+;;   C-c e F   - Share file across all sessions
+;;   C-c e M   - Share repo map across all sessions
+;;   C-c e p   - Apply shared context to session
+;;
+;; Session Dashboard (Gap 4 fix):
+;;   C-c e d   - Open visual session dashboard
+;;
+;; Auto Detection:
+;;   - Auto-add project to workspace (eca-auto-add-workspace-folder)
+;;   - Auto-switch session by project (eca-auto-switch-session)
+;;   - Auto-set ai-code backend to ECA (ai-code-eca-auto-switch-backend)
 ;;
 ;; Usage:
 ;;   The extensions load automatically when ai-code-eca is loaded.
@@ -251,6 +260,67 @@ Useful for shared libraries that should be available in all projects."
     (user-error "Workspace features require eca-ext.el"))
   (eca-add-workspace-folder-all-sessions folder))
 
+;;; Gap 1: Auto Session-Project Affinity
+
+(defcustom ai-code-eca-auto-switch-session nil
+  "If non-nil, automatically switch ECA session when project changes.
+Delegates to `eca-auto-switch-session' in eca-ext.el.
+If 'prompt, ask before switching.
+If nil, do nothing."
+  :type '(choice (const :tag "Auto switch" t)
+                 (const :tag "Prompt before switching" prompt)
+                 (const :tag "Disabled" nil))
+  :group 'ai-code)
+
+;;;###autoload
+(defun ai-code-eca-toggle-auto-switch ()
+  "Toggle auto session switching based on project."
+  (interactive)
+  (setq eca-auto-switch-session
+        (not eca-auto-switch-session))
+  (message "ECA auto session switching: %s"
+           (if eca-auto-switch-session "enabled" "disabled")))
+
+;;; Gap 3: Cross-Session Context Sharing
+
+;;;###autoload
+(defun ai-code-eca-share-file (file-path)
+  "Share FILE-PATH context across all ECA sessions."
+  (interactive "fShare file: ")
+  (require 'eca-ext nil t)
+  (unless (fboundp 'eca-share-file-context)
+    (user-error "Shared context requires eca-ext.el"))
+  (eca-share-file-context file-path))
+
+;;;###autoload
+(defun ai-code-eca-share-repo-map (project-root)
+  "Share PROJECT-ROOT repo map across all ECA sessions."
+  (interactive "DShare repo map: ")
+  (require 'eca-ext nil t)
+  (unless (fboundp 'eca-share-repo-map-context)
+    (user-error "Shared context requires eca-ext.el"))
+  (eca-share-repo-map-context project-root))
+
+;;;###autoload
+(defun ai-code-eca-apply-shared-context ()
+  "Apply shared context to current ECA session."
+  (interactive)
+  (require 'eca-ext nil t)
+  (unless (fboundp 'eca-apply-shared-context)
+    (user-error "Shared context requires eca-ext.el"))
+  (eca-apply-shared-context (eca-session)))
+
+;;; Gap 4: Session Dashboard
+
+;;;###autoload
+(defun ai-code-eca-dashboard ()
+  "Open ECA session dashboard for visual session management."
+  (interactive)
+  (require 'eca-ext nil t)
+  (unless (fboundp 'eca-session-dashboard)
+    (user-error "Dashboard requires eca-ext.el"))
+  (eca-session-dashboard))
+
 ;;; Context Synchronization
 
 (defvar ai-code-eca-context-sync-timer nil)
@@ -312,6 +382,28 @@ Useful for shared libraries that should be available in all projects."
   (when-let* ((root (ai-code-eca--project-root))
               ((fboundp 'ai-code--remember-repo-backend)))
     (ai-code--remember-repo-backend root 'eca)))
+
+;;; Gap 5: Auto Backend Switching
+
+(defcustom ai-code-eca-auto-switch-backend t
+  "If non-nil, automatically set ai-code backend to ECA when switching sessions.
+When `ai-code-eca-switch-session' or `eca-switch-to-session' is called,
+ensure `ai-code-selected-backend' is set to 'eca."
+  :type 'boolean
+  :group 'ai-code)
+
+(defun ai-code-eca--ensure-backend-selected ()
+  "Ensure ai-code backend is set to ECA."
+  (when (and ai-code-eca-auto-switch-backend
+             (boundp 'ai-code-selected-backend)
+             (not (eq ai-code-selected-backend 'eca)))
+    (setq ai-code-selected-backend 'eca)
+    (when (boundp 'ai-code-mode-line)
+      (setq ai-code-mode-line "ECA"))
+    (message "Set ai-code backend to ECA")))
+
+(advice-add 'eca-switch-to-session :after
+            (lambda (&rest _) (ai-code-eca--ensure-backend-selected)))
 
 ;;; Health Verification
 
@@ -410,16 +502,21 @@ Useful for shared libraries that should be available in all projects."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "l") #'ai-code-eca-list-sessions)
     (define-key map (kbd "s") #'ai-code-eca-switch-session)
+    (define-key map (kbd "d") #'ai-code-eca-dashboard)
     (define-key map (kbd "f") #'ai-code-eca-add-file-context)
+    (define-key map (kbd "F") #'ai-code-eca-share-file)
     (define-key map (kbd "c") #'ai-code-eca-add-cursor-context)
     (define-key map (kbd "m") #'ai-code-eca-add-repo-map-context)
+    (define-key map (kbd "M") #'ai-code-eca-share-repo-map)
     (define-key map (kbd "y") #'ai-code-eca-add-clipboard-context)
     (define-key map (kbd "a") #'ai-code-eca-add-workspace-folder)
     (define-key map (kbd "w") #'ai-code-eca-list-workspace-folders)
     (define-key map (kbd "W") #'ai-code-eca-remove-workspace-folder)
     (define-key map (kbd "A") #'ai-code-eca-add-workspace-folder-all-sessions)
     (define-key map (kbd "S") #'ai-code-eca-sync-project-workspaces)
+    (define-key map (kbd "p") #'ai-code-eca-apply-shared-context)
     (define-key map (kbd "v") #'ai-code-eca-verify-health)
+    (define-key map (kbd "t") #'ai-code-eca-toggle-auto-switch)
     map)
   "Keymap for ECA extension commands.")
 

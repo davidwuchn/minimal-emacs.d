@@ -249,6 +249,26 @@
   "eca-ext.el should have eca-auto-add-workspace-folder config."
   (should (boundp 'eca-auto-add-workspace-folder)))
 
+(ert-deftest eca-ext/has-auto-switch-session-config ()
+  "eca-ext.el should have eca-auto-switch-session config."
+  (should (boundp 'eca-auto-switch-session)))
+
+(ert-deftest eca-ext/has-session-for-project-root ()
+  "eca-ext.el should have eca--session-for-project-root."
+  (should (fboundp 'eca--session-for-project-root)))
+
+(ert-deftest eca-ext/has-share-file-context ()
+  "eca-ext.el should have eca-share-file-context."
+  (should (fboundp 'eca-share-file-context)))
+
+(ert-deftest eca-ext/has-share-repo-map-context ()
+  "eca-ext.el should have eca-share-repo-map-context."
+  (should (fboundp 'eca-share-repo-map-context)))
+
+(ert-deftest eca-ext/has-session-dashboard ()
+  "eca-ext.el should have eca-session-dashboard."
+  (should (fboundp 'eca-session-dashboard)))
+
 (ert-deftest eca-ext/has-clipboard-context-function ()
   "eca-ext.el should have eca-chat-add-clipboard-context."
   (should (fboundp 'eca-chat-add-clipboard-context)))

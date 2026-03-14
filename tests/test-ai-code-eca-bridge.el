@@ -73,6 +73,35 @@
                     "")))
     (should (string-match-p "defun ai-code-eca-add-workspace-folder-all-sessions" source))))
 
+(ert-deftest eca-bridge/extensions/shared-context ()
+  "Bridge should provide shared context commands."
+  (let ((source (or (ignore-errors
+                      (with-temp-buffer
+                        (insert-file-contents "lisp/ai-code-eca-bridge.el")
+                        (buffer-string)))
+                    "")))
+    (should (string-match-p "defun ai-code-eca-share-file" source))
+    (should (string-match-p "defun ai-code-eca-share-repo-map" source))
+    (should (string-match-p "defun ai-code-eca-apply-shared-context" source))))
+
+(ert-deftest eca-bridge/extensions/dashboard ()
+  "Bridge should provide session dashboard."
+  (let ((source (or (ignore-errors
+                      (with-temp-buffer
+                        (insert-file-contents "lisp/ai-code-eca-bridge.el")
+                        (buffer-string)))
+                    "")))
+    (should (string-match-p "defun ai-code-eca-dashboard" source))))
+
+(ert-deftest eca-bridge/extensions/auto-switch-session ()
+  "Bridge should provide auto-switch-session toggle."
+  (let ((source (or (ignore-errors
+                      (with-temp-buffer
+                        (insert-file-contents "lisp/ai-code-eca-bridge.el")
+                        (buffer-string)))
+                    "")))
+    (should (string-match-p "defun ai-code-eca-toggle-auto-switch" source))))
+
 (ert-deftest eca-bridge/extensions/upgrade-vc ()
   "Bridge should provide upgrade-vc function."
   (let ((source (or (ignore-errors

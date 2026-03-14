@@ -480,6 +480,182 @@ Triggered when opening files outside current workspace."
 (with-eval-after-load 'eca
   (add-hook 'find-file-hook #'eca--auto-add-workspace-hook))
 
+;;; Gap 1: Auto Session-Project Affinity
+
+(defcustom eca-auto-switch-session nil
+  "If non-nil, automatically switch to session matching current project.
+When switching to a buffer in a different project, ECA will switch to
+the session that owns that project's workspace.
+
+If 'prompt, ask before switching.
+If nil, do nothing (manual switching only)."
+  :type '(choice (const :tag "Auto switch" t)
+                 (const :tag "Prompt before switching" prompt)
+                 (const :tag "Disabled" nil))
+  :group 'eca)
+
+(defvar eca--last-project-root nil
+  "Track last detected project root to avoid redundant switches.")
+
+(defun eca--session-for-project-root (project-root)
+  "Find session whose workspace contains PROJECT-ROOT."
+  (let* ((root (directory-file-name (expand-file-name project-root)))
+         (sessions (eca-list-sessions)))
+    (cl-dolist (info sessions)
+      (let* ((session-id (plist-get info :id))
+             (folders (plist-get info :workspace-folders))
+             (match (cl-find root folders :test (lambda (r f)
+                                                   (string= r (directory-file-name (expand-file-name f)))))))
+        (when match
+          (cl-return session-id))))))
+
+(defun eca--auto-switch-session-hook ()
+  "Hook to auto-switch session when project changes.
+Triggered on buffer switch when `eca-auto-switch-session' is enabled."
+  (when (and eca-auto-switch-session
+             buffer-file-name
+             (featurep 'eca)
+             (eca-list-sessions))
+    (let* ((file-path buffer-file-name)
+           (project-root (eca--file-project-root file-path)))
+      (when (and project-root
+                 (not (string= project-root eca--last-project-root)))
+        (let ((target-session (eca--session-for-project-root project-root)))
+          (when (and target-session
+                     (not (eq target-session (eca--session-id (eca-session)))))
+            (let ((root (directory-file-name (expand-file-name project-root))))
+              (setq eca--last-project-root root)
+              (cond
+               ((eq eca-auto-switch-session t)
+                (eca-switch-to-session target-session)
+                (message "Auto-switched to ECA session %d for %s"
+                         target-session root))
+               ((eq eca-auto-switch-session 'prompt)
+                (when (y-or-n-p (format "Switch to session %d for %s? "
+                                        target-session root))
+                  (eca-switch-to-session target-session)))))))))))
+
+(add-hook 'window-buffer-change-functions #'eca--auto-switch-session-hook)
+
+;;; Gap 3: Cross-Session Context Sharing
+
+(defvar eca--shared-context nil
+  "Plist of shared context items available to all sessions.
+Format: (:files (path1 path2 ...) :repo-maps (root1 root2 ...))")
+
+(defun eca-share-file-context (file-path)
+  "Add FILE-PATH to shared context for all sessions."
+  (interactive "fShare file across sessions: ")
+  (let ((file-path (expand-file-name file-path)))
+    (unless (plist-get eca--shared-context :files)
+      (setq eca--shared-context (plist-put eca--shared-context :files nil)))
+    (cl-pushnew file-path (plist-get eca--shared-context :files) :test #'string=))
+  (message "Shared file across all ECA sessions: %s" file-path))
+
+(defun eca-share-repo-map-context (project-root)
+  "Add PROJECT-ROOT repo map to shared context for all sessions."
+  (interactive "DShare repo map across sessions: ")
+  (let ((root (expand-file-name project-root)))
+    (unless (plist-get eca--shared-context :repo-maps)
+      (setq eca--shared-context (plist-put eca--shared-context :repo-maps nil)))
+    (cl-pushnew root (plist-get eca--shared-context :repo-maps) :test #'string=))
+  (message "Shared repo map across all ECA sessions: %s" root))
+
+(defun eca-apply-shared-context (session)
+  "Apply shared context to SESSION."
+  (interactive (list (eca-session)))
+  (unless session
+    (user-error "No ECA session active"))
+  (let ((files (plist-get eca--shared-context :files))
+        (repo-maps (plist-get eca--shared-context :repo-maps)))
+    (dolist (file files)
+      (when (file-exists-p file)
+        (eca-chat-add-file-context session file)))
+    (dolist (root repo-maps)
+      (when (file-directory-p root)
+        (eca-chat-add-repo-map-context session)))
+    (message "Applied shared context to session %d: %d files, %d repo maps"
+             (eca--session-id session) (length files) (length repo-maps))))
+
+(defun eca-clear-shared-context ()
+  "Clear all shared context items."
+  (interactive)
+  (setq eca--shared-context nil)
+  (message "Cleared shared context"))
+
+;;; Gap 4: Session Dashboard
+
+(defvar eca-session-dashboard-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "RET") #'eca-session-dashboard-switch)
+    (define-key map (kbd "d") #'eca-session-dashboard-delete)
+    (define-key map (kbd "w") #'eca-session-dashboard-list-folders)
+    (define-key map (kbd "g") #'eca-session-dashboard-refresh)
+    (define-key map (kbd "q") #'quit-window)
+    map)
+  "Keymap for ECA session dashboard.")
+
+(define-derived-mode eca-session-dashboard-mode tabulated-list-mode "ECA Sessions"
+  "Major mode for viewing and managing ECA sessions."
+  (setq tabulated-list-format [("ID" 4 t)
+                               ("Status" 8 t)
+                               ("Workspaces" 40 t)
+                               ("Chats" 6 t)])
+  (setq tabulated-list-sort-key (cons "ID" nil))
+  (tabulated-list-init-header))
+
+(defun eca-session-dashboard ()
+  "Open a dashboard showing all ECA sessions."
+  (interactive)
+  (let ((buffer (get-buffer-create "*ECA Sessions*")))
+    (with-current-buffer buffer
+      (eca-session-dashboard-mode)
+      (eca-session-dashboard-refresh)
+      (pop-to-buffer buffer))))
+
+(defun eca-session-dashboard-refresh ()
+  "Refresh the session dashboard."
+  (interactive)
+  (let ((sessions (eca-list-sessions)))
+    (setq tabulated-list-entries
+          (mapcar (lambda (info)
+                    (list (plist-get info :id)
+                          (vector (number-to-string (plist-get info :id))
+                                  (symbol-name (plist-get info :status))
+                                  (string-join (plist-get info :workspace-folders) ", ")
+                                  (number-to-string (plist-get info :chat-count)))))
+                  sessions))
+    (tabulated-list-print t)))
+
+(defun eca-session-dashboard-switch ()
+  "Switch to session at current line."
+  (interactive)
+  (let ((session-id (tabulated-list-get-id)))
+    (when session-id
+      (eca-switch-to-session session-id)
+      (quit-window))))
+
+(defun eca-session-dashboard-delete ()
+  "Delete session at current line."
+  (interactive)
+  (let ((session-id (tabulated-list-get-id)))
+    (when (and session-id
+               (y-or-n-p (format "Delete session %d? " session-id)))
+      (let ((session (eca-get eca--sessions session-id)))
+        (when session
+          (eca-delete-session session)
+          (eca-session-dashboard-refresh))))))
+
+(defun eca-session-dashboard-list-folders ()
+  "List workspace folders for session at current line."
+  (interactive)
+  (let ((session-id (tabulated-list-get-id)))
+    (when session-id
+      (let* ((session (eca-get eca--sessions session-id))
+             (folders (when session (eca--session-workspace-folders session))))
+        (message "Session %d workspaces: %s" session-id
+                 (string-join folders " | "))))))
+
 (provide 'eca-ext)
 
 ;;; eca-ext.el ends here
