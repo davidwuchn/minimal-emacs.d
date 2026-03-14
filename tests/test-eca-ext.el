@@ -269,6 +269,22 @@
   "eca-ext.el should have eca-session-dashboard."
   (should (fboundp 'eca-session-dashboard)))
 
+(ert-deftest eca-ext/has-auto-create-session-config ()
+  "eca-ext.el should have eca-auto-create-session config."
+  (should (boundp 'eca-auto-create-session)))
+
+(ert-deftest eca-ext/has-auto-sync-workspace-config ()
+  "eca-ext.el should have eca-auto-sync-workspace config."
+  (should (boundp 'eca-auto-sync-workspace)))
+
+(ert-deftest eca-ext/has-auto-create-session-hook ()
+  "eca-ext.el should have eca--auto-create-session-hook."
+  (should (fboundp 'eca--auto-create-session-hook)))
+
+(ert-deftest eca-ext/has-auto-sync-workspace-hook ()
+  "eca-ext.el should have eca--auto-sync-workspace-hook."
+  (should (fboundp 'eca--auto-sync-workspace-hook)))
+
 (ert-deftest eca-ext/has-clipboard-context-function ()
   "eca-ext.el should have eca-chat-add-clipboard-context."
   (should (fboundp 'eca-chat-add-clipboard-context)))

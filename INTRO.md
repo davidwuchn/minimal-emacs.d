@@ -192,55 +192,82 @@ In `init-ai.el`:
 
 ### ai-code-menu Integration
 
-When ECA is selected as the backend, workspace commands appear directly in
-`M-x ai-code-menu` (typically bound to `C-c a`):
+**Primary UX**: All ECA commands accessible via `M-x ai-code-menu` (typically `C-c a`).
+
+When ECA is selected as the backend:
 
 ```
-AI Code Commands
-├── AI CLI session
-│   ...
-├── ECA Workspace                    ← Auto-added when ECA active
-│   Session 1 (ready)                ← Dynamic status
-│   Workspace (2 folders)            ← Dynamic status
-│   wa  Add workspace folder
-│   wA  Add to ALL sessions
-│   wl  List workspace folders
-│   wr  Remove workspace folder
-│   ws  Sync project roots
-│   wd  Session dashboard
+AI Code Menu (C-c a)
+│
+├── ECA Workspace
+│   │ Session 1 (ready)           ← Dynamic status
+│   │ Workspace (2 folders)       ← Dynamic status
+│   │
+│   │ wa  Add workspace folder
+│   │ wA  Add to ALL sessions
+│   │ wl  List workspace folders
+│   │ wr  Remove workspace folder
+│   │ ws  Sync project roots
+│   │ wd  Session dashboard
+│   └ wt  Toggle auto-switch
+│
+├── ECA Context
+│   │ cf  Add file context
+│   │ cc  Add cursor context
+│   │ cm  Add repo map
+│   │ cy  Add clipboard
+│   │ cs  Start context sync
+│   └ cS  Stop context sync
+│
 ├── ECA Shared Context
-│   F   Share file
-│   M   Share repo map
-│   p   Apply shared context
-└── AI Code Actions
-    ...
+│   │ F   Share file
+│   │ M   Share repo map
+│   │ p   Apply shared context
+│   └ c   Clear shared context
+│
+└── ECA Sessions
+    │ sl  List sessions
+    │ ss  Switch session
+    │ sv  Verify health
+    └ su  Upgrade ECA
 ```
 
-No need to remember `C-c e` prefix - all workspace commands are discoverable
-in the main menu when ECA is active.
+**No prefix key memorization needed** - all commands discoverable in menu.
 
-### Keybindings
+### Auto-Detection
 
-Direct keybindings under `C-c e` prefix (alternative to menu):
+Configure automatic behaviors:
+
+```elisp
+;; Auto-add project to workspace on file open (default: t)
+(setq eca-auto-add-workspace-folder t)
+
+;; Auto-switch session when project changes (default: nil)
+(setq eca-auto-switch-session t)
+
+;; Auto-create session for new projects (default: nil)
+(setq eca-auto-create-session t)
+
+;; Auto-sync workspace on project switch (default: t)
+(setq eca-auto-sync-workspace t)
+```
+
+These settings enable "just work" multi-project workflows:
+- Open a file → project auto-added to workspace
+- Switch to another project → session switches automatically
+- Open file in new project → session created automatically
+
+### Keybindings (Alternative)
+
+Direct keybindings available under `C-c e` prefix for power users:
 
 | Key | Command |
 |-----|---------|
 | `C-c e d` | Session dashboard |
-| `C-c e l` | List sessions |
 | `C-c e s` | Switch session |
-| `C-c e t` | Toggle auto-switch |
-| `C-c e f` | Add file context |
-| `C-c e F` | Share file across sessions |
-| `C-c e c` | Add cursor context |
-| `C-c e m` | Add repo map |
-| `C-c e M` | Share repo map across sessions |
-| `C-c e p` | Apply shared context |
-| `C-c e y` | Add clipboard |
 | `C-c e a` | Add workspace folder |
-| `C-c e A` | Add folder to ALL sessions |
 | `C-c e w` | List workspace folders |
-| `C-c e W` | Remove workspace folder |
-| `C-c e S` | Sync project roots to workspace |
+| `C-c e f` | Add file context |
 | `C-c e v` | Verify health |
 
 In `eca-chat-mode`:

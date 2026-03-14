@@ -537,6 +537,91 @@ Triggered on buffer switch when `eca-auto-switch-session' is enabled."
 
 (add-hook 'window-buffer-change-functions #'eca--auto-switch-session-hook)
 
+;;; Enhanced Auto-Detection
+
+(defcustom eca-auto-create-session nil
+  "If non-nil, automatically create ECA session for new projects.
+When opening a file in a project that has no session, create one.
+
+If 'prompt, ask before creating.
+If nil, do nothing (manual creation only)."
+  :type '(choice (const :tag "Auto create" t)
+                 (const :tag "Prompt before creating" prompt)
+                 (const :tag "Disabled" nil))
+  :group 'eca)
+
+(defun eca--auto-create-session-hook ()
+  "Hook to auto-create session when opening file in project without session.
+Only triggers if no sessions exist or current project has no matching session."
+  (when (and eca-auto-create-session
+             buffer-file-name
+             (featurep 'eca))
+    (let* ((project-root (eca--file-project-root buffer-file-name))
+           (existing-session (when project-root
+                               (eca--session-for-project-root project-root)))
+           (any-sessions (eca-list-sessions)))
+      (when (and project-root (not existing-session))
+        ;; No session for this project
+        (let ((root (directory-file-name (expand-file-name project-root))))
+          (cond
+           ;; No sessions at all - auto create
+           ((and (not any-sessions) (eq eca-auto-create-session t))
+            (let ((session (eca-create-session (list root))))
+              (when session
+                (message "Auto-created ECA session %d for %s"
+                         (eca--session-id session) root)
+                (eca-chat-open session))))
+           ;; Has sessions but not for this project - prompt or add to existing
+           ((eq eca-auto-create-session t)
+            (let ((session (eca-session)))
+              (if session
+                  ;; Add to current session
+                  (progn
+                    (eca--session-add-workspace-folder session root)
+                    (message "Auto-added %s to current ECA session" root))
+                ;; No current session, create new
+                (let ((session (eca-create-session (list root))))
+                  (when session
+                    (message "Auto-created ECA session %d for %s"
+                             (eca--session-id session) root))))))
+           ((eq eca-auto-create-session 'prompt)
+            (when (y-or-n-p (format "Create ECA session for %s? " root))
+              (let ((session (eca-create-session (list root))))
+                (when session
+                  (eca-chat-open session)))))))))))
+
+;; Add to find-file-hook with lower priority than workspace addition
+(add-hook 'find-file-hook #'eca--auto-create-session-hook 90)
+
+;;; Auto-Sync Workspace on Project Switch
+
+(defcustom eca-auto-sync-workspace t
+  "If non-nil, automatically sync workspace folders when project changes.
+When switching to a buffer in a different project, add that project to
+the current session's workspace if not already present."
+  :type 'boolean
+  :group 'eca)
+
+(defun eca--auto-sync-workspace-hook ()
+  "Hook to auto-sync workspace folders on project switch."
+  (when (and eca-auto-sync-workspace
+             buffer-file-name
+             (featurep 'eca)
+             (eca-session))
+    (let* ((project-root (eca--file-project-root buffer-file-name)))
+      (when project-root
+        (let* ((root (directory-file-name (expand-file-name project-root)))
+               (session (eca-session))
+               (folders (eca--session-workspace-folders session))
+               (in-workspace (member root (mapcar (lambda (f)
+                                                    (directory-file-name (expand-file-name f)))
+                                                  folders))))
+          (unless in-workspace
+            (eca--session-add-workspace-folder session root)
+            (message "Auto-synced workspace: added %s" root)))))))
+
+(add-hook 'window-buffer-change-functions #'eca--auto-sync-workspace-hook)
+
 ;;; Gap 3: Cross-Session Context Sharing
 
 (defvar eca--shared-context nil

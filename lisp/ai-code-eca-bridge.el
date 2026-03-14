@@ -26,37 +26,34 @@
 ;;   - eca--session-add-workspace-folder (internal)
 ;;   - eca--session-for-worktree (worktree detection)
 ;;
-;; ai-code-menu Integration (Gap 1-4 fix):
-;;   When ECA is selected as backend, workspace commands appear in main menu:
-;;   M-x ai-code-menu → ECA Workspace group
-;;     wa - Add workspace folder
-;;     wA - Add to ALL sessions
-;;     wl - List workspace folders
-;;     wr - Remove workspace folder
-;;     ws - Sync project roots
-;;     wd - Session dashboard
-;;   M-x ai-code-menu → ECA Shared Context group
-;;     F  - Share file
-;;     M  - Share repo map
-;;     p  - Apply shared context
+;; ai-code-menu Integration (primary UX):
+;;   All commands accessible via M-x ai-code-menu (C-c a) when ECA is selected:
 ;;
-;; Direct Keybindings (alternative, C-c e prefix):
-;;   C-c e d   - Open visual session dashboard
-;;   C-c e w   - List workspace folders (with session ID)
-;;   C-c e a   - Add workspace folder to current session
-;;   C-c e A   - Add workspace folder to ALL sessions
-;;   C-c e W   - Remove workspace folder from current session
-;;   C-c e S   - Sync project roots to workspace
-;;   C-c e F/M/p - Shared context commands
+;;   ECA Workspace              ECA Context         ECA Shared Context
+;;     wa - Add folder            cf - File           F - Share file
+;;     wA - Add to ALL            cc - Cursor         M - Share repo map
+;;     wl - List folders          cm - Repo map       p - Apply shared
+;;     wr - Remove folder         cy - Clipboard      c - Clear shared
+;;     ws - Sync projects         cs - Start sync
+;;     wd - Dashboard             cS - Stop sync
+;;     wt - Toggle auto-switch
 ;;
-;; Auto Detection:
-;;   - Auto-add project to workspace (eca-auto-add-workspace-folder)
-;;   - Auto-switch session by project (eca-auto-switch-session)
-;;   - Auto-set ai-code backend to ECA (ai-code-eca-auto-switch-backend)
+;;   ECA Sessions
+;;     sl - List sessions
+;;     ss - Switch session
+;;     sv - Verify health
+;;     su - Upgrade ECA
+;;
+;; Auto-Detection (configurable):
+;;   - eca-auto-add-workspace-folder: Add project on file open (default: t)
+;;   - eca-auto-switch-session: Switch session by project (default: nil)
+;;   - eca-auto-create-session: Create session for new projects (default: nil)
+;;   - eca-auto-sync-workspace: Sync workspace on project switch (default: t)
+;;   - ai-code-eca-auto-switch-backend: Set backend to ECA (default: t)
 ;;
 ;; Usage:
-;;   The extensions load automatically when ai-code-eca is loaded.
-;;   Or manually: (require 'ai-code-eca-bridge)
+;;   (require 'ai-code-eca-bridge)
+;;   M-x ai-code-menu (when ECA is selected)
 
 ;;; Code:
 
@@ -619,13 +616,31 @@ ensure `ai-code-selected-backend' is set to 'eca."
              ("wl" "List workspace folders" ai-code-eca-list-workspace-folders)
              ("wr" "Remove workspace folder" ai-code-eca-remove-workspace-folder)
              ("ws" "Sync project roots" ai-code-eca-sync-project-workspaces)
-             ("wd" "Session dashboard" ai-code-eca-dashboard)])
-          ;; Add shared context items
+             ("wd" "Session dashboard" ai-code-eca-dashboard)
+             ("wt" "Toggle auto-switch" ai-code-eca-toggle-auto-switch)])
+          ;; Add ECA Context group (file, cursor, repo-map, clipboard)
           (transient-append-suffix 'ai-code-menu '("wa")
+            ["ECA Context"
+             ("cf" "Add file context" ai-code-eca-add-file-context)
+             ("cc" "Add cursor context" ai-code-eca-add-cursor-context)
+             ("cm" "Add repo map" ai-code-eca-add-repo-map-context)
+             ("cy" "Add clipboard" ai-code-eca-add-clipboard-context)
+             ("cs" "Start context sync" ai-code-eca-context-sync-start)
+             ("cS" "Stop context sync" ai-code-eca-context-sync-stop)])
+          ;; Add ECA Shared Context items
+          (transient-append-suffix 'ai-code-menu '("cf")
             ["ECA Shared Context"
              ("F" "Share file" ai-code-eca-share-file)
              ("M" "Share repo map" ai-code-eca-share-repo-map)
-             ("p" "Apply shared context" ai-code-eca-apply-shared-context)])
+             ("p" "Apply shared context" ai-code-eca-apply-shared-context)
+             ("c" "Clear shared context" eca-clear-shared-context)])
+          ;; Add ECA Session group
+          (transient-append-suffix 'ai-code-menu '("F")
+            ["ECA Sessions"
+             ("sl" "List sessions" ai-code-eca-list-sessions)
+             ("ss" "Switch session" ai-code-eca-switch-session)
+             ("sv" "Verify health" ai-code-eca-verify-health)
+             ("su" "Upgrade ECA" ai-code-eca-upgrade-vc)])
           (setq ai-code-eca--menu-suffixes-added t))
       (error nil))))
 
