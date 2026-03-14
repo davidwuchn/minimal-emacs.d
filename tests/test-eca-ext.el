@@ -233,6 +233,22 @@
                              (eca-workspace-folder-for-file (expand-file-name "file.txt" subdir)))))))
       (delete-directory test-dir t))))
 
+(ert-deftest eca-ext/has-alias-workspace-folder ()
+  "eca-ext.el should have alias eca-chat-add-workspace-folder."
+  (should (fboundp 'eca-chat-add-workspace-folder)))
+
+(ert-deftest eca-ext/has-add-workspace-folder-all-sessions ()
+  "eca-ext.el should have eca-add-workspace-folder-all-sessions."
+  (should (fboundp 'eca-add-workspace-folder-all-sessions)))
+
+(ert-deftest eca-ext/auto-add-workspace-hook-defined ()
+  "eca-ext.el should have auto-add hook."
+  (should (fboundp 'eca--auto-add-workspace-hook)))
+
+(ert-deftest eca-ext/auto-add-config-exists ()
+  "eca-ext.el should have eca-auto-add-workspace-folder config."
+  (should (boundp 'eca-auto-add-workspace-folder)))
+
 (ert-deftest eca-ext/has-clipboard-context-function ()
   "eca-ext.el should have eca-chat-add-clipboard-context."
   (should (fboundp 'eca-chat-add-clipboard-context)))

@@ -64,6 +64,15 @@
     (should (string-match-p "defun ai-code-eca-remove-workspace-folder" source))
     (should (string-match-p "defun ai-code-eca-sync-project-workspaces" source))))
 
+(ert-deftest eca-bridge/extensions/workspace-all-sessions ()
+  "Bridge should provide add-workspace-folder-all-sessions."
+  (let ((source (or (ignore-errors
+                      (with-temp-buffer
+                        (insert-file-contents "lisp/ai-code-eca-bridge.el")
+                        (buffer-string)))
+                    "")))
+    (should (string-match-p "defun ai-code-eca-add-workspace-folder-all-sessions" source))))
+
 (ert-deftest eca-bridge/extensions/upgrade-vc ()
   "Bridge should provide upgrade-vc function."
   (let ((source (or (ignore-errors

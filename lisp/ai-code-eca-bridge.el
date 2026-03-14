@@ -25,10 +25,16 @@
 ;;   - eca--session-for-worktree (worktree detection)
 ;;
 ;; Workspace Management (multi-project support):
-;;   C-c e w   - List workspace folders
-;;   C-c e a   - Add workspace folder
-;;   C-c e W   - Remove workspace folder
+;;   C-c e w   - List workspace folders (with session ID)
+;;   C-c e a   - Add workspace folder to current session
+;;   C-c e A   - Add workspace folder to ALL sessions
+;;   C-c e W   - Remove workspace folder from current session
 ;;   C-c e S   - Sync project roots to workspace
+;;
+;; Auto-detection (configurable via `eca-auto-add-workspace-folder'):
+;;   - Automatically adds file's project to session when opening
+;;   - Set to 'prompt to ask before adding
+;;   - Set to nil to disable
 ;;
 ;; Usage:
 ;;   The extensions load automatically when ai-code-eca is loaded.
@@ -232,8 +238,18 @@ Useful when working with multiple projects in one session."
             (eca-add-workspace-folder root session)
             (cl-incf added))))
       (if (> added 0)
-          (message "Added %d project roots to workspace" added)
-        (message "All project roots already in workspace")))))
+          (message "Added %d project roots to session %d workspace" added (eca--session-id session))
+        (message "All project roots already in session %d workspace" (eca--session-id session))))))
+
+;;;###autoload
+(defun ai-code-eca-add-workspace-folder-all-sessions (folder)
+  "Add FOLDER to all active ECA sessions.
+Useful for shared libraries that should be available in all projects."
+  (interactive "DAdd to all sessions: ")
+  (require 'eca-ext nil t)
+  (unless (fboundp 'eca-add-workspace-folder-all-sessions)
+    (user-error "Workspace features require eca-ext.el"))
+  (eca-add-workspace-folder-all-sessions folder))
 
 ;;; Context Synchronization
 
@@ -401,6 +417,7 @@ Useful when working with multiple projects in one session."
     (define-key map (kbd "a") #'ai-code-eca-add-workspace-folder)
     (define-key map (kbd "w") #'ai-code-eca-list-workspace-folders)
     (define-key map (kbd "W") #'ai-code-eca-remove-workspace-folder)
+    (define-key map (kbd "A") #'ai-code-eca-add-workspace-folder-all-sessions)
     (define-key map (kbd "S") #'ai-code-eca-sync-project-workspaces)
     (define-key map (kbd "v") #'ai-code-eca-verify-health)
     map)

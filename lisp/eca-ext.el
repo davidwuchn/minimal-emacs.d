@@ -145,7 +145,8 @@ Returns nil if no session is active."
 
 (defun eca-add-workspace-folder (folder &optional session)
   "Add FOLDER to SESSION's workspace.
-SESSION defaults to current session.  Returns the folder path on success."
+SESSION defaults to current session.  Returns the folder path on success.
+Shows session ID in feedback for multi-session awareness."
   (interactive
    (let ((session (eca-session)))
      (unless session
@@ -155,18 +156,49 @@ SESSION defaults to current session.  Returns the folder path on success."
     (unless sess
       (user-error "No ECA session active"))
     (let* ((folder (expand-file-name folder))
-           (existing (eca--session-workspace-folders sess)))
+           (existing (eca--session-workspace-folders sess))
+           (session-id (eca--session-id sess)))
       (unless (file-directory-p folder)
         (user-error "Directory does not exist: %s" folder))
       (when (member folder existing)
         (user-error "Folder already in workspace: %s" folder))
       (eca--session-add-workspace-folder sess folder)
-      (eca-info "Added workspace folder: %s" folder)
+      (eca-info "Added workspace folder to session %d: %s" session-id folder)
       folder)))
+
+(defalias 'eca-chat-add-workspace-folder #'eca-add-workspace-folder
+  "Alias for `eca-add-workspace-folder' for discoverability.")
+
+(defun eca-add-workspace-folder-all-sessions (folder)
+  "Add FOLDER to ALL active sessions' workspaces.
+Useful for shared libraries across multiple projects."
+  (interactive "DAdd to all sessions: ")
+  (let* ((folder (expand-file-name folder))
+         (sessions (eca-list-sessions))
+         (added 0)
+         (skipped 0))
+    (unless sessions
+      (user-error "No active ECA sessions"))
+    (unless (file-directory-p folder)
+      (user-error "Directory does not exist: %s" folder))
+    (dolist (info sessions)
+      (let* ((session-id (plist-get info :id))
+             (session (condition-case nil
+                            (eca-get eca--sessions session-id)
+                          (error nil)))
+             (existing (when session (eca--session-workspace-folders session))))
+        (if (member folder existing)
+            (cl-incf skipped)
+          (when session
+            (eca--session-add-workspace-folder session folder)
+            (cl-incf added)))))
+    (eca-info "Added %s to %d session(s), skipped %d (already present)"
+              folder added skipped)))
 
 (defun eca-remove-workspace-folder (folder &optional session)
   "Remove FOLDER from SESSION's workspace.
-SESSION defaults to current session.  Returns the removed folder on success."
+SESSION defaults to current session.  Returns the removed folder on success.
+Shows session ID in feedback for multi-session awareness."
   (interactive
    (let* ((session (eca-session))
           (folders (when session (eca--session-workspace-folders session))))
@@ -179,7 +211,8 @@ SESSION defaults to current session.  Returns the removed folder on success."
     (unless sess
       (user-error "No ECA session active"))
     (let* ((folder (expand-file-name folder))
-           (existing (eca--session-workspace-folders sess)))
+           (existing (eca--session-workspace-folders sess))
+           (session-id (eca--session-id sess)))
       (unless (member folder existing)
         (user-error "Folder not in workspace: %s" folder))
       (setf (eca--session-workspace-folders sess)
@@ -194,7 +227,7 @@ SESSION defaults to current session.  Returns the removed folder on success."
                                        (list :uri (concat "file://" folder)
                                              :name (file-name-nondirectory
                                                     (directory-file-name folder))))))))
-      (eca-info "Removed workspace folder: %s" folder)
+      (eca-info "Removed workspace folder from session %d: %s" session-id folder)
       folder)))
 
 (defun eca-workspace-folder-for-file (file-path &optional session)
@@ -389,6 +422,63 @@ SESSION defaults to current session.  Only registers if file exists."
       (setq eca--context-temp-files (assq-delete-all sid eca--context-temp-files))
       (when (and (fboundp 'eca-info) (> count 0))
         (eca-info "Cleaned up %d temp files for session %s" count sid)))))
+
+;;; Auto Session Detection (Gap 5 fix)
+
+(defcustom eca-auto-add-workspace-folder t
+  "If non-nil, automatically add file's project to current session's workspace.
+When opening a file outside the current workspace, the project root
+is added to the session's workspace folders automatically.
+
+If 'prompt, ask before adding.
+If nil, do nothing."
+  :type '(choice (const :tag "Auto add" t)
+                 (const :tag "Prompt before adding" prompt)
+                 (const :tag "Disabled" nil))
+  :group 'eca)
+
+(defun eca--file-project-root (file-path)
+  "Return project root for FILE-PATH using projectile or project.el."
+  (when file-path
+    (or (when (fboundp 'projectile-project-root)
+          (ignore-errors
+            (let ((projectile-project-root-cache (make-hash-table :test #'equal)))
+              (projectile-project-root (file-name-directory file-path)))))
+        (when (fboundp 'project-current)
+          (ignore-errors
+            (let ((proj (project-current nil (file-name-directory file-path))))
+              (when proj (project-root proj)))))
+        (file-name-directory file-path))))
+
+(defun eca--auto-add-workspace-hook ()
+  "Hook to auto-add file's project to current session's workspace.
+Triggered when opening files outside current workspace."
+  (when (and eca-auto-add-workspace-folder
+             buffer-file-name
+             (featurep 'eca)
+             (eca-session))
+    (let* ((file-path buffer-file-name)
+           (project-root (eca--file-project-root file-path))
+           (session (eca-session))
+           (workspace-folders (eca--session-workspace-folders session))
+           (in-workspace (and project-root
+                              (member (directory-file-name (expand-file-name project-root))
+                                      (mapcar (lambda (f) (directory-file-name (expand-file-name f)))
+                                              workspace-folders)))))
+      (when (and project-root (not in-workspace))
+        (let ((root (directory-file-name (expand-file-name project-root))))
+          (cond
+           ((eq eca-auto-add-workspace-folder t)
+            (eca--session-add-workspace-folder session root)
+            (message "Auto-added project to ECA session %d: %s"
+                     (eca--session-id session) root))
+           ((eq eca-auto-add-workspace-folder 'prompt)
+            (when (y-or-n-p (format "Add project to ECA workspace? (%s) " root))
+              (eca--session-add-workspace-folder session root)))))))))
+
+;; Add hook after ECA loads
+(with-eval-after-load 'eca
+  (add-hook 'find-file-hook #'eca--auto-add-workspace-hook))
 
 (provide 'eca-ext)
 
