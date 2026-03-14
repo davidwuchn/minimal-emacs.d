@@ -158,7 +158,9 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
 | Per-tool output limits | **Skip** | `my/gptel-subagent-result-limit` truncation on subagents works fine |
 
-### Recent Changes (v0.6.61)
+### Recent Changes (v0.6.62)
+
+- **Add Multi-Project Mode toggle** (⚒): `M-x ai-code-eca-multi-project-mode` enables all auto-detection features at once (auto-switch, auto-sync, auto-add, mode-line). Added workflow documentation: single session with multiple workspaces vs. multiple sessions. Removed duplicate `ai-code-eca-auto-switch-session` defcustom. Improved `toggle-auto-switch` to cycle through states (disabled → prompt → auto). 69 tests passing.
 
 - **Fix multi-project workflow gaps** (⚒): Gap 1: Changed `eca-auto-switch-session` default from `nil` to `'prompt` (asks before switching). Gap 2: Added mode-line indicator (`ECA:1[2]`) and `ai-code-eca-which-session` command (`C-c e ?`). Gap 3: Cross-session context sharing documented in INTRO.md. Gap 4: `eca-auto-sync-workspace` already defaults to `t`. 68 tests passing.
 
