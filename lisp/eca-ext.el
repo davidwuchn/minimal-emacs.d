@@ -5,19 +5,23 @@
 
 ;;; Commentary:
 
-;; Session Multiplexing:
+;; Session Multiplexing (not in upstream):
 ;;   (eca-list-sessions)              → List all active sessions
 ;;   (eca-select-session)             → Interactively select a session
 ;;   (eca-switch-to-session)          → Switch to session and open chat buffer
 ;;   (eca-create-session-for-workspace) → Create new session for workspace
 ;;
-;; Context Management:
+;; Context Management (programmatic API):
 ;;   (eca-chat-add-file-context session file-path)
 ;;   (eca-chat-add-repo-map-context session)
 ;;   (eca-chat-add-cursor-context session file-path position)
 ;;   (eca-chat-add-clipboard-context session content)
 ;;
-;; See `eca-chat-auto-add-repomap' for automatic repo map context.
+;; Note: Upstream ECA now provides:
+;;   - eca-chat-add-workspace-root (interactive)
+;;   - eca--session-add-workspace-folder (internal)
+;;   - eca--session-for-worktree (worktree detection)
+;;   - Automatic worktree detection in eca-session
 
 ;;; Code:
 
@@ -45,7 +49,6 @@
 
 ;;; Session Multiplexing
 
-;;;###autoload
 (defun eca-list-sessions ()
   "Return a list of all active ECA sessions.
 Each element is a plist with :id, :status, :workspace-folders, :chat-count.
@@ -60,7 +63,6 @@ Returns nil if ECA is not initialized or has no sessions."
                          :chat-count (length (eca--session-chats session)))))
                eca--sessions)))
 
-;;;###autoload
 (defun eca-select-session (&optional session-id)
   "Select an ECA session by SESSION-ID or interactively.
 Returns the selected session or nil if cancelled.
@@ -99,7 +101,6 @@ When called interactively, prompts for session selection."
               session)
           (user-error "Session %s not found (may have been deleted)" session-id))))))
 
-;;;###autoload
 (defun eca-switch-to-session (&optional session-id)
   "Switch to ECA session SESSION-ID and open its last chat buffer.
 When called interactively, prompts for session selection."
@@ -110,7 +111,6 @@ When called interactively, prompts for session selection."
       (pop-to-buffer (eca-chat--get-last-buffer session))
       session)))
 
-;;;###autoload
 (defun eca-create-session-for-workspace (workspace-roots)
   "Create a new ECA session for WORKSPACE-ROOTS and switch to it.
 Returns the new session."
@@ -126,9 +126,8 @@ Returns the new session."
       (eca-switch-to-session (eca--session-id session)))
     session))
 
-;;; Context Management Extensions
+;;; Context Management Extensions (programmatic API)
 
-;;;###autoload
 (defun eca-chat-add-file-context (session file-path)
   "Add FILE-PATH as context to SESSION.
 This is a programmatic interface for adding file context."
@@ -137,7 +136,6 @@ This is a programmatic interface for adding file context."
     (eca-chat--add-context (list :type "file" :path (expand-file-name file-path)))
     (eca-chat-open session)))
 
-;;;###autoload
 (defun eca-chat-add-repo-map-context (session)
   "Add repository map context to SESSION.
 
@@ -151,7 +149,6 @@ See also `eca-chat-auto-add-repomap' for automatic inclusion."
     (eca-chat--add-context (list :type "repoMap"))
     (eca-chat-open session)))
 
-;;;###autoload
 (defun eca-chat-add-cursor-context (session file-path position)
   "Add cursor context to SESSION at FILE-PATH and POSITION.
 POSITION is a buffer position (integer)."
@@ -173,7 +170,6 @@ POSITION is a buffer position (integer)."
                                :end (list :line end-line :character end-char))))))
     (eca-chat-open session)))
 
-;;;###autoload
 (defun eca-chat-add-clipboard-context (session content)
   "Add CLIPBOARD CONTENT as a temporary file context to SESSION.
 The content is saved to a temporary file and added as context."
@@ -195,7 +191,6 @@ The content is saved to a temporary file and added as context."
       (eca-chat-open session))
     (eca-info "Added clipboard context (%d chars)" (length content))))
 
-;;;###autoload
 (defun eca-chat-add-clipboard-context-now ()
   "Add current clipboard contents as context to the current ECA session."
   (interactive)
@@ -207,7 +202,7 @@ The content is saved to a temporary file and added as context."
             (message "Clipboard is empty")))
       (user-error "No ECA session active"))))
 
-;;; Temp File Management
+;;; Temp File Management (for clipboard context)
 
 (defvar eca--context-temp-files nil
   "List of temporary context files created by eca-ext.
@@ -258,7 +253,6 @@ Default: 24 hours.  Set to nil to disable age-based cleanup.")
 (add-hook 'kill-emacs-hook #'eca--cleanup-temp-context-files)
 (run-with-timer 3600 3600 #'eca--cleanup-stale-temp-files)
 
-;;;###autoload
 (defun eca--register-temp-file (file-path &optional session)
   "Register FILE-PATH for cleanup on Emacs exit or session end.
 SESSION defaults to current session.  Only registers if file exists."
@@ -273,7 +267,6 @@ SESSION defaults to current session.  Only registers if file exists."
         (push (cons sid (list file-path)) eca--context-temp-files)))
     file-path))
 
-;;;###autoload
 (defun eca--cleanup-session-temp-files (session)
   "Clean up temp files associated with SESSION."
   (let* ((sid (if (numberp session) session (eca--session-id session)))

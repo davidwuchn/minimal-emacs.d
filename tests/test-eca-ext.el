@@ -54,6 +54,18 @@
           (should (plist-get s :workspace-folders))
           (should (plist-get s :chat-count)))))))
 
+;;; Session switching tests
+
+(ert-deftest eca-ext/select-session-returns-nil-when-empty ()
+  "eca-select-session returns nil when no sessions exist."
+  (let ((eca--sessions nil))
+    (should (null (eca-select-session)))))
+
+(ert-deftest eca-ext/switch-to-session-returns-nil-when-empty ()
+  "eca-switch-to-session returns nil when no sessions exist."
+  (let ((eca--sessions nil))
+    (should (null (eca-switch-to-session)))))
+
 ;;; Temp file management tests
 
 (ert-deftest eca-ext/temp-file-tracking-per-session ()
@@ -64,26 +76,21 @@
         (let ((file1 (expand-file-name "file1.txt" tmp-dir))
               (file2 (expand-file-name "file2.txt" tmp-dir))
               (file3 (expand-file-name "file3.txt" tmp-dir)))
-          ;; Create files
           (write-region "test" nil file1)
           (write-region "test" nil file2)
           (write-region "test" nil file3)
           
-          ;; Register files for different sessions
           (eca--register-temp-file file1 1)
           (eca--register-temp-file file2 1)
           (eca--register-temp-file file3 2)
           
-          ;; Verify structure
           (should (listp eca--context-temp-files))
           (should (= (length eca--context-temp-files) 2))
           
-          ;; Verify files for session 1
           (let ((entry1 (assoc 1 eca--context-temp-files)))
             (should entry1)
             (should (= (length (cdr entry1)) 2)))
           
-          ;; Verify files for session 2
           (let ((entry2 (assoc 2 eca--context-temp-files)))
             (should entry2)
             (should (= (length (cdr entry2)) 1))))
@@ -100,7 +107,6 @@
   "eca--register-temp-file uses current session when not specified."
   (let ((eca--context-temp-files nil)
         (eca--session-id-cache 99))
-    ;; Create a real temp file
     (let ((tmp-file (make-temp-file "eca-test")))
       (unwind-protect
           (progn
@@ -119,29 +125,20 @@
         (let ((file1 (expand-file-name "test1.txt" tmp-dir))
               (file2 (expand-file-name "test2.txt" tmp-dir))
               (file3 (expand-file-name "other.txt" tmp-dir)))
-          ;; Create files
           (write-region "test" nil file1)
           (write-region "test" nil file2)
           (write-region "test" nil file3)
           
-          ;; Register them
           (eca--register-temp-file file1 1)
           (eca--register-temp-file file2 1)
           (eca--register-temp-file file3 2)
           
-          ;; Cleanup session 1
           (eca--cleanup-session-temp-files 1)
           
-          ;; Verify session 1 files deleted
           (should-not (file-exists-p file1))
           (should-not (file-exists-p file2))
-          
-          ;; Verify session 1 entry removed
           (should-not (assoc 1 eca--context-temp-files))
-          
-          ;; Verify other session still tracked
           (should (assoc 2 eca--context-temp-files)))
-      ;; Cleanup
       (when (file-directory-p tmp-dir)
         (delete-directory tmp-dir t)))))
 
@@ -173,13 +170,30 @@
 
 (ert-deftest eca-ext/create-session-validates-result ()
   "eca-create-session-for-workspace validates session creation."
-  (let ((called-with nil))
-    (cl-letf (((symbol-function 'eca-create-session)
-               (lambda (roots) (setq called-with roots) nil)))
-      (condition-case err
-          (eca-create-session-for-workspace '("/test"))
-        (user-error
-         (should (string-match-p "Failed to create" (error-message-string err))))))))
+  (cl-letf (((symbol-function 'eca-create-session)
+             (lambda (roots) nil)))
+    (condition-case err
+        (eca-create-session-for-workspace '("/test"))
+      (user-error
+       (should (string-match-p "Failed to create" (error-message-string err)))))))
+
+;;; Context function existence tests
+
+(ert-deftest eca-ext/has-file-context-function ()
+  "eca-ext.el should have eca-chat-add-file-context."
+  (should (fboundp 'eca-chat-add-file-context)))
+
+(ert-deftest eca-ext/has-cursor-context-function ()
+  "eca-ext.el should have eca-chat-add-cursor-context."
+  (should (fboundp 'eca-chat-add-cursor-context)))
+
+(ert-deftest eca-ext/has-repo-map-context-function ()
+  "eca-ext.el should have eca-chat-add-repo-map-context."
+  (should (fboundp 'eca-chat-add-repo-map-context)))
+
+(ert-deftest eca-ext/has-clipboard-context-function ()
+  "eca-ext.el should have eca-chat-add-clipboard-context."
+  (should (fboundp 'eca-chat-add-clipboard-context)))
 
 (provide 'test-eca-ext)
 
