@@ -134,6 +134,7 @@
 - **Backend-specific suffixes require tracking**: Use a flag (`ai-code-eca--menu-suffixes-added`) to prevent duplicate additions. `transient-remove-suffix` on unload or backend switch.
 - **transient-append-suffix uses string, not list**: The LOC argument is a string like `"s"`, NOT a list like `'("s")`. List format causes silent errors in `condition-case nil` blocks. Always check transient documentation for argument types.
 - **Log errors in condition-case**: When using `condition-case`, bind the error variable (`(condition-case err ... (error (message "...: %s" err)))`) to see what went wrong. Silent `nil` swallows bugs.
+- **Groups and suffixes cannot be siblings**: In transient, a group `["Group Name" ...]` cannot be inserted as sibling of a suffix `("k" "description" command)`. Use group name as LOC: `(transient-append-suffix 'prefix "Existing Group" ["New Group" ...])`. The LOC must match the level where you're inserting.
 
 ## Auto-Detection Patterns
 - **Layer auto-detection behaviors**: (1) `eca-auto-add-workspace-folder` - add project on file open, (2) `eca-auto-switch-session` - switch to matching session, (3) `eca-auto-create-session` - create session for new projects, (4) `eca-auto-sync-workspace` - keep workspace in sync. Each is independently configurable.

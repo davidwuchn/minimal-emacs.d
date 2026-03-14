@@ -701,8 +701,9 @@ Displays session ID, status, and workspace folders."
              (featurep 'transient))
     (condition-case err
         (progn
-          ;; Add ECA Workspace group after AI CLI session group
-          (transient-append-suffix 'ai-code-menu "s"
+          ;; Append ECA groups after "Other Tools" group
+          ;; Using group name as LOC: "Other Tools"
+          (transient-append-suffix 'ai-code-menu "Other Tools"
             ["ECA Workspace"
              (:info #'ai-code-eca--session-status-description)
              (:info #'ai-code-eca--workspace-status-description)
@@ -714,8 +715,7 @@ Displays session ID, status, and workspace folders."
              ("ws" "Sync project roots" ai-code-eca-sync-project-workspaces)
              ("wd" "Session dashboard" ai-code-eca-dashboard)
              ("wt" "Toggle auto-switch" ai-code-eca-toggle-auto-switch)])
-          ;; Add ECA Context group (file, cursor, repo-map, clipboard)
-          (transient-append-suffix 'ai-code-menu "wa"
+          (transient-append-suffix 'ai-code-menu "ECA Workspace"
             ["ECA Context"
              ("cf" "Add file context" ai-code-eca-add-file-context)
              ("cc" "Add cursor context" ai-code-eca-add-cursor-context)
@@ -723,15 +723,13 @@ Displays session ID, status, and workspace folders."
              ("cy" "Add clipboard" ai-code-eca-add-clipboard-context)
              ("cs" "Start context sync" ai-code-eca-context-sync-start)
              ("cS" "Stop context sync" ai-code-eca-context-sync-stop)])
-          ;; Add ECA Shared Context items
-          (transient-append-suffix 'ai-code-menu "cf"
+          (transient-append-suffix 'ai-code-menu "ECA Context"
             ["ECA Shared Context"
              ("F" "Share file" ai-code-eca-share-file)
              ("R" "Share repo map" ai-code-eca-share-repo-map)
              ("p" "Apply shared context" ai-code-eca-apply-shared-context)
              ("c" "Clear shared context" eca-clear-shared-context)])
-          ;; Add ECA Session group
-          (transient-append-suffix 'ai-code-menu "F"
+          (transient-append-suffix 'ai-code-menu "ECA Shared Context"
             ["ECA Sessions"
              ("s?" "Which session?" ai-code-eca-which-session)
              ("sl" "List sessions" ai-code-eca-list-sessions)
@@ -749,7 +747,10 @@ Displays session ID, status, and workspace folders."
              (featurep 'transient))
     (condition-case err
         (progn
-          (transient-remove-suffix 'ai-code-menu "s")
+          (transient-remove-suffix 'ai-code-menu "ECA Workspace")
+          (transient-remove-suffix 'ai-code-menu "ECA Context")
+          (transient-remove-suffix 'ai-code-menu "ECA Shared Context")
+          (transient-remove-suffix 'ai-code-menu "ECA Sessions")
           (setq ai-code-eca--menu-suffixes-added nil))
       (error
        (message "Failed to remove ECA menu items: %s" (error-message-string err))))))
