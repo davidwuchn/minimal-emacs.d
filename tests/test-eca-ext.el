@@ -191,6 +191,48 @@
   "eca-ext.el should have eca-chat-add-repo-map-context."
   (should (fboundp 'eca-chat-add-repo-map-context)))
 
+;;; Workspace management tests
+
+(ert-deftest eca-ext/has-list-workspace-folders ()
+  "eca-ext.el should have eca-list-workspace-folders."
+  (should (fboundp 'eca-list-workspace-folders)))
+
+(ert-deftest eca-ext/has-add-workspace-folder ()
+  "eca-ext.el should have eca-add-workspace-folder."
+  (should (fboundp 'eca-add-workspace-folder)))
+
+(ert-deftest eca-ext/has-remove-workspace-folder ()
+  "eca-ext.el should have eca-remove-workspace-folder."
+  (should (fboundp 'eca-remove-workspace-folder)))
+
+(ert-deftest eca-ext/has-workspace-folder-for-file ()
+  "eca-ext.el should have eca-workspace-folder-for-file."
+  (should (fboundp 'eca-workspace-folder-for-file)))
+
+(ert-deftest eca-ext/has-workspace-provenance ()
+  "eca-ext.el should have eca-workspace-provenance."
+  (should (fboundp 'eca-workspace-provenance)))
+
+(ert-deftest eca-ext/workspace-provenance-returns-nil-outside-workspace ()
+  "eca-workspace-provenance returns nil when file not in workspace."
+  (let ((eca--sessions nil))
+    (should (null (eca-workspace-provenance "/nonexistent/file.txt")))))
+
+(ert-deftest eca-ext/workspace-folder-for-file-finds-match ()
+  "eca-workspace-folder-for-file finds correct workspace."
+  (let ((test-dir (make-temp-file "eca-test" t)))
+    (unwind-protect
+        (let ((subdir (expand-file-name "subdir/nested" test-dir)))
+          (make-directory subdir t)
+          (let ((eca--sessions nil)
+                (session (list 'mock-session)))
+            (cl-letf (((symbol-function 'eca-session) (lambda () session))
+                      ((symbol-function 'eca--session-workspace-folders)
+                       (lambda (_) (list test-dir))))
+              (should (equal test-dir
+                             (eca-workspace-folder-for-file (expand-file-name "file.txt" subdir)))))))
+      (delete-directory test-dir t))))
+
 (ert-deftest eca-ext/has-clipboard-context-function ()
   "eca-ext.el should have eca-chat-add-clipboard-context."
   (should (fboundp 'eca-chat-add-clipboard-context)))

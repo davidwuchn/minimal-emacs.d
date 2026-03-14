@@ -9,6 +9,7 @@
 ;;; Commentary:
 ;; This file EXTENDS the upstream ai-code-eca.el with additional features:
 ;;   - Session management (list, switch, create)
+;;   - Workspace management (list, add, remove, sync projects)
 ;;   - Context commands (file, cursor, repo-map, clipboard)
 ;;   - Keybindings integration
 ;;   - Session affinity
@@ -22,6 +23,12 @@
 ;;   - eca-chat-add-workspace-root (interactive workspace folder)
 ;;   - eca--session-add-workspace-folder (internal)
 ;;   - eca--session-for-worktree (worktree detection)
+;;
+;; Workspace Management (multi-project support):
+;;   C-c e w   - List workspace folders
+;;   C-c e a   - Add workspace folder
+;;   C-c e W   - Remove workspace folder
+;;   C-c e S   - Sync project roots to workspace
 ;;
 ;; Usage:
 ;;   The extensions load automatically when ai-code-eca is loaded.
@@ -177,6 +184,56 @@
   (unless (fboundp 'eca-chat-add-workspace-root)
     (user-error "ECA workspace features not available"))
   (eca-chat-add-workspace-root))
+
+;;;###autoload
+(defun ai-code-eca-list-workspace-folders ()
+  "Display workspace folders for current ECA session."
+  (interactive)
+  (require 'eca-ext nil t)
+  (let ((folders (eca-list-workspace-folders)))
+    (if folders
+        (message "ECA Workspace: %s" (string-join folders " | "))
+      (message "No workspace folders in session"))))
+
+;;;###autoload
+(defun ai-code-eca-remove-workspace-folder (folder)
+  "Remove FOLDER from current ECA session's workspace."
+  (interactive
+   (progn
+     (require 'eca-ext nil t)
+     (let ((folders (eca-list-workspace-folders)))
+       (unless folders
+         (user-error "No workspace folders in session"))
+       (list (completing-read "Remove workspace folder: " folders nil t)))))
+  (require 'eca-ext nil t)
+  (eca-remove-workspace-folder folder))
+
+;;;###autoload
+(defun ai-code-eca-sync-project-workspaces ()
+  "Sync current project roots to ECA session workspace.
+Adds any project roots not already in the workspace.
+Useful when working with multiple projects in one session."
+  (interactive)
+  (require 'eca-ext nil t)
+  (let ((session (eca-session)))
+    (unless session
+      (user-error "No ECA session active"))
+    (let* ((project-roots (or (when (fboundp 'projectile-project-root)
+                                (ignore-errors (list (projectile-project-root))))
+                              (when (fboundp 'project-roots)
+                                (ignore-errors (project-roots (project-current))))
+                              (when buffer-file-name
+                                (list (file-name-directory buffer-file-name)))))
+           (existing (eca-list-workspace-folders session))
+           (added 0))
+      (dolist (root project-roots)
+        (let ((root (expand-file-name root)))
+          (unless (member root existing)
+            (eca-add-workspace-folder root session)
+            (cl-incf added))))
+      (if (> added 0)
+          (message "Added %d project roots to workspace" added)
+        (message "All project roots already in workspace")))))
 
 ;;; Context Synchronization
 
@@ -342,6 +399,9 @@
     (define-key map (kbd "m") #'ai-code-eca-add-repo-map-context)
     (define-key map (kbd "y") #'ai-code-eca-add-clipboard-context)
     (define-key map (kbd "a") #'ai-code-eca-add-workspace-folder)
+    (define-key map (kbd "w") #'ai-code-eca-list-workspace-folders)
+    (define-key map (kbd "W") #'ai-code-eca-remove-workspace-folder)
+    (define-key map (kbd "S") #'ai-code-eca-sync-project-workspaces)
     (define-key map (kbd "v") #'ai-code-eca-verify-health)
     map)
   "Keymap for ECA extension commands.")
@@ -355,7 +415,9 @@
     (define-key eca-chat-mode-map (kbd "C-c C-c") #'ai-code-eca-add-cursor-context)
     (define-key eca-chat-mode-map (kbd "C-c C-m") #'ai-code-eca-add-repo-map-context)
     (define-key eca-chat-mode-map (kbd "C-c C-y") #'ai-code-eca-add-clipboard-context)
-    (define-key eca-chat-mode-map (kbd "C-c C-a") #'ai-code-eca-add-workspace-folder))
+    (define-key eca-chat-mode-map (kbd "C-c C-a") #'ai-code-eca-add-workspace-folder)
+    (define-key eca-chat-mode-map (kbd "C-c C-w") #'ai-code-eca-list-workspace-folders)
+    (define-key eca-chat-mode-map (kbd "C-c C-S-w") #'ai-code-eca-remove-workspace-folder))
   (when (boundp 'ai-code-mode-map)
     (define-key ai-code-mode-map (kbd "C-c e") ai-code-eca-keymap))
   (message "ECA extension keybindings configured"))
@@ -371,7 +433,9 @@
     (define-key eca-chat-mode-map (kbd "C-c C-c") nil)
     (define-key eca-chat-mode-map (kbd "C-c C-m") nil)
     (define-key eca-chat-mode-map (kbd "C-c C-y") nil)
-    (define-key eca-chat-mode-map (kbd "C-c C-a") nil)))
+    (define-key eca-chat-mode-map (kbd "C-c C-a") nil)
+    (define-key eca-chat-mode-map (kbd "C-c C-w") nil)
+    (define-key eca-chat-mode-map (kbd "C-c C-S-w") nil)))
 
 (add-hook 'ai-code-eca-bridge-unload-hook #'ai-code-eca--unload-function)
 

@@ -53,6 +53,17 @@
                     "")))
     (should (string-match-p "eca-chat-add-workspace-root" source))))
 
+(ert-deftest eca-bridge/extensions/workspace-management ()
+  "Bridge should provide workspace management commands."
+  (let ((source (or (ignore-errors
+                      (with-temp-buffer
+                        (insert-file-contents "lisp/ai-code-eca-bridge.el")
+                        (buffer-string)))
+                    "")))
+    (should (string-match-p "defun ai-code-eca-list-workspace-folders" source))
+    (should (string-match-p "defun ai-code-eca-remove-workspace-folder" source))
+    (should (string-match-p "defun ai-code-eca-sync-project-workspaces" source))))
+
 (ert-deftest eca-bridge/extensions/upgrade-vc ()
   "Bridge should provide upgrade-vc function."
   (let ((source (or (ignore-errors

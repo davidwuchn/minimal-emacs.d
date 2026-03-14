@@ -11,6 +11,12 @@
 ;;   (eca-switch-to-session)          → Switch to session and open chat buffer
 ;;   (eca-create-session-for-workspace) → Create new session for workspace
 ;;
+;; Workspace Management (extends upstream):
+;;   (eca-list-workspace-folders)     → List folders in current session
+;;   (eca-add-workspace-folder)       → Add folder to session
+;;   (eca-remove-workspace-folder)    → Remove folder from session
+;;   (eca-workspace-folder-for-file)  → Find which workspace owns a file
+;;
 ;; Context Management (programmatic API):
 ;;   (eca-chat-add-file-context session file-path)
 ;;   (eca-chat-add-repo-map-context session)
@@ -41,11 +47,13 @@
 (declare-function eca--session-id "eca-util" (session))
 (declare-function eca--session-status "eca-util" (session))
 (declare-function eca--session-workspace-folders "eca-util" (session))
+(declare-function eca--session-add-workspace-folder "eca-util" (session folder))
 (declare-function eca--session-chats "eca-util" (session))
 (declare-function eca-chat-open "eca-chat" (session))
 (declare-function eca-chat--get-last-buffer "eca-chat" (session))
 (declare-function eca-chat--add-context "eca-chat" (context-plist))
 (declare-function eca-chat--with-current-buffer "eca-chat" (&rest body))
+(declare-function eca-api-notify "eca-api" (session &rest args))
 
 ;;; Session Multiplexing
 
@@ -126,15 +134,108 @@ Returns the new session."
       (eca-switch-to-session (eca--session-id session)))
     session))
 
+;;; Workspace Management
+
+(defun eca-list-workspace-folders (&optional session)
+  "Return list of workspace folders for SESSION or current session.
+Returns nil if no session is active."
+  (let ((sess (or session (eca-session))))
+    (when sess
+      (eca--session-workspace-folders sess))))
+
+(defun eca-add-workspace-folder (folder &optional session)
+  "Add FOLDER to SESSION's workspace.
+SESSION defaults to current session.  Returns the folder path on success."
+  (interactive
+   (let ((session (eca-session)))
+     (unless session
+       (user-error "No ECA session active"))
+     (list (read-directory-name "Add workspace folder: ") session)))
+  (let ((sess (or session (eca-session))))
+    (unless sess
+      (user-error "No ECA session active"))
+    (let* ((folder (expand-file-name folder))
+           (existing (eca--session-workspace-folders sess)))
+      (unless (file-directory-p folder)
+        (user-error "Directory does not exist: %s" folder))
+      (when (member folder existing)
+        (user-error "Folder already in workspace: %s" folder))
+      (eca--session-add-workspace-folder sess folder)
+      (eca-info "Added workspace folder: %s" folder)
+      folder)))
+
+(defun eca-remove-workspace-folder (folder &optional session)
+  "Remove FOLDER from SESSION's workspace.
+SESSION defaults to current session.  Returns the removed folder on success."
+  (interactive
+   (let* ((session (eca-session))
+          (folders (when session (eca--session-workspace-folders session))))
+     (unless session
+       (user-error "No ECA session active"))
+     (unless folders
+       (user-error "No workspace folders in session"))
+     (list (completing-read "Remove workspace folder: " folders nil t) session)))
+  (let ((sess (or session (eca-session))))
+    (unless sess
+      (user-error "No ECA session active"))
+    (let* ((folder (expand-file-name folder))
+           (existing (eca--session-workspace-folders sess)))
+      (unless (member folder existing)
+        (user-error "Folder not in workspace: %s" folder))
+      (setf (eca--session-workspace-folders sess)
+            (remove folder existing))
+      (when (fboundp 'eca-api-notify)
+        (eca-api-notify
+         sess
+         :method "workspace/didChangeWorkspaceFolders"
+         :params (list :event
+                       (list :added []
+                             :removed (vector
+                                       (list :uri (concat "file://" folder)
+                                             :name (file-name-nondirectory
+                                                    (directory-file-name folder))))))))
+      (eca-info "Removed workspace folder: %s" folder)
+      folder)))
+
+(defun eca-workspace-folder-for-file (file-path &optional session)
+  "Return the workspace folder that contains FILE-PATH in SESSION.
+SESSION defaults to current session.  Returns nil if file is not
+in any workspace folder."
+  (let* ((sess (or session (eca-session)))
+         (folders (when sess (eca--session-workspace-folders sess)))
+         (file-path (expand-file-name file-path)))
+    (when folders
+      (seq-find (lambda (folder)
+                   (string-prefix-p (file-name-as-directory folder)
+                                    (file-name-as-directory file-path)))
+                 folders))))
+
+(defun eca-workspace-provenance (file-path &optional session)
+  "Return plist with workspace provenance for FILE-PATH in SESSION.
+Result contains :workspace, :relative-path, and :folder-name.
+Returns nil if file is not in any workspace."
+  (let* ((workspace (eca-workspace-folder-for-file file-path session)))
+    (when workspace
+      (list :workspace workspace
+            :relative-path (file-relative-name file-path workspace)
+            :folder-name (file-name-nondirectory
+                          (directory-file-name workspace))))))
+
 ;;; Context Management Extensions (programmatic API)
 
 (defun eca-chat-add-file-context (session file-path)
   "Add FILE-PATH as context to SESSION.
-This is a programmatic interface for adding file context."
+This is a programmatic interface for adding file context.
+Includes workspace provenance when file is in a workspace folder."
   (eca-assert-session-running session)
-  (eca-chat--with-current-buffer (eca-chat--get-last-buffer session)
-    (eca-chat--add-context (list :type "file" :path (expand-file-name file-path)))
-    (eca-chat-open session)))
+  (let* ((file-path (expand-file-name file-path))
+         (prov (eca-workspace-provenance file-path session))
+         (context (list :type "file" :path file-path)))
+    (when prov
+      (setq context (append context (list :workspace prov))))
+    (eca-chat--with-current-buffer (eca-chat--get-last-buffer session)
+      (eca-chat--add-context context)
+      (eca-chat-open session))))
 
 (defun eca-chat-add-repo-map-context (session)
   "Add repository map context to SESSION.
@@ -151,7 +252,8 @@ See also `eca-chat-auto-add-repomap' for automatic inclusion."
 
 (defun eca-chat-add-cursor-context (session file-path position)
   "Add cursor context to SESSION at FILE-PATH and POSITION.
-POSITION is a buffer position (integer)."
+POSITION is a buffer position (integer).
+Includes workspace provenance when file is in a workspace folder."
   (eca-assert-session-running session)
   (eca-chat--with-current-buffer (eca-chat--get-last-buffer session)
     (save-restriction
@@ -162,12 +264,16 @@ POSITION is a buffer position (integer)."
              (start-line (line-number-at-pos start))
              (end-line (line-number-at-pos end))
              (start-char (- position start))
-             (end-char (- end start)))
-        (eca-chat--add-context
-         (list :type "cursor"
-               :path (expand-file-name file-path)
-               :position (list :start (list :line start-line :character start-char)
-                               :end (list :line end-line :character end-char))))))
+             (end-char (- end start))
+             (file-path (expand-file-name file-path))
+             (prov (eca-workspace-provenance file-path session))
+             (context (list :type "cursor"
+                            :path file-path
+                            :position (list :start (list :line start-line :character start-char)
+                                            :end (list :line end-line :character end-char)))))
+        (when prov
+          (setq context (append context (list :workspace prov))))
+        (eca-chat--add-context context)))
     (eca-chat-open session)))
 
 (defun eca-chat-add-clipboard-context (session content)
