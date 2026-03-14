@@ -160,6 +160,7 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 
 ### Recent Changes (v0.6.27-v0.6.30)
 
+- **Slim ECA bridge** (⚒): Removed 467 lines (42%) by delegating to upstream. Core backend functions (start/switch/send/resume) now in upstream `ai-code-eca.el`. Workspace folder uses upstream `eca-chat-add-workspace-root`. Worktree detection built into upstream `eca-session`. Kept only extensions: session management, context commands, keybindings, health verification, context sync. Added 15 autoload cookies for interactive commands.
 - **Fix load-order issue** (⊘): Tools missing from FSM due to `nucleus-get-tools` filtering out unregistered tools. Added `gptel-tools-after-register-hook` to refresh presets after registration.
 - **Refactor ECA bridge** (⚒): Unified session affinity with `ai-code--repo-backend-alist`, simplified git worktree delegation, enabled 60s context sync default, removed dead menu code.
 - **Remove misleading menu code** (⊘): `ai-code-eca--build-menu-items` was never displayed. ECA integrates via backend system (`ai-code-select-backend`), not separate menu.

@@ -126,6 +126,91 @@ OpenRouter, GitHub Copilot, MiniMax, and Cloudflare Workers AI. Backend/model
 selection is centralized so presets and subagents inherit the active default
 instead of hardcoding provider-specific values.
 
+## ECA + ai-code Integration
+
+[ECA](https://github.com/editor-code-assistant/eca-emacs) (Editor Code Assistant)
+integrates with [ai-code](https://github.com/tninja/ai-code) via a thin extension
+layer that delegates to upstream packages where possible.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        ai-code (frontend)                        │
+│   ai-code-select-backend → 'eca                                  │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────────┐
+│                   ai-code-eca.el (upstream)                      │
+│   :start, :switch, :send, :resume                                │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────────┐
+│                ai-code-eca-bridge.el (extensions)                │
+│   Session mgmt, context commands, keybindings, health verify     │
+│   15 autoloaded commands, ~370 lines                             │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────────┐
+│                     eca-ext.el (support)                         │
+│   Programmatic context API, session multiplexing                 │
+│   ~290 lines                                                     │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────────┐
+│                    ECA (upstream package)                        │
+│   eca-chat-add-workspace-root, eca--session-for-worktree,       │
+│   automatic worktree detection                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### What's in upstream vs extensions
+
+| Feature | Source | Location |
+|---------|--------|----------|
+| Core backend (start/switch/send/resume) | upstream | `ai-code-eca.el` |
+| Add workspace folder | upstream | `eca-chat-add-workspace-root` |
+| Worktree detection | upstream | `eca--session-for-worktree` |
+| Session list/switch | bridge | `ai-code-eca-list-sessions`, `ai-code-eca-switch-session` |
+| Context commands | bridge | `ai-code-eca-add-file-context`, etc. |
+| Keybindings | bridge | `ai-code-eca-keymap`, `C-c e` prefix |
+| Health verification | bridge | `ai-code-eca-verify-health` |
+| Context sync | bridge | `ai-code-eca-sync-context` |
+| Programmatic context API | eca-ext | `eca-chat-add-file-context`, etc. |
+
+### Setup
+
+In `init-ai.el`:
+
+```elisp
+(with-eval-after-load 'ai-code
+  (with-eval-after-load 'eca
+    (require 'ai-code-eca-bridge)))
+```
+
+### Keybindings
+
+| Key | Command |
+|-----|---------|
+| `C-c e l` | List sessions |
+| `C-c e s` | Switch session |
+| `C-c e f` | Add file context |
+| `C-c e c` | Add cursor context |
+| `C-c e m` | Add repo map |
+| `C-c e y` | Add clipboard |
+| `C-c e a` | Add workspace folder |
+| `C-c e v` | Verify health |
+
+In `eca-chat-mode`:
+
+| Key | Command |
+|-----|---------|
+| `C-c C-f` | Add file context |
+| `C-c C-c` | Add cursor context |
+| `C-c C-m` | Add repo map |
+| `C-c C-y` | Add clipboard |
+| `C-c C-a` | Add workspace folder |
+
 ---
 
 This fork builds on
