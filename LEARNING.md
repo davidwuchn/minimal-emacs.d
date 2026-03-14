@@ -120,6 +120,34 @@
 - **Guard hash-table access**: `(gethash key table)` errors if `table` isn't a hash table. Always `(when (hash-table-p table) (gethash ...))` for safety.
 - **Keybinding race conditions**: If setting up keybindings in `with-eval-after-load`, call the setup function from auto-registration too. Both paths may execute; both should be idempotent.
 
+## Multi-Project Workspace Patterns
+- **Workspace folder ≠ git worktree**: A workspace folder is a project directory added to an ECA session for AI context. A git worktree is a separate checkout of the same repo. They serve different purposes: workspace folders give AI context across projects; worktrees let you work on multiple branches simultaneously.
+- **Session multiplexing requires explicit selection**: ECA's `eca-session` returns the session for the current buffer's root. With multiple sessions, `eca--session-id-cache` tracks the "current" one. Extensions need `eca-list-sessions`, `eca-switch-to-session` for user control.
+- **Workspace provenance aids AI understanding**: Adding `:workspace` property to file context (`:workspace "/project" :relative-path "src/file.el"`) helps AI understand which project each file belongs to when working across multiple repositories.
+- **Cross-session context sharing**: Shared context (`eca--shared-context`) allows common files/repo-maps to be applied to all sessions. Useful for shared libraries, documentation, or dependency knowledge that should be available regardless of active project.
+
+## ai-code-menu Transient Integration
+- **Menu-first UX reduces cognitive load**: Users shouldn't need to memorize `C-c e` prefix. Adding ECA commands to `ai-code-menu` via `transient-append-suffix` makes them discoverable when ECA backend is selected.
+- **Dynamic status display**: `:info` type in transient groups can display dynamic values (session ID, folder count). Use functions (`ai-code-eca--session-status-description`) not static strings.
+- **Conditional menu items**: Hook `transient-setup-hook` to add/remove menu items based on `ai-code-selected-backend`. Items appear only when relevant backend is active.
+- **Group organization**: 4 groups for ECA: Workspace (w prefix), Context (c prefix), Shared Context, Sessions (s prefix). Mnemonics reduce memorization.
+- **Backend-specific suffixes require tracking**: Use a flag (`ai-code-eca--menu-suffixes-added`) to prevent duplicate additions. `transient-remove-suffix` on unload or backend switch.
+
+## Auto-Detection Patterns
+- **Layer auto-detection behaviors**: (1) `eca-auto-add-workspace-folder` - add project on file open, (2) `eca-auto-switch-session` - switch to matching session, (3) `eca-auto-create-session` - create session for new projects, (4) `eca-auto-sync-workspace` - keep workspace in sync. Each is independently configurable.
+- **Hook ordering matters**: `find-file-hook` runs hooks in order. Put `eca--auto-add-workspace-hook` early (default priority) and `eca--auto-create-session-hook` later (90 priority) so workspace addition happens before session creation check.
+- **Project root detection cascade**: Try `projectile-project-root` first, then `project-root` (project.el), then `file-name-directory` as fallback. Each may return nil.
+- **Avoid redundant triggers**: Track last-detected project root (`eca--last-project-root`) to skip hooks when switching between files in the same project. Prevents flicker.
+- **Auto-switch needs session lookup**: `eca--session-for-project-root` iterates sessions to find one whose workspace contains the project. O(n) but sessions are few.
+- **Backend auto-switch**: When ECA session activates, `ai-code-selected-backend` should auto-set to `'eca`. Use advice on `eca-switch-to-session` for this. Prevents requests going to wrong backend.
+
+## Upstream Delegation vs Local Extensions
+- **Check upstream before implementing**: ECA upstream gained `eca-chat-add-workspace-root`, `eca--session-for-worktree`, automatic worktree detection. Local implementations became redundant. Re-audit after each upstream update.
+- **Slim the bridge**: If upstream provides core functions, remove local copies. Bridge should only provide what upstream lacks. Lines saved = maintenance burden reduced.
+- **Alias for discoverability**: Users may search for `eca-chat-add-workspace-folder` but actual function is `eca-add-workspace-folder`. Provide `defalias` for common naming variations.
+- **Session feedback improves UX**: When adding workspace folder, show session ID in message (`"Added to session %d: %s"`). Multi-session workflows need clarity about which session was affected.
+- **Tests verify delegation**: Add tests that check upstream provides expected functions (`string-match-p "defun eca-chat-add-workspace-root" source`). Catches drift when upstream changes.
+
 ## TDD Refactoring Workflow
 - **Fix tests before refactoring**: When tests fail in batch but pass in isolation, fix them first. Refactoring with failing tests masks new breakages.
 - **P0 > P1 > P2 priority**: Fix critical gaps first. High-risk untested code is a bomb waiting to go off.
