@@ -201,6 +201,7 @@ In `init-ai.el`:
 | `C-c e m` | Add repo map |
 | `C-c e y` | Add clipboard |
 | `C-c e a` | Add workspace folder |
+| `C-c e A` | Add folder to ALL sessions |
 | `C-c e w` | List workspace folders |
 | `C-c e W` | Remove workspace folder |
 | `C-c e S` | Sync project roots to workspace |
@@ -245,6 +246,21 @@ Context added from files includes workspace provenance:
 
 This enables the AI to understand which project each file belongs to when working
 across multiple repositories.
+
+### Auto Workspace Detection
+
+When `eca-auto-add-workspace-folder` is enabled (default `t`), opening a file
+outside the current session's workspace automatically adds its project root:
+
+```elisp
+;; Configure auto-detection behavior
+(setq eca-auto-add-workspace-folder t)       ; Auto-add (default)
+(setq eca-auto-add-workspace-folder 'prompt) ; Ask before adding
+(setq eca-auto-add-workspace-folder nil)     ; Disable
+```
+
+This ensures your ECA session always has the right context when working across
+multiple projects.
 
 ---
 
