@@ -466,8 +466,9 @@ Displays session ID and folder count when in a project with active session."
 (defvar ai-code-eca--mode-line-string nil
   "Mode-line string showing current ECA session context.")
 
-(defun ai-code-eca--update-mode-line ()
-  "Update mode-line string with current session info."
+(defun ai-code-eca--update-mode-line (&optional _frame)
+  "Update mode-line string with current session info.
+_FRAME is passed by `window-buffer-change-functions' but ignored."
   (when ai-code-eca-mode-line-indicator
     (let* ((session (when (featurep 'eca) (eca-session)))
            (folders (when session (eca--session-workspace-folders session)))

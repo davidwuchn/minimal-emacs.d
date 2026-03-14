@@ -510,9 +510,10 @@ If nil, do nothing (manual switching only)."
         (when match
           (cl-return session-id))))))
 
-(defun eca--auto-switch-session-hook ()
+(defun eca--auto-switch-session-hook (&optional _frame)
   "Hook to auto-switch session when project changes.
-Triggered on buffer switch when `eca-auto-switch-session' is enabled."
+Triggered on buffer switch when `eca-auto-switch-session' is enabled.
+_FRAME is passed by `window-buffer-change-functions' but ignored."
   (when (and eca-auto-switch-session
              buffer-file-name
              (featurep 'eca)
@@ -603,8 +604,9 @@ the current session's workspace if not already present."
   :type 'boolean
   :group 'eca)
 
-(defun eca--auto-sync-workspace-hook ()
-  "Hook to auto-sync workspace folders on project switch."
+(defun eca--auto-sync-workspace-hook (&optional _frame)
+  "Hook to auto-sync workspace folders on project switch.
+_FRAME is passed by `window-buffer-change-functions' but ignored."
   (when (and eca-auto-sync-workspace
              buffer-file-name
              (featurep 'eca)

@@ -132,6 +132,8 @@
 - **Conditional menu items**: Hook `transient-setup-hook` to add/remove menu items based on `ai-code-selected-backend`. Items appear only when relevant backend is active.
 - **Group organization**: 4 groups for ECA: Workspace (w prefix), Context (c prefix), Shared Context, Sessions (s prefix). Mnemonics reduce memorization.
 - **Backend-specific suffixes require tracking**: Use a flag (`ai-code-eca--menu-suffixes-added`) to prevent duplicate additions. `transient-remove-suffix` on unload or backend switch.
+- **transient-append-suffix uses string, not list**: The LOC argument is a string like `"s"`, NOT a list like `'("s")`. List format causes silent errors in `condition-case nil` blocks. Always check transient documentation for argument types.
+- **Log errors in condition-case**: When using `condition-case`, bind the error variable (`(condition-case err ... (error (message "...: %s" err)))`) to see what went wrong. Silent `nil` swallows bugs.
 
 ## Auto-Detection Patterns
 - **Layer auto-detection behaviors**: (1) `eca-auto-add-workspace-folder` - add project on file open, (2) `eca-auto-switch-session` - switch to matching session, (3) `eca-auto-create-session` - create session for new projects, (4) `eca-auto-sync-workspace` - keep workspace in sync. Each is independently configurable.
@@ -140,6 +142,7 @@
 - **Avoid redundant triggers**: Track last-detected project root (`eca--last-project-root`) to skip hooks when switching between files in the same project. Prevents flicker.
 - **Auto-switch needs session lookup**: `eca--session-for-project-root` iterates sessions to find one whose workspace contains the project. O(n) but sessions are few.
 - **Backend auto-switch**: When ECA session activates, `ai-code-selected-backend` should auto-set to `'eca`. Use advice on `eca-switch-to-session` for this. Prevents requests going to wrong backend.
+- **Hook functions need optional argument**: `window-buffer-change-functions` passes the frame as argument. Hook functions must accept `(&optional _frame)` to avoid `wrong-number-of-arguments` errors. The frame argument is often not needed but must be declared.
 
 ## Upstream Delegation vs Local Extensions
 - **Check upstream before implementing**: ECA upstream gained `eca-chat-add-workspace-root`, `eca--session-for-worktree`, automatic worktree detection. Local implementations became redundant. Re-audit after each upstream update.
