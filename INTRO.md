@@ -190,7 +190,38 @@ In `init-ai.el`:
     (require 'ai-code-eca-bridge)))
 ```
 
+### ai-code-menu Integration
+
+When ECA is selected as the backend, workspace commands appear directly in
+`M-x ai-code-menu` (typically bound to `C-c a`):
+
+```
+AI Code Commands
+├── AI CLI session
+│   ...
+├── ECA Workspace                    ← Auto-added when ECA active
+│   Session 1 (ready)                ← Dynamic status
+│   Workspace (2 folders)            ← Dynamic status
+│   wa  Add workspace folder
+│   wA  Add to ALL sessions
+│   wl  List workspace folders
+│   wr  Remove workspace folder
+│   ws  Sync project roots
+│   wd  Session dashboard
+├── ECA Shared Context
+│   F   Share file
+│   M   Share repo map
+│   p   Apply shared context
+└── AI Code Actions
+    ...
+```
+
+No need to remember `C-c e` prefix - all workspace commands are discoverable
+in the main menu when ECA is active.
+
 ### Keybindings
+
+Direct keybindings under `C-c e` prefix (alternative to menu):
 
 | Key | Command |
 |-----|---------|

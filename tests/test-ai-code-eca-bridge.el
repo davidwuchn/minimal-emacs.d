@@ -102,6 +102,25 @@
                     "")))
     (should (string-match-p "defun ai-code-eca-toggle-auto-switch" source))))
 
+(ert-deftest eca-bridge/menu-integration/has-status-functions ()
+  "Bridge should provide menu status description functions."
+  (let ((source (or (ignore-errors
+                      (with-temp-buffer
+                        (insert-file-contents "lisp/ai-code-eca-bridge.el")
+                        (buffer-string)))
+                    "")))
+    (should (string-match-p "defun ai-code-eca--workspace-status-description" source))
+    (should (string-match-p "defun ai-code-eca--session-status-description" source))))
+
+(ert-deftest eca-bridge/menu-integration/has-menu-suffix-function ()
+  "Bridge should provide menu suffix addition function."
+  (let ((source (or (ignore-errors
+                      (with-temp-buffer
+                        (insert-file-contents "lisp/ai-code-eca-bridge.el")
+                        (buffer-string)))
+                    "")))
+    (should (string-match-p "defun ai-code-eca--add-menu-suffixes" source))))
+
 (ert-deftest eca-bridge/extensions/upgrade-vc ()
   "Bridge should provide upgrade-vc function."
   (let ((source (or (ignore-errors

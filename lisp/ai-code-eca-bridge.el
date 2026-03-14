@@ -16,6 +16,7 @@
 ;;   - Keybindings integration
 ;;   - Health verification
 ;;   - Context synchronization
+;;   - ai-code-menu integration (transient)
 ;;
 ;; Upstream ai-code-eca.el provides:
 ;;   - ai-code-eca-start, ai-code-eca-switch, ai-code-eca-send, ai-code-eca-resume
@@ -25,20 +26,28 @@
 ;;   - eca--session-add-workspace-folder (internal)
 ;;   - eca--session-for-worktree (worktree detection)
 ;;
-;; Workspace Management (multi-project support):
+;; ai-code-menu Integration (Gap 1-4 fix):
+;;   When ECA is selected as backend, workspace commands appear in main menu:
+;;   M-x ai-code-menu → ECA Workspace group
+;;     wa - Add workspace folder
+;;     wA - Add to ALL sessions
+;;     wl - List workspace folders
+;;     wr - Remove workspace folder
+;;     ws - Sync project roots
+;;     wd - Session dashboard
+;;   M-x ai-code-menu → ECA Shared Context group
+;;     F  - Share file
+;;     M  - Share repo map
+;;     p  - Apply shared context
+;;
+;; Direct Keybindings (alternative, C-c e prefix):
+;;   C-c e d   - Open visual session dashboard
 ;;   C-c e w   - List workspace folders (with session ID)
 ;;   C-c e a   - Add workspace folder to current session
 ;;   C-c e A   - Add workspace folder to ALL sessions
 ;;   C-c e W   - Remove workspace folder from current session
 ;;   C-c e S   - Sync project roots to workspace
-;;
-;; Shared Context (Gap 3 fix):
-;;   C-c e F   - Share file across all sessions
-;;   C-c e M   - Share repo map across all sessions
-;;   C-c e p   - Apply shared context to session
-;;
-;; Session Dashboard (Gap 4 fix):
-;;   C-c e d   - Open visual session dashboard
+;;   C-c e F/M/p - Shared context commands
 ;;
 ;; Auto Detection:
 ;;   - Auto-add project to workspace (eca-auto-add-workspace-folder)
@@ -559,6 +568,91 @@ ensure `ai-code-selected-backend' is set to 'eca."
 
 (with-eval-after-load 'eca
   (ai-code-eca-setup-keybindings))
+
+;;; Gap 1-4: ai-code-menu Integration
+
+(defun ai-code-eca--workspace-status-description ()
+  "Dynamic description showing ECA workspace status."
+  (let* ((session (when (fboundp 'eca-session) (eca-session)))
+         (folders (when session
+                    (or (when (fboundp 'eca-list-workspace-folders)
+                          (eca-list-workspace-folders session))
+                        (when (fboundp 'eca--session-workspace-folders)
+                          (eca--session-workspace-folders session))))))
+    (if folders
+        (format "Workspace (%d folders)" (length folders))
+      "Workspace (no session)")))
+
+(defun ai-code-eca--session-status-description ()
+  "Dynamic description showing ECA session status."
+  (let* ((session (when (fboundp 'eca-session) (eca-session)))
+         (session-id (when session
+                        (or (when (fboundp 'eca--session-id)
+                              (eca--session-id session))
+                            "?")))
+         (status (when session
+                   (or (when (fboundp 'eca--session-status)
+                         (eca--session-status session))
+                       'unknown))))
+    (if session
+        (format "Session %d (%s)" session-id status)
+      "No session")))
+
+(defvar ai-code-eca--menu-suffixes-added nil
+  "Track whether ECA menu suffixes have been added.")
+
+(defun ai-code-eca--add-menu-suffixes ()
+  "Add ECA workspace items to ai-code-menu if ECA backend selected."
+  (when (and (boundp 'ai-code-selected-backend)
+             (eq ai-code-selected-backend 'eca)
+             (not ai-code-eca--menu-suffixes-added)
+             (featurep 'transient))
+    (condition-case nil
+        (progn
+          ;; Add ECA Workspace group after AI CLI session group
+          (transient-append-suffix 'ai-code-menu '("s")
+            ["ECA Workspace"
+             (:info #'ai-code-eca--session-status-description)
+             (:info #'ai-code-eca--workspace-status-description)
+             ("wa" "Add workspace folder" ai-code-eca-add-workspace-folder)
+             ("wA" "Add to ALL sessions" ai-code-eca-add-workspace-folder-all-sessions)
+             ("wl" "List workspace folders" ai-code-eca-list-workspace-folders)
+             ("wr" "Remove workspace folder" ai-code-eca-remove-workspace-folder)
+             ("ws" "Sync project roots" ai-code-eca-sync-project-workspaces)
+             ("wd" "Session dashboard" ai-code-eca-dashboard)])
+          ;; Add shared context items
+          (transient-append-suffix 'ai-code-menu '("wa")
+            ["ECA Shared Context"
+             ("F" "Share file" ai-code-eca-share-file)
+             ("M" "Share repo map" ai-code-eca-share-repo-map)
+             ("p" "Apply shared context" ai-code-eca-apply-shared-context)])
+          (setq ai-code-eca--menu-suffixes-added t))
+      (error nil))))
+
+(defun ai-code-eca--remove-menu-suffixes ()
+  "Remove ECA workspace items from ai-code-menu."
+  (when (and ai-code-eca--menu-suffixes-added
+             (featurep 'transient))
+    (condition-case nil
+        (progn
+          (transient-remove-suffix 'ai-code-menu '("wa"))
+          (transient-remove-suffix 'ai-code-menu '("F"))
+          (setq ai-code-eca--menu-suffixes-added nil))
+      (error nil))))
+
+;; Hook into ai-code-menu to add ECA items conditionally
+(with-eval-after-load 'ai-code
+  (add-hook 'transient-setup-hook
+            (lambda ()
+              (when (and (boundp 'ai-code-selected-backend)
+                         (eq ai-code-selected-backend 'eca))
+                (ai-code-eca--add-menu-suffixes))))
+  
+  ;; Also add when backend is switched to ECA
+  (advice-add 'ai-code-set-backend :after
+              (lambda (backend)
+                (when (eq backend 'eca)
+                  (ai-code-eca--add-menu-suffixes))))))
 
 (provide 'ai-code-eca-bridge)
 
