@@ -194,11 +194,16 @@ In `init-ai.el`:
 
 | Key | Command |
 |-----|---------|
+| `C-c e d` | Session dashboard |
 | `C-c e l` | List sessions |
 | `C-c e s` | Switch session |
+| `C-c e t` | Toggle auto-switch |
 | `C-c e f` | Add file context |
+| `C-c e F` | Share file across sessions |
 | `C-c e c` | Add cursor context |
 | `C-c e m` | Add repo map |
+| `C-c e M` | Share repo map across sessions |
+| `C-c e p` | Apply shared context |
 | `C-c e y` | Add clipboard |
 | `C-c e a` | Add workspace folder |
 | `C-c e A` | Add folder to ALL sessions |
@@ -261,6 +266,51 @@ outside the current session's workspace automatically adds its project root:
 
 This ensures your ECA session always has the right context when working across
 multiple projects.
+
+### Auto Session Switching
+
+Enable automatic session switching based on project:
+
+```elisp
+;; Auto-switch to session matching current project
+(setq eca-auto-switch-session t)       ; Auto-switch (disabled by default)
+(setq eca-auto-switch-session 'prompt) ; Ask before switching
+(setq eca-auto-switch-session nil)     ; Disabled
+```
+
+When enabled, switching to a buffer in a different project automatically
+switches to the ECA session that owns that project.
+
+### Cross-Session Context Sharing
+
+Share common files/repo-maps across all sessions:
+
+```elisp
+;; Share a file (e.g., shared library docs)
+M-x ai-code-eca-share-file RET /path/to/shared/docs.md RET
+
+;; Share a repo map (e.g., shared library)
+M-x ai-code-eca-share-repo-map RET /path/to/shared-lib RET
+
+;; Apply all shared context to current session
+M-x ai-code-eca-apply-shared-context RET
+```
+
+Keybindings: `C-c e F` (share file), `C-c e M` (share repo map), `C-c e p` (apply).
+
+### Session Dashboard
+
+Visual session management with `M-x ai-code-eca-dashboard` or `C-c e d`:
+
+| Key | Action |
+|-----|--------|
+| `RET` | Switch to session |
+| `d` | Delete session |
+| `w` | List workspace folders |
+| `g` | Refresh |
+| `q` | Quit |
+
+Shows session ID, status, workspace folders, and chat count in a table.
 
 ---
 
