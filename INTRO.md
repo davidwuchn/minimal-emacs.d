@@ -173,10 +173,12 @@ layer that delegates to upstream packages where possible.
 | Worktree detection | upstream | `eca--session-for-worktree` |
 | Session list/switch | bridge | `ai-code-eca-list-sessions`, `ai-code-eca-switch-session` |
 | Context commands | bridge | `ai-code-eca-add-file-context`, etc. |
+| Workspace management | bridge | `ai-code-eca-list-workspace-folders`, `ai-code-eca-remove-workspace-folder`, `ai-code-eca-sync-project-workspaces` |
 | Keybindings | bridge | `ai-code-eca-keymap`, `C-c e` prefix |
 | Health verification | bridge | `ai-code-eca-verify-health` |
 | Context sync | bridge | `ai-code-eca-sync-context` |
 | Programmatic context API | eca-ext | `eca-chat-add-file-context`, etc. |
+| Workspace provenance | eca-ext | `eca-workspace-folder-for-file`, `eca-workspace-provenance` |
 
 ### Setup
 
@@ -199,6 +201,9 @@ In `init-ai.el`:
 | `C-c e m` | Add repo map |
 | `C-c e y` | Add clipboard |
 | `C-c e a` | Add workspace folder |
+| `C-c e w` | List workspace folders |
+| `C-c e W` | Remove workspace folder |
+| `C-c e S` | Sync project roots to workspace |
 | `C-c e v` | Verify health |
 
 In `eca-chat-mode`:
@@ -210,6 +215,36 @@ In `eca-chat-mode`:
 | `C-c C-m` | Add repo map |
 | `C-c C-y` | Add clipboard |
 | `C-c C-a` | Add workspace folder |
+| `C-c C-w` | List workspace folders |
+
+### Multi-Project Workspace
+
+ECA supports multiple projects in a single session. Use these workflows:
+
+```elisp
+;; Add another project to current session
+M-x ai-code-eca-add-workspace-folder RET /path/to/project RET
+
+;; List all workspace folders
+M-x ai-code-eca-list-workspace-folders
+
+;; Sync current project roots to workspace
+M-x ai-code-eca-sync-project-workspaces
+
+;; Remove a workspace folder
+M-x ai-code-eca-remove-workspace-folder RET /path/to/project RET
+```
+
+Context added from files includes workspace provenance:
+
+```elisp
+;; File context now includes :workspace property
+(:type "file" :path "/project/src/file.el"
+ :workspace (:workspace "/project" :relative-path "src/file.el" :folder-name "project"))
+```
+
+This enables the AI to understand which project each file belongs to when working
+across multiple repositories.
 
 ---
 

@@ -158,7 +158,11 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
 | Per-tool output limits | **Skip** | `my/gptel-subagent-result-limit` truncation on subagents works fine |
 
-### Recent Changes (v0.6.27-v0.6.30)
+### Recent Changes (v0.6.54)
+
+- **Add multi-project workspace support** (⚒): Extended ECA with workspace management API. New functions in `eca-ext.el`: `eca-list-workspace-folders`, `eca-add-workspace-folder`, `eca-remove-workspace-folder`, `eca-workspace-folder-for-file`, `eca-workspace-provenance`. New commands in `ai-code-eca-bridge.el`: `ai-code-eca-list-workspace-folders` (`C-c e w`), `ai-code-eca-remove-workspace-folder` (`C-c e W`), `ai-code-eca-sync-project-workspaces` (`C-c e S`). File/cursor context now includes `:workspace` provenance property. Enables multi-project workflows in single ECA session.
+
+### Recent Changes (v0.6.27-v0.6.53)
 
 - **Slim ECA bridge** (⚒): Removed 467 lines (42%) by delegating to upstream. Core backend functions (start/switch/send/resume) now in upstream `ai-code-eca.el`. Workspace folder uses upstream `eca-chat-add-workspace-root`. Worktree detection built into upstream `eca-session`. Kept only extensions: session management, context commands, keybindings, health verification, context sync. Added 15 autoload cookies for interactive commands.
 - **Fix load-order issue** (⊘): Tools missing from FSM due to `nucleus-get-tools` filtering out unregistered tools. Added `gptel-tools-after-register-hook` to refresh presets after registration.
