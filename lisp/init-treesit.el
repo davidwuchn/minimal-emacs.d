@@ -61,7 +61,7 @@
 
                (javascript js-ts-mode           (js-mode javascript-mode js2-mode)
                 "https://github.com/tree-sitter/tree-sitter-javascript"
-                "\\.js\\'" "v0.21.0")))
+                "\\.js\\'" "v0.21.0" nil "src")))
   (let ((lang           (nth 0 spec))
         (ts-mode        (nth 1 spec))
         (remap          (nth 2 spec))
