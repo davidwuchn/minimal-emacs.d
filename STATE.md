@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-15 (tag v0.7.0)
+> Last updated: 2026-03-15 (tag v0.7.1)
 
 ## Architecture Overview
 
@@ -202,7 +202,7 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 - **Consolidate permit/confirm workflow** (⚒): Two-layer system with clear responsibilities: (1) Tool confirm UI controlled by `my/gptel-permitted-tools`, (2) Preview diff controlled by `gptel-tools-preview-enabled`. Preview NO LONGER checks permits (safety net should always show). "!" in preview adds tool to permits.
 - **Fix ECA bridge declarations** (⊘): Added proper `declare-function` for `eca--session-workspace-folders`, `eca--session-add-workspace-folder`. Fixed function calls to use correct ECA internal APIs. Added `hash-table-p` safety check.
 - **Complete ECA integration** (⚒): Keybindings (`ai-code-eca-keymap` with C-c e prefix), context synchronization (`ai-code-eca-sync-context` with 60s auto-timer), session affinity (via `ai-code--repo-backend-alist`), health check (`ai-code-eca-verify-health`), VC-aware upgrade (`ai-code-eca-upgrade-vc`), unload cleanup.
-- **Add test coverage** (⊘): 383 tests passing across P0 security, agent core, treesit, introspection, edit/apply, programmatic. New test files: `test-gptel-ext-tool-sanitize.el` (31 tests), `test-gptel-tools-agent-core.el` (49 tests), `test-treesit-agent-tools-core.el` (47 tests).
+- **Add test coverage** (⊘): 1017 test definitions across P0 security, agent core, treesit, introspection, edit/apply, programmatic. New test files: `test-gptel-ext-tool-sanitize.el` (31 tests), `test-gptel-tools-agent-core.el` (49 tests), `test-treesit-agent-tools-core.el` (47 tests).
 
 ### Recent Changes (v0.6.6)
 

@@ -130,6 +130,20 @@ Use `gh api` to read files from `anomalyco/opencode` (branch: `dev`):
 
 ---
 
+## Project Conventions
+
+### Package Directory
+
+- **ALWAYS use `var/elpa/`** — never create `elpa/` at repository root
+- Configured in `pre-early-init.el`:
+  ```elisp
+  (setq user-emacs-directory (expand-file-name "var/" minimal-emacs-user-directory))
+  (setq package-user-dir (expand-file-name "elpa" user-emacs-directory))
+  ```
+- If `elpa/` appears at root, delete it: `rm -rf elpa/`
+
+---
+
 ## Rule for ψ (AI)
 
 ### Verification Required
