@@ -55,6 +55,8 @@
 
 (use-package ai-code
   :ensure t
+  :vc (:url "https://github.com/davidwuchn/ai-code-interface.el"
+       :branch "copilot/add-eca-backend-support-again")
   :commands (ai-code-menu
              ai-code-send-command
              ai-code-cli-switch-to-buffer-or-hide
