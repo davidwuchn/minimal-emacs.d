@@ -149,14 +149,14 @@
                     "")))
     (should (string-match-p "defun ai-code-eca--add-menu-suffixes" source))))
 
-(ert-deftest eca-bridge/extensions/upgrade-vc ()
-  "Bridge should provide upgrade-vc function."
+(ert-deftest eca-bridge/extensions/upgrade ()
+  "Bridge should provide upgrade function."
   (let ((source (or (ignore-errors
                       (with-temp-buffer
                         (insert-file-contents "lisp/ai-code-eca-bridge.el")
                         (buffer-string)))
                     "")))
-    (should (string-match-p "defun ai-code-eca-upgrade-vc" source))))
+    (should (string-match-p "defun ai-code-eca-upgrade" source))))
 
 (ert-deftest eca-bridge/extensions/verify-health ()
   "Bridge should provide health verification."

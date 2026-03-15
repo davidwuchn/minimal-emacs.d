@@ -717,7 +717,7 @@ Displays session ID, status, and workspace folders."
     ("L" "List sessions" ai-code-eca-list-sessions)
     ("w" "Switch session" ai-code-eca-switch-session)
     ("v" "Verify health" ai-code-eca-verify-health)
-    ("u" "Upgrade ECA" ai-code-eca-upgrade-vc)]])
+    ("u" "Upgrade ECA" ai-code-eca-upgrade)]])
 
 (defun ai-code-eca--add-menu-suffixes ()
   "Add ECA submenu to ai-code-menu if ECA backend selected."
