@@ -166,6 +166,92 @@ The generated prompt will include the function/region scope, visible file list, 
   - [[https://github.com/crystaldba/postgres-mcp][Postgresql MCP]] / Sqlite MCP
   - [[https://github.com/docker/mcp-gateway][Docker]] / [[https://github.com/containers/kubernetes-mcp-server][Kubernetes]] MCP
 
+**** Built-in Emacs MCP Tools
+
+AI Code includes an Emacs MCP server with these built-in tools:
+- =project_info=
+- =imenu_list_symbols=
+- =xref_find_references=
+- =treesit_info=
+
+***** Use It with an AI CLI
+
+Set the backend to =codex= or =github-copilot-cli= and start a session with =C-c a a=. AI Code will:
+- start a local Emacs MCP HTTP server
+- register the current project/buffer as the MCP session context
+- inject a session-scoped MCP config into that agent session automatically
+
+Today this auto-wiring is enabled for =codex= and =github-copilot-cli=. The adapter layer is designed so other backends can be added later.
+
+If you disabled it before, enable it again with:
+
+#+begin_src emacs-lisp
+(setq ai-code-mcp-agent-enabled-backends '(codex github-copilot-cli))
+#+end_src
+
+***** Make Sure It Works
+
+1. Start =codex= or =github-copilot-cli= with =C-c a a= from the file or project you want to work on.
+2. Switch to the agent buffer and run =M-x ai-code-mcp-agent-show-buffer-status=.
+
+If it shows =:backend=, =:session-id=, and a local =:server-url=, then Emacs has attached MCP to this session.
+
+3. Then ask the agent to use one of the Emacs tools, for example:
+- use =project_info= and tell me the current project info
+- use =imenu_list_symbols= for the current file
+
+The status command only proves the Emacs side is wired.
+The real proof is that the started agent returns your current project path, buffer context, or current-file symbols from those tools.
+
+***** Add New MCP function
+
+1. Define an Emacs Lisp function.
+
+#+begin_src emacs-lisp
+(defun ai-code-mcp-current-buffer-name ()
+  "Return the current buffer name for the active MCP session."
+  (buffer-name (current-buffer)))
+#+end_src
+
+2. Register it as an MCP tool before you start the AI agent session:
+
+#+begin_src emacs-lisp
+(require 'ai-code-mcp-server)
+
+(ai-code-mcp-make-tool
+ :function #'ai-code-mcp-current-buffer-name
+ :name "current_buffer_name"
+ :description "Return the current Emacs buffer name."
+ :args nil)
+#+end_src
+
+3. Start =codex= or =github-copilot-cli= with =C-c a a=.
+If the agent session is already running, restart it after registering the new tool.
+
+4. Ask the agent to use the tool, for example:
+- use =current_buffer_name= and tell me the current Emacs buffer name
+
+5. If you want to verify from Emacs first, run:
+
+#+begin_src emacs-lisp
+(ai-code-mcp-dispatch "tools/list")
+#+end_src
+
+If =current_buffer_name= appears in the tool list, Emacs has registered it.
+If the started agent can call it and returns the expected buffer name, the tool is available inside the AI coding agent.
+
+***** Use the MCP Core Directly from Elisp
+
+If you want to use the MCP core without an AI CLI, you can still call it directly:
+
+#+begin_src emacs-lisp
+(require 'ai-code-mcp-server)
+(ai-code-mcp-builtins-setup)
+(ai-code-mcp-dispatch "tools/list")
+#+end_src
+
+To expose your own Emacs function as a tool, use =ai-code-mcp-make-tool=.
+
 - [[https://martinfowler.com/articles/exploring-gen-ai/context-engineering-coding-agents.html][Context Engineering for Coding Agents]], recommended by Martin Fowler.
 
 *** Harness Engineering Practice
