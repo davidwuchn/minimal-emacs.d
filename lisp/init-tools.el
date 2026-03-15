@@ -117,7 +117,7 @@
 ;; Session management (save/restore windows, buffers, desktop)
 (use-package easysession
   :ensure t
-  :hook (after-init . easysession-mode)
+  :hook (after-init . easysession-save-mode)
   :config
   (setq easysession-directory (locate-user-emacs-file "session"))
   (setq easysession-save-interval 300))  ; Auto-save every 5 minutes
