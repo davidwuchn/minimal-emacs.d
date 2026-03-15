@@ -167,6 +167,10 @@
 - **Log errors in condition-case**: When using `condition-case`, bind the error variable (`(condition-case err ... (error (message "...: %s" err)))`) to see what went wrong. Silent `nil` swallows bugs.
 - **Groups and suffixes cannot be siblings**: In transient, a group `["Group Name" ...]` cannot be inserted as sibling of a suffix `("k" "description" command)`. Use group name as LOC: `(transient-append-suffix 'prefix "Existing Group" ["New Group" ...])`. The LOC must match the level where you're inserting.
 - **LOC is a key/command string, not a group name**: The LOC argument for `transient-append-suffix` must be a key like `"N"` (the last item in a group), NOT a group name like `"Other Tools"`. To append a group after another group, use the key of the last suffix in that group.
+- **Multi-char keys cause errors**: Transient suffix keys like `("wr" ...)` cause `Wrong type argument: number-or-marker-p, "wr"` error. Use single-char keys: `("r" ...)`. Multi-char sequences only work with prefix keys, not in suffix vectors.
+- **Coordinate lists for top-level insertion**: `nil` as LOC doesn't work for `transient-append-suffix`. Use coordinate list `'(0 -1)` to append at end of top-level vector. Format: `(level index)` where `-1` means last position.
+- **Show session id, not raw struct**: Functions like `ai-code-eca-which-session` should display `(message "ECA session %d: %s" id folders)` not `(message "Current ECA session: %s" session)`. Raw struct output is unreadable.
+- **ECA's C-c . menu is separate**: ECA has its own transient menu (`eca--transient-menu-prefix`) for chat operations. Don't modify it — use `ai-code-menu` for workspace/context integration.
 
 ## Auto-Detection Patterns
 - **Layer auto-detection behaviors**: (1) `eca-auto-add-workspace-folder` - add project on file open, (2) `eca-auto-switch-session` - switch to matching session, (3) `eca-auto-create-session` - create session for new projects, (4) `eca-auto-sync-workspace` - keep workspace in sync. Each is independently configurable.

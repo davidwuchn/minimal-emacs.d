@@ -7,4 +7,4 @@
 - `regex` (string): Search pattern
 - `path` (string): Search path
 - `glob` (string, optional): File filter
-- `context_lines` (integer, optional): [**maximum: 15**]
+- `context_lines` (integer, optional): [**maximum: 30**]

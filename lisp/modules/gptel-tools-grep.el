@@ -48,7 +48,7 @@ has been aborted, in which case results are dropped."
                  (_ (unless grepper (error "ripgrep/grep not available")))
                  (cmd (file-name-sans-extension (file-name-nondirectory grepper)))
                  (context-lines (if (natnump context-lines) context-lines 0))
-                 (context-lines (min 15 context-lines))
+                 (context-lines (min 30 context-lines))
                  (expanded-path (expand-file-name (substitute-in-file-name path)))
                  (args
                   (cond
@@ -130,10 +130,10 @@ has been aborted, in which case results are dropped."
               (:name "glob"
                 :type string
                 :optional t)
-              (:name "context_lines"
-                :optional t
-                :type integer
-                :maximum 15))
+(:name "context_lines"
+                 :optional t
+                 :type integer
+                 :maximum 30))
        :category "gptel-agent"
        :include t))))
 

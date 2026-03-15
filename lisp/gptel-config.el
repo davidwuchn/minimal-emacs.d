@@ -40,6 +40,9 @@
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3.5-plus)
 
+;; Enable media/image attachment support (required for vision models)
+(setq gptel-track-media t)
+
 ;; Tool confirmation: auto (default) / confirm-all (kill switch).
 ;; Use M-x my/gptel-toggle-confirm to switch modes.
 ;; Per-tool permits remembered for the session (M-x my/gptel-show-permits).

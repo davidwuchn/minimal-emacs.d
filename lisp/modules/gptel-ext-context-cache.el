@@ -157,22 +157,28 @@ Sources:
 - MiniMax: https://openrouter.ai/models/minimax/minimax-m2.5")
 
 (defvar my/gptel--known-model-metadata
-  '(;; Qwen (Alibaba via DashScope)
+  '(;; Qwen (Alibaba via DashScope) - VISION ENABLED
     ("qwen3.5-plus"
      :context-window 1000000
      :pricing-input 0.8 :pricing-output 4.8
      :max-output 65536
-     :description "Qwen3.5 Plus - 1M context, thinking mode")
+     :features (streaming tools vision)
+     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "image/tiff" "image/heic")
+     :description "Qwen3.5 Plus - 1M context, thinking mode, VISION ENABLED")
     ("qwen3.5-flash"
      :context-window 1000000
      :pricing-input 0.2 :pricing-output 2.0
      :max-output 65536
-     :description "Qwen3.5 Flash - fast, 1M context")
+     :features (streaming tools vision)
+     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp")
+     :description "Qwen3.5 Flash - fast, 1M context, VISION ENABLED")
     ("qwen3-max"
      :context-window 262144
      :pricing-input 2.5 :pricing-output 10.0
      :max-output 32768
-     :description "Qwen3 Max - best quality, 256k context")
+     :features (streaming tools vision)
+     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp")
+     :description "Qwen3 Max - best quality, 256k context, VISION ENABLED")
     ;; Gemini
     ("gemini-2.5-pro"
      :context-window 1048576

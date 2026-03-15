@@ -53,14 +53,15 @@
 (with-eval-after-load 'ai-code-prompt-mode
   (advice-add 'ai-code-call-gptel-sync :around #'my/ai-code--ensure-gptel-helper-model))
 
+;;; ==============================================================================
+;;; AI CODE (with ECA backend support)
+;;; ==============================================================================
+
 (use-package ai-code
   :ensure t
   :vc (:url "https://github.com/tninja/ai-code-interface.el"
        :branch "main")
-  :commands (ai-code-menu
-             ai-code-send-command
-             ai-code-cli-switch-to-buffer-or-hide
-             ai-code-select-backend)
+  :demand t  ;; Load immediately (not deferred) to ensure eca-ext is available
   :custom
   (ai-code-backends-infra-terminal-backend 'vterm)
   (ai-code-backends-infra-use-side-window nil)
@@ -70,6 +71,14 @@
   (ai-code-notes-use-gptel-headline t)
   (ai-code-task-use-gptel-filename t)
   :config
+  ;; Ensure eca-ext.el is loaded (bundled with ai-code but not autoloaded)
+  (let ((ai-code-dir (car (directory-files 
+                            (expand-file-name "var/elpa" minimal-emacs-user-directory) 
+                            t "^ai-code-"))))
+    (when (and ai-code-dir (file-exists-p (expand-file-name "eca-ext.el" ai-code-dir)))
+      (add-to-list 'load-path ai-code-dir)))
+  (require 'eca-ext)
+  (require 'ai-code-eca)
   (ai-code-set-backend 'opencode)
   (global-set-key (kbd "C-c a") #'ai-code-menu))
 
@@ -77,8 +86,7 @@
   :ensure t
   :defer t)
 
-;; Load ECA security/config early — all code inside is guarded by
-;; eval-after-load so nothing runs until eca/eca-process actually load.
+;; Load ECA security/config early
 (require 'eca-security)
 
 (use-package eca
@@ -89,7 +97,7 @@
   (eca-chat-custom-behavior nil)
   (eca-chat-parent-mode 'markdown-mode)
   (eca-api-response-timeout 15)
-  (eca-extra-args '("--log-level" "debug"))
+  (eca-extra-args '("--log-level" "warn"))
   :config
   ;; Disable markup hiding in ECA chat buffers
   (defun my/eca-chat-disable-markup-hiding-h ()

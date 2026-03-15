@@ -43,7 +43,12 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
     :endpoint "/v1/chat/completions"
     :key (lambda () (my/gptel-api-key "coding.dashscope.aliyuncs.com"))
     :stream t
-    :models '(qwen3.5-plus kimi-k2.5 glm-5 MiniMax-M2.5 qwen3-max-2026-01-23 qwen3-coder-next qwen3-coder-plus glm-4.7)))
+    :models '((qwen3.5-plus :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp"))
+              (kimi-k2.5 :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp"))
+              (qwen3-max-2026-01-23 :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp"))
+              (qwen3-coder-next :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp"))
+              (qwen3-coder-plus :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp"))
+              glm-5 MiniMax-M2.5 glm-4.7)))
 
 (defvar gptel--moonshot
   (gptel-make-openai "Moonshot"
