@@ -63,3 +63,81 @@
   (eat-eshell-mode)
   (eat-eshell-visual-command-mode))
 
+;; ==============================================================================
+;; ENHANCEMENTS (Optional but recommended)
+;; ==============================================================================
+
+;; Git diff highlights in margin (complements Magit)
+(use-package diff-hl
+  :ensure t
+  :hook ((prog-mode . diff-hl-mode)
+         (dired-mode . diff-hl-mode))
+  :init
+  (global-diff-hl-mode)
+  :config
+  ;; Show diff hints in left fringe
+  (setq diff-hl-draw-borders nil))
+
+;; Tree-sitter based code folding
+(use-package treesit-fold
+  :ensure t
+  :hook (prog-mode . treesit-fold-mode)
+  :bind (:map global-map
+              ("C-c f t" . treesit-fold-toggle)
+              ("C-c f o" . treesit-fold-open)
+              ("C-c f c" . treesit-fold-close)))
+
+;; Navigate to last changes (Evil integration: g;, g,)
+(use-package goto-chg
+  :ensure t
+  :after evil
+  :bind (:map evil-normal-state-map
+              ("g;" . goto-last-change)
+              ("g," . goto-last-change-reverse)))
+
+;; ==============================================================================
+;; OPTIONAL ENHANCEMENTS (Recommended but not essential)
+;; ==============================================================================
+
+;; Vim-style tab bar (integrates with Evil mode)
+(use-package vim-tab-bar
+  :ensure t
+  :hook (after-init . vim-tab-bar-mode)
+  :config
+  (setq vim-tab-bar-show-tabs 2)  ; Always show tab bar
+  (setq vim-tab-bar-width 15))    ; Tab width
+
+;; Surround text with pairs (cs"', ds', ysW, etc.)
+(use-package evil-surround
+  :ensure t
+  :after evil
+  :config
+  (global-evil-surround-mode 1))
+
+;; Session management (save/restore windows, buffers, desktop)
+(use-package easysession
+  :ensure t
+  :hook (after-init . easysession-mode)
+  :config
+  (setq easysession-directory (locate-user-emacs-file "session"))
+  (setq easysession-save-interval 300))  ; Auto-save every 5 minutes
+
+;; Auto-update packages on startup
+(use-package auto-package-update
+  :ensure t
+  :config
+  (setq auto-package-update-delete-old-versions t)
+  (setq auto-package-update-hide-results t)
+  (auto-package-update-maybe))  ; Check and update on startup
+
+;; Auto-kill unused buffers to save memory
+(use-package buffer-terminator
+  :ensure t
+  :hook (after-init . buffer-terminator-mode)
+  :config
+  (setq buffer-terminator-idle-seconds 300)  ; Kill after 5 minutes idle
+  (setq buffer-terminator-ignored-modes
+        '(dired-mode magit-mode term-mode vterm-mode)))
+
+;;; init-tools.el ends here
+

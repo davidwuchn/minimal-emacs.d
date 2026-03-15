@@ -3,7 +3,7 @@
 (require 'treesit-auto)
 
 ;; Languages to enable. This filters treesit-auto-recipe-list.
-(setq treesit-auto-langs '(python rust clojure elisp java c cpp lua json javascript))
+(setq treesit-auto-langs '(python rust clojure elisp java c cpp lua json javascript go yaml dockerfile bash))
 
 ;; Custom recipes with ABI14 revisions for Emacs 30 compatibility where known.
 ;; Each entry: (lang ts-mode remap-list url ext &optional abi14-revision revision source-dir)
@@ -42,6 +42,22 @@
                (json       json-ts-mode         (js-json-mode)
                 "https://github.com/tree-sitter/tree-sitter-json"
                 "\\.json\\'" "v0.24.8")
+
+               (go         go-ts-mode           (go-mode)
+                "https://github.com/tree-sitter/tree-sitter-go"
+                "\\.go\\'" "v0.21.0")
+
+               (yaml       yaml-ts-mode         (yaml-mode)
+                "https://github.com/ikatyang/tree-sitter-yaml"
+                "\\.ya\\?ml\\'")
+
+               (dockerfile dockerfile-ts-mode    (dockerfile-mode)
+                "https://github.com/tree-sitter-grammars/tree-sitter-dockerfile"
+                "Dockerfile\\'")
+
+               (bash       bash-ts-mode         (sh-mode bash-ts-mode)
+                "https://github.com/tree-sitter/tree-sitter-bash"
+                "\\.sh\\'\\|\\.bash\\'")
 
                ;; JavaScript needs explicit :revision and :source-dir
                (javascript js-ts-mode           (js-mode javascript-mode js2-mode)

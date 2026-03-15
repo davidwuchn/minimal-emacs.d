@@ -27,3 +27,6 @@ lisp/modules/*.elc
 !tests/*.el
 !scripts/
 !scripts/*.sh
+!lisp/init-org.el
+!docs/
+!docs/*.md

@@ -12,7 +12,13 @@
   :custom
   (completion-styles '(orderless basic))
   (completion-category-defaults nil)
-  (completion-category-overrides '((file (styles partial-completion)))))
+  (completion-category-overrides
+   '((file (styles partial-completion))
+     (path (styles partial-completion))
+     (buffer (styles partial-completion orderless))
+     (command (styles orderless))
+     (variable (styles orderless))
+     (symbol (styles orderless)))))
 
 (use-package marginalia
   :ensure t
@@ -23,14 +29,23 @@
   :bind
   (("C-." . embark-act)
    ("C-;" . embark-dwim)
-   ("C-h B" . embark-bindings))
+   ("C-h B" . embark-bindings)
+   ("C-h C" . embark-act))  ; Alternative binding for embark-act
   :init
   (setq prefix-help-command #'embark-prefix-help-command)
+  (setq embark-cycle-key (kbd "."))  ; Cycle through candidates with '.'
   :config
+  ;; Hide mode line in Embark collect buffers
   (add-to-list 'display-buffer-alist
                '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
                  nil
-                 (window-parameters (mode-line-format . none)))))
+                 (window-parameters (mode-line-format . none))))
+  ;; Make Embark act like a more powerful `M-x`
+  (define-key minibuffer-local-map (kbd "C-.") #'embark-act)
+  ;; Export Embark keymap to Occur mode
+  (add-hook 'occur-mode-hook
+            (lambda ()
+              (define-key occur-mode-map (kbd "C-.") #'embark-act))))
 
 (use-package embark-consult
   :ensure t
@@ -104,9 +119,14 @@
   :ensure t
   :bind ("C-c p" . cape-prefix-map)
   :init
+  ;; Add Cape completion backends in order of priority
   (add-hook 'completion-at-point-functions #'cape-dabbrev)
   (add-hook 'completion-at-point-functions #'cape-file)
-  (add-hook 'completion-at-point-functions #'cape-elisp-block))
+  (add-hook 'completion-at-point-functions #'cape-elisp-block)
+  (add-hook 'completion-at-point-functions #'cape-keyword)
+  (add-hook 'completion-at-point-functions #'cape-symbol)
+  (add-hook 'completion-at-point-functions #'cape-dict)
+  (add-hook 'completion-at-point-functions #'cape-line))
 
 (use-package tempel
   :ensure t

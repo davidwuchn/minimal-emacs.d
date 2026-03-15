@@ -26,7 +26,7 @@
 
 ;; Environment Variable Synchronization (Essential for macOS users)
 (use-package exec-path-from-shell
-:if (or (display-graphic-p) (daemonp))
+  :if (or (display-graphic-p) (daemonp))
   :ensure t
   :demand t
   :functions exec-path-from-shell-initialize
@@ -37,5 +37,15 @@
                  "LANG" "LC_CTYPE"))
     (add-to-list 'exec-path-from-shell-variables var))
   (exec-path-from-shell-initialize))
+
+;; ============================================================
+;; Built-in Enhancements (No external packages required)
+;; ============================================================
+
+;; Window configuration undo/redo (C-c <left>, C-c <right>)
+(winner-mode 1)
+
+;; Auto-pairing parentheses, quotes, brackets
+(electric-pair-mode 1)
 
 ;;; init-system.el ends here
