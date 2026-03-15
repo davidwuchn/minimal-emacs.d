@@ -41,6 +41,30 @@ Set to nil to disable tool-result trimming on retry."
   :type 'string
   :group 'gptel)
 
+(defcustom my/gptel-reasoning-keep-turns 1
+  "Number of recent assistant turns whose reasoning_content to preserve.
+Older reasoning blocks are stripped to reduce payload while preserving
+recent reasoning context for continuity.
+Set to 0 to strip all reasoning, nil to disable reasoning trimming."
+  :type '(choice (const :tag "Disabled" nil)
+                 (const :tag "Strip all" 0)
+                 integer)
+  :group 'gptel)
+
+(defcustom my/gptel-trim-min-bytes 5000
+  "Minimum bytes to save per trimming operation.
+If trimming would not save at least this many bytes, skip trimming.
+This prevents tiny trims that provide negligible payload reduction
+while potentially breaking prompt cache consistency.
+
+Set to 0 to disable the minimum threshold (always trim).
+
+Default is 5000 bytes (5KB) based on Anthropic's guidance that context
+edits should clear at least 5000 tokens to be worthwhile, adjusted
+for byte-level operations (~3.5 bytes/token)."
+  :type 'integer
+  :group 'gptel)
+
 (defun my/gptel--trim-tool-results-for-retry (info)
   "Trim old tool-result content in INFO's :data :messages to reduce payload.
 
@@ -59,6 +83,9 @@ Retry 3+:            keep 0 (truncate ALL)
 This preserves the tool_call_id pairing required by OpenAI-compatible APIs
 while progressively reducing payload size on successive retries.
 
+If `my/gptel-trim-min-bytes' is non-zero, trimming only proceeds when
+the byte savings would meet or exceed that threshold.
+
 Returns the number of messages truncated, or 0 if nothing was done."
   (if (null my/gptel-retry-keep-recent-tool-results)
       0
@@ -67,18 +94,15 @@ Returns the number of messages truncated, or 0 if nothing was done."
            (retries (or (plist-get info :retries) 1))
            (keep (max 0 (- my/gptel-retry-keep-recent-tool-results retries)))
            (replacement my/gptel-retry-truncated-result-text)
-           (truncated 0))
+           (truncated 0)
+           (bytes-saved 0))
       (when (and messages (> (length messages) 0))
-        ;; Collect indices of tool-result messages (role = "tool")
         (let ((tool-indices '()))
           (dotimes (i (length messages))
             (let ((msg (aref messages i)))
               (when (equal (plist-get msg :role) "tool")
                 (push i tool-indices))))
-          ;; tool-indices is now newest-first (pushed in forward order, so reversed)
-          ;; Actually dotimes pushes 0,1,2... so tool-indices is reversed (last first)
-          ;; We want to keep the LAST `keep' entries, so drop from the front of tool-indices
-          (setq tool-indices (nreverse tool-indices)) ; now oldest-first
+          (setq tool-indices (nreverse tool-indices))
           (when (> (length tool-indices) keep)
             (let ((to-truncate (seq-take tool-indices (- (length tool-indices) keep))))
               (dolist (idx to-truncate)
@@ -86,31 +110,53 @@ Returns the number of messages truncated, or 0 if nothing was done."
                        (content (plist-get msg :content)))
                   (when (and (stringp content)
                              (> (length content) (length replacement)))
-                    (plist-put msg :content replacement)
-                    (cl-incf truncated))))))))
+                    (cl-incf bytes-saved (- (length content) (length replacement))))))
+              (when (or (= my/gptel-trim-min-bytes 0)
+                         (>= bytes-saved my/gptel-trim-min-bytes))
+                (dolist (idx to-truncate)
+                  (let* ((msg (aref messages idx))
+                         (content (plist-get msg :content)))
+                    (when (and (stringp content)
+                               (> (length content) (length replacement)))
+                      (plist-put msg :content replacement)
+                      (cl-incf truncated)))))))))
       truncated)))
 
 (defun my/gptel--trim-reasoning-content (info)
-  "Strip reasoning_content from assistant messages in INFO to reduce payload.
+  "Strip reasoning_content from older assistant messages in INFO to reduce payload.
+
+Preserves the N most recent assistant turns with reasoning_content, where N is
+`my/gptel-reasoning-keep-turns'.  Older reasoning blocks are set to an empty
+string so the field remains present in the serialized payload (some APIs like
+Moonshot require the field to exist when thinking is enabled).
 
 Called on retry 2+ (retries >= 2) to remove chain-of-thought reasoning text
-that accumulates across tool-use rounds.  The :reasoning_content field is
-set to an empty string so it remains present in the serialized payload
-\(some APIs like Moonshot require the field to exist when thinking is enabled).
+that accumulates across tool-use rounds.
 
 Returns the number of messages whose reasoning_content was stripped."
-  (let* ((data (plist-get info :data))
-         (messages (and data (plist-get data :messages)))
-         (stripped 0))
-    (when (and messages (> (length messages) 0))
-      (dotimes (i (length messages))
-        (let ((msg (aref messages i)))
-          (when (and (equal (plist-get msg :role) "assistant")
-                     (plist-get msg :reasoning_content)
-                     (not (equal "" (plist-get msg :reasoning_content))))
-             (plist-put msg :reasoning_content "")
-             (cl-incf stripped)))))
-    stripped))
+  (if (null my/gptel-reasoning-keep-turns)
+      0
+    (let* ((data (plist-get info :data))
+           (messages (and data (plist-get data :messages)))
+           (keep my/gptel-reasoning-keep-turns)
+           (stripped 0))
+      (when (and messages (> (length messages) 0))
+        (let ((reasoning-indices '()))
+          (dotimes (i (length messages))
+            (let ((msg (aref messages i)))
+              (when (and (equal (plist-get msg :role) "assistant")
+                         (plist-get msg :reasoning_content)
+                         (not (equal "" (plist-get msg :reasoning_content))))
+                (push i reasoning-indices))))
+          (setq reasoning-indices (nreverse reasoning-indices))
+          (when (> (length reasoning-indices) keep)
+            (let ((to-strip (seq-take reasoning-indices
+                                      (- (length reasoning-indices) keep))))
+              (dolist (idx to-strip)
+                (let ((msg (aref messages idx)))
+                  (plist-put msg :reasoning_content "")
+                  (cl-incf stripped)))))))
+      stripped)))
 
 (defun my/gptel--repair-thinking-tool-call-messages (info)
   "Ensure thinking-enabled assistant tool-call messages stay API-valid.
@@ -225,6 +271,32 @@ Returns the number of messages truncated, or 0 if nothing was done."
                 (plist-put msg :content truncation-text)
                 (cl-incf truncated))))))
       truncated)))
+
+(defun my/gptel--strip-images-from-messages (info)
+  "Strip image content from all messages in INFO to reduce payload.
+Removes :image_url parts from multimodal message content arrays.
+Base64 images can easily exceed 1MB each.
+
+Returns the number of image parts removed, or 0 if nothing was done."
+  (let* ((data (plist-get info :data))
+         (messages (and data (plist-get data :messages)))
+         (removed 0))
+    (when (and messages (> (length messages) 0))
+      (dotimes (i (length messages))
+        (let* ((msg (aref messages i))
+               (content (plist-get msg :content)))
+          ;; Content can be a string (text-only) or a vector/list of parts
+          (when (and content (vectorp content) (> (length content) 0))
+            (let ((filtered-parts
+                   (cl-remove-if
+                    (lambda (part)
+                      (and (listp part)
+                           (equal (plist-get part :type) "image_url")
+                           (cl-incf removed)))
+                    (append content nil))))
+              (when (< (length filtered-parts) (length content))
+                (plist-put msg :content (vconcat filtered-parts))))))))
+    removed))
 
 (defun my/gptel--transient-error-p (error-data http-status)
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error.
@@ -460,7 +532,16 @@ Applies trimming progressively until under limit or nothing left to trim:
                 (setq bytes (my/gptel--estimate-payload-bytes info))
                 (setq pass 5)
                 (when (> n 0)
-                  (message "gptel: Pass 5: truncated %d old message(s), now %dKB"
+(message "gptel: Pass 5: truncated %d old message(s), now %dKB"
+                            n (/ bytes 1024)))))
+            ;; Pass 6: strip images from multimodal messages
+            (when (> bytes limit)
+              (let ((n (my/gptel--strip-images-from-messages info)))
+                (cl-incf trimmed-total n)
+                (setq bytes (my/gptel--estimate-payload-bytes info))
+                (setq pass 6)
+                (when (> n 0)
+                  (message "gptel: Pass 6: stripped %d image(s), now %dKB"
                            n (/ bytes 1024)))))
             ;; Reset retries to 0 (we simulated retries for trim functions)
             (plist-put info :retries 0)

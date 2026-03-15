@@ -26,6 +26,8 @@
 (defvar my/gptel-retry-truncated-result-text "[Content truncated to reduce context size for retry]")
 (defvar my/gptel-payload-byte-limit 200000)
 (defvar my/gptel-truncate-old-messages-keep 6)
+(defvar my/gptel-trim-min-bytes 0)
+(defvar my/gptel-reasoning-keep-turns 1)
 
 (defvar my/gptel-model-context-bytes
   '((kimi-k2\.5        . 400000)
