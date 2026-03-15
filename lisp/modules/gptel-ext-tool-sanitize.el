@@ -75,17 +75,16 @@ RunAgent was registered, leaving it out of the buffer's tool list."
               (setf (gptel-fsm-info fsm) info)
               ;; Update our local tools reference for subsequent loop iterations.
               (setq tools new-tools)))
-           ;; Case 3: genuinely unknown / nil tool name — prune it
-           (t
-            (when (not (plist-get tc :result))
-              (message "gptel: skipping malformed tool call \
-(name=%S, known-tools=%S)"
-                       name
-                       (and (boundp 'gptel--known-tools)
-                            (mapcar #'car gptel--known-tools)))
-              (plist-put tc :result
-                         (format "Error: unknown or nil tool %S called by model" name))
-              (push tc pruned))))))
+;; Case 3: genuinely unknown / nil tool name — prune it
+            (t
+             (when (not (plist-get tc :result))
+               (message "gptel: skipping malformed tool call \
+(name=%S, available-tools=%S)"
+                        name
+                        (mapcar (lambda (ts) (gptel-tool-name ts)) tools))
+               (plist-put tc :result
+                          (format "Error: unknown or nil tool %S called by model" name))
+               (push tc pruned))))))
       ;; Prune offending entries so gptel--parse-tool-results never sees them.
       ;; This prevents orphaned tool role messages (tool_call_id=null) that
       ;; cause 400 errors when the assistant message has no matching tool_calls.
