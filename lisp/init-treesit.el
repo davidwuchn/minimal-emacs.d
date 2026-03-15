@@ -52,17 +52,16 @@
                 "\\.ya\\?ml\\'")
 
                (dockerfile dockerfile-ts-mode    (dockerfile-mode)
-                "https://github.com/tree-sitter-grammars/tree-sitter-dockerfile"
-                "Dockerfile\\'")
+                "https://github.com/camdencheek/tree-sitter-dockerfile"
+                "Dockerfile\\'" "v0.1.2")
 
                (bash       bash-ts-mode         (sh-mode bash-ts-mode)
                 "https://github.com/tree-sitter/tree-sitter-bash"
-                "\\.sh\\'\\|\\.bash\\'")
+                "\\.sh\\'\\|\\.bash\\'" "v0.21.0")
 
-               ;; JavaScript needs explicit :revision and :source-dir
                (javascript js-ts-mode           (js-mode javascript-mode js2-mode)
                 "https://github.com/tree-sitter/tree-sitter-javascript"
-                "\\.js\\'" nil "master" "src")))
+                "\\.js\\'" "v0.21.0")))
   (let ((lang           (nth 0 spec))
         (ts-mode        (nth 1 spec))
         (remap          (nth 2 spec))
