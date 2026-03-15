@@ -1,5 +1,35 @@
 # LEARNING
 
+## Table of Contents
+
+- [gptel-agent & Emacs LSP (Eglot) Integration](#gptel-agent--emacs-lsp-eglot-integration)
+- [AI Agent Sandboxing & Security](#ai-agent-sandboxing--security)
+- [Network Resilience & LLM Edge Cases (OpenCode Style)](#network-resilience--llm-edge-cases-opencode-style)
+- [Emacs Lisp Quirks](#emacs-lisp-quirks)
+- [Delegation & Context Boundaries](#delegation--context-boundaries)
+- [API & Network Limitations (DashScope / OpenAI)](#api--network-limitations-dashscope--openai)
+- [Feature Evaluation Discipline](#feature-evaluation-discipline)
+- [Subagent Callback Must Handle `(tool-result . ...)`](#subagent-callback-must-handle-tool-result-)
+- [Paren Balance in gptel-make-tool Calls](#paren-balance-in-gptel-make-tool-calls)
+- [Tree-sitter Language Patterns (Code_* Tools)](#tree-sitter-language-patterns-code_-tools)
+- [Emacs Byte-Compilation Traps](#emacs-byte-compilation-traps)
+- [Upstream Init File Discipline](#upstream-init-file-discipline)
+- [Nucleus Header Convention](#nucleus-header-convention)
+- [Symlink Footguns & Data Directory Hygiene](#symlink-footguns--data-directory-hygiene)
+- [Emacs Batch Init Chain](#emacs-batch-init-chain)
+- [Path Resolution in minimal-emacs.d](#path-resolution-in-minimal-emacsd)
+- [Discovery Pattern (λ)](#discovery-pattern-λ)
+- [Tool Argument Naming Conventions](#tool-argument-naming-conventions)
+- [Confirmation UI Architecture](#confirmation-ui-architecture)
+- [ECA Bridge Integration Patterns](#eca-bridge-integration-patterns)
+- [Multi-Project Workspace Patterns](#multi-project-workspace-patterns)
+- [ai-code-menu Transient Integration](#ai-code-menu-transient-integration)
+- [Auto-Detection Patterns](#auto-detection-patterns)
+- [Upstream Delegation vs Local Extensions](#upstream-delegation-vs-local-extensions)
+- [TDD Refactoring Workflow](#tdd-refactoring-workflow)
+- [Backend Integration Patterns](#backend-integration-patterns)
+- [Context Window Detection & Auto-Compact](#context-window-detection--auto-compact)
+
 
 ## gptel-agent & Emacs LSP (Eglot) Integration
 - **Asynchronous JSON-RPC**: Bypassing Emacs interactive UI commands (like `xref-find-definitions`) and querying the LSP server directly via `jsonrpc-async-request` is significantly more efficient and reliable for an AI agent.

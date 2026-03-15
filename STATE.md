@@ -1,6 +1,6 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-14 (tag v0.6.68)
+> Last updated: 2026-03-15 (tag v0.7.0)
 
 ## Architecture Overview
 
@@ -10,39 +10,44 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 
 | Module | Purpose | Lines |
 |--------|---------|-------|
-| `gptel-ext-core.el` | Residual core: temp dir, markdown compat, model config, mode hook, tool registry audit, curl hardening, content sanitizer | ~286 |
-| `gptel-ext-abort.el` | Curl timeouts, abort-generation, keyboard-quit advice, prompt marker helpers | ~185 |
-| `gptel-ext-backends.el` | Backend configuration (Moonshot, DashScope, DeepSeek, Gemini, OpenRouter, etc.) | ~93 |
-| `gptel-ext-context.el` | Auto-compact: LLM-based summarization when tokens approach context window | ~108 |
-| `gptel-ext-context-cache.el` | Context-window caching: model tables, OpenRouter fetch, disk persistence | ~296 |
-| `gptel-ext-fsm.el` | FSM recovery: fix-stuck-in-type, agent handler fixes, recover-on-error | ~82 |
-| `gptel-ext-reasoning.el` | Reasoning/thinking model support: key detection, capture, inject, noop tool, nil-tool strip | ~255 |
-| `gptel-ext-retry.el` | Auto-retry with exponential backoff, progressive trimming, pre-send compaction | ~397 |
-| `gptel-ext-security.el` | ACL router advice on gptel-make-tool | ~110 |
-| `gptel-ext-streaming.el` | Streaming flag, jit-lock protection during gptel responses | ~79 |
-| `gptel-ext-tool-confirm.el` | Enhanced tool confirmation UI (display-tool-calls override, permit-and-accept) | ~206 |
-| `gptel-ext-tool-sanitize.el` | Nil-tool filtering, tool-call sanitization, doom-loop detection, dedup | ~191 |
-| `gptel-ext-transient.el` | Transient menu extensions: suffix-system-message, filter-directive, crowdsourced prompts | ~195 |
-| `gptel-tools.el` | Tool registration orchestrator, readonly/action tool lists | ~320 |
-| `gptel-tools-agent.el` | RunAgent tool + subagent delegation + upstream Agent deregistration | ~326 |
-| `gptel-tools-apply.el` | ApplyPatch tool | |
-| `gptel-tools-bash.el` | Async Bash tool | ~202 |
-| `gptel-tools-code.el` | Code_Map, Code_Inspect, Code_Replace, Diagnostics, Code_Usages | ~464 |
-| `gptel-tools-edit.el` | Async Edit tool | |
-| `gptel-tools-glob.el` | Async Glob tool | |
-| `gptel-tools-grep.el` | Async Grep tool | |
-| `gptel-tools-introspection.el` | Emacs introspection tools (describe_symbol, get_symbol_source, find_buffers_and_recent) | |
-| `gptel-tools-preview.el` | Unified Preview tool (minibuffer confirm, never-ask-again option) | ~400 |
-| `gptel-tools-programmatic.el` | Programmatic tool registration + restricted orchestration entrypoint | ~42 |
-| `gptel-programmatic-benchmark.el` | Local benchmark harness for Programmatic vs ordinary tool chaining | ~250 |
-| `gptel-sandbox.el` | Restricted evaluator for serial Programmatic tool orchestration | ~301 |
-| `nucleus-mode-switch.el` | Plan/Agent mode switching with system reminders | |
-| `nucleus-presets.el` | Preset management, agent patching, tool contract validation | ~344 |
-| `nucleus-prompts.el` | Prompt loading from assistant/prompts/ | ~280 |
-| `nucleus-tools.el` | Toolset definitions (nucleus-toolsets constant), tool filtering, agent-tool contracts | ~565 |
-| `nucleus-tools-validate.el` | Tool signature validation (M-x nucleus-validate-tool-signatures) | |
-| `nucleus-tools-verify.el` | Tool registration verification (M-x nucleus-verify-tools-interactively) | |
-| `nucleus-header-line.el` | Header-line preset display | ~100 |
+| `gptel-ext-core.el` | Residual core: temp dir, markdown compat, model config, mode hook, tool registry audit, curl hardening, content sanitizer | 286 |
+| `gptel-ext-abort.el` | Curl timeouts, abort-generation, keyboard-quit advice, prompt marker helpers | 187 |
+| `gptel-ext-backends.el` | Backend configuration (Moonshot, DashScope, DeepSeek, Gemini, OpenRouter, etc.) | 82 |
+| `gptel-ext-context.el` | Auto-compact: LLM-based summarization when tokens approach context window | 259 |
+| `gptel-ext-context-cache.el` | Context-window caching: model tables, OpenRouter fetch, disk persistence | 699 |
+| `gptel-ext-fsm.el` | FSM recovery: fix-stuck-in-type, agent handler fixes, recover-on-error | 83 |
+| `gptel-ext-fsm-utils.el` | FSM utility functions | 26 |
+| `gptel-ext-reasoning.el` | Reasoning/thinking model support: key detection, capture, inject, noop tool, nil-tool strip | 268 |
+| `gptel-ext-retry.el` | Auto-retry with exponential backoff, progressive trimming, pre-send compaction | 476 |
+| `gptel-ext-security.el` | ACL router advice on gptel-make-tool | 95 |
+| `gptel-ext-streaming.el` | Streaming flag, jit-lock protection during gptel responses | 79 |
+| `gptel-ext-tool-confirm.el` | Enhanced tool confirmation UI (display-tool-calls override, permit-and-accept) | 389 |
+| `gptel-ext-tool-permits.el` | Permit management: toggle-confirm, show-permits, emergency-stop, health-check | 125 |
+| `gptel-ext-tool-sanitize.el` | Nil-tool filtering, tool-call sanitization, doom-loop detection, dedup | 191 |
+| `gptel-ext-transient.el` | Transient menu extensions: suffix-system-message, filter-directive, crowdsourced prompts | 195 |
+| `gptel-tools.el` | Tool registration orchestrator, readonly/action tool lists | 283 |
+| `gptel-tools-agent.el` | RunAgent tool + subagent delegation + upstream Agent deregistration | 360 |
+| `gptel-tools-apply.el` | ApplyPatch tool (unified diff + OpenCode envelope format) | 335 |
+| `gptel-tools-bash.el` | Async Bash tool | 202 |
+| `gptel-tools-code.el` | Code_Map, Code_Inspect, Code_Replace, Diagnostics, Code_Usages | 596 |
+| `gptel-tools-edit.el` | Async Edit tool (string replacement + patch mode) | 174 |
+| `gptel-tools-glob.el` | Async Glob tool | 157 |
+| `gptel-tools-grep.el` | Async Grep tool | 144 |
+| `gptel-tools-introspection.el` | Emacs introspection tools (describe_symbol, get_symbol_source, find_buffers_and_recent) | 111 |
+| `gptel-tools-preview.el` | Unified Preview tool (minibuffer confirm, never-ask-again option) | 403 |
+| `gptel-tools-programmatic.el` | Programmatic tool registration + restricted orchestration entrypoint | 46 |
+| `gptel-programmatic-benchmark.el` | Local benchmark harness for Programmatic vs ordinary tool chaining | 386 |
+| `gptel-sandbox.el` | Restricted evaluator for serial Programmatic tool orchestration | 593 |
+| `nucleus-mode-switch.el` | Plan/Agent mode switching with system reminders | 97 |
+| `nucleus-presets.el` | Preset management, agent patching, tool contract validation | 354 |
+| `nucleus-prompts.el` | Prompt loading from assistant/prompts/ | 288 |
+| `nucleus-tools.el` | Toolset definitions (nucleus-toolsets constant), tool filtering, agent-tool contracts | 559 |
+| `nucleus-tools-validate.el` | Tool signature validation (M-x nucleus-validate-tool-signatures) | 132 |
+| `nucleus-tools-verify.el` | Tool registration verification (M-x nucleus-verify-tools-interactively) | 95 |
+| `nucleus-header-line.el` | Header-line preset display | 92 |
+| `treesit-agent-tools.el` | Core AST engine for Code_* tools | 173 |
+| `treesit-agent-tools-workspace.el` | Workspace-wide search for Code_* tools | 70 |
+| `treesit-local-xref.el` | Local xref backend using tree-sitter | 42 |
 
 ### Confirmation UI (`lisp/modules/gptel-ext-tool-permits.el`)
 

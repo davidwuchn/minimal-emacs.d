@@ -336,19 +336,26 @@ The following parsers are pre-configured with ABI14-compatible revisions:
 
 | Language | Grammar Repository | ABI14 Revision |
 |----------|-------------------|----------------|
-| Elisp | `Wilfred/tree-sitter-elisp` | `1.2` |
 | Python | `tree-sitter/tree-sitter-python` | `v0.21.0` |
 | Rust | `tree-sitter/tree-sitter-rust` | `v0.21.0` |
+| Elisp | `Wilfred/tree-sitter-elisp` | `1.2` |
 | Clojure | `sogaiu/tree-sitter-clojure` | `master` |
+| C | `tree-sitter/tree-sitter-c` | `v0.21.4` |
+| C++ | `tree-sitter/tree-sitter-cpp` | `v0.22.3` |
+| Java | `tree-sitter/tree-sitter-java` | `master` |
+| Lua | `tree-sitter-grammars/tree-sitter-lua` | `v0.2.0` |
+| JSON | `tree-sitter/tree-sitter-json` | `v0.24.8` |
+| JavaScript | `tree-sitter/tree-sitter-javascript` | `master` (src/) |
 
 ### Manual Installation (Optional)
 To pre-install parsers before first use:
 
 ```elisp
 M-x treesit-install-language-grammar RET python RET
-M-x treesit-install-language-grammar RET elisp RET
 M-x treesit-install-language-grammar RET rust RET
+M-x treesit-install-language-grammar RET elisp RET
 M-x treesit-install-language-grammar RET clojure RET
+M-x treesit-install-language-grammar RET javascript RET
 ```
 
 Installed grammars are stored in `~/.emacs.d/var/tree-sitter/`.
