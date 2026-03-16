@@ -215,3 +215,20 @@
 - **Pre-seed popular models**: Don't wait for async API fetch. Seed `my/gptel--known-model-context-windows` with correct values for models you use. Async fetch is unreliable (no API key, network issues).
 - **Auto-compact threshold, not interval**: Primary control should be token percentage (80% of context window), not elapsed time. Interval is a secondary safeguard against rapid re-compact cycles.
 - **Debug command for users**: `M-x my/gptel-context-window-show` shows model, context window, threshold, current usage. Essential for diagnosing "why is it compacting?" questions.
+
+## Emacs Lisp Pattern Matching (pcase)
+- **`pcase` is pattern matching, not just switch**: Like a powerful `case`/`switch` that can destructure, bind variables, and test predicates in one expression.
+- **Basic syntax**: `(pcase EXPR (PATTERN BODY...) ...)` — evaluates EXPR, matches against PATTERNs in order, executes first matching BODY.
+- **Quoted symbols match literally**: `'stopped` matches the symbol `stopped`. Use backquote for lists: `` `(a ,b) `` matches `(a anything)` and binds `b`.
+- **Underscore is wildcard**: `_` matches anything. Use as default case.
+- **Binding variables in patterns**: `` `(,x ,y ,z) `` matches a 3-element list and binds `x`, `y`, `z` to elements. Variables without comma are pattern literals.
+- **Predicate patterns**: `(pred fn)` tests with predicate. `(pred stringp)` matches strings. Combine with variable: `(and (pred numberp) n)` binds `n` if number.
+- **Destructuring structs/lists**: `(app fn pat)` applies function then matches. `(app car 'stopped)` extracts car then matches.
+- **Why use over cond**: (1) Destructuring + matching in one step, (2) Compiler checks patterns, (3) More readable for complex data, (4) Functional style without nested if/let.
+- **Example from ECA integration**:
+  ```elisp
+  (pcase (eca--session-status session)
+    ('stopped  (eca-process-start session ...))
+    ('started  (eca-chat-open session))
+    ('starting (eca-info "already starting")))
+  ```
