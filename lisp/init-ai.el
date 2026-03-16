@@ -57,11 +57,13 @@
 ;;; AI CODE (with ECA backend support)
 ;;; ==============================================================================
 
+;; TODO: After PR #232 is merged, change branch back to "main" and URL to tninja
+;; PR: https://github.com/tninja/ai-code-interface.el/pull/232
 (use-package ai-code
   :ensure t
-  :vc (:url "https://github.com/tninja/ai-code-interface.el"
-       :branch "main")
-  :demand t  ;; Load immediately (not deferred) to ensure eca-ext is available
+  :vc (:url "https://github.com/davidwuchn/ai-code-interface.el"
+       :branch "fix/transient-menu-keys")
+  :demand t
   :custom
   (ai-code-backends-infra-terminal-backend 'vterm)
   (ai-code-backends-infra-use-side-window nil)
@@ -71,13 +73,6 @@
   (ai-code-notes-use-gptel-headline t)
   (ai-code-task-use-gptel-filename t)
   :config
-  ;; Ensure eca-ext.el is loaded (bundled with ai-code but not autoloaded)
-  (let ((ai-code-dir (car (directory-files 
-                            (expand-file-name "var/elpa" minimal-emacs-user-directory) 
-                            t "^ai-code-"))))
-    (when (and ai-code-dir (file-exists-p (expand-file-name "eca-ext.el" ai-code-dir)))
-      (add-to-list 'load-path ai-code-dir)))
-  (require 'eca-ext)
   (require 'ai-code-eca)
   (ai-code-set-backend 'opencode)
   (global-set-key (kbd "C-c a") #'ai-code-menu))
