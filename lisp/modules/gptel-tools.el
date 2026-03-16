@@ -53,9 +53,61 @@ Call this after gptel-agent-tools loads."
   ;; (gptel-tools-ast-register)  ; Deprecated by gptel-tools-code
   (gptel-tools-code-register)
 
-  ;; Register nucleus-specific tools (not in gptel-agent-tools)
+  ;; Register standard gptel-agent tools
   (when (fboundp 'gptel-make-tool)
-    ;; Move tool - not in gptel-agent-tools
+    ;; Write tool
+    (gptel-make-tool
+     :name "Write"
+     :category "gptel-agent"
+     :function (lambda (path filename content)
+                 "Create a new file safely. Refuses to overwrite existing files."
+                 (let ((filepath (expand-file-name filename path)))
+                   (if (file-exists-p filepath)
+                       (error "File already exists: %s. Use Edit or Insert instead." filepath)
+                     (with-temp-file filepath (insert content)))
+                   (format "Created new file: %s" filepath)))
+     :description "Create a new file with the specified content. SAFETY: refuses to overwrite existing files."
+     :args '((:name "path" :type string :description "Directory path")
+             (:name "filename" :type string :description "File name")
+             (:name "content" :type string :description "Content"))
+     :confirm t
+     :include t)
+
+    ;; Read tool
+    (gptel-make-tool
+     :name "Read"
+     :function #'gptel-agent--read-file-lines
+     :description "Read file contents by line range."
+     :args '((:name "file_path" :type string)
+             (:name "start_line" :type integer :optional t)
+             (:name "end_line" :type integer :optional t))
+     :category "gptel-agent"
+     :include t)
+
+    ;; Insert tool
+    (gptel-make-tool
+     :name "Insert"
+     :function #'gptel-agent--insert-in-file
+     :description "Insert text at a line number in a file."
+     :args '((:name "file_path" :type string :description "Path to the file")
+             (:name "line_number" :type integer)
+             (:name "new_str" :type string))
+     :category "gptel-agent"
+     :confirm t
+     :include t)
+
+    ;; Mkdir tool
+    (gptel-make-tool
+     :name "Mkdir"
+     :function #'gptel-agent--make-directory
+     :description "Create a directory under a parent directory."
+     :args '((:name "parent" :type string)
+             (:name "name" :type string))
+     :category "gptel-agent"
+     :confirm t
+     :include t)
+
+    ;; Move tool
     (gptel-make-tool
      :name "Move"
      :function (lambda (source dest)
@@ -72,7 +124,75 @@ Call this after gptel-agent-tools loads."
      :confirm t
      :include t)
 
-    ;; Skill tool - nucleus extension, not in gptel-agent-tools
+    ;; Eval tool
+    (gptel-make-tool
+     :name "Eval"
+     :function (lambda (expression)
+                 (let ((standard-output (generate-new-buffer " *gptel-eval*"))
+                       (result nil) (output nil))
+                   (unwind-protect
+                       (condition-case err
+                           (progn
+                             (setq result (eval (read expression) t))
+                             (when (> (buffer-size standard-output) 0)
+                               (setq output (with-current-buffer standard-output (buffer-string))))
+                             (concat (format "Result:\n%S" result)
+                                     (and output (format "\n\nSTDOUT:\n%s" output))))
+                         ((error user-error)
+                          (concat (format "Error: %S: %S" (car err) (cdr err))
+                                  (and output (format "\n\nSTDOUT:\n%s" output)))))
+                     (kill-buffer standard-output))))
+     :description "Evaluate a single Elisp expression."
+     :args '((:name "expression" :type string))
+     :category "gptel-agent"
+     :confirm t
+     :include t)
+
+    ;; WebSearch tool
+    (gptel-make-tool
+     :name "WebSearch"
+     :function #'gptel-agent--web-search-eww
+     :description "Search the web (returns top results)."
+     :args '((:name "query" :type string)
+             (:name "count" :type integer :optional t))
+     :include t
+     :async t
+     :category "gptel-agent")
+
+    ;; WebFetch tool
+    (gptel-make-tool
+     :name "WebFetch"
+     :function #'gptel-agent--read-url
+     :description "Fetch and read the text of a URL."
+     :args '((:name "url" :type string))
+     :async t
+     :include t
+     :category "gptel-agent")
+
+    ;; YouTube tool
+    (gptel-make-tool
+     :name "YouTube"
+     :function #'gptel-agent--yt-read-url
+     :description "Fetch YouTube description and transcript."
+     :args '((:name "url" :type string))
+     :category "gptel-agent"
+     :async t
+     :include t)
+
+    ;; TodoWrite tool
+    (gptel-make-tool
+     :name "TodoWrite"
+     :function #'gptel-agent--write-todo
+     :description "Update a session todo list."
+     :args '((:name "todos"
+                    :type array
+                    :items (:type object
+                                  :properties (:content (:type string :minLength 1)
+                                                        :status (:type string :enum ["pending" "in_progress" "completed"])
+                                                        :activeForm (:type string :minLength 1)))))
+     :category "gptel-agent")
+
+     ;; Skill tool
     (gptel-make-tool
      :name "Skill"
      :function #'my/gptel--skill-tool
@@ -82,7 +202,7 @@ Call this after gptel-agent-tools loads."
      :category "gptel-agent"
      :include t)
 
-    ;; Skill management tools - nucleus extensions
+    ;; Skill management tools
     (gptel-make-tool
      :name "list_skills"
      :function (lambda (&optional dir)
