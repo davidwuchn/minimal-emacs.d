@@ -19,8 +19,8 @@
 
 (defvar gptel-model nil)
 (defvar gptel-max-tokens nil)
-(defvar my/gptel-default-context-window 32768)
-(defvar my/gptel--context-window-cache (make-hash-table :test 'equal))
+(defvar test-default-context-window 32768)
+(defvar test-context-window-cache (make-hash-table :test 'equal))
 (defvar my/gptel-context-window-cache-file nil)
 
 ;;; Functions under test
@@ -44,22 +44,24 @@
   "Estimate token count from CHARS."
   (/ (float chars) 4.0))
 
-(defun test-context-window ()
-  "Return model context window."
-  (let* ((model gptel-model)
-         (model-id (test-model-id-string model))
+(defun test-context-window (&optional model max-tokens)
+  "Return model context window.
+If MODEL is provided, use it instead of `gptel-model'.
+If MAX-TOKENS is provided, use it instead of `gptel-max-tokens'."
+  (let* ((m (or model gptel-model))
+         (model-id (test-model-id-string m))
          (window nil))
     (when (and (stringp model-id)
-               (gethash model-id my/gptel--context-window-cache))
-      (setq window (gethash model-id my/gptel--context-window-cache)))
+               (gethash model-id test-context-window-cache))
+      (setq window (gethash model-id test-context-window-cache)))
     (or window
-        gptel-max-tokens
-        my/gptel-default-context-window)))
+        (or max-tokens gptel-max-tokens)
+        test-default-context-window)))
 
 (defun test-cache-put (model-id window)
   "Put WINDOW for MODEL-ID in cache."
   (when (and (stringp model-id) (integerp window) (> window 0))
-    (puthash model-id window my/gptel--context-window-cache)))
+    (puthash model-id window test-context-window-cache)))
 
 ;;; Tests for my/gptel--model-id-string
 
@@ -139,65 +141,58 @@
 
 (ert-deftest cache/context-window/returns-cached ()
   "Should return cached value."
-  (let ((gptel-model "test-model")
-        (my/gptel--context-window-cache (make-hash-table :test 'equal)))
-    (puthash "test-model" 65536 my/gptel--context-window-cache)
-    (should (= (test-context-window) 65536))))
+  (clrhash test-context-window-cache)
+  (puthash "test-model" 65536 test-context-window-cache)
+  (should (= (test-context-window "test-model") 65536)))
 
 (ert-deftest cache/context-window/falls-back-to-max-tokens ()
   "Should fall back to gptel-max-tokens."
-  (let ((gptel-model "unknown-model")
-        (gptel-max-tokens 16384)
-        (my/gptel--context-window-cache (make-hash-table :test 'equal)))
-    (should (= (test-context-window) 16384))))
+  (clrhash test-context-window-cache)
+  (should (= (test-context-window "unknown-model" 16384) 16384)))
 
 (ert-deftest cache/context-window/falls-back-to-default ()
   "Should fall back to default when all else fails."
-  (let ((gptel-model "unknown-model")
-        (gptel-max-tokens nil)
-        (my/gptel--context-window-cache (make-hash-table :test 'equal)))
-    (should (= (test-context-window) 32768))))
+  (clrhash test-context-window-cache)
+  (should (= (test-context-window "unknown-model" nil) 32768)))
 
 (ert-deftest cache/context-window/prefers-cache ()
   "Should prefer cache over gptel-max-tokens."
-  (let ((gptel-model "cached-model")
-        (gptel-max-tokens 8192)
-        (my/gptel--context-window-cache (make-hash-table :test 'equal)))
-    (puthash "cached-model" 131072 my/gptel--context-window-cache)
-    (should (= (test-context-window) 131072))))
+  (clrhash test-context-window-cache)
+  (puthash "cached-model" 131072 test-context-window-cache)
+  (should (= (test-context-window "cached-model" 8192) 131072)))
 
 ;;; Tests for cache operations
 
 (ert-deftest cache/put/stores-value ()
   "Should store value in cache."
-  (let ((my/gptel--context-window-cache (make-hash-table :test 'equal)))
-    (test-cache-put "test-model" 8192)
-    (should (= (gethash "test-model" my/gptel--context-window-cache) 8192))))
+  (clrhash test-context-window-cache)
+  (test-cache-put "test-model" 8192)
+  (should (= (gethash "test-model" test-context-window-cache) 8192)))
 
 (ert-deftest cache/put/rejects-nil-model ()
   "Should not store nil model id."
-  (let ((my/gptel--context-window-cache (make-hash-table :test 'equal)))
-    (test-cache-put nil 8192)
-    (should (= (hash-table-count my/gptel--context-window-cache) 0))))
+  (clrhash test-context-window-cache)
+  (test-cache-put nil 8192)
+  (should (= (hash-table-count test-context-window-cache) 0)))
 
 (ert-deftest cache/put/rejects-nil-window ()
   "Should not store nil window."
-  (let ((my/gptel--context-window-cache (make-hash-table :test 'equal)))
-    (test-cache-put "test-model" nil)
-    (should (= (hash-table-count my/gptel--context-window-cache) 0))))
+  (clrhash test-context-window-cache)
+  (test-cache-put "test-model" nil)
+  (should (= (hash-table-count test-context-window-cache) 0)))
 
 (ert-deftest cache/put/rejects-negative-window ()
   "Should not store negative window."
-  (let ((my/gptel--context-window-cache (make-hash-table :test 'equal)))
-    (test-cache-put "test-model" -100)
-    (should (= (hash-table-count my/gptel--context-window-cache) 0))))
+  (clrhash test-context-window-cache)
+  (test-cache-put "test-model" -100)
+  (should (= (hash-table-count test-context-window-cache) 0)))
 
 (ert-deftest cache/put/overwrites-existing ()
   "Should overwrite existing entry."
-  (let ((my/gptel--context-window-cache (make-hash-table :test 'equal)))
-    (test-cache-put "test-model" 8192)
-    (test-cache-put "test-model" 16384)
-    (should (= (gethash "test-model" my/gptel--context-window-cache) 16384))))
+  (clrhash test-context-window-cache)
+  (test-cache-put "test-model" 8192)
+  (test-cache-put "test-model" 16384)
+  (should (= (gethash "test-model" test-context-window-cache) 16384)))
 
 ;;; Tests for edge cases
 

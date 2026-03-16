@@ -171,22 +171,22 @@
 ;;; Tests for treesit-agent--flatten-sparse-tree
 ;;; ========================================
 
-(ert-deftest treesit/flatten/nil-tree ()
+(ert-deftest treesit/flatten-tree/nil-tree ()
   "Should return nil for nil tree."
   (should-not (test-flatten-sparse-tree nil)))
 
-(ert-deftest treesit/flatten/single-node ()
+(ert-deftest treesit/flatten-tree/single-node ()
   "Should flatten single node."
   (let ((tree '("root")))
     (should (equal (test-flatten-sparse-tree tree) '("root")))))
 
-(ert-deftest treesit/flatten/nested-nodes ()
+(ert-deftest treesit/flatten-tree/nested-nodes ()
   "Should flatten nested tree."
   (let ((tree '("root" ("child1") ("child2"))))
     (let ((result (test-flatten-sparse-tree tree)))
       (should (= (length result) 3)))))
 
-(ert-deftest treesit/flatten/deeply-nested ()
+(ert-deftest treesit/flatten-tree/deeply-nested ()
   "Should flatten deeply nested tree."
   (let ((tree '("root" ("child" ("grandchild")))))
     (let ((result (test-flatten-sparse-tree tree)))

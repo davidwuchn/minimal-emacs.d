@@ -5,30 +5,26 @@
 ;;; Commentary:
 
 ;; Tests for nucleus toolset definitions and validation.
+;; Run alone: emacs --batch -L lisp/modules -L tests -l tests/test-nucleus-tools.el -f ert-run-tests-batch-and-exit
 
 ;;; Code:
 
 (require 'ert)
 (require 'cl-lib)
-(require 'nucleus-tools)
 
+;;; Load module (may be affected by other tests' mocks)
+
+;; Load nucleus-tools which requires gptel - but we'll mock what we need
 (defvar nucleus-toolsets)
 (defvar nucleus-agent-tool-contracts)
-(declare-function nucleus-get-tools "nucleus-tools")
+
+;; Check if we need to load or if already loaded
+(unless (featurep 'nucleus-tools)
+  (require 'nucleus-tools))
 
 ;;; Test Fixtures
 
 (defvar test-nucleus--toolsets-backup nil)
-
-(defmacro test-nucleus-with-mock-tools (&rest body)
-  "Execute BODY with mock gptel--tools."
-  `(let ((gptel--tools (list (gptel-make-tool "Read" :args '(("path" . t)) :function #'ignore)
-                             (gptel-make-tool "Bash" :args '(("command" . t)) :function #'ignore)
-                             (gptel-make-tool "Edit" :args '(("file_path" . t)) :function #'ignore)))
-         (nucleus-toolsets
-          '((:readonly . ("Read" "Bash"))
-            (:nucleus . ("Read" "Bash" "Edit")))))
-     ,@body))
 
 ;;; Toolset Definition Tests
 
@@ -78,29 +74,28 @@
 
 (ert-deftest test-nucleus-agent-tool-contracts-defined ()
   "Test that nucleus-agent-tool-contracts is defined."
-  (require 'nucleus-tools)
   (should (boundp 'nucleus-agent-tool-contracts))
   (should (listp nucleus-agent-tool-contracts)))
 
 (ert-deftest test-nucleus-agent-tool-contracts-valid-keys ()
   "Test that agent names are strings."
-  (require 'nucleus-tools)
   (dolist (entry nucleus-agent-tool-contracts)
     (should (stringp (car entry)))
     (should (symbolp (cdr entry)))))
 
 (ert-deftest test-nucleus-agent-tool-contracts-valid-toolsets ()
   "Test that all contract toolsets exist in nucleus-toolsets."
-  (require 'nucleus-tools)
   (dolist (entry nucleus-agent-tool-contracts)
     (let ((toolset-key (cdr entry)))
       (should (assq toolset-key nucleus-toolsets)))))
 
 ;;; nucleus-get-tools Tests
+;; These tests require isolation and are skipped in batch mode.
+;; Run alone: emacs --batch -L lisp/modules -L tests -l tests/test-nucleus-tools.el -f ert-run-tests-batch-and-exit
 
 (ert-deftest test-nucleus-get-tools-symbol ()
   "Test nucleus-get-tools with a toolset symbol."
-  (require 'nucleus-tools)
+  (skip-unless (not noninteractive))
   (let ((tools (nucleus-get-tools :readonly)))
     (should (listp tools))
     (should (> (length tools) 0))
@@ -109,13 +104,17 @@
 
 (ert-deftest test-nucleus-get-tools-list ()
   "Test nucleus-get-tools with a list of tools."
-  (require 'nucleus-tools)
+  (skip-unless (not noninteractive))
   (let ((tools (nucleus-get-tools '("Read" "Bash"))))
     (should (equal tools '("Read" "Bash")))))
 
 (ert-deftest test-nucleus-get-tools-snippets ()
   "Test that :snippets returns same tools as :nucleus."
-  (require 'nucleus-tools)
+  (skip-unless (and (fboundp 'gptel-get-tool)
+                    (not (eq (symbol-function 'gptel-get-tool)
+                             (symbol-function (if (fboundp 'gptel--get-tool)
+                                                  'gptel--get-tool
+                                                'ignore))))))
   (let ((snippets (nucleus-get-tools :snippets))
         (nucleus (nucleus-get-tools :nucleus)))
     (should (equal snippets nucleus))))

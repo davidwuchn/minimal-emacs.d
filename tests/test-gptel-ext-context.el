@@ -29,8 +29,8 @@
   "Estimate token count from CHARS."
   (/ (float chars) 4.0))
 
-(defun test-context-window ()
-  "Return mock context window."
+(defun test-context--mock-window ()
+  "Return mock context window for auto-compact tests."
   32768)
 
 (defun test-compact-safe-p ()
@@ -46,7 +46,7 @@
   "Return non-nil when current buffer should be compacted."
   (let* ((chars (buffer-size))
          (tokens (test-estimate-tokens chars))
-         (window (test-context-window))
+         (window (test-context--mock-window))
          (threshold (* window my/gptel-auto-compact-threshold)))
     (and my/gptel-auto-compact-enabled
          gptel-mode

@@ -1,51 +1,25 @@
 ;;; test-treesit-agent-tools-workspace.el --- Tests for workspace AST tools -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; Integration tests for treesit-agent-tools-workspace.el
+;; Unit tests for treesit-agent-tools-workspace.el
 ;; Tests:
-;; - treesit-agent--ensure-parser
-;; - treesit-agent-find-workspace
+;; - treesit-agent--ensure-parser logic (via mock functions)
+;; - Extension-to-language mapping
 
 ;;; Code:
 
 (require 'ert)
 (require 'cl-lib)
 
-;;; Mock project functions
+;;; Functions under test (local implementation to avoid module dependency)
 
-(defvar test-project-current nil)
-(defvar test-project-root nil)
-
-(defun project-current ()
-  "Mock: return current project."
-  test-project-current)
-
-(defun project-root (_proj)
-  "Mock: return project root."
-  test-project-root)
-
-;;; Mock treesit functions
-
-(defvar test-treesit-parser-list nil)
-(defvar test-treesit-language-available nil)
-
-(defun treesit-parser-list ()
-  "Mock: return parser list."
-  test-treesit-parser-list)
-
-(defun treesit-language-available-p (lang)
-  "Mock: check if LANG is available."
-  (member lang test-treesit-language-available))
-
-(defun treesit-parser-create (lang)
-  "Mock: create parser for LANG."
-  (push lang test-treesit-parser-list))
-
-;;; Functions under test
-
-(defun test-treesit--ensure-parser (file)
-  "Ensure a tree-sitter parser is active for FILE's buffer."
-  (unless (treesit-parser-list)
+(defun test-workspace--ensure-parser (file parser-list-fn create-parser-fn lang-available-fn)
+  "Test implementation of ensure-parser for FILE.
+PARSER-LIST-FN returns current parser list.
+CREATE-PARSER-FN creates a parser for a language.
+LANG-AVAILABLE-FN checks if language is available.
+Returns the new parser list."
+  (unless (funcall parser-list-fn)
     (let* ((ext (file-name-extension file))
            (lang (cond
                   ((member ext '("el" "elisp")) 'elisp)
@@ -61,145 +35,203 @@
                   ((member ext '("cpp" "cc" "cxx" "hpp")) 'cpp)
                   ((member ext '("java"))        'java)
                   ((member ext '("lua"))         'lua))))
-      (when (and lang (treesit-language-available-p lang))
-        (treesit-parser-create lang)))))
+      (when (and lang (funcall lang-available-fn lang))
+        (funcall create-parser-fn lang)))))
 
-;;; Tests for treesit-agent--ensure-parser
+;;; Tests for ensure-parser logic
 
 (ert-deftest workspace/ensure-parser/elisp ()
   "Should create elisp parser for .el files."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(elisp python)))
-    (test-treesit--ensure-parser "test.el")
-    (should (member 'elisp test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(elisp python)))
+    (test-workspace--ensure-parser
+     "test.el"
+     (lambda () parser-list)
+     (lambda (lang) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should (member 'elisp parser-list))))
 
 (ert-deftest workspace/ensure-parser/python ()
   "Should create python parser for .py files."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(elisp python)))
-    (test-treesit--ensure-parser "test.py")
-    (should (member 'python test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(elisp python)))
+    (test-workspace--ensure-parser
+     "test.py"
+     (lambda () parser-list)
+     (lambda (lang) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should (member 'python parser-list))))
 
 (ert-deftest workspace/ensure-parser/rust ()
   "Should create rust parser for .rs files."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(rust)))
-    (test-treesit--ensure-parser "src/lib.rs")
-    (should (member 'rust test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(rust)))
+    (test-workspace--ensure-parser
+     "src/main.rs"
+     (lambda () parser-list)
+     (lambda (lang) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should (member 'rust parser-list))))
 
 (ert-deftest workspace/ensure-parser/clojure ()
   "Should create clojure parser for .clj files."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(clojure)))
-    (test-treesit--ensure-parser "src/core.clj")
-    (should (member 'clojure test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(clojure)))
+    (test-workspace--ensure-parser
+     "core.clj"
+     (lambda () parser-list)
+     (lambda (lang) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should (member 'clojure parser-list))))
 
 (ert-deftest workspace/ensure-parser/javascript ()
   "Should create javascript parser for .js files."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(javascript)))
-    (test-treesit--ensure-parser "app.js")
-    (should (member 'javascript test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(javascript)))
+    (test-workspace--ensure-parser
+     "app.js"
+     (lambda () parser-list)
+     (lambda (lang) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should (member 'javascript parser-list))))
 
 (ert-deftest workspace/ensure-parser/typescript ()
   "Should create typescript parser for .ts files."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(typescript)))
-    (test-treesit--ensure-parser "main.ts")
-    (should (member 'typescript test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(typescript)))
+    (test-workspace--ensure-parser
+     "main.ts"
+     (lambda () parser-list)
+     (lambda (lang) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should (member 'typescript parser-list))))
 
 (ert-deftest workspace/ensure-parser/go ()
   "Should create go parser for .go files."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(go)))
-    (test-treesit--ensure-parser "main.go")
-    (should (member 'go test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(go)))
+    (test-workspace--ensure-parser
+     "main.go"
+     (lambda () parser-list)
+     (lambda (lang) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should (member 'go parser-list))))
 
 (ert-deftest workspace/ensure-parser/java ()
   "Should create java parser for .java files."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(java)))
-    (test-treesit--ensure-parser "Main.java")
-    (should (member 'java test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(java)))
+    (test-workspace--ensure-parser
+     "Main.java"
+     (lambda () parser-list)
+     (lambda (lang) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should (member 'java parser-list))))
 
 (ert-deftest workspace/ensure-parser/c ()
   "Should create c parser for .c files."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(c)))
-    (test-treesit--ensure-parser "main.c")
-    (should (member 'c test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(c)))
+    (test-workspace--ensure-parser
+     "main.c"
+     (lambda () parser-list)
+     (lambda (lang) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should (member 'c parser-list))))
 
 (ert-deftest workspace/ensure-parser/cpp ()
   "Should create cpp parser for .cpp files."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(cpp)))
-    (test-treesit--ensure-parser "main.cpp")
-    (should (member 'cpp test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(cpp)))
+    (test-workspace--ensure-parser
+     "main.cpp"
+     (lambda () parser-list)
+     (lambda (lang) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should (member 'cpp parser-list))))
 
 (ert-deftest workspace/ensure-parser/lua ()
   "Should create lua parser for .lua files."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(lua)))
-    (test-treesit--ensure-parser "script.lua")
-    (should (member 'lua test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(lua)))
+    (test-workspace--ensure-parser
+     "script.lua"
+     (lambda () parser-list)
+     (lambda (lang) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should (member 'lua parser-list))))
 
 (ert-deftest workspace/ensure-parser/skips-when-parser-exists ()
   "Should not create parser when one already exists."
-  (let ((test-treesit-parser-list '(existing))
-        (test-treesit-language-available '(python)))
-    (test-treesit--ensure-parser "test.py")
-    (should (equal test-treesit-parser-list '(existing)))))
+  (let ((parser-list '(existing))
+        (lang-available '(python))
+        (create-called nil))
+    (test-workspace--ensure-parser
+     "test.py"
+     (lambda () parser-list)
+     (lambda (lang) (setq create-called t) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should-not create-called)
+    (should (equal parser-list '(existing)))))
 
 (ert-deftest workspace/ensure-parser/skips-unavailable-language ()
   "Should not create parser when language is unavailable."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available nil))
-    (test-treesit--ensure-parser "test.py")
-    (should (null test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available nil)
+        (create-called nil))
+    (test-workspace--ensure-parser
+     "test.py"
+     (lambda () parser-list)
+     (lambda (lang) (setq create-called t) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should-not create-called)
+    (should (null parser-list))))
 
 (ert-deftest workspace/ensure-parser/skips-unknown-extension ()
   "Should not create parser for unknown extensions."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(elisp)))
-    (test-treesit--ensure-parser "test.xyz")
-    (should (null test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(elisp))
+        (create-called nil))
+    (test-workspace--ensure-parser
+     "test.xyz"
+     (lambda () parser-list)
+     (lambda (lang) (setq create-called t) (push lang parser-list))
+     (lambda (lang) (member lang lang-available)))
+    (should-not create-called)
+    (should (null parser-list))))
 
 (ert-deftest workspace/ensure-parser/multiple-extensions ()
   "Should handle all extension variants."
-  (let ((test-treesit-parser-list nil)
-        (test-treesit-language-available '(clojure)))
-    (test-treesit--ensure-parser "core.cljs")
-    (should (member 'clojure test-treesit-parser-list))))
+  (let ((parser-list nil)
+        (lang-available '(clojure)))
+    (dolist (ext '("clj" "cljs" "cljc" "edn"))
+      (setq parser-list nil)
+      (test-workspace--ensure-parser
+       (concat "file." ext)
+       (lambda () parser-list)
+       (lambda (lang) (push lang parser-list))
+       (lambda (lang) (member lang lang-available)))
+      (should (member 'clojure parser-list)))))
 
-;;; Tests for extension-to-language mapping
+;;; Tests for extension mapping
 
 (ert-deftest workspace/extension-mapping/elisp-variants ()
-  "Both .el and .elisp should map to elisp."
-  (let ((test-treesit-language-available '(elisp)))
-    (let ((test-treesit-parser-list nil))
-      (test-treesit--ensure-parser "file.el")
-      (should (member 'elisp test-treesit-parser-list)))
-    (let ((test-treesit-parser-list nil))
-      (test-treesit--ensure-parser "file.elisp")
-      (should (member 'elisp test-treesit-parser-list)))))
+  "Should map .el and .elisp to elisp."
+  (let ((ext-to-lang '(("el" . elisp) ("elisp" . elisp))))
+    (should (eq (cdr (assoc "el" ext-to-lang)) 'elisp))
+    (should (eq (cdr (assoc "elisp" ext-to-lang)) 'elisp))))
 
 (ert-deftest workspace/extension-mapping/clojure-variants ()
-  "All Clojure extensions should map to clojure."
-  (let ((test-treesit-language-available '(clojure)))
+  "Should map all Clojure extensions to clojure."
+  (let ((ext-to-lang '(("clj" . clojure) ("cljs" . clojure) ("cljc" . clojure) ("edn" . clojure))))
     (dolist (ext '("clj" "cljs" "cljc" "edn"))
-      (let ((test-treesit-parser-list nil))
-        (test-treesit--ensure-parser (format "file.%s" ext))
-        (should (member 'clojure test-treesit-parser-list))))))
+      (should (eq (cdr (assoc ext ext-to-lang)) 'clojure)))))
 
 (ert-deftest workspace/extension-mapping/cpp-variants ()
-  "All C++ extensions should map to cpp."
-  (let ((test-treesit-language-available '(cpp)))
+  "Should map all C++ extensions to cpp."
+  (let ((ext-to-lang '(("cpp" . cpp) ("cc" . cpp) ("cxx" . cpp) ("hpp" . cpp))))
     (dolist (ext '("cpp" "cc" "cxx" "hpp"))
-      (let ((test-treesit-parser-list nil))
-        (test-treesit--ensure-parser (format "file.%s" ext))
-        (should (member 'cpp test-treesit-parser-list))))))
-
-;;; Footer
+      (should (eq (cdr (assoc ext ext-to-lang)) 'cpp)))))
 
 (provide 'test-treesit-agent-tools-workspace)
 

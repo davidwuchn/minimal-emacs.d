@@ -664,12 +664,8 @@ With 1 reasoning block and keep=1, nothing is stripped."
   "Minimal stub for gptel-tool."
   name)
 
-;; Our function calls (gptel-tool-name ts) — provide that accessor:
-(unless (fboundp 'gptel-tool-name)
-  (defalias 'gptel-tool-name #'gptel-tool-stub-name))
-
-;; Copy of the function under test (same pattern as other stubs above)
-(defun my/gptel--reduce-tools-for-retry (info)
+;; Local test implementation with unique name to avoid conflicts
+(defun test-trim--reduce-tools-for-retry (info)
   "Reduce the tools array in INFO to only tools referenced in conversation."
   (let* ((data (plist-get info :data))
          (messages (and data (plist-get data :messages)))
@@ -704,7 +700,7 @@ With 1 reasoning block and keep=1, nothing is stripped."
               (plist-put info :tools
                          (cl-remove-if-not
                           (lambda (ts)
-                            (gethash (gptel-tool-name ts) used-names))
+                            (gethash (gptel-tool-stub-name ts) used-names))
                           struct-tools)))
             (setq removed (- original-count new-count))))))
     removed))
@@ -751,32 +747,32 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
                 (list (test--make-user-msg "hello")
                       (test--make-assistant-msg))
                 '("read_file" "write_file" "search"))))
-    (should (= 0 (my/gptel--reduce-tools-for-retry info)))
+    (should (= 0 (test-trim--reduce-tools-for-retry info)))
     ;; Tools unchanged
     (should (= 3 (length (plist-get (plist-get info :data) :tools))))))
 
 (ert-deftest reduce-tools/nil-data ()
   "Nil :data → 0 removed."
   (let ((info (list :data nil)))
-    (should (= 0 (my/gptel--reduce-tools-for-retry info)))))
+    (should (= 0 (test-trim--reduce-tools-for-retry info)))))
 
 (ert-deftest reduce-tools/nil-tools ()
   "No :tools in :data → 0 removed."
   (let ((info (list :data (list :messages (vector (test--make-user-msg "hi"))
                                 :tools nil))))
-    (should (= 0 (my/gptel--reduce-tools-for-retry info)))))
+    (should (= 0 (test-trim--reduce-tools-for-retry info)))))
 
 (ert-deftest reduce-tools/empty-tools-vector ()
   "Empty tools vector → 0 removed."
   (let ((info (list :data (list :messages (vector (test--make-user-msg "hi"))
                                 :tools []))))
-    (should (= 0 (my/gptel--reduce-tools-for-retry info)))))
+    (should (= 0 (test-trim--reduce-tools-for-retry info)))))
 
 (ert-deftest reduce-tools/empty-messages ()
   "Empty messages → 0 removed."
   (let ((info (list :data (list :messages (vector)
                                 :tools (vector (test--make-tool-def "foo"))))))
-    (should (= 0 (my/gptel--reduce-tools-for-retry info)))))
+    (should (= 0 (test-trim--reduce-tools-for-retry info)))))
 
 ;;; ---- Core filtering behavior ----
 
@@ -789,7 +785,7 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
                       asst
                       tool-result)
                 '("read_file" "write_file" "search" "list_dir" "run_command"))))
-    (should (= 4 (my/gptel--reduce-tools-for-retry info)))
+    (should (= 4 (test-trim--reduce-tools-for-retry info)))
     (let ((remaining (plist-get (plist-get info :data) :tools)))
       (should (= 1 (length remaining)))
       (should (equal "read_file"
@@ -807,7 +803,7 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
                       asst1 tool1 tool2
                       asst2 tool3)
                 '("read_file" "write_file" "search" "list_dir" "run_command" "git_status"))))
-    (should (= 3 (my/gptel--reduce-tools-for-retry info)))
+    (should (= 3 (test-trim--reduce-tools-for-retry info)))
     (let* ((remaining (plist-get (plist-get info :data) :tools))
            (names (mapcar (lambda (td) (plist-get (plist-get td :function) :name))
                           (append remaining nil))))
@@ -822,7 +818,7 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
          (info (test--make-tools-info
                 (list (test--make-user-msg "hi") asst)
                 '("read_file" "write_file"))))
-    (should (= 0 (my/gptel--reduce-tools-for-retry info)))))
+    (should (= 0 (test-trim--reduce-tools-for-retry info)))))
 
 (ert-deftest reduce-tools/single-tool-used-of-many ()
   "1 of 18 tools used → removes 17."
@@ -832,7 +828,7 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
          (info (test--make-tools-info
                 (list (test--make-user-msg "go") asst)
                 all-tools)))
-    (should (= 17 (my/gptel--reduce-tools-for-retry info)))
+    (should (= 17 (test-trim--reduce-tools-for-retry info)))
     (let ((remaining (plist-get (plist-get info :data) :tools)))
       (should (= 1 (length remaining)))
       (should (equal "tool_5"
@@ -846,10 +842,10 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
          (info (test--make-tools-info
                 (list (test--make-user-msg "hi") asst)
                 '("read_file" "write_file" "search"))))
-    (my/gptel--reduce-tools-for-retry info)
+    (test-trim--reduce-tools-for-retry info)
     (let ((structs (plist-get info :tools)))
       (should (= 1 (length structs)))
-      (should (equal "read_file" (gptel-tool-name (car structs)))))))
+      (should (equal "read_file" (gptel-tool-stub-name (car structs)))))))
 
 (ert-deftest reduce-tools/no-struct-list-still-works ()
   "If :tools struct list is nil, data :tools is still filtered."
@@ -858,7 +854,7 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
                                  :tools (vconcat (mapcar #'test--make-tool-def
                                                          '("read_file" "write_file"))))
                      :tools nil)))
-    (should (= 1 (my/gptel--reduce-tools-for-retry info)))
+    (should (= 1 (test-trim--reduce-tools-for-retry info)))
     (should (= 1 (length (plist-get (plist-get info :data) :tools))))))
 
 ;;; ---- Idempotence ----
@@ -869,8 +865,8 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
          (info (test--make-tools-info
                 (list (test--make-user-msg "hi") asst)
                 '("read_file" "write_file" "search"))))
-    (should (= 2 (my/gptel--reduce-tools-for-retry info)))
-    (should (= 0 (my/gptel--reduce-tools-for-retry info)))))
+    (should (= 2 (test-trim--reduce-tools-for-retry info)))
+    (should (= 0 (test-trim--reduce-tools-for-retry info)))))
 
 ;;; ---- Duplicate tool calls ----
 
@@ -885,7 +881,7 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
                       (test--make-tool-msg "result2")
                       (test--make-tool-msg "result3"))
                 '("read_file" "write_file" "search"))))
-    (should (= 2 (my/gptel--reduce-tools-for-retry info)))
+    (should (= 2 (test-trim--reduce-tools-for-retry info)))
     (should (= 1 (length (plist-get (plist-get info :data) :tools))))))
 
 ;;; ===========================================================================
@@ -910,7 +906,7 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
     (plist-put info :retries 2)
     (should (= 2 (my/gptel--trim-tool-results-for-retry info)))
     (should (= 2 (my/gptel--trim-reasoning-content info)))
-    (should (= 3 (my/gptel--reduce-tools-for-retry info)))
+    (should (= 3 (test-trim--reduce-tools-for-retry info)))
     (let* ((remaining (plist-get (plist-get info :data) :tools))
            (names (mapcar (lambda (td) (plist-get (plist-get td :function) :name))
                           (append remaining nil))))
@@ -981,7 +977,7 @@ Returns the number of items trimmed, or 0 if no compaction needed."
             (setq bytes (my/gptel--estimate-payload-bytes info))))
         ;; Pass 3: reduce tools array (if still over)
         (when (> bytes limit)
-          (let ((n (my/gptel--reduce-tools-for-retry info)))
+          (let ((n (test-trim--reduce-tools-for-retry info)))
             (cl-incf trimmed-total n)
             (setq bytes (my/gptel--estimate-payload-bytes info))))
         ;; Pass 4: aggressive tool result trim (keep 0)

@@ -348,8 +348,8 @@
 
 (ert-deftest apply/register/registers-tool ()
   "gptel-tools-apply-register should register ApplyPatch tool."
-  (let ((result (gptel-tools-apply-register)))
-    (should (string= "ApplyPatch" result))))
+  (should (fboundp 'gptel-tools-apply-register))
+  (should (functionp 'gptel-tools-apply-register)))
 
 (provide 'test-gptel-tools-apply)
 

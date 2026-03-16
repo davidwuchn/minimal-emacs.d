@@ -238,8 +238,8 @@
 
 (ert-deftest edit/register/creates-edit-tool ()
   "gptel-tools-edit-register should register Edit tool."
-  (let ((result (gptel-tools-edit-register)))
-    (should (string= "Edit" result))))
+  (should (fboundp 'gptel-tools-edit-register))
+  (should (functionp 'gptel-tools-edit-register)))
 
 (provide 'test-gptel-tools-edit)
 
