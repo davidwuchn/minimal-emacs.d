@@ -1,4 +1,4 @@
-;;; nucleus-mode-switch.el --- Mode transition handler for nucleus -*- lexical-binding: t; -*-
+;;; nucleus-mode-switch.el --- Mode transition handler for nucleus -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 2.0.0

@@ -1,4 +1,4 @@
-;;; gptel-ext-context-images.el --- Image context management for gptel -*- lexical-binding: t; -*-
+;;; gptel-ext-context-images.el --- Image context management for gptel -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 1.0.0

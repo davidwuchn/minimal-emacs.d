@@ -1,4 +1,4 @@
-;;; gptel-tools-programmatic.el --- Programmatic tool orchestration -*- lexical-binding: t; -*-
+;;; gptel-tools-programmatic.el --- Programmatic tool orchestration -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 1.0.0

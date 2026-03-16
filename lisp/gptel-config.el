@@ -1,4 +1,4 @@
-;;; gptel-config.el --- Clean, modular gptel configuration -*- lexical-binding: t -*-
+;;; gptel-config.el --- Clean, modular gptel configuration -*- no-byte-compile: t; lexical-binding: t; -*-
 
 (eval-and-compile
   (let* ((base-dir (if (boundp 'minimal-emacs-user-directory)

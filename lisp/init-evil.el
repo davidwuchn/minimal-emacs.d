@@ -1,4 +1,4 @@
-;;; init-evil.el --- Vim bindings and ergonomics -*- lexical-binding: t; -*-
+;;; init-evil.el --- Vim bindings and ergonomics -*- no-byte-compile: t; lexical-binding: t; -*-
 
 (provide 'init-evil)
 

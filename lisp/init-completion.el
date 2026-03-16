@@ -1,4 +1,4 @@
-;;; init-completion.el --- Minibuffer and in-buffer completion -*- lexical-binding: t; -*-
+;;; init-completion.el --- Minibuffer and in-buffer completion -*- no-byte-compile: t; lexical-binding: t; -*-
 
 (provide 'init-completion)
 

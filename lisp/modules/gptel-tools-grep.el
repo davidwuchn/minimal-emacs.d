@@ -1,4 +1,4 @@
-;;; gptel-tools-grep.el --- Async Grep tool for gptel -*- lexical-binding: t; -*-
+;;; gptel-tools-grep.el --- Async Grep tool for gptel -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 1.0.0

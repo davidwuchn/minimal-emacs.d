@@ -1,4 +1,4 @@
-;;; gptel-ext-streaming.el --- Streaming jit-lock protection -*- lexical-binding: t; -*-
+;;; gptel-ext-streaming.el --- Streaming jit-lock protection -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Fix: jit-lock error during streaming.

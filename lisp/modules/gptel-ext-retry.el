@@ -1,4 +1,4 @@
-;;; gptel-ext-retry.el --- Automatic retry and payload compaction -*- lexical-binding: t; -*-
+;;; gptel-ext-retry.el --- Automatic retry and payload compaction -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Automatic retry for transient API errors with exponential backoff.

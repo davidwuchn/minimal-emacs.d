@@ -1,4 +1,4 @@
-;;; theme-setting.el --- User Visual and Theme Customizations -*- lexical-binding: t; -*-
+;;; theme-setting.el --- User Visual and Theme Customizations -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Fonts
 

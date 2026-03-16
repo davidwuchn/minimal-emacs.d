@@ -1,4 +1,4 @@
-;;; nucleus-tools-verify.el --- Runtime verification for nucleus tools -*- lexical-binding: t -*-
+;;; nucleus-tools-verify.el --- Runtime verification for nucleus tools -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Verifies that all tools declared in nucleus-toolsets are actually registered.

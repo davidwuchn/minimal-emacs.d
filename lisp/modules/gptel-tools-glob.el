@@ -1,4 +1,4 @@
-;;; gptel-tools-glob.el --- Async Glob tool for gptel -*- lexical-binding: t; -*-
+;;; gptel-tools-glob.el --- Async Glob tool for gptel -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 1.0.0

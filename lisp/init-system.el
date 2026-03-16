@@ -1,4 +1,4 @@
-;;; init-system.el --- Core performance and system integration -*- lexical-binding: t; -*-
+;;; init-system.el --- Core performance and system integration -*- no-byte-compile: t; lexical-binding: t; -*-
 
 (provide 'init-system)
 

@@ -1,4 +1,4 @@
-;;; gptel-tools.el --- Tool registry for gptel -*- lexical-binding: t; -*-
+;;; gptel-tools.el --- Tool registry for gptel -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 1.1.0

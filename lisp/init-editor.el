@@ -1,4 +1,4 @@
-;;; init-editor.el --- Editor quality-of-life enhancements -*- lexical-binding: t; -*-
+;;; init-editor.el --- Editor quality-of-life enhancements -*- no-byte-compile: t; lexical-binding: t; -*-
 
 (provide 'init-editor)
 

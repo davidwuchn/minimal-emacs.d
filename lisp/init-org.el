@@ -1,4 +1,4 @@
-;;; init-org.el --- Org mode configuration -*- lexical-binding: t; -*-
+;;; init-org.el --- Org mode configuration -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Comprehensive Org mode configuration including:

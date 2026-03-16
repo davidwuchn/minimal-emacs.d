@@ -1,4 +1,4 @@
-;;; gptel-ext-abort.el --- Request abort, curl timeouts, and keyboard-quit -*- lexical-binding: t; -*-
+;;; gptel-ext-abort.el --- Request abort, curl timeouts, and keyboard-quit -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Two layers for always-interruptable requests:

@@ -1,4 +1,4 @@
-;;; gptel-ext-fsm-utils.el --- Shared FSM helpers -*- lexical-binding: t; -*-
+;;; gptel-ext-fsm-utils.el --- Shared FSM helpers -*- no-byte-compile: t; lexical-binding: t; -*-
 
 (require 'gptel)
 

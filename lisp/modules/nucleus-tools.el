@@ -1,4 +1,4 @@
-;;; nucleus-tools.el --- Tool definitions for nucleus -*- lexical-binding: t; -*-
+;;; nucleus-tools.el --- Tool definitions for nucleus -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 1.0.0

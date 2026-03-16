@@ -1,4 +1,4 @@
-;;; gptel-sandbox.el --- Restricted tool orchestration sandbox -*- lexical-binding: t; -*-
+;;; gptel-sandbox.el --- Restricted tool orchestration sandbox -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 1.0.0

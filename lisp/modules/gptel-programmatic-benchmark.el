@@ -1,4 +1,4 @@
-;;; gptel-programmatic-benchmark.el --- Benchmark Programmatic orchestration -*- lexical-binding: t; -*-
+;;; gptel-programmatic-benchmark.el --- Benchmark Programmatic orchestration -*- no-byte-compile: t; lexical-binding: t; -*-
 
 (require 'benchmark)
 (require 'cl-lib)

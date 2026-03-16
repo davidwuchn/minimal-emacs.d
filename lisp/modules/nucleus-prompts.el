@@ -1,4 +1,4 @@
-;;; nucleus-prompts.el --- Prompt loading for nucleus -*- lexical-binding: t; -*-
+;;; nucleus-prompts.el --- Prompt loading for nucleus -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 1.0.0

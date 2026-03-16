@@ -1,4 +1,4 @@
-;;; gptel-ext-core.el --- Core gptel configuration and hooks -*- lexical-binding: t; -*-
+;;; gptel-ext-core.el --- Core gptel configuration and hooks -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Core configuration for gptel: project temp directory, markdown face compat,

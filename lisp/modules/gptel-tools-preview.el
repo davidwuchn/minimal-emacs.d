@@ -1,4 +1,4 @@
-;;; gptel-tools-preview.el --- Preview tool for gptel -*- lexical-binding: t; -*-
+;;; gptel-tools-preview.el --- Preview tool for gptel -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 3.0.0

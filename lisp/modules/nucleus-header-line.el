@@ -1,4 +1,4 @@
-;;; nucleus-header-line.el --- Header-line components for nucleus -*- lexical-binding: t; -*-
+;;; nucleus-header-line.el --- Header-line components for nucleus -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 1.0.0

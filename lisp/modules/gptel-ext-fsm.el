@@ -1,4 +1,4 @@
-;;; gptel-ext-fsm.el --- FSM error recovery and agent handler fixes -*- lexical-binding: t; -*-
+;;; gptel-ext-fsm.el --- FSM error recovery and agent handler fixes -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Workarounds for gptel FSM getting stuck:

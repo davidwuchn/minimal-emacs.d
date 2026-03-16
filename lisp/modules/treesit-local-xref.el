@@ -1,4 +1,4 @@
-;;; treesit-local-xref.el --- Tree-sitter file-local xref backend -*- lexical-binding: t -*-
+;;; treesit-local-xref.el --- Tree-sitter file-local xref backend -*- no-byte-compile: t; lexical-binding: t; -*-
 
 (require 'xref)
 (require 'treesit)

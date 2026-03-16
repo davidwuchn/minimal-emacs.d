@@ -1,4 +1,4 @@
-;;; gptel-ext-tool-sanitize.el --- Tool call sanitization and doom-loop detection -*- lexical-binding: t; -*-
+;;; gptel-ext-tool-sanitize.el --- Tool call sanitization and doom-loop detection -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Sanitize malformed tool calls, detect doom-loops, and deduplicate tools.

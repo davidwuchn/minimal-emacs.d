@@ -1,4 +1,4 @@
-;;; gptel-tools-apply.el --- ApplyPatch tool for gptel -*- lexical-binding: t; -*-
+;;; gptel-tools-apply.el --- ApplyPatch tool for gptel -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 1.1.0

@@ -1,4 +1,4 @@
-;;; nucleus-config.el --- Nucleus configuration facade -*- lexical-binding: t; -*-
+;;; nucleus-config.el --- Nucleus configuration facade -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Backward-compatibility facade that loads nucleus modules.

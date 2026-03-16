@@ -1,4 +1,4 @@
-;;; gptel-ext-context.el --- Auto-compact gptel buffers -*- lexical-binding: t; -*-
+;;; gptel-ext-context.el --- Auto-compact gptel buffers -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 2.0.0

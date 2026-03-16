@@ -1,4 +1,4 @@
-;;; init-files.el --- File management, history, backup & no-littering -*- lexical-binding: t; -*-
+;;; init-files.el --- File management, history, backup & no-littering -*- no-byte-compile: t; lexical-binding: t; -*-
 
 (provide 'init-files)
 

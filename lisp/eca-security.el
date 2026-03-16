@@ -1,4 +1,4 @@
-;;; eca-security.el --- ECA security config -*- lexical-binding: t; -*-
+;;; eca-security.el --- ECA security config -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; This file is written to work in both Doom Emacs and vanilla Emacs.
 ;; In vanilla Emacs, Doom macros like `use-package!' and `add-hook!' are undefined.

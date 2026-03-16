@@ -1,4 +1,4 @@
-;;; gptel-ext-tool-confirm.el --- Enhanced tool call confirmation UI -*- lexical-binding: t; -*-
+;;; gptel-ext-tool-confirm.el --- Enhanced tool call confirmation UI -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Override `gptel--display-tool-calls' to include arguments in the minibuffer

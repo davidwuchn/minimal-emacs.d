@@ -1,4 +1,4 @@
-;;; init-tools.el --- Magit, UI tools, and miscellany -*- lexical-binding: t; -*-
+;;; init-tools.el --- Magit, UI tools, and miscellany -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; General-purpose tools: Magit, UI enhancements, Dirvish, EAT terminal.

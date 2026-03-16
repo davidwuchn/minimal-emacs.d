@@ -1,4 +1,4 @@
-;;; gptel-ext-transient.el --- Transient menu fixes and crowdsourced prompts -*- lexical-binding: t; -*-
+;;; gptel-ext-transient.el --- Transient menu fixes and crowdsourced prompts -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Fix gptel-system-prompt transient losing the originating buffer.

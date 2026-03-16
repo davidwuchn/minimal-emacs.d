@@ -1,4 +1,4 @@
-;;; gptel-ext-context-cache.el --- Context-window caching for gptel -*- lexical-binding: t; -*-
+;;; gptel-ext-context-cache.el --- Context-window caching for gptel -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 1.0.0

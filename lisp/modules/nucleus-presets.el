@@ -1,4 +1,4 @@
-;;; nucleus-presets.el --- Preset management for nucleus -*- lexical-binding: t; -*-
+;;; nucleus-presets.el --- Preset management for nucleus -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
 ;; Version: 1.0.0

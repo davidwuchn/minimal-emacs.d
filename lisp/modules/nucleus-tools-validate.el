@@ -1,4 +1,4 @@
-;;; nucleus-tools-validate.el --- Validate tool prompt signatures -*- lexical-binding: t -*-
+;;; nucleus-tools-validate.el --- Validate tool prompt signatures -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Validates that tool prompt lambda signatures match registered :args.

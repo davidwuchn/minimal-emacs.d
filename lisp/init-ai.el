@@ -1,4 +1,4 @@
-;;; init-ai.el --- AI assistant configuration -*- lexical-binding: t; -*-
+;;; init-ai.el --- AI assistant configuration -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Configuration for AI assistants: gptel, gptel-agent, nucleus, and ECA.

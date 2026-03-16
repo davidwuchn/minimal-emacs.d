@@ -1,4 +1,4 @@
-;;; treesit-agent-tools.el --- Tree-sitter tools for AI agents -*- lexical-binding: t -*-
+;;; treesit-agent-tools.el --- Tree-sitter tools for AI agents -*- no-byte-compile: t; lexical-binding: t; -*-
 
 (require 'treesit)
 

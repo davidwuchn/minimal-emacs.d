@@ -1,4 +1,4 @@
-;;; init-treesit.el --- Tree-sitter auto configuration -*- lexical-binding: t; -*-
+;;; init-treesit.el --- Tree-sitter auto configuration -*- no-byte-compile: t; lexical-binding: t; -*-
 
 (require 'treesit-auto)
 

@@ -1,4 +1,4 @@
-;;; gptel-ext-reasoning.el --- Thinking/reasoning content preservation -*- lexical-binding: t; -*-
+;;; gptel-ext-reasoning.el --- Thinking/reasoning content preservation -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; Moonshot/Kimi (and other thinking-enabled models) require that every assistant

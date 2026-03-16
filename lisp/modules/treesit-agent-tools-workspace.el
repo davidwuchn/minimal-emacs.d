@@ -1,4 +1,4 @@
-;;; treesit-agent-tools-workspace.el --- Workspace AST tools -*- lexical-binding: t -*-
+;;; treesit-agent-tools-workspace.el --- Workspace AST tools -*- no-byte-compile: t; lexical-binding: t; -*-
 
 (require 'treesit-agent-tools)
 (require 'project)

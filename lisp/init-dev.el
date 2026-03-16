@@ -1,4 +1,4 @@
-;;; init-dev.el --- Programming, LSP, Clojure, Elisp -*- lexical-binding: t; -*-
+;;; init-dev.el --- Programming, LSP, Clojure, Elisp -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Add lisp/ and lisp/modules/ to load-path for both load and byte-compile time.
 (eval-and-compile
