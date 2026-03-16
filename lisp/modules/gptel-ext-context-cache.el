@@ -261,8 +261,8 @@ raw tokens."
    ((< n 5000) (round (* n 1000)))
    (t (round n))))
 
-(defun my/gptel--estimate-tokens (chars)
-  "Estimate token count from CHARS.
+(defun my/gptel--estimate-text-tokens (chars)
+  "Estimate text token count from CHARS.
 
 Uses language-aware heuristics:
 - Code (high symbol density): ~3 chars/token
@@ -271,21 +271,28 @@ Uses language-aware heuristics:
 
 For buffers with current buffer, analyzes content type."
   (let ((ratio 3.5))
-    ;; Check if we have buffer context
     (when (and (buffer-live-p (current-buffer))
                (buffer-file-name))
       (let ((ext (file-name-extension (buffer-file-name))))
         (cond
-         ;; Code files - higher token density
          ((member ext '("el" "clj" "cljs" "py" "js" "ts" "rs" "go" "java" "c" "cpp" "h"))
           (setq ratio 3.0))
-         ;; Prose/documentation
          ((member ext '("md" "txt" "org" "rst" "adoc"))
           (setq ratio 4.0))
-         ;; Config/JSON - very dense
          ((member ext '("json" "yaml" "yml" "toml" "ini"))
           (setq ratio 2.5)))))
     (/ (float chars) ratio)))
+
+(defun my/gptel--estimate-tokens (chars)
+  "Estimate total token count: text (CHARS) + images in context.
+
+Text estimation uses language-aware heuristics.
+Image tokens are counted from `gptel-context' if available."
+  (let ((text-tokens (my/gptel--estimate-text-tokens chars))
+        (image-tokens (if (fboundp 'my/gptel--count-context-image-tokens)
+                          (my/gptel--count-context-image-tokens)
+                        0)))
+    (+ text-tokens image-tokens)))
 
 ;;; Cache Persistence
 

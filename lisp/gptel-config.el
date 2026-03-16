@@ -12,6 +12,7 @@
 (require 'gptel-ext-fsm-utils)
 (require 'gptel-ext-tool-sanitize)
 (require 'gptel-ext-reasoning)
+(require 'gptel-ext-context-images)
 (require 'gptel-ext-retry)
 (require 'gptel-ext-transient)
 (require 'gptel-ext-abort)

@@ -15,8 +15,10 @@
 (require 'gptel)
 (require 'gptel-openai)
 
-(defvar gptel-send--handlers)    ; defined in gptel
-(defvar gptel-request--handlers) ; defined in gptel
+(defvar gptel-send--handlers)
+(defvar gptel-request--handlers)
+
+(declare-function my/gptel--trim-context-images "gptel-ext-context-images")
 
 ;; --- Automatic Retry for Transient API Errors ---
 ;; Gemini often returns "Malformed JSON" due to API load or payload limits.
@@ -468,25 +470,28 @@ subsequent attempts via `my/gptel-auto-retry'.
 Applies trimming progressively until under limit or nothing left to trim:
   1. Trim old tool results (keep 2 recent)
   2. Strip reasoning_content
-  3. Reduce tools array to only used tools"
+  3. Reduce tools array to only used tools
+  4. Trim context images (oldest first)
+  5. Aggressive tool result trim (keep 0)
+  6. Truncate old user/assistant messages
+  7. Strip images from multimodal messages (last resort)"
   (when my/gptel-payload-byte-limit
     (let* ((info (gptel-fsm-info fsm))
            (retries (or (plist-get info :retries) 0)))
-      ;; Only compact on first send — retries have their own trimming
-       (when (= retries 0)
-         (let ((limit (my/gptel--effective-byte-limit info))
-               (repaired (my/gptel--repair-thinking-tool-call-messages info))
-               (bytes (my/gptel--estimate-payload-bytes info))
-               (trimmed-total 0)
-               (pass 0))
-           (when (> repaired 0)
-             (message "gptel: Repaired reasoning field on %d tool-call message(s) before compaction" repaired))
-           (when (> bytes limit)
-             (message "gptel: Payload %dKB exceeds %dKB limit, compacting..."
-                      (/ bytes 1024) (/ limit 1024))
+      (when (= retries 0)
+        (let ((limit (my/gptel--effective-byte-limit info))
+              (repaired (my/gptel--repair-thinking-tool-call-messages info))
+              (bytes (my/gptel--estimate-payload-bytes info))
+              (trimmed-total 0)
+              (pass 0))
+          (when (> repaired 0)
+            (message "gptel: Repaired reasoning field on %d tool-call message(s) before compaction" repaired))
+          (when (> bytes limit)
+            (message "gptel: Payload %dKB exceeds %dKB limit, compacting..."
+                     (/ bytes 1024) (/ limit 1024))
             ;; Pass 1: trim tool results (keep 2 recent)
             (let ((my/gptel-retry-keep-recent-tool-results 2))
-              (plist-put info :retries 1)  ; simulate retry 1 for keep count
+              (plist-put info :retries 1)
               (let ((n (my/gptel--trim-tool-results-for-retry info)))
                 (cl-incf trimmed-total n)
                 (setq bytes (my/gptel--estimate-payload-bytes info))
@@ -495,16 +500,16 @@ Applies trimming progressively until under limit or nothing left to trim:
                   (message "gptel: Pass 1: trimmed %d tool result(s), now %dKB"
                            n (/ bytes 1024)))))
             ;; Pass 2: strip reasoning (if still over)
-             (when (> bytes limit)
-               (let ((n (my/gptel--trim-reasoning-content info)))
-                 (cl-incf trimmed-total n)
-                 (setq repaired (my/gptel--repair-thinking-tool-call-messages info))
-                 (cl-incf trimmed-total repaired)
-                 (setq bytes (my/gptel--estimate-payload-bytes info))
-                 (setq pass 2)
-                 (when (or (> n 0) (> repaired 0))
-                   (message "gptel: Pass 2: stripped reasoning from %d message(s), repaired %d tool-call message(s), now %dKB"
-                            n repaired (/ bytes 1024)))))
+            (when (> bytes limit)
+              (let ((n (my/gptel--trim-reasoning-content info)))
+                (cl-incf trimmed-total n)
+                (setq repaired (my/gptel--repair-thinking-tool-call-messages info))
+                (cl-incf trimmed-total repaired)
+                (setq bytes (my/gptel--estimate-payload-bytes info))
+                (setq pass 2)
+                (when (or (> n 0) (> repaired 0))
+                  (message "gptel: Pass 2: stripped reasoning from %d message(s), repaired %d tool-call message(s), now %dKB"
+                           n repaired (/ bytes 1024)))))
             ;; Pass 3: reduce tools array (if still over)
             (when (> bytes limit)
               (let ((n (my/gptel--reduce-tools-for-retry info)))
@@ -514,36 +519,45 @@ Applies trimming progressively until under limit or nothing left to trim:
                 (when (> n 0)
                   (message "gptel: Pass 3: removed %d unused tool def(s), now %dKB"
                            n (/ bytes 1024)))))
-            ;; Pass 4: aggressive tool result trim (keep 0)
+            ;; Pass 4: trim context images (oldest first)
             (when (> bytes limit)
-              (let ((my/gptel-retry-keep-recent-tool-results 2))
-                (plist-put info :retries 3)  ; simulate retry 3 for keep=0
-                (let ((n (my/gptel--trim-tool-results-for-retry info)))
+              (let ((n (when (fboundp 'my/gptel--trim-context-images)
+                         (my/gptel--trim-context-images))))
+                (when (and n (> n 0))
                   (cl-incf trimmed-total n)
                   (setq bytes (my/gptel--estimate-payload-bytes info))
                   (setq pass 4)
+                  (message "gptel: Pass 4: trimmed %d context image(s), now %dKB"
+                           n (/ bytes 1024)))))
+            ;; Pass 5: aggressive tool result trim (keep 0)
+            (when (> bytes limit)
+              (let ((my/gptel-retry-keep-recent-tool-results 2))
+                (plist-put info :retries 3)
+                (let ((n (my/gptel--trim-tool-results-for-retry info)))
+                  (cl-incf trimmed-total n)
+                  (setq bytes (my/gptel--estimate-payload-bytes info))
+                  (setq pass 5)
                   (when (> n 0)
-                    (message "gptel: Pass 4: truncated %d remaining tool results, now %dKB"
+                    (message "gptel: Pass 5: truncated %d remaining tool results, now %dKB"
                              n (/ bytes 1024))))))
-            ;; Pass 5: truncate old user/assistant messages
+            ;; Pass 6: truncate old user/assistant messages
             (when (> bytes limit)
               (let ((n (my/gptel--truncate-old-messages info)))
                 (cl-incf trimmed-total n)
                 (setq bytes (my/gptel--estimate-payload-bytes info))
-                (setq pass 5)
+                (setq pass 6)
                 (when (> n 0)
-(message "gptel: Pass 5: truncated %d old message(s), now %dKB"
-                            n (/ bytes 1024)))))
-            ;; Pass 6: strip images from multimodal messages
+                  (message "gptel: Pass 6: truncated %d old message(s), now %dKB"
+                           n (/ bytes 1024)))))
+            ;; Pass 7: strip images from multimodal messages (last resort)
             (when (> bytes limit)
               (let ((n (my/gptel--strip-images-from-messages info)))
                 (cl-incf trimmed-total n)
                 (setq bytes (my/gptel--estimate-payload-bytes info))
-                (setq pass 6)
+                (setq pass 7)
                 (when (> n 0)
-                  (message "gptel: Pass 6: stripped %d image(s), now %dKB"
+                  (message "gptel: Pass 7: stripped %d image(s) from messages, now %dKB"
                            n (/ bytes 1024)))))
-            ;; Reset retries to 0 (we simulated retries for trim functions)
             (plist-put info :retries 0)
             (if (> bytes limit)
                 (message "gptel: WARNING: Payload still %dKB after %d passes of compaction (limit %dKB)"

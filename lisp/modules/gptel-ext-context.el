@@ -11,10 +11,14 @@
 (require 'gptel)
 (require 'gptel-request)
 (require 'gptel-ext-context-cache)
+(require 'gptel-ext-context-images)
 (require 'cl-lib)
 
 (declare-function my/gptel--model-id-string "gptel-ext-context-cache")
 (declare-function my/gptel--context-window "gptel-ext-context-cache")
+(declare-function my/gptel--estimate-text-tokens "gptel-ext-context-cache")
+(declare-function my/gptel--count-context-image-tokens "gptel-ext-context-images")
+(declare-function my/gptel--context-image-count "gptel-ext-context-images")
 (defvar my/gptel--context-window-cache)
 
 ;;; Customization
@@ -107,7 +111,11 @@ Preview mode never requires confirmation since original is preserved."
 Only returns t when tokens >= threshold% of context window.
 The interval check is a secondary safeguard, not the primary control."
   (let* ((chars (buffer-size))
-         (tokens (my/gptel--estimate-tokens chars))
+         (text-tokens (my/gptel--estimate-text-tokens chars))
+         (image-tokens (or (and (fboundp 'my/gptel--count-context-image-tokens)
+                                (my/gptel--count-context-image-tokens))
+                           0))
+         (tokens (+ text-tokens image-tokens))
          (window (my/gptel--context-window))
          (threshold (* window my/gptel-auto-compact-threshold))
          (needed (and my/gptel-auto-compact-enabled
@@ -117,8 +125,9 @@ The interval check is a secondary safeguard, not the primary control."
     (when (and my/gptel-auto-compact-enabled
                (bound-and-true-p gptel-mode)
                (>= chars my/gptel-auto-compact-min-chars))
-      (message "[compact] Check: %d tokens vs %d threshold (window: %d, %.0f%%) -> %s"
-               (round tokens) (round threshold) window
+      (message "[compact] Check: %d tokens (text:%d + images:%d) vs %d threshold (window: %d, %.0f%%) -> %s"
+               (round tokens) (round text-tokens) (round image-tokens)
+               (round threshold) window
                (* 100 (/ (float tokens) window))
                (if needed "NEEDED" "skipped")))
     needed))
@@ -132,16 +141,24 @@ The interval check is a secondary safeguard, not the primary control."
          (cached (and model-id (gethash model-id my/gptel--context-window-cache)))
          (threshold (* window my/gptel-auto-compact-threshold))
          (chars (buffer-size))
-         (tokens (my/gptel--estimate-tokens chars)))
+         (text-tokens (my/gptel--estimate-text-tokens chars))
+         (image-tokens (or (and (fboundp 'my/gptel--count-context-image-tokens)
+                                (my/gptel--count-context-image-tokens))
+                           0))
+         (image-count (or (and (fboundp 'my/gptel--context-image-count)
+                               (my/gptel--context-image-count))
+                          0))
+         (tokens (+ text-tokens image-tokens)))
     (message "Context window: %d tokens (threshold: %d, %.0f%%)
 Model: %s
 Model ID: %s
 Cached: %s
-Current: %d chars, ~%d tokens (%.0f%% of window)"
+Current: %d chars, ~%d tokens (text:%d + images:%d [%d]) (%.0f%% of window)"
              window threshold (* 100 my/gptel-auto-compact-threshold)
              model model-id
              (if cached (format "yes (%d)" cached) "no")
-             chars (round tokens) (* 100 (/ (float tokens) window)))))
+             chars (round tokens) (round text-tokens) (round image-tokens) image-count
+             (* 100 (/ (float tokens) window)))))
 
 (defun my/gptel--directive-text (sym)
   "Resolve directive SYM to a string.
