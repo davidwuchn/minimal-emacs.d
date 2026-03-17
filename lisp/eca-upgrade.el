@@ -6,6 +6,18 @@
 
 ;;; Code:
 
+;;; Configuration
+
+(defcustom eca-upgrade-auto-enabled nil
+  "When non-nil, check for eca updates once per day at idle."
+  :type 'boolean
+  :group 'eca)
+
+(defcustom eca-upgrade-auto-idle-seconds 30
+  "Seconds of idle time before the daily eca update check runs."
+  :type 'integer
+  :group 'eca)
+
 ;; Ensure eca-process is loaded for its variables
 (with-eval-after-load 'eca-process
 
