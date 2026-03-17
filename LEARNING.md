@@ -29,6 +29,7 @@
 - [TDD Refactoring Workflow](#tdd-refactoring-workflow)
 - [Backend Integration Patterns](#backend-integration-patterns)
 - [Context Window Detection & Auto-Compact](#context-window-detection--auto-compact)
+- [Context Management Code Organization](#context-management-code-organization)
 
 
 ## gptel-agent & Emacs LSP (Eglot) Integration
@@ -227,8 +228,14 @@
 - **Why use over cond**: (1) Destructuring + matching in one step, (2) Compiler checks patterns, (3) More readable for complex data, (4) Functional style without nested if/let.
 - **Example from ECA integration**:
   ```elisp
-  (pcase (eca--session-status session)
-    ('stopped  (eca-process-start session ...))
-    ('started  (eca-chat-open session))
-    ('starting (eca-info "already starting")))
-  ```
+(pcase (eca--session-status session)
+     ('stopped  (eca-process-start session ...))
+     ('started  (eca-chat-open session))
+     ('starting (eca-info "already starting")))
+   ```
+
+## Context Management Code Organization
+- **Facade pattern for config files**: `gptel-config.el` should be a thin facade that only requires modules. Interactive commands and helpers belong in feature-specific modules like `gptel-ext-context.el`.
+- **Group related functions by domain**: `gptel-ext-context.el` houses all context-related functionality: auto-compaction, context window detection, token estimation, and interactive context commands like `my/gptel-add-project-files`.
+- **Keybindings live with mode setup**: The `C-c C-p` binding for `my/gptel-add-project-files` lives in `gptel-ext-core.el` alongside other gptel-mode-map bindings, not in the function definition file.
+- **Function definition → keybinding separation**: Define functions in feature modules, bind keys in core/setup modules. This allows the feature to be loaded independently of keybinding preferences.
