@@ -1,4 +1,4 @@
-;;; test-eca-security.el --- Tests for eca-security.el -*- lexical-binding: t; no-byte-compile: t; -*-
+;;; test-eca-upgrade.el --- Tests for eca-upgrade.el -*- lexical-binding: t; no-byte-compile: t; -*-
 
 (require 'ert)
 (require 'cl-lib)
@@ -14,11 +14,11 @@
 (defun package-version-join (vlist) (mapconcat #'number-to-string vlist "."))
 
 ;; Load just the version resolution part
-(defvar my/eca--pinned-version "0.106.0"
+(defvar eca-upgrade--pinned-version "0.106.0"
   "Pinned fallback version for testing.")
 
-(defun my/eca--resolve-version-test ()
-  "Test version of my/eca--resolve-version that skips network calls."
+(defun eca-upgrade--resolve-version-test ()
+  "Test version of eca-upgrade--resolve-version that skips network calls."
   (cl-flet ((parse-semver (raw)
               (and (stringp raw)
                    (string-match "\\([0-9]+\\.[0-9]+\\.[0-9]+\\)" raw)
@@ -34,26 +34,26 @@
                    (ver-list (package-desc-version (cadr pkg-desc))))
          (package-version-join ver-list)))
      ;; (d) pinned fallback
-     my/eca--pinned-version)))
+     eca-upgrade--pinned-version)))
 
 ;;; Version resolution tests
 
-(ert-deftest eca-security/pinned-version-default ()
+(ert-deftest eca-upgrade/pinned-version-default ()
   "Default pinned version is a valid semver."
-  (should (stringp my/eca--pinned-version))
-  (should (string-match-p "^[0-9]+\\.[0-9]+\\.[0-9]+$" my/eca--pinned-version)))
+  (should (stringp eca-upgrade--pinned-version))
+  (should (string-match-p "^[0-9]+\\.[0-9]+\\.[0-9]+$" eca-upgrade--pinned-version)))
 
-(ert-deftest eca-security/resolve-version-fallback-to-pinned ()
-  "my/eca--resolve-version returns pinned version when no other source available."
+(ert-deftest eca-upgrade/resolve-version-fallback-to-pinned ()
+  "eca-upgrade--resolve-version returns pinned version when no other source available."
   (let ((package-alist nil))
-    (should (equal my/eca--pinned-version (my/eca--resolve-version-test)))))
+    (should (equal eca-upgrade--pinned-version (eca-upgrade--resolve-version-test)))))
 
-(ert-deftest eca-security/resolve-version-from-package-el ()
-  "my/eca--resolve-version uses package.el version when available."
+(ert-deftest eca-upgrade/resolve-version-from-package-el ()
+  "eca-upgrade--resolve-version uses package.el version when available."
   (let ((package-alist `((eca . [,(make-symbol "pkg")]))))
-    (should (equal "0.106.0" (my/eca--resolve-version-test)))))
+    (should (equal "0.106.0" (eca-upgrade--resolve-version-test)))))
 
-(ert-deftest eca-security/parse-semver-extracts-version ()
+(ert-deftest eca-upgrade/parse-semver-extracts-version ()
   "parse-semver extracts X.Y.Z from various version strings."
   (cl-flet ((parse-semver (raw)
               (and (stringp raw)
@@ -65,13 +65,13 @@
     (should (null (parse-semver nil)))
     (should (null (parse-semver "no-version-here")))))
 
-(ert-deftest eca-security/pinned-version-is-configurable ()
-  "my/eca--pinned-version can be customized."
-  (let ((original my/eca--pinned-version))
-    (setq my/eca--pinned-version "99.99.99")
-    (should (equal "99.99.99" my/eca--pinned-version))
-    (setq my/eca--pinned-version original)))
+(ert-deftest eca-upgrade/pinned-version-is-configurable ()
+  "eca-upgrade--pinned-version can be customized."
+  (let ((original eca-upgrade--pinned-version))
+    (setq eca-upgrade--pinned-version "99.99.99")
+    (should (equal "99.99.99" eca-upgrade--pinned-version))
+    (setq eca-upgrade--pinned-version original)))
 
-(provide 'test-eca-security)
+(provide 'test-eca-upgrade)
 
-;;; test-eca-security.el ends here
+;;; test-eca-upgrade.el ends here

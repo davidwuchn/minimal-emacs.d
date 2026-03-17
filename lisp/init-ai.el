@@ -80,8 +80,9 @@
   :ensure t
   :defer t)
 
-;; Load ECA security/config early
+;; Load ECA security and upgrade utilities
 (require 'eca-security)
+(require 'eca-upgrade)
 
 (use-package eca
   :ensure t
