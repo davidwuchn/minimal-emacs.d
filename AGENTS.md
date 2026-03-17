@@ -294,10 +294,9 @@ If rules conflict:
 | AGENTS.md | Bootstrap (this file) | Reference |
 | INTRO.md | Fork overview & nucleus architecture | Guide |
 | README.md | Upstream user documentation | Guide |
-| **STATE.md** | **Now** (what is true) | **Full** — Current status, changes frequently |
-| **PLAN.md** | **Next** (what should happen) | **Summary** — Roadmap, decisions, medium-term |
-| **LEARNING.md** | **Past** (patterns discovered) | **Distilled** — Eternal truths, timeless patterns |
-| CHANGELOG.md | Commit summaries | Log |
+| **STATE.md** | **Now** (what is true) | **Full** — Current status, module architecture, active backend |
+| **PLAN.md** | **Next** (what should happen) | **Summary** — Roadmap, implementation status |
+| **LEARNING.md** | **Past** (patterns discovered) | **Distilled** — 32 patterns, anti-patterns, principles |
 
 > **Note:** STATE/PLAN/LEARNING mirrors Agent Zero's context compression: STATE=recent (full), PLAN=medium (summarized), LEARNING=old (condensed).
 
@@ -453,6 +452,6 @@ When something feels wrong, trace it through the elements.
 
 ---
 
-**See Also:** [INTRO](INTRO.md) · [README](README.md) · [STATE](STATE.md) · [PLAN](PLAN.md) · [LEARNING](LEARNING.md) · [CHANGELOG](CHANGELOG.md)
+**See Also:** [INTRO](INTRO.md) · [README](README.md) · [STATE](STATE.md) · [PLAN](PLAN.md) · [LEARNING](LEARNING.md)
 
 *Patterns and detailed learnings: see LEARNING.md*
