@@ -1,10 +1,22 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-15 (tag v0.7.1)
+> Last updated: 2026-03-17 (tag v0.7.11)
 
 ## Architecture Overview
 
 Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engine; nucleus layers on tool management, agent presets, prompts, and UI.
+
+### Recent Changes (v0.7.11)
+
+- **AGENTS.md VSM restructure** (◈): Transformed flat 9-Principles structure into 5-layer VSM architecture with Wu Xing elemental mapping. S5=Identity(Water), S4=Intelligence(Fire), S3=Control(Earth), S2=Coordination(Metal), S1=Operations(Wood). Added lambda notation reference and Wu Xing diagnostics.
+
+- **Merge eca-upgrade into ai-code-eca** (Δ): Binary upgrade functionality merged into `ai-code-eca.el` in the ai-code package. Unified `ai-code-eca-upgrade` command: no prefix=binary, C-u=package, C-u C-u=show status.
+
+- **Move context command** (Δ): `my/gptel-add-project-files` moved from `gptel-config.el` to `gptel-ext-context.el`.
+
+- **Fix provide placement** (Δ): `init-ai.el` now has `(provide 'init-ai)` at end of file.
+
+- **Git tag cleanup**: Reduced from 187 to 10 tags (v0.7.2–v0.7.11).
 
 ### Module Structure (`lisp/modules/`)
 
@@ -13,7 +25,7 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 | `gptel-ext-core.el` | Residual core: temp dir, markdown compat, model config, mode hook, tool registry audit, curl hardening, content sanitizer | 286 |
 | `gptel-ext-abort.el` | Curl timeouts, abort-generation, keyboard-quit advice, prompt marker helpers | 187 |
 | `gptel-ext-backends.el` | Backend configuration (Moonshot, DashScope, DeepSeek, Gemini, OpenRouter, etc.) | 82 |
-| `gptel-ext-context.el` | Auto-compact: LLM-based summarization when tokens approach context window | 259 |
+| `gptel-ext-context.el` | Auto-compact, context window detection, `my/gptel-add-project-files` | 290 |
 | `gptel-ext-context-cache.el` | Context-window caching: model tables, OpenRouter fetch, disk persistence | 699 |
 | `gptel-ext-fsm.el` | FSM recovery: fix-stuck-in-type, agent handler fixes, recover-on-error | 83 |
 | `gptel-ext-fsm-utils.el` | FSM utility functions | 26 |

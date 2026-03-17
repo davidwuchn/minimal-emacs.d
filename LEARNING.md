@@ -30,6 +30,7 @@
 - [Backend Integration Patterns](#backend-integration-patterns)
 - [Context Window Detection & Auto-Compact](#context-window-detection--auto-compact)
 - [Context Management Code Organization](#context-management-code-organization)
+- [VSM Architecture Pattern](#vsm-architecture-pattern)
 
 
 ## gptel-agent & Emacs LSP (Eglot) Integration
@@ -239,3 +240,13 @@
 - **Group related functions by domain**: `gptel-ext-context.el` houses all context-related functionality: auto-compaction, context window detection, token estimation, and interactive context commands like `my/gptel-add-project-files`.
 - **Keybindings live with mode setup**: The `C-c C-p` binding for `my/gptel-add-project-files` lives in `gptel-ext-core.el` alongside other gptel-mode-map bindings, not in the function definition file.
 - **Function definition → keybinding separation**: Define functions in feature modules, bind keys in core/setup modules. This allows the feature to be loaded independently of keybinding preferences.
+
+## VSM Architecture Pattern
+- **Five-layer separation by purpose**: VSM (Viable System Model) separates concerns by *why they exist*, not by feature. S5=Identity (what the system IS), S4=Intelligence (how it adapts), S3=Control (resource management), S2=Coordination (how parts work together), S1=Operations (what it does).
+- **Higher layers change less**: S5 principles survive everything else being replaced. S1 tools change most often. When S5 changes, everything below shifts.
+- **Lambda notation for machine-readable rules**: Encode principles as `λ name(x). condition → action | constraint`. Symbols: `→` (implies), `|` (also), `>` (preferred over), `∧` (and), `∨` (or), `¬` (not), `≡` (defined as).
+- **Wu Xing elemental mapping**: S5=Water (deep soul), S4=Fire (illuminates unknown), S3=Earth (grounding foundation), S2=Metal (prunes chaos), S1=Wood (living core). Use for diagnostics: symptom → element imbalance → remedy.
+- **Generating cycle (相生)**: Water→Wood→Fire→Earth→Metal→Water. Each layer enables the next.
+- **Controlling cycle (相克)**: Wood→Earth→Water→Fire→Metal→Wood. Each layer constrains another.
+- **Diagnostic use**: Chaos/burnout = Wood excess (S1 without S2). No innovation = Fire deficient (S4 weakness). Bureaucracy kills ideas = Metal excess (S2 strangling S1).
+- **Flat principles are a smell**: Treating "use PostgreSQL" and "never suppress errors" as equally important is wrong. One is S1 (tool choice), the other is S5 (identity principle).
