@@ -15,12 +15,11 @@ lisp/modules/*.elc
 !post-init.el
 !custom.el
 !AGENTS.md
-!PLAN.md
 !STATE.md
 !LEARNING.md
-!CHANGELOG.md
 !INTRO.md
 !SECURITY.md
+!.dir-locals.el
 !assistant/
 !.ignore
 !tests/
