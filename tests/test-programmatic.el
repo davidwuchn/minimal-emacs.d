@@ -488,6 +488,46 @@
 (result (concat one \" | \" two))")))
         (should (= 0 confirm-count))))))
 
+(ert-deftest programmatic/supports-top-level-progn ()
+  "Top-level progn executes forms sequentially."
+  (skip-unless (not noninteractive))
+  (test-programmatic--with-tools
+      `(("Read" . ,(test-programmatic--sync-tool
+                    "Read"
+                    (lambda (file-path &optional _start _end) file-path)
+                    '((:name "file_path")
+                      (:name "start_line" :optional t)
+                      (:name "end_line" :optional t)))))
+    (should (string-match-p
+             "test.el"
+             (test-programmatic--run
+              "(progn
+  (tool-call \"Read\" :file_path \"test.el\")
+  (result \"done\"))")))))
+
+(ert-deftest programmatic/progn-with-result-returns-value ()
+  "progn containing result returns the final value."
+  (skip-unless (not noninteractive))
+  (test-programmatic--with-tools
+      `(("Read" . ,(test-programmatic--sync-tool
+                    "Read"
+                    (lambda (file-path &optional _start _end) file-path)
+                    '((:name "file_path")
+                      (:name "start_line" :optional t)
+                      (:name "end_line" :optional t)))))
+    (should (equal "final-value"
+                   (test-programmatic--run
+                    "(progn
+  (tool-call \"Read\" :file_path \"ignored.el\")
+  (result \"final-value\"))")))))
+
+(ert-deftest programmatic/nested-progn-in-expression ()
+  "progn works inside expressions (was already supported)."
+  (test-programmatic--with-tools nil
+    (should (equal "b"
+                   (test-programmatic--run
+                    "(result (progn \"a\" \"b\"))")))))
+
 (provide 'test-programmatic)
 
 ;;; test-programmatic.el ends here

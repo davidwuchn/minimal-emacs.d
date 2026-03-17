@@ -512,6 +512,8 @@ can consume lists, vectors, plists, and alists as readable data."
   "Evaluate sandbox STATEMENT with ENV and STATE, then CALLBACK.
 CALLBACK receives a plist with one of the keys `:continue' or `:result'."
   (pcase statement
+    (`(progn . ,body)
+     (gptel-sandbox--eval-progn body env state callback))
     (`(setq ,symbol ,expr)
      (unless (symbolp symbol)
        (error "Programmatic setq target must be a symbol, got: %S" symbol))
@@ -540,6 +542,18 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
     (_
      (error "Unsupported statement in Programmatic sandbox: %S"
             (if (consp statement) (car statement) statement)))))
+
+(defun gptel-sandbox--eval-progn (body env state callback)
+  "Evaluate BODY forms sequentially, handling async tool-calls.
+CALLBACK receives final outcome plist."
+  (if (null body)
+      (funcall callback (list :continue t :done nil))
+    (gptel-sandbox--eval-statement
+     (car body) env state
+     (lambda (outcome)
+       (if (plist-get outcome :done)
+           (funcall callback outcome)
+         (gptel-sandbox--eval-progn (cdr body) env state callback))))))
 
 (defun gptel-sandbox--run-forms (forms env state callback)
   "Run sandbox FORMS with ENV and STATE, then CALLBACK final result."
