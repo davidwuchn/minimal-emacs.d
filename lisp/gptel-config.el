@@ -48,19 +48,6 @@
 ;; Use M-x my/gptel-toggle-confirm to switch modes.
 ;; Per-tool permits remembered for the session (M-x my/gptel-show-permits).
 
-;; --- Keybindings & UI Helpers ---
-(defun my/gptel-add-project-files ()
-  "Select and add project files to gptel context."
-  (interactive)
-  (if-let* ((proj (project-current))
-            (files (project-files proj))
-            (selected (completing-read-multiple "Add context files: " files)))
-      (progn
-        (dolist (f selected)
-          (gptel-add-file f))
-        (message "Added %d files to gptel context." (length selected)))
-    (user-error "Not in a project or no files selected")))
-
 (provide 'gptel-config)
 
 ;;; gptel-config.el ends here

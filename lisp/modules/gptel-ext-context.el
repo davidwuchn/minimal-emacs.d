@@ -271,6 +271,20 @@ Hook for `gptel-post-response-functions'."
 
 (add-hook 'gptel-post-response-functions #'my/gptel-auto-compact)
 
+;;; Interactive Context Commands
+
+(defun my/gptel-add-project-files ()
+  "Select and add project files to gptel context."
+  (interactive)
+  (if-let* ((proj (project-current))
+            (files (project-files proj))
+            (selected (completing-read-multiple "Add context files: " files)))
+      (progn
+        (dolist (f selected)
+          (gptel-add-file f))
+        (message "Added %d files to gptel context." (length selected)))
+    (user-error "Not in a project or no files selected")))
+
 ;;; Footer
 
 (provide 'gptel-ext-context)
