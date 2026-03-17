@@ -4,8 +4,6 @@
 ;; Configuration for AI assistants: gptel, gptel-agent, nucleus, and ECA.
 ;; This separates AI tooling from general-purpose tools like Magit and Dirvish.
 
-(provide 'init-ai)
-
 ;;; ==============================================================================
 ;;; AI ASSISTANT (gptel + nucleus)
 ;;; ==============================================================================
@@ -57,12 +55,13 @@
 ;;; AI CODE (with ECA backend support)
 ;;; ==============================================================================
 
-;; TODO: After PR #232 is merged, change branch back to "main" and URL to tninja
-;; PR: https://github.com/tninja/ai-code-interface.el/pull/232
+;; VC-installed packages need manual load-path addition
+(let ((ai-code-dir (expand-file-name "ai-code" package-user-dir)))
+  (when (file-directory-p ai-code-dir)
+    (add-to-list 'load-path ai-code-dir)))
+
 (use-package ai-code
-  :ensure t
-  :vc (:url "https://github.com/davidwuchn/ai-code-interface.el"
-       :branch "fix/transient-menu-keys")
+  :ensure nil
   :demand t
   :custom
   (ai-code-backends-infra-terminal-backend 'vterm)
@@ -104,5 +103,7 @@
   (add-hook 'eca-chat-mode-hook #'my/eca-chat-disable-markup-hiding-h)
   ;; Enable inline ghost-text code completion in programming modes
   (add-hook 'prog-mode-hook #'eca-completion-mode))
+
+(provide 'init-ai)
 
 ;;; init-ai.el ends here
