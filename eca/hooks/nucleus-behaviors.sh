@@ -1,5 +1,14 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
 set -euo pipefail
+
+# Paths follow setup-eca-links.sh convention
+# ~/.config/eca -> ~/.emacs.d/eca (symlink)
+# This hook lives in ~/.emacs.d/eca/hooks/
+
+EMACS_ECA_DIR="${HOME}/.emacs.d/eca"
+BEHAVIORS_DIR="${EMACS_ECA_DIR}/behaviors"
+STATE_DIR="${HOME}/.config/eca/.behaviors"
 
 INPUT=$(cat)
 PROMPT=$(jq -r '.prompt // empty' <<< "$INPUT")
@@ -9,21 +18,15 @@ if [ -z "$PROMPT" ]; then
   exit 0
 fi
 
-# Use local behaviors directory (relative to hook location)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ECA_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-BEHAVIORS_DIR="$ECA_DIR/behaviors"
-
-# Fallback to nucleus if local doesn't exist
 if [ ! -d "$BEHAVIORS_DIR" ]; then
-  BEHAVIORS_DIR="$HOME/workspace/nucleus/behaviors"
+  echo "warning: ${BEHAVIORS_DIR} does not exist" >&2
+  exit 0
 fi
 
 # Extract hashtags: #=mode, #quality, #technique
 HASHTAGS=$(grep -oE '#[=a-zA-Z0-9_-]+' <<< "$PROMPT" | sort -u) || true
 
 # State directory for persistence
-STATE_DIR="$HOME/.config/eca/.behaviors"
 STATE_FILE=""
 if [ -n "$SESSION_ID" ]; then
   STATE_FILE="$STATE_DIR/$SESSION_ID"
