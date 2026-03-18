@@ -48,7 +48,7 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
               (qwen3-max-2026-01-23 :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp"))
               (qwen3-coder-next :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp"))
               (qwen3-coder-plus :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp"))
-              glm-5 MiniMax-M2.5 glm-4.7)))
+              glm-5 minimax-m2.5 glm-4.7)))
 
 (defvar gptel--moonshot
   (gptel-make-openai "Moonshot"
