@@ -69,13 +69,13 @@
 (setq auto-save-include-big-deletions t) ; Don't disable auto-save after big deletions
 (setq kill-buffer-delete-auto-save-files t) ; Clean up auto-save files when killing buffer
 
-;; Auto-save file locations
-(setq auto-save-file-name-transforms
-      `((".*" ,(expand-file-name "savefile/auto-save-" user-emacs-directory) t)))
+;; Auto-save file locations (match upstream: autosave/)
 (setq auto-save-list-file-prefix
-      (expand-file-name "savefile/auto-save-" user-emacs-directory))
+      (expand-file-name "autosave/" user-emacs-directory))
 (setq tramp-auto-save-directory
-      (expand-file-name "savefile/tramp-auto-save/" user-emacs-directory))
+      (expand-file-name "tramp-autosave/" user-emacs-directory))
+(setq auto-save-file-name-transforms
+      `((".*" ,(file-name-concat auto-save-list-file-prefix "\\2-") sha1)))
 
 ;; Enable auto-save-visited-mode for automatic buffer saving
 (auto-save-visited-mode 1)
@@ -93,7 +93,7 @@
 ;; ==============================================================================
 
 ;; Ensure var subdirectories exist
-(let ((dirs '("backup" "lockfiles" "cache" "tmp" "savefile")))
+(let ((dirs '("backup" "autosave" "tramp-autosave" "lockfiles" "cache" "tmp" "savefile")))
   (dolist (dir dirs)
     (let ((path (expand-file-name dir user-emacs-directory)))
       (unless (file-directory-p path)
