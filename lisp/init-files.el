@@ -179,4 +179,16 @@ package.  Otherwise, only recreate missing `*-autoloads.el' files.  Refresh
 ;; Dabbrev expansion cache
 (setq dabbrev--last-buffer-file-name nil) ; Reset on session
 
+;; Savehist file (command history)
+(setq savehist-file
+      (expand-file-name "savefile/history" user-emacs-directory))
+
+;; Project list file
+(setq project-list-file
+      (expand-file-name "savefile/projects" user-emacs-directory))
+
+;; Tramp persistence
+(setq tramp-persistency-file-name
+      (expand-file-name "savefile/tramp" user-emacs-directory))
+
 ;;; init-files.el ends here
