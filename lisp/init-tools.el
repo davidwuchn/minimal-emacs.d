@@ -20,7 +20,7 @@
 (use-package doom-modeline
   :ensure t
   :after nerd-icons
-  :init (doom-modeline-mode 1))
+  :hook (after-init . doom-modeline-mode))
 
 (use-package nerd-icons-completion
   :ensure t
@@ -70,12 +70,8 @@
 ;; Git diff highlights in margin (complements Magit)
 (use-package diff-hl
   :ensure t
-  :hook ((prog-mode . diff-hl-mode)
-         (dired-mode . diff-hl-mode))
-  :init
-  (global-diff-hl-mode)
+  :hook (after-init . global-diff-hl-mode)
   :config
-  ;; Show diff hints in left fringe
   (setq diff-hl-draw-borders nil))
 
 ;; Tree-sitter based code folding
