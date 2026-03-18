@@ -271,12 +271,12 @@
 (use-package kirigami
   :ensure t
   :hook (org-mode . kirigami-mode)
-  :bind (:map kirigami-mode-map
-              ("C-c f o" . kirigami-open)
-              ("C-c f c" . kirigami-close)
-              ("C-c f t" . kirigami-toggle)
-              ("C-c f O" . kirigami-open-all)
-              ("C-c f C" . kirigami-close-all)))
+  :config
+  (define-key kirigami-mode-map (kbd "C-c f o") 'kirigami-open)
+  (define-key kirigami-mode-map (kbd "C-c f c") 'kirigami-close)
+  (define-key kirigami-mode-map (kbd "C-c f t") 'kirigami-toggle)
+  (define-key kirigami-mode-map (kbd "C-c f O") 'kirigami-open-all)
+  (define-key kirigami-mode-map (kbd "C-c f C") 'kirigami-close-all))
 
 ;; ==============================================================================
 ;; ORG TRANSCCLUSION (Optional - Embed content from other files)
