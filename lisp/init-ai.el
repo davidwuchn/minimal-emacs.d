@@ -48,9 +48,6 @@
         (gptel-model (or my/ai-code-gptel-helper-model gptel-model)))
     (funcall orig question)))
 
-(with-eval-after-load 'ai-code-prompt-mode
-  (advice-add 'ai-code-call-gptel-sync :around #'my/ai-code--ensure-gptel-helper-model))
-
 ;;; ==============================================================================
 ;;; AI CODE (with ECA backend support)
 ;;; ==============================================================================
@@ -74,7 +71,8 @@
   :config
   (require 'ai-code-eca)
   (ai-code-set-backend 'opencode)
-  (global-set-key (kbd "C-c a") #'ai-code-menu))
+  (global-set-key (kbd "C-c a") #'ai-code-menu)
+  (advice-add 'ai-code-call-gptel-sync :around #'my/ai-code--ensure-gptel-helper-model))
 
 (use-package buttercup
   :ensure t
