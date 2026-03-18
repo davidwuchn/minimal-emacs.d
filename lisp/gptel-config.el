@@ -41,9 +41,10 @@
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3-coder-next)
 
-;; Subagent model: minimax-m2.5 on DashScope for agent workflows
-;; MiniMax M2.5 has 196k context, 80.2% SWE-Bench score
-(setq my/gptel-subagent-model 'minimax-m2.5
+;; Subagent model: qwen3-coder-next on DashScope
+;; Fast, reliable, no streaming issues
+;; Alternative: glm-5, qwen3.5-plus
+(setq my/gptel-subagent-model 'qwen3-coder-next
       my/gptel-subagent-backend 'gptel--dashscope)
 
 ;; Enable media/image attachment support (required for vision models)
