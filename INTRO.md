@@ -63,12 +63,10 @@ This clones to `var/elpa/`:
 | **Global default** | `qwen3-coder-next` | DashScope | 131k | $0.30/$1.20 |
 | **Plan preset** | `qwen3.5-plus` | DashScope | 1M | $0.80/$4.80 |
 | **Agent preset** | `glm-5` | DashScope | 131k | $0.50/$0.50 |
-| **Subagents** | `minimax-m2.5` | **MiniMax** | 196k | $0.27/$0.95 |
+| **Subagents** | `glm-5` | DashScope | 131k | $0.50/$0.50 |
 | **ai-code helper** | `qwen3-coder-next` | DashScope | 131k | $0.30/$1.20 |
 
-**Note:** Subagents use MiniMax backend (requires `api.minimaxi.com` API key in auth-source).
-If you don't have MiniMax access, change `my/gptel-subagent-backend` to `gptel--dashscope`
-and `my/gptel-subagent-model` to `glm-5`.
+All models use DashScope backend (阿里云百炼). Requires `coding.dashscope.aliyuncs.com` API key in auth-source.
 
 Configured in `lisp/gptel-config.el` and `lisp/modules/nucleus-presets.el`.
 
