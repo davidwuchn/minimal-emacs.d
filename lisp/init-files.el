@@ -93,7 +93,7 @@
 ;; ==============================================================================
 
 ;; Ensure var subdirectories exist
-(let ((dirs '("backup" "auto-save" "lockfiles" "cache" "tmp")))
+(let ((dirs '("backup" "auto-save" "lockfiles" "cache")))
   (dolist (dir dirs)
     (let ((path (expand-file-name dir user-emacs-directory)))
       (unless (file-directory-p path)
