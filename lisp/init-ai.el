@@ -68,6 +68,7 @@
   (ai-code-auto-test-type 'ask-me)
   (ai-code-notes-use-gptel-headline t)
   (ai-code-task-use-gptel-filename t)
+  (ai-code-behaviors-auto-enable t)
   :config
   (require 'ai-code-eca)
   (ai-code-set-backend 'opencode)
