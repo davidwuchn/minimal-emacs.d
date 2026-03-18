@@ -4,8 +4,7 @@
 
 (use-package vertico
   :ensure t
-  :config
-  (vertico-mode))
+  :hook (after-init . vertico-mode))
 
 (use-package orderless
   :ensure t

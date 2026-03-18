@@ -59,7 +59,8 @@
 
 (use-package ai-code
   :ensure nil
-  :demand t
+  :defer t
+  :commands (ai-code-menu ai-code-set-backend)
   :custom
   (ai-code-backends-infra-terminal-backend 'vterm)
   (ai-code-backends-infra-use-side-window nil)
@@ -69,10 +70,10 @@
   (ai-code-notes-use-gptel-headline t)
   (ai-code-task-use-gptel-filename t)
   (ai-code-behaviors-auto-enable t)
+  :bind ("C-c a" . ai-code-menu)
   :config
   (require 'ai-code-eca)
   (ai-code-set-backend 'eca)
-  (global-set-key (kbd "C-c a") #'ai-code-menu)
   (advice-add 'ai-code-call-gptel-sync :around #'my/ai-code--ensure-gptel-helper-model))
 
 (use-package buttercup

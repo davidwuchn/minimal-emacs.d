@@ -12,7 +12,7 @@
 ;; compile-angel: Byte-compile and native-compile Elisp code automatically
 (use-package compile-angel
   :ensure t
-  :demand t
+  :hook (emacs-startup . (lambda () (compile-angel-on-load-mode 1)))
   :config
   (setq package-native-compile nil)
   (setq compile-angel-verbose nil)
@@ -21,8 +21,7 @@
   (push "/pre-init.el" compile-angel-excluded-files)
   (push "/post-init.el" compile-angel-excluded-files)
   (push "/pre-early-init.el" compile-angel-excluded-files)
-  (push "/post-early-init.el" compile-angel-excluded-files)
-  (compile-angel-on-load-mode 1))
+  (push "/post-early-init.el" compile-angel-excluded-files))
 
 ;; Environment Variable Synchronization (Essential for macOS users)
 (use-package exec-path-from-shell
