@@ -9,10 +9,17 @@
 ;;; ==============================================================================
 
 ;; Add gptel and gptel-agent to load-path (installed via git clone)
-;; See: scripts/verify-nucleus.sh for installation instructions
+;; See: scripts/setup-packages.sh for installation instructions
 (let ((elpa-dir (expand-file-name "var/elpa" minimal-emacs-user-directory)))
   (add-to-list 'load-path (expand-file-name "gptel" elpa-dir))
-  (add-to-list 'load-path (expand-file-name "gptel-agent" elpa-dir)))
+  (add-to-list 'load-path (expand-file-name "gptel-agent" elpa-dir))
+  ;; Load autoloads for git-cloned packages
+  (let ((gptel-autoloads (expand-file-name "gptel/gptel-autoloads.el" elpa-dir))
+        (agent-autoloads (expand-file-name "gptel-agent/gptel-agent-autoloads.el" elpa-dir)))
+    (when (file-exists-p gptel-autoloads)
+      (load gptel-autoloads nil t))
+    (when (file-exists-p agent-autoloads)
+      (load agent-autoloads nil t))))
 
 (use-package gptel
   :ensure nil
@@ -21,6 +28,7 @@
 
 (use-package gptel-agent
   :ensure nil
+  :commands (gptel-agent gptel-agent-read-file gptel-agent-update)
   :after gptel)
 
 ;; After they are installed, load the custom configurations
