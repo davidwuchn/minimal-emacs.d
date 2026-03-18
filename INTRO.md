@@ -68,6 +68,29 @@ This clones to `var/elpa/`:
 
 Configured in `lisp/gptel-config.el` and `lisp/modules/nucleus-presets.el`.
 
+## Directory Structure
+
+Follows upstream `minimal-emacs.d` with `user-emacs-directory` set to `var/`:
+
+```
+var/
+├── autosave/        - Auto-save crash recovery [upstream]
+├── backup/          - Versioned backups (.~1~) [upstream]
+├── tramp-autosave/  - TRAMP auto-save [upstream]
+├── cache/           - Cache files
+├── elpa/            - Packages (gptel, gptel-agent)
+├── lockfiles/       - Lock files
+├── savefile/        - gptel context cache
+├── tmp/             - Temp files (gptel tools)
+├── history          - Command history
+├── projects         - Project list
+├── recentf          - Recent files
+├── saveplace        - File positions [upstream]
+└── tramp            - TRAMP persistence
+```
+
+Files in `var/` (not subdirectories) match upstream pattern.
+
 Important: `~/.emacs.d/eca` is the real directory used by this setup. The
 `~/.config/eca` path should be the symlink that points back to it.
 

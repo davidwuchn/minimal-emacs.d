@@ -60,7 +60,7 @@
 (setq kept-old-versions 5)            ; Keep 5 oldest versions
 (setq make-backup-files t)            ; Enable backups (overrides init.el)
 
-;; Auto-save configuration - files saved to var/auto-save/
+;; Auto-save configuration (match upstream: autosave/)
 (setq auto-save-default t)
 (setq auto-save-interval 300)         ; Save every 300 keystrokes
 (setq auto-save-timeout 30)           ; Or after 30 seconds of idle time
@@ -93,7 +93,9 @@
 ;; ==============================================================================
 
 ;; Ensure var subdirectories exist
-(let ((dirs '("backup" "autosave" "tramp-autosave" "lockfiles" "cache" "tmp" "savefile")))
+;; Upstream directories: backup, autosave, tramp-autosave
+;; Local additions: cache, savefile, lockfiles, tmp
+(let ((dirs '("backup" "autosave" "tramp-autosave" "cache" "savefile" "lockfiles" "tmp")))
   (dolist (dir dirs)
     (let ((path (expand-file-name dir user-emacs-directory)))
       (unless (file-directory-p path)
@@ -146,15 +148,15 @@ package.  Otherwise, only recreate missing `*-autoloads.el' files.  Refresh
 
 ;; Recentf file
 (setq recentf-save-file
-      (expand-file-name "savefile/recentf" user-emacs-directory))
+      (expand-file-name "recentf" user-emacs-directory))
 
-;; Saveplace file (already set in init.el, ensure consistency)
+;; Saveplace file (match upstream: saveplace file in var/)
 (setq save-place-file
-      (expand-file-name "savefile/saveplace" user-emacs-directory))
+      (expand-file-name "saveplace" user-emacs-directory))
 
-;; Abbrev file
+;; Abbrev file (match upstream: abbrev_defs file in var/)
 (setq abbrev-file-name
-      (expand-file-name "savefile/abbrev_defs" user-emacs-directory))
+      (expand-file-name "abbrev_defs" user-emacs-directory))
 
 ;; Custom file (already using custom.el in root, but ensure path)
 (setq custom-file
@@ -166,29 +168,29 @@ package.  Otherwise, only recreate missing `*-autoloads.el' files.  Refresh
 
 ;; Bookmark file
 (setq bookmark-default-file
-      (expand-file-name "savefile/bookmarks" user-emacs-directory))
+      (expand-file-name "bookmarks" user-emacs-directory))
 
 ;; Ido last file
 (setq ido-last-file
-      (expand-file-name "savefile/ido.last" user-emacs-directory))
+      (expand-file-name "ido.last" user-emacs-directory))
 
 ;; Register file
 (setq register-file
-      (expand-file-name "savefile/registers" user-emacs-directory))
+      (expand-file-name "registers" user-emacs-directory))
 
 ;; Dabbrev expansion cache
 (setq dabbrev--last-buffer-file-name nil) ; Reset on session
 
 ;; Savehist file (command history)
 (setq savehist-file
-      (expand-file-name "savefile/history" user-emacs-directory))
+      (expand-file-name "history" user-emacs-directory))
 
 ;; Project list file
 (setq project-list-file
-      (expand-file-name "savefile/projects" user-emacs-directory))
+      (expand-file-name "projects" user-emacs-directory))
 
 ;; Tramp persistence
 (setq tramp-persistency-file-name
-      (expand-file-name "savefile/tramp" user-emacs-directory))
+      (expand-file-name "tramp" user-emacs-directory))
 
 ;;; init-files.el ends here
