@@ -25,6 +25,32 @@
 (require 'gptel-openai)
 
 ;; ==============================================================================
+;; GPT-AGENT COMPATIBILITY SHIMS
+;; ==============================================================================
+;; gptel-agent (20260308) expects functions from newer gptel versions.
+;; These stubs provide compatibility.
+
+(declare-function gptel-fsm-info "gptel")
+
+(unless (fboundp 'gptel--handle-pre-tool)
+  (defun gptel--handle-pre-tool (_fsm)
+    "Compatibility shim: pre-tool handler for gptel-agent.
+Does nothing in older gptel versions."
+    nil))
+
+(unless (fboundp 'gptel--handle-post-tool)
+  (defun gptel--handle-post-tool (_fsm)
+    "Compatibility shim: post-tool handler for gptel-agent.
+Does nothing in older gptel versions."
+    nil))
+
+(unless (fboundp 'gptel--handle-tool-result)
+  (defun gptel--handle-tool-result (_fsm)
+    "Compatibility shim: tool-result handler for gptel-agent.
+Does nothing in older gptel versions."
+    nil))
+
+;; ==============================================================================
 ;; PROJECT TEMP DIRECTORY
 ;; ==============================================================================
 ;; All tool temp files go to <project-root>/temp/ instead of system /tmp.
