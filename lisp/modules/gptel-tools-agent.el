@@ -246,8 +246,8 @@ CALLBACK is called with the result or a timeout error."
                (message "[nucleus] Subagent '%s' completed in %.1fs, result-len=%d"
                         agent-type (float-time (time-since start-time))
                         (if (stringp result) (length result) 0))
-               ;; Debug: log actual result for short responses (likely errors)
-               (when (and (stringp result) (< (length result) 500))
+               ;; Debug: log actual result (error messages are usually short)
+               (when (and (stringp result) (< (length result) 1000))
                  (message "[nucleus] Subagent result: %s" result))
                (when (buffer-live-p origin-buf)
                  (with-current-buffer origin-buf
