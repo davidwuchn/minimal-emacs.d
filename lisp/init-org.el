@@ -270,7 +270,6 @@
 ;; Unified fold/unfold interface across many modes including org-mode
 (use-package kirigami
   :ensure t
-  :hook (org-mode . kirigami-mode)
   :bind
   (:map org-mode-map
         ("C-c f o" . kirigami-open-fold)
