@@ -232,17 +232,5 @@
         "gemini-3-flash-preview": {}
       }
     }
-  },
-  "hooks": {
-    "nucleus-behaviors": {
-      "type": "preRequest",
-      "visible": true,
-      "actions": [
-        {
-          "type": "shell",
-          "file": "hooks/nucleus-behaviors.sh"
-        }
-      ]
-    }
   }
 }
