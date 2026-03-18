@@ -89,6 +89,8 @@ under `lexical-binding: t'.")
 
 (defvar my/gptel--known-model-context-windows
   '(;; Qwen (Alibaba) - NOTE: Qwen3.5-Plus and Qwen3-Max have 1M context!
+    ("qwen3-coder-next" . 131072)
+    ("qwen3-coder-plus" . 131072)
     ("qwen3.5-plus" . 1000000)
     ("qwen3.5-flash" . 1000000)
     ("qwen3-max" . 262144)
@@ -128,7 +130,7 @@ under `lexical-binding: t'.")
     ("minimax-m2.5" . 196608)
     ("minimax-m2.1" . 196608)
     ;; Kimi/Moonshot
-    ("kimi-k2.5" . 131072)
+    ("kimi-k2.5" . 262144)
     ("kimi-for-coding" . 131072)
     ;; GLM (Zhipu AI)
     ("glm-5" . 131072)
@@ -158,6 +160,20 @@ Sources:
 
 (defvar my/gptel--known-model-metadata
   '(;; Qwen (Alibaba via DashScope) - VISION ENABLED
+    ("qwen3-coder-next"
+     :context-window 131072
+     :pricing-input 0.3 :pricing-output 1.2
+     :max-output 16384
+     :features (streaming tools vision)
+     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp")
+     :description "Qwen3 Coder Next - fast coding model, 131k context, VISION")
+    ("qwen3-coder-plus"
+     :context-window 131072
+     :pricing-input 0.6 :pricing-output 2.4
+     :max-output 16384
+     :features (streaming tools vision)
+     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp")
+     :description "Qwen3 Coder Plus - advanced coding, 131k context, VISION")
     ("qwen3.5-plus"
      :context-window 1000000
      :pricing-input 0.8 :pricing-output 4.8
@@ -218,6 +234,11 @@ Sources:
      :pricing-input 0.27 :pricing-output 0.95
      :max-output 16384
      :description "MiniMax M2.5 - 196k context, SWE-bench 80.2%")
+    ("minimax-m2.1"
+     :context-window 196608
+     :pricing-input 0.27 :pricing-output 0.95
+     :max-output 16384
+     :description "MiniMax M2.1 - 10B params, coding/agentic, 196k context")
     ;; GPT
     ("gpt-4o"
      :context-window 128000
@@ -231,10 +252,21 @@ Sources:
      :description "GPT-4o Mini - fast, cheap")
     ;; Kimi
     ("kimi-k2.5"
-     :context-window 131072
-     :pricing-input nil :pricing-output nil
+     :context-window 262144
+     :pricing-input 0.45 :pricing-output 2.20
      :max-output 16384
-     :description "Kimi K2.5 - reasoning, 131k context"))
+     :description "Kimi K2.5 - Moonshot AI multimodal, 256k context, visual coding")
+    ;; GLM (Zhipu AI)
+    ("glm-5"
+     :context-window 131072
+     :pricing-input 0.5 :pricing-output 0.5
+     :max-output 16384
+     :description "GLM-5 - Zhipu AI flagship, 131k context")
+    ("glm-4.7"
+     :context-window 131072
+     :pricing-input 0.3 :pricing-output 0.3
+     :max-output 16384
+     :description "GLM-4.7 - Zhipu AI, 131k context"))
   "Pre-seeded model metadata with context window, pricing, and descriptions.
 Pricing is in USD per million tokens (input/output).")
 
@@ -557,16 +589,20 @@ Description: %s"
      :features (streaming tools reasoning)
      :notes "Use --http1.1 for curl, some models support reasoning tokens")
 
-    (dashscope
-     :description "Alibaba DashScope - Qwen models"
-     :rate-limit "60 req/min (free tier), higher for paid"
-     :pricing-model "Per-model, tiered by context length"
-     :features (streaming tools reasoning)
-     :notes "Qwen3.5-Plus has 1M context. Reasoning models need streaming or fast response."
-     :context-windows
-     ((qwen3.5-plus . 1000000)
-      (qwen3.5-flash . 1000000)
-      (qwen3-max . 262144)))
+(dashscope
+      :description "Alibaba DashScope - Qwen, GLM models"
+      :rate-limit "60 req/min (free tier), higher for paid"
+      :pricing-model "Per-model, tiered by context length"
+      :features (streaming tools reasoning)
+      :notes "Qwen3.5-Plus has 1M context. Reasoning models need streaming or fast response."
+      :context-windows
+      ((qwen3-coder-next . 131072)
+       (qwen3-coder-plus . 131072)
+       (qwen3.5-plus . 1000000)
+       (qwen3.5-flash . 1000000)
+       (qwen3-max . 262144)
+       (glm-5 . 131072)
+       (glm-4.7 . 131072)))
 
     (deepseek
      :description "DeepSeek - V3 and R1 models"
