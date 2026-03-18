@@ -41,10 +41,10 @@
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3-coder-next)
 
-;; Subagent model: qwen3.5-plus on DashScope
-;; 1M context, reliable, known to work for subagent tasks
-;; Alternative: glm-5, qwen3-coder-next
-(setq my/gptel-subagent-model 'qwen3.5-plus
+;; Subagent model: qwen3-coder-next on DashScope
+;; 1M context, fast, reliable for subagent tasks
+;; Alternative: qwen3.5-plus, glm-5
+(setq my/gptel-subagent-model 'qwen3-coder-next
       my/gptel-subagent-backend 'gptel--dashscope)
 
 ;; Enable media/image attachment support (required for vision models)
