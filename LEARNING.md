@@ -31,6 +31,12 @@
 - [Context Window Detection & Auto-Compact](#context-window-detection--auto-compact)
 - [Context Management Code Organization](#context-management-code-organization)
 - [VSM Architecture Pattern](#vsm-architecture-pattern)
+- [Package VC Installation Pitfalls](#package-vc-installation-pitfalls)
+- [gptel/gptel-agent Version Compatibility](#gptelgptel-agent-version-compatibility)
+- [Per-Preset Model Configuration](#per-preset-model-configuration)
+- [Deferred Package Loading for Performance](#deferred-package-loading-for-performance)
+- [Upstream Directory Structure Compliance](#upstream-directory-structure-compliance)
+- [Context Window Cache Maintenance](#context-window-cache-maintenance)
 
 
 ## gptel-agent & Emacs LSP (Eglot) Integration
@@ -250,3 +256,61 @@
 - **Controlling cycle (相克)**: Wood→Earth→Water→Fire→Metal→Wood. Each layer constrains another.
 - **Diagnostic use**: Chaos/burnout = Wood excess (S1 without S2). No innovation = Fire deficient (S4 weakness). Bureaucracy kills ideas = Metal excess (S2 strangling S1).
 - **Flat principles are a smell**: Treating "use PostgreSQL" and "never suppress errors" as equally important is wrong. One is S1 (tool choice), the other is S5 (identity principle).
+
+## Package VC Installation Pitfalls
+- **`package-installed-p` returns nil for git clones**: A package cloned with `git clone` to `var/elpa/gptel/` is NOT recognized by `package-installed-p`. This causes `package-vc-install` to run on every startup, hanging Emacs.
+- **Solution: Just add to load-path**: For git-cloned packages, skip `package-vc-install` entirely and just add the directory to `load-path`:
+  ```elisp
+  (let ((elpa-dir (expand-file-name "var/elpa" minimal-emacs-user-directory)))
+    (add-to-list 'load-path (expand-file-name "gptel" elpa-dir))
+    (add-to-list 'load-path (expand-file-name "gptel-agent" elpa-dir)))
+  ```
+- **Pre-commit hook needs local packages**: CI/pre-commit scripts must either install packages or assume they exist. Use a `scripts/setup-packages.sh` that clones required packages, called by the pre-commit hook.
+
+## gptel/gptel-agent Version Compatibility
+- **ELPA lags behind Git main**: ELPA's `gptel-0.9.9.4` is 44+ commits behind `karthink/gptel` main branch.
+- **Missing functions break gptel-agent**: `gptel-agent` (20260308) expects `gptel--handle-pre-tool`, `gptel--handle-post-tool`, `gptel--handle-tool-result` which don't exist in ELPA gptel.
+- **Error: Symbol's function definition is void**: This error on `gptel--handle-pre-tool` means you need newer gptel.
+- **Fix**: Install both `gptel` and `gptel-agent` from Git main branches, not ELPA.
+
+## Per-Preset Model Configuration
+- **Different models for different tasks**: Plan mode (research) needs large context; Agent mode (execution) needs speed; Subagents need reliability.
+- **Use `defcustom` for preset models**:
+  ```elisp
+  (defcustom nucleus-plan-model 'qwen3.5-plus
+    "Model for gptel-plan preset (read-only planning)."
+    :type 'symbol
+    :group 'nucleus-presets)
+  ```
+- **Override in preset definition**: Pass the custom variable to `gptel-make-preset` instead of hardcoded model symbol.
+- **Subagent model should differ from parent**: `minimax-m2.5` (196k context, 80.2% SWE-Bench) is better for subagent tool use than parent buffer's model.
+
+## Deferred Package Loading for Performance
+- **`:demand t` forces immediate load**: Heavy packages like `ai-code` load synchronously at startup.
+- **`:defer t` with `:commands` for lazy load**: Package loads on first command invocation:
+  ```elisp
+  (use-package ai-code
+    :ensure nil
+    :defer t
+    :commands (ai-code-menu ai-code-set-backend)
+    :bind ("C-c a" . ai-code-menu))
+  ```
+- **Hooks defer to after-init**: `:hook (after-init . mode)` runs after startup completes, reducing perceived startup time.
+- **ai-code is heavy**: Deferring it saves ~200-500ms startup time.
+
+## Upstream Directory Structure Compliance
+- **Upstream uses `autosave/`, not `auto-save/`**: `auto-save-list-file-prefix` points to `autosave/` directory.
+- **`saveplace` is a file, not directory**: Upstream puts `saveplace` file directly in `user-emacs-directory`, not in a subdirectory.
+- **`abbrev_defs` is a file**: Same pattern — file in `var/`, not subdirectory.
+- **Why follow upstream**: Reduces cognitive load when debugging, matches expectations from upstream docs, avoids "why are there two autosave directories?" confusion.
+- **Local additions are ok**: `cache/`, `elpa/`, `lockfiles/`, `tmp/`, `savefile/` for local needs, but don't rename upstream directories.
+
+## Context Window Cache Maintenance
+- **Add explicit entries for new models**: When adding a model, update `my/gptel--known-model-context-windows` with exact name:
+  ```elisp
+  ("qwen3-coder-next" . 131072)
+  ("kimi-k2.5" . 262144)
+  ```
+- **Partial matching can fail**: A model `qwen3-coder-next` might match `qwen3-coder` prefix, but explicit entry is clearer and avoids ambiguity.
+- **Model metadata matters too**: Pricing, max output, features (vision/tools), description belong in `my/gptel--known-model-metadata`.
+- **Research pricing from provider docs**: OpenRouter shows pricing; DashScope docs show Qwen pricing; provider pages are authoritative.
