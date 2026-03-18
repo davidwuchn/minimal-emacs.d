@@ -22,6 +22,16 @@
 (defvar nucleus-agent-default 'gptel-plan
   "Default gptel agent preset. Use `nucleus-agent-toggle' to switch.")
 
+(defcustom nucleus-plan-model 'qwen3.5-plus
+  "Model for gptel-plan preset (read-only planning)."
+  :type 'symbol
+  :group 'nucleus-presets)
+
+(defcustom nucleus-agent-model 'glm-5
+  "Model for gptel-agent preset (full execution)."
+  :type 'symbol
+  :group 'nucleus-presets)
+
 (defvar nucleus-hidden-directives
   '(explorer reviewer chatTitle compact init skillCreate completion rewrite)
   "Directives to hide from the transient menu.")
@@ -119,20 +129,17 @@ changed (e.g. RunAgent added after buffer was created)."
   "Make gptel-agent's Plan/Agent presets use nucleus system prompts and toolsets."
   (when (and (fboundp 'gptel-get-preset)
              (fboundp 'gptel-make-preset))
-    (let* ((preferred-backend gptel-backend)
-           ;; Use the global default model for both agent and plan presets.
-           ;; Change once in gptel-config.el to switch everywhere.
-           (model gptel-model))
+    (let* ((preferred-backend gptel-backend))
 
       (nucleus--override-preset
        'gptel-agent 'nucleus-gptel-agent
        "Nucleus execution agent — full tool access, code changes"
-       :nucleus model preferred-backend)
+       :nucleus nucleus-agent-model preferred-backend)
 
       (nucleus--override-preset
        'gptel-plan 'nucleus-gptel-plan
        "Nucleus planning agent — read-only, architecture & research"
-       :readonly model preferred-backend)
+       :readonly nucleus-plan-model preferred-backend)
       
       ;; Patch subagents in gptel-agent--agents
       (when (boundp 'gptel-agent--agents)
