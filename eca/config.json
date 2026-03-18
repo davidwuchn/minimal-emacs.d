@@ -126,7 +126,7 @@
             }
           }
         },
-        "MiniMax-M2.7": {
+        "MiniMax-M2.5": {
           "extraPayload": {
             "thinking": {
               "type": "enabled",
