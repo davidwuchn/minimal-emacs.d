@@ -8,13 +8,11 @@
 ;;; AI ASSISTANT (gptel + nucleus)
 ;;; ==============================================================================
 
-;; Install gptel and gptel-agent from Git main branches
-;; Required for compatibility (gptel--handle-pre-tool etc.)
-(unless (package-installed-p 'gptel)
-  (package-vc-install '(gptel :url "https://github.com/karthink/gptel" :branch "main")))
-
-(unless (package-installed-p 'gptel-agent)
-  (package-vc-install '(gptel-agent :url "https://github.com/karthink/gptel-agent" :branch "main")))
+;; Add gptel and gptel-agent to load-path (installed via git clone)
+;; See: scripts/verify-nucleus.sh for installation instructions
+(let ((elpa-dir (expand-file-name "var/elpa" minimal-emacs-user-directory)))
+  (add-to-list 'load-path (expand-file-name "gptel" elpa-dir))
+  (add-to-list 'load-path (expand-file-name "gptel-agent" elpa-dir)))
 
 (use-package gptel
   :ensure nil
