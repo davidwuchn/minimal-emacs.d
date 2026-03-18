@@ -17,10 +17,13 @@ echo "Running Nucleus Tool Validations..."
 $EMACS -Q --batch \
        -l "$DIR/early-init.el" \
        --eval "(progn
-         (package-initialize)
-         (unless (package-installed-p 'gptel)
-           (package-refresh-contents)
-           (package-install 'gptel))
+         ;; Skip package archive operations (packages pre-installed via git clone)
+         (setq package-archives nil)
+         (package-initialize 'no-activate)
+         ;; Add gptel and gptel-agent to load-path
+         (let ((elpa-dir (expand-file-name \"var/elpa\" \"$DIR\")))
+           (add-to-list 'load-path (expand-file-name \"gptel\" elpa-dir))
+           (add-to-list 'load-path (expand-file-name \"gptel-agent\" elpa-dir)))
          (add-to-list 'load-path (expand-file-name \"lisp\" \"$DIR\"))
          (add-to-list 'load-path (expand-file-name \"lisp/modules\" \"$DIR\"))
          (require 'gptel-config)
