@@ -22,7 +22,7 @@
 
 (use-package org
   :ensure nil  ; Built-in
-  :hook (org-mode . display-line-numbers-mode-off)
+  :hook (org-mode . (lambda () (display-line-numbers-mode -1)))
   :bind (("C-c a" . org-agenda)
          ("C-c c" . org-capture)
          ("C-c l" . org-store-link)
