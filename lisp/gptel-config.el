@@ -39,7 +39,7 @@
 
 ;; --- Configuration Defaults ---
 (setq gptel-backend gptel--dashscope
-      gptel-model 'qwen3.5-plus)
+      gptel-model 'qwen3-coder-next)
 
 ;; Enable media/image attachment support (required for vision models)
 (setq gptel-track-media t)
