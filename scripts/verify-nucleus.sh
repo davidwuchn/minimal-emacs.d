@@ -12,6 +12,9 @@ set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EMACS=${EMACS:-emacs}
 
+# Ensure packages are installed
+"$DIR/scripts/setup-packages.sh" 2>/dev/null
+
 echo "Running Nucleus Tool Validations..."
 
 $EMACS -Q --batch \
