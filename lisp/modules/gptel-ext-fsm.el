@@ -42,6 +42,10 @@ This advice forces the final transition."
   (add-to-list 'gptel-agent-request--handlers '(DONE . (gptel--handle-post)))
   (add-to-list 'gptel-agent-request--handlers '(ERRS . (gptel--handle-post)))
   (add-to-list 'gptel-agent-request--handlers '(ABRT . (gptel--handle-post)))
+  ;; TRET handler for tool result (gptel-agent compatibility)
+  (unless (assoc 'TRET gptel-agent-request--handlers)
+    (add-to-list 'gptel-agent-request--handlers 
+                 '(TRET . (gptel--handle-post-tool gptel--handle-tool-result))))
 
   ;; Log subagent errors loudly but ALWAYS call main-cb so the parent FSM can
   ;; continue.  The old implementation swallowed the callback when the result
