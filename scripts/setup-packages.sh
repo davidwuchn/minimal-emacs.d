@@ -43,6 +43,11 @@ for pkg in "${PACKAGES[@]}"; do
   # Clone with depth 1 for faster download
   git clone --depth 1 --branch "$BRANCH" "$URL" "$TARGET_DIR"
   
+  # Generate autoloads for git-cloned packages
+  emacs -Q --batch --eval "(progn
+    (require 'package)
+    (package-generate-autoloads '$NAME \"$TARGET_DIR\"))" 2>/dev/null || true
+  
   echo "✓ $NAME installed"
 done
 
