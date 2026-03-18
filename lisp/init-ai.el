@@ -8,14 +8,21 @@
 ;;; AI ASSISTANT (gptel + nucleus)
 ;;; ==============================================================================
 
-;; Defer gptel loading until explicitly invoked
+;; Install gptel and gptel-agent from Git main branches
+;; Required for compatibility (gptel--handle-pre-tool etc.)
+(unless (package-installed-p 'gptel)
+  (package-vc-install '(gptel :url "https://github.com/karthink/gptel" :branch "main")))
+
+(unless (package-installed-p 'gptel-agent)
+  (package-vc-install '(gptel-agent :url "https://github.com/karthink/gptel-agent" :branch "main")))
+
 (use-package gptel
-  :ensure t
+  :ensure nil
   :commands (gptel gptel-send gptel-menu gptel-other-frame)
   :defer t)
 
 (use-package gptel-agent
-  :ensure t
+  :ensure nil
   :after gptel)
 
 ;; After they are installed, load the custom configurations
