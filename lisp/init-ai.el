@@ -64,7 +64,7 @@
   (ai-code-backends-infra-terminal-backend 'vterm)
   (ai-code-backends-infra-use-side-window nil)
   (ai-code-use-gptel-headline t)
-  (ai-code-use-gptel-classify-prompt t)
+  (ai-code-use-gptel-classify-prompt nil)
   (ai-code-auto-test-type 'ask-me)
   (ai-code-notes-use-gptel-headline t)
   (ai-code-task-use-gptel-filename t)
