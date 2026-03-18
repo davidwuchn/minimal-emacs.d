@@ -41,10 +41,9 @@
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3-coder-next)
 
-;; Subagent model: glm-5 on DashScope
-;; GLM-5 is a capable coding model available on DashScope
-;; Alternative: Use minimax-m2.5 on gptel--minimax backend (requires MiniMax API key)
-(setq my/gptel-subagent-model 'glm-5
+;; Subagent model: minimax-m2.5 on DashScope for agent workflows
+;; MiniMax M2.5 has 196k context, 80.2% SWE-Bench score
+(setq my/gptel-subagent-model 'minimax-m2.5
       my/gptel-subagent-backend 'gptel--dashscope)
 
 ;; Enable media/image attachment support (required for vision models)
