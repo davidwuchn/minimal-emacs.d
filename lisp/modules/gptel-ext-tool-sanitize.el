@@ -19,9 +19,9 @@
 ;; counter, causing the FSM to hang forever.  This advice pre-marks any
 ;; malformed tool calls with an error result so they're skipped.
 (defun my/gptel--nil-tool-call-p (tc)
-  "Return non-nil when TC is a nil/null-named tool call spec."
+  "Return non-nil when TC is a nil/null/empty-named tool call spec."
   (let ((name (plist-get tc :name)))
-    (or (null name) (eq name :null) (equal name "null"))))
+    (or (null name) (eq name :null) (equal name "null") (equal name ""))))
 
 (defun my/gptel--sanitize-tool-calls (fsm)
   "Remove nil/unknown-named tool calls from FSM before execution.

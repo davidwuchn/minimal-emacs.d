@@ -473,7 +473,8 @@ Runs asynchronously; returns nil immediately."
 (defun my/gptel-refresh-context-window-cache ()
   "Refresh (fetch) the current model's context window into the cache."
   (interactive)
-  (my/gptel--openrouter-fetch-context-window gptel-model))
+  (when (boundp 'gptel--openrouter)
+    (my/gptel--openrouter-fetch-context-window gptel-model)))
 
 (defun my/gptel-fetch-all-model-metadata ()
   "Fetch ALL model metadata from OpenRouter and cache it.

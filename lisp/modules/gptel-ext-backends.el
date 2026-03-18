@@ -21,13 +21,14 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
     :stream t
     :models '(gemini-3.1-pro-preview gemini-3-flash-preview)))
 
-(defvar gptel--openrouter
-  (gptel-make-openai "OpenRouter"
-    :host "openrouter.ai"
-    :endpoint "/api/v1/chat/completions"
-    :key (lambda () (my/gptel-api-key "api.openrouter.com"))
-    :stream t
-    :models '(openai/gpt-5.2-codex z-ai/glm-5 anthropic/claude-sonnet-4.6)))
+;; DISABLED temporarily - OpenRouter causing HTTP parse errors
+;; (defvar gptel--openrouter
+;;   (gptel-make-openai "OpenRouter"
+;;     :host "openrouter.ai"
+;;     :endpoint "/api/v1/chat/completions"
+;;     :key (lambda () (my/gptel-api-key "api.openrouter.com"))
+;;     :stream t
+;;     :models '(openai/gpt-5.2-codex z-ai/glm-5 anthropic/claude-sonnet-4.6)))
 
 (defvar gptel--minimax
   (gptel-make-openai "MiniMax"
@@ -43,6 +44,7 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
     :endpoint "/v1/chat/completions"
     :key (lambda () (my/gptel-api-key "coding.dashscope.aliyuncs.com"))
     :stream t
+    :curl-args '("--http1.1")
     :models '((qwen3.5-plus :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp"))
               (kimi-k2.5 :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp"))
               (qwen3-max-2026-01-23 :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp"))

@@ -216,14 +216,15 @@ OpenRouter/Anthropic when the model emits a tool call with a nil function name
                    (equal (plist-get msg :role) "assistant"))
           (when-let* ((tcs (plist-get msg :tool_calls))
                       ((vectorp tcs)))
-            (let ((filtered (cl-remove-if
-                             (lambda (tc)
-                               (let* ((func (plist-get tc :function))
-                                      (name (and func (plist-get func :name))))
-                                 (or (null name)
-                                     (eq name :null)
-                                     (equal name "null"))))
-                             tcs)))
+(let ((filtered (cl-remove-if
+                              (lambda (tc)
+                                (let* ((func (plist-get tc :function))
+                                       (name (and func (plist-get func :name))))
+                                  (or (null name)
+                                      (eq name :null)
+                                      (equal name "null")
+                                      (equal name ""))))
+                              tcs)))
               (if (= (length filtered) 0)
                   ;; No valid tool calls remain — demote to plain assistant message
                   ;; so the conversation stays well-formed.
