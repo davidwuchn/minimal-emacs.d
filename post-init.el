@@ -20,10 +20,6 @@
 (require 'init-ai)
 
 ;; Backup and auto-save settings are configured in init-files.el
-;; (backup-directory-alist, auto-save-file-name-transforms, etc.)
-
-;; Enable auto-save-visited-mode for automatic buffer saving
-(auto-save-visited-mode 1)
 
 ;; ==============================================================================
 ;; PERSONAL CUSTOMIZATIONS (Add your own below)
