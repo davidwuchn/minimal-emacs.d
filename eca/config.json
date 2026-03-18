@@ -55,14 +55,14 @@
       }
     },
     "plan": {
-      "defaultModel": "github-copilot/claude-sonnet-4.6",
+      "defaultModel": "github-copilot/gpt-5.4",
       "prompts": {
         "chat": "${file:prompts/plan_agent.md}"
       }
     },
     "executor": {
       "mode": "subagent",
-      "defaultModel": "github-copilot/gpt-5.4",
+      "defaultModel": "github-copilot/gpt-5.4-mini",
       "description": "Versatile subagent for grunt work (Tests, Docs, Linting).",
       "systemPrompt": "Your primary responsibilities include writing/fixing unit tests, generating comprehensive documentation, and resolving linter/formatting errors. Analyze the user's prompt to determine which task you are executing."
     },
@@ -74,7 +74,7 @@
     },
     "explorer": {
       "mode": "subagent",
-      "defaultModel": "github-copilot/claude-sonnet-4.6",
+      "defaultModel": "github-copilot/gpt-5.4",
       "systemPrompt": "${file:prompts/explorer_agent.md}",
       "description": "Dedicated agent for deep codebase analysis requiring investigation across multiple files and concepts. Returns synthesized findings from isolated context. Use when understanding how something works requires connecting patterns across the codebase, not just locating code. High context cost - prefer grep/read/tree for simple lookups."
     },
@@ -91,7 +91,7 @@
     "model": "github-copilot/gpt-5.4"
   },
   "completion": {
-    "model": "github-copilot/gpt-5.4"
+    "model": "github-copilot/gpt-5.4-mini"
   },
   "prompts": {
     "chat": "${file:prompts/code_agent.md}",
@@ -231,6 +231,18 @@
         "gemini-3.1-pro-preview-customtools": {},
         "gemini-3-flash-preview": {}
       }
+    }
+  },
+  "hooks": {
+    "nucleus-behaviors": {
+      "type": "preRequest",
+      "visible": true,
+      "actions": [
+        {
+          "type": "shell",
+          "file": "~/.config/eca/hooks/nucleus-behaviors.sh"
+        }
+      ]
     }
   }
 }
