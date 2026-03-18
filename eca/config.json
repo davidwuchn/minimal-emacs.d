@@ -55,13 +55,13 @@
       }
     },
     "plan": {
-      "defaultModel": "gihub-copilot/claude-sonnet-4.6",
+      "defaultModel": "github-copilot/claude-sonnet-4.6",
       "prompts": {
         "chat": "${file:prompts/plan_agent.md}"
       }
     },
     "executor": {
-      "model": "subagent",
+      "mode": "subagent",
       "defaultModel": "github-copilot/gpt-5.4",
       "description": "Versatile subagent for grunt work (Tests, Docs, Linting).",
       "systemPrompt": "Your primary responsibilities include writing/fixing unit tests, generating comprehensive documentation, and resolving linter/formatting errors. Analyze the user's prompt to determine which task you are executing."
