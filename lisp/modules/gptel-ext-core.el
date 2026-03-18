@@ -27,22 +27,16 @@
 ;; ==============================================================================
 ;; PROJECT TEMP DIRECTORY
 ;; ==============================================================================
-;; All tool temp files go to <project-root>/temp/ instead of system /tmp.
-;; This keeps them inside the workspace boundary so the security ACL
-;; doesn't force user confirmation for LLM read-back operations.
+;; All tool temp files go to var/tmp/ inside user-emacs-directory.
 
 (defun my/gptel-temp-dir ()
-  "Return the project-local temp directory, creating it if needed.
-Falls back to `temporary-file-directory' if no project is found."
-  (let* ((root (if-let ((proj (project-current nil)))
-                   (expand-file-name (project-root proj))
-                 default-directory))
-         (dir (expand-file-name "temp/" root)))
+  "Return the temp directory in user-emacs-directory, creating it if needed."
+  (let ((dir (expand-file-name "tmp/" user-emacs-directory)))
     (unless (file-directory-p dir) (make-directory dir t))
     dir))
 
 (defun my/gptel-make-temp-file (prefix &optional dir-flag suffix)
-  "Like `make-temp-file' but in the project temp/ directory.
+  "Like `make-temp-file' but in var/tmp/ directory.
 PREFIX, DIR-FLAG, and SUFFIX are passed to `make-temp-file'."
   (let ((temporary-file-directory (my/gptel-temp-dir)))
     (make-temp-file prefix dir-flag suffix)))
