@@ -71,7 +71,7 @@
   (ai-code-behaviors-auto-enable t)
   :config
   (require 'ai-code-eca)
-  (ai-code-set-backend 'opencode)
+  (ai-code-set-backend 'eca)
   (global-set-key (kbd "C-c a") #'ai-code-menu)
   (advice-add 'ai-code-call-gptel-sync :around #'my/ai-code--ensure-gptel-helper-model))
 
