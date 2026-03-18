@@ -63,12 +63,12 @@ This clones to `var/elpa/`:
 | **Global default** | `qwen3-coder-next` | DashScope | 131k | $0.30/$1.20 |
 | **Plan preset** | `qwen3.5-plus` | DashScope | 1M | $0.80/$4.80 |
 | **Agent preset** | `glm-5` | DashScope | 131k | $0.50/$0.50 |
-| **Subagents** | `MiniMax-M2.5` | DashScope | 196k | $0.27/$0.95 |
+| **Subagents** | `qwen3.5-plus` | DashScope | 1M | $0.80/$4.80 |
 | **ai-code helper** | `qwen3-coder-next` | DashScope | 131k | $0.30/$1.20 |
 
 All models use DashScope backend (阿里云百炼 Coding Plan). Requires `coding.dashscope.aliyuncs.com` API key in auth-source.
 
-**Note:** Model names must match DashScope exactly (e.g., `MiniMax-M2.5` with capitals).
+**Note:** Third-party models on DashScope (MiniMax, Kimi, GLM) may have API compatibility issues. Native Qwen models are most reliable.
 
 Configured in `lisp/gptel-config.el` and `lisp/modules/nucleus-presets.el`.
 
