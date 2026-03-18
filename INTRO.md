@@ -4,6 +4,16 @@ A fork of [jamescherti/minimal-emacs.d](https://github.com/jamescherti/minimal-e
 extended with a full AI agent system built on
 [gptel](https://github.com/karthink/gptel).
 
+## Quick Start
+
+```bash
+# 1. Install required packages from Git
+./scripts/setup-packages.sh
+
+# 2. Setup ECA symlinks
+./scripts/setup-eca-links.sh
+```
+
 ## Before you use this repo
 
 This setup expects the ECA config and wrapper paths below to exist before you
@@ -28,6 +38,35 @@ Required path layout:
 
 Without these links, ECA-backed secure provider flows may not resolve the
 expected config and wrapper locations.
+
+## Package Installation
+
+This fork uses **Git main branches** for `gptel` and `gptel-agent` (44 commits
+ahead of ELPA) to get the latest features:
+
+```bash
+./scripts/setup-packages.sh          # Install if missing
+./scripts/setup-packages.sh --force  # Reinstall
+```
+
+This clones to `var/elpa/`:
+- `gptel` - Chat engine and FSM-based tool execution
+- `gptel-agent` - Subagent delegation and tool orchestration
+
+**Why Git main?** ELPA's `gptel-0.9.9.4` is missing functions required by
+`gptel-agent` (e.g., `gptel--handle-pre-tool`). Git main has these fixes.
+
+## Model Configuration
+
+| Use Case | Model | Context | Pricing |
+|----------|-------|---------|---------|
+| **Global default** | `qwen3-coder-next` | 131k | $0.30/$1.20 |
+| **Plan preset** | `qwen3.5-plus` | 1M | $0.80/$4.80 |
+| **Agent preset** | `glm-5` | 131k | $0.50/$0.50 |
+| **Subagents** | `minimax-m2.5` | 196k | $0.27/$0.95 |
+| **ai-code helper** | `qwen3-coder-next` | 131k | $0.30/$1.20 |
+
+Configured in `lisp/gptel-config.el` and `lisp/modules/nucleus-presets.el`.
 
 Important: `~/.emacs.d/eca` is the real directory used by this setup. The
 `~/.config/eca` path should be the symlink that points back to it.
