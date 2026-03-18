@@ -71,11 +71,11 @@
 
 ;; Auto-save file locations
 (setq auto-save-file-name-transforms
-      `((".*" ,(expand-file-name "auto-save/" user-emacs-directory) t)))
+      `((".*" ,(expand-file-name "savefile/auto-save-" user-emacs-directory) t)))
 (setq auto-save-list-file-prefix
-      (expand-file-name "auto-save/saves-" user-emacs-directory))
+      (expand-file-name "savefile/auto-save-" user-emacs-directory))
 (setq tramp-auto-save-directory
-      (expand-file-name "tramp-autosave/" user-emacs-directory))
+      (expand-file-name "savefile/tramp-auto-save/" user-emacs-directory))
 
 ;; Enable auto-save-visited-mode for automatic buffer saving
 (auto-save-visited-mode 1)
@@ -93,7 +93,7 @@
 ;; ==============================================================================
 
 ;; Ensure var subdirectories exist
-(let ((dirs '("backup" "auto-save" "lockfiles" "cache" "tmp")))
+(let ((dirs '("backup" "lockfiles" "cache" "tmp" "savefile")))
   (dolist (dir dirs)
     (let ((path (expand-file-name dir user-emacs-directory)))
       (unless (file-directory-p path)
