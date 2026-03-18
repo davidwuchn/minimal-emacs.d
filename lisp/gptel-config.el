@@ -41,10 +41,11 @@
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3-coder-next)
 
-;; Subagent model: minimax-m2.5 for agent workflows (80.2% SWE-Bench)
-;; Uses gptel--minimax backend (NOT DashScope - minimax is a separate provider)
-(setq my/gptel-subagent-model 'minimax-m2.5
-      my/gptel-subagent-backend 'gptel--minimax)
+;; Subagent model: glm-5 on DashScope
+;; GLM-5 is a capable coding model available on DashScope
+;; Alternative: Use minimax-m2.5 on gptel--minimax backend (requires MiniMax API key)
+(setq my/gptel-subagent-model 'glm-5
+      my/gptel-subagent-backend 'gptel--dashscope)
 
 ;; Enable media/image attachment support (required for vision models)
 (setq gptel-track-media t)
