@@ -22,8 +22,8 @@ mkdir -p "$ELPA_DIR"
 
 # Packages to install: name, URL, branch
 PACKAGES=(
-  "gptel|https://github.com/karthink/gptel|main"
-  "gptel-agent|https://github.com/karthink/gptel-agent|main"
+  "gptel|https://github.com/karthink/gptel|master"
+  "gptel-agent|https://github.com/karthink/gptel-agent|master"
 )
 
 for pkg in "${PACKAGES[@]}"; do
