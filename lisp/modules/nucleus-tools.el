@@ -44,13 +44,14 @@ When enabled, validates:
 (defconst nucleus-toolsets
   '((:readonly . ("Bash" "Eval" "Glob" "Grep" "Read" "RunAgent" "Skill" "TodoWrite"
                   "Programmatic"
+                  "WebFetch" "WebSearch"
                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                    "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
-     (:researcher . ("Bash" "Glob" "Grep" "Read" "Skill" "Programmatic"
+     (:researcher . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill" "Programmatic"
                      "WebFetch" "WebSearch" "YouTube"
                      "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
                      "list_skills" "load_skill"
-                     "Code_Map" "Code_Inspect"))
+                     "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"))
      (:nucleus . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
                    "Insert" "Mkdir" "Move" "Read" "Skill" "TodoWrite"
                    "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
@@ -58,24 +59,24 @@ When enabled, validates:
                     "Preview"
                     "list_skills" "load_skill" "create_skill"
                    "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-     (:explorer . ("Glob" "Grep" "Read"))
-     (:reviewer . ("Glob" "Grep" "Read")))
+     (:explorer . ("Glob" "Grep" "Read" "Code_Map" "Code_Inspect"))
+     (:reviewer . ("Glob" "Grep" "Read" "Diagnostics")))
   "Canonical toolset definitions for nucleus.
 
-:readonly — Emacs introspection (16 tools): Eval, RunAgent, no web research
-:researcher — Codebase + web research (16 tools): Web tools, no live Eval
+:readonly — Emacs introspection (18 tools): Eval, RunAgent, web search
+:researcher — Codebase + web research (19 tools): Full analysis capability
 :nucleus — Full action tools (30 tools): No RunAgent (prevent recursive delegation)
-:explorer — Minimal read-only set for codebase exploration (3 tools)
-:reviewer — Minimal read-only set for code review (3 tools)
+:explorer — Codebase exploration (5 tools): Glob, Grep, Read, Code_Map, Code_Inspect
+:reviewer — Code review (4 tools): Read-only + Diagnostics
 
 :snippets is derived from :nucleus at runtime (see `nucleus-get-tools').
 
 Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   executor     → :nucleus     (30 tools) - code changes & execution (no RunAgent)
-  researcher   → :researcher  (16 tools) - web + codebase research (no Eval)
-  introspector → :readonly    (16 tools) - Emacs introspection (no web tools)
-  explorer     → :explorer     (3 tools) - read-only codebase exploration
-  reviewer     → :reviewer     (3 tools) - read-only code review")
+  researcher   → :researcher  (19 tools) - web + codebase + Eval
+  introspector → :readonly    (18 tools) - Emacs introspection + web search
+  explorer     → :explorer     (5 tools) - codebase exploration + Code tools
+  reviewer     → :reviewer     (4 tools) - code review + Diagnostics")
 
 (defconst nucleus-agent-tool-contracts
   '(("executor"     . :nucleus)
