@@ -46,9 +46,9 @@
   "RunAgent loop control settings."
   :group 'gptel)
 
-(defcustom gptel-agent-loop-timeout 120
+(defcustom gptel-agent-loop-timeout nil
   "Timeout in seconds for RunAgent tasks.
-Set to nil for no timeout."
+Set to nil for no timeout (default)."
   :type '(choice (const :tag "No timeout" nil) integer)
   :group 'gptel-agent-loop)
 

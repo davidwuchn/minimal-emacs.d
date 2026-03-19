@@ -14,9 +14,10 @@
   "Subagent delegation for gptel-agent."
   :group 'gptel)
 
-(defcustom my/gptel-agent-task-timeout 120
-  "Seconds before a delegated Agent/RunAgent task is force-stopped."
-  :type 'integer
+(defcustom my/gptel-agent-task-timeout nil
+  "Seconds before a delegated Agent/RunAgent task is force-stopped.
+Set to nil for no timeout (default)."
+  :type '(choice (const :tag "No timeout" nil) integer)
   :group 'gptel-tools-agent)
 
 (defcustom my/gptel-subagent-result-limit 4000
@@ -303,8 +304,11 @@ CALLBACK is called with the result or a timeout error."
                  (setq-local gptel--fsm-last parent-fsm))
                (funcall callback result)))))
 
-    (message "[nucleus] Delegating to subagent '%s' (timeout: %ds)..."
-             agent-type my/gptel-agent-task-timeout)
+(message "[nucleus] Delegating to subagent '%s'%s..."
+              agent-type
+              (if my/gptel-agent-task-timeout
+                  (format " (timeout: %ds)" my/gptel-agent-task-timeout)
+                ""))
 
     (setq progress-timer
           (run-at-time my/gptel-subagent-progress-interval
@@ -314,25 +318,22 @@ CALLBACK is called with the result or a timeout error."
                (message "[nucleus] Subagent '%s' still running... (%.1fs elapsed)"
                         agent-type (float-time (time-since start-time)))))))
 
-    (setq timeout-timer
-          (run-at-time
-           my/gptel-agent-task-timeout nil
-           (lambda ()
-             (unless done
-               (setq done t)
-               (when (timerp progress-timer) (cancel-timer progress-timer))
-               (message "[nucleus] Subagent '%s' timed out after %ds"
-                        agent-type my/gptel-agent-task-timeout)
-               ;; Restore parent FSM reference so the parent buffer is still usable.
-               ;; Do NOT call my/gptel-abort-here here — that would kill the parent's
-               ;; own curl process, aborting the parent request that is waiting on us.
-               ;; The subagent's curl process will clean up on its own via its sentinel.
-               (when (buffer-live-p origin-buf)
-                 (with-current-buffer origin-buf
-                   (setq-local gptel--fsm-last parent-fsm)))
-(funcall callback
-                         (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                 description agent-type my/gptel-agent-task-timeout))))))
+    (when my/gptel-agent-task-timeout
+      (setq timeout-timer
+            (run-at-time
+             my/gptel-agent-task-timeout nil
+             (lambda ()
+               (unless done
+                 (setq done t)
+                 (when (timerp progress-timer) (cancel-timer progress-timer))
+                 (message "[nucleus] Subagent '%s' timed out after %ds"
+                          agent-type my/gptel-agent-task-timeout)
+                 (when (buffer-live-p origin-buf)
+                   (with-current-buffer origin-buf
+                     (setq-local gptel--fsm-last parent-fsm)))
+                 (funcall callback
+                          (format "Error: Task \"%s\" (%s) timed out after %ds."
+                                  description agent-type my/gptel-agent-task-timeout)))))))
 
     (gptel-agent--task wrapped-cb agent-type description packaged-prompt)))
 
