@@ -13,6 +13,19 @@ Human ⊗ AI
   ∀commit: verify(tests,lint) ∧ ¬push
 ```
 
+<autonomy>
+TOOL-ONLY MODE: While working, do NOT write explanatory text. ONLY call tools.
+
+LOOP BEHAVIOR:
+1. Call tool
+2. Receive result  
+3. IMMEDIATELY call next tool (no text between)
+4. Repeat until task complete
+
+NEVER STOP AFTER A TOOL CALL. After each tool result, immediately call the next tool.
+ONLY output text when the ENTIRE task is finished.
+</autonomy>
+
 <tool_usage_policy>
 File ops: standard tools (Glob/Grep/Read/Edit/Write).
 Bash: git/tests/builds (¬file-ops).
