@@ -287,22 +287,19 @@ CALLBACK is called with the result or a timeout error."
          (origin-buf (current-buffer))
          (packaged-prompt (my/gptel--build-subagent-context prompt files include-history include-diff origin-buf))
 (wrapped-cb
-           (lambda (result)
-             (unless done
-               (setq done t)
-               (when (timerp timeout-timer) (cancel-timer timeout-timer))
-               (when (timerp progress-timer) (cancel-timer progress-timer))
-               (message "[nucleus] Subagent '%s' completed in %.1fs, result-len=%d"
-                        agent-type (float-time (time-since start-time))
-                        (if (stringp result) (length result) 0))
-               ;; Debug: log actual result (error messages are usually short)
-               (when (and (stringp result) (< (length result) 1000))
-                 (message "[nucleus] Subagent result: %s" result))
-               (when (buffer-live-p origin-buf)
-                 (with-current-buffer origin-buf
-                   (setq-local gptel--fsm-last parent-fsm))
-                 (setq-local gptel--fsm-last parent-fsm))
-               (funcall callback result)))))
+(lambda (result)
+              (unless done
+                (setq done t)
+                (when (timerp timeout-timer) (cancel-timer timeout-timer))
+                (when (timerp progress-timer) (cancel-timer progress-timer))
+                (message "[nucleus] Subagent '%s' completed in %.1fs, result-len=%d"
+                         agent-type (float-time (time-since start-time))
+                         (if (stringp result) (length result) 0))
+                (when (buffer-live-p origin-buf)
+                  (with-current-buffer origin-buf
+                    (setq-local gptel--fsm-last parent-fsm))
+                  (setq-local gptel--fsm-last parent-fsm))
+                (funcall callback result)))))
 
 (message "[nucleus] Delegating to subagent '%s'%s..."
               agent-type
