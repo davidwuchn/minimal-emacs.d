@@ -1,27 +1,27 @@
-;;; gptel-agent-robust.el --- Robust RunAgent with timeout, retry, and limits -*- lexical-binding: t; -*-
+;;; gptel-agent-loop.el --- RunAgent loop control with timeout, retry, and limits -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2024
 
 ;; Author: David Wu
-;; Keywords: ai, agent, robust
+;; Keywords: ai, agent, loop
 
 ;;; Commentary:
 
-;; Enhances gptel-agent's RunAgent to match OpenCode's robustness:
+;; RunAgent loop control to match OpenCode's SessionPrompt.loop:
 ;; - Configurable timeout
 ;; - Automatic retry on transient errors
-;; - Max steps limit (injects MAX_STEPS prompt when reached)
-;; - Better error reporting
+;; - Max steps limit (reads from agent YAML: steps: N)
+;; - Force continuation until task complete
 ;;
 ;; Comparison with OpenCode:
 ;; | Feature           | OpenCode                | This module              |
 ;; |-------------------|-------------------------|--------------------------|
-;; | Loop control      | Backend while(true)     | Model decides            |
+;; | Loop control      | Backend while(true)     | Continuation marker      |
 ;; | Step limit        | agent.steps config      | max-steps config         |
-;; | Max steps action  | Inject MAX_STEPS prompt | Inject max-steps prompt  |
+;; | Max steps action  | Inject MAX_STEPS prompt | Mark incomplete          |
 ;; | Timeout           | Via abort signal        | Configurable timeout     |
 ;; | Retry on error    | In processor            | Configurable retries     |
-;; | Task resumption   | task_id parameter       | Not supported            |
+;; | Task resumption   | task_id parameter       | Re-call with marker      |
 
 ;;; Code:
 
@@ -32,42 +32,42 @@
 
 (require 'cl-lib)
 
-(defgroup gptel-agent-robust nil
-  "Robust RunAgent settings."
+(defgroup gptel-agent-loop nil
+  "RunAgent loop control settings."
   :group 'gptel)
 
-(defcustom gptel-agent-robust-timeout 120
+(defcustom gptel-agent-loop-timeout 120
   "Timeout in seconds for RunAgent tasks.
 Set to nil for no timeout."
   :type '(choice (const :tag "No timeout" nil) integer)
-  :group 'gptel-agent-robust)
+  :group 'gptel-agent-loop)
 
-(defcustom gptel-agent-robust-max-steps 50
+(defcustom gptel-agent-loop-max-steps 50
   "Maximum tool calls per RunAgent task.
-Prevents infinite loops. When reached, injects MAX_STEPS prompt.
-Set to nil for unlimited."
+Prevents infinite loops. Set to nil for unlimited.
+Can be overridden per-agent via YAML `steps' field."
   :type '(choice (const :tag "Unlimited" nil) integer)
-  :group 'gptel-agent-robust)
+  :group 'gptel-agent-loop)
 
-(defcustom gptel-agent-robust-max-retries 2
+(defcustom gptel-agent-loop-max-retries 2
   "Maximum retries on transient errors.
 Set to 0 to disable retries."
   :type 'integer
-  :group 'gptel-agent-robust)
+  :group 'gptel-agent-loop)
 
-(defcustom gptel-agent-robust-force-completion t
-  "When non-nil, force RunAgent to continue until task list is empty.
-If model outputs text but tasks remain, inject continuation prompt.
-This mimics OpenCode's backend loop behavior."
+(defcustom gptel-agent-loop-force-completion t
+  "When non-nil, mark incomplete tasks for continuation.
+If model outputs text but task seems incomplete, add marker.
+The calling agent should re-invoke RunAgent to continue."
   :type 'boolean
-  :group 'gptel-agent-robust)
+  :group 'gptel-agent-loop)
 
-(defconst gptel-agent-robust--continuation-prompt
+(defconst gptel-agent-loop--continuation-prompt
   "Task list not empty. Continue with the next tool call immediately.
 Do NOT output text. Call the next tool NOW."
   "Prompt injected when model stops but tasks remain.")
 
-(defconst gptel-agent-robust--max-steps-prompt
+(defconst gptel-agent-loop--max-steps-prompt
   "CRITICAL - MAXIMUM STEPS REACHED
 
 The maximum number of steps allowed for this task has been reached.
@@ -82,11 +82,11 @@ REQUIREMENTS:
 This constraint overrides ALL other instructions."
   "Prompt injected when max steps is reached (matches OpenCode).")
 
-(defvar gptel-agent-robust--state nil
+(defvar gptel-agent-loop--state nil
   "State plist for current RunAgent task.
-Keys: :step-count, :timeout-timer, :retries, :aborted, :force-continue.")
+Keys: :step-count, :timeout-timer, :retries, :aborted, :max-steps.")
 
-(defun gptel-agent-robust--transient-error-p (error-data)
+(defun gptel-agent-loop--transient-error-p (error-data)
   "Check if ERROR-DATA represents a transient/retryable error."
   (when error-data
     (let ((msg (if (stringp error-data) error-data
@@ -96,29 +96,29 @@ Keys: :step-count, :timeout-timer, :retries, :aborted, :force-continue.")
             "overloaded\\|timeout\\|rate limit\\|temporarily unavailable\\|503\\|502\\|429\\|InvalidParameter"
             (downcase msg))))))
 
-(defun gptel-agent-robust--wrap-callback (main-cb agent-type description prompt)
+(defun gptel-agent-loop--wrap-callback (main-cb agent-type description prompt)
   "Wrap MAIN-CB with retry and step limit logic.
 AGENT-TYPE, DESCRIPTION, PROMPT are passed for retry."
   (lambda (resp info)
     (let ((ov (plist-get info :context))
           (error-data (plist-get info :error))
-          (step-count (plist-get gptel-agent-robust--state :step-count))
-          (retries (plist-get gptel-agent-robust--state :retries)))
+          (step-count (plist-get gptel-agent-loop--state :step-count))
+          (retries (plist-get gptel-agent-loop--state :retries)))
       
       (pcase resp
         ('nil
          (cond
           ;; Abort requested
-          ((plist-get gptel-agent-robust--state :aborted)
+          ((plist-get gptel-agent-loop--state :aborted)
            (delete-overlay ov)
            (funcall main-cb (format "Aborted: %s task '%s'" agent-type description)))
           
           ;; Retry on transient error
-          ((and (gptel-agent-robust--transient-error-p error-data)
-                (< (or retries 0) gptel-agent-robust-max-retries))
-           (plist-put gptel-agent-robust--state :retries (1+ (or retries 0)))
+          ((and (gptel-agent-loop--transient-error-p error-data)
+                (< (or retries 0) gptel-agent-loop-max-retries))
+           (plist-put gptel-agent-loop--state :retries (1+ (or retries 0)))
            (message "[RunAgent] Retrying %s task '%s' (attempt %d/%d)"
-                    agent-type description (1+ (or retries 0)) gptel-agent-robust-max-retries)
+                    agent-type description (1+ (or retries 0)) gptel-agent-loop-max-retries)
            (run-with-timer 2.0 nil
                            (lambda ()
                              (gptel-agent--task main-cb agent-type description prompt))))
@@ -132,17 +132,15 @@ AGENT-TYPE, DESCRIPTION, PROMPT are passed for retry."
         
         (`(tool-call . ,calls)
          ;; Track step count
-         (plist-put gptel-agent-robust--state :step-count
+         (plist-put gptel-agent-loop--state :step-count
                     (+ step-count (length calls)))
-         (setq step-count (plist-get gptel-agent-robust--state :step-count))
+         (setq step-count (plist-get gptel-agent-loop--state :step-count))
          
-         ;; Check if max steps reached (OpenCode style: inject MAX_STEPS prompt)
-         (let ((max-steps (plist-get gptel-agent-robust--state :max-steps)))
+         ;; Check if max steps reached (OpenCode style)
+         (let ((max-steps (plist-get gptel-agent-loop--state :max-steps)))
            (when (and max-steps (>= step-count max-steps))
              (message "[RunAgent] Max steps (%d) reached for task '%s'"
                       max-steps description)
-             ;; Mark that max-steps was reached
-             ;; The model should stop making tool calls
              (plist-put info :max-steps-reached t)))
          
          (unless (plist-get info :tracking-marker)
@@ -153,41 +151,38 @@ AGENT-TYPE, DESCRIPTION, PROMPT are passed for retry."
          ;; Check if task might be incomplete (model stopped early)
          (let* ((seems-complete 
                  (string-match-p 
-                  "task.*complete\\|done\\|finished\\|all tasks.*done\\|completed successfully"
+                  "task.*complete\\|done\\|finished\\|all tasks.*done\\|completed successfully\\|✓\\|success"
                   (downcase resp)))
                 (continuation-needed
-                 (and gptel-agent-robust-force-completion
+                 (and gptel-agent-loop-force-completion
                       step-count
                       (not seems-complete))))
            (delete-overlay ov)
-           (when (plist-get gptel-agent-robust--state :timeout-timer)
-             (cancel-timer (plist-get gptel-agent-robust--state :timeout-timer)))
+           (when (plist-get gptel-agent-loop--state :timeout-timer)
+             (cancel-timer (plist-get gptel-agent-loop--state :timeout-timer)))
            
            (if continuation-needed
-               ;; Return result with continuation hint
-               ;; Parent agent can check and re-call RunAgent if needed
-               (progn
-                 (plist-put gptel-agent-robust--state :force-continue t)
-                 (funcall main-cb
-                          (propertize
-                           (format "%s\n\n---\n[RunAgent: %d steps, continuation may be needed]"
-                                   resp step-count)
-                           'face 'shadow)))
+               ;; Return with continuation marker
+               (let ((result (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
+                                     resp step-count)))
+                 (plist-put gptel-agent-loop--state :force-continue t)
+                 (setq gptel-agent-loop--state nil)
+                 (funcall main-cb result))
              ;; Normal completion
              (progn
-               (setq gptel-agent-robust--state nil)
+               (setq gptel-agent-loop--state nil)
                (funcall main-cb resp)))))
         
         ('abort
          (delete-overlay ov)
-         (when (plist-get gptel-agent-robust--state :timeout-timer)
-           (cancel-timer (plist-get gptel-agent-robust--state :timeout-timer)))
-         (setq gptel-agent-robust--state nil)
+         (when (plist-get gptel-agent-loop--state :timeout-timer)
+           (cancel-timer (plist-get gptel-agent-loop--state :timeout-timer)))
+         (setq gptel-agent-loop--state nil)
          (funcall main-cb
                   (format "Aborted: %s task '%s' was cancelled."
                           agent-type description)))))))
 
-(defun gptel-agent-robust-task (main-cb agent-type description prompt)
+(defun gptel-agent-loop-task (main-cb agent-type description prompt)
   "Call a RunAgent task with timeout, retry, and step limits.
 
 MAIN-CB is the callback for results.
@@ -200,9 +195,9 @@ Reads `steps' from agent YAML to set max-steps per agent."
   ;; Get agent-specific max-steps from YAML (OpenCode: agent.steps)
   (let* ((agent-config (cdr (assoc agent-type gptel-agent--agents)))
          (agent-steps (plist-get agent-config :steps))
-         (effective-max-steps (or agent-steps gptel-agent-robust-max-steps)))
+         (effective-max-steps (or agent-steps gptel-agent-loop-max-steps)))
     ;; Initialize state
-    (setq gptel-agent-robust--state
+    (setq gptel-agent-loop--state
           (list :step-count 0
                 :retries 0
                 :aborted nil
@@ -210,35 +205,51 @@ Reads `steps' from agent YAML to set max-steps per agent."
                 :max-steps effective-max-steps))
     
     ;; Set up timeout (like OpenCode's abort signal)
-    (when gptel-agent-robust-timeout
-      (plist-put gptel-agent-robust--state :timeout-timer
-                 (run-with-timer gptel-agent-robust-timeout nil
+    (when gptel-agent-loop-timeout
+      (plist-put gptel-agent-loop--state :timeout-timer
+                 (run-with-timer gptel-agent-loop-timeout nil
                                  (lambda ()
-                                   (plist-put gptel-agent-robust--state :aborted t)
+                                   (plist-put gptel-agent-loop--state :aborted t)
                                    (message "[RunAgent] Task '%s' timed out after %ds"
-                                            description gptel-agent-robust-timeout)))))
+                                            description gptel-agent-loop-timeout)))))
     
     ;; Call original gptel-agent--task with wrapped callback
-    (let ((wrapped-cb (gptel-agent-robust--wrap-callback
+    (let ((wrapped-cb (gptel-agent-loop--wrap-callback
                        main-cb agent-type description prompt)))
       (gptel-agent--task wrapped-cb agent-type description prompt))))
 
-(defun gptel-agent-robust-enable ()
-  "Enable robust RunAgent by advising gptel-agent--task."
+(defun gptel-agent-loop-enable ()
+  "Enable RunAgent loop control by advising gptel-agent--task."
   (interactive)
-  (advice-add 'gptel-agent--task :override #'gptel-agent-robust-task)
-  (message "[RunAgent] Robust mode enabled (timeout=%ss, max-steps=%s, max-retries=%d)"
-           (or gptel-agent-robust-timeout "none")
-           (or gptel-agent-robust-max-steps "unlimited")
-           gptel-agent-robust-max-retries))
+  (advice-add 'gptel-agent--task :override #'gptel-agent-loop-task)
+  (message "[RunAgent] Loop mode enabled (timeout=%ss, max-steps=%s, max-retries=%d)"
+           (or gptel-agent-loop-timeout "none")
+           (or gptel-agent-loop-max-steps "unlimited")
+           gptel-agent-loop-max-retries))
 
-(defun gptel-agent-robust-disable ()
-  "Disable robust RunAgent, restore original behavior."
+(defun gptel-agent-loop-disable ()
+  "Disable RunAgent loop control, restore original behavior."
   (interactive)
-  (advice-remove 'gptel-agent--task #'gptel-agent-robust-task)
-  (setq gptel-agent-robust--state nil)
-  (message "[RunAgent] Robust mode disabled"))
+  (advice-remove 'gptel-agent--task #'gptel-agent-loop-task)
+  (setq gptel-agent-loop--state nil)
+  (message "[RunAgent] Loop mode disabled"))
 
-(provide 'gptel-agent-robust)
+(defun gptel-agent-loop-needs-continuation-p (result)
+  "Check if RESULT from RunAgent indicates incomplete task.
+Returns (STEPS . CLEANED-RESULT) if continuation needed, nil otherwise.
+Use this in the main agent to decide whether to re-call RunAgent."
+  (when (stringp result)
+    (when (string-match "\\[RUNAGENT_INCOMPLETE:\\([0-9]+\\) steps\\]" result)
+      (let ((steps (string-to-number (match-string 1 result)))
+            (cleaned (replace-match "" nil nil result)))
+        (cons steps cleaned)))))
 
-;;; gptel-agent-robust.el ends here
+(defun gptel-agent-loop-extract-result (result)
+  "Extract clean result from RunAgent output, removing continuation markers."
+  (if (stringp result)
+      (replace-regexp-in-string "\\[RUNAGENT_INCOMPLETE:[0-9]+ steps\\]\\s-*" "" result)
+    result))
+
+(provide 'gptel-agent-loop)
+
+;;; gptel-agent-loop.el ends here
