@@ -115,10 +115,9 @@ by `my/gptel--mode-hook-setup' before this runs)."
 ;; Lower temperature for reliable tool calling (1.0 causes malformed tool calls).
 (setq gptel-temperature 0.5)
 
-;; Enable full request/response logging in *gptel-log* buffer.
+;; Uncomment to enable full request/response logging in *gptel-log* buffer.
 ;; Useful for diagnosing 400 errors — shows exact JSON sent to the API.
-;; Comment out to disable after diagnosing.
-(setq gptel-log-level 'debug)
+;; (setq gptel-log-level 'debug)
 
 ;; ==============================================================================
 ;; DEFAULT DIRECTORY
