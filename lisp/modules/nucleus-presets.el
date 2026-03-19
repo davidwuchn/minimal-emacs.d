@@ -10,6 +10,7 @@
 (require 'subr-x)
 
 (defvar nucleus-agent-tool-contracts)  ; defined in nucleus-tools.el
+(defvar nucleus-agents-dir)            ; defined in nucleus-prompts.el
 
 ;;; Customization
 
@@ -22,22 +23,16 @@
 (defvar nucleus-agent-default 'gptel-plan
   "Default gptel agent preset. Use `nucleus-agent-toggle' to switch.")
 
-(defcustom nucleus-plan-model 'qwen3.5-plus
-  "Model for gptel-plan preset (read-only planning)."
-  :type 'symbol
-  :group 'nucleus-presets)
-
-(defcustom nucleus-agent-model 'glm-5
-  "Fallback model for gptel-agent preset when YAML doesn't specify model.
-YAML frontmatter in gptel-agent.md takes priority if model: is set."
-  :type 'symbol
-  :group 'nucleus-presets)
-
-(defcustom nucleus-plan-model 'qwen3.5-plus
-  "Fallback model for gptel-plan preset when YAML doesn't specify model.
-YAML frontmatter in gptel-plan.md takes priority if model: is set."
-  :type 'symbol
-  :group 'nucleus-presets)
+(defun nucleus--read-agent-model (agent-file)
+  "Read model from AGENT-FILE YAML frontmatter.
+Returns model as symbol, or nil if not found."
+  (when (and agent-file (file-readable-p agent-file)
+             (fboundp 'gptel-agent-read-file))
+    (let* ((parsed (gptel-agent-read-file agent-file nil nil))
+           (plist (cdr parsed))
+           (model (plist-get plist :model)))
+      (when (stringp model)
+        (intern model)))))
 
 (defvar nucleus-hidden-directives
   '(chatTitle compact init skillCreate completion rewrite)
@@ -145,20 +140,25 @@ changed (e.g. RunAgent added after buffer was created)."
                       (error-message-string err)))))))))
 
 (defun nucleus--override-gptel-agent-presets ()
-  "Make gptel-agent's Plan/Agent presets use nucleus system prompts and toolsets."
+  "Make gptel-agent's Plan/Agent presets use nucleus system prompts and toolsets.
+Model is read from YAML frontmatter in code_agent.md and plan_agent.md."
   (when (and (fboundp 'gptel-get-preset)
              (fboundp 'gptel-make-preset))
-    (let* ((preferred-backend gptel-backend))
+    (let* ((preferred-backend gptel-backend)
+           (agent-model (nucleus--read-agent-model
+                          (expand-file-name "code_agent.md" nucleus-agents-dir)))
+           (plan-model (nucleus--read-agent-model
+                         (expand-file-name "plan_agent.md" nucleus-agents-dir))))
 
       (nucleus--override-preset
        'gptel-agent 'nucleus-gptel-agent
        "Nucleus execution agent — full tool access, code changes"
-       :nucleus nucleus-agent-model preferred-backend)
+       :nucleus agent-model preferred-backend)
 
       (nucleus--override-preset
        'gptel-plan 'nucleus-gptel-plan
        "Nucleus planning agent — read-only, architecture & research"
-       :readonly nucleus-plan-model preferred-backend)
+       :readonly plan-model preferred-backend)
       
       ;; Patch subagent tools in gptel-agent--agents (model from YAML)
       (when (boundp 'gptel-agent--agents)

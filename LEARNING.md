@@ -277,14 +277,14 @@
 
 ## Per-Preset Model Configuration
 - **Different models for different tasks**: Plan mode (research) needs large context; Agent mode (execution) needs speed; Subagents need reliability.
-- **Use `defcustom` for preset models**:
-  ```elisp
-  (defcustom nucleus-plan-model 'qwen3.5-plus
-    "Model for gptel-plan preset (read-only planning)."
-    :type 'symbol
-    :group 'nucleus-presets)
+- **YAML is single source of truth**: Model is read from YAML frontmatter in agent files:
+  ```yaml
+  ---
+  name: nucleus-gptel-agent
+  model: qwen3.5-plus
+  ---
   ```
-- **Override in preset definition**: Pass the custom variable to `gptel-make-preset` instead of hardcoded model symbol.
+- **Read with `gptel-agent-read-file`**: Parse YAML to get model for preset override.
 - **Subagent model should differ from parent**: `minimax-m2.5` (196k context, 80.2% SWE-Bench) is better for subagent tool use than parent buffer's model.
 
 ## Deferred Package Loading for Performance

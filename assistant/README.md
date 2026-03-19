@@ -282,14 +282,13 @@ Tool lists are strictly defined in `lisp/modules/nucleus-tools.el`:
 
 ## Models & Routing
 
-Nucleus implements task-specific model routing to optimize cost and capability (configured via `nucleus-presets.el` and `gptel-tools-agent.el`):
+Model is configured in YAML frontmatter (single source of truth). Edit `assistant/agents/*.md` to change models:
 
-| Role | Default Model | Reasoning |
-|------|---------------|-----------|
-| **Global Fallback** | `qwen3.5-plus` | Solid generalist via `dashscope` |
-| **Plan Agent** | `qwen3.5-plus` | Fast, logic-heavy planning and reasoning |
-| **Action Agent** | `glm-5` | High capability for complex coding and refactoring |
-| **Subagents** | `kimi-k2.5` | Fast, deep-context model via `moonshot` for heavy codebase reading |
+| Role | Model | YAML File |
+|------|-------|-----------|
+| **Plan Agent** | `qwen3.5-plus` | `plan_agent.md` |
+| **Action Agent** | `qwen3.5-plus` | `code_agent.md` |
+| **Subagents** | per-agent | `executor.md`, `researcher.md`, etc. |
 
 *Note: Subagents spawned via `RunAgent` or `Agent` are entirely stateless. Network requests still benefit from `my/gptel-auto-retry`, and the RunAgent loop itself retries transient subagent failures with a fixed short delay.*
 

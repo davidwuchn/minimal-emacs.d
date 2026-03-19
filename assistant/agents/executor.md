@@ -1,6 +1,6 @@
 ---
 name: executor
-model: qwen3-coder-plus
+model: qwen3.5-plus
 max-tokens: 16384
 temperature: 0.1
 steps: 100
