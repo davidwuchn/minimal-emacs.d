@@ -174,6 +174,12 @@ jobs:
             -l tests/test-nucleus-tools.el \
             -f ert-run-tests-batch-and-exit
 
+      - name: Run Agent Loop Tests
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-gptel-agent-loop.el \
+            -f ert-run-tests-batch-and-exit
+
       - name: Verify Nucleus Tool Contracts
         run: |
           ./scripts/verify-nucleus.sh
