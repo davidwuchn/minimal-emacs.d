@@ -54,8 +54,7 @@ Inserts after the last assistant exchange, before the current prompt."
                          "You are no longer in read-only mode.\n"
                          "You are permitted to make file changes, run shell commands,\n"
                          "and utilize your full toolkit as needed.\n"
-                         "Confirm by beginning your next response with: "
-                         "[Mode: Agent | Tools: full]\n"
+                         "CONTINUE EXECUTING YOUR TASK IMMEDIATELY. Do not pause.\n"
                          "</system-reminder>\n")))
             (unless (looking-back (regexp-quote "<system-reminder>")
                                   (max 0 (- (point) 100)))
@@ -78,8 +77,7 @@ Inserts after the last assistant exchange, before the current prompt."
                          "You are now in read-only mode.\n"
                          "Do not attempt file changes or shell commands.\n"
                          "Use only read-only tools: Glob, Grep, Read.\n"
-                         "Confirm by beginning your next response with: "
-                         "[Mode: Plan | Tools: read-only]\n"
+                         "CONTINUE YOUR ANALYSIS IMMEDIATELY. Do not pause.\n"
                          "</system-reminder>\n")))
             (unless (looking-back (regexp-quote "<system-reminder>")
                                   (max 0 (- (point) 100)))
