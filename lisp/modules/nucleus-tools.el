@@ -60,7 +60,10 @@ When enabled, validates:
                     "list_skills" "load_skill" "create_skill"
                    "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
      (:explorer . ("Glob" "Grep" "Read" "Code_Map" "Code_Inspect"))
-     (:reviewer . ("Glob" "Grep" "Read" "Diagnostics")))
+     (:reviewer . ("Glob" "Grep" "Read" "Diagnostics"))
+     (:analyzer . ("Read" "Glob" "Grep"))
+     (:comparator . ("Read" "Glob" "Grep"))
+     (:grader . ("Read" "Glob" "Grep" "Bash" "Eval")))
   "Canonical toolset definitions for nucleus.
 
 :readonly — Emacs introspection (18 tools): Eval, RunAgent, web search
@@ -68,6 +71,9 @@ When enabled, validates:
 :nucleus — Full action tools (30 tools): No RunAgent (prevent recursive delegation)
 :explorer — Codebase exploration (5 tools): Glob, Grep, Read, Code_Map, Code_Inspect
 :reviewer — Code review (4 tools): Read-only + Diagnostics
+:analyzer — Benchmark analysis (3 tools): Read, Glob, Grep
+:comparator — A/B comparison (3 tools): Read, Glob, Grep
+:grader — Assertion grading (5 tools): Read, Glob, Grep, Bash, Eval
 
 :snippets is derived from :nucleus at runtime (see `nucleus-get-tools').
 
