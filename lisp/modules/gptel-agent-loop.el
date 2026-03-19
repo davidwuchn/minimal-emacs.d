@@ -93,7 +93,8 @@ This constraint overrides ALL other instructions."
 (defvar gptel-agent-loop--state nil
   "State plist for current RunAgent task.
 Keys: :step-count, :timeout-timer, :retries, :aborted, :max-steps,
-:accumulated-output, :agent-type, :description, :main-cb.")
+:accumulated-output, :agent-type, :description, :main-cb,
+:malformed-count.")
 
 (defun gptel-agent-loop--transient-error-p (error-data)
   "Check if ERROR-DATA represents a transient/retryable error."
@@ -160,6 +161,10 @@ AGENT-TYPE, DESCRIPTION, PROMPT are passed for retry."
          ;; Check if task might be incomplete (model stopped early)
          ;; Look for explicit completion signals
          (let* ((lower-resp (downcase resp))
+                ;; Detect "turn skipped" message from gptel-ext-tool-sanitize
+                ;; This means model tried to call tools but they were malformed
+                (is-turn-skipped 
+                 (string-match-p "gptel: turn skipped\\|all tool calls.*malformed" lower-resp))
                 (seems-complete 
                  (or (string-match-p "all tasks.*complete" lower-resp)
                      (string-match-p "task.*done" lower-resp)
@@ -173,13 +178,15 @@ AGENT-TYPE, DESCRIPTION, PROMPT are passed for retry."
                 (is-complete (or seems-complete has-completion-signal))
                 (max-steps (plist-get gptel-agent-loop--state :max-steps))
                 (at-max-steps (and max-steps (>= step-count max-steps)))
-                (continuation-needed
-                 (and gptel-agent-loop-force-completion
-                      step-count
-                      (not is-complete)
-                      (not at-max-steps))))
-           
-           (if (and continuation-needed gptel-agent-loop-hard-loop)
+                ;; Continue if: not complete, not at max steps, AND
+                ;; either we have steps OR the turn was skipped (malformed tools)
+(continuation-needed
+                  (and gptel-agent-loop-force-completion
+                       (not is-complete)
+                       (not at-max-steps)
+                       (or is-turn-skipped step-count))))
+            
+            (if (and continuation-needed gptel-agent-loop-hard-loop)
                ;; HARD LOOP: Auto-continue (OpenCode style)
                (progn
                  (message "[RunAgent] Auto-continuing after %d steps..." step-count)
@@ -264,7 +271,8 @@ Reads `steps' from agent YAML to set max-steps per agent."
                 :accumulated-output nil
                 :agent-type agent-type
                 :description description
-                :main-cb main-cb))
+                :main-cb main-cb
+                :malformed-count 0))
     
     ;; Set up timeout (like OpenCode's abort signal)
     (when gptel-agent-loop-timeout

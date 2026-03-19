@@ -34,7 +34,19 @@
   (should (= gptel-agent-loop-timeout 120))
   (should (= gptel-agent-loop-max-steps 50))
   (should (= gptel-agent-loop-max-retries 2))
-  (should gptel-agent-loop-force-completion))
+  (should gptel-agent-loop-force-completion)
+  (should gptel-agent-loop-hard-loop))
+
+(ert-deftest gptel-agent-loop-test-turn-skipped-detection ()
+  "Test detection of turn skipped message (malformed tool calls)."
+  (let ((skipped-msg "gptel: turn skipped (all tool calls had nil/unknown names)")
+        (normal-msg "Created file successfully"))
+    ;; Turn skipped should match
+    (should (string-match-p "gptel: turn skipped\\|all tool calls.*malformed" 
+                            (downcase skipped-msg)))
+    ;; Normal message should not match
+    (should-not (string-match-p "gptel: turn skipped\\|all tool calls.*malformed"
+                                 (downcase normal-msg)))))
 
 (provide 'test-gptel-agent-loop)
 
