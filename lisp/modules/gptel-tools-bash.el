@@ -147,7 +147,7 @@ CALLBACK is called with the result string on completion."
                                     (let ((res (my/gptel--safe-bash-command-p command)))
                                       (if (stringp res) res nil)))))
               (if sandbox-err
-                  (finish (format "Error: Command rejected by Sandbox. %s.\n\nTIP: For file operations, prefer native tools (`Read`, `Grep`, `Glob`) over Bash. For shell commands, use whitelisted read-only commands (git, ls, cat, grep, etc.) or ask the user to say \"go\" to switch to Execution mode." sandbox-err))
+                  (finish (format "Error: Command rejected by Sandbox. %s.\n\nTIP: For file operations, prefer native tools (`Read`, `Grep`, `Glob`) over Bash. For shell commands, use whitelisted read-only commands (git, ls, cat, grep, etc.)." sandbox-err))
 
                 (my/gptel--ensure-persistent-bash)
 
