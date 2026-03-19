@@ -31,6 +31,8 @@ cleanup_old_versions() {
   local ELPA_DIR="$2"
   # Remove old versioned directories (e.g., gptel-0.9.0, gptel-agent-1.0.0)
   find "$ELPA_DIR" -maxdepth 1 -type d -name "${NAME}-[0-9]*" -exec rm -rf {} \; 2>/dev/null || true
+  # Remove old .signed files (e.g., gptel-0.9.9.4.signed)
+  find "$ELPA_DIR" -maxdepth 1 -type f -name "${NAME}-[0-9]*.signed" -delete 2>/dev/null || true
 }
 
 for pkg in "${PACKAGES[@]}"; do
