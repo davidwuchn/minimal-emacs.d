@@ -305,19 +305,24 @@ Returns the number of image parts removed, or 0 if nothing was done."
 Matches network failures, overload responses, rate limits, and common
 curl error codes that are safe to retry with backoff.
 Also retries model-side bugs like malformed tool arguments."
-  (let ((status (if (stringp http-status) (string-to-number http-status) http-status)))
-    (or (and (stringp error-data)
-             (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests\\|InvalidParameter\\|function\\.arguments" error-data))
-        (and (numberp status) (memql status '(408 429 500 502 503 504)))
-        ;; HTTP 400 with model-side tool argument bugs (retryable)
-        (and (= status 400)
-             (listp error-data)
-             (string-match-p "InvalidParameter\\|function\\.arguments\\|must be in JSON"
-                             (or (plist-get error-data :message) "")))
-        ;; Catch dictionary format errors from OpenCode style backend responses
-        (and (listp error-data)
-             (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
-                             (downcase (or (plist-get error-data :message) "")))))))
+  (let* ((status (if (stringp http-status) (string-to-number http-status) http-status))
+         (error-msg (when (listp error-data) (plist-get error-data :message)))
+         (result
+          (or (and (stringp error-data)
+                   (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests\\|InvalidParameter\\|function\\.arguments" error-data))
+              (and (numberp status) (memql status '(408 429 500 502 503 504)))
+              ;; HTTP 400 with model-side tool argument bugs (retryable)
+              (and (= status 400)
+                   (listp error-data)
+                   (stringp error-msg)
+                   (string-match-p "InvalidParameter\\|function\\.arguments\\|must be in JSON" error-msg))
+              ;; Catch dictionary format errors from OpenCode style backend responses
+              (and (listp error-data)
+                   (stringp error-msg)
+                   (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
+                                   (downcase error-msg))))))
+    (message "gptel-transient-check: status=%s error-msg=%s result=%s" status error-msg result)
+    result))
 
 (defun my/gptel--cleanup-partial-insertion (info)
   "Remove partial buffer text inserted before a failed request.
