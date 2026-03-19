@@ -6,22 +6,26 @@
 ;; Prompt loading and directive registration for nucleus gptel-agent.
 ;;
 ;; DIRECTORY STRUCTURE:
-;; - assistant/prompts/     → System prompts for directives (loaded by nucleus-prompt-files)
-;;   - code_agent.md        → Primary agent system prompt (nucleus-gptel-agent)
-;;   - plan_agent.md        → Plan mode system prompt (nucleus-gptel-plan)
-;;   - init.md              → Init prompt (AGENTS.md loader)
-;;   - compact.md           → Auto-compaction prompt
+;; - assistant/prompts/     → Utility prompts (directives)
+;;   - init.md              → AGENTS.md loader
+;;   - compact.md           → Auto-compaction summary
+;;   - title.md             → Title generation
+;;   - skill_create.md      → Skill creation
+;;   - inline_completion.md → Inline completion
+;;   - rewrite.md           → Text rewriting
+;;   - tools/               → Tool-specific prompts (Read, Write, Bash, etc.)
 ;;
-;; - assistant/agents/      → Subagent definitions for RunAgent tool
+;; - assistant/agents/      → ALL agent prompts (primary + subagents)
+;;   - code_agent.md        → Primary agent (nucleus-gptel-agent)
+;;   - plan_agent.md        → Plan mode (nucleus-gptel-plan)
 ;;   - executor.md          → RunAgent("executor", ...)
 ;;   - researcher.md        → RunAgent("researcher", ...)
 ;;   - explorer_agent.md    → RunAgent("explorer", ...) [name in YAML is "explorer"]
 ;;   - reviewer.md          → RunAgent("reviewer", ...)
 ;;   - introspector.md      → RunAgent("introspector", ...)
-;;
-;; NOTE: The agents/ directory defines subagents callable via RunAgent.
-;; The prompts/ directory defines gptel-directives for system prompts.
-;; These are DIFFERENT systems - do not mix them.
+;;   - analyzer.md          → RunAgent("analyzer", ...)
+;;   - comparator.md        → RunAgent("comparator", ...)
+;;   - grader.md            → RunAgent("grader", ...)
 
 (require 'cl-lib)
 (require 'seq)
@@ -39,7 +43,15 @@
                     (if (boundp 'minimal-emacs-user-directory)
                         minimal-emacs-user-directory
                       user-emacs-directory))
-  "Directory containing nucleus prompt templates (agents)."
+  "Directory containing utility prompt templates."
+  :type 'directory)
+
+(defcustom nucleus-agents-dir
+  (expand-file-name "assistant/agents/"
+                    (if (boundp 'minimal-emacs-user-directory)
+                        minimal-emacs-user-directory
+                      user-emacs-directory))
+  "Directory containing agent prompts (primary + subagents)."
   :type 'directory)
 
 (defcustom nucleus-tool-prompts-dir
@@ -66,15 +78,14 @@
   "Non-nil after `nucleus--register-gptel-directives' has run once.")
 
 (defconst nucleus-prompt-files
-  '((nucleus-gptel-agent . "code_agent.md")
-    (chatTitle           . "title.md")
+  '((chatTitle           . "title.md")
     (compact             . "compact.md")
     (init                . "init.md")
     (skillCreate         . "skill_create.md")
     (completion          . "inline_completion.md")
-    (rewrite             . "rewrite.md")
-    (nucleus-gptel-plan  . "plan_agent.md"))
-  "Prompt file map.")
+    (rewrite             . "rewrite.md"))
+  "Prompt file map for utility prompts loaded from `nucleus-prompts-dir'.
+Agent prompts (code_agent.md, plan_agent.md) are loaded separately from `nucleus-agents-dir'.")
 
 (defconst nucleus-tool-prompt-files
   '((Bash                . "bash.md")
@@ -131,6 +142,11 @@
   "Return `nucleus-prompts-dir' if it exists as a directory, else nil."
   (when (file-directory-p nucleus-prompts-dir)
     nucleus-prompts-dir))
+
+(defun nucleus--resolve-agents-dir ()
+  "Return `nucleus-agents-dir' if it exists as a directory, else nil."
+  (when (file-directory-p nucleus-agents-dir)
+    nucleus-agents-dir))
 
 (defun nucleus--resolve-tool-prompts-dir ()
   "Return `nucleus-tool-prompts-dir' if it exists as a directory, else nil."
@@ -262,7 +278,7 @@ Idempotent: only registers and logs once per session."
                               tool-names))))
                  (and chunks
                       (string-join chunks "\n\n"))))))
-        (let* ((dir nucleus-prompts-dir)
+        (let* ((dir nucleus-agents-dir)
                (agent-file (expand-file-name "code_agent.md" dir))
                (plan-file (expand-file-name "plan_agent.md" dir))
                (agent-sys (nucleus--read-gptel-agent-system agent-file))
