@@ -28,6 +28,8 @@
 (declare-function gptel-agent--task "gptel-agent-tools")
 (declare-function gptel--display-tool-calls "gptel")
 
+(defvar gptel-agent--agents)  ; Defined in gptel-agent
+
 (require 'cl-lib)
 
 (defgroup gptel-agent-robust nil
@@ -134,14 +136,14 @@ AGENT-TYPE, DESCRIPTION, PROMPT are passed for retry."
                     (+ step-count (length calls)))
          (setq step-count (plist-get gptel-agent-robust--state :step-count))
          
-         ;; Check if max steps reached - inject prompt (OpenCode style)
-         (when (and gptel-agent-robust-max-steps
-                    (>= step-count gptel-agent-robust-max-steps))
-           (message "[RunAgent] Max steps (%d) reached for task '%s'"
-                    gptel-agent-robust-max-steps description)
-           ;; Inject max-steps prompt as a system message
-           ;; The model should stop making tool calls after this
-           (plist-put info :max-steps-reached t))
+         ;; Check if max steps reached (OpenCode style: inject MAX_STEPS prompt)
+         (let ((max-steps (plist-get gptel-agent-robust--state :max-steps)))
+           (when (and max-steps (>= step-count max-steps))
+             (message "[RunAgent] Max steps (%d) reached for task '%s'"
+                      max-steps description)
+             ;; Mark that max-steps was reached
+             ;; The model should stop making tool calls
+             (plist-put info :max-steps-reached t)))
          
          (unless (plist-get info :tracking-marker)
            (plist-put info :tracking-marker (overlay-start ov)))
@@ -193,27 +195,33 @@ AGENT-TYPE is the subagent name.
 DESCRIPTION is a short task description.
 PROMPT is the full task instructions.
 
-This mirrors OpenCode's SessionPrompt.loop behavior."
-  ;; Initialize state
-  (setq gptel-agent-robust--state
-        (list :step-count 0
-              :retries 0
-              :aborted nil
-              :timeout-timer nil))
-  
-  ;; Set up timeout (like OpenCode's abort signal)
-  (when gptel-agent-robust-timeout
-    (plist-put gptel-agent-robust--state :timeout-timer
-               (run-with-timer gptel-agent-robust-timeout nil
-                               (lambda ()
-                                 (plist-put gptel-agent-robust--state :aborted t)
-                                 (message "[RunAgent] Task '%s' timed out after %ds"
-                                          description gptel-agent-robust-timeout)))))
-  
-  ;; Call original gptel-agent--task with wrapped callback
-  (let ((wrapped-cb (gptel-agent-robust--wrap-callback
-                     main-cb agent-type description prompt)))
-    (gptel-agent--task wrapped-cb agent-type description prompt)))
+This mirrors OpenCode SessionPrompt.loop behavior.
+Reads `steps' from agent YAML to set max-steps per agent."
+  ;; Get agent-specific max-steps from YAML (OpenCode: agent.steps)
+  (let* ((agent-config (cdr (assoc agent-type gptel-agent--agents)))
+         (agent-steps (plist-get agent-config :steps))
+         (effective-max-steps (or agent-steps gptel-agent-robust-max-steps)))
+    ;; Initialize state
+    (setq gptel-agent-robust--state
+          (list :step-count 0
+                :retries 0
+                :aborted nil
+                :timeout-timer nil
+                :max-steps effective-max-steps))
+    
+    ;; Set up timeout (like OpenCode's abort signal)
+    (when gptel-agent-robust-timeout
+      (plist-put gptel-agent-robust--state :timeout-timer
+                 (run-with-timer gptel-agent-robust-timeout nil
+                                 (lambda ()
+                                   (plist-put gptel-agent-robust--state :aborted t)
+                                   (message "[RunAgent] Task '%s' timed out after %ds"
+                                            description gptel-agent-robust-timeout)))))
+    
+    ;; Call original gptel-agent--task with wrapped callback
+    (let ((wrapped-cb (gptel-agent-robust--wrap-callback
+                       main-cb agent-type description prompt)))
+      (gptel-agent--task wrapped-cb agent-type description prompt))))
 
 (defun gptel-agent-robust-enable ()
   "Enable robust RunAgent by advising gptel-agent--task."
