@@ -1,5 +1,6 @@
 ---
 name: nucleus-gptel-plan
+model: qwen3.5-plus
 description: Nucleus planning agent (nucleus-owned, schema-faithful)
 ---
 
