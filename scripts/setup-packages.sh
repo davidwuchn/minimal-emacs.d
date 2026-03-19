@@ -24,7 +24,7 @@ mkdir -p "$ELPA_DIR"
 PACKAGES=(
   "gptel|https://github.com/karthink/gptel|master"
   "gptel-agent|https://github.com/karthink/gptel-agent|master"
-  "ai-code|https://github.com/davidwuchn/ai-code-interface.el|feat/behaviors-integration"
+  "ai-code|https://github.com/davidwuchn/ai-code-interface.el|main"
 )
 
 cleanup_old_versions() {
