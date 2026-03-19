@@ -24,6 +24,7 @@ mkdir -p "$ELPA_DIR"
 PACKAGES=(
   "gptel|https://github.com/karthink/gptel|master"
   "gptel-agent|https://github.com/karthink/gptel-agent|master"
+  "ai-code|https://github.com/davidwuchn/ai-code-interface.el|feat/behaviors-integration"
 )
 
 cleanup_old_versions() {
@@ -66,4 +67,4 @@ done
 
 echo ""
 echo "All packages installed in var/elpa/:"
-ls -d "$ELPA_DIR"/gptel* 2>/dev/null | xargs -n1 basename
+ls -d "$ELPA_DIR"/gptel* "$ELPA_DIR"/ai-code 2>/dev/null | xargs -n1 basename
