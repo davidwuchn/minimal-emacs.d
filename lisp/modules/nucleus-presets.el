@@ -40,8 +40,9 @@ YAML frontmatter in gptel-plan.md takes priority if model: is set."
   :group 'nucleus-presets)
 
 (defvar nucleus-hidden-directives
-  '(explorer reviewer chatTitle compact init skillCreate completion rewrite)
-  "Directives to hide from the transient menu.")
+  '(chatTitle compact init skillCreate completion rewrite)
+  "Directives to hide from the transient menu.
+These are gptel-directives keys that should not appear in the menu.")
 
 ;;; Preset Functions
 

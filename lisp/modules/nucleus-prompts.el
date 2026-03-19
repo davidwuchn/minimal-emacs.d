@@ -9,15 +9,19 @@
 ;; - assistant/prompts/     → System prompts for directives (loaded by nucleus-prompt-files)
 ;;   - code_agent.md        → Primary agent system prompt (nucleus-gptel-agent)
 ;;   - plan_agent.md        → Plan mode system prompt (nucleus-gptel-plan)
-;;   - explorer_agent.md    → Explorer directive prompt
+;;   - init.md              → Init prompt (AGENTS.md loader)
+;;   - compact.md           → Auto-compaction prompt
 ;;
 ;; - assistant/agents/      → Subagent definitions for RunAgent tool
 ;;   - executor.md          → RunAgent("executor", ...)
 ;;   - researcher.md        → RunAgent("researcher", ...)
-;;   - explorer_agent.md    → RunAgent("explorer_agent", ...) [different from prompts/explorer_agent.md!]
+;;   - explorer_agent.md    → RunAgent("explorer", ...) [name in YAML is "explorer"]
+;;   - reviewer.md          → RunAgent("reviewer", ...)
+;;   - introspector.md      → RunAgent("introspector", ...)
 ;;
-;; NOTE: Files with similar names in both directories serve DIFFERENT purposes.
-;; Do NOT create files with the same base name in both directories to avoid confusion.
+;; NOTE: The agents/ directory defines subagents callable via RunAgent.
+;; The prompts/ directory defines gptel-directives for system prompts.
+;; These are DIFFERENT systems - do not mix them.
 
 (require 'cl-lib)
 (require 'seq)
@@ -69,8 +73,7 @@
     (skillCreate         . "skill_create.md")
     (completion          . "inline_completion.md")
     (rewrite             . "rewrite.md")
-    (nucleus-gptel-plan  . "plan_agent.md")
-    (explorer            . "explorer.md"))
+    (nucleus-gptel-plan  . "plan_agent.md"))
   "Prompt file map.")
 
 (defconst nucleus-tool-prompt-files
