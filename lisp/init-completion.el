@@ -84,8 +84,8 @@
          (eshell-mode . corfu-mode))
   :custom
   (corfu-auto t)
-  (corfu-auto-delay 0.0)
-  (corfu-auto-prefix 1)
+  (corfu-auto-delay 0.2)
+  (corfu-auto-prefix 2)
   (corfu-cycle t)
   (corfu-preselect 'prompt)
   (read-extended-command-predicate #'command-completion-default-include-p)
@@ -119,21 +119,9 @@
   :bind ("C-c p" . cape-prefix-map)
   :init
   ;; Add Cape completion backends in order of priority
-  (add-hook 'completion-at-point-functions #'cape-dabbrev)
   (add-hook 'completion-at-point-functions #'cape-file)
-  (add-hook 'completion-at-point-functions #'cape-elisp-block)
+  (add-hook 'completion-at-point-functions #'cape-dabbrev)
   (add-hook 'completion-at-point-functions #'cape-keyword)
-  (add-hook 'completion-at-point-functions #'cape-elisp-symbol)
-  (add-hook 'completion-at-point-functions #'cape-dict)
-  (add-hook 'completion-at-point-functions #'cape-line))
+  (add-hook 'completion-at-point-functions #'cape-elisp-symbol))
 
-(use-package tempel
-  :ensure t
-  :bind (("M-+" . tempel-complete) 
-         ("M-*" . tempel-insert))
-  :init
-  (defun tempel-setup-capf ()
-    (setq-local completion-at-point-functions
-                (cons #'tempel-expand completion-at-point-functions)))
-  (add-hook 'prog-mode-hook 'tempel-setup-capf)
-  (add-hook 'text-mode-hook 'tempel-setup-capf))
+

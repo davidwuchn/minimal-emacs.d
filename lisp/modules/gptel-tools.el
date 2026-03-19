@@ -9,6 +9,8 @@
 (require 'subr-x)
 (require 'seq)
 
+(declare-function gptel--file-binary-p "gptel-request")
+
 ;;; Hooks
 
 (defvar gptel-tools-after-register-hook nil
@@ -73,11 +75,11 @@ Call this after gptel-agent-tools loads."
      :confirm t
      :include t)
 
-    ;; Read tool
+    ;; Read tool (supports PDF extraction via pdftotext)
     (gptel-make-tool
      :name "Read"
-     :function #'gptel-agent--read-file-lines
-     :description "Read file contents by line range."
+     :function #'my/gptel--read-file-safe
+     :description "Read file contents by line range. PDF files are extracted as text. Other binary files (images, archives) are rejected."
      :args '((:name "file_path" :type string)
              (:name "start_line" :type integer :optional t)
              (:name "end_line" :type integer :optional t))
@@ -247,6 +249,50 @@ Call this after gptel-agent-tools loads."
   )
 
 ;;; Utility Functions
+
+(defun my/gptel--read-file-safe (file-path &optional start-line end-line)
+  "Read FILE-PATH safely, extracting text from PDFs, rejecting other binary files.
+START-LINE and END-LINE specify the line range to read.
+PDF files are extracted using pdftotext if available."
+  (let ((path (expand-file-name file-path)))
+    (cond
+     ((not (file-readable-p path))
+      (error "Error: File %s is not readable" path))
+     ((file-directory-p path)
+      (error "Error: Cannot read directory %s as file" path))
+     ((string-match-p "\\.pdf\\'" path)
+      (my/gptel--extract-pdf-text path start-line end-line))
+     ((or (string-match-p "\\.\\(jpe?g\\|png\\|gif\\|webp\\|zip\\|tar\\|gz\\|exe\\|dll\\|so\\|dylib\\)\\'" path)
+          (and (fboundp 'gptel--file-binary-p) (gptel--file-binary-p path)))
+      (format "Error: Binary file detected (%s). Use appropriate tools for binary files."
+              (or (file-name-extension path) "unknown type")))
+     (t
+      (gptel-agent--read-file-lines path start-line end-line)))))
+
+(defun my/gptel--extract-pdf-text (path &optional start-line end-line)
+  "Extract text from PDF at PATH using pdftotext.
+START-LINE and END-LINE specify the line range to return."
+  (let ((pdftotext (executable-find "pdftotext")))
+    (if (not pdftotext)
+        (format "Error: pdftotext not found. Install with: brew install poppler")
+      (let ((text (with-temp-buffer
+                    (call-process pdftotext nil t nil "-layout" path "-")
+                    (buffer-string))))
+        (if (string-empty-p (string-trim text))
+            (format "Error: Could not extract text from PDF: %s" (file-name-nondirectory path))
+          (let* ((lines (split-string text "\n"))
+                 (total-lines (length lines))
+                 (start (or start-line 1))
+                 (end (min (or end-line total-lines) total-lines)))
+            (when (< start 1) (setq start 1))
+            (when (> start total-lines) (setq start total-lines))
+            (format "PDF: %s (%d pages, %d lines)\n\n%s"
+                    (file-name-nondirectory path)
+                    (with-temp-buffer
+                      (call-process pdftotext nil t nil "-layout" path "-")
+                      (how-many "^\\f" (point-min) (point-max)))
+                    total-lines
+                    (string-join (seq-subseq lines (1- start) end) "\n"))))))))
 
 (defun my/gptel--skill-tool (skill &optional args)
   "Wrapper for gptel-agent Skill tool."
