@@ -181,18 +181,19 @@ Call this after gptel-agent-tools loads."
      :async t
      :include t)
 
-    ;; TodoWrite tool
+;; TodoWrite tool
     (gptel-make-tool
-     :name "TodoWrite"
-     :function #'gptel-agent--write-todo
-     :description "Update a session todo list."
-     :args '((:name "todos"
-                    :type array
-                    :items (:type object
-                                  :properties (:content (:type string :minLength 1)
-                                                        :status (:type string :enum ["pending" "in_progress" "completed"])
-                                                        :activeForm (:type string :minLength 1)))))
-     :category "gptel-agent")
+      :name "TodoWrite"
+      :function #'gptel-agent--write-todo
+      :description "Update a session todo list. IMPORTANT: This is a tracking tool only. After calling TodoWrite, immediately continue executing the tasks. Do not stop or wait for user input after creating a todo list."
+      :args '((:name "todos"
+                     :type array
+                     :items (:type object
+                                   :properties (:content (:type string :minLength 1)
+                                                         :status (:type string :enum ["pending" "in_progress" "completed"])
+                                                         :activeForm (:type string :minLength 1)))))
+      :category "gptel-agent"
+      :include t)
 
      ;; Skill tool
     (gptel-make-tool
