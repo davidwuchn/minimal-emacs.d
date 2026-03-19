@@ -90,7 +90,7 @@ under `lexical-binding: t'.")
 (defvar my/gptel--known-model-context-windows
   '(;; Qwen (Alibaba) - NOTE: Qwen3.5-Plus and Qwen3-Max have 1M context!
     ("qwen3-coder-next" . 131072)
-    ("qwen3-coder-plus" . 131072)
+    ("qwen3-coder-plus" . 1000000)
     ("qwen3.5-plus" . 1000000)
     ("qwen3.5-flash" . 1000000)
     ("qwen3-max" . 262144)
@@ -168,12 +168,12 @@ Sources:
      :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp")
      :description "Qwen3 Coder Next - fast coding model, 131k context, VISION")
     ("qwen3-coder-plus"
-     :context-window 131072
+     :context-window 1000000
      :pricing-input 0.6 :pricing-output 2.4
-     :max-output 16384
+     :max-output 65536
      :features (streaming tools vision)
      :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp")
-     :description "Qwen3 Coder Plus - advanced coding, 131k context, VISION")
+     :description "Qwen3 Coder Plus - advanced coding, 1M context, VISION")
     ("qwen3.5-plus"
      :context-window 1000000
      :pricing-input 0.8 :pricing-output 4.8

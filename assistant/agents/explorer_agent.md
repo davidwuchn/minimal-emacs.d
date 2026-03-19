@@ -1,6 +1,7 @@
 ---
 name: explorer
 model: qwen3-coder-next
+temperature: 0.2
 description: Deep codebase analysis subagent. Read-only exploration with high synthesis value.
 tools:
   - Glob

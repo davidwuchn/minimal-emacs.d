@@ -1,6 +1,8 @@
 ---
 name: reviewer
 model: qwen3.5-plus
+max-tokens: 8192
+temperature: 0.3
 description: Multi-scale Elisp/nucleus code reviewer (best practices, architecture, security). Read-only.
 tools:
   - Glob

@@ -1,6 +1,7 @@
 ---
 name: executor
 model: qwen3-coder-plus
+temperature: 0.1
 description: Nucleus executor for multi-step tasks
 tools:
   - ApplyPatch
