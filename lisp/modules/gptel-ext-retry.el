@@ -307,9 +307,9 @@ curl error codes that are safe to retry with backoff.
 Also retries model-side bugs like malformed tool arguments."
   (or (and (stringp error-data)
            (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests\\|InvalidParameter\\|function\\.arguments" error-data))
-      (and (numberp http-status) (memq http-status '(408 429 500 502 503 504)))
+      (and (numberp http-status) (memql http-status '(408 429 500 502 503 504)))
       ;; HTTP 400 with model-side tool argument bugs (retryable)
-      (and (eq http-status 400)
+      (and (= http-status 400)
            (listp error-data)
            (string-match-p "InvalidParameter\\|function\\.arguments\\|must be in JSON"
                            (or (plist-get error-data :message) "")))
@@ -345,17 +345,21 @@ Skips retries for subagent FSMs (they have their own timeout handler)."
          (error-data (plist-get info :error))
          (http-status (plist-get info :http-status))
          (retries (or (plist-get info :retries) 0))
-;; Detect subagent FSMs: they use custom handlers and should not be
-          ;; retried (the parent's timeout handles failures).
-          ;; A request is retryable if its handlers are one of the "main"
-          ;; handler sets: gptel-send--handlers (interactive),
-          ;; gptel-request--handlers (programmatic), or
-          ;; gptel-agent-request--handlers (agent mode).
-          (handlers (gptel-fsm-handlers machine))
-          (subagent-p (not (or (eq handlers gptel-send--handlers)
-                               (eq handlers gptel-request--handlers)
-                               (and (boundp 'gptel-agent-request--handlers)
-                                    (eq handlers gptel-agent-request--handlers))))))
+         ;; Detect subagent FSMs: they use custom handlers and should not be
+         ;; retried (the parent's timeout handles failures).
+         ;; A request is retryable if its handlers are one of the "main"
+         ;; handler sets: gptel-send--handlers (interactive),
+         ;; gptel-request--handlers (programmatic), or
+         ;; gptel-agent-request--handlers (agent mode).
+         (handlers (gptel-fsm-handlers machine))
+         (subagent-p (not (or (eq handlers gptel-send--handlers)
+                              (eq handlers gptel-request--handlers)
+                              (and (boundp 'gptel-agent-request--handlers)
+                                   (eq handlers gptel-agent-request--handlers))))))
+    (when (eq new-state 'ERRS)
+      (message "gptel-retry: ERRS state, subagent=%s, http=%s, error=%S, transient=%s"
+               subagent-p http-status error-data 
+               (my/gptel--transient-error-p error-data http-status)))
     (if (and (eq new-state 'ERRS)
              (not subagent-p)
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
