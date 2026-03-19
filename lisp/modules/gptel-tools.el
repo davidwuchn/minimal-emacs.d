@@ -193,7 +193,7 @@ Call this after gptel-agent-tools loads."
                                                          :status (:type string :enum ["pending" "in_progress" "completed"])
                                                          :activeForm (:type string :minLength 1)))))
       :category "gptel-agent"
-      :include t)
+      :include nil)
 
      ;; Skill tool
     (gptel-make-tool
