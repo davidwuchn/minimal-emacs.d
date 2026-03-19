@@ -82,14 +82,20 @@ Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   researcher   → :researcher  (19 tools) - web + codebase + Eval
   introspector → :readonly    (18 tools) - Emacs introspection + web search
   explorer     → :explorer     (5 tools) - codebase exploration + Code tools
-  reviewer     → :reviewer     (4 tools) - code review + Diagnostics")
+  reviewer     → :reviewer     (4 tools) - code review + Diagnostics
+  analyzer     → :analyzer     (3 tools) - benchmark result analysis
+  comparator   → :comparator   (3 tools) - blind A/B comparison
+  grader       → :grader       (5 tools) - assertion grading")
 
 (defconst nucleus-agent-tool-contracts
   '(("executor"     . :nucleus)
     ("researcher"   . :researcher)
     ("introspector" . :readonly)
     ("explorer"     . :explorer)
-    ("reviewer"     . :reviewer))
+    ("reviewer"     . :reviewer)
+    ("analyzer"     . :analyzer)
+    ("comparator"   . :comparator)
+    ("grader"       . :grader))
   "Mapping from gptel-agent agent names to their expected nucleus toolset keys.
 Used by `nucleus--override-gptel-agent-presets' and contract validation.")
 
