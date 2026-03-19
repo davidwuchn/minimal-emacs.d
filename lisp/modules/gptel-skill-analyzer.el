@@ -1,132 +1,178 @@
-;;; gptel-skill-analyzer.el --- Pattern analysis for benchmark results -*- lexical-binding: t; -*-
+;;; gptel-skill-analyzer.el --- GPTel Skill Result Analyzer -*- lexical-binding: t -*-
 
-;; Copyright (C) 2024
+;; Copyright (C) 2024 David Wu
 
-;; Author: David Wu
-;; Keywords: ai, benchmark, analysis
+;; Author: David Wu <davidwu@example.com>
+;; Keywords: ai, analysis, benchmark
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
-;; Analyze benchmark results to find patterns, insights, and recommendations.
+;; Analyzes benchmark results to identify patterns, flaky tests, and systematic failures.
 
 ;;; Code:
 
 (require 'json)
 (require 'cl-lib)
+(require 'gptel-skill-utils)
 
-(defconst gptel-skill-analyzer-version "1.0.0"
-  "Version of the analyzer system.")
+(defun gptel-skill-analyze-results (benchmark-file)
+  "Analyze results in BENCHMARK-FILE."
+  (let* ((data (gptel-skill-read-json benchmark-file))
+         (flaky-tests (gptel-skill-find-flaky-tests benchmark-file))
+         (non-discriminating (gptel-skill-find-non-discriminating benchmark-file))
+         (systematic-failures (gptel-skill-find-systematic-failures benchmark-file)))
+    (list :flaky-tests flaky-tests
+          :non-discriminating-tests non-discriminating
+          :systematic-failures systematic-failures
+          :summary (gptel-skill-generate-summary data))))
 
-(defun gptel-skill-analyze-results (benchmark-data)
-  "Analyze BENCHMARK-DATA and return insights.
-BENCHMARK-DATA is a plist from gptel-skill-benchmark-run."
-  (let* ((results (plist-get benchmark-data :results))
-         (pass-rate (plist-get benchmark-data :pass-rate))
-         (total (plist-get benchmark-data :total-tests))
-         (passed (plist-get benchmark-data :passed-tests))
-         (findings '()))
-    
-    (push (list :category 'summary
-                :severity 'info
-                :description (format "Pass rate: %.1f%% (%d/%d)" pass-rate passed total)
-                :evidence (list :pass-rate pass-rate :passed passed :total total))
-          findings)
-    
-    (let ((failed-tests (cl-remove-if (lambda (r) (eq (plist-get r :status) 'pass)) results)))
-      (when failed-tests
-        (push (list :category 'failures
-                    :severity 'high
-                    :description (format "%d tests failed" (length failed-tests))
-                    :evidence (mapcar (lambda (x) (plist-get x :test-id)) failed-tests))
-              findings)))
-    
-    (let ((error-tests (cl-remove-if (lambda (r) (not (eq (plist-get r :status) 'error))) results)))
-      (when error-tests
-        (push (list :category 'errors
-                    :severity 'critical
-                    :description (format "%d tests had errors" (length error-tests))
-                    :evidence (mapcar (lambda (x) (plist-get x :test-id)) error-tests))
-              findings)))
-    
-    (let ((slow-tests (cl-remove-if (lambda (r) 
-                                       (< (float-time (plist-get r :duration)) 5.0))
-                                     results)))
-      (when slow-tests
-        (push (list :category 'performance
-                    :severity 'medium
-                    :description (format "%d tests took >5s" (length slow-tests))
-                    :evidence (mapcar (lambda (x) 
-                                        (list :test-id (plist-get x :test-id)
-                                              :duration (float-time (plist-get x :duration))))
-                                      slow-tests))
-              findings)))
-    
-    (list :findings (reverse findings)
-          :recommendations (gptel-skill-analyzer-recommendations findings)
-          :summary (format "Analyzed %d tests: %.1f%% pass rate" total pass-rate))))
-
-(defun gptel-skill-analyzer-recommendations (findings)
-  "Generate recommendations based on FINDINGS."
-  (let ((recs '()))
-    (dolist (f findings)
-      (let ((cat (plist-get f :category))
-            (sev (plist-get f :severity)))
-        (cond
-         ((and (eq cat 'failures) (eq sev 'high))
-          (push "Review failed test cases and improve skill prompts" recs))
-         ((and (eq cat 'errors) (eq sev 'critical))
-          (push "Fix errors before running additional benchmarks" recs))
-         ((and (eq cat 'performance) (eq sev 'medium))
-          (push "Consider optimizing slow operations" recs)))))
-    (delete-dups (reverse recs))))
-
-(defun gptel-skill-analyze-trends (history)
-  "Analyze HISTORY of benchmark runs for trends.
-HISTORY is a list of benchmark reports."
-  (when (< (length history) 2)
-    (error "Need at least 2 benchmark runs for trend analysis"))
-  (let* ((recent (car history))
-         (previous (cadr history))
-         (recent-rate (plist-get recent :pass-rate))
-         (previous-rate (plist-get previous :pass-rate))
-         (delta (- recent-rate previous-rate)))
-    (list :trend (cond ((> delta 5) 'improving)
-                       ((< delta -5) 'degrading)
-                       (t 'stable))
-          :delta delta
-          :recent-rate recent-rate
-          :previous-rate previous-rate
-          :summary (format "Pass rate %s by %.1f%% (%.1f%% → %.1f%%)"
-                           (if (> delta 0) "improved" "declined")
-                           (abs delta)
-                           previous-rate
-                           recent-rate))))
-
-(defun gptel-skill-analyze-assertions (results)
-  "Analyze assertion patterns across RESULTS."
-  (let ((assertion-stats (make-hash-table :test 'equal)))
-    (dolist (result results)
+(defun gptel-skill-find-flaky-tests (benchmark-file)
+  "Identify tests that sometimes pass and sometimes fail in BENCHMARK-FILE."
+  (let* ((data (gptel-skill-read-json benchmark-file))
+         (flaky-tests '()))
+    (dolist (result data)
       (let ((test-id (plist-get result :test-id))
-            (assertion-results (plist-get result :assertion-results)))
-        (dolist (ar assertion-results)
-          (let* ((assertion (plist-get ar :assertion))
-                 (type (plist-get assertion :type))
-                 (passed (plist-get ar :result)))
-            (puthash type 
-                     (cons (list :test-id test-id :passed passed)
-                           (gethash type assertion-stats '()))
-                     assertion-stats)))))
-    (let ((summary '()))
-      (maphash (lambda (type results)
-                 (let* ((total (length results))
-                        (passed (cl-count-if (lambda (r) (plist-get r :passed)) results)))
-                   (push (list :type type
-                              :total total
-                              :passed passed
-                              :pass-rate (* 100.0 (/ passed (max total 1))))
-                         summary)))
-               assertion-stats)
-      (sort summary (lambda (a b) (> (plist-get a :pass-rate) (plist-get b :pass-rate)))))))
+            (_grade (plist-get result :grade)))
+        (when (gptel-skill-is-flaky-test test-id benchmark-file)
+          (push test-id flaky-tests))))
+    flaky-tests))
+
+(defun gptel-skill-find-non-discriminating (benchmark-file)
+  "Find tests that don't effectively differentiate between skill levels."
+  (let* ((data (gptel-skill-read-json benchmark-file))
+         (non-discriminating '()))
+    (dolist (result data)
+      (let ((test-id (plist-get result :test-id)))
+        (when (gptel-skill-is-non-discriminating-test test-id benchmark-file)
+          (push test-id non-discriminating))))
+    non-discriminating))
+
+(defun gptel-skill-find-systematic-failures (benchmark-file)
+  "Identify tests that consistently fail across different skills."
+  (let* ((data (gptel-skill-read-json benchmark-file))
+         (systematic-failures '()))
+    (dolist (result data)
+      (let ((test-id (plist-get result :test-id))
+            (_grade (plist-get result :grade)))
+        (when (gptel-skill-is-systematic-failure test-id benchmark-file)
+          (push test-id systematic-failures))))
+    systematic-failures))
+
+(defun gptel-skill-generate-improvement-plan (analysis)
+  "Generate improvement plan based on ANALYSIS."
+  (let* ((flaky-tests (plist-get analysis :flaky-tests))
+         (non-discriminating (plist-get analysis :non-discriminating-tests))
+         (systematic-failures (plist-get analysis :systematic-failures))
+         (recommendations '()))
+    (when flaky-tests
+      (push "Investigate and stabilize flaky tests" recommendations))
+    (when non-discriminating
+      (push "Revise non-discriminating tests to better differentiate skill levels" recommendations))
+    (when systematic-failures
+      (push "Review systematically failing tests for appropriate difficulty level" recommendations))
+    (list :recommendations recommendations
+          :priority (gptel-skill-assess-priority flaky-tests non-discriminating systematic-failures))))
+
+(defun gptel-skill-is-flaky-test (test-id benchmark-file)
+  "Check if TEST-ID in BENCHMARK-FILE shows inconsistent pass/fail across runs.
+A test is considered flaky if it has multiple runs with different outcomes.
+Returns non-nil if the test is flaky."
+  (let* ((data (gptel-skill-read-json benchmark-file))
+         (test-runs '())
+         (pass-count 0)
+         (fail-count 0))
+    ;; Collect all runs for this test
+    (dolist (result data)
+      (when (equal (plist-get result :test-id) test-id)
+        (let* ((grade (plist-get result :grade))
+               (passed (plist-get grade :passed)))
+          (push passed test-runs)
+          (if passed (cl-incf pass-count) (cl-incf fail-count)))))
+    ;; Test is flaky if it has both passes and failures
+    (and (> pass-count 0) (> fail-count 0) (> (length test-runs) 1))))
+
+(defun gptel-skill-is-non-discriminating-test (test-id benchmark-file)
+  "Check if TEST-ID in BENCHMARK-FILE doesn't differentiate skill levels.
+A test is non-discriminating if all runs pass or all runs fail, meaning
+it doesn't help distinguish between different skill levels.
+Returns non-nil if the test is non-discriminating."
+  (let* ((data (gptel-skill-read-json benchmark-file))
+         (test-runs '())
+         (all-pass t)
+         (all-fail t))
+    ;; Collect all runs for this test
+    (dolist (result data)
+      (when (equal (plist-get result :test-id) test-id)
+        (let* ((grade (plist-get result :grade))
+               (passed (plist-get grade :passed)))
+          (push passed test-runs)
+          (when (not passed) (setq all-pass nil))
+          (when passed (setq all-fail nil)))))
+    ;; Test is non-discriminating if all pass or all fail (and has multiple runs)
+    (and (> (length test-runs) 1) (or all-pass all-fail))))
+
+(defun gptel-skill-is-systematic-failure (test-id benchmark-file)
+  "Check if TEST-ID in BENCHMARK-FILE represents a systematic failure.
+A test is a systematic failure if it fails consistently across multiple
+different skills, indicating the test itself may be problematic or too difficult.
+Returns non-nil if the test is a systematic failure."
+  (let* ((data (gptel-skill-read-json benchmark-file))
+         (test-runs '())
+         (fail-count 0)
+         (total-count 0))
+    ;; Collect all runs for this test
+    (dolist (result data)
+      (when (equal (plist-get result :test-id) test-id)
+        (let* ((grade (plist-get result :grade))
+               (passed (plist-get grade :passed)))
+          (push result test-runs)
+          (cl-incf total-count)
+          (when (not passed) (cl-incf fail-count)))))
+    ;; Test is systematic failure if >80% of runs fail (and has multiple runs)
+    (and (> total-count 1)
+         (> (/ (float fail-count) total-count) 0.8))))
+
+(defun gptel-skill-generate-summary (data)
+  "Generate summary statistics from benchmark DATA."
+  (let ((total-tests (length data))
+        (avg-score 0))
+    (dolist (result data)
+      (let* ((grade (plist-get result :grade))
+             (score (plist-get grade :percentage)))
+        (cl-incf avg-score score)))
+    (when (> total-tests 0)
+      (setq avg-score (/ avg-score total-tests)))
+    (list :total-tests total-tests
+          :average-score avg-score)))
+
+(defun gptel-skill-assess-priority (flaky non-discriminating systematic)
+  "Assess priority of issues.
+FLAKY, NON-DISCRIMINATING, and SYSTEMATIC are lists of test IDs."
+  (let ((high-priority 0)
+        (medium-priority 0)
+        (low-priority 0))
+    (when flaky
+      (cl-incf high-priority (length flaky)))
+    (when systematic
+      (cl-incf medium-priority (length systematic)))
+    (when non-discriminating
+      (cl-incf low-priority (length non-discriminating)))
+    (list :high high-priority
+          :medium medium-priority
+          :low low-priority)))
 
 (provide 'gptel-skill-analyzer)
 

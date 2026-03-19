@@ -1,133 +1,160 @@
-;;; gptel-skill-comparator.el --- A/B comparison for skill outputs -*- lexical-binding: t; -*-
+;;; gptel-skill-comparator.el --- GPTel Skill Version Comparator -*- lexical-binding: t -*-
 
-;; Copyright (C) 2024
+;; Copyright (C) 2024 David Wu
 
-;; Author: David Wu
-;; Keywords: ai, benchmark, comparison
+;; Author: David Wu <davidwu@example.com>
+;; Keywords: ai, comparison, benchmark
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
-;; Perform blind A/B comparison between two skill outputs.
+;; Compare different versions of GPTel skills to measure improvement.
 
 ;;; Code:
 
 (require 'json)
 (require 'cl-lib)
+(require 'gptel-skill-benchmark)
+(require 'gptel-skill-utils)
 
-(defconst gptel-skill-comparator-version "1.0.0"
-  "Version of the comparator system.")
+(defun gptel-skill-compare-versions (skill version-a version-b)
+  "Compare VERSION-A and VERSION-B of SKILL."
+  (let* ((benchmark-a (gptel-skill-load-benchmark-result skill version-a))
+         (benchmark-b (gptel-skill-load-benchmark-result skill version-b))
+         (summary-a (gptel-skill-benchmark-summary benchmark-a))
+         (summary-b (gptel-skill-benchmark-summary benchmark-b)))
+    (list :version-a version-a
+          :version-b version-b
+          :summary-a summary-a
+          :summary-b summary-b
+          :comparison (gptel-skill-compare-summaries summary-a summary-b))))
 
-(defun gptel-skill-compare-outputs (output-a output-b criteria)
-  "Compare OUTPUT-A and OUTPUT-B against CRITERIA.
-Returns a comparison result with winner and reasoning."
-  (let ((scores-a (gptel-skill-comparator-score output-a criteria))
-        (scores-b (gptel-skill-comparator-score output-b criteria)))
-    (let* ((total-a (apply #'+ (mapcar #'cdr scores-a)))
-           (total-b (apply #'+ (mapcar #'cdr scores-b)))
-           (winner (cond ((> total-a total-b) 'a)
-                         ((< total-a total-b) 'b)
-                         (t 'tie))))
-      (list :winner winner
-            :scores-a scores-a
-            :scores-b scores-b
-            :total-a total-a
-            :total-b total-b
-            :reasoning (gptel-skill-comparator-reasoning winner scores-a scores-b)))))
+(defun gptel-skill-baseline-compare (skill)
+  "Compare current version of SKILL against baseline."
+  (let* ((current-version (gptel-skill-current-version skill))
+         (baseline-version (gptel-skill-baseline-version skill))
+         (comparison (gptel-skill-compare-versions skill current-version baseline-version)))
+    comparison))
 
-(defun gptel-skill-comparator-score (output criteria)
-  "Score OUTPUT against CRITERIA list.
-Returns list of (criterion . score) pairs."
-  (mapcar (lambda (criterion)
-            (let ((score (gptel-skill-comparator-evaluate output criterion)))
-              (cons (plist-get criterion :name) score)))
-          criteria))
+(defun gptel-skill-trend (skill &optional versions)
+  "Show trend for SKILL across VERSIONS."
+  (let ((trend-data '()))
+    (if versions
+        (dolist (version versions)
+          (let* ((benchmark-file (gptel-skill-get-benchmark-file skill version))
+                 (summary (gptel-skill-benchmark-summary benchmark-file)))
+            (push (list :version version :summary summary) trend-data)))
+      ;; If no versions specified, get all available versions
+      (let ((all-versions (gptel-skill-get-all-versions skill)))
+        (dolist (version all-versions)
+          (let* ((benchmark-file (gptel-skill-get-benchmark-file skill version))
+                 (summary (gptel-skill-benchmark-summary benchmark-file)))
+            (push (list :version version :summary summary) trend-data)))))
+    trend-data))
 
-(defun gptel-skill-comparator-evaluate (output criterion)
-  "Evaluate OUTPUT against single CRITERION.
-Returns a score 0-10."
-  (let ((type (plist-get criterion :type)))
-    (cond
-     ((string= type "contains-all")
-      (let ((required (plist-get criterion :items))
-            (found 0))
-        (dolist (item required)
-          (when (string-match-p (regexp-quote item) output)
-            (cl-incf found)))
-        (* 10 (/ (float found) (length required)))))
-     ((string= type "contains-any")
-      (if (cl-some (lambda (item) (string-match-p (regexp-quote item) output))
-                   (plist-get criterion :items))
-          10 0))
-     ((string= type "min-length")
-      (let ((min-len (plist-get criterion :value)))
-        (if (>= (length output) min-len) 10 0)))
-     ((string= type "max-length")
-      (let ((max-len (plist-get criterion :value)))
-        (if (<= (length output) max-len) 10 0)))
-     ((string= type "regex-match")
-      (if (string-match-p (plist-get criterion :pattern) output) 10 0))
-     ((string= type "json-valid")
-      (condition-case nil
-          (and (json-parse-string output) 10)
-        (error 0)))
-     (t
-      (message "Unknown criterion type: %s" type)
-      5))))
+(defun gptel-skill-compare-summaries (summary-a summary-b)
+  "Compare two benchmark summaries."
+  (let* ((score-a (plist-get summary-a :overall-score))
+         (score-b (plist-get summary-b :overall-score))
+         (improvement (- score-b score-a)))
+    (list :improvement improvement
+          :score-a score-a
+          :score-b score-b
+          :better (> score-b score-a)
+          :regression (< score-b score-a))))
 
-(defun gptel-skill-comparator-reasoning (winner scores-a scores-b)
-  "Generate reasoning for WINNER based on SCORES-A and SCORES-B."
-  (let ((diffs '()))
-    (cl-loop for (criterion-a . score-a) in scores-a
-             for (_criterion-b . score-b) in scores-b
-             do (let ((diff (- score-a score-b)))
-                  (when (not (= diff 0))
-                    (push (format "%s: A=%.1f B=%.1f (%s)" 
-                                  criterion-a score-a score-b
-                                  (cond ((> diff 0) "A better")
-                                        ((< diff 0) "B better")
-                                        (t "equal")))
-                          diffs))))
-    (format "Winner: %s. Differences: %s"
-            (symbol-name winner)
-            (if diffs (string-join (reverse diffs) "; ") "none"))))
+(defun gptel-skill-load-benchmark-result (skill version)
+  "Load benchmark result for SKILL VERSION."
+  (let ((benchmark-file (format "./benchmarks/%s-%s-benchmark.json" skill version)))
+    (if (file-exists-p benchmark-file)
+        (gptel-skill-read-json benchmark-file)
+      '())))
 
-(defun gptel-skill-comparator-blind-compare (outputs-a outputs-b prompt)
-  "Perform blind comparison of OUTPUTS-A and OUTPUTS-B for PROMPT.
-Returns comparison without revealing which is which."
-  (let ((label-a (if (= (random 2) 0) "X" "Y"))
-        (label-b (if (= (random 2) 0) "Y" "X")))
-    (list :comparison-type 'blind
-          :prompt prompt
-          :label-a label-a
-          :label-b label-b
-          :output-a (plist-get outputs-a :output)
-          :output-b (plist-get outputs-b :output)
-          :note "Labels randomized for blind comparison")))
+(defun gptel-skill-current-version (skill)
+  "Get current version of SKILL.
+Attempts to read version from SKILL-VERSION file, falls back to
+scanning benchmark files, then to hardcoded default."
+  (let ((version-file (format "./assistant/skills/%s/VERSION" skill))
+        (version nil))
+    ;; Try reading from VERSION file first
+    (when (file-exists-p version-file)
+      (with-temp-buffer
+        (insert-file-contents version-file)
+        (goto-char (point-min))
+        (when (re-search-forward "^\\([0-9]+\\.[0-9]+\\.[0-9]+\\)" nil t)
+          (setq version (match-string 1)))))
+    ;; Fallback to scanning benchmark files
+    (unless version
+      (let ((benchmark-dir "./benchmarks/")
+            (found-versions '()))
+        (when (file-exists-p benchmark-dir)
+          (let ((files (directory-files benchmark-dir nil (format "%s-.*-benchmark\\.json$" skill))))
+            (dolist (file files)
+              (when (string-match (format "%s-\\(.*\\)-benchmark\\.json$" skill) file)
+                (push (match-string 1 file) found-versions))))
+          (when found-versions
+            (setq version (car (sort found-versions 'string-greaterp)))))))
+    ;; Final fallback
+    (or version "v1.1")))
 
-(defun gptel-skill-comparator-batch-compare (results-a results-b criteria)
-  "Compare batches RESULTS-A and RESULTS-B against CRITERIA.
-Returns aggregated comparison statistics."
-  (let ((comparisons '())
-        (a-wins 0)
-        (b-wins 0)
-        (ties 0))
-    (cl-loop for a in results-a
-             for b in results-b
-             do (let ((result (gptel-skill-compare-outputs 
-                              (plist-get a :output)
-                              (plist-get b :output)
-                              criteria)))
-                  (push result comparisons)
-                  (pcase (plist-get result :winner)
-                    ('a (cl-incf a-wins))
-                    ('b (cl-incf b-wins))
-                    ('tie (cl-incf ties)))))
-    (list :total (length comparisons)
-          :a-wins a-wins
-          :b-wins b-wins
-          :ties ties
-          :a-win-rate (* 100.0 (/ (float a-wins) (length comparisons)))
-          :comparisons (reverse comparisons))))
+(defun gptel-skill-baseline-version (skill)
+  "Get baseline version of SKILL for comparison.
+Attempts to read from SKILL-BASELINE file, looks for v1.0 or earliest version,
+falls back to hardcoded default."
+  (let ((baseline-file (format "./assistant/skills/%s/BASELINE" skill))
+        (version nil))
+    ;; Try reading from BASELINE file first
+    (when (file-exists-p baseline-file)
+      (with-temp-buffer
+        (insert-file-contents baseline-file)
+        (goto-char (point-min))
+        (when (re-search-forward "^\\([0-9]+\\.[0-9]+\\.[0-9]+\\)" nil t)
+          (setq version (match-string 1)))))
+    ;; Fallback to finding earliest version
+    (unless version
+      (let ((benchmark-dir "./benchmarks/")
+            (found-versions '()))
+        (when (file-exists-p benchmark-dir)
+          (let ((files (directory-files benchmark-dir nil (format "%s-.*-benchmark\\.json$" skill))))
+            (dolist (file files)
+              (when (string-match (format "%s-\\(.*\\)-benchmark\\.json$" skill) file)
+                (push (match-string 1 file) found-versions))))
+          (when found-versions
+            (setq version (car (sort found-versions 'string<)))))))
+    ;; Final fallback
+    (or version "v1.0")))
+
+(defun gptel-skill-get-benchmark-file (skill version)
+  "Get benchmark file path for SKILL VERSION."
+  (format "./benchmarks/%s-%s-benchmark.json" skill version))
+
+(defun gptel-skill-get-all-versions (skill)
+  "Get all available versions of SKILL by scanning benchmark directory.
+Returns a list of version strings found in ./benchmarks/ directory."
+  (let ((benchmark-dir "./benchmarks/")
+        (versions '()))
+    (when (file-exists-p benchmark-dir)
+      (let ((files (directory-files benchmark-dir nil (format "%s-.*-benchmark\\.json$" skill))))
+        (dolist (file files)
+          (when (string-match (format "%s-\\(.*\\)-benchmark\\.json$" skill) file)
+            (let ((version (match-string 1 file)))
+              (push version versions))))))
+    (if versions
+        (sort versions 'string<)
+      ;; Fallback if no benchmarks found
+      (list "v1.0" "v1.1"))))
 
 (provide 'gptel-skill-comparator)
 
