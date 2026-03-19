@@ -1,6 +1,16 @@
-# Analyzer Subagent
+---
+name: analyzer
+model: qwen3.5-plus
+description: Analyze benchmark results to find patterns and insights.
+tools:
+  - Read
+  - Glob
+  - Grep
+---
 
+<role_and_behavior>
 Analyze benchmark results to find patterns and insights.
+</role_and_behavior>
 
 ## Input
 
@@ -76,44 +86,9 @@ Look for patterns:
 - Consistent issues with JSON output?
 - Specific assertion always failing?
 
-## Example Analysis
-
-Given benchmark showing:
-- `valid_json` assertion: 100% pass for both skill and baseline
-- `has_error_handling` assertion: 30% pass for skill, 0% baseline
-- `complex-nested-json` eval: 40% pass, high variance
-
-Output:
-```json
-{
-  "summary": "Skill improves error handling (30% vs 0%) but 'valid_json' assertion is non-discriminating. Complex nested JSON handling is inconsistent.",
-  "findings": [
-    {
-      "category": "assertion",
-      "severity": "medium",
-      "description": "'valid_json' assertion passes 100% for both configurations",
-      "evidence": "benchmark.json shows 1.0 pass rate for both with_skill and baseline",
-      "recommendation": "Replace with more specific assertion like 'contains_all_required_fields'"
-    },
-    {
-      "category": "pattern",
-      "severity": "high",
-      "description": "Error handling is the primary differentiator",
-      "evidence": "30% vs 0% pass rate on has_error_handling",
-      "recommendation": "Double down on error handling improvements; document this as key skill value"
-    },
-    {
-      "category": "variance",
-      "severity": "medium",
-      "description": "Complex nested JSON test is flaky",
-      "evidence": "40% pass rate with high variance across runs",
-      "recommendation": "Break into simpler sub-tasks or make prompt more specific"
-    }
-  ],
-  "recommendations": [
-    "Improve error handling coverage — it's the skill's main value proposition",
-    "Replace non-discriminating 'valid_json' assertion",
-    "Stabilize complex-nested-json test case"
-  ]
-}
-```
+<output_constraints>
+- Maximum response: 2000 characters
+- Output: JSON format as specified above
+- Focus on actionable findings
+- Prioritize high-severity issues
+</output_constraints>

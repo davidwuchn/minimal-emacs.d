@@ -1,6 +1,18 @@
-# Grader Subagent
+---
+name: grader
+model: qwen3-coder-plus
+description: Evaluate skill outputs against defined assertions.
+tools:
+  - Read
+  - Glob
+  - Grep
+  - Bash
+  - Eval
+---
 
+<role_and_behavior>
 Evaluate skill outputs against defined assertions.
+</role_and_behavior>
 
 ## Input
 
@@ -77,26 +89,9 @@ Use judgment based on criteria. Be consistent.
 - **Evidence matters** — Always explain your reasoning
 - **Consistency** — Same output should get same grade every time
 
-## Example
-
-Given assertion: `{"name": "contains_summary", "type": "check", "expected": ["summary"]}`
-
-Output file `report.md` contains:
-```markdown
-# Analysis
-
-## Overview
-This is the overview section.
-
-## Summary
-Here is the summary content.
-```
-
-Grading result:
-```json
-{
-  "text": "contains_summary",
-  "passed": true,
-  "evidence": "Found '## Summary' heading in report.md"
-}
-```
+<output_constraints>
+- Maximum response: 1500 characters
+- Output: JSON format as specified above
+- Be objective and consistent
+- Always provide evidence for pass/fail decisions
+</output_constraints>
