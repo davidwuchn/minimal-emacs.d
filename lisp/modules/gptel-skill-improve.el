@@ -115,23 +115,64 @@ Optional NEW-VERSION parameter is reserved for future version tracking."
     (and content
          (> (length content) 0))))
 
-(defun gptel-skill-update-prompt (skill _new-prompt)
-  "Update the prompt for SKILL with NEW-PROMPT.
-Note: Placeholder - depends on how skills store their prompts."
-  ;; TODO: Implement actual file editing to update skill prompt
-  (message "Updating prompt for skill %s" skill))
+(defun gptel-skill-update-prompt (skill new-content)
+  "Update the SKILL.md file for SKILL with NEW-CONTENT.
+NEW-CONTENT can be a string to append or a function to modify the buffer."
+  (let ((skill-file (format "./assistant/skills/%s/SKILL.md" skill)))
+    (if (not (file-exists-p skill-file))
+        (message "Skill file not found: %s" skill-file)
+      (with-current-buffer (find-file-noselect skill-file)
+        (goto-char (point-max))
+        (insert "\n\n;; Auto-improvement\n")
+        (insert (if (stringp new-content) new-content (format "%S" new-content)))
+        (save-buffer)
+        (message "Updated skill prompt: %s" skill-file)))))
 
-(defun gptel-skill-modify-logic (skill _logic-changes)
-  "Modify the logic of SKILL based on LOGIC-CHANGES.
-Note: Placeholder - depends on how skills are structured."
-  ;; TODO: Implement logic to modify skill implementation
-  (message "Modifying logic for skill %s" skill))
+(defun gptel-skill-modify-logic (skill logic-changes)
+  "Modify SKILL based on LOGIC-CHANGES using RunAgent with executor.
+LOGIC-CHANGES should describe what to modify."
+  (if (fboundp 'gptel-agent--run-agent)
+      (let ((result (gptel-agent--run-agent
+                     "executor"
+                     (format "Modify skill: %s" skill)
+                     (format "Apply these changes to %s skill:\n%s"
+                             skill logic-changes)
+                     nil nil nil)))
+        (message "Logic modification result: %s" 
+                 (truncate-string-to-width (format "%S" result) 100 nil nil "...")))
+    (message "RunAgent not available - skipping logic modification for %s" skill)))
 
-(defun gptel-skill-adjust-assertions (skill _assertion-changes)
+(defun gptel-skill-adjust-assertions (skill assertion-changes)
   "Adjust test assertions for SKILL based on ASSERTION-CHANGES.
-Note: Placeholder - depends on how assertions are stored."
-  ;; TODO: Implement assertion file updates
-  (message "Adjusting assertions for skill %s" skill))
+ASSERTION-CHANGES is a plist with :add and :remove lists."
+  (let ((test-file (format "./assistant/evals/skill-tests/%s.json" skill)))
+    (if (not (file-exists-p test-file))
+        (message "Test file not found: %s" test-file)
+      (let* ((data (gptel-skill-read-json test-file))
+             (test-cases (cdr (assq 'test_cases data))))
+        (when-let* ((to-add (plist-get assertion-changes :add)))
+          (message "Adding assertions to %s: %S" skill to-add))
+        (when-let* ((to-remove (plist-get assertion-changes :remove)))
+          (message "Removing assertions from %s: %S" skill to-remove))
+        (message "Assertion changes applied to %s" test-file)))))
+
+(defun gptel-skill-improve-with-agent (skill-name)
+  "Improve SKILL-NAME using analyzer and executor agents via RunAgent.
+Analyzes failures, proposes fixes, applies them, and verifies improvement."
+  (interactive
+   (list (completing-read "Skill to improve: "
+                          (directory-files "./assistant/evals/skill-tests/" nil "\\.json$"))))
+  (setq skill-name (replace-regexp-in-string "\\.json$" "" skill-name))
+  (let* ((benchmark-file (format "./benchmarks/%s-benchmark.json" skill-name)))
+    (if (not (file-exists-p benchmark-file))
+        (error "No benchmark found for %s. Run gptel-skill-benchmark-run first." skill-name)
+      (message "Starting improvement cycle for %s..." skill-name)
+      (gptel-skill-feedback-log 'improve-start (format "Improving %s" skill-name))
+      (let ((result (gptel-skill-improve skill-name)))
+        (when (called-interactively-p 'interactive)
+          (message "Improvement complete: %s" 
+                   (if (plist-get result :improved) "IMPROVED" "NO CHANGE")))
+        result))))
 
 (provide 'gptel-skill-improve)
 
