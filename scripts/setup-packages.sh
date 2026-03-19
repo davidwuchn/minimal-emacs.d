@@ -26,12 +26,20 @@ PACKAGES=(
   "gptel-agent|https://github.com/karthink/gptel-agent|master"
 )
 
+cleanup_old_versions() {
+  local NAME="$1"
+  local ELPA_DIR="$2"
+  # Remove old versioned directories (e.g., gptel-0.9.0, gptel-agent-1.0.0)
+  find "$ELPA_DIR" -maxdepth 1 -type d -name "${NAME}-[0-9]*" -exec rm -rf {} \; 2>/dev/null || true
+}
+
 for pkg in "${PACKAGES[@]}"; do
   IFS='|' read -r NAME URL BRANCH <<< "$pkg"
   TARGET_DIR="$ELPA_DIR/$NAME"
   
   if [ -d "$TARGET_DIR/.git" ] && [ -z "$FORCE" ]; then
     echo "✓ $NAME already installed (use --force to reinstall)"
+    cleanup_old_versions "$NAME" "$ELPA_DIR"
     continue
   fi
   
@@ -47,6 +55,9 @@ for pkg in "${PACKAGES[@]}"; do
   emacs -Q --batch --eval "(progn
     (require 'package)
     (package-generate-autoloads '$NAME \"$TARGET_DIR\"))" 2>/dev/null || true
+  
+  # Cleanup old versioned directories after successful install
+  cleanup_old_versions "$NAME" "$ELPA_DIR"
   
   echo "✓ $NAME installed"
 done
