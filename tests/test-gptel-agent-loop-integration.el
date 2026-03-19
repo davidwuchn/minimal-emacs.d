@@ -55,6 +55,43 @@
     (setq gptel-agent-loop-timeout original-timeout)
     (setq gptel-agent-loop-max-steps original-max-steps)))
 
+(ert-deftest gptel-agent-loop-integration-test-hard-loop-config ()
+  "Test hard loop configuration."
+  (require 'gptel-agent-loop)
+  
+  ;; Hard loop should be enabled by default
+  (should gptel-agent-loop-hard-loop)
+  
+  ;; Can be disabled
+  (let ((original gptel-agent-loop-hard-loop))
+    (setq gptel-agent-loop-hard-loop nil)
+    (should-not gptel-agent-loop-hard-loop)
+    (setq gptel-agent-loop-hard-loop original)))
+
+(ert-deftest gptel-agent-loop-integration-test-state-for-continuation ()
+  "Test that state includes all keys needed for hard loop continuation."
+  (require 'gptel-agent-loop)
+  
+  (setq gptel-agent-loop--state
+        (list :step-count 5
+              :retries 0
+              :aborted nil
+              :timeout-timer nil
+              :max-steps 100
+              :accumulated-output "Partial work"
+              :agent-type "executor"
+              :description "test task"
+              :main-cb #'ignore))
+  
+  (should (= (plist-get gptel-agent-loop--state :step-count) 5))
+  (should (string= (plist-get gptel-agent-loop--state :accumulated-output) "Partial work"))
+  (should (string= (plist-get gptel-agent-loop--state :agent-type) "executor"))
+  (should (string= (plist-get gptel-agent-loop--state :description) "test task"))
+  (should (functionp (plist-get gptel-agent-loop--state :main-cb)))
+  
+  ;; Cleanup
+  (setq gptel-agent-loop--state nil))
+
 (provide 'test-gptel-agent-loop-integration)
 
 ;;; test-gptel-agent-loop-integration.el ends here
