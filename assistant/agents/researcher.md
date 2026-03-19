@@ -1,5 +1,6 @@
 ---
 name: researcher
+model: qwen3-coder-plus
 description: Nucleus research agent for codebase exploration and web research.
 tools:
   - Bash
