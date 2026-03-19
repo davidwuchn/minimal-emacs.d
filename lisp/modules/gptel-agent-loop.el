@@ -78,8 +78,17 @@ This mimics OpenCode's backend while(true) loop behavior."
   :group 'gptel-agent-loop)
 
 (defconst gptel-agent-loop--continuation-prompt
-  "Task list not empty. Continue with the next tool call immediately.
-Do NOT output text unless the work is complete. Call the next tool NOW."
+  "CRITICAL: You must CALL TOOLS, not write text.
+
+Previous response contained planning text but NO TOOL CALLS.
+This is incorrect. You MUST call tools to do actual work.
+
+IMMEDIATELY call the next tool. Do NOT:
+- Write more planning text
+- Say 'Let me...' without calling a tool
+- Output reasoning blocks without tool calls
+
+Call a tool NOW."
   "Prompt injected when model stops but tasks remain.")
 
 (defconst gptel-agent-loop--max-steps-prompt
@@ -232,12 +241,20 @@ When CACHE-RESULT is non-nil, cache the delivered string first."
   (let ((lower-resp (downcase resp)))
     (string-match-p "gptel: turn skipped\\|all tool calls.*malformed" lower-resp)))
 
+(defun gptel-agent-loop--looks-like-planning-p (resp)
+  "Return non-nil when RESP looks like planning text without tool calls.
+Detects common patterns where model talks about doing work but didn't call tools."
+  (let ((lower-resp (downcase resp)))
+    (and (>= (length resp) 30)
+         (string-match-p "let me\\|i will\\|i need to\\|now i\\|going to\\|first,\\|step 1\\|todo\\|checklist" lower-resp))))
+
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP."
   (and gptel-agent-loop-force-completion
        (not (gptel-agent-loop--seems-complete-p resp))
        (not (gptel-agent-loop--task-max-steps-reached state))
        (or (gptel-agent-loop--turn-skipped-p resp)
+           (gptel-agent-loop--looks-like-planning-p resp)
            (> (gptel-agent-loop--task-step-count state) 0))))
 
 (defun gptel-agent-loop--schedule (delay fn)

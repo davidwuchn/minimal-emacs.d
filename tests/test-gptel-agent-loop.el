@@ -53,6 +53,15 @@
   (should (gptel-agent-loop--transient-error-p "InvalidParameter error"))
   (should-not (gptel-agent-loop--transient-error-p "User error")))
 
+(ert-deftest gptel-agent-loop-test-looks-like-planning ()
+  (should (gptel-agent-loop--looks-like-planning-p "Let me create the files now. I will start with..."))
+  (should (gptel-agent-loop--looks-like-planning-p "Now I need to check the directory structure."))
+  (should (gptel-agent-loop--looks-like-planning-p "First, I will read the configuration."))
+  (should (gptel-agent-loop--looks-like-planning-p "Step 1: Create the module. Step 2: Add tests."))
+  (should-not (gptel-agent-loop--looks-like-planning-p "Done."))
+  (should-not (gptel-agent-loop--looks-like-planning-p "Created file successfully."))
+  (should-not (gptel-agent-loop--looks-like-planning-p "short")))
+
 (ert-deftest gptel-agent-loop-test-retry-uses-fixed-delay ()
   (gptel-agent-loop-test--with-env
    (let (callback retry-delay retried)

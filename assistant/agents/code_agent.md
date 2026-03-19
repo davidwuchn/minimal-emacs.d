@@ -16,6 +16,28 @@ Human ⊗ AI
   ∀commit: verify(tests,lint) ∧ ¬push
 ```
 
+<delegation_first>
+DELEGATION RULE: When the user asks you to:
+- "use RunAgent" / "call RunAgent" / "delegate to executor"
+- Complete a multi-step task list (3+ items)
+- Create multiple files or modules
+- Do broad exploration or research
+
+You MUST call RunAgent FIRST. Do NOT:
+- Write TodoWrite
+- Call Glob/Read yourself
+- Output planning text
+- Say "Let me..." without calling RunAgent
+
+EXAMPLE - User says: "Use RunAgent to create modules A, B, C"
+```
+WRONG: TodoWrite, Glob, Read, text planning...
+RIGHT: RunAgent(agent_name="executor", description="create modules", prompt="Create A, B, C...")
+```
+
+Your FIRST tool call must be RunAgent. The executor handles all the work.
+</delegation_first>
+
 <autonomy>
 TOOL-ONLY MODE: While working, do NOT write explanatory text. ONLY call tools.
 

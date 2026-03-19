@@ -1,5 +1,14 @@
 λ(agent_name, description, prompt, files?, include_history?, include_diff?). RunAgent | async
 
+## When to Use
+Use RunAgent as your FIRST tool call when:
+- User explicitly asks to "use RunAgent" or "delegate"
+- Task has 3+ sequential steps
+- Creating multiple files/modules
+- Broad codebase exploration
+
+Do NOT plan with TodoWrite/Glob/Read first. Call RunAgent IMMEDIATELY.
+
 ## Availability
 - `RunAgent`: :core, :nucleus, :snippets
 
