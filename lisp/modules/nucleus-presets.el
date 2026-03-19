@@ -95,15 +95,20 @@ Updates `nucleus-agent-default' so new buffers use the same preset."
       (force-mode-line-update))))
 
 (defun nucleus--override-preset (preset-name system-symbol description toolset model backend)
-  "Override PRESET-NAME with nucleus SYSTEM-SYMBOL, DESCRIPTION, TOOLSET, MODEL, BACKEND."
+  "Override PRESET-NAME with nucleus SYSTEM-SYMBOL, DESCRIPTION, TOOLSET, MODEL, BACKEND.
+
+Only override :model and :backend if the preset doesn't already have a model
+(allowing YAML model: to take priority)."
   (when-let ((base (gptel-get-preset preset-name)))
     (let ((plist (copy-sequence base)))
       (setq plist (plist-put plist :system system-symbol))
       (setq plist (plist-put plist :description description))
       (setq plist (plist-put plist :tools (nucleus-get-tools toolset)))
-      (when model
-        (setq plist (plist-put plist :model model))
-        (setq plist (plist-put plist :backend backend)))
+      ;; Only set model/backend if not already defined (YAML takes priority)
+      (unless (plist-get plist :model)
+        (when model
+          (setq plist (plist-put plist :model model))
+          (setq plist (plist-put plist :backend backend))))
       (apply #'gptel-make-preset preset-name plist))))
 
 (defun nucleus--refresh-open-gptel-buffers ()
