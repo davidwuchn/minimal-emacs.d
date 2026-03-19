@@ -1,7 +1,7 @@
 ---
 name: planning
 description: File-based planning for complex tasks. Use when starting multi-step tasks, research projects, or anything requiring >5 tool calls.
-version: 1.0.0
+version: 1.1.0
 λ: plan.track.reflect
 ---
 
@@ -183,6 +183,157 @@ AFTER 3 FAILURES: Escalate to User
 | What have I done? | docs/plans/progress.md | Δ |
 
 If you can answer all five, your context management is solid.
+
+---
+
+## New Modules in v1.1
+
+### Module 1: Nil Input Handling
+
+**Purpose:** Gracefully handle empty or nil input without crashing.
+
+```elisp
+(defun skill/plan-nil-guard (input)
+  "Return error message if INPUT is nil or empty."
+  (when (or (null input) (string-empty-p (string-trim input)))
+    (user-error "No input provided. Please describe your task before planning.")))
+```
+
+**Behavior:**
+- Check input before processing
+- Return clear, actionable error message
+- Prompt user to provide task description
+- Do not create empty plan files
+
+**Test:** `plan-006` — nil_empty_input_handling
+
+---
+
+### Module 2: Session Recovery
+
+**Purpose:** Recover planning session from checkpoint after interruption.
+
+```elisp
+(defun skill/plan-recover-session ()
+  "Recover planning session from checkpoint.
+   1. Check for existing PLAN.md
+   2. Load last known state
+   3. Resume from last completed step
+   4. Update PROGRESS.md with recovery note"
+  (let ((plan-file "docs/plans/task_plan.md")
+        (progress-file "docs/plans/progress.md"))
+    (when (file-exists-p plan-file)
+      (message "Recovering session from %s" plan-file)
+      ;; Load and parse existing plan
+      ;; Find last completed phase
+      ;; Resume from next phase
+      (skill/plan-log-recovery progress-file))))
+```
+
+**Behavior:**
+- Detect existing plan files on startup
+- Parse last known state
+- Resume from incomplete phase
+- Log recovery in progress file
+- Preserve all previous findings
+
+**Test:** `plan-007` — session_recovery_checkpoint
+
+---
+
+### Module 3: Conflict Detection
+
+**Purpose:** Detect and resolve conflicting plan files from multiple sessions.
+
+```elisp
+(defun skill/plan-detect-conflict ()
+  "Detect conflicting plan files.
+   1. Check for multiple PLAN*.md files
+   2. Compare timestamps and content hashes
+   3. If conflict: prompt user to resolve
+   4. Merge or archive old versions"
+  (let ((plan-files (file-expand-wildcards "docs/plans/PLAN*.md")))
+    (when (> (length plan-files) 1)
+      (let ((conflicts (skill/plan-compare-plans plan-files)))
+        (when conflicts
+          (skill/plan-prompt-resolve conflicts))))))
+```
+
+**Behavior:**
+- Scan for multiple plan files
+- Compare timestamps and content
+- Present conflict to user
+- Offer merge/archive options
+- Prevent silent overwrites
+
+**Test:** `plan-008` — conflicting_plans_detection
+
+---
+
+### Module 4: Simple Task Detection
+
+**Purpose:** Skip planning overhead for trivial tasks.
+
+```elisp
+(defun skill/plan-should-skip-p (task)
+  "Return t if task is too simple for planning.
+   Criteria:
+   - Single action (< 5 min)
+   - No dependencies
+   - No risk factors
+   - Familiar task (done 5+ times)"
+  (or (skill/plan-single-action-p task)
+      (skill/plan-no-dependencies-p task)
+      (skill/plan-no-risk-p task)
+      (skill/plan-familiar-task-p task)))
+```
+
+**Skip Criteria:**
+- ✓ Single file edit
+- ✓ Simple lookup question
+- ✓ One-command operation
+- ✓ No state changes required
+- ✓ No error recovery needed
+
+**Behavior:**
+- Analyze task complexity
+- Skip planning if criteria met
+- Explain why planning not needed
+- Execute directly
+
+**Test:** `plan-012` — simple_task_skip_criteria
+
+---
+
+### Module 5: Automated 3-Strike Protocol
+
+**Purpose:** Handle repeated failures with automatic mutation and escalation.
+
+```elisp
+(defun skill/plan-3-strike-retry (action failures)
+  "Handle repeated failures with mutation.
+   Strike 1: Retry same action
+   Strike 2: Retry with modified approach
+   Strike 3: Escalate (ask user, skip, or abort)"
+  (cond
+   ((= failures 1) (skill/plan-retry-same action))
+   ((= failures 2) (skill/plan-retry-mutated action))
+   ((>= failures 3) (skill/plan-escalate action failures))))
+```
+
+**Protocol:**
+- **Strike 1:** Diagnose error, apply targeted fix
+- **Strike 2:** Try different method/tool/library
+- **Strike 3:** Question assumptions, escalate to user
+
+**Behavior:**
+- Track failure count per action
+- Mutate approach on each retry
+- Never repeat exact same failing action
+- Escalate after 3 failures
+- Log all errors in plan file
+
+**Tests:** `plan-010` — error_recovery_3_strike, `plan-013` — repeated_failure_mutation
 
 ---
 
