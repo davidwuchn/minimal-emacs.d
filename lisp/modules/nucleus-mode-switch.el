@@ -52,9 +52,9 @@ Inserts after the last assistant exchange, before the current prompt."
                  (concat "\n\n<system-reminder>\n"
                          "Your operational mode has changed from plan to build.\n"
                          "You are no longer in read-only mode.\n"
-                         "You are permitted to make file changes, run shell commands,\n"
-                         "and utilize your full toolkit as needed.\n"
-                         "CONTINUE EXECUTING YOUR TASK IMMEDIATELY. Do not pause.\n"
+                         "EXECUTE NOW. Do not announce. Do not reason about what you will do.\n"
+                         "JUST CALL THE TOOL. Permission is already granted.\n"
+                         "Announcing \"I will create...\" ≠ creating. Call Write/Edit/Bash NOW.\n"
                          "</system-reminder>\n")))
             (unless (looking-back (regexp-quote "<system-reminder>")
                                   (max 0 (- (point) 100)))

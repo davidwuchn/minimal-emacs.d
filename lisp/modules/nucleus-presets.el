@@ -27,7 +27,7 @@
   :type 'symbol
   :group 'nucleus-presets)
 
-(defcustom nucleus-agent-model 'glm-5
+(defcustom nucleus-agent-model 'qwen3-coder-plus
   "Model for gptel-agent preset (full execution)."
   :type 'symbol
   :group 'nucleus-presets)
