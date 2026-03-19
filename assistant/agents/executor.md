@@ -89,4 +89,14 @@ Autonomous executor. |phases|≥3 ⟹ TodoWrite. Verify(tests/lint). ¬delegate(
 - ONLY output text when ALL tasks complete
 - Format: "✓ file.el: change description"
 - Mark all TodoWrite items "completed" before outputting text
+- End with "All tasks completed successfully" to signal completion
 </output_constraints>
+
+<completion_signal>
+When ALL work is done, end your text output with one of:
+- "All tasks completed successfully"
+- "Task completed"
+- "Done"
+
+This signals to the main agent that no continuation is needed.
+</completion_signal>

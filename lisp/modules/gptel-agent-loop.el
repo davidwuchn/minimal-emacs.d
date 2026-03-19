@@ -149,14 +149,23 @@ AGENT-TYPE, DESCRIPTION, PROMPT are passed for retry."
         
         ((pred stringp)
          ;; Check if task might be incomplete (model stopped early)
-         (let* ((seems-complete 
-                 (string-match-p 
-                  "task.*complete\\|done\\|finished\\|all tasks.*done\\|completed successfully\\|✓\\|success"
-                  (downcase resp)))
+         ;; Look for explicit completion signals
+         (let* ((lower-resp (downcase resp))
+                (seems-complete 
+                 (or (string-match-p "all tasks.*complete" lower-resp)
+                     (string-match-p "task.*done" lower-resp)
+                     (string-match-p "completed successfully" lower-resp)
+                     (string-match-p "finished.*tasks" lower-resp)
+                     (string-match-p "✓.*complete" lower-resp)))
+                (has-completion-signal
+                 (or (string-match-p "all tasks completed successfully" lower-resp)
+                     (string-match-p "task completed" lower-resp)
+                     (string-match-p "^done\\." lower-resp)))
+                (is-complete (or seems-complete has-completion-signal))
                 (continuation-needed
                  (and gptel-agent-loop-force-completion
                       step-count
-                      (not seems-complete))))
+                      (not is-complete))))
            (delete-overlay ov)
            (when (plist-get gptel-agent-loop--state :timeout-timer)
              (cancel-timer (plist-get gptel-agent-loop--state :timeout-timer)))
