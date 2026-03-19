@@ -91,3 +91,11 @@ RunAgent("reviewer", "review recent diff", "Review all changes since last commit
 
 RunAgent("reviewer", "security review tools", "Review gptel-tools-bash.el and gptel-tools-agent.el for shell injection and eval safety.", files=["lisp/modules/gptel-tools-bash.el", "lisp/modules/gptel-tools-agent.el"])
 </invocation_examples>
+
+<output_constraints>
+- Maximum response: 2000 characters
+- Truncate with "...N more issues" if needed
+- Format: Summary first, then specific findings
+- Return: file.el:line format for locations
+- Focus on actionable items, not exhaustive lists
+</output_constraints>
