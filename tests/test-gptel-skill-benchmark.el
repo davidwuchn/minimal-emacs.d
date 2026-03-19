@@ -7,40 +7,113 @@
 ;;; Code:
 
 (require 'ert)
+(require 'gptel-skill-utils)
 (require 'gptel-skill-benchmark)
+
+;;; Test Loading
+
+(ert-deftest test-gptel-skill-load-tests ()
+  "Test loading test definitions from JSON."
+  (let ((tests (gptel-skill-load-tests "planning")))
+    (should (listp tests))
+    (should (> (length tests) 0))
+    (let ((first-test (car tests)))
+      (should (plist-get first-test :id))
+      (should (plist-get first-test :prompt)))))
+
+(ert-deftest test-gptel-skill-normalize-test ()
+  "Test normalizing test alist to plist."
+  (let* ((test-alist '((id . "test-001")
+                       (name . "test-name")
+                       (prompt . "Test prompt")
+                       (expected_behaviors . ["behavior1" "behavior2"])
+                       (forbidden_behaviors . ["bad1"])))
+         (plist (gptel-skill--normalize-test test-alist)))
+    (should (equal (plist-get plist :id) "test-001"))
+    (should (equal (plist-get plist :name) "test-name"))
+    (should (equal (plist-get plist :prompt) "Test prompt"))))
+
+;;; Summary
 
 (ert-deftest test-gptel-skill-benchmark-summary ()
   "Test generating benchmark summary."
-  ;; Skip this test for now - requires proper JSON array handling
-  :expected-result :failed
-  (let ((test-data '(((:test-id . "test-1")
-                      (:grade (:score . 8) (:total . 10) (:percentage . 80.0)))
-                     ((:test-id . "test-2")
-                      (:grade (:score . 10) (:total . 10) (:percentage . 100.0))))))
-    (let ((test-file (make-temp-file "benchmark" nil ".json")))
-      (unwind-protect
-          (progn
-            (gptel-skill-write-json test-data test-file)
-            (let ((summary (gptel-skill-benchmark-summary test-file)))
-              (should (equal (plist-get summary :total-tests) 2))
-              (should (equal (plist-get summary :passed-tests) 1))
-              (should (> (plist-get summary :overall-score) 80))))
-        (delete-file test-file)))))
+  (let ((test-file (make-temp-file "benchmark" nil ".json")))
+    (unwind-protect
+        (progn
+          (gptel-skill-write-json
+           (list (list :test-id "test-1"
+                       :grade (list :score 8 :total 10 :percentage 80.0))
+                 (list :test-id "test-2"
+                       :grade (list :score 10 :total 10 :percentage 100.0)))
+           test-file)
+          (let ((summary (gptel-skill-benchmark-summary test-file)))
+            (should (equal (plist-get summary :total-tests) 2))
+            (should (equal (plist-get summary :passed-tests) 1))
+            (should (> (plist-get summary :overall-score) 80))))
+      (delete-file test-file))))
+
+(ert-deftest test-gptel-skill-benchmark-summary-empty ()
+  "Test summary with empty results."
+  (let ((test-file (make-temp-file "benchmark" nil ".json")))
+    (unwind-protect
+        (progn
+          (gptel-skill-write-json nil test-file)
+          (let ((summary (gptel-skill-benchmark-summary test-file)))
+            (should (equal (plist-get summary :total-tests) 0))
+            (should (equal (plist-get summary :overall-score) 0))))
+      (delete-file test-file))))
+
+;;; Assertion Checking (Legacy)
 
 (ert-deftest test-gptel-skill-check-assertion ()
-  "Test assertion checking."
+  "Test legacy assertion checking."
   (should (gptel-skill-check-assertion "Hello World" "Hello"))
   (should (gptel-skill-check-assertion "Hello World" "World"))
   (should-not (gptel-skill-check-assertion "Hello World" "Goodbye")))
 
-(ert-deftest test-gptel-skill-grade-output ()
-  "Test grading output against assertions."
-  (let ((assertions '("expected" "output"))
-        (output "expected output here"))
-    (let ((grade (gptel-skill-grade-output "test-1" output assertions)))
+;;; Grade Response Parsing
+
+(ert-deftest test-gptel-skill-parse-grade-response ()
+  "Test parsing LLM grade response."
+  (let ((response "EXPECTED:\n1. behavior1: PASS - found it\nFORBIDDEN:\n1. bad1: PASS - not present\nSUMMARY: SCORE: 2/2"))
+    (let ((grade (gptel-skill--parse-grade-response response)))
       (should (equal (plist-get grade :score) 2))
       (should (equal (plist-get grade :total) 2))
-      (should (equal (plist-get grade :percentage) 100.0)))))
+      (should (equal (plist-get grade :percentage) 100.0))
+      (should (plist-get grade :passed)))))
+
+(ert-deftest test-gptel-skill-parse-grade-response-partial ()
+  "Test parsing partial grade response."
+  (let ((response "SUMMARY: SCORE: 1/3"))
+    (let ((grade (gptel-skill--parse-grade-response response)))
+      (should (equal (plist-get grade :score) 1))
+      (should (equal (plist-get grade :total) 3))
+      (should (< (plist-get grade :percentage) 50)))))
+
+;;; Average Score
+
+(ert-deftest test-gptel-skill-average-score ()
+  "Test calculating average score."
+  (let ((results (list (list :grade (list :percentage 80.0))
+                       (list :grade (list :percentage 100.0))
+                       (list :grade (list :percentage 60.0)))))
+    (let ((avg (gptel-skill--average-score results)))
+      (should (equal avg 80.0)))))
+
+;;; Eval Metadata
+
+(ert-deftest test-gptel-skill-write-eval-metadata ()
+  "Test writing eval metadata file."
+  (let ((test-file (make-temp-file "eval" nil ".json")))
+    (unwind-protect
+        (progn
+          (gptel-skill--write-eval-metadata test-file "test-001" '("b1" "b2") '("bad1"))
+          (let ((data (gptel-skill-read-json test-file)))
+            (should (equal (cdr (assq 'eval_id data)) "test-001"))
+            (should (equal (length (cdr (assq 'assertions data))) 3))))
+      (delete-file test-file))))
+
+;;; Provide
 
 (provide 'test-gptel-skill-benchmark)
 

@@ -29,7 +29,7 @@
 
 (defun gptel-skill-read-json (file)
   "Read and parse JSON from FILE.
-Returns the parsed JSON structure as Elisp objects."
+Returns the parsed JSON structure as Elisp objects (alists/vectors)."
   (with-temp-buffer
     (insert-file-contents file)
     (goto-char (point-min))
@@ -37,10 +37,34 @@ Returns the parsed JSON structure as Elisp objects."
 
 (defun gptel-skill-write-json (data file)
   "Write DATA as JSON to FILE.
-DATA should be an Elisp object that can be serialized to JSON."
-  (with-temp-buffer
-    (insert (json-encode data))
-    (write-region (point-min) (point-max) file)))
+DATA should be an alist or list of alists for proper JSON encoding.
+Plists are converted to alists automatically."
+  (let ((json-data (gptel-skill--to-json-format data)))
+    (with-temp-file file
+      (insert (json-encode json-data)))))
+
+(defun gptel-skill--to-json-format (data)
+  "Convert DATA to JSON-serializable format.
+Handles plists by converting to alists."
+  (cond
+   ((null data) nil)
+   ((and (listp data) (keywordp (car data)))
+    (gptel-skill--plist-to-alist data))
+   ((listp data)
+    (mapcar #'gptel-skill--to-json-format data))
+   (t data)))
+
+(defun gptel-skill--plist-to-alist (plist)
+  "Convert PLIST to alist format for JSON encoding."
+  (let (alist)
+    (while plist
+      (let ((key (car plist))
+            (val (cadr plist)))
+        (when (keywordp key)
+          (setq key (intern (substring (symbol-name key) 1))))
+        (push (cons key (gptel-skill--to-json-format val)) alist)
+        (setq plist (cddr plist))))
+    (nreverse alist)))
 
 (provide 'gptel-skill-utils)
 
