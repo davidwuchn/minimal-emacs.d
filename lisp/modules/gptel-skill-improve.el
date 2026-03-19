@@ -129,18 +129,20 @@ NEW-CONTENT can be a string to append or a function to modify the buffer."
         (message "Updated skill prompt: %s" skill-file)))))
 
 (defun gptel-skill-modify-logic (skill logic-changes)
-  "Modify SKILL based on LOGIC-CHANGES using RunAgent with executor.
-LOGIC-CHANGES should describe what to modify."
-  (if (fboundp 'gptel-agent--run-agent)
-      (let ((result (gptel-agent--run-agent
-                     "executor"
-                     (format "Modify skill: %s" skill)
-                     (format "Apply these changes to %s skill:\n%s"
-                             skill logic-changes)
-                     nil nil nil)))
-        (message "Logic modification result: %s" 
+  "Modify SKILL based on LOGIC-CHANGES using gptel-agent--task with executor."
+  (if (fboundp 'gptel-agent--task)
+      (let ((result nil) (done nil))
+        (gptel-agent--task
+         (lambda (r)
+           (setq result r done t))
+         "executor"
+         (format "Modify skill: %s" skill)
+         (format "Apply these changes to %s skill:\n%s"
+                 skill logic-changes))
+        (while (not done) (sit-for 0.1))
+        (message "Logic modification result: %s"
                  (truncate-string-to-width (format "%S" result) 100 nil nil "...")))
-    (message "RunAgent not available - skipping logic modification for %s" skill)))
+    (message "gptel-agent--task not available - skipping logic modification for %s" skill)))
 
 (defun gptel-skill-adjust-assertions (skill assertion-changes)
   "Adjust test assertions for SKILL based on ASSERTION-CHANGES.

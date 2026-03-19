@@ -30,9 +30,18 @@
 
 (defun gptel-skill-analyze-results (benchmark-file)
   "Analyze results in BENCHMARK-FILE.
-Uses analyzer agent via RunAgent if available."
-  (if (fboundp 'gptel-agent--run-agent)
-      (gptel-skill-analyze-with-agent (file-name-base benchmark-file))
+Uses analyzer agent via gptel-agent--task if available."
+  (if (fboundp 'gptel-agent--task)
+      (let ((result nil) (done nil))
+        (gptel-agent--task
+         (lambda (r)
+           (setq result r done t))
+         "analyzer"
+         (format "Analyze: %s" (file-name-base benchmark-file))
+         (format "Analyze benchmark results in %s. Output JSON with findings and recommendations."
+                 benchmark-file))
+        (while (not done) (sit-for 0.1))
+        (gptel-skill--parse-analysis-result result))
     (let* ((data (gptel-skill-read-json benchmark-file))
            (flaky-tests (gptel-skill-find-flaky-tests benchmark-file))
            (non-discriminating (gptel-skill-find-non-discriminating benchmark-file))
@@ -42,28 +51,16 @@ Uses analyzer agent via RunAgent if available."
             :systematic-failures systematic-failures
             :summary (gptel-skill-generate-summary data)))))
 
-(defun gptel-skill-analyze-with-agent (skill-name)
-  "Analyze benchmark for SKILL-NAME using analyzer agent via RunAgent."
-  (let* ((benchmark-file (format "./benchmarks/%s-benchmark.json" skill-name)))
-    (if (not (file-exists-p benchmark-file))
-        (list :error (format "No benchmark file found for %s" skill-name))
-      (let ((result (condition-case err
-                        (gptel-agent--run-agent
-                         "analyzer"
-                         (format "Analyze: %s" skill-name)
-                         (format "Analyze benchmark results in %s. Output JSON with findings and recommendations."
-                                 benchmark-file)
-                         (list benchmark-file)
-                         nil nil)
-                      (error (format "Analyzer error: %s" (error-message-string err))))))
-        (if (stringp result)
-            (condition-case nil
-                (let ((parsed (json-read-from-string result)))
-                  (list :summary (cdr (assq 'summary parsed))
-                        :findings (cdr (assq 'findings parsed))
-                        :recommendations (cdr (assq 'recommendations parsed))))
-              (error (list :raw result)))
-          (list :raw (format "%S" result)))))))
+(defun gptel-skill--parse-analysis-result (result)
+  "Parse analyzer RESULT into plist."
+  (if (stringp result)
+      (condition-case nil
+          (let ((parsed (json-read-from-string result)))
+            (list :summary (cdr (assq 'summary parsed))
+                  :findings (cdr (assq 'findings parsed))
+                  :recommendations (cdr (assq 'recommendations parsed))))
+        (error (list :raw result)))
+    (list :raw (format "%S" result))))
 
 (defun gptel-skill-find-flaky-tests (benchmark-file)
   "Identify tests that sometimes pass and sometimes fail in BENCHMARK-FILE."

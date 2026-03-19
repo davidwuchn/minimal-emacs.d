@@ -100,18 +100,18 @@
     (let ((avg (gptel-skill--average-score results)))
       (should (equal avg 80.0)))))
 
-;;; Eval Metadata
+;;; Grading Prompt
 
-(ert-deftest test-gptel-skill-write-eval-metadata ()
-  "Test writing eval metadata file."
-  (let ((test-file (make-temp-file "eval" nil ".json")))
-    (unwind-protect
-        (progn
-          (gptel-skill--write-eval-metadata test-file "test-001" '("b1" "b2") '("bad1"))
-          (let ((data (gptel-skill-read-json test-file)))
-            (should (equal (cdr (assq 'eval_id data)) "test-001"))
-            (should (equal (length (cdr (assq 'assertions data))) 3))))
-      (delete-file test-file))))
+(ert-deftest test-gptel-skill-make-grading-prompt ()
+  "Test grading prompt generation."
+  (let ((prompt (gptel-skill--make-grading-prompt
+                 "test output"
+                 '("expected1" "expected2")
+                 '("forbidden1"))))
+    (should (stringp prompt))
+    (should (string-match-p "expected1" prompt))
+    (should (string-match-p "forbidden1" prompt))
+    (should (string-match-p "SCORE:" prompt))))
 
 ;;; Provide
 
