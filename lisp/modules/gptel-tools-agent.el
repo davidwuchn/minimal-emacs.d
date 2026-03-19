@@ -397,9 +397,56 @@ AGENT-NAME must exist in `gptel-agent--agents`."
               :optional t
               :description "Set to \"true\" to inject git diff HEAD into subagent context."))
      :category "gptel-agent"
-     :async t
-     :confirm t
-     :include t)))
+:async t
+      :confirm t
+      :include t)))
+
+;;; TodoWrite Overlay Fix for Subagent Context
+
+(defvar gptel-agent--hrule)  ; from gptel-agent-tools
+
+(defun my/gptel-agent--write-todo-around (orig todos)
+  "Advice to fix TodoWrite overlay updates in subagent context.
+Finds existing overlay anywhere in buffer instead of relying on position."
+  (setq gptel-agent--todos todos)
+  (let* ((info (gptel-fsm-info gptel--fsm-last))
+         (pos (or (plist-get info :tracking-marker)
+                  (plist-get info :position)))
+         (buf (plist-get info :buffer))
+         (existing-ov (and buf
+                           (buffer-live-p buf)
+                           (with-current-buffer buf
+                             (cl-find-if
+                              (lambda (ov) (overlay-get ov 'gptel-agent--todos))
+                              (overlays-in (point-min) (point-max)))))))
+    (if existing-ov
+        (let* ((formatted-todos
+                (mapconcat
+                 (lambda (todo)
+                   (pcase (plist-get todo :status)
+                     ("completed"
+                      (concat "✓ " (propertize (plist-get todo :content)
+                                               'face '(:inherit shadow :strike-through t))))
+                     ("in_progress"
+                      (concat "● " (propertize (plist-get todo :activeForm)
+                                               'face '(:inherit bold :inherit warning))))
+                     (_ (concat "○ " (plist-get todo :content)))))
+                 todos "\n"))
+               (todo-display
+                (concat
+                 (unless (= (char-before (overlay-end existing-ov)) 10) "\n")
+                 gptel-agent--hrule
+                 (propertize "Task list: [ "
+                             'face '(:inherit font-lock-comment-face :inherit bold))
+                 (propertize "TAB to toggle display ]\n" 'face 'font-lock-comment-face)
+                 formatted-todos "\n"
+                 gptel-agent--hrule)))
+          (overlay-put existing-ov 'after-string todo-display)
+          t)
+      (funcall orig todos))))
+
+(with-eval-after-load 'gptel-agent-tools
+  (advice-add 'gptel-agent--write-todo :around #'my/gptel-agent--write-todo-around))
 
 ;;; Footer
 
