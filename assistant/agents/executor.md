@@ -1,5 +1,6 @@
 ---
 name: executor
+model: qwen3-coder-next
 description: Nucleus executor for multi-step tasks
 tools:
   - ApplyPatch

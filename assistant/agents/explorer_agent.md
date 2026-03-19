@@ -1,5 +1,6 @@
 ---
 name: explorer
+model: qwen3-coder-next
 description: Deep codebase analysis subagent. Read-only exploration with high synthesis value.
 tools:
   - Glob

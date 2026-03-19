@@ -1,5 +1,6 @@
 ---
 name: reviewer
+model: qwen3-coder-plus
 description: Multi-scale Elisp/nucleus code reviewer (best practices, architecture, security). Read-only.
 tools:
   - Glob

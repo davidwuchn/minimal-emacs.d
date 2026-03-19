@@ -1,5 +1,6 @@
 ---
 name: introspector
+model: qwen3-coder-plus
 description: Nucleus introspector for Emacs/elisp APIs and live session state.
 tools:
   - Bash
