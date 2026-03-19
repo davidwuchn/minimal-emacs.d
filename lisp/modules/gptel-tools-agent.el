@@ -42,8 +42,7 @@ Set to 0 to disable auto-cleanup."
 
 (defcustom my/gptel-subagent-model nil
   "Model to use for delegated subagents.
-nil means use `gptel-model' (the global default).
-Change the default in `gptel-config.el' to switch everywhere."
+DEPRECATED: Subagents now use their YAML model: field. This variable is ignored."
   :type '(choice (const :tag "Same as parent" nil) symbol)
   :group 'gptel-tools-agent)
 
@@ -167,7 +166,7 @@ remove it."
 
 (defcustom my/gptel-subagent-backend nil
   "Backend for delegated subagents.
-nil means use `gptel-backend' (the global default)."
+DEPRECATED: Subagents now use their YAML model: field and inherit backend from parent. This variable is ignored."
   :type '(choice (const :tag "Same as parent" nil) variable)
   :group 'gptel-tools-agent)
 
@@ -282,12 +281,11 @@ CALLBACK is called with the result or a timeout error."
                (when (buffer-live-p origin-buf)
                  (with-current-buffer origin-buf
                    (setq-local gptel--fsm-last parent-fsm)))
-               (funcall callback
-                        (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                description agent-type my/gptel-agent-task-timeout))))))
-    (let* ((gptel-model (or my/gptel-subagent-model gptel-model))
-           (gptel-backend (or my/gptel-subagent-backend gptel-backend)))
-      (gptel-agent--task wrapped-cb agent-type description packaged-prompt))))
+(funcall callback
+                         (format "Error: Task \"%s\" (%s) timed out after %ds."
+                                 description agent-type my/gptel-agent-task-timeout))))))
+
+    (gptel-agent--task wrapped-cb agent-type description packaged-prompt)))
 
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.

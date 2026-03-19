@@ -41,11 +41,8 @@
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3-coder-next)
 
-;; Subagent model: qwen3-coder-next on DashScope
-;; 1M context, fast, reliable for subagent tasks
-;; Alternative: qwen3.5-plus, glm-5
-(setq my/gptel-subagent-model 'qwen3-coder-next
-      my/gptel-subagent-backend 'gptel--dashscope)
+;; Subagent model/backend: DEPRECATED
+;; Subagents now use their YAML model: field. See assistant/agents/*.md
 
 ;; Enable media/image attachment support (required for vision models)
 (setq gptel-track-media t)
