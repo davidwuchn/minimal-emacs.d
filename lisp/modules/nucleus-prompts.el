@@ -4,6 +4,20 @@
 ;; Version: 1.0.0
 ;;
 ;; Prompt loading and directive registration for nucleus gptel-agent.
+;;
+;; DIRECTORY STRUCTURE:
+;; - assistant/prompts/     → System prompts for directives (loaded by nucleus-prompt-files)
+;;   - code_agent.md        → Primary agent system prompt (nucleus-gptel-agent)
+;;   - plan_agent.md        → Plan mode system prompt (nucleus-gptel-plan)
+;;   - explorer_agent.md    → Explorer directive prompt
+;;
+;; - assistant/agents/      → Subagent definitions for RunAgent tool
+;;   - executor.md          → RunAgent("executor", ...)
+;;   - researcher.md        → RunAgent("researcher", ...)
+;;   - explorer_agent.md    → RunAgent("explorer_agent", ...) [different from prompts/explorer_agent.md!]
+;;
+;; NOTE: Files with similar names in both directories serve DIFFERENT purposes.
+;; Do NOT create files with the same base name in both directories to avoid confusion.
 
 (require 'cl-lib)
 (require 'seq)
@@ -56,7 +70,7 @@
     (completion          . "inline_completion.md")
     (rewrite             . "rewrite.md")
     (nucleus-gptel-plan  . "plan_agent.md")
-    (explorer            . "explorer_agent.md"))
+    (explorer            . "explorer.md"))
   "Prompt file map.")
 
 (defconst nucleus-tool-prompt-files
