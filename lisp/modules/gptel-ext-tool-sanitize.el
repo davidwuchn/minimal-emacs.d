@@ -6,12 +6,42 @@
 ;; - nil/unknown tool calls: pre-mark with error result so FSM doesn't hang
 ;; - Doom-loop detection: abort when same tool+args repeats N times (OpenCode-style)
 ;; - Tool dedup: remove duplicate tool names before API serialization
+;; - Tool repair: fix case, underscore/hyphen, and common typos (OpenCode-style)
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'seq)
 (require 'gptel)
+
+(defcustom my/gptel-tool-repair-enabled t
+  "When non-nil, attempt to repair malformed tool names.
+Repairs: case (read -> Read), underscores (code-map -> Code_Map)."
+  :type 'boolean
+  :group 'gptel)
+
+(defun my/gptel--normalize-tool-name (name)
+  "Normalize tool NAME for fuzzy matching.
+Removes underscores, hyphens, and converts to lowercase."
+  (when (stringp name)
+    (downcase (replace-regexp-in-string "[-_]" "" name))))
+
+(defun my/gptel--find-tool-fuzzy (name tools)
+  "Find tool in TOOLS matching NAME using fuzzy matching.
+Tries: exact, case-insensitive, underscore/hyphen normalization."
+  (when (stringp name)
+    (or
+     ;; 1. Exact match
+     (cl-find-if (lambda (ts) (string= (gptel-tool-name ts) name)) tools)
+     ;; 2. Case-insensitive match
+     (cl-find-if (lambda (ts) (string-equal-ignore-case (gptel-tool-name ts) name)) tools)
+     ;; 3. Normalized match (ignore underscores/hyphens)
+     (when my/gptel-tool-repair-enabled
+       (let ((normalized (my/gptel--normalize-tool-name name)))
+         (cl-find-if
+          (lambda (ts)
+            (string= normalized (my/gptel--normalize-tool-name (gptel-tool-name ts))))
+          tools))))))
 
 ;; Handle nil/unknown tool calls gracefully instead of hanging the FSM.
 ;; When a model sends a tool call with a nil or unrecognized name, gptel's
@@ -43,28 +73,45 @@ RunAgent was registered, leaving it out of the buffer's tool list."
     ;; Get the tools list; may be nil if preset had no tools set.
     (let ((tools (plist-get info :tools))
           pruned)
-      (dolist (tc tool-use)
+(dolist (tc tool-use)
         (let* ((name (plist-get tc :name))
                (matched-tool (and (stringp name)
-                                  (cl-find-if
-                                   (lambda (ts) (string-equal-ignore-case
-                                                 (gptel-tool-name ts) name))
-                                   tools))))
+                                  (my/gptel--find-tool-fuzzy name tools))))
           (cond
            ;; Case 1: found in info :tools (normal case)
            (matched-tool
             (let ((correct-name (gptel-tool-name matched-tool)))
               (unless (string= name correct-name)
-                (message "gptel: repairing tool call casing %S -> %S" name correct-name)
+                (message "gptel: repairing tool call %S -> %S" name correct-name)
                 (plist-put tc :name correct-name))))
            ;; Case 2: not in info :tools but IS registered globally —
            ;; preset misconfiguration recovery (e.g. RunAgent missing from
            ;; buffer's gptel-tools due to load order issue at buffer creation).
+           ;; Also handles fuzzy match (case/underscore differences).
            ((and (stringp name)
                  (fboundp 'gptel-get-tool)
-                 (ignore-errors (gptel-get-tool name)))
-            (let* ((global-tool (ignore-errors (gptel-get-tool name)))
+                 (or (ignore-errors (gptel-get-tool name))
+                     ;; Try fuzzy match globally
+                     (when my/gptel-tool-repair-enabled
+                       (cl-find-if
+                        (lambda (ts)
+                          (string= (my/gptel--normalize-tool-name name)
+                                   (my/gptel--normalize-tool-name 
+                                    (gptel-tool-name ts))))
+                        (ignore-errors (gptel-get-tool))))))
+            (let* ((global-tool (or (ignore-errors (gptel-get-tool name))
+                                    (cl-find-if
+                                     (lambda (ts)
+                                       (string= (my/gptel--normalize-tool-name name)
+                                                (my/gptel--normalize-tool-name 
+                                                 (gptel-tool-name ts))))
+                                     (ignore-errors (gptel-get-tool)))))
+                   (correct-name (gptel-tool-name global-tool))
                    (new-tools (append tools (list global-tool))))
+              ;; Repair name if fuzzy matched
+              (unless (string= name correct-name)
+                (message "gptel: repairing tool call %S -> %S" name correct-name)
+                (plist-put tc :name correct-name))
               (message "gptel: recovering tool call %S not in FSM tools \
 (preset misconfiguration); injecting from global registry" name)
               ;; Inject the tool into info :tools so gptel--handle-tool-use

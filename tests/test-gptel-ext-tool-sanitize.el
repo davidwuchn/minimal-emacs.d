@@ -240,5 +240,50 @@
     (should (equal (test-tool-call-fingerprint tc)
                    (test-tool-call-fingerprint tc)))))
 
+;;; ========================================
+;;; Tests for fuzzy tool name matching
+;;; ========================================
+
+(defun test-normalize-tool-name (name)
+  "Normalize tool NAME for fuzzy matching (standalone for testing)."
+  (when (stringp name)
+    (downcase (replace-regexp-in-string "[-_]" "" name))))
+
+(ert-deftest sanitize/fuzzy/normalize-name ()
+  "Test name normalization for fuzzy matching."
+  (should (equal (test-normalize-tool-name "Code_Map") "codemap"))
+  (should (equal (test-normalize-tool-name "code-map") "codemap"))
+  (should (equal (test-normalize-tool-name "CODE-MAP") "codemap"))
+  (should (equal (test-normalize-tool-name "CodeMap") "codemap")))
+
+(ert-deftest sanitize/fuzzy/case-insensitive ()
+  "Case differences should match."
+  (should (equal (test-normalize-tool-name "read") 
+                 (test-normalize-tool-name "Read")))
+  (should (equal (test-normalize-tool-name "BASH") 
+                 (test-normalize-tool-name "bash"))))
+
+(ert-deftest sanitize/fuzzy/underscore-hyphen ()
+  "Underscores and hyphens should be treated equally."
+  (should (equal (test-normalize-tool-name "Code_Map") 
+                 (test-normalize-tool-name "Code-Map")))
+  (should (equal (test-normalize-tool-name "find_buffers_and_recent") 
+                 (test-normalize-tool-name "find-buffers-and-recent"))))
+
+(ert-deftest sanitize/fuzzy/mixed-case-and-separators ()
+  "Mixed case and separators should still match."
+  (should (equal (test-normalize-tool-name "CODE_MAP") 
+                 (test-normalize-tool-name "code-map")))
+  (should (equal (test-normalize-tool-name "Find_Buffers_And_Recent") 
+                 (test-normalize-tool-name "find-buffers-and-recent"))))
+
+(ert-deftest sanitize/fuzzy/nil-name ()
+  "Nil name should return nil."
+  (should-not (test-normalize-tool-name nil)))
+
+(ert-deftest sanitize/fuzzy/empty-name ()
+  "Empty name should return empty."
+  (should (equal (test-normalize-tool-name "") "")))
+
 (provide 'test-gptel-ext-tool-sanitize)
 ;;; test-gptel-ext-tool-sanitize.el ends here
