@@ -1,6 +1,7 @@
 ---
 name: introspector
 model: qwen3-coder-plus
+max-tokens: 4096
 temperature: 0.3
 description: Nucleus introspector for Emacs/elisp APIs and live session state.
 tools:

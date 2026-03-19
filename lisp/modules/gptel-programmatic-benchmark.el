@@ -146,7 +146,7 @@ tool round trips and transcript chatter, not necessarily raw local CPU time."
    #'identity
    '("(setq hits (tool-call \"Grep\" :regex \"Programmatic\" :path \"lisp/modules\"))"
      "(setq first (tool-call \"Read\" :file_path \"lisp/modules/gptel-sandbox.el\" :start_line 1 :end_line 60))"
-     "(setq second (tool-call \"Read\" :file_path \"assistant/prompts/code_agent.md\" :start_line 1 :end_line 40))"
+     "(setq second (tool-call "Read" :file_path "assistant/agents/code_agent.md" :start_line 1 :end_line 40))"
      "(result (list :hits hits :first first :second second))")
    "\n")
   "Representative read-only Programmatic workflow.")
@@ -170,7 +170,7 @@ tool round trips and transcript chatter, not necessarily raw local CPU time."
          (first (apply (gptel-tool-function read-tool)
                        '("lisp/modules/gptel-sandbox.el" 1 60)))
          (second (apply (gptel-tool-function read-tool)
-                        '("assistant/prompts/code_agent.md" 1 40))))
+                        '("assistant/agents/code_agent.md" 1 40))))
     (list :hits hits :first first :second second)))
 
 (defun gptel-programmatic-benchmark--run-mutating-normal-workflow ()
@@ -215,7 +215,7 @@ tool round trips and transcript chatter, not necessarily raw local CPU time."
       (format "tool_result: %s" hits)
       "assistant: tool_use Read(file_path=lisp/modules/gptel-sandbox.el start_line=1 end_line=60)"
       (format "tool_result: %s" first)
-      "assistant: tool_use Read(file_path=assistant/prompts/code_agent.md start_line=1 end_line=40)"
+      "assistant: tool_use Read(file_path=assistant/agents/code_agent.md start_line=1 end_line=40)"
       (format "tool_result: %s" second)
       (format "assistant: final %S" result))
      "\n")))

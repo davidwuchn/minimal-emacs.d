@@ -1,6 +1,7 @@
 ---
 name: comparator
 model: qwen3.5-plus
+max-tokens: 2048
 description: Perform blind A/B comparison between two skill outputs.
 tools:
   - Read

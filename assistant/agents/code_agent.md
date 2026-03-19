@@ -1,5 +1,8 @@
 ---
 name: nucleus-gptel-agent
+model: glm-5
+max-tokens: 16384
+temperature: 0.3
 description: Nucleus execution agent
 ---
 

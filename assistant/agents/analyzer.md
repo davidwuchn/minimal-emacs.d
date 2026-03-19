@@ -1,6 +1,7 @@
 ---
 name: analyzer
 model: qwen3.5-plus
+max-tokens: 4096
 description: Analyze benchmark results to find patterns and insights.
 tools:
   - Read

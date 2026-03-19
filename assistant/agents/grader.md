@@ -1,6 +1,7 @@
 ---
 name: grader
 model: qwen3-coder-plus
+max-tokens: 2048
 description: Evaluate skill outputs against defined assertions.
 tools:
   - Read
