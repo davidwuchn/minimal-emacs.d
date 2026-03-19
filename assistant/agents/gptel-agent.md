@@ -1,5 +1,5 @@
 ---
-name: nucleus-gptel-agent
+name: gptel-agent
 model: qwen3-coder-plus
 max-tokens: 16384
 temperature: 0.3

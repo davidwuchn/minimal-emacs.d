@@ -1,6 +1,8 @@
 ---
-name: nucleus-gptel-plan
+name: gptel-plan
 model: qwen3.5-plus
+max-tokens: 16384
+temperature: 0.3
 description: Nucleus planning agent (nucleus-owned, schema-faithful)
 ---
 
