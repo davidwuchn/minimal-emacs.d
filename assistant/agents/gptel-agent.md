@@ -1,6 +1,6 @@
 ---
 name: nucleus-gptel-agent
-model: qwen3.5-plus
+model: glm-5
 description: Nucleus execution agent (nucleus-owned, schema-faithful)
 ---
 
