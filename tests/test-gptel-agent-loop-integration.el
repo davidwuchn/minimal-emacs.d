@@ -1,96 +1,49 @@
 ;;; test-gptel-agent-loop-integration.el --- Integration tests -*- lexical-binding: t; -*-
 
 (require 'ert)
+(require 'cl-lib)
+
+(defvar gptel-agent--agents nil)
+(defvar gptel--fsm-last nil)
+(defvar gptel-agent-request--handlers nil)
+(defvar gptel--preset nil)
+
+(cl-defstruct gptel-fsm info)
+
+(defun gptel--preset-syms (_preset) nil)
+(defun gptel--apply-preset (preset) (setq gptel--preset preset))
+(defun gptel--update-status (&rest _args) nil)
+(defun gptel--display-tool-calls (&rest _args) nil)
+(defun gptel-make-fsm (&rest args) args)
+(defun gptel-agent--task-overlay (&rest _args) nil)
+(defun my/gptel--coerce-fsm (obj) obj)
+(defun my/gptel--deliver-subagent-result (callback result) (funcall callback result))
+
+(require 'gptel-agent-loop)
 
 (ert-deftest gptel-agent-loop-integration-test-enable-disable ()
-  "Test that loop mode can be enabled and disabled."
-  (require 'gptel-agent-loop)
-  
-  ;; Enable
-  (gptel-agent-loop-enable)
-  (should (boundp 'gptel-agent-loop--state))
-  (message "Loop mode enabled successfully")
-  
-  ;; Disable
-  (gptel-agent-loop-disable)
-  (should (null gptel-agent-loop--state))
-  (message "Loop mode disabled successfully"))
+  (cl-letf (((symbol-function 'gptel-agent--task) #'ignore))
+    (gptel-agent-loop-enable)
+    (should (advice-member-p #'gptel-agent-loop-task 'gptel-agent--task))
+    (gptel-agent-loop-disable)
+    (should-not (advice-member-p #'gptel-agent-loop-task 'gptel-agent--task))))
 
-(ert-deftest gptel-agent-loop-integration-test-state-init ()
-  "Test that state is initialized correctly."
-  (require 'gptel-agent-loop)
-  
-  ;; State should be nil initially
-  (should (null gptel-agent-loop--state))
-  
-  ;; After simulating task start, state should have keys
-  (setq gptel-agent-loop--state
-        (list :step-count 0
-              :retries 0
-              :aborted nil
-              :timeout-timer nil
-              :max-steps 100))
-  
-  (should (= (plist-get gptel-agent-loop--state :step-count) 0))
-  (should (= (plist-get gptel-agent-loop--state :max-steps) 100))
-  
-  ;; Cleanup
-  (setq gptel-agent-loop--state nil))
-
-(ert-deftest gptel-agent-loop-integration-test-config-override ()
-  "Test that config can be overridden."
-  (require 'gptel-agent-loop)
-  
-  (let ((original-timeout gptel-agent-loop-timeout)
-        (original-max-steps gptel-agent-loop-max-steps))
-    
-    ;; Override
-    (setq gptel-agent-loop-timeout 60)
-    (setq gptel-agent-loop-max-steps 25)
-    
-    (should (= gptel-agent-loop-timeout 60))
-    (should (= gptel-agent-loop-max-steps 25))
-    
-    ;; Restore
-    (setq gptel-agent-loop-timeout original-timeout)
-    (setq gptel-agent-loop-max-steps original-max-steps)))
-
-(ert-deftest gptel-agent-loop-integration-test-hard-loop-config ()
-  "Test hard loop configuration."
-  (require 'gptel-agent-loop)
-  
-  ;; Hard loop should be enabled by default
-  (should gptel-agent-loop-hard-loop)
-  
-  ;; Can be disabled
-  (let ((original gptel-agent-loop-hard-loop))
-    (setq gptel-agent-loop-hard-loop nil)
-    (should-not gptel-agent-loop-hard-loop)
-    (setq gptel-agent-loop-hard-loop original)))
-
-(ert-deftest gptel-agent-loop-integration-test-state-for-continuation ()
-  "Test that state includes all keys needed for hard loop continuation."
-  (require 'gptel-agent-loop)
-  
-  (setq gptel-agent-loop--state
-        (list :step-count 5
-              :retries 0
-              :aborted nil
-              :timeout-timer nil
-              :max-steps 100
-              :accumulated-output "Partial work"
-              :agent-type "executor"
-              :description "test task"
-              :main-cb #'ignore))
-  
-  (should (= (plist-get gptel-agent-loop--state :step-count) 5))
-  (should (string= (plist-get gptel-agent-loop--state :accumulated-output) "Partial work"))
-  (should (string= (plist-get gptel-agent-loop--state :agent-type) "executor"))
-  (should (string= (plist-get gptel-agent-loop--state :description) "test task"))
-  (should (functionp (plist-get gptel-agent-loop--state :main-cb)))
-  
-  ;; Cleanup
-  (setq gptel-agent-loop--state nil))
+(ert-deftest gptel-agent-loop-integration-test-state-uses-struct-and-active-table ()
+  (let ((gptel-agent--agents '(("executor" :steps 2)))
+        callback)
+    (with-temp-buffer
+      (setq gptel--fsm-last
+            (make-gptel-fsm :info (list :buffer (current-buffer)
+                                        :position (point-marker))))
+      (cl-letf (((symbol-function 'gptel-request)
+                 (lambda (_prompt &rest args)
+                   (setq callback (plist-get args :callback)))))
+        (gptel-agent-loop-task #'ignore "executor" "integration task" "prompt")
+        (should (gptel-agent-loop--task-p gptel-agent-loop--state))
+        (should (= 1 (hash-table-count gptel-agent-loop--active-tasks)))
+        (funcall callback "done" '(:tool-use nil))
+        (should (null gptel-agent-loop--state))
+        (should (= 0 (hash-table-count gptel-agent-loop--active-tasks)))))))
 
 (provide 'test-gptel-agent-loop-integration)
 

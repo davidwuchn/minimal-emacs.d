@@ -43,32 +43,41 @@ When enabled, validates:
 
 (defconst nucleus-toolsets
   '((:readonly . ("Bash" "Eval" "Glob" "Grep" "Read" "RunAgent" "Skill" "TodoWrite"
-                  "Programmatic"
-                  "WebFetch" "WebSearch"
-                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                   "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
-     (:researcher . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill" "Programmatic"
-                     "WebFetch" "WebSearch" "YouTube"
-                     "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                     "list_skills" "load_skill"
-                     "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"))
-     (:nucleus . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
-                   "Insert" "Mkdir" "Move" "Read" "Skill" "TodoWrite"
-                   "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
+                   "Programmatic"
+                   "WebFetch" "WebSearch"
                    "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                    "Preview"
-                    "list_skills" "load_skill" "create_skill"
-                   "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-     (:explorer . ("Glob" "Grep" "Read" "Code_Map" "Code_Inspect"))
-     (:reviewer . ("Glob" "Grep" "Read" "Diagnostics"))
-     (:analyzer . ("Read" "Glob" "Grep"))
-     (:comparator . ("Read" "Glob" "Grep"))
-     (:grader . ("Read" "Glob" "Grep" "Bash" "Eval")))
+                    "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
+      (:researcher . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill" "Programmatic"
+                      "WebFetch" "WebSearch" "YouTube"
+                      "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                      "list_skills" "load_skill"
+                      "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"))
+      (:nucleus . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
+                    "Insert" "Mkdir" "Move" "Read" "Skill" "TodoWrite"
+                    "RunAgent"
+                    "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
+                    "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                     "Preview"
+                     "list_skills" "load_skill" "create_skill"
+                    "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
+      (:executor . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
+                     "Insert" "Mkdir" "Move" "Read" "Skill" "TodoWrite"
+                     "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
+                     "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                     "Preview"
+                     "list_skills" "load_skill" "create_skill"
+                     "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
+      (:explorer . ("Glob" "Grep" "Read" "Code_Map" "Code_Inspect"))
+      (:reviewer . ("Glob" "Grep" "Read" "Diagnostics"))
+      (:analyzer . ("Read" "Glob" "Grep"))
+      (:comparator . ("Read" "Glob" "Grep"))
+      (:grader . ("Read" "Glob" "Grep" "Bash" "Eval")))
   "Canonical toolset definitions for nucleus.
 
 :readonly — Emacs introspection (18 tools): Eval, RunAgent, web search
 :researcher — Codebase + web research (19 tools): Full analysis capability
-:nucleus — Full action tools (30 tools): No RunAgent (prevent recursive delegation)
+:nucleus — Top-level action tools (30 tools): Includes RunAgent for orchestration
+:executor — Subagent execution tools (29 tools): No RunAgent (prevent recursive delegation)
 :explorer — Codebase exploration (5 tools): Glob, Grep, Read, Code_Map, Code_Inspect
 :reviewer — Code review (4 tools): Read-only + Diagnostics
 :analyzer — Benchmark analysis (3 tools): Read, Glob, Grep
@@ -78,7 +87,7 @@ When enabled, validates:
 :snippets is derived from :nucleus at runtime (see `nucleus-get-tools').
 
 Tool contracts enforced in `nucleus--override-gptel-agent-presets':
-  executor     → :nucleus     (30 tools) - code changes & execution (no RunAgent)
+  executor     → :executor    (29 tools) - code changes & execution (no RunAgent)
   researcher   → :researcher  (19 tools) - web + codebase + Eval
   introspector → :readonly    (18 tools) - Emacs introspection + web search
   explorer     → :explorer     (5 tools) - codebase exploration + Code tools
@@ -88,7 +97,7 @@ Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   grader       → :grader       (5 tools) - assertion grading")
 
 (defconst nucleus-agent-tool-contracts
-  '(("executor"     . :nucleus)
+  '(("executor"     . :executor)
     ("researcher"   . :researcher)
     ("introspector" . :readonly)
     ("explorer"     . :explorer)
@@ -275,7 +284,7 @@ Agent Tool Contracts Status:
 Legend: ✓ valid  ✗ mismatch  ? not found
 
 Expected toolsets:
-  executor     → :nucleus     (%d tools)
+  executor     → :executor    (%d tools)
   researcher   → :researcher  (%d tools)
   introspector → :readonly    (%d tools)
   explorer     → :explorer     (%d tools)
@@ -289,7 +298,7 @@ Expected toolsets:
                                        actual-count
                                        (if missing (length missing) 0)
                                         (if extra (length extra) 0))))
-                 (length (nucleus-get-tools :nucleus))
+                 (length (nucleus-get-tools :executor))
                  (length (nucleus-get-tools :researcher))
                  (length (nucleus-get-tools :readonly))
                  (length (nucleus-get-tools :explorer))

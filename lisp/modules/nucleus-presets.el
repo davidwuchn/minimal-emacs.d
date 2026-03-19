@@ -186,11 +186,11 @@ changed (e.g. RunAgent added after buffer was created)."
                     nucleus-tools-strict-validation)
            (nucleus--validate-agent-tool-contracts))
           ;; Agent tool contracts (counts must match nucleus-toolsets):
-          ;; - executor:     :nucleus    (31 tools) - code changes & execution
-         ;; - researcher:   :researcher (20 tools) - exploration & research
-          ;; - introspector: :readonly   (19 tools) - Emacs introspection
-          ;; - explorer:     :explorer    (3 tools) - read-only codebase exploration
-          ;; - reviewer:     :reviewer    (3 tools) - read-only code review
+          ;; - executor:     :executor   (29 tools) - code changes & execution
+          ;; - researcher:   :researcher (19 tools) - exploration & research
+          ;; - introspector: :readonly   (18 tools) - Emacs introspection
+          ;; - explorer:     :explorer    (5 tools) - read-only codebase exploration
+          ;; - reviewer:     :reviewer    (4 tools) - read-only code review
           ))
       (nucleus--refresh-open-gptel-buffers))))
 

@@ -291,7 +291,7 @@ Nucleus implements task-specific model routing to optimize cost and capability (
 | **Action Agent** | `glm-5` | High capability for complex coding and refactoring |
 | **Subagents** | `kimi-k2.5` | Fast, deep-context model via `moonshot` for heavy codebase reading |
 
-*Note: Subagents spawned via `RunAgent` or `Agent` are entirely stateless and use exponential backoff (`my/gptel-auto-retry`) for stability.*
+*Note: Subagents spawned via `RunAgent` or `Agent` are entirely stateless. Network requests still benefit from `my/gptel-auto-retry`, and the RunAgent loop itself retries transient subagent failures with a fixed short delay.*
 
 ## Key Customizations in `gptel-config.el`
 

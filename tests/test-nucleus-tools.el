@@ -63,6 +63,15 @@
     (dolist (tool reviewer)
       (should (member tool readonly)))))
 
+(ert-deftest test-nucleus-toolsets-executor-is-nucleus-minus-runagent ()
+  "Test that :executor matches :nucleus except for RunAgent." 
+  (let* ((executor (alist-get :executor nucleus-toolsets))
+         (nucleus (alist-get :nucleus nucleus-toolsets))
+         (nucleus-without-runagent (remove "RunAgent" (copy-sequence nucleus))))
+    (should (member "RunAgent" nucleus))
+    (should-not (member "RunAgent" executor))
+    (should (equal executor nucleus-without-runagent))))
+
 (ert-deftest test-nucleus-toolsets-no-duplicates ()
   "Test that no toolset has duplicate tools."
   (dolist (entry nucleus-toolsets)
@@ -88,6 +97,10 @@
   (dolist (entry nucleus-agent-tool-contracts)
     (let ((toolset-key (cdr entry)))
       (should (assq toolset-key nucleus-toolsets)))))
+
+(ert-deftest test-nucleus-agent-tool-contracts-executor-uses-executor-toolset ()
+  "Test that executor agent is pinned to the non-recursive toolset."
+  (should (equal (cdr (assoc "executor" nucleus-agent-tool-contracts)) :executor)))
 
 ;;; nucleus-get-tools Tests
 ;; These tests require isolation and are skipped in batch mode.
@@ -123,11 +136,12 @@
 
 (ert-deftest test-nucleus-toolset-counts ()
   "Test expected tool counts per toolset."
-  (let ((counts '((:readonly . 19)
-                  (:researcher . 19)
-                  (:nucleus . 30)
-                  (:explorer . 3)
-                  (:reviewer . 3))))
+  (let ((counts '((:readonly . 18)
+                   (:researcher . 19)
+                   (:nucleus . 30)
+                   (:executor . 29)
+                   (:explorer . 5)
+                   (:reviewer . 4))))
     (dolist (entry counts)
       (let ((tools (alist-get (car entry) nucleus-toolsets)))
         (should (= (length tools) (cdr entry)))))))
