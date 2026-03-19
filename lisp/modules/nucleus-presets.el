@@ -27,7 +27,7 @@
   :type 'symbol
   :group 'nucleus-presets)
 
-(defcustom nucleus-agent-model 'qwen3-coder-plus
+(defcustom nucleus-agent-model 'glm-5
   "Fallback model for gptel-agent preset when YAML doesn't specify model.
 YAML frontmatter in gptel-agent.md takes priority if model: is set."
   :type 'symbol
