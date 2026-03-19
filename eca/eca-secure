@@ -4,11 +4,19 @@
 # Usage: eca server, eca chat, etc.
 
 AUTHINFO_GPG="$HOME/.authinfo.gpg"
+ECA_BINARY="$HOME/.emacs.d/var/eca/eca"
 
 # Check if encrypted authinfo exists
 if [[ ! -f "$AUTHINFO_GPG" ]]; then
     echo "Error: $AUTHINFO_GPG not found" >&2
     echo "Please encrypt your .authinfo file with: gpg -e -r your@email ~/.authinfo" >&2
+    exit 1
+fi
+
+# Check if ECA binary exists
+if [[ ! -x "$ECA_BINARY" ]]; then
+    echo "Error: ECA binary not found at $ECA_BINARY" >&2
+    echo "Download with: C-c a u or eca upgrade" >&2
     exit 1
 fi
 
@@ -27,4 +35,4 @@ fi
 
 # Run ECA using the normal config file, but override the netrc path.
 export ECA_NETRC_FILE="$TMP_NETRC"
-"$HOME/.emacs.d/eca/eca" "$@"
+exec "$ECA_BINARY" "$@"
