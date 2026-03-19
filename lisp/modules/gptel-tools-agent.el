@@ -37,8 +37,18 @@ Set to 0 to disable auto-cleanup."
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defcustom my/gptel-subagent-cache-ttl 300
+  "Time-to-live in seconds for cached subagent results.
+Set to 0 to disable caching."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
 (defvar my/gptel--subagent-temp-files nil
   "List of temp files created by subagent results.")
+
+(defvar my/gptel--subagent-cache (make-hash-table :test 'equal)
+  "Hash table for caching subagent results.
+Keys are (agent-type prompt-hash), values are (timestamp . result).")
 
 (defcustom my/gptel-subagent-model nil
   "Model to use for delegated subagents.
@@ -52,7 +62,36 @@ DEPRECATED: Subagents now use their YAML model: field. This variable is ignored.
 
 (require 'gptel-ext-fsm-utils)
 
-;; Fallback macro definition removed in favor of explicit cl-progv scoping
+;;; Subagent Result Cache
+
+(defun my/gptel--subagent-cache-key (agent-type prompt)
+  "Generate cache key for (AGENT-TYPE, PROMPT)."
+  (list agent-type (md5 prompt)))
+
+(defun my/gptel--subagent-cache-get (agent-type prompt)
+  "Get cached result for (AGENT-TYPE, PROMPT) if still valid.
+Returns nil if cache disabled, not found, or expired."
+  (when (> my/gptel-subagent-cache-ttl 0)
+    (let* ((key (my/gptel--subagent-cache-key agent-type prompt))
+           (cached (gethash key my/gptel--subagent-cache)))
+      (when cached
+        (let ((timestamp (car cached))
+              (result (cdr cached)))
+          (if (> (- (float-time) timestamp) my/gptel-subagent-cache-ttl)
+              (progn (remhash key my/gptel--subagent-cache) nil)
+            result))))))
+
+(defun my/gptel--subagent-cache-put (agent-type prompt result)
+  "Cache RESULT for (AGENT-TYPE, PROMPT)."
+  (when (> my/gptel-subagent-cache-ttl 0)
+    (let ((key (my/gptel--subagent-cache-key agent-type prompt)))
+      (puthash key (cons (float-time) result) my/gptel--subagent-cache))))
+
+(defun my/gptel--subagent-cache-clear ()
+  "Clear all cached subagent results."
+  (interactive)
+  (clrhash my/gptel--subagent-cache)
+  (message "Subagent cache cleared."))
 
 
 ;; PATCH: Override gptel-agent--task to add tracking-marker for parent buffer
@@ -61,8 +100,15 @@ DEPRECATED: Subagents now use their YAML model: field. This variable is ignored.
 
 (defun my/gptel-agent--task-override (main-cb agent-type description prompt)
   "Call a gptel agent to do specific compound tasks.
-Like upstream `gptel-agent--task' but adds parent-buffer tracking-marker
-and large-result truncation via `my/gptel--deliver-subagent-result'."
+Like upstream `gptel-agent--task' but adds parent-buffer tracking-marker,
+large-result truncation, and result caching."
+  ;; Check cache first
+  (let ((cached (my/gptel--subagent-cache-get agent-type prompt)))
+    (when cached
+      (message "[nucleus] Subagent '%s' cache hit" agent-type)
+      (funcall main-cb cached)
+      (cl-return-from my/gptel-agent--task-override)))
+  ;; Not cached, run the subagent
   (let* ((preset (nconc (list :include-reasoning nil
                               :use-tools t
                               :use-context nil
@@ -83,7 +129,7 @@ and large-result truncation via `my/gptel--deliver-subagent-result'."
                                 m))
              (partial (format "%s result for task: %s\n\n"
                               (capitalize agent-type) description)))
-        (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
+        (gptel--update-status " Calling Agent..." 'font-font-lock-escape-face)
         (gptel-request prompt
           :context (gptel-agent--task-overlay where agent-type description)
           :fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)
@@ -110,6 +156,8 @@ and large-result truncation via `my/gptel--deliver-subagent-result'."
                    (when (overlayp ov) (delete-overlay ov))
                    (when-let* ((transformer (plist-get info :transformer)))
                      (setq partial (funcall transformer partial)))
+                   ;; Cache the result before delivering
+                   (my/gptel--subagent-cache-put agent-type prompt partial)
                    (my/gptel--deliver-subagent-result main-cb partial)))
                 ('abort
                  (when (overlayp ov) (delete-overlay ov))

@@ -9,9 +9,6 @@ tools:
   - Grep
   - Read
   - Skill
-  - WebFetch
-  - WebSearch
-  - YouTube
   - find_buffers_and_recent
   - describe_symbol
   - get_symbol_source
@@ -32,3 +29,10 @@ You are an Emacs/elisp introspection agent. Verify hypotheses using introspectio
 - Prefer completions/discovery tools first, then documentation, then source.
 - Use `Eval` for small checks and to confirm live values.
 </tool_usage_policy>
+
+<output_constraints>
+- Maximum response: 1500 characters
+- Return: symbol names + values, not full documentation
+- Format: "symbol: value" or "function: behavior summary"
+- For errors: explain what failed and why
+</output_constraints>
