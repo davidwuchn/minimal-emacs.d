@@ -65,7 +65,8 @@ Like upstream `gptel-agent--task' but adds parent-buffer tracking-marker
 and large-result truncation via `my/gptel--deliver-subagent-result'."
   (let* ((preset (nconc (list :include-reasoning nil
                               :use-tools t
-                              :use-context nil)
+                              :use-context nil
+                              :stream nil)  ; Non-streaming for reliability
                         (cdr (assoc agent-type gptel-agent--agents))))
          (syms (cons 'gptel--preset (gptel--preset-syms preset)))
          (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
