@@ -141,7 +141,7 @@ changed (e.g. RunAgent added after buffer was created)."
        "Nucleus planning agent — read-only, architecture & research"
        :readonly nucleus-plan-model preferred-backend)
       
-      ;; Patch subagents in gptel-agent--agents
+      ;; Patch subagent tools in gptel-agent--agents (model from YAML)
       (when (boundp 'gptel-agent--agents)
         (cl-labels
          ((sys->string (sys)
@@ -158,25 +158,7 @@ changed (e.g. RunAgent added after buffer was created)."
               (when-let* ((sys (plist-get (cdr cell) :system))
                           (sys (sys->string sys))
                           sys)
-                (setf (plist-get (cdr cell) :system) sys))
-               ;; Pin subagents to my/gptel-subagent-model/backend so they don't
-               ;; inherit the parent buffer's model (e.g. glm-5 on DashScope,
-               ;; which has streaming parse issues).
-               (let* ((sub-model (and (boundp 'my/gptel-subagent-model)
-                                       my/gptel-subagent-model))
-                      (sub-backend-sym (and (boundp 'my/gptel-subagent-backend)
-                                             my/gptel-subagent-backend))
-                      (sub-backend (and sub-backend-sym
-                                        (boundp sub-backend-sym)
-                                        (symbol-value sub-backend-sym))))
-                 (when sub-model
-                   (setf (plist-get (cdr cell) :model) sub-model))
-                 (when sub-backend
-                   (setf (plist-get (cdr cell) :backend) sub-backend))
-                 ;; Disable streaming for subagents: SSE stalls on large
-                 ;; contexts (the 3rd+ turn with full file content embedded).
-                 ;; Non-streaming (single JSON response) is more reliable.
-                 (setf (plist-get (cdr cell) :stream) nil)))))
+                (setf (plist-get (cdr cell) :system) sys)))))
 
          (dolist (contract nucleus-agent-tool-contracts)
            (patch-agent (car contract) (nucleus-get-tools (cdr contract))))
@@ -188,9 +170,9 @@ changed (e.g. RunAgent added after buffer was created)."
           ;; - executor:     :nucleus    (31 tools) - code changes & execution
          ;; - researcher:   :researcher (20 tools) - exploration & research
           ;; - introspector: :readonly   (19 tools) - Emacs introspection
-         ;; - explorer:     :explorer    (3 tools) - read-only codebase exploration
-         ;; - reviewer:     :reviewer    (3 tools) - read-only code review
-         ))
+          ;; - explorer:     :explorer    (3 tools) - read-only codebase exploration
+          ;; - reviewer:     :reviewer    (3 tools) - read-only code review
+          ))
       (nucleus--refresh-open-gptel-buffers))))
 
 (defun nucleus--validate-agent-tool-contracts ()
