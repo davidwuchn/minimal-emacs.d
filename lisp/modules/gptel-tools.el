@@ -150,10 +150,10 @@ Call this after gptel-agent-tools loads."
      :confirm t
      :include t)
 
-    ;; WebSearch tool
+    ;; WebSearch tool (with error handling)
     (gptel-make-tool
      :name "WebSearch"
-     :function #'gptel-agent--web-search-eww
+     :function #'my/gptel-web-search-safe
      :description "Search the web (returns top results)."
      :args '((:name "query" :type string)
              (:name "count" :type integer :optional t))
@@ -161,10 +161,10 @@ Call this after gptel-agent-tools loads."
      :async t
      :category "gptel-agent")
 
-    ;; WebFetch tool
+    ;; WebFetch tool (with error handling)
     (gptel-make-tool
      :name "WebFetch"
-     :function #'gptel-agent--read-url
+     :function #'my/gptel-web-fetch-safe
      :description "Fetch and read the text of a URL."
      :args '((:name "url" :type string))
      :async t
@@ -294,6 +294,56 @@ START-LINE and END-LINE specify the line range to return."
                     total-lines
                     (string-join (seq-subseq lines (1- start) end) "\n"))))))))
 
+(defun my/gptel-web-search-safe (tool-cb query &optional count)
+  "Web search with error handling.
+Wraps `gptel-agent--web-search-eww' with better error recovery."
+  (condition-case err
+      (gptel-agent--web-search-eww
+       (lambda (result)
+         (cond
+          ((null result)
+           (funcall tool-cb "WebSearch returned no results."))
+          ((and (stringp result) (string-match-p "^Error:" result))
+           (funcall tool-cb result))
+          ((stringp result)
+           (funcall tool-cb result))
+          (t
+           (funcall tool-cb (format "WebSearch: unexpected result type: %s" (type-of result))))))
+       query count)
+    (error
+     (funcall tool-cb (format "WebSearch error: %s" (error-message-string err))))))
+
+(defun my/gptel-web-fetch-safe (tool-cb url)
+  "Web fetch with error handling.
+Wraps `gptel-agent--read-url' with better error recovery."
+  (condition-case err
+      (gptel-agent--read-url
+       (lambda (result)
+         (cond
+          ((null result)
+           (funcall tool-cb "WebFetch returned no content."))
+          ((and (stringp result) (string-match-p "^Error:" result))
+           (funcall tool-cb result))
+          ((stringp result)
+           (funcall tool-cb result))
+          (t
+           (funcall tool-cb (format "WebFetch: unexpected result type: %s" (type-of result))))))
+       url)
+    (error
+     (funcall tool-cb (format "WebFetch error: %s" (error-message-string err))))))
+
+;;; Advice for gptel-agent web search callback
+
+(defun my/gptel--around-web-search-eww-callback (orig-fn cb)
+  "Advice around `gptel-agent--web-search-eww-callback' with error handling."
+  (condition-case err
+      (if (and (boundp 'url-http-end-of-headers)
+               url-http-end-of-headers)
+          (funcall orig-fn cb)
+        (funcall cb "Error: HTTP response headers not found. The search may have failed or been blocked."))
+    (error
+     (funcall cb (format "Error parsing search results: %s" (error-message-string err))))))
+
 (defun my/gptel--skill-tool (skill &optional args)
   "Wrapper for gptel-agent Skill tool."
   (let* ((skill (string-trim skill))
@@ -314,6 +364,9 @@ START-LINE and END-LINE specify the line range to return."
 
 Call this after gptel-agent-tools loads.
 Runs `gptel-tools-after-register-hook' after registration."
+  ;; Add error handling advice to web search callback
+  (advice-add 'gptel-agent--web-search-eww-callback :around
+              #'my/gptel--around-web-search-eww-callback)
   (gptel-tools-register-all)
   (run-hooks 'gptel-tools-after-register-hook))
 
