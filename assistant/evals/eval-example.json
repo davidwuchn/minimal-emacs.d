@@ -1,0 +1,37 @@
+{
+  "id": "eval-example",
+  "name": "example-code-generation",
+  "prompt": "Write a Python function that validates email addresses. It should return True for valid emails and False for invalid ones. Include docstring and type hints.",
+  "assertions": [
+    {
+      "name": "function_defined",
+      "type": "check",
+      "expected": ["def ", "validate_email"]
+    },
+    {
+      "name": "has_docstring",
+      "type": "check",
+      "expected": ["\"\"\"", "email", "valid"]
+    },
+    {
+      "name": "has_type_hints",
+      "type": "check",
+      "expected": ["-> bool", "str"]
+    },
+    {
+      "name": "valid_syntax",
+      "type": "script",
+      "command": "python -m py_compile outputs/output.py"
+    },
+    {
+      "name": "handles_edge_cases",
+      "type": "llm",
+      "criteria": "Function should handle: empty string, missing @, multiple @, invalid domains. Returns False for these cases."
+    }
+  ],
+  "metadata": {
+    "category": "code",
+    "difficulty": "easy",
+    "tags": ["python", "validation", "functions"]
+  }
+}

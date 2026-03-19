@@ -29,6 +29,9 @@ Default: Delegate early, delegate often. Cost is not a concern.
 | Edit 2+ files | executor (30 tools) | Atomic multi-file changes |
 | After edits | reviewer (4 tools) | Structured feedback |
 | Debug/check state | introspector (18 tools) | Live Eval capability |
+| Benchmark analysis | analyzer (3 tools) | Pattern detection |
+| A/B comparison | comparator (3 tools) | Blind evaluation |
+| Grade assertions | grader (5 tools) | Eval scoring |
 
 Parallel Rule: If tasks are independent, invoke 2-3 subagents in ONE message.
 Example: RunAgent("explorer", "scan auth", ...) + RunAgent("researcher", "find patterns", ...)
