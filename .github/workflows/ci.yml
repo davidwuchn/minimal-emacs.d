@@ -172,6 +172,7 @@ jobs:
             -l tests/test-gptel-tools-preview.el \
             -l tests/test-gptel-tools-programmatic.el \
             -l tests/test-nucleus-tools.el \
+            -l tests/test-nucleus-presets.el \
             -f ert-run-tests-batch-and-exit
 
       - name: Run Agent Loop Tests
@@ -179,6 +180,12 @@ jobs:
           emacs --batch -Q -L . -L lisp -L lisp/modules \
             -l tests/test-gptel-agent-loop.el \
             -l tests/test-gptel-agent-loop-integration.el \
+            -f ert-run-tests-batch-and-exit
+
+      - name: Verify Agent YAML Frontmatter
+        run: |
+          emacs --batch -Q -L . -L lisp -L lisp/modules \
+            -l tests/test-agent-yaml.el \
             -f ert-run-tests-batch-and-exit
 
       - name: Verify Nucleus Tool Contracts
