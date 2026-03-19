@@ -405,9 +405,13 @@ AGENT-NAME must exist in `gptel-agent--agents`."
 
 (defvar gptel-agent--hrule)  ; from gptel-agent-tools
 
+(defvar-local my/gptel--todo-overlay nil
+  "Buffer-local cache for TodoWrite overlay.
+Avoids scanning entire buffer on each update.")
+
 (defun my/gptel-agent--write-todo-around (orig todos)
   "Advice to fix TodoWrite overlay updates in subagent context.
-Finds existing overlay anywhere in buffer instead of relying on position."
+Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
   (setq gptel-agent--todos todos)
   (let* ((info (gptel-fsm-info gptel--fsm-last))
          (pos (or (plist-get info :tracking-marker)
@@ -416,9 +420,11 @@ Finds existing overlay anywhere in buffer instead of relying on position."
          (existing-ov (and buf
                            (buffer-live-p buf)
                            (with-current-buffer buf
-                             (cl-find-if
-                              (lambda (ov) (overlay-get ov 'gptel-agent--todos))
-                              (overlays-in (point-min) (point-max)))))))
+                             (or my/gptel--todo-overlay
+                                 (setq my/gptel--todo-overlay
+                                       (cl-find-if
+                                        (lambda (ov) (overlay-get ov 'gptel-agent--todos))
+                                        (overlays-in (point-min) (point-max)))))))))
     (if existing-ov
         (let* ((formatted-todos
                 (mapconcat

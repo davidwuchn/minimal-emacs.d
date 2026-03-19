@@ -1,22 +1,22 @@
 # STATE: Current Emacs Project Configuration
 
-> Last updated: 2026-03-17 (tag v0.7.11)
+> Last updated: 2026-03-20 (tag v0.8.1)
 
 ## Architecture Overview
 
 Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engine; nucleus layers on tool management, agent presets, prompts, and UI.
 
-### Recent Changes (v0.7.11)
+### Recent Changes (v0.8.1)
 
-- **AGENTS.md VSM restructure** (◈): Transformed flat 9-Principles structure into 5-layer VSM architecture with Wu Xing elemental mapping. S5=Identity(Water), S4=Intelligence(Fire), S3=Control(Earth), S2=Coordination(Metal), S1=Operations(Wood). Added lambda notation reference and Wu Xing diagnostics.
+- **YAML model config** (⚡): Model is now read from YAML frontmatter in `assistant/agents/*.md`. Single source of truth. Removed `nucleus-agent-model` and `nucleus-plan-model` defcustoms.
 
-- **Merge eca-upgrade into ai-code-eca** (Δ): Binary upgrade functionality merged into `ai-code-eca.el` in the ai-code package. Unified `ai-code-eca-upgrade` command: no prefix=binary, C-u=package, C-u C-u=show status.
+- **TodoWrite overlay fix** (⚡): Fixed overlay updates in subagent context. Uses cached overlay reference (`my/gptel--todo-overlay`) for O(1) lookup. Hides raw tool call display (`:include nil`).
 
-- **Move context command** (Δ): `my/gptel-add-project-files` moved from `gptel-config.el` to `gptel-ext-context.el`.
+- **Subagent logging cleanup** (⊘): Removed debug logging that was dumping subagent results to `*Messages*`. Results now only appear in chat buffer.
 
-- **Fix provide placement** (Δ): `init-ai.el` now has `(provide 'init-ai)` at end of file.
+- **Agent loop improvements** (⚡): Hard loop detection, fuzzy tool name matching, RunAgent delegation hardening.
 
-- **Git tag cleanup**: Reduced from 187 to 10 tags (v0.7.2–v0.7.11).
+### Module Structure (`lisp/modules/`)
 
 ### Module Structure (`lisp/modules/`)
 

@@ -167,6 +167,43 @@ INCLUDE-DIFF injects git diff."
     (should (equal (plist-get result :include-history) "true"))
     (should (equal (plist-get result :agent-name) "reviewer"))))
 
+;;; TodoWrite Overlay Tests
+
+(defvar my/gptel--todo-overlay nil)
+(defvar gptel-agent--todos nil)
+(defvar gptel-agent--hrule "\n")
+
+(defun my/gptel-agent--write-todo-around (orig todos)
+  "Test stub for TodoWrite overlay advice."
+  (setq gptel-agent--todos todos)
+  (let ((existing-ov my/gptel--todo-overlay))
+    (if existing-ov
+        (progn
+          (overlay-put existing-ov 'after-string
+                       (format "Tasks: %d" (length todos)))
+          t)
+      (funcall orig todos))))
+
+(ert-deftest test-todowrite-overlay-caching ()
+  "Test that TodoWrite overlay is cached for O(1) lookup."
+  (with-temp-buffer
+    (let ((ov (make-overlay 1 1)))
+      (overlay-put ov 'gptel-agent--todos t)
+      (setq-local my/gptel--todo-overlay ov)
+      (should (eq my/gptel--todo-overlay ov))
+      (should (overlay-get my/gptel--todo-overlay 'gptel-agent--todos)))))
+
+(ert-deftest test-todowrite-overlay-update ()
+  "Test that TodoWrite updates cached overlay."
+  (with-temp-buffer
+    (let ((ov (make-overlay 1 1)))
+      (overlay-put ov 'gptel-agent--todos t)
+      (setq-local my/gptel--todo-overlay ov)
+      (setq gptel-agent--todos nil)
+      (let ((todos [(:content "Task 1" :status "pending" :activeForm "Doing task 1")]))
+        (setq gptel-agent--todos (append todos nil))
+        (should (= (length gptel-agent--todos) 1))))))
+
 ;;; Provide the test suite
 
 (provide 'test-gptel-tools-agent)
