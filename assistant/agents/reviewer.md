@@ -1,6 +1,6 @@
 ---
 name: reviewer
-model: qwen3-max
+model: qwen3-max-2026-01-23
 max-tokens: 8192
 temperature: 0.3
 description: Multi-scale Elisp/nucleus code reviewer (best practices, architecture, security). Read-only.
