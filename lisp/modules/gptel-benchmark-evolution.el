@@ -293,7 +293,57 @@ SYSTEM + Feed Forward = AI COMPLETE"
      :detection (lambda (results)
                   (let ((completion (plist-get results :completion-score)))
                     (when (and completion (< completion 0.4)) 'water-fragmentation)))
-     :remedy "Apply Earth (control): set limits, establish processes"))
+     :remedy "Apply Earth (control): set limits, establish processes")
+    ;; Workflow-specific anti-patterns
+    (phase-violation
+     :element wood
+     :controlled-by metal
+     :symptom "Workflow skipped required phases (P1→P3 without P2)"
+     :detection (lambda (results)
+                  (let* ((phases (plist-get results :phases))
+                         (phase-list (when (vectorp phases) (append phases nil))))
+                    (when (and phase-list
+                               (cl-find 'P3 phase-list :key (lambda (p) (plist-get p :phase)))
+                               (not (cl-find 'P1 phase-list :key (lambda (p) (plist-get p :phase)))))
+                      'phase-violation)))
+     :remedy "Apply Metal: enforce phase transitions, add phase checks")
+    (tool-misuse
+     :element fire
+     :controlled-by water
+     :symptom "Inefficient tool usage (too many tool calls for simple task)"
+     :detection (lambda (results)
+                  (let ((step-count (plist-get results :step-count))
+                        (continuations (plist-get results :continuation-count)))
+                    (when (and step-count continuations
+                               (or (> step-count 15) (> continuations 3)))
+                      'tool-misuse)))
+     :remedy "Apply Water: review tool selection, optimize tool chain")
+    (context-overflow
+     :element earth
+     :controlled-by wood
+     :symptom "Too much context gathered, no action taken"
+     :detection (lambda (results)
+                  (let ((tool-calls (plist-get results :tool-calls))
+                        (completed (plist-get results :completed)))
+                    (when (and tool-calls (not completed)
+                               (> (length tool-calls) 10))
+                      'context-overflow)))
+     :remedy "Apply Wood: prioritize action, limit exploration time")
+    (no-verification
+     :element metal
+     :controlled-by fire
+     :symptom "Changes made without verification step"
+     :detection (lambda (results)
+                  (let* ((tool-calls (plist-get results :tool-calls))
+                         (tools (when tool-calls
+                                  (if (vectorp tool-calls)
+                                      (mapcar (lambda (tc) (plist-get tc :tool)) (append tool-calls nil))
+                                    (mapcar #'car tool-calls)))))
+                    (when (and tools
+                               (memq 'edit tools)
+                               (not (memq 'read tools)))
+                      'no-verification)))
+     :remedy "Apply Fire: add verification step after edits"))
   "Anti-patterns mapped to 相克 (controlling cycle).
 Each anti-pattern is detected when an element is excessive.
 The controlling element provides the remedy.")

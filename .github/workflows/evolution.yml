@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'lisp/modules/gptel-benchmark-*.el'
+      - 'lisp/modules/gptel-workflow-*.el'
+      - 'assistant/evals/workflow-tests/**'
       - 'mementum/**'
       - 'benchmarks/**'
   workflow_dispatch:
@@ -43,9 +45,13 @@ jobs:
         id: load-data
         run: |
           echo "Loading historical benchmark data..."
-          BENCHMARK_COUNT=$(ls benchmarks/*-results.json 2>/dev/null | wc -l | tr -d ' ')
-          echo "benchmark_count=$BENCHMARK_COUNT" >> $GITHUB_OUTPUT
-          echo "Found $BENCHMARK_COUNT benchmark files"
+          SKILL_COUNT=$(ls benchmarks/*-results.json 2>/dev/null | wc -l | tr -d ' ')
+          WORKFLOW_COUNT=$(ls benchmarks/workflows/*-results.json 2>/dev/null | wc -l | tr -d ' ')
+          TOTAL=$((SKILL_COUNT + WORKFLOW_COUNT))
+          echo "skill_count=$SKILL_COUNT" >> $GITHUB_OUTPUT
+          echo "workflow_count=$WORKFLOW_COUNT" >> $GITHUB_OUTPUT
+          echo "benchmark_count=$TOTAL" >> $GITHUB_OUTPUT
+          echo "Found $SKILL_COUNT skill benchmarks, $WORKFLOW_COUNT workflow benchmarks"
 
       - name: Run Evolution Cycle with Data
         id: evolution
@@ -55,23 +61,32 @@ jobs:
             --eval "(require 'gptel-benchmark-integrate)" \
             --eval "(require 'gptel-benchmark-memory)" \
             --eval "(require 'gptel-benchmark-core)" \
+            --eval "(require 'gptel-workflow-benchmark)" \
             --eval "(gptel-benchmark-memory-init)" \
             --eval "(message \"[evolution] Loading historical benchmark data...\")" \
-            --eval "(let* ((bench-dir \"benchmarks/\")
-                          (all-results '()))
-                     (dolist (file (directory-files bench-dir t \"-results\\\\.json$\"))
+            --eval "(let* ((all-results '()))
+                     ;; Load skill benchmarks
+                     (dolist (file (directory-files \"benchmarks/\" t \"-results\\\\.json$\"))
                        (when (file-exists-p file)
                          (let* ((data (gptel-benchmark-read-json file))
-                                (skill-name (replace-regexp-in-string \"-results\\\\.json$\" \"\" (file-name-nondirectory file))))
-                           (push (list :skill skill-name :results data) all-results))))
+                                (name (replace-regexp-in-string \"-results\\\\.json$\" \"\" (file-name-nondirectory file))))
+                           (push (list :name name :type 'skill :results data) all-results))))
+                     ;; Load workflow benchmarks
+                     (when (file-exists-p \"benchmarks/workflows/\")
+                       (dolist (file (directory-files \"benchmarks/workflows/\" t \"-results\\\\.json$\"))
+                         (when (file-exists-p file)
+                           (let* ((data (gptel-benchmark-read-json file))
+                                  (name (replace-regexp-in-string \"-results\\\\.json$\" \"\" (file-name-nondirectory file))))
+                             (push (list :name name :type 'workflow :results data) all-results)))))
                      (message \"[evolution] Loaded %d benchmark results\" (length all-results))
-                     (dolist (skill-result all-results)
-                       (let* ((skill-name (plist-get skill-result :skill))
-                              (results (plist-get skill-result :results)))
-                         (message \"[evolution] Evolving %s...\" skill-name)
+                     (dolist (result all-results)
+                       (let* ((name (plist-get result :name))
+                              (type (plist-get result :type))
+                              (data (plist-get result :results)))
+                         (message \"[evolution] Evolving %s (%s)...\" name type)
                          (condition-case err
-                             (gptel-benchmark-evolve-with-improvement skill-name 'skill results)
-                           (error (message \"[evolution] Error evolving %s: %s\" skill-name err)))))
+                             (gptel-benchmark-evolve-with-improvement name type data)
+                           (error (message \"[evolution] Error evolving %s: %s\" name err)))))
                      (gptel-benchmark-evolution-cycle \"ci-with-data\"))" \
             --eval "(message \"[evolution] Checking capabilities...\")" \
             --eval "(gptel-benchmark-evolution-check-capabilities)" \
