@@ -50,7 +50,9 @@
   (should (gptel-agent-loop--transient-error-p "Service overloaded"))
   (should (gptel-agent-loop--transient-error-p "Rate limit exceeded"))
   (should (gptel-agent-loop--transient-error-p "503 Service Unavailable"))
-  (should (gptel-agent-loop--transient-error-p "InvalidParameter error"))
+  (should (gptel-agent-loop--transient-error-p "502 Bad Gateway"))
+  (should (gptel-agent-loop--transient-error-p "429 Too Many Requests"))
+  (should-not (gptel-agent-loop--transient-error-p "InvalidParameter error"))
   (should-not (gptel-agent-loop--transient-error-p "User error")))
 
 (ert-deftest gptel-agent-loop-test-looks-like-planning ()
