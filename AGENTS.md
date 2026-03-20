@@ -18,6 +18,7 @@
 | **AGENTS.md** | This file - VSM system architecture | You need the full framework |
 | **[INTRO.md](INTRO.md)** | Fork overview & nucleus architecture | You're new to this setup |
 | **[README.md](README.md)** | Upstream user documentation | You need base Emacs info |
+| **[eca/AGENTS.md](eca/AGENTS.md)** | ECA configuration & subagents | You need AI provider info |
 | **mementum/** | AI memory system | Session continuity |
 
 ### Mementum Structure
@@ -52,15 +53,13 @@ Tool-based skills reference protocols and provide external integrations:
 | `requesthunt` | — | External API |
 | `seo-geo` | — | External API |
 
-### Subagents
+### ECA Configuration
 
-Dedicated subagents for specialized tasks:
-
-| Subagent | Purpose | Model |
-|----------|---------|-------|
-| `reviewer` | Code review (multi-scale) | `gpt-5.4` |
-| `executor` | Tests, docs, linting | `gpt-5.4-mini` |
-| `explorer` | Deep codebase analysis | `gpt-5.4` |
+See [eca/AGENTS.md](eca/AGENTS.md) for:
+- Subagent definitions (reviewer, executor, explorer)
+- Provider configuration
+- Custom tools
+- Keybindings
 
 ---
 
@@ -451,7 +450,7 @@ If rules conflict:
 λ commands(x).      nucleus-agent-toggle
                     | gptel-send | gptel-menu
                     | C-c a (ai-code-menu)
-                    | C-c e (eca-prefix)
+                    | C-c e (eca-prefix) → see eca/AGENTS.md
 
 λ workflows(x).     orient() → read(mementum/state.md) → follow(related)
                     | task > 3 steps → create mementum/knowledge/task-plan.md
@@ -459,7 +458,7 @@ If rules conflict:
                     | learned_pattern → store(mementum/memories/) ∧ commit(💡)
 
 λ keybindings(x).   C-c a → ai-code-menu
-                    | C-c e → eca-prefix
+                    | C-c e → eca-prefix (see eca/AGENTS.md)
                     | C-c C-p → add-project-files (gptel)
 ```
 
@@ -578,6 +577,6 @@ When something feels wrong, trace it through the elements.
 
 ---
 
-**See Also:** [INTRO](INTRO.md) · [README](README.md) · [mementum/](mementum/)
+**See Also:** [INTRO](INTRO.md) · [README](README.md) · [mementum/](mementum/) · [eca/AGENTS.md](eca/AGENTS.md)
 
 *Patterns and protocols: see mementum/knowledge/*

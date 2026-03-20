@@ -15,8 +15,6 @@ lisp/modules/*.elc
 !post-init.el
 !custom.el
 !AGENTS.md
-!STATE.md
-!LEARNING.md
 !INTRO.md
 !SECURITY.md
 !.dir-locals.el
@@ -30,3 +28,12 @@ lisp/modules/*.elc
 !docs/
 !docs/*.md
 !lisp/modules/gptel-skill-*.el
+!eca/
+!eca/AGENTS.md
+!eca/README.md
+!eca/config.json
+!eca/*.sh
+!eca/hooks/
+!eca/hooks/**
+!eca/prompts/
+!eca/prompts/**/*.md
