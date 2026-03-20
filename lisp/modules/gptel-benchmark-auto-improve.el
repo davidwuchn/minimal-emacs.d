@@ -53,6 +53,18 @@
   :type 'boolean
   :group 'gptel-benchmark-auto-improve)
 
+(defcustom gptel-benchmark-verify-enabled t
+  "Whether to verify improvements before keeping them."
+  :type 'boolean
+  :group 'gptel-benchmark-auto-improve)
+
+(defcustom gptel-benchmark-verify-threshold 0.05
+  "Minimum improvement required to keep changes (5% default).
+A value of 0.05 means improvement must be at least 5 percentage points
+better than before to be kept."
+  :type 'number
+  :group 'gptel-benchmark-auto-improve)
+
 ;;; Improvement Registry
 
 (defvar gptel-benchmark-improvements '()
@@ -311,12 +323,6 @@ IMPROVEMENT-SPECS is list of (name type results) triples."
 ;;; Verification Loop
 
 (require 'gptel-benchmark-editor)
-
-(defvar gptel-benchmark-verify-enabled t
-  "Whether to verify improvements before keeping them.")
-
-(defvar gptel-benchmark-verify-threshold 0.05
-  "Minimum improvement required to keep changes (5% default).")
 
 (defun gptel-benchmark-verify-improvement (name type checkpoint-id before-results)
   "Verify improvement by re-running benchmark.

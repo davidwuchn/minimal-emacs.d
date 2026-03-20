@@ -259,42 +259,41 @@ SYSTEM + Feed Forward = AI COMPLETE"
      :controlled-by metal
      :symptom "Chaos, burnout, too many operations without coordination"
      :detection (lambda (results)
-                  (let ((ops (plist-get results :step-count)))
-                    (when (and ops (> ops 20)) 'wood-overgrowth)))
+                  (let ((ops (or (plist-get results :step-count) 0)))
+                    (when (> ops 20) 'wood-overgrowth)))
      :remedy "Apply Metal (coordination): add protocols, standardize")
     (fire-excess
      :element fire
      :controlled-by water
      :symptom "Constant pivoting, no stability, reactive only"
      :detection (lambda (results)
-                  (let ((efficiency (plist-get results :efficiency-score)))
-                    (when (and efficiency (< efficiency 0.5)) 'fire-excess)))
+                  (let ((efficiency (or (plist-get results :efficiency-score) 1.0)))
+                    (when (< efficiency 0.5) 'fire-excess)))
      :remedy "Apply Water (identity): clarify principles, ground in values")
     (earth-stagnation
      :element earth
      :controlled-by wood
      :symptom "Micromanagement, bureaucracy kills ideas, no delegation"
      :detection (lambda (results)
-                  (let ((constraints (plist-get results :constraint-score)))
-                    (when (and constraints (> constraints 0.95)) 'earth-stagnation)))
+                  (let ((constraints (or (plist-get results :constraint-score) 0)))
+                    (when (> constraints 0.95) 'earth-stagnation)))
      :remedy "Apply Wood (operations): delegate, empower execution")
     (metal-rigidity
      :element metal
      :controlled-by fire
      :symptom "Over-standardization, no flexibility, rules over outcomes"
      :detection (lambda (results)
-                  (let ((tool-score (plist-get results :tool-score)))
-                    (when (and tool-score (< tool-score 0.6)) 'metal-rigidity)))
+                  (let ((tool-score (or (plist-get results :tool-score) 1.0)))
+                    (when (< tool-score 0.6) 'metal-rigidity)))
      :remedy "Apply Fire (intelligence): adapt rules, allow exceptions")
     (water-fragmentation
      :element water
      :controlled-by earth
      :symptom "Values without action, identity crisis, no grounding"
      :detection (lambda (results)
-                  (let ((completion (plist-get results :completion-score)))
-                    (when (and completion (< completion 0.4)) 'water-fragmentation)))
+                  (let ((completion (or (plist-get results :completion-score) 1.0)))
+                    (when (< completion 0.4) 'water-fragmentation)))
      :remedy "Apply Earth (control): set limits, establish processes")
-    ;; Workflow-specific anti-patterns
     (phase-violation
      :element wood
      :controlled-by metal
@@ -312,10 +311,9 @@ SYSTEM + Feed Forward = AI COMPLETE"
      :controlled-by water
      :symptom "Inefficient tool usage (too many tool calls for simple task)"
      :detection (lambda (results)
-                  (let ((step-count (plist-get results :step-count))
-                        (continuations (plist-get results :continuation-count)))
-                    (when (and step-count continuations
-                               (or (> step-count 15) (> continuations 3)))
+                  (let ((step-count (or (plist-get results :step-count) 0))
+                        (continuations (or (plist-get results :continuation-count) 0)))
+                    (when (or (> step-count 15) (> continuations 3))
                       'tool-misuse)))
      :remedy "Apply Water: review tool selection, optimize tool chain")
     (context-overflow
@@ -323,10 +321,12 @@ SYSTEM + Feed Forward = AI COMPLETE"
      :controlled-by wood
      :symptom "Too much context gathered, no action taken"
      :detection (lambda (results)
-                  (let ((tool-calls (plist-get results :tool-calls))
-                        (completed (plist-get results :completed)))
-                    (when (and tool-calls (not completed)
-                               (> (length tool-calls) 10))
+                  (let* ((tool-calls (plist-get results :tool-calls))
+                         (completed (plist-get results :completed))
+                         (call-count (cond ((vectorp tool-calls) (length tool-calls))
+                                           ((listp tool-calls) (length tool-calls))
+                                           (t 0))))
+                    (when (and (> call-count 10) (not completed))
                       'context-overflow)))
      :remedy "Apply Wood: prioritize action, limit exploration time")
     (no-verification
@@ -335,10 +335,11 @@ SYSTEM + Feed Forward = AI COMPLETE"
      :symptom "Changes made without verification step"
      :detection (lambda (results)
                   (let* ((tool-calls (plist-get results :tool-calls))
-                         (tools (when tool-calls
-                                  (if (vectorp tool-calls)
-                                      (mapcar (lambda (tc) (plist-get tc :tool)) (append tool-calls nil))
-                                    (mapcar #'car tool-calls)))))
+                         (tools (cond ((vectorp tool-calls)
+                                       (mapcar (lambda (tc) (plist-get tc :tool)) (append tool-calls nil)))
+                                      ((listp tool-calls)
+                                       (mapcar #'car tool-calls))
+                                      (t nil))))
                     (when (and tools
                                (memq 'edit tools)
                                (not (memq 'read tools)))
