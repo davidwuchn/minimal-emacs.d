@@ -155,6 +155,20 @@ Returns alist: ((key . score) ...) plus overall score."
     (push (cons 'overall (/ total count)) scores)
     (nreverse scores)))
 
+(defun gptel-benchmark-eight-keys-summary (scores)
+  "Generate human-readable summary of Eight Keys SCORES.
+SCORES is the alist returned by gptel-benchmark-eight-keys-score."
+  (let ((parts '()))
+    (dolist (key-def gptel-benchmark-eight-keys-definitions)
+      (let* ((key (car key-def))
+             (symbol (plist-get key-def :symbol))
+             (name (plist-get key-def :name))
+             (score (alist-get key scores)))
+        (push (format "%s %s: %.0f%%" symbol name (* 100 (or score 0))) parts)))
+    (let ((overall (alist-get 'overall scores)))
+      (push (format "Overall: %.0f%%" (* 100 (or overall 0))) parts))
+    (mapconcat #'identity (nreverse parts) "\n")))
+
 (defun gptel-benchmark--score-signals (output signals)
   "Score OUTPUT based on presence of SIGNALS."
   (let ((matches 0)

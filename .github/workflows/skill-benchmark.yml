@@ -155,7 +155,7 @@ jobs:
                       failed.append(f"{key} score {score:.1%} < {MIN_PER_KEY:.0%}")
 
               # Output results
-              print(f"## Benchmark Results: ${{{{ matrix.skill }}}}")
+              print(f"## Benchmark Results: ${{ matrix.skill }}")
               print(f"")
               print(f"### Overall Score: {overall_score:.1%}")
               print(f"")
@@ -177,6 +177,100 @@ jobs:
           except Exception as e:
               print(f"Error checking scores: {e}")
               sys.exit(1)
+          EOF
+
+      - name: Detect Anti-Patterns (相克)
+        id: anti-patterns
+        if: always()
+        run: |
+          python3 - <<EOF
+          import json
+
+          ANTI_PATTERNS = {
+              'wood-overgrowth': {
+                  'element': 'wood',
+                  'controlled_by': 'metal',
+                  'symptom': 'Too many operations without coordination',
+                  'threshold': {'step_count': 20}
+              },
+              'fire-excess': {
+                  'element': 'fire', 
+                  'controlled_by': 'water',
+                  'symptom': 'Scattered, reactive approach',
+                  'threshold': {'efficiency_score': 0.5}
+              },
+              'earth-stagnation': {
+                  'element': 'earth',
+                  'controlled_by': 'wood',
+                  'symptom': 'Over-constrained, no flexibility',
+                  'threshold': {'constraint_score': 0.95}
+              },
+              'metal-rigidity': {
+                  'element': 'metal',
+                  'controlled_by': 'fire',
+                  'symptom': 'Too rigid, no adaptation',
+                  'threshold': {'tool_score': 0.6}
+              },
+              'water-fragmentation': {
+                  'element': 'water',
+                  'controlled_by': 'earth',
+                  'symptom': 'Unclear purpose, identity crisis',
+                  'threshold': {'completion_score': 0.4}
+              }
+          }
+
+          REMEDIES = {
+              'wood': 'Apply Metal (coordination): add protocols, reduce steps',
+              'fire': 'Apply Water (identity): ground in principles, plan first',
+              'earth': 'Apply Wood (operations): delegate, relax constraints',
+              'metal': 'Apply Fire (intelligence): adapt rules, allow exceptions',
+              'water': 'Apply Earth (control): set limits, establish processes'
+          }
+
+          try:
+              with open("benchmarks/${{ matrix.skill }}-results.json") as f:
+                  results = json.load(f)
+              
+              detected = []
+              
+              if isinstance(results, list):
+                  for r in results:
+                      metrics = r.get('metrics', {})
+                      step_count = metrics.get('step_count', 0)
+                      efficiency = metrics.get('efficiency_score', 1.0)
+                      
+                      if step_count > 20:
+                          detected.append({
+                              'pattern': 'wood-overgrowth',
+                              'element': 'wood',
+                              'symptom': f'Step count ({step_count}) exceeds threshold (20)',
+                              'remedy': REMEDIES['wood']
+                          })
+                      
+                      if efficiency < 0.5:
+                          detected.append({
+                              'pattern': 'fire-excess', 
+                              'element': 'fire',
+                              'symptom': f'Efficiency ({efficiency:.1%}) below threshold (50%)',
+                              'remedy': REMEDIES['fire']
+                          })
+
+              if detected:
+                  print("### ⚠️ Anti-Patterns Detected (相克)")
+                  print("")
+                  for ap in detected:
+                      print(f"- **{ap['pattern']}** ({ap['element']})")
+                      print(f"  - Symptom: {ap['symptom']}")
+                      print(f"  - Remedy: {ap['remedy']}")
+                      print("")
+                  
+                  with open("anti-patterns.json", "w") as f:
+                      json.dump(detected, f, indent=2)
+              else:
+                  print("### ✅ No anti-patterns detected")
+                  
+          except Exception as e:
+              print(f"Could not analyze anti-patterns: {e}")
           EOF
 
       - name: Post Results as Comment

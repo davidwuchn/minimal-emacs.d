@@ -1,0 +1,189 @@
+;;; gptel-benchmark-analysis.el --- Benchmark result analysis -*- lexical-binding: t -*-
+
+;; Copyright (C) 2025 David Wu
+;; Author: David Wu
+;; Version: 1.0.0
+;; Keywords: ai, benchmark, analysis
+
+;;; Commentary:
+
+;; Analyzes benchmark results to identify patterns, flaky tests, and systematic failures.
+;; Consolidated from gptel-skill-analyzer.el.
+
+;;; Code:
+
+(require 'json)
+(require 'cl-lib)
+(require 'gptel-benchmark-core)
+
+(declare-function gptel-agent--task "gptel-agent-tools")
+
+;;; Main Analysis
+
+(defun gptel-benchmark-analyze-results (benchmark-file)
+  "Analyze results in BENCHMARK-FILE.
+Returns plist with flaky tests, non-discriminating tests, and systematic failures."
+  (if (fboundp 'gptel-agent--task)
+      (let ((result nil) (done nil))
+        (gptel-agent--task
+         (lambda (r)
+           (setq result r done t))
+         "analyzer"
+         (format "Analyze: %s" (file-name-base benchmark-file))
+         (format "Analyze benchmark results in %s. Output JSON with findings and recommendations."
+                 benchmark-file))
+        (while (not done) (sit-for 0.1))
+        (gptel-benchmark--parse-analysis-result result))
+    (let* ((data (gptel-benchmark-read-json benchmark-file))
+           (flaky-tests (gptel-benchmark-find-flaky-tests benchmark-file))
+           (non-discriminating (gptel-benchmark-find-non-discriminating benchmark-file))
+           (systematic-failures (gptel-benchmark-find-systematic-failures benchmark-file)))
+      (list :flaky-tests flaky-tests
+            :non-discriminating-tests non-discriminating
+            :systematic-failures systematic-failures
+            :summary (gptel-benchmark-generate-summary data)))))
+
+(defun gptel-benchmark--parse-analysis-result (result)
+  "Parse analyzer RESULT into plist."
+  (if (stringp result)
+      (condition-case nil
+          (let ((parsed (json-read-from-string result)))
+            (list :summary (cdr (assq 'summary parsed))
+                  :findings (cdr (assq 'findings parsed))
+                  :recommendations (cdr (assq 'recommendations parsed))))
+        (error (list :raw result)))
+    (list :raw (format "%S" result))))
+
+;;; Flaky Test Detection
+
+(defun gptel-benchmark-find-flaky-tests (benchmark-file)
+  "Identify tests that sometimes pass and sometimes fail in BENCHMARK-FILE."
+  (let* ((data (gptel-benchmark-read-json benchmark-file))
+         (flaky-tests '()))
+    (dolist (result data)
+      (let ((test-id (plist-get result :test-id)))
+        (when (gptel-benchmark-is-flaky-test test-id benchmark-file)
+          (push test-id flaky-tests))))
+    flaky-tests))
+
+(defun gptel-benchmark-is-flaky-test (test-id benchmark-file)
+  "Check if TEST-ID in BENCHMARK-FILE shows inconsistent pass/fail across runs.
+A test is considered flaky if it has multiple runs with different outcomes."
+  (let* ((data (gptel-benchmark-read-json benchmark-file))
+         (pass-count 0)
+         (fail-count 0)
+         (run-count 0))
+    (dolist (result data)
+      (when (equal (plist-get result :test-id) test-id)
+        (let* ((grade (plist-get result :grade))
+               (passed (plist-get grade :passed)))
+          (cl-incf run-count)
+          (if passed (cl-incf pass-count) (cl-incf fail-count)))))
+    (and (> pass-count 0) (> fail-count 0) (> run-count 1))))
+
+;;; Non-Discriminating Test Detection
+
+(defun gptel-benchmark-find-non-discriminating (benchmark-file)
+  "Find tests that don't effectively differentiate between skill levels."
+  (let* ((data (gptel-benchmark-read-json benchmark-file))
+         (non-discriminating '()))
+    (dolist (result data)
+      (let ((test-id (plist-get result :test-id)))
+        (when (gptel-benchmark-is-non-discriminating-test test-id benchmark-file)
+          (push test-id non-discriminating))))
+    non-discriminating))
+
+(defun gptel-benchmark-is-non-discriminating-test (test-id benchmark-file)
+  "Check if TEST-ID in BENCHMARK-FILE doesn't differentiate skill levels.
+A test is non-discriminating if all runs pass or all runs fail."
+  (let* ((data (gptel-benchmark-read-json benchmark-file))
+         (all-pass t)
+         (all-fail t)
+         (run-count 0))
+    (dolist (result data)
+      (when (equal (plist-get result :test-id) test-id)
+        (let* ((grade (plist-get result :grade))
+               (passed (plist-get grade :passed)))
+          (cl-incf run-count)
+          (when (not passed) (setq all-pass nil))
+          (when passed (setq all-fail nil)))))
+    (and (> run-count 1) (or all-pass all-fail))))
+
+;;; Systematic Failure Detection
+
+(defun gptel-benchmark-find-systematic-failures (benchmark-file)
+  "Identify tests that consistently fail across different skills."
+  (let* ((data (gptel-benchmark-read-json benchmark-file))
+         (systematic-failures '()))
+    (dolist (result data)
+      (let ((test-id (plist-get result :test-id)))
+        (when (gptel-benchmark-is-systematic-failure test-id benchmark-file)
+          (push test-id systematic-failures))))
+    systematic-failures))
+
+(defun gptel-benchmark-is-systematic-failure (test-id benchmark-file)
+  "Check if TEST-ID in BENCHMARK-FILE represents a systematic failure.
+A test is a systematic failure if >80% of runs fail."
+  (let* ((data (gptel-benchmark-read-json benchmark-file))
+         (fail-count 0)
+         (total-count 0))
+    (dolist (result data)
+      (when (equal (plist-get result :test-id) test-id)
+        (let* ((grade (plist-get result :grade))
+               (passed (plist-get grade :passed)))
+          (cl-incf total-count)
+          (when (not passed) (cl-incf fail-count)))))
+    (and (> total-count 1)
+         (> (/ (float fail-count) total-count) 0.8))))
+
+;;; Summary Generation
+
+(defun gptel-benchmark-generate-summary (data)
+  "Generate summary statistics from benchmark DATA."
+  (let ((total-tests (length data))
+        (avg-score 0))
+    (dolist (result data)
+      (let* ((grade (plist-get result :grade))
+             (score (plist-get grade :percentage)))
+        (cl-incf avg-score score)))
+    (when (> total-tests 0)
+      (setq avg-score (/ avg-score total-tests)))
+    (list :total-tests total-tests
+          :average-score avg-score)))
+
+(defun gptel-benchmark-generate-improvement-plan (analysis)
+  "Generate improvement plan based on ANALYSIS."
+  (let* ((flaky-tests (plist-get analysis :flaky-tests))
+         (non-discriminating (plist-get analysis :non-discriminating-tests))
+         (systematic-failures (plist-get analysis :systematic-failures))
+         (recommendations '()))
+    (when flaky-tests
+      (push "Investigate and stabilize flaky tests" recommendations))
+    (when non-discriminating
+      (push "Revise non-discriminating tests to better differentiate skill levels" recommendations))
+    (when systematic-failures
+      (push "Review systematically failing tests for appropriate difficulty level" recommendations))
+    (list :recommendations recommendations
+          :priority (gptel-benchmark-assess-priority flaky-tests non-discriminating systematic-failures))))
+
+(defun gptel-benchmark-assess-priority (flaky non-discriminating systematic)
+  "Assess priority of issues.
+FLAKY, NON-DISCRIMINATING, and SYSTEMATIC are lists of test IDs."
+  (let ((high-priority 0)
+        (medium-priority 0)
+        (low-priority 0))
+    (when flaky
+      (cl-incf high-priority (length flaky)))
+    (when systematic
+      (cl-incf medium-priority (length systematic)))
+    (when non-discriminating
+      (cl-incf low-priority (length non-discriminating)))
+    (list :high high-priority
+          :medium medium-priority
+          :low low-priority)))
+
+;;; Provide
+
+(provide 'gptel-benchmark-analysis)
+
+;;; gptel-benchmark-analysis.el ends here

@@ -28,7 +28,6 @@
 
 (require 'json)
 (require 'cl-lib)
-(require 'gptel-skill-utils)
 (require 'gptel-benchmark-principles)
 (require 'gptel-benchmark-core)
 (require 'gptel-benchmark-evolution)
@@ -69,7 +68,7 @@
 Returns list of test plists with :id, :name, :prompt, :expected_behaviors, :forbidden_behaviors."
   (let ((test-file (expand-file-name (format "%s.json" skill-name) gptel-skill-tests-dir)))
     (if (file-exists-p test-file)
-        (let* ((data (gptel-skill-read-json test-file))
+        (let* ((data (gptel-benchmark-read-json test-file))
                (test-cases (cdr (assq 'test_cases data))))
           (mapcar #'gptel-skill--normalize-test test-cases))
       '())))
@@ -280,23 +279,23 @@ Type C-g to cancel."
   (let* ((history-file (expand-file-name (format "%s-history.json" skill-name)
                                          gptel-skill-benchmark-dir))
          (existing (when (file-exists-p history-file)
-                     (gptel-skill-read-json history-file)))
+                     (gptel-benchmark-read-json history-file)))
          (run-id (format-time-string "%Y%m%d-%H%M%S"))
          (entry (list :run-id run-id
                       :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")
                       :summary (gptel-skill--summarize-results results)
                       :total-tests (length results))))
     (let ((history (if (vectorp existing) (append existing nil) existing)))
-      (gptel-skill-write-json (cons entry history) history-file)
+      (gptel-benchmark-write-json (cons entry history) history-file)
       entry)))
 
 (defun gptel-skill--summarize-results (results)
   "Create summary of RESULTS."
   (let ((total 0) (passed 0) (score-sum 0) (max-sum 0))
     (dolist (r results)
-      (let* ((grade (gptel-skill--get-field r :grade))
-             (s (or (gptel-skill--get-field grade :score) 0))
-             (m (or (gptel-skill--get-field grade :total) 1)))
+      (let* ((grade (gptel-benchmark--get-field r :grade))
+             (s (or (gptel-benchmark--get-field grade :score) 0))
+             (m (or (gptel-benchmark--get-field grade :total) 1)))
         (cl-incf total 1)
         (cl-incf score-sum s)
         (cl-incf max-sum m)
@@ -310,7 +309,7 @@ Type C-g to cancel."
   (let ((history-file (expand-file-name (format "%s-history.json" skill-name)
                                         gptel-skill-benchmark-dir)))
     (when (file-exists-p history-file)
-      (let ((data (gptel-skill-read-json history-file)))
+      (let ((data (gptel-benchmark-read-json history-file)))
         (if (vectorp data) (append data nil) data)))))
 
 ;;; Summary and Display
@@ -328,16 +327,16 @@ Type C-g to cancel."
 (defun gptel-skill-benchmark-summary (benchmark-file)
   "Generate summary from BENCHMARK-FILE."
   (when (file-exists-p benchmark-file)
-    (let* ((data (gptel-skill-read-json benchmark-file))
+    (let* ((data (gptel-benchmark-read-json benchmark-file))
            (data-list (if (vectorp data) (append data nil) data))
            (total-tests (length data-list))
            (passed-tests 0)
            (total-score 0)
            (max-possible-score 0))
       (dolist (result data-list)
-        (let* ((grade (gptel-skill--get-field result :grade))
-               (score (or (gptel-skill--get-field grade :score) 0))
-               (total (or (gptel-skill--get-field grade :total) 1)))
+        (let* ((grade (gptel-benchmark--get-field result :grade))
+               (score (or (gptel-benchmark--get-field grade :score) 0))
+               (total (or (gptel-benchmark--get-field grade :total) 1)))
           (cl-incf total-score score)
           (cl-incf max-possible-score total)
           (when (= score total)
@@ -357,8 +356,8 @@ Returns alist with average score per key."
         (key-names [phi-vitality fractal-clarity epsilon-purpose tau-wisdom
                     pi-synthesis mu-directness exists-truth forall-vigilance]))
     (dolist (r results)
-      (let* ((grade (gptel-skill--get-field r :grade))
-             (eight-keys (or (gptel-skill--get-field grade :eight-keys) '())))
+      (let* ((grade (gptel-benchmark--get-field r :grade))
+             (eight-keys (or (gptel-benchmark--get-field grade :eight-keys) '())))
         (cl-loop for key across key-names
                  for i from 0
                  for score = (alist-get key eight-keys)
@@ -384,7 +383,7 @@ Returns alist with average score per key."
   (let* ((benchmark-file (expand-file-name (format "%s-benchmark.json" skill-name)
                                            gptel-skill-benchmark-dir))
          (results (when (file-exists-p benchmark-file)
-                    (gptel-skill-read-json benchmark-file))))
+                    (gptel-benchmark-read-json benchmark-file))))
     (if (not results)
         (message "No benchmark results found for %s" skill-name)
       (let* ((results-list (if (vectorp results) (append results nil) results))
@@ -409,7 +408,7 @@ Returns alist with average score per key."
   (let* ((benchmark-file (expand-file-name (format "%s-benchmark.json" skill-name)
                                            gptel-skill-benchmark-dir))
          (results (when (file-exists-p benchmark-file)
-                    (gptel-skill-read-json benchmark-file)))
+                    (gptel-benchmark-read-json benchmark-file)))
          (summary (when results (gptel-skill-benchmark-summary benchmark-file))))
     (with-output-to-temp-buffer (format "*Benchmark: %s*" skill-name)
       (princ (format "=== Benchmark Results: %s ===\n\n" skill-name))
@@ -419,10 +418,10 @@ Returns alist with average score per key."
         (princ (format "Overall Score: %.1f%%\n\n" (plist-get summary :overall-score))))
       (princ "--- Test Details ---\n\n")
       (dolist (result (if (vectorp results) (append results nil) results))
-        (let* ((test-id (gptel-skill--get-field result :test-id))
-               (grade (gptel-skill--get-field result :grade))
-               (score (or (gptel-skill--get-field grade :score) 0))
-               (total (or (gptel-skill--get-field grade :total) 1)))
+        (let* ((test-id (gptel-benchmark--get-field result :test-id))
+               (grade (gptel-benchmark--get-field result :grade))
+               (score (or (gptel-benchmark--get-field grade :score) 0))
+               (total (or (gptel-benchmark--get-field grade :total) 1)))
           (princ (format "%s: %d/%d (%.0f%%)\n"
                          test-id score total
                          (if (> total 0) (* 100 (/ (float score) total)) 0)))))
@@ -441,13 +440,13 @@ Returns alist with average score per key."
       (with-output-to-temp-buffer (format "*Benchmark Trend: %s*" skill-name)
         (princ (format "=== Benchmark Trend: %s ===\n\n" skill-name))
         (dolist (entry (nreverse history))
-          (let* ((summary (gptel-skill--get-field entry :summary))
-                 (timestamp (or (gptel-skill--get-field entry :timestamp) "unknown"))
-                 (avg-score (or (gptel-skill--get-field summary :average-score) 0)))
+          (let* ((summary (gptel-benchmark--get-field entry :summary))
+                 (timestamp (or (gptel-benchmark--get-field entry :timestamp) "unknown"))
+                 (avg-score (or (gptel-benchmark--get-field summary :average-score) 0)))
             (princ (format "%s: %.1f%% (%d tests)\n"
                            timestamp
                            avg-score
-                           (or (gptel-skill--get-field summary :total-tests) 0)))))))))
+                           (or (gptel-benchmark--get-field summary :total-tests) 0)))))))))
 
 ;;; Feedback Logging
 
@@ -472,7 +471,7 @@ Returns alist with average score per key."
     (unless (file-exists-p dir)
       (make-directory dir t)))
   (with-temp-file benchmark-file
-    (insert (json-encode (gptel-skill--to-json-format results)))))
+    (insert (json-encode (gptel-benchmark--to-json-format results)))))
 
 ;;; Legacy Compatibility
 
@@ -493,14 +492,14 @@ Shows which elements (Water/Wood/Fire/Earth/Metal) need attention."
   (let* ((benchmark-file (expand-file-name (format "%s-benchmark.json" skill-name)
                                            gptel-skill-benchmark-dir))
          (results (when (file-exists-p benchmark-file)
-                    (gptel-skill-read-json benchmark-file)))
+                    (gptel-benchmark-read-json benchmark-file)))
          (results-list (when results
                          (if (vectorp results) (append results nil) results))))
     (if (not results-list)
         (message "No benchmark results for %s. Run M-x gptel-skill-benchmark-run first." skill-name)
       (let* ((scores (mapcar (lambda (r)
-                               (let* ((grade (gptel-skill--get-field r :grade))
-                                      (ek (gptel-skill--get-field grade :eight-keys)))
+                               (let* ((grade (gptel-benchmark--get-field r :grade))
+                                      (ek (gptel-benchmark--get-field grade :eight-keys)))
                                  (list :overall-score (/ (or (alist-get 'overall ek) 0.5) 1.0)
                                        :completion-score (/ (or (alist-get 'epsilon-purpose ek) 0.5) 1.0)
                                        :efficiency-score (/ (or (alist-get 'phi-vitality ek) 0.5) 1.0)
@@ -533,13 +532,13 @@ Uses 相克 (controlling cycle) to identify problems and 相生 (generating cycl
   (let* ((benchmark-file (expand-file-name (format "%s-benchmark.json" skill-name)
                                            gptel-skill-benchmark-dir))
          (results (when (file-exists-p benchmark-file)
-                    (gptel-skill-read-json benchmark-file)))
+                    (gptel-benchmark-read-json benchmark-file)))
          (results-list (when results
                          (if (vectorp results) (append results nil) results))))
     (if (not results-list)
         (message "No benchmark results for %s" skill-name)
       (let* ((outputs (mapcar (lambda (r)
-                                (or (gptel-skill--get-field r :output) ""))
+                                (or (gptel-benchmark--get-field r :output) ""))
                               results-list))
              (combined-output (mapconcat #'identity outputs "\n"))
              (violations (gptel-benchmark-eight-keys-violations combined-output))
@@ -582,7 +581,7 @@ Shows: Eight Keys + Wu Xing + Anti-patterns + Improvements."
   (let* ((benchmark-file (expand-file-name (format "%s-benchmark.json" skill-name)
                                            gptel-skill-benchmark-dir))
          (results (when (file-exists-p benchmark-file)
-                    (gptel-skill-read-json benchmark-file)))
+                    (gptel-benchmark-read-json benchmark-file)))
          (results-list (when results
                          (if (vectorp results) (append results nil) results))))
     (if (not results-list)
@@ -610,8 +609,8 @@ Shows: Eight Keys + Wu Xing + Anti-patterns + Improvements."
           
           (princ "\n【WU XING HEALTH】\n")
           (let* ((scores (mapcar (lambda (r)
-                                   (let* ((grade (gptel-skill--get-field r :grade))
-                                          (ek (gptel-skill--get-field grade :eight-keys)))
+                                   (let* ((grade (gptel-benchmark--get-field r :grade))
+                                          (ek (gptel-benchmark--get-field grade :eight-keys)))
                                      (list :overall-score (/ (or (alist-get 'overall ek) 0.5) 1.0)
                                            :completion-score (/ (or (alist-get 'epsilon-purpose ek) 0.5) 1.0)
                                            :efficiency-score (/ (or (alist-get 'phi-vitality ek) 0.5) 1.0))))

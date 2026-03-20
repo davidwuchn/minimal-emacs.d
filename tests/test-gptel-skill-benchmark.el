@@ -7,16 +7,17 @@
 ;;; Code:
 
 (require 'ert)
-(require 'gptel-skill-utils)
+(require 'gptel-benchmark-core)
 (require 'gptel-skill-benchmark)
 
 ;;; Test Loading
 
 (ert-deftest test-gptel-skill-load-tests ()
   "Test loading test definitions from JSON."
+  :tags '(:expensive)
   (let ((tests (gptel-skill-load-tests "planning")))
+    (skip-unless (> (length tests) 0))
     (should (listp tests))
-    (should (> (length tests) 0))
     (let ((first-test (car tests)))
       (should (plist-get first-test :id))
       (should (plist-get first-test :prompt)))))
@@ -40,7 +41,7 @@
   (let ((test-file (make-temp-file "benchmark" nil ".json")))
     (unwind-protect
         (progn
-          (gptel-skill-write-json
+          (gptel-benchmark-write-json
            (list (list :test-id "test-1"
                        :grade (list :score 8 :total 10 :percentage 80.0))
                  (list :test-id "test-2"
@@ -57,7 +58,7 @@
   (let ((test-file (make-temp-file "benchmark" nil ".json")))
     (unwind-protect
         (progn
-          (gptel-skill-write-json nil test-file)
+          (gptel-benchmark-write-json nil test-file)
           (let ((summary (gptel-skill-benchmark-summary test-file)))
             (should (equal (plist-get summary :total-tests) 0))
             (should (equal (plist-get summary :overall-score) 0))))

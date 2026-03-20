@@ -279,7 +279,10 @@
 (ert-deftest gptel-benchmark-test-daily-collect ()
   "Test daily metric collection."
   (setq gptel-benchmark-daily-runs nil)
-  (gptel-benchmark-daily--collect-skill 'test-skill 'test-001)
+  (let ((gptel-benchmark-daily-auto-collect t))
+    (gptel-benchmark-daily--wrap-skill-run
+     (lambda (&rest _args) 'mock-result)
+     'test-skill 'test-001))
   (should (= (length gptel-benchmark-daily-runs) 1))
   (should (eq (plist-get (car gptel-benchmark-daily-runs) :type) 'skill)))
 

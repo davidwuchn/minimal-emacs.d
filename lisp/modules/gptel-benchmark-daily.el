@@ -28,6 +28,7 @@
 (require 'gptel-benchmark-evolution)
 (require 'gptel-benchmark-auto-improve)
 (require 'gptel-benchmark-integrate)
+(require 'gptel-benchmark-memory)
 
 ;;; Customization
 
@@ -66,66 +67,113 @@
 
 (defun gptel-benchmark-daily-setup ()
   "Setup daily benchmark integration.
-Adds hooks to auto-collect metrics on skill/workflow runs."
+Adds hooks to auto-collect metrics on skill/workflow runs.
+Reads mementum state on session start for continuity."
   (interactive)
-  ;; Hook into workflow execution
-  (advice-add 'gptel-workflow-benchmark-run :after
-              #'gptel-benchmark-daily--collect-workflow)
-  
-  ;; Hook into skill execution
-  (advice-add 'gptel-skill-benchmark-run :after
-              #'gptel-benchmark-daily--collect-skill)
-  
-  ;; Setup daily report timer
+  (gptel-benchmark-memory-orient)
+  (advice-add 'gptel-workflow-benchmark-run :around
+              #'gptel-benchmark-daily--wrap-workflow-run)
+  (advice-add 'gptel-skill-benchmark-run :around
+              #'gptel-benchmark-daily--wrap-skill-run)
   (when gptel-benchmark-daily-report-time
     (gptel-benchmark-daily--setup-report-timer))
-  
   (message "[daily-bench] Integration enabled"))
 
 (defun gptel-benchmark-daily-teardown ()
   "Remove daily benchmark integration hooks."
   (interactive)
   (advice-remove 'gptel-workflow-benchmark-run
-                 #'gptel-benchmark-daily--collect-workflow)
+                 #'gptel-benchmark-daily--wrap-workflow-run)
   (advice-remove 'gptel-skill-benchmark-run
-                 #'gptel-benchmark-daily--collect-skill)
+                 #'gptel-benchmark-daily--wrap-skill-run)
   (when gptel-benchmark-daily-timer
     (cancel-timer gptel-benchmark-daily-timer))
   (message "[daily-bench] Integration disabled"))
 
 ;;; Collection Hooks
 
-(defun gptel-benchmark-daily--collect-workflow (workflow-name test-id)
-  "Collect metrics after workflow run.
-WORKFLOW-NAME and TEST-ID from the advised function."
-  (when gptel-benchmark-daily-auto-collect
-    (let ((entry (list :type 'workflow
-                       :name workflow-name
-                       :test-id test-id
-                       :timestamp (format-time-string "%H:%M:%S"))))
-      (push entry gptel-benchmark-daily-runs)
-      (cl-incf gptel-benchmark-daily-run-count)
-      (gptel-benchmark-daily--maybe-evolve))))
+(defun gptel-benchmark-daily--wrap-workflow-run (orig-fun &rest args)
+  "Wrap workflow run to auto-collect metrics.
+ORIG-FUN is the original function, ARGS are its arguments."
+  (let* ((workflow-name (car args))
+         (test-id (cadr args))
+         (result (apply orig-fun args)))
+    (when gptel-benchmark-daily-auto-collect
+      (let ((entry (list :type 'workflow
+                         :name workflow-name
+                         :test-id test-id
+                         :results result
+                         :timestamp (format-time-string "%H:%M:%S"))))
+        (push entry gptel-benchmark-daily-runs)
+        (gptel-benchmark-daily--update-state entry)
+        (cl-incf gptel-benchmark-daily-run-count)
+        (gptel-benchmark-daily--maybe-evolve entry)))
+    result))
 
-(defun gptel-benchmark-daily--collect-skill (skill-name test-id)
-  "Collect metrics after skill run.
-SKILL-NAME and TEST-ID from the advised function."
-  (when gptel-benchmark-daily-auto-collect
-    (let ((entry (list :type 'skill
-                       :name skill-name
-                       :test-id test-id
-                       :timestamp (format-time-string "%H:%M:%S"))))
-      (push entry gptel-benchmark-daily-runs)
-      (cl-incf gptel-benchmark-daily-run-count)
-      (gptel-benchmark-daily--maybe-evolve))))
+(defun gptel-benchmark-daily--wrap-skill-run (orig-fun &rest args)
+  "Wrap skill run to auto-collect metrics.
+ORIG-FUN is the original function, ARGS are its arguments."
+  (let* ((skill-name (car args))
+         (test-id (cadr args))
+         (result (apply orig-fun args)))
+    (when gptel-benchmark-daily-auto-collect
+      (let ((entry (list :type 'skill
+                         :name skill-name
+                         :test-id test-id
+                         :results result
+                         :timestamp (format-time-string "%H:%M:%S"))))
+        (push entry gptel-benchmark-daily-runs)
+        (gptel-benchmark-daily--update-state entry)
+        (cl-incf gptel-benchmark-daily-run-count)
+        (gptel-benchmark-daily--maybe-evolve entry)))
+    result))
 
-(defun gptel-benchmark-daily--maybe-evolve ()
-  "Run evolution cycle if interval reached."
+(defun gptel-benchmark-daily--update-state (entry)
+  "Update mementum state with ENTRY summary."
+  (let* ((type (plist-get entry :type))
+         (name (plist-get entry :name))
+         (timestamp (plist-get entry :timestamp))
+         (results (plist-get entry :results))
+         (state-content (gptel-benchmark-memory-read-state))
+         (new-section (format "\n### Run: %s/%s @ %s\n- Result: %s\n"
+                              type name timestamp
+                              (if results "completed" "unknown"))))
+    (when state-content
+      (gptel-benchmark-memory-update-state
+       (concat state-content new-section)))))
+
+(defun gptel-benchmark-daily--maybe-evolve (entry)
+  "Run evolution cycle if interval reached.
+ENTRY contains run details including results."
   (when (>= gptel-benchmark-daily-run-count
-             gptel-benchmark-daily-evolution-interval)
+            gptel-benchmark-daily-evolution-interval)
     (setq gptel-benchmark-daily-run-count 0)
-    (gptel-benchmark-evolution-cycle "daily-interval")
-    (message "[daily-bench] Evolution cycle triggered")))
+    (let* ((name (plist-get entry :name))
+           (type (plist-get entry :type))
+           (results (plist-get entry :results)))
+      (if results
+          (progn
+            (gptel-benchmark-evolve-with-improvement name type results)
+            (message "[daily-bench] Evolution + improvement cycle completed for %s/%s" type name))
+        (gptel-benchmark-evolution-cycle "daily-interval")
+        (message "[daily-bench] Evolution cycle triggered")))
+    (gptel-benchmark-daily--check-synthesis)))
+
+(defun gptel-benchmark-daily--check-synthesis ()
+  "Check if any topics have enough memories for synthesis.
+Triggers gptel-benchmark-memory-synthesize for topics with >= 3 memories."
+  (let* ((memories (gptel-benchmark-memory-list 'memories))
+         (topic-counts (make-hash-table :test 'equal)))
+    (dolist (mem memories)
+      (let* ((slug (cadr mem))
+             (topic (replace-regexp-in-string "-[0-9]+$" "" (file-name-sans-extension slug))))
+        (puthash topic (1+ (gethash topic topic-counts 0)) topic-counts)))
+    (maphash
+     (lambda (topic count)
+       (when (>= count 3)
+         (message "[daily-bench] Synthesizing topic: %s (%d memories)" topic count)
+         (gptel-benchmark-memory-synthesize topic)))
+     topic-counts)))
 
 ;;; Dashboard
 
@@ -287,22 +335,6 @@ SKILL-NAME and TEST-ID from the advised function."
     (when (string-match-p "λ\\|◈\\|Δ" msg)
       (message "[daily-bench] Learning commit detected - evolution cycle")
       (gptel-benchmark-evolution-cycle "commit-hook"))))
-
-;;; Integration with Existing Commands
-
-(defun gptel-benchmark-daily-wrap-skill-run (orig-fun &rest args)
-  "Wrap skill run to auto-collect metrics."
-  (let ((result (apply orig-fun args)))
-    (when gptel-benchmark-daily-auto-collect
-      (let ((entry (list :type 'skill
-                         :name (car args)
-                         :test-id (cadr args)
-                         :timestamp (format-time-string "%H:%M:%S")
-                         :result result)))
-        (push entry gptel-benchmark-daily-runs)
-        (cl-incf gptel-benchmark-daily-run-count)
-        (gptel-benchmark-daily--maybe-evolve)))
-    result))
 
 ;;; Report Generation
 

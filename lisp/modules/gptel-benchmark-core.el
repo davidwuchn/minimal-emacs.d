@@ -70,10 +70,42 @@ Use `gptel-benchmark--cancelled' to check if cancelled."
     (json-read)))
 
 (defun gptel-benchmark-write-json (data file)
-  "Write DATA as JSON to FILE with pretty printing."
-  (with-temp-file file
-    (let ((json-encoding-pretty-print t))
-      (insert (json-encode data)))))
+  "Write DATA as JSON to FILE with pretty printing.
+DATA should be an alist or list of alists for proper JSON encoding.
+Plists are converted to alists automatically."
+  (let ((json-data (gptel-benchmark--to-json-format data)))
+    (with-temp-file file
+      (let ((json-encoding-pretty-print t))
+        (insert (json-encode json-data))))))
+
+(defun gptel-benchmark--to-json-format (data)
+  "Convert DATA to JSON-serializable format.
+Handles plists by converting to alists."
+  (cond
+   ((null data) nil)
+   ((and (listp data) (keywordp (car data)))
+    (gptel-benchmark--plist-to-alist data))
+   ((listp data)
+    (mapcar #'gptel-benchmark--to-json-format data))
+   (t data)))
+
+(defun gptel-benchmark--plist-to-alist (plist)
+  "Convert PLIST to alist format for JSON encoding."
+  (let (alist)
+    (while plist
+      (let ((key (car plist))
+            (val (cadr plist)))
+        (when (keywordp key)
+          (setq key (intern (substring (symbol-name key) 1))))
+        (push (cons key (gptel-benchmark--to-json-format val)) alist)
+        (setq plist (cddr plist))))
+    (nreverse alist)))
+
+(defun gptel-benchmark--get-field (obj field)
+  "Get FIELD from OBJ, handling both plist and alist formats.
+FIELD should be a keyword like :score."
+  (or (plist-get obj field)
+      (cdr (assq (intern (substring (symbol-name field) 1)) obj))))
 
 ;;; Historical Tracking
 
