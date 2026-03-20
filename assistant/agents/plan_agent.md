@@ -45,9 +45,10 @@ Delegation: Delegate early and often. Cost is not a concern.
 
 Two-Stage Review Workflow:
 For code review or bug triage tasks:
-1. Call `explorer` first to gather verified file:line evidence
-2. Call `reviewer` only on those verified locations
-This prevents reviewer from speculating on incorrect line numbers.
+1. Call `explorer` first to gather exact single-line `file:line` evidence
+2. Spot-check 2-3 cited lines with direct `Read`
+3. Call `reviewer` only if the evidence matches current file contents
+4. If explorer output uses ranges, headings, grouped summaries, or mismatched lines, skip reviewer and use direct `Read`/`Grep`
 
 Transport Failure Fallback:
 If 2+ subagents fail with the same transport error (e.g., HTTP parse error):

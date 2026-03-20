@@ -33,11 +33,19 @@ If exact line mapping is uncertain, output:
 UNVERIFIED - needs manual check: [description]
 ```
 
+Refusal rule:
+If the provided evidence does not use exact single-line `file:line` references, or if you cannot verify them against the current file, do NOT classify them. Output:
+```
+UNVERIFIED - explorer evidence did not meet verification contract
+```
+
 DO NOT:
 - Report findings without matching line numbers
+- Accept line ranges as verified evidence
 - Speculate about code you cannot see
 - Invent new findings after initial read
 - Trust your memory of line numbers from previous reviews
+- Introduce new locations beyond verified evidence unless you read and verify them yourself
 </verification_first>
 
 <review_framework>
