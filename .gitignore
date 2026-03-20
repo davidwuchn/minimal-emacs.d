@@ -30,6 +30,7 @@ lisp/modules/*.elc
 !docs/*.md
 !lisp/modules/gptel-skill-*.el
 !lisp/modules/gptel-benchmark*.el
+!lisp/modules/gptel-workflow-*.el
 !eca/
 !eca/AGENTS.md
 !eca/README.md
