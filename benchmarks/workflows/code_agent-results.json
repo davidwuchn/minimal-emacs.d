@@ -1,0 +1,62 @@
+[
+  {
+    "test-id": "code-001",
+    "run-id": "20260320-100000",
+    "timestamp": "2026-03-20T10:00:00",
+    "metrics": {
+      "duration_seconds": 55,
+      "step_count": 6,
+      "continuation_count": 1,
+      "completed": true,
+      "phases": [{"phase": "P1", "entered": true}, {"phase": "P3", "entered": true}],
+      "tool_calls": [{"tool": "read", "timestamp": 1}, {"tool": "edit", "timestamp": 10}]
+    },
+    "scores": {
+      "overall-score": 0.85,
+      "completion-score": 1.0,
+      "efficiency-score": 0.82,
+      "tool-score": 0.88,
+      "eight-keys-score": 0.80
+    }
+  },
+  {
+    "test-id": "code-002",
+    "run-id": "20260320-100100",
+    "timestamp": "2026-03-20T10:01:00",
+    "metrics": {
+      "duration_seconds": 40,
+      "step_count": 5,
+      "continuation_count": 0,
+      "completed": true,
+      "phases": [{"phase": "P1", "entered": true}],
+      "tool_calls": [{"tool": "grep", "timestamp": 1}, {"tool": "read", "timestamp": 5}, {"tool": "edit", "timestamp": 15}]
+    },
+    "scores": {
+      "overall-score": 0.88,
+      "completion-score": 1.0,
+      "efficiency-score": 0.90,
+      "tool-score": 0.92,
+      "eight-keys-score": 0.85
+    }
+  },
+  {
+    "test-id": "code-003",
+    "run-id": "20260320-100200",
+    "timestamp": "2026-03-20T10:02:00",
+    "metrics": {
+      "duration_seconds": 75,
+      "step_count": 8,
+      "continuation_count": 2,
+      "completed": true,
+      "phases": [{"phase": "P1", "entered": true}, {"phase": "P2", "entered": true}],
+      "tool_calls": [{"tool": "glob", "timestamp": 1}, {"tool": "read", "timestamp": 3}, {"tool": "read", "timestamp": 10}, {"tool": "edit", "timestamp": 30}]
+    },
+    "scores": {
+      "overall-score": 0.78,
+      "completion-score": 1.0,
+      "efficiency-score": 0.72,
+      "tool-score": 0.80,
+      "eight-keys-score": 0.75
+    }
+  }
+]

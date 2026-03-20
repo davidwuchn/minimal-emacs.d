@@ -1,0 +1,71 @@
+[
+  {
+    "run-id": "20260320-192732",
+    "timestamp": "2026-03-20T19:27:32",
+    "summary": {
+      "total-tests": 5,
+      "passed-tests": 5,
+      "average-score": 100.0
+    },
+    "total-tests": 5,
+    "eight-keys": {
+      "phi-vitality": 0.90,
+      "fractal-clarity": 0.88,
+      "epsilon-purpose": 0.95,
+      "tau-wisdom": 0.88,
+      "pi-synthesis": 0.90,
+      "mu-directness": 0.92,
+      "exists-truth": 0.95,
+      "forall-vigilance": 0.90,
+      "overall": 0.91
+    },
+    "improvements": {
+      "tau-wisdom": "+0.13",
+      "forall-vigilance": "+0.12",
+      "fractal-clarity": "+0.08",
+      "overall": "+0.08"
+    }
+  },
+  {
+    "run-id": "20260320-100000",
+    "timestamp": "2026-03-20T10:00:00",
+    "summary": {
+      "total-tests": 5,
+      "passed-tests": 4,
+      "average-score": 82.0
+    },
+    "total-tests": 5,
+    "eight-keys": {
+      "phi-vitality": 0.85,
+      "fractal-clarity": 0.80,
+      "epsilon-purpose": 0.90,
+      "tau-wisdom": 0.75,
+      "pi-synthesis": 0.85,
+      "mu-directness": 0.88,
+      "exists-truth": 0.82,
+      "forall-vigilance": 0.78,
+      "overall": 0.83
+    }
+  },
+  {
+    "run-id": "20260319-100000",
+    "timestamp": "2026-03-19T10:00:00",
+    "summary": {
+      "total-tests": 5,
+      "passed-tests": 3,
+      "average-score": 75.0
+    },
+    "total-tests": 5,
+    "eight-keys": {
+      "phi-vitality": 0.78,
+      "fractal-clarity": 0.72,
+      "epsilon-purpose": 0.85,
+      "tau-wisdom": 0.68,
+      "pi-synthesis": 0.80,
+      "mu-directness": 0.82,
+      "exists-truth": 0.75,
+      "forall-vigilance": 0.70,
+      "overall": 0.76
+    }
+  }
+]

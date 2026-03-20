@@ -1,0 +1,23 @@
+[
+  {
+    "run-id": "20260320-100000",
+    "timestamp": "2026-03-20T10:00:00",
+    "summary": {
+      "total-tests": 6,
+      "passed-tests": 5,
+      "average-score": 85.0
+    },
+    "total-tests": 6,
+    "eight-keys": {
+      "phi-vitality": 0.88,
+      "fractal-clarity": 0.85,
+      "epsilon-purpose": 0.90,
+      "tau-wisdom": 0.82,
+      "pi-synthesis": 0.87,
+      "mu-directness": 0.85,
+      "exists-truth": 0.88,
+      "forall-vigilance": 0.80,
+      "overall": 0.86
+    }
+  }
+]

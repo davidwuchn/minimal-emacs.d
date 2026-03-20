@@ -49,6 +49,39 @@ This skill provides **REPL tools** for the protocol:
 ;; 5. Save to file ONLY after verification
 ```
 
+### REPL Examples
+
+```clojure
+;; Edge case testing pattern (ALWAYS test these)
+(defn safe-reverse [coll]
+  (cond
+    (nil? coll) '()
+    (empty? coll) '()
+    :else (reverse coll)))
+
+;; REPL verification workflow
+(safe-reverse nil)           ;=> ()
+(safe-reverse [])            ;=> ()
+(safe-reverse [1 2 3])       ;=> (3 2 1)
+```
+
+### Decision Tree: Collection Processing
+
+| Goal | Use | Avoid |
+|------|-----|-------|
+| Transform each item | `map` / `mapv` | `doseq` (side effects only) |
+| Accumulate result | `reduce` | atom for accumulation |
+| Complex iteration | `loop/recur` (last resort) | explicit recursion |
+| Thread transformations | `->` / `->>` | nested function calls |
+
+### Pre-Save Verification Checklist
+
+- [ ] REPL tested: nil, empty, invalid inputs
+- [ ] No `!` suffix in function names
+- [ ] Threading macros over deep nesting
+- [ ] No inline comments (use descriptive names)
+- [ ] Zero compilation warnings
+
 ## Definition of Done
 
 - [ ] REPL testing completed (all edge cases)

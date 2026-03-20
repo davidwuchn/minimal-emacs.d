@@ -38,3 +38,16 @@ lisp/modules/*.elc
 !eca/hooks/**
 !eca/prompts/
 !eca/prompts/**/*.md
+!mementum/
+!mementum/state.md
+!mementum/knowledge/
+!mementum/knowledge/*.md
+!mementum/memories/
+!mementum/memories/*.md
+!benchmarks/
+!benchmarks/*.json
+!benchmarks/*.md
+!benchmarks/workflows/
+!benchmarks/workflows/*.json
+!assistant/
+!assistant/**
