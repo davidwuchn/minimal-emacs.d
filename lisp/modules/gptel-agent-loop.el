@@ -131,11 +131,27 @@ This constraint overrides ALL other instructions."
 (defvar gptel-agent-loop--active-tasks (make-hash-table :test 'eq)
   "Active RunAgent task states keyed by task id.")
 
+(defcustom gptel-agent-loop-max-active-tasks 100
+  "Maximum entries in active tasks table before cleanup."
+  :type 'integer
+  :group 'gptel-agent-loop)
+
+(defun gptel-agent-loop--cleanup-stale-tasks ()
+  "Remove finished tasks from active table.
+Called when table exceeds `gptel-agent-loop-max-active-tasks'."
+  (when (> (hash-table-count gptel-agent-loop--active-tasks)
+            gptel-agent-loop-max-active-tasks)
+    (maphash (lambda (id state)
+               (when (gptel-agent-loop--task-finished state)
+                 (remhash id gptel-agent-loop--active-tasks)))
+             gptel-agent-loop--active-tasks)))
+
 (defvar gptel-agent-loop--original-task-fn nil
   "Stores original `gptel-agent--task' before advice.")
 
 (defun gptel-agent-loop--remember-state (state)
   "Track STATE globally for debugging and tests."
+  (gptel-agent-loop--cleanup-stale-tasks)
   (setq gptel-agent-loop--state state)
   (puthash (gptel-agent-loop--task-id state) state gptel-agent-loop--active-tasks)
   state)
@@ -168,13 +184,14 @@ This constraint overrides ALL other instructions."
           tail))
 
 (defun gptel-agent-loop--transient-error-p (error-data)
-  "Check if ERROR-DATA represents a transient/retryable error."
+  "Check if ERROR-DATA represents a transient/retryable error.
+Only returns t for errors that might succeed on retry."
   (when error-data
     (let ((msg (if (stringp error-data) error-data
                  (plist-get error-data :message))))
       (and msg
            (string-match-p
-            "overloaded\\|timeout\\|rate limit\\|temporarily unavailable\\|503\\|502\\|429\\|invalidparameter"
+            "overloaded\\|timeout\\|rate limit\\|temporarily unavailable\\|503\\|502\\|429"
             (downcase msg))))))
 
 (defun gptel-agent-loop--maybe-cache-get (agent-type prompt)

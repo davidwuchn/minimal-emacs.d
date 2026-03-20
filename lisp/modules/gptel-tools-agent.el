@@ -44,8 +44,12 @@ Set to 0 to disable caching."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defvar my/gptel--subagent-temp-files nil
-  "List of temp files created by subagent results.")
+(defvar-local my/gptel--subagent-temp-files nil
+  "Buffer-local list of temp files created by subagent results.
+Each buffer manages its own temp files to avoid race conditions.")
+
+(defvar my/gptel--global-temp-files nil
+  "Global fallback list for temp files (used when no buffer context).")
 
 (defvar my/gptel--subagent-cache (make-hash-table :test 'equal)
   "Hash table for caching subagent results.
@@ -119,17 +123,20 @@ large-result truncation, and result caching."
          (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
     (cl-progv syms vals
       (gptel--apply-preset preset)
-      (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
-             (info (and parent-fsm (gptel-fsm-info parent-fsm)))
-              (parent-buf (plist-get info :buffer))
-              (where (or (plist-get info :tracking-marker)
-                         (plist-get info :position)))
-             (tracking-marker (let ((m (copy-marker where)))
-                                (set-marker-insertion-type m t)
-                                (set-marker m (marker-position where) parent-buf)
-                                m))
-             (partial (format "%s result for task: %s\n\n"
-                              (capitalize agent-type) description)))
+(let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
+              (info (and parent-fsm (gptel-fsm-info parent-fsm)))
+               (parent-buf (when (buffer-live-p (plist-get info :buffer))
+                             (plist-get info :buffer)))
+               (where (or (plist-get info :tracking-marker)
+                          (plist-get info :position)))
+              (tracking-marker (if (and where parent-buf (buffer-live-p parent-buf))
+                                  (let ((m (copy-marker where)))
+                                    (set-marker-insertion-type m t)
+                                    (set-marker m (marker-position where) parent-buf)
+                                    m)
+                                (point-min-marker)))
+              (partial (format "%s result for task: %s\n\n"
+                               (capitalize agent-type) description)))
         (gptel--update-status " Calling Agent..." 'font-font-lock-escape-face)
         (gptel-request prompt
           :context (gptel-agent--task-overlay where agent-type description)
@@ -173,18 +180,20 @@ large-result truncation, and result caching."
       (let* ((temp-file (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt"))
              (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
                                 (substring result 0 my/gptel-subagent-result-limit)
-                                temp-file)))
+                                temp-file))
+             (file-list (if (buffer-live-p (current-buffer))
+                            'my/gptel--subagent-temp-files
+                          'my/gptel--global-temp-files)))
         (with-temp-file temp-file
           (insert result))
-        (push temp-file my/gptel--subagent-temp-files)
+        (push temp-file (symbol-value file-list))
         (when (> my/gptel-subagent-temp-file-ttl 0)
           (run-at-time my/gptel-subagent-temp-file-ttl nil
-                       (lambda (f)
+                       (lambda (f list-var)
                          (when (file-exists-p f)
                            (delete-file f))
-                         (setq my/gptel--subagent-temp-files
-                               (delete f my/gptel--subagent-temp-files)))
-                       temp-file))
+                         (set list-var (delete f (symbol-value list-var))))
+                       temp-file file-list))
         (funcall callback trunc-msg))
     (funcall callback result)))
 
@@ -248,14 +257,26 @@ explicitly to avoid capturing the wrong buffer."
         (when (not (string-empty-p file-context))
           (setq context (concat context "<files>\n" file-context "</files>\n\n")))))
 
-    (when include-diff
-      (let* ((default-directory (or (and (fboundp 'project-current)
-                                         (project-current)
-                                         (project-root (project-current)))
-                                    default-directory))
-             (diff-out (with-temp-buffer
-                         (call-process "git" nil t nil "diff" "HEAD")
-                         (buffer-string))))
+(when include-diff
+      (let* ((proj-root (and (fboundp 'project-current)
+                              (project-current)
+                              (project-root (project-current))))
+             (default-directory
+              (cond
+               ((and proj-root (file-in-directory-p default-directory proj-root))
+                proj-root)
+               ((and proj-root (file-exists-p (expand-file-name ".git" proj-root)))
+                proj-root)
+               (t default-directory)))
+              (diff-out (with-temp-buffer
+                          (condition-case err
+                              (let ((exit-code (call-process "git" nil '(t nil) nil "diff" "HEAD")))
+                                (unless (eq exit-code 0)
+                                  (message "[gptel] git diff exit code %s" exit-code))
+                                (buffer-string))
+                            (error
+                             (message "[gptel] git diff error: %s" (error-message-string err))
+                             "")))))
         (when (not (string-empty-p diff-out))
           (setq context (concat context "<git_diff>\n" diff-out "\n</git_diff>\n\n")))))
 
