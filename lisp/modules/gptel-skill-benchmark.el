@@ -30,15 +30,40 @@
 (require 'cl-lib)
 (require 'gptel-skill-utils)
 
-(defvar gptel-skill-benchmark-dir "./benchmarks/"
-  "Directory where benchmark results are stored.")
+(declare-function gptel-agent--task "gptel-agent-tools")
+
+;;; Customization
+
+(defgroup gptel-skill-benchmark nil
+  "Benchmarking for GPTel skills."
+  :group 'gptel)
+
+(defcustom gptel-skill-benchmark-dir "./benchmarks/"
+  "Directory where benchmark results are stored."
+  :type 'directory
+  :group 'gptel-skill-benchmark)
+
+(defcustom gptel-skill-tests-dir "./assistant/evals/skill-tests/"
+  "Directory where test definitions are stored."
+  :type 'directory
+  :group 'gptel-skill-benchmark)
+
+(defcustom gptel-skill-skills-dir "./assistant/skills/"
+  "Directory where skill definitions are stored."
+  :type 'directory
+  :group 'gptel-skill-benchmark)
+
+;;; Cancel Support
+
+(defvar gptel-skill-benchmark--cancelled nil
+  "Flag to cancel running benchmark.")
 
 ;;; Test Loading
 
 (defun gptel-skill-load-tests (skill-name)
   "Load test definitions for SKILL-NAME.
 Returns list of test plists with :id, :name, :prompt, :expected_behaviors, :forbidden_behaviors."
-  (let ((test-file (format "./assistant/evals/skill-tests/%s.json" skill-name)))
+  (let ((test-file (expand-file-name (format "%s.json" skill-name) gptel-skill-tests-dir)))
     (if (file-exists-p test-file)
         (let* ((data (gptel-skill-read-json test-file))
                (test-cases (cdr (assq 'test_cases data))))
@@ -59,14 +84,17 @@ Returns list of test plists with :id, :name, :prompt, :expected_behaviors, :forb
   "Execute TEST-ID for SKILL with PROMPT using gptel-agent--task.
 Calls CALLBACK with result string asynchronously."
   (gptel-skill-feedback-log 'execute (format "Executing test %s for skill %s" test-id skill))
-  (if (fboundp 'gptel-agent--task)
-      (gptel-agent--task
-       callback
-       skill
-       (format "Benchmark test: %s" test-id)
-       prompt)
-    (funcall callback (format "[MOCK] Skill %s: %s"
-                              skill (truncate-string-to-width prompt 100 nil nil "...")))))
+  (condition-case err
+      (if (fboundp 'gptel-agent--task)
+          (gptel-agent--task
+           callback
+           skill
+           (format "Benchmark test: %s" test-id)
+           prompt)
+        (funcall callback (format "[MOCK] Skill %s: %s"
+                                  skill (truncate-string-to-width prompt 100 nil nil "..."))))
+    (error
+     (funcall callback (format "ERROR: %s" (error-message-string err))))))
 
 ;;; Async Grading
 
@@ -76,15 +104,23 @@ OUTPUT is the skill output. EXPECTED and FORBIDDEN are behavior lists.
 Calls CALLBACK with grade plist."
   (let* ((grading-prompt (gptel-skill--make-grading-prompt output expected forbidden))
          (total (+ (length expected) (length forbidden))))
-    (if (and (fboundp 'gptel-agent--task) (> total 0))
-        (gptel-agent--task
-         (lambda (result)
-           (funcall callback (gptel-skill--parse-grade-response result)))
-         "grader"
-         (format "Grade test: %s" test-id)
-         grading-prompt)
-      (funcall callback (list :score 0 :total total :percentage 0.0
-                              :passed nil :details "No grader or no behaviors")))))
+    (condition-case err
+        (if (and (fboundp 'gptel-agent--task) (> total 0))
+            (gptel-agent--task
+             (lambda (result)
+               (condition-case nil
+                   (funcall callback (gptel-skill--parse-grade-response result))
+                 (error
+                  (funcall callback (list :score 0 :total total :percentage 0.0
+                                          :passed nil :details (format "Parse error: %s" result))))))
+             "grader"
+             (format "Grade test: %s" test-id)
+             grading-prompt)
+          (funcall callback (list :score 0 :total total :percentage 0.0
+                                  :passed nil :details "No grader or no behaviors")))
+      (error
+       (funcall callback (list :score 0 :total total :percentage 0.0
+                               :passed nil :details (format "Error: %s" (error-message-string err))))))))
 
 (defun gptel-skill--make-grading-prompt (output expected forbidden)
   "Create grading prompt for OUTPUT against EXPECTED and FORBIDDEN behaviors."
@@ -134,59 +170,71 @@ SUMMARY: SCORE: X/Y"
   "Run benchmark for SKILL-NAME asynchronously.
 Calls CALLBACK with results list when complete."
   (let* ((run-id (format-time-string "%Y%m%d-%H%M%S"))
-         (benchmark-file (format "%s%s-benchmark.json" gptel-skill-benchmark-dir skill-name))
+         (benchmark-file (expand-file-name (format "%s-benchmark.json" skill-name)
+                                           gptel-skill-benchmark-dir))
          (tests (gptel-skill-load-tests skill-name))
-         (results '())
-         (pending 0)
-         (lock (make-mutex)))
+         (results (make-vector (length tests) nil))
+         (pending (length tests))
+         (index 0))
+    (setq gptel-skill-benchmark--cancelled nil)
     (if (null tests)
         (funcall callback nil)
       (gptel-skill-feedback-log 'benchmark-start
                                 (format "Starting benchmark for %s with %d tests"
                                         skill-name (length tests)))
       (dolist (test tests)
-        (mutex-lock lock)
-        (cl-incf pending)
-        (mutex-unlock lock)
-        (let* ((test-id (plist-get test :id))
-               (prompt (plist-get test :prompt))
-               (expected (plist-get test :expected_behaviors))
-               (forbidden (plist-get test :forbidden_behaviors)))
+        (let ((current-index index)
+              (test-id (plist-get test :id))
+              (prompt (plist-get test :prompt))
+              (expected (plist-get test :expected_behaviors))
+              (forbidden (plist-get test :forbidden_behaviors)))
+          (setq index (1+ index))
           (gptel-skill-execute-test
            skill-name test-id prompt
            (lambda (output)
-             (gptel-skill-grade-with-agent
-              test-id output expected forbidden
-              (lambda (grade)
-                (gptel-skill-feedback-log 'test-complete
-                                          (format "Test %s: score=%.1f%%"
-                                                  test-id (plist-get grade :percentage)))
-                (mutex-lock lock)
-                (push (list :test-id test-id
-                            :run-id run-id
-                            :output (truncate-string-to-width output 500 nil nil "...")
-                            :grade grade
-                            :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S"))
-                      results)
-                (cl-decf pending)
-                (let ((done (= pending 0)))
-                  (mutex-unlock lock)
-                  (when done
-                    (let ((final-results (nreverse results)))
+             (when gptel-skill-benchmark--cancelled
+               (message "[Benchmark] Cancelled"))
+             (if gptel-skill-benchmark--cancelled
+                 (progn
+                   (setq pending 0)
+                   (funcall callback nil))
+               (gptel-skill-grade-with-agent
+                test-id output expected forbidden
+                (lambda (grade)
+                  (gptel-skill-feedback-log 'test-complete
+                                            (format "Test %s: score=%.1f%%"
+                                                    test-id (plist-get grade :percentage)))
+                  (aset results current-index
+                        (list :test-id test-id
+                              :run-id run-id
+                              :output (truncate-string-to-width output 500 nil nil "...")
+                              :grade grade
+                              :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")))
+                  (setq pending (1- pending))
+                  (when (= pending 0)
+                    (let ((final-results (append results nil)))
                       (gptel-skill-save-results benchmark-file final-results)
                       (gptel-skill-benchmark-save-historical skill-name final-results)
                       (gptel-skill-feedback-log 'benchmark-complete
                                                 (format "Benchmark complete: %d tests" (length final-results)))
                       (funcall callback final-results)))))))))))))
 
-;;; Interactive Wrapper (blocking for user convenience)
+;;; Cancel
+
+(defun gptel-skill-benchmark-cancel ()
+  "Cancel running benchmark."
+  (interactive)
+  (setq gptel-skill-benchmark--cancelled t)
+  (message "Benchmark cancellation requested..."))
+
+;;; Interactive Wrapper (with cancellation support)
 
 (defun gptel-skill-benchmark-run (skill-name)
   "Run benchmark for SKILL-NAME.
-Blocks until complete when called interactively."
+Type C-g to cancel."
   (interactive
-   (list (completing-read "Skill to benchmark: "
-                          (directory-files "./assistant/evals/skill-tests/" nil "\\.json$"))))
+   (list (completing-read "Skill to benchmark (C-g to cancel): "
+                          (directory-files gptel-skill-tests-dir nil "\\.json$"))))
   (setq skill-name (replace-regexp-in-string "\\.json$" "" skill-name))
   (let ((result nil)
         (done nil))
@@ -194,22 +242,31 @@ Blocks until complete when called interactively."
      skill-name
      (lambda (results)
        (setq result results done t)))
-    (message "Running benchmark for %s..." skill-name)
-    (while (not done)
-      (sit-for 0.2))
+    (message "Running benchmark for %s... (C-g to cancel)" skill-name)
+    (while (and (not done) (not gptel-skill-benchmark--cancelled))
+      (when (input-pending-p)
+        (let ((event (read-event nil nil 0.1)))
+          (when (and event (eq event ?\C-g))
+            (gptel-skill-benchmark-cancel)
+            (keyboard-quit)))))
     (when (called-interactively-p 'interactive)
-      (if result
-          (message "Benchmark complete: %d tests, avg: %.1f%%"
-                   (length result)
-                   (gptel-skill--average-score result))
-        (message "No tests found for %s" skill-name)))
+      (cond
+       (gptel-skill-benchmark--cancelled
+        (message "Benchmark cancelled"))
+       (result
+        (message "Benchmark complete: %d tests, avg: %.1f%%"
+                 (length result)
+                 (gptel-skill--average-score result)))
+       (t
+        (message "No tests found for %s" skill-name))))
     result))
 
 ;;; Historical Data
 
 (defun gptel-skill-benchmark-save-historical (skill-name results)
   "Save RESULTS to historical file for SKILL-NAME."
-  (let* ((history-file (format "%s%s-history.json" gptel-skill-benchmark-dir skill-name))
+  (let* ((history-file (expand-file-name (format "%s-history.json" skill-name)
+                                         gptel-skill-benchmark-dir))
          (existing (when (file-exists-p history-file)
                      (gptel-skill-read-json history-file)))
          (run-id (format-time-string "%Y%m%d-%H%M%S"))
@@ -238,7 +295,8 @@ Blocks until complete when called interactively."
 
 (defun gptel-skill-benchmark-load-history (skill-name)
   "Load historical benchmark data for SKILL-NAME."
-  (let ((history-file (format "%s%s-history.json" gptel-skill-benchmark-dir skill-name)))
+  (let ((history-file (expand-file-name (format "%s-history.json" skill-name)
+                                        gptel-skill-benchmark-dir)))
     (when (file-exists-p history-file)
       (let ((data (gptel-skill-read-json history-file)))
         (if (vectorp data) (append data nil) data)))))
@@ -254,11 +312,6 @@ Blocks until complete when called interactively."
           (cl-incf total pct)
           (cl-incf count))))
     (if (> count 0) (/ total count) 0.0)))
-
-(defun gptel-skill--get-field (obj field)
-  "Get FIELD from OBJ, handling both plist and alist formats."
-  (or (plist-get obj field)
-      (cdr (assq (intern (substring (symbol-name field) 1)) obj))))
 
 (defun gptel-skill-benchmark-summary (benchmark-file)
   "Generate summary from BENCHMARK-FILE."
@@ -287,9 +340,10 @@ Blocks until complete when called interactively."
   "Show benchmark results for SKILL-NAME."
   (interactive
    (list (completing-read "Skill: "
-                          (directory-files "./assistant/evals/skill-tests/" nil "\\.json$"))))
+                          (directory-files gptel-skill-tests-dir nil "\\.json$"))))
   (setq skill-name (replace-regexp-in-string "\\.json$" "" skill-name))
-  (let* ((benchmark-file (format "%s%s-benchmark.json" gptel-skill-benchmark-dir skill-name))
+  (let* ((benchmark-file (expand-file-name (format "%s-benchmark.json" skill-name)
+                                           gptel-skill-benchmark-dir))
          (results (when (file-exists-p benchmark-file)
                     (gptel-skill-read-json benchmark-file)))
          (summary (when results (gptel-skill-benchmark-summary benchmark-file))))
@@ -313,7 +367,7 @@ Blocks until complete when called interactively."
   "Show trend of benchmark scores over time for SKILL-NAME."
   (interactive
    (list (completing-read "Skill: "
-                          (directory-files "./assistant/evals/skill-tests/" nil "\\.json$"))))
+                          (directory-files gptel-skill-tests-dir nil "\\.json$"))))
   (setq skill-name (replace-regexp-in-string "\\.json$" "" skill-name))
   (let* ((history (gptel-skill-benchmark-load-history skill-name)))
     (if (not history)

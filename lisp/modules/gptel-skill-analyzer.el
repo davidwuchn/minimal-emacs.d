@@ -28,6 +28,8 @@
 (require 'cl-lib)
 (require 'gptel-skill-utils)
 
+(declare-function gptel-agent--task "gptel-agent-tools")
+
 (defun gptel-skill-analyze-results (benchmark-file)
   "Analyze results in BENCHMARK-FILE.
 Uses analyzer agent via gptel-agent--task if available."

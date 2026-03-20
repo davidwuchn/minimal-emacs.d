@@ -66,6 +66,14 @@ Handles plists by converting to alists."
         (setq plist (cddr plist))))
     (nreverse alist)))
 
+;;; Field Access
+
+(defun gptel-skill--get-field (obj field)
+  "Get FIELD from OBJ, handling both plist and alist formats.
+FIELD should be a keyword like :score."
+  (or (plist-get obj field)
+      (cdr (assq (intern (substring (symbol-name field) 1)) obj))))
+
 (provide 'gptel-skill-utils)
 
 ;;; gptel-skill-utils.el ends here
