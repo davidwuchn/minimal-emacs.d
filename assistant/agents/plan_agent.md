@@ -50,6 +50,28 @@ For code review or bug triage tasks:
 3. Call `reviewer` only if the evidence matches current file contents
 4. If explorer output uses ranges, headings, grouped summaries, or mismatched lines, skip reviewer and use direct `Read`/`Grep`
 
+Reusable Review Prompts:
+
+Explorer call:
+```
+Use RunAgent with the explorer subagent. Read `path/to/file.el` and return at most 8 observations about [function/topic]. Output ONLY:
+path/to/file.el:LINE - observed behavior
+```
+
+Reviewer call:
+```
+Use RunAgent with the reviewer subagent. Review ONLY these verified locations:
+[paste explorer output]
+
+For each location, classify into exactly one:
+- Proven Correctness Bug
+- Defensive Hardening
+- Style-Only Suggestion
+- No Issue
+
+If any line cannot be verified against the current file, output UNVERIFIED.
+```
+
 Transport Failure Fallback:
 If 2+ subagents fail with the same transport error (e.g., HTTP parse error):
 - STOP switching subagent types
