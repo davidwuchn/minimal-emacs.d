@@ -64,6 +64,17 @@
   (should-not (gptel-agent-loop--looks-like-planning-p "Created file successfully."))
   (should-not (gptel-agent-loop--looks-like-planning-p "short")))
 
+(ert-deftest gptel-agent-loop-test-looks-like-finishing ()
+  (should (gptel-agent-loop--looks-like-finishing-p "Let me summarize the findings."))
+  (should (gptel-agent-loop--looks-like-finishing-p "I will conclude with the main points."))
+  (should (gptel-agent-loop--looks-like-finishing-p "In conclusion, the fix is correct."))
+  (should (gptel-agent-loop--looks-like-finishing-p "To summarize, here are the results."))
+  (should (gptel-agent-loop--looks-like-finishing-p "That's all for this task."))
+  (should (gptel-agent-loop--looks-like-finishing-p "Here is the final answer."))
+  (should-not (gptel-agent-loop--looks-like-finishing-p "Let me check the file first."))
+  (should-not (gptel-agent-loop--looks-like-finishing-p "I will now read the configuration."))
+  (should-not (gptel-agent-loop--looks-like-finishing-p "Step 1: Read the file.")))
+
 (ert-deftest gptel-agent-loop-test-retry-uses-fixed-delay ()
   (gptel-agent-loop-test--with-env
    (let (callback retry-delay retried)

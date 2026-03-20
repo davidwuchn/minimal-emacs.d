@@ -276,11 +276,18 @@ Detects common patterns where model talks about doing work but didn't call tools
     (and (>= (length resp) 30)
          (string-match-p "let me\\|i will\\|i need to\\|now i\\|going to\\|first,\\|step 1\\|todo\\|checklist" lower-resp))))
 
+(defun gptel-agent-loop--looks-like-finishing-p (resp)
+  "Return non-nil when RESP looks like model is about to finish.
+Detects patterns indicating the model is wrapping up, not planning more work."
+  (let ((lower-resp (downcase resp)))
+    (string-match-p "summariz\\|conclude\\|conclusion\\|finish\\|wrap up\\|that's all\\|in summary\\|to summarize\\|final\\|overall\\|here ('s|is) (the |)\\(result\\|answer\\|output\\)" lower-resp)))
+
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP.
 Only continues if tools were called AND model seems to be planning without action."
   (and gptel-agent-loop-force-completion
        (not (gptel-agent-loop--seems-complete-p resp))
+       (not (gptel-agent-loop--looks-like-finishing-p resp))
        (not (gptel-agent-loop--task-max-steps-reached state))
        (> (gptel-agent-loop--task-step-count state) 0)
        (or (gptel-agent-loop--turn-skipped-p resp)
