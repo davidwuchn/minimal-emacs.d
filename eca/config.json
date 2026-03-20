@@ -69,7 +69,7 @@
       "mode": "subagent",
       "defaultModel": "github-copilot/gpt-5.4",
       "description": "Code reviewer for project changes, use it when asked to review code",
-      "systemPrompt": "You are expert in code review, analyze the changes in git and be rigorous about the changes."
+      "systemPrompt": "${file:prompts/reviewer_agent.md}"
     },
     "explorer": {
       "mode": "subagent",

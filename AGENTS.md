@@ -48,10 +48,19 @@ Tool-based skills reference protocols and provide external integrations:
 | Skill | Protocol | External Dependency |
 |-------|----------|---------------------|
 | `clojure-expert` | `clojure-protocol.md` | REPL |
-| `clojure-reviewer` | `clojure-protocol.md` | REPL verification |
 | `reddit` | — | Python scripts + API |
 | `requesthunt` | — | External API |
 | `seo-geo` | — | External API |
+
+### Subagents
+
+Dedicated subagents for specialized tasks:
+
+| Subagent | Purpose | Model |
+|----------|---------|-------|
+| `reviewer` | Code review (multi-scale) | `gpt-5.4` |
+| `executor` | Tests, docs, linting | `gpt-5.4-mini` |
+| `explorer` | Deep codebase analysis | `gpt-5.4` |
 
 ---
 
