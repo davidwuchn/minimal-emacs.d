@@ -50,6 +50,10 @@ jobs:
         run: |
           ./scripts/lint-elisp.sh
 
+      - name: Audit Mementum
+        run: |
+          ./scripts/audit-mementum.sh
+
   test:
     runs-on: ubuntu-latest
     strategy:

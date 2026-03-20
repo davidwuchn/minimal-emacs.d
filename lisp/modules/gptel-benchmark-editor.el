@@ -224,7 +224,7 @@ MODIFICATIONS is a plist of changes."
   "Apply PATCH to FILE.
 PATCH is a unified diff format string."
   (let ((checkpoint-id (gptel-benchmark-editor-create-checkpoint file)))
-    (let ((temp-patch (make-temp-file "benchmark-patch")))
+    (let ((temp-patch (gptel-benchmark-make-temp-file "benchmark-patch")))
       (with-temp-file temp-patch
         (insert patch))
       (let ((result (call-process "patch" nil nil nil "-p1" "-i" temp-patch file)))

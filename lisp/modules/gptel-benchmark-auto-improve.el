@@ -273,12 +273,13 @@ This is the Ouroboros loop: Observe → Detect → Generate → Apply → Feed F
     (dolist (impr generate)
       (gptel-benchmark-apply-improvement name type impr)
       (cl-incf apply-count))
-    ;; Feed forward
-    (gptel-benchmark-memory-create
-     (format "improvement-cycle-%s" (format-time-string "%Y%m%d-%H%M%S"))
-     'pattern
-     (format "%s/%s: Observed %d issues, applied %d improvements via 相生/相克"
-             type name (length detect) apply-count))
+    ;; Feed forward (only when there's actual insight)
+    (when (or (> (length detect) 0) (> apply-count 0))
+      (gptel-benchmark-memory-create
+       (format "improvement-cycle-%s" (format-time-string "%Y%m%d-%H%M%S"))
+       'pattern
+       (format "%s/%s: Observed %d issues, applied %d improvements via 相生/相克"
+               type name (length detect) apply-count)))
     (list :name name
           :type type
           :anti-patterns (length detect)

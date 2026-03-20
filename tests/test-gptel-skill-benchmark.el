@@ -38,7 +38,7 @@
 
 (ert-deftest test-gptel-skill-benchmark-summary ()
   "Test generating benchmark summary."
-  (let ((test-file (make-temp-file "benchmark" nil ".json")))
+  (let ((test-file (gptel-benchmark-make-temp-file "benchmark" nil ".json")))
     (unwind-protect
         (progn
           (gptel-benchmark-write-json
@@ -55,7 +55,7 @@
 
 (ert-deftest test-gptel-skill-benchmark-summary-empty ()
   "Test summary with empty results."
-  (let ((test-file (make-temp-file "benchmark" nil ".json")))
+  (let ((test-file (gptel-benchmark-make-temp-file "benchmark" nil ".json")))
     (unwind-protect
         (progn
           (gptel-benchmark-write-json nil test-file)

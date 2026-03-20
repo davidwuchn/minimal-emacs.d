@@ -117,7 +117,11 @@ def main():
     parser.add_argument("--eval", help="Path to eval JSON file")
     parser.add_argument("--suite", help="Path to suite JSON file")
     parser.add_argument("--baseline", help="Baseline skill for comparison")
-    parser.add_argument("--output-dir", default="outputs", help="Output directory")
+    parser.add_argument(
+        "--output-dir",
+        default="var/tmp/eval-outputs",
+        help="Output directory (default: var/tmp/eval-outputs)",
+    )
     parser.add_argument(
         "--iterations", type=int, default=1, help="Number of iterations"
     )

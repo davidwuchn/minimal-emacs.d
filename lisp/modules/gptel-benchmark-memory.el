@@ -111,18 +111,50 @@ In interactive mode, uses project.el or falls back to git root."
 
 (defun gptel-benchmark-memory-create (slug symbol content)
   "Create a new memory with SLUG, SYMBOL, and CONTENT.
-Memory files are <200 words and contain one insight."
+Memory files are <200 words and contain one insight.
+Returns nil and logs warning if content appears to be noise."
   (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
          (symbol-str (alist-get symbol gptel-benchmark-memory-symbols "💡"))
          (mem-file (expand-file-name (format "memories/%s.md" slug) mem-dir))
          (full-content (format "%s %s\n\n%s" symbol-str slug content)))
     (when (> (length (split-string content)) 200)
       (error "Memory content exceeds 200 words"))
+    (when (gptel-benchmark-memory--noise-p content)
+      (message "[memory] Skipping noise memory: %s" slug)
+      (cl-return-from gptel-benchmark-memory-create nil))
     (with-temp-file mem-file
       (insert full-content))
     (when gptel-benchmark-memory-auto-commit
       (gptel-benchmark-memory-commit (format "%s %s" symbol-str slug)))
     mem-file))
+
+(defun gptel-benchmark-memory--noise-p (content)
+  "Check if CONTENT is noise (null results, no insight).
+Returns t if content should be rejected."
+  (or (string-match-p "0 issues.*0 improvements" content)
+      (string-match-p "0 anti-patterns.*0 improvements" content)
+      (string-match-p "Observed 0.*applied 0" content)
+      (string-match-p "0 → 0 → 0" content)))
+
+(defun gptel-benchmark-memory-audit ()
+  "Audit all memories for noise. Return list of noise files."
+  (interactive)
+  (let* ((mem-dir (expand-file-name "memories/" (gptel-benchmark-memory--resolve-dir)))
+         (files (directory-files mem-dir t "\\.md$"))
+         (noise-files '()))
+    (dolist (file files)
+      (let ((content (with-temp-buffer
+                       (insert-file-contents file)
+                       (buffer-string))))
+        (when (gptel-benchmark-memory--noise-p content)
+          (push file noise-files))))
+    (when (called-interactively-p 'interactive)
+      (if noise-files
+          (message "[memory] Found %d noise memories: %s" 
+                   (length noise-files) 
+                   (mapconcat #'file-name-nondirectory noise-files ", "))
+        (message "[memory] No noise memories found")))
+    noise-files))
 
 (defun gptel-benchmark-memory-create-knowledge (topic frontmatter content)
   "Create knowledge page for TOPIC with FRONTMATTER and CONTENT.

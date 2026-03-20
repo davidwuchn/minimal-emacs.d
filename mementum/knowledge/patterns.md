@@ -3,7 +3,7 @@ title: Pattern Memory
 status: active
 category: knowledge
 tags: [patterns, anti-patterns, principles, elisp, gptel, nucleus]
-related: [mementum/knowledge/benchmark-roadmap.md]
+related: [mementum/knowledge/nucleus-patterns.md]
 ---
 
 # Pattern Memory

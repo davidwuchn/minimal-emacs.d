@@ -333,6 +333,20 @@ Returns plist with suggested threshold adjustments."
                 :message "Thresholds are well-calibrated"
                 :current-avg overall-avg)))))))
 
+;;; Temp File Helper
+
+(defun gptel-benchmark--temp-dir ()
+  "Return the temp directory in user-emacs-directory."
+  (let ((dir (expand-file-name "tmp/" (or user-emacs-directory default-directory))))
+    (unless (file-directory-p dir) (make-directory dir t))
+    dir))
+
+(defun gptel-benchmark-make-temp-file (prefix &optional dir-flag suffix)
+  "Like `make-temp-file' but in project var/tmp/ directory.
+PREFIX, DIR-FLAG, and SUFFIX are passed to `make-temp-file'."
+  (let ((temporary-file-directory (gptel-benchmark--temp-dir)))
+    (make-temp-file prefix dir-flag suffix)))
+
 ;;; Provide
 
 (provide 'gptel-benchmark-core)

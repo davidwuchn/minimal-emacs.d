@@ -127,7 +127,7 @@ Uses latest checkpoint for each file."
   "Show diff between current FILE and CHECKPOINT-ID."
   (let ((checkpoint (gptel-benchmark-rollback--find-checkpoint file checkpoint-id)))
     (when checkpoint
-      (let ((temp-file (make-temp-file "rollback-diff"))
+      (let ((temp-file (gptel-benchmark-make-temp-file "rollback-diff"))
             (diff-buffer (get-buffer-create "*Rollback Diff*")))
         (with-temp-file temp-file
           (insert (plist-get checkpoint :content)))

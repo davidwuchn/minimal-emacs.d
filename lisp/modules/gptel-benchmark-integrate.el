@@ -158,12 +158,14 @@ Try real benchmark if gptel-agent--task is available, else mock."
     (_ "")))
 
 (defun gptel-benchmark--feed-forward-improvement (name type anti-patterns applied capabilities)
-  "Store improvement result in memory for next cycle."
-  (gptel-benchmark-memory-create
-   (format "evolve-%s-%s" type (format-time-string "%Y%m%d-%H%M%S"))
-   'pattern
-   (format "%s/%s: %d anti-patterns → %d improvements → %d capabilities"
-           type name (length anti-patterns) applied (length capabilities))))
+  "Store improvement result in memory for next cycle.
+Only creates memory when there's actual insight (anti-patterns or improvements)."
+  (when (or (> (length anti-patterns) 0) (> applied 0))
+    (gptel-benchmark-memory-create
+     (format "evolve-%s-%s" type (format-time-string "%Y%m%d-%H%M%S"))
+     'pattern
+     (format "%s/%s: %d anti-patterns → %d improvements → %d capabilities"
+             type name (length anti-patterns) applied (length capabilities)))))
 
 ;;; Batch Processing
 

@@ -340,7 +340,11 @@ def main():
     parser = argparse.ArgumentParser(description="Skill Benchmark Runner")
     parser.add_argument("--skill", help="Skill name to benchmark")
     parser.add_argument("--tests", help="Path to test cases JSON")
-    parser.add_argument("--output-dir", default="outputs", help="Output directory")
+    parser.add_argument(
+        "--output-dir",
+        default="var/tmp/benchmark-outputs",
+        help="Output directory (default: var/tmp/benchmark-outputs)",
+    )
     parser.add_argument(
         "--skill-dir", help="Skills directory (default: assistant/skills)"
     )

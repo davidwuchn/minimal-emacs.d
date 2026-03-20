@@ -2,7 +2,23 @@
 
 > Last session: 2026-03-20
 
-## Completed (2026-03-20)
+## Completed (2026-03-20) — Mementum Cleanup
+
+Noise memory prevention:
+- Deleted 45 auto-generated memory files (improvement-cycle-*, evolve-skill-*) with null results
+- Fixed `gptel-benchmark-auto-improve.el` — guard memory creation with insight check
+- Fixed `gptel-benchmark-integrate.el` — guard feed-forward memory
+- Fixed `patterns.md` stale reference to non-existent benchmark-roadmap.md
+
+Temp file consolidation:
+- Added `gptel-benchmark-make-temp-file` helper in `gptel-benchmark-core.el`
+- Updated `gptel-benchmark-editor.el`, `gptel-benchmark-rollback.el` to use var/tmp/
+- Updated Python scripts to output to `var/tmp/benchmark-outputs`, `var/tmp/eval-outputs`
+- Removed `benchmarks/skill-results/` (temp test-run outputs)
+
+Memory count: 10 remaining (all actual insights)
+
+## Earlier (2026-03-20)
 
 Closed workflow benchmark gaps:
 - CI: Added workflow benchmarks to evolution.yml processing
