@@ -62,22 +62,40 @@
   "Memory symbols for encoding insights.
 Core symbols from Mementum + Eight Keys symbols.")
 
+(defun gptel-benchmark-memory--project-root ()
+  "Find project root directory.
+In batch mode, searches upward from command-line-default-directory.
+In interactive mode, uses project.el or falls back to git root."
+  (or (when (fboundp 'project-root)
+        (when-let ((proj (project-current nil)))
+          (project-root proj)))
+      (locate-dominating-file default-directory ".git")
+      (when noninteractive
+        (locate-dominating-file command-line-default-directory ".git"))
+      default-directory))
+
+(defun gptel-benchmark-memory--resolve-dir ()
+  "Resolve gptel-benchmark-memory-dir to absolute path."
+  (let ((root (gptel-benchmark-memory--project-root)))
+    (expand-file-name "mementum/" root)))
+
 ;;; Memory Operations
 
 (defun gptel-benchmark-memory-init ()
   "Initialize mementum directory structure."
-  (let ((mem-dir (expand-file-name "memories" gptel-benchmark-memory-dir))
-        (know-dir (expand-file-name "knowledge" gptel-benchmark-memory-dir)))
-    (unless (file-exists-p mem-dir)
-      (make-directory mem-dir t))
-    (unless (file-exists-p know-dir)
-      (make-directory know-dir t))
-    (unless (file-exists-p (expand-file-name "state.md" gptel-benchmark-memory-dir))
+  (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
+         (memories (expand-file-name "memories" mem-dir))
+         (knowledge (expand-file-name "knowledge" mem-dir)))
+    (unless (file-exists-p memories)
+      (make-directory memories t))
+    (unless (file-exists-p knowledge)
+      (make-directory knowledge t))
+    (unless (file-exists-p (expand-file-name "state.md" mem-dir))
       (gptel-benchmark-memory-update-state "Initialized mementum"))))
 
 (defun gptel-benchmark-memory-read-state ()
   "Read working memory state.md."
-  (let ((state-file (expand-file-name "state.md" gptel-benchmark-memory-dir)))
+  (let ((state-file (expand-file-name "state.md" (gptel-benchmark-memory--resolve-dir))))
     (when (file-exists-p state-file)
       (with-temp-buffer
         (insert-file-contents state-file)
@@ -85,7 +103,7 @@ Core symbols from Mementum + Eight Keys symbols.")
 
 (defun gptel-benchmark-memory-update-state (content)
   "Update working memory state.md with CONTENT."
-  (let ((state-file (expand-file-name "state.md" gptel-benchmark-memory-dir)))
+  (let ((state-file (expand-file-name "state.md" (gptel-benchmark-memory--resolve-dir))))
     (with-temp-file state-file
       (insert content))
     (when gptel-benchmark-memory-auto-commit
@@ -94,9 +112,9 @@ Core symbols from Mementum + Eight Keys symbols.")
 (defun gptel-benchmark-memory-create (slug symbol content)
   "Create a new memory with SLUG, SYMBOL, and CONTENT.
 Memory files are <200 words and contain one insight."
-  (let* ((symbol-str (alist-get symbol gptel-benchmark-memory-symbols "💡"))
-         (mem-file (expand-file-name (format "memories/%s.md" slug)
-                                     gptel-benchmark-memory-dir))
+  (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
+         (symbol-str (alist-get symbol gptel-benchmark-memory-symbols "💡"))
+         (mem-file (expand-file-name (format "memories/%s.md" slug) mem-dir))
          (full-content (format "%s %s\n\n%s" symbol-str slug content)))
     (when (> (length (split-string content)) 200)
       (error "Memory content exceeds 200 words"))
@@ -109,8 +127,8 @@ Memory files are <200 words and contain one insight."
 (defun gptel-benchmark-memory-create-knowledge (topic frontmatter content)
   "Create knowledge page for TOPIC with FRONTMATTER and CONTENT.
 Knowledge is AI documentation written for future AI sessions."
-  (let* ((know-file (expand-file-name (format "knowledge/%s.md" topic)
-                                       gptel-benchmark-memory-dir))
+  (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
+         (know-file (expand-file-name (format "knowledge/%s.md" topic) mem-dir))
          (full-content (format "%s\n\n%s" frontmatter content)))
     (with-temp-file know-file
       (insert full-content))
@@ -120,8 +138,8 @@ Knowledge is AI documentation written for future AI sessions."
 
 (defun gptel-benchmark-memory-update (slug content)
   "Update memory SLUG with new CONTENT."
-  (let ((mem-file (expand-file-name (format "memories/%s.md" slug)
-                                     gptel-benchmark-memory-dir)))
+  (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
+         (mem-file (expand-file-name (format "memories/%s.md" slug) mem-dir)))
     (unless (file-exists-p mem-file)
       (error "Memory not found: %s" slug))
     (with-temp-file mem-file
@@ -131,8 +149,8 @@ Knowledge is AI documentation written for future AI sessions."
 
 (defun gptel-benchmark-memory-delete (slug)
   "Delete memory SLUG."
-  (let ((mem-file (expand-file-name (format "memories/%s.md" slug)
-                                     gptel-benchmark-memory-dir)))
+  (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
+         (mem-file (expand-file-name (format "memories/%s.md" slug) mem-dir)))
     (unless (file-exists-p mem-file)
       (error "Memory not found: %s" slug))
     (delete-file mem-file)
@@ -142,20 +160,18 @@ Knowledge is AI documentation written for future AI sessions."
 (defun gptel-benchmark-memory-search (query &optional depth)
   "Search memories for QUERY with optional DEPTH (fibonacci: 1,2,3,5,8,13).
 Uses git grep for semantic search, git log for temporal search."
-  (let ((d (or depth 2))
-        (results '()))
-    ;; Semantic search via git grep
-    (call-process "git" nil t nil "grep" "-i" "-l" query "--" 
-                  (expand-file-name "mementum/" gptel-benchmark-memory-dir))
-    ;; Temporal search via git log
+  (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
+         (d (or depth 2))
+         (results '()))
+    (call-process "git" nil t nil "grep" "-i" "-l" query "--" mem-dir)
     (call-process "git" nil t nil "log" (format "-n %d" d) "--oneline" "--"
-                  (expand-file-name "mementum/memories/" gptel-benchmark-memory-dir)
-                  (expand-file-name "mementum/knowledge/" gptel-benchmark-memory-dir))
+                  (expand-file-name "memories/" mem-dir)
+                  (expand-file-name "knowledge/" mem-dir))
     results))
 
 (defun gptel-benchmark-memory-read (path)
   "Read memory or knowledge at PATH."
-  (let ((full-path (expand-file-name path gptel-benchmark-memory-dir)))
+  (let ((full-path (expand-file-name path (gptel-benchmark-memory--resolve-dir))))
     (when (file-exists-p full-path)
       (with-temp-buffer
         (insert-file-contents full-path)
@@ -163,16 +179,17 @@ Uses git grep for semantic search, git log for temporal search."
 
 (defun gptel-benchmark-memory-list (&optional type)
   "List all memories of TYPE (memories, knowledge, or all)."
-  (let* ((mem-dir (expand-file-name "memories" gptel-benchmark-memory-dir))
-         (know-dir (expand-file-name "knowledge" gptel-benchmark-memory-dir))
+  (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
+         (memories-dir (expand-file-name "memories" mem-dir))
+         (knowledge-dir (expand-file-name "knowledge" mem-dir))
          (results '()))
     (when (or (eq type 'memories) (eq type 'all) (null type))
-      (when (file-exists-p mem-dir)
-        (dolist (f (directory-files mem-dir t "\\.md$"))
+      (when (file-exists-p memories-dir)
+        (dolist (f (directory-files memories-dir t "\\.md$"))
           (push (list 'memory (file-name-nondirectory f)) results))))
     (when (or (eq type 'knowledge) (eq type 'all) (null type))
-      (when (file-exists-p know-dir)
-        (dolist (f (directory-files know-dir t "\\.md$"))
+      (when (file-exists-p knowledge-dir)
+        (dolist (f (directory-files knowledge-dir t "\\.md$"))
           (push (list 'knowledge (file-name-nondirectory f)) results))))
     (nreverse results)))
 
@@ -186,10 +203,11 @@ Reads actual memory content and creates proper knowledge page."
          (memories-with-content '()))
     (when (>= (length related-files) 3)
       (dolist (file related-files)
-        (let* ((file-path (if (string-prefix-p "/" file)
+        (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
+               (file-path (if (string-prefix-p "/" file)
                               file
                             (expand-file-name file 
-                                             (expand-file-name "memories" gptel-benchmark-memory-dir))))
+                                             (expand-file-name "memories" mem-dir))))
                (content (when (file-exists-p file-path)
                           (with-temp-buffer
                             (insert-file-contents file-path)
@@ -249,10 +267,11 @@ Aligned with Wu Xing: observe(Wood) -> memory(Fire) -> synthesize(Earth) -> know
 
 (defun gptel-benchmark-memory-commit (message)
   "Commit memory changes with MESSAGE."
-  (let ((default-directory (or (file-name-directory gptel-benchmark-memory-dir)
-                               default-directory)))
-    (call-process "git" nil nil nil "add" (expand-file-name "mementum/" gptel-benchmark-memory-dir))
-    (call-process "git" nil nil nil "commit" "-m" message)))
+  (let* ((root (gptel-benchmark-memory--project-root))
+         (mem-dir (expand-file-name "mementum/" root)))
+    (let ((default-directory root))
+      (call-process "git" nil nil nil "add" mem-dir)
+      (call-process "git" nil nil nil "commit" "-m" message))))
 
 ;;; λ-Orient (OODA first action)
 
