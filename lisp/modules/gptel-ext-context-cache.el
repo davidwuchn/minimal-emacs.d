@@ -93,7 +93,7 @@ under `lexical-binding: t'.")
     ("qwen3-coder-plus" . 1000000)
     ("qwen3.5-plus" . 1000000)
     ("qwen3.5-flash" . 1000000)
-    ("qwen3-max" . 262144)
+    ("qwen3-max-2026-01-23" . 262144)
     ("qwen3-coder" . 131072)
     ("qwen-plus" . 1000000)
     ("qwen-flash" . 1000000)
@@ -188,7 +188,7 @@ Sources:
      :features (streaming tools vision)
      :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp")
      :description "Qwen3.5 Flash - fast, 1M context, VISION ENABLED")
-    ("qwen3-max"
+    ("qwen3-max-2026-01-23"
      :context-window 262144
      :pricing-input 2.5 :pricing-output 10.0
      :max-output 32768
@@ -601,7 +601,7 @@ Description: %s"
        (qwen3-coder-plus . 131072)
        (qwen3.5-plus . 1000000)
        (qwen3.5-flash . 1000000)
-       (qwen3-max . 262144)
+       (qwen3-max-2026-01-23 . 262144)
        (glm-5 . 131072)
        (glm-4.7 . 131072)))
 
