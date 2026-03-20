@@ -42,8 +42,7 @@
     "approval": {
       "byDefault": "ask",
       "allow": {
-        "eca": {},
-        "context7": {}
+        "eca": {}
       }
     }
   },

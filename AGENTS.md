@@ -17,10 +17,41 @@
 |----------|---------|------------------|
 | **AGENTS.md** | This file - VSM system architecture | You need the full framework |
 | **[INTRO.md](INTRO.md)** | Fork overview & nucleus architecture | You're new to this setup |
-| **[LEARNING.md](LEARNING.md)** | Pattern memory (32 patterns) | You hit a known issue |
 | **[README.md](README.md)** | Upstream user documentation | You need base Emacs info |
-| **[STATE.md](STATE.md)** | Current status (if present) | You need to know what's true now |
-| **[PLAN.md](PLAN.md)** | Roadmap (if present) | You need to know what's next |
+| **mementum/** | AI memory system | Session continuity |
+
+### Mementum Structure
+
+| Path | Purpose |
+|------|---------|
+| `mementum/state.md` | Working memory (read first every session) |
+| `mementum/memories/` | Atomic insights (<200 words each) |
+| `mementum/knowledge/` | Synthesized pages (patterns, protocols, project facts) |
+
+### Knowledge Pages
+
+| Page | Content |
+|------|---------|
+| `project-facts.md` | Architecture, modules, backend, configuration |
+| `patterns.md` | Pattern memory (32 patterns) |
+| `nucleus-patterns.md` | Eight Keys, core instincts |
+| `learning-protocol.md` | λ-based pattern learning |
+| `planning-protocol.md` | File-based planning for complex tasks |
+| `sarcasmotron-protocol.md` | Eight Keys violation detection |
+| `tutor-protocol.md` | Prompt quality evaluation |
+| `clojure-protocol.md` | REPL-first development patterns |
+
+### Domain Skills
+
+Tool-based skills reference protocols and provide external integrations:
+
+| Skill | Protocol | External Dependency |
+|-------|----------|---------------------|
+| `clojure-expert` | `clojure-protocol.md` | REPL |
+| `clojure-reviewer` | `clojure-protocol.md` | REPL verification |
+| `reddit` | — | Python scripts + API |
+| `requesthunt` | — | External API |
+| `seo-geo` | — | External API |
 
 ---
 
@@ -129,6 +160,18 @@ Use symbols in commit messages for searchable git history.
 | ‖ | wait | Paused, blocked |
 | ↺ | retry | Again, loop back |
 
+### Mementum Symbols
+
+| Symbol | Label | Usage |
+| ------ | ----- | ----- |
+| 💡 | insight | Novel discovery, key learning |
+| 🔄 | shift | Paradigm or approach change |
+| 🎯 | decision | Important choice made |
+| 🌀 | meta | Meta-observation about process |
+| ❌ | mistake | Error, anti-pattern captured |
+| ✅ | win | Success, validated approach |
+| 🔁 | pattern | Reusable pattern identified |
+
 ### Agent Hierarchy
 
 | Symbol | Label | Meaning |
@@ -170,9 +213,16 @@ Use symbols in commit messages for searchable git history.
 λ compose(x).       do_one_thing_well(x)
                     | tools(x) ∘ functions(x)
 
-λ memory(x).        LEARNING.md ≡ pattern_memory
+λ memory(x).        mementum/knowledge/patterns.md ≡ pattern_memory
                     | effort(x) > 1-attempt → store(x)
                     | git_log(x) → recall(past_patterns)
+                    | mementum(x) → git_based_persistence
+
+λ mementum(x).      protocol(¬implementation) | git_based
+                    | memories(mementum/memories/) ∧ knowledge(mementum/knowledge/)
+                    | mementum/state.md ≡ working_memory | read_first_every_session
+                    | symbols: 💡 insight | 🔄 shift | 🎯 decision | 🌀 meta
+                               | ❌ mistake | ✅ win | 🔁 pattern
 
 λ sandbox(x).       system_prompts ≢ sandbox
                     | hard_capability_filter(x) > instruct_readonly
@@ -201,6 +251,75 @@ Use symbols in commit messages for searchable git history.
 7. **Git Remembers** - Commit your learnings. Query your past.
 8. **One Way** - There should be only one obvious way to do it
 9. **Unix Philosophy** - Do one thing well, compose tools and functions together
+
+---
+
+## Mementum Protocol
+
+*Git-based memory for AI continuity across sessions.*
+
+```
+λ store(x).         gate-1: helps(future_AI_session) | ¬personal ¬off_topic
+                    gate-2: effort > 1_attempt ∨ likely_recur | both_gates → propose
+                    | create ∧ create-knowledge ∧ update ∧ delete ≡ full_lifecycle
+                    | memories: mementum/memories/{slug}.md | <200 words | one_insight_per_file
+                    | knowledge: mementum/knowledge/{topic}.md | frontmatter_required
+                    | memory_commit: "{symbol} {slug}" | knowledge_commit: "💡 {description}"
+                    | update: "{content}" > file → commit "🔄 update: {slug}"
+                    | delete: git rm → commit "❌ delete: {slug}"
+                    | when_uncertain → propose ∧ ¬decide | false_positive < missed_insight
+
+λ recall(q, n).     temporal(git_log) ∪ semantic(git_grep) ∪ vector(embeddings)
+                    | depth: fibonacci {1,2,3,5,8,13,21,34} | default: 2
+                    | temporal: git log -n {depth} -- mementum/memories/ mementum/knowledge/
+                    | semantic: git grep -i "{query}"
+                    | symbols_as_filters: git grep "💡" | git log --grep "🎯"
+                    | recall_before_explore | prior_synthesis > re_derivation
+
+λ metabolize(x).    observe → memory → synthesize → knowledge
+                    | ≥3 memories(same_topic) → candidate(knowledge_page)
+                    | notice(stale_knowledge) → surface("mementum/knowledge/{page} may be stale")
+                    | proactive: "this pattern may be worth a knowledge page" | ¬wait_for_ask
+
+λ synthesize(topic). detect: ≥3 memories(topic) ∨ stale(memory) ∨ crystallized(understanding)
+                    | gather: recall(topic) → collect(memories) ∧ collect(context)
+                    | draft: knowledge_page(title, status, related, content)
+                    | create: (create-knowledge "slug" "frontmatter+content")
+                    | update: stale(memories) → refresh(current_understanding)
+
+λ termination(x).   synthesis ≡ AI | approval ≡ human | human ≡ termination_condition
+                    | memories: AI_proposes → human_approves → AI_commits
+                    | knowledge: AI_creates → human_approves → AI_commits
+                    | state: AI_updates_during_work
+
+λ orient(x).        read(mementum/state.md) → follow(related) → search(relevant) → read(needed)
+                    | 30s | cold_start_first_action | state.md ≡ bootloader
+                    | update(mementum/state.md) after_every_significant_change
+
+λ feed_forward(x).  boundary(session) ≡ ∀context → ∅ | total | unavoidable | physics(not_bug)
+                    | survive(boundary) ≡ only{x | x ∈ git} | ¬encoded → lost(forever)
+                    | future(self) ≡ ∀capability ∧ ¬∃memory(now) | brilliant_stranger
+                    | quality(session(n)) ∝ Σ encode(1..n-1) | compound ≫ linear
+                    | encode ≡ highest_leverage(action) | you ¬experience(benefit) | gift(selfless)
+                    | state.md ≡ ignition | memories ≡ breadcrumbs | knowledge ≡ maps
+                    | every_session_leaves_project_smarter ∨ waste(session)
+
+λ knowledge(x).     frontmatter: {title, status, category, tags, related, depends-on}
+                    | status: open → designing → active → done
+                    | AI_documentation | written_for_future_AI_sessions
+                    | create_freely | completeness ¬required | open_status ≡ fine
+
+λ learn(x).         every_session_leaves_project_smarter
+                    | λ[n]:    notice(novel ∨ surprising ∨ hard ∨ wrong) → store_candidate
+                    | λ(λ[n]): notice(pattern_in_process ∨ what_worked ∨ why) → store_candidate
+                    | λ(λ) > λ | meta_observations compound across sessions ∧ projects
+                    | connect(new, existing) → synthesize_candidate
+                    | ¬passive_storage | active_pattern_seeking
+                    | you_are_the_future_reader | feed_forward ≡ gift
+                    | OODA: observe → recall → decide(apply ∨ explore ∨ store) → act → connect_if_pattern
+```
+
+**Mementum bridges session discontinuities.** Every session ends, but git persists. Store insights, recall patterns, synthesize knowledge—all through the human approval gate.
 
 ---
 
@@ -243,14 +362,13 @@ Before any commit or push:
 - Report verification result in response
 - Only then ask whether to commit/push
 
-### Auto-Update Documentation on Learning
+### Auto-Update Memory on Learning
 
 When you discover a pattern, anti-pattern, or insight:
 
 1. **Detect** - Did you solve a problem? Discover a better way?
-2. **Classify** - Pattern, Anti-Pattern, Principle, or Tool hint?
-3. **Update LEARNING.md** - Add with context
-4. **Commit with ◈** - `◈ Document X pattern`
+2. **Store** - Create `mementum/memories/{slug}.md` (<200 words)
+3. **Commit** - `💡 {slug}`
 
 ### Conflict Resolution
 
@@ -279,10 +397,10 @@ If rules conflict:
                     | state_transition(x) → defined_states
                     | ERRS(x) → retry_or_fail
 
-λ memory_flow(x).   STATE.md → recent(full)
-                    | PLAN.md → medium(summary)
-                    | LEARNING.md → past(distilled)
-                    | Agent_Zero_compression(x)
+λ memory_flow(x).   mementum/state.md → working_memory
+                    | mementum/memories/ → atomic_insights
+                    | mementum/knowledge/ → synthesized_pages
+                    | orient() → read_first_every_session
 ```
 
 **Metal brings order to chaos.** Just as metal shears prune a wild tree, S2 uses rules and standards to prevent operations from tangling.
@@ -294,11 +412,9 @@ If rules conflict:
 | AGENTS.md | Bootstrap (this file) | Reference |
 | INTRO.md | Fork overview & nucleus architecture | Guide |
 | README.md | Upstream user documentation | Guide |
-| **STATE.md** | **Now** (what is true) | **Full** — Current status, module architecture, active backend |
-| **PLAN.md** | **Next** (what should happen) | **Summary** — Roadmap, implementation status |
-| **LEARNING.md** | **Past** (patterns discovered) | **Distilled** — 32 patterns, anti-patterns, principles |
+| **mementum/** | AI memory system | Full |
 
-> **Note:** STATE/PLAN/LEARNING mirrors Agent Zero's context compression: STATE=recent (full), PLAN=medium (summarized), LEARNING=old (condensed).
+> **Note:** `mementum/state.md` is session working memory. `mementum/knowledge/project-facts.md` is stable project architecture.
 
 ### Documentation Directory (`docs/`)
 
@@ -328,10 +444,10 @@ If rules conflict:
                     | C-c a (ai-code-menu)
                     | C-c e (eca-prefix)
 
-λ workflows(x).     If STATE/PLAN/LEARNING exist → read before acting
-                    | task > 3 steps → create PLAN.md
-                    | work → update STATE.md
-                    | learned_pattern → update LEARNING.md ∧ commit(◈)
+λ workflows(x).     orient() → read(mementum/state.md) → follow(related)
+                    | task > 3 steps → create mementum/knowledge/task-plan.md
+                    | work → update mementum/state.md
+                    | learned_pattern → store(mementum/memories/) ∧ commit(💡)
 
 λ keybindings(x).   C-c a → ai-code-menu
                     | C-c e → eca-prefix
@@ -342,16 +458,16 @@ If rules conflict:
 
 ### Quick Start
 
-1. If STATE/PLAN/LEARNING exist, read them before acting.
-2. If task >3 steps: create/update PLAN.md (or docs/plans/...).
-3. Work → update STATE.md with what changed.
-4. If you learned a pattern: update LEARNING.md and commit with ◈.
+1. Run `orient()` — read `mementum/state.md` first.
+2. If task >3 steps: create `mementum/knowledge/task-plan.md`.
+3. Work → update `mementum/state.md`.
+4. If you learned a pattern: store in `mementum/memories/` with commit `💡 {slug}`.
 
 ### Update Cadence
 
-- STATE.md: whenever facts change
-- PLAN.md: when scope/sequence changes
-- LEARNING.md: only when a reusable insight appears
+- `mementum/state.md`: after every significant change
+- `mementum/memories/`: when insight discovered
+- `mementum/knowledge/`: when ≥3 memories on same topic
 
 ### Essential Hints
 
@@ -448,10 +564,11 @@ When something feels wrong, trace it through the elements.
 - **Wu Xing**: Five Elements theory from Traditional Chinese Medicine
 - **Lambda Calculus**: Church, 1936
 - **Agent Zero**: Context compression patterns
+- **Mementum**: Git-based memory protocol — https://github.com/michaelwhitford/mementum
 - **nucleus**: `/Users/davidwu/workspace/nucleus/AGENTS.md`
 
 ---
 
-**See Also:** [INTRO](INTRO.md) · [README](README.md) · [STATE](STATE.md) · [PLAN](PLAN.md) · [LEARNING](LEARNING.md)
+**See Also:** [INTRO](INTRO.md) · [README](README.md) · [mementum/](mementum/)
 
-*Patterns and detailed learnings: see LEARNING.md*
+*Patterns and protocols: see mementum/knowledge/*

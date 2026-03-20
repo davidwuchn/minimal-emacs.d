@@ -37,6 +37,19 @@
 ;; Load tool permit system (auto / confirm-all + per-tool permits)
 (require 'gptel-ext-tool-permits)
 
+;; Load benchmark framework (Eight Keys + Wu Xing + Evolution)
+(require 'gptel-benchmark-principles)
+(require 'gptel-benchmark-core)
+(require 'gptel-benchmark-subagent)
+(require 'gptel-benchmark-memory)
+(require 'gptel-benchmark-evolution)
+(require 'gptel-benchmark-auto-improve)
+(require 'gptel-benchmark-integrate)
+(require 'gptel-benchmark-daily)
+
+;; Enable daily benchmark integration (auto-collect metrics on skill/workflow runs)
+(gptel-benchmark-daily-setup)
+
 ;; --- Configuration Defaults ---
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3-coder-next)

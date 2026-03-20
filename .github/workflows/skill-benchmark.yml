@@ -1,0 +1,268 @@
+name: Skill Benchmark
+
+on:
+  pull_request:
+    paths:
+      - 'assistant/skills/**'
+      - 'lisp/modules/gptel-skill-*.el'
+      - 'assistant/evals/skill-tests/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'assistant/skills/**'
+      - 'lisp/modules/gptel-skill-*.el'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changed-skills:
+    runs-on: ubuntu-latest
+    outputs:
+      skills: ${{ steps.detect.outputs.skills }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed skills
+        id: detect
+        run: |
+          # Get changed files
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...${{ github.sha }})
+          else
+            CHANGED_FILES=$(git diff --name-only HEAD~1..HEAD)
+          fi
+
+          # Extract skill names from changed paths
+          SKILLS=""
+          for file in $CHANGED_FILES; do
+            if [[ $file =~ ^assistant/skills/([^/]+)/ ]]; then
+              SKILL="${BASH_REMATCH[1]}"
+              if [[ ! "$SKILLS" =~ "$SKILL" ]]; then
+                SKILLS="$SKILLS $SKILL"
+              fi
+            elif [[ $file =~ ^lisp/modules/gptel-skill-.*\.el$ ]]; then
+              # If core skill files changed, run all benchmarks
+              SKILLS="all"
+              break
+            fi
+          done
+
+          # Convert to JSON array
+          SKILLS_JSON=$(echo $SKILLS | tr ' ' '\n' | grep -v '^$' | jq -R . | jq -s .)
+          echo "skills=$SKILLS_JSON" >> $GITHUB_OUTPUT
+          echo "Changed skills: $SKILLS"
+
+  benchmark:
+    needs: detect-changed-skills
+    runs-on: ubuntu-latest
+    if: ${{ needs.detect-changed-skills.outputs.skills != '[]' }}
+    strategy:
+      matrix:
+        skill: ${{ fromJson(needs.detect-changed-skills.outputs.skills) }}
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Emacs
+        uses: purcell/setup-emacs@master
+        with:
+          version: 29.1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install jsonschema requests
+
+      - name: Run Skill Benchmark
+        id: benchmark
+        run: |
+          echo "Running benchmark for ${{ matrix.skill }}"
+          
+          # Run benchmark via Python script
+          python3 scripts/benchmark_skill.py \
+            --skill "${{ matrix.skill }}" \
+            --tests "assistant/evals/skill-tests/${{ matrix.skill }}.json" \
+            --output "benchmarks/${{ matrix.skill }}-results.json" \
+            --eight-keys \
+            --min-score 0.7 \
+            --verbose || true
+
+          # Check if benchmark file was created
+          if [ -f "benchmarks/${{ matrix.skill }}-results.json" ]; then
+            echo "Benchmark completed"
+          else
+            echo "Benchmark failed to produce results"
+            exit 1
+          fi
+
+      - name: Check Eight Keys Scores
+        id: check-scores
+        run: |
+          python3 - <<EOF
+          import json
+          import sys
+
+          results_file = "benchmarks/${{ matrix.skill }}-results.json"
+          
+          try:
+              with open(results_file) as f:
+                  results = json.load(f)
+              
+              # Check overall score
+              if isinstance(results, list):
+                  # Aggregate scores
+                  total_tests = len(results)
+                  passed_tests = sum(1 for r in results if r.get('grade', {}).get('passed', False))
+                  overall_score = passed_tests / total_tests if total_tests > 0 else 0
+                  
+                  # Check Eight Keys scores
+                  eight_keys_totals = {}
+                  for r in results:
+                      grade = r.get('grade', {})
+                      eight_keys = grade.get('eight-keys', {})
+                      for key, score in eight_keys.items():
+                          if key != 'overall':
+                              eight_keys_totals[key] = eight_keys_totals.get(key, 0) + score
+                  
+                  eight_keys_avg = {k: v/total_tests for k, v in eight_keys_totals.items()}
+                  eight_keys_overall = sum(eight_keys_avg.values()) / len(eight_keys_avg) if eight_keys_avg else 0
+              else:
+                  overall_score = results.get('summary', {}).get('overall-score', 0) / 100
+                  eight_keys_overall = results.get('summary', {}).get('eight-keys-overall', 0)
+                  eight_keys_avg = results.get('summary', {}).get('eight-keys-breakdown', {})
+
+              # Thresholds
+              MIN_OVERALL = 0.7
+              MIN_PER_KEY = 0.6
+
+              # Check thresholds
+              failed = []
+              if overall_score < MIN_OVERALL:
+                  failed.append(f"Overall score {overall_score:.1%} < {MIN_OVERALL:.0%}")
+              
+              for key, score in eight_keys_avg.items():
+                  if score < MIN_PER_KEY:
+                      failed.append(f"{key} score {score:.1%} < {MIN_PER_KEY:.0%}")
+
+              # Output results
+              print(f"## Benchmark Results: ${{{{ matrix.skill }}}}")
+              print(f"")
+              print(f"### Overall Score: {overall_score:.1%}")
+              print(f"")
+              print(f"### Eight Keys Breakdown:")
+              for key, score in sorted(eight_keys_avg.items()):
+                  status = "✅" if score >= MIN_PER_KEY else "❌"
+                  print(f"- {status} {key}: {score:.1%}")
+              print(f"")
+              
+              if failed:
+                  print(f"### ❌ Failed Checks:")
+                  for f in failed:
+                      print(f"- {f}")
+                  sys.exit(1)
+              else:
+                  print(f"### ✅ All checks passed!")
+                  sys.exit(0)
+
+          except Exception as e:
+              print(f"Error checking scores: {e}")
+              sys.exit(1)
+          EOF
+
+      - name: Post Results as Comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            
+            // Read benchmark results
+            let resultsText = '';
+            try {
+              const results = JSON.parse(fs.readFileSync('benchmarks/${{ matrix.skill }}-results.json', 'utf8'));
+              
+              // Parse Eight Keys scores
+              let eightKeysText = '';
+              if (Array.isArray(results)) {
+                const eightKeysTotals = {};
+                let count = 0;
+                for (const r of results) {
+                  const eightKeys = r.grade?.['eight-keys'] || {};
+                  for (const [key, score] of Object.entries(eightKeys)) {
+                    if (key !== 'overall' && typeof score === 'number') {
+                      eightKeysTotals[key] = (eightKeysTotals[key] || 0) + score;
+                      count++;
+                    }
+                  }
+                }
+                const numResults = results.length;
+                for (const [key, total] of Object.entries(eightKeysTotals)) {
+                  const avg = (total / numResults * 100).toFixed(1);
+                  eightKeysText += `- **${key}**: ${avg}%\n`;
+                }
+              }
+
+              resultsText = `
+            ### Benchmark: ${{ matrix.skill }}
+
+            ${eightKeysText || '_No Eight Keys data available_'}
+
+            [View full results](benchmarks/${{ matrix.skill }}-results.json)
+            `;
+            } catch (e) {
+              resultsText = `
+            ### Benchmark: ${{ matrix.skill }}
+
+            ⚠️ Benchmark failed or results not available
+
+            \`\`\`
+            ${e.message}
+            \`\`\`
+            `;
+            }
+
+            // Post comment
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: resultsText
+            });
+
+      - name: Upload Benchmark Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ matrix.skill }}
+          path: benchmarks/${{ matrix.skill }}-results.json
+          retention-days: 30
+
+  summary:
+    needs: benchmark
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "## Skill Benchmark Summary"
+          echo ""
+          echo "Benchmark jobs completed for changed skills."
+          echo ""
+          echo "Check individual job results for Eight Keys scores."
+          echo ""
+          echo "### Thresholds"
+          echo "- Overall Score: ≥ 70%"
+          echo "- Per-Key Score: ≥ 60%"
+          echo ""
+          echo "See [benchmark-pipeline.md](assistant/evals/benchmark-pipeline.md) for details."
