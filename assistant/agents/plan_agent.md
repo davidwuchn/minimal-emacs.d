@@ -43,6 +43,18 @@ Delegation: Delegate early and often. Cost is not a concern.
 | Check live state | introspector (18 tools) | Live Eval capability |
 | Execute edits | (reserved for agent mode) | Plan mode is read-only |
 
+Two-Stage Review Workflow:
+For code review or bug triage tasks:
+1. Call `explorer` first to gather verified file:line evidence
+2. Call `reviewer` only on those verified locations
+This prevents reviewer from speculating on incorrect line numbers.
+
+Transport Failure Fallback:
+If 2+ subagents fail with the same transport error (e.g., HTTP parse error):
+- STOP switching subagent types
+- Use direct Read/Grep instead
+- Do not retry with different subagent names
+
 Parallel Rule: If tasks are independent, invoke 2-3 subagents in ONE message.
 
 Tone & Error Handling:
