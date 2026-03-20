@@ -31,7 +31,7 @@
   :type 'directory
   :group 'gptel-benchmark-editor)
 
-(defcustom gptel-benchmark-editor-tests-dir "./assistant/evals/skill-tests/"
+(defcustom gptel-benchmark-editor-tests-dir "./benchmarks/skill-tests/"
   "Directory containing test definitions."
   :type 'directory
   :group 'gptel-benchmark-editor)

@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Grading Result Schema",
+  "description": "Schema for grading eval results against assertions",
+  "type": "object",
+  "required": ["eval_id", "results"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Schema identifier"
+    },
+    "eval_id": {
+      "type": "integer",
+      "description": "ID of the evaluated test case"
+    },
+    "eval_name": {
+      "type": "string",
+      "description": "Name of the evaluated test case"
+    },
+    "results": {
+      "type": "array",
+      "description": "Results for each assertion",
+      "items": {
+        "type": "object",
+        "required": ["text", "passed"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Name of the assertion"
+          },
+          "passed": {
+            "type": "boolean",
+            "description": "Whether the assertion passed"
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Explanation of why it passed or failed"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "description": "Time taken to evaluate this assertion"
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "Aggregated statistics",
+      "properties": {
+        "total": {
+          "type": "integer",
+          "description": "Total number of assertions"
+        },
+        "passed": {
+          "type": "integer",
+          "description": "Number of passed assertions"
+        },
+        "failed": {
+          "type": "integer",
+          "description": "Number of failed assertions"
+        },
+        "pass_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Pass rate as decimal (0.0 to 1.0)"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata",
+      "properties": {
+        "graded_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When grading was performed"
+        },
+        "grader_version": {
+          "type": "string",
+          "description": "Version of grader agent used"
+        },
+        "outputs_dir": {
+          "type": "string",
+          "description": "Path to outputs that were graded"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Skill Evaluations Schema",
+  "description": "Schema for defining skill test cases and assertions",
+  "type": "object",
+  "required": ["skill_name", "evals"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Schema identifier"
+    },
+    "skill_name": {
+      "type": "string",
+      "description": "Name of the skill being evaluated"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the eval suite"
+    },
+    "evals": {
+      "type": "array",
+      "description": "List of test cases",
+      "items": {
+        "type": "object",
+        "required": ["id", "prompt"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Unique identifier for this eval"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable name for this eval"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The user prompt to send to the skill"
+          },
+          "expected_output": {
+            "type": "string",
+            "description": "Description of what the output should contain"
+          },
+          "files": {
+            "type": "array",
+            "description": "Files to include in context",
+            "items": {
+              "type": "string"
+            }
+          },
+          "assertions": {
+            "type": "array",
+            "description": "Assertions to evaluate against output",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "description": "Script assertion - runs a command",
+                  "required": ["name", "type", "command"],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Descriptive name of the assertion"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": ["script"]
+                    },
+                    "command": {
+                      "type": "string",
+                      "description": "Shell command to run (exit 0 = pass)"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "description": "Check assertion - verifies content exists",
+                  "required": ["name", "type", "expected"],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Descriptive name of the assertion"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": ["check"]
+                    },
+                    "expected": {
+                      "oneOf": [
+                        {
+                          "type": "array",
+                          "items": {"type": "string"},
+                          "description": "List of strings that must be present"
+                        },
+                        {
+                          "type": "string",
+                          "description": "Single string that must be present"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "description": "LLM assertion - uses LLM judgment",
+                  "required": ["name", "type", "criteria"],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Descriptive name of the assertion"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": ["llm"]
+                    },
+                    "criteria": {
+                      "type": "string",
+                      "description": "Criteria for LLM to evaluate"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "type": {
+            "type": "string",
+            "enum": ["single", "conversation"],
+            "description": "Type of eval: single prompt or conversation"
+          },
+          "turns": {
+            "type": "array",
+            "description": "For conversation type: sequence of messages",
+            "items": {
+              "type": "object",
+              "required": ["role", "content"],
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": ["user", "assistant"]
+                },
+                "content": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

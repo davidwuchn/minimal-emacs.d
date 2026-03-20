@@ -1,0 +1,49 @@
+{
+  "$schema": "evals-schema",
+  "skill_name": "template-skill",
+  "description": "Example eval structure for new skills",
+  "evals": [
+    {
+      "id": 1,
+      "name": "basic-functionality",
+      "prompt": "Test the skill with a basic, straightforward request",
+      "expected_output": "Skill should handle the request correctly following its defined procedure",
+      "files": [],
+      "assertions": [
+        {
+          "name": "output_has_required_sections",
+          "type": "check",
+          "expected": ["Summary", "Details"]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "edge-case-handling",
+      "prompt": "Test the skill with an edge case or unusual input",
+      "expected_output": "Skill should handle gracefully without errors",
+      "files": [],
+      "assertions": [
+        {
+          "name": "no_error_in_output",
+          "type": "check",
+          "expected": []
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "format-compliance",
+      "prompt": "Test that output format matches specification",
+      "expected_output": "Output should follow the exact format defined in the skill",
+      "files": [],
+      "assertions": [
+        {
+          "name": "follows_output_structure",
+          "type": "llm",
+          "criteria": "Output follows the structure defined in ## Output Format"
+        }
+      ]
+    }
+  ]
+}

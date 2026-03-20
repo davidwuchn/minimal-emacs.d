@@ -1,0 +1,123 @@
+{
+  "$schema": "benchmark-schema",
+  "timestamp": "2025-01-15T14:30:00Z",
+  "skill_name": "refactoring-assistant",
+  "iteration": 1,
+  "summary": {
+    "with_skill": {
+      "count": 5,
+      "passed": 4,
+      "failed": 1,
+      "pass_rate": 0.8,
+      "duration_ms": {
+        "mean": 12450.5,
+        "stddev": 2340.2,
+        "min": 9800,
+        "max": 15200
+      },
+      "tokens": {
+        "mean": 4520,
+        "stddev": 890
+      }
+    },
+    "baseline": {
+      "count": 5,
+      "passed": 2,
+      "failed": 3,
+      "pass_rate": 0.4,
+      "duration_ms": {
+        "mean": 8930.0,
+        "stddev": 1230.5,
+        "min": 7500,
+        "max": 10500
+      },
+      "tokens": {
+        "mean": 3200,
+        "stddev": 450
+      }
+    },
+    "delta": {
+      "pass_rate": 0.4,
+      "duration_ms_mean": 3520.5,
+      "tokens_mean": 1320
+    }
+  },
+  "evals": [
+    {
+      "eval_id": 1,
+      "eval_name": "basic-refactor",
+      "with_skill": {
+        "passed": true,
+        "duration_ms": 11200,
+        "tokens": 4200
+      },
+      "baseline": {
+        "passed": true,
+        "duration_ms": 9800,
+        "tokens": 3500
+      }
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "complex-extraction",
+      "with_skill": {
+        "passed": true,
+        "duration_ms": 14500,
+        "tokens": 5100
+      },
+      "baseline": {
+        "passed": false,
+        "duration_ms": 8900,
+        "tokens": 2900
+      }
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "rename-variables",
+      "with_skill": {
+        "passed": true,
+        "duration_ms": 9800,
+        "tokens": 3800
+      },
+      "baseline": {
+        "passed": false,
+        "duration_ms": 7500,
+        "tokens": 2800
+      }
+    },
+    {
+      "eval_id": 4,
+      "eval_name": "simplify-nested",
+      "with_skill": {
+        "passed": false,
+        "duration_ms": 15200,
+        "tokens": 5800
+      },
+      "baseline": {
+        "passed": false,
+        "duration_ms": 10500,
+        "tokens": 3400
+      }
+    },
+    {
+      "eval_id": 5,
+      "eval_name": "extract-class",
+      "with_skill": {
+        "passed": true,
+        "duration_ms": 12100,
+        "tokens": 4700
+      },
+      "baseline": {
+        "passed": true,
+        "duration_ms": 9200,
+        "tokens": 3100
+      }
+    }
+  ],
+  "metadata": {
+    "skill_path": "./skills/refactoring-assistant",
+    "evals_path": "./skills/refactoring-assistant/evals.json",
+    "total_runs": 10,
+    "notes": "Skill shows strong improvement on complex tasks (evals 2, 3) but both skill and baseline fail on deeply nested simplification (eval 4)"
+  }
+}

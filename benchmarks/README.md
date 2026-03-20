@@ -1,107 +1,74 @@
-# Benchmark Results Directory
+# Skill Evaluation Test Cases
 
-This directory stores benchmark results for GPTel skills and workflows, including Eight Keys rubric scores.
+This directory contains evaluation test cases for benchmarking skills.
 
-## Structure
+## Directory Structure
 
 ```
-benchmarks/
-├── <skill>-results.json              # Skill benchmark results
-├── <skill>-history.json              # Skill historical trend data
-├── workflows/
-│   ├── <workflow>-results.json       # Workflow benchmark results
-│   └── <workflow>-history.json       # Workflow historical trend data
-└── feedback.log                      # Improvement feedback log
+evals/
+├── README.md           # This file
+├── eval-<name>.json    # Individual test case
+└── suites/             # Grouped test suites
+    └── suite-<name>.json
 ```
 
-## File Formats
+## Eval Format
 
-### Benchmark Results JSON
+Each eval is a JSON file with:
 
 ```json
-[
-  {
-    "test-id": "test-001",
-    "output": "Skill output here",
-    "grade": {
-      "score": 8,
-      "total": 10,
-      "percentage": 80.0,
-      "passed": true,
-      "eight-keys": {
-        "phi-vitality": 0.85,
-        "fractal-clarity": 0.92,
-        "epsilon-purpose": 1.0,
-        "tau-wisdom": 0.75,
-        "pi-synthesis": 0.80,
-        "mu-directness": 0.95,
-        "exists-truth": 0.88,
-        "forall-vigilance": 0.70,
-        "overall": 0.86
-      },
-      "eight-keys-summary": "..."
-    },
-    "timestamp": "2024-01-15 10:30:00"
+{
+  "id": "eval-001",
+  "name": "descriptive-name",
+  "prompt": "The task prompt for the skill",
+  "assertions": [
+    {
+      "name": "assertion_name",
+      "type": "check|script|llm",
+      "expected": ["list", "of", "expected"],
+      "command": "optional script command",
+      "criteria": "optional LLM criteria"
+    }
+  ],
+  "metadata": {
+    "category": "code|research|analysis",
+    "difficulty": "easy|medium|hard",
+    "tags": ["optional", "tags"]
   }
-]
+}
 ```
 
-### Trend Data JSON
+## Assertion Types
 
-```json
-[
-  {
-    "date": "2024-01-15",
-    "version": "v1.1",
-    "score": 85.5,
-    "eight-keys-overall": 0.86
-  }
-]
-```
+| Type | Description | Fields |
+|------|-------------|--------|
+| `check` | Verify output contains expected elements | `expected` |
+| `script` | Run shell command, exit 0 = pass | `command` |
+| `llm` | LLM judgment based on criteria | `criteria` |
 
 ## Usage
 
-### Skill Benchmarks
+Run benchmark via Bash:
 
-- `gptel-skill-benchmark-run` - Run benchmarks with Eight Keys scoring
-- `gptel-skill-benchmark-show-eight-keys` - View Eight Keys breakdown
-- `gptel-skill-benchmark-trend` - Show skill trend over time
+```bash
+# Run single eval
+python scripts/run_eval.py --skill my-skill --eval evals/eval-001.json
 
-### Workflow Benchmarks
+# Run all evals in suite
+python scripts/run_eval.py --skill my-skill --suite evals/suites/suite-code.json
 
-- `gptel-workflow-benchmark-run` - Run workflow benchmarks
-- `gptel-workflow-benchmark-run-all` - Run all workflow benchmarks
-- `gptel-workflow-benchmark-trend` - Show workflow trend analysis
-- `gptel-workflow-benchmark-show-eight-keys` - View Eight Keys breakdown
+# Run with baseline comparison
+python scripts/run_eval.py --skill my-skill --baseline baseline-skill --eval evals/eval-001.json
+```
 
-### Auto-Evolve
+Invoke from gptel:
 
-- `gptel-benchmark-evolve-with-improvement` - Run evolution + improvement cycle
-- `gptel-benchmark-auto-improve-skill` - Auto-improve a skill
-- `gptel-benchmark-auto-improve-workflow` - Auto-improve a workflow
+```
+RunAgent("grader", "grade eval-001", "Evaluate outputs from evals/eval-001.json")
+RunAgent("analyzer", "analyze results", "Analyze benchmark.json for patterns")
+RunAgent("comparator", "compare v1 vs v2", "Compare output_a/ vs output_b/")
+```
 
-## Eight Keys Scoring
+## Example Eval
 
-Each skill output is scored against 8 philosophical principles:
-
-| Key | Symbol | Focus |
-|-----|--------|-------|
-| **Vitality** | φ | Energy, growth, adaptive learning |
-| **Clarity** | fractal | Explicit structure, testable definitions |
-| **Purpose** | ε | Goal-directedness, actionable outcomes |
-| **Wisdom** | τ | Foresight, planning before execution |
-| **Synthesis** | π | Integration, holistic thinking |
-| **Directness** | μ | Efficiency, no wasted effort |
-| **Truth** | ∃ | Reality-based, evidence over assumptions |
-| **Vigilance** | ∀ | Robustness, defensive constraints |
-
-### Score Thresholds
-
-- **Overall**: ≥ 70% (CI pass), ≥ 80% (excellent)
-- **Per-Key**: ≥ 60% (minimum acceptable)
-
-## Documentation
-
-- [Benchmark Pipeline](../assistant/evals/benchmark-pipeline.md) - Complete pipeline documentation
-- [Eight Keys Rubric](../assistant/evals/BENCHMARK_NUCLEUS.md) - Detailed Eight Keys criteria
-- [Skill Tests](../assistant/evals/skill-tests/) - Test definitions for each skill
+See `eval-example.json` for a complete example.

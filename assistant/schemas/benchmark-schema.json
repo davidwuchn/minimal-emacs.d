@@ -1,0 +1,166 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Benchmark Schema",
+  "description": "Schema for aggregated benchmark results comparing skill vs baseline",
+  "type": "object",
+  "required": ["timestamp", "summary", "evals"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Schema identifier"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When benchmark was generated"
+    },
+    "summary": {
+      "type": "object",
+      "required": ["with_skill", "baseline", "delta"],
+      "properties": {
+        "with_skill": {
+          "$ref": "#/definitions/config_stats",
+          "description": "Statistics for runs with skill"
+        },
+        "baseline": {
+          "$ref": "#/definitions/config_stats",
+          "description": "Statistics for baseline runs"
+        },
+        "delta": {
+          "type": "object",
+          "description": "Differences between configurations",
+          "properties": {
+            "pass_rate": {
+              "type": "number",
+              "description": "Difference in pass rate (positive = skill better)"
+            },
+            "duration_ms_mean": {
+              "type": "number",
+              "description": "Difference in mean duration"
+            },
+            "tokens_mean": {
+              "type": "number",
+              "description": "Difference in mean token usage"
+            }
+          }
+        }
+      }
+    },
+    "evals": {
+      "type": "array",
+      "description": "Per-eval breakdown",
+      "items": {
+        "type": "object",
+        "required": ["eval_id", "eval_name"],
+        "properties": {
+          "eval_id": {
+            "type": "integer"
+          },
+          "eval_name": {
+            "type": "string"
+          },
+          "with_skill": {
+            "type": "object",
+            "properties": {
+              "passed": {
+                "type": "boolean"
+              },
+              "duration_ms": {
+                "type": "integer"
+              },
+              "tokens": {
+                "type": "integer"
+              }
+            }
+          },
+          "baseline": {
+            "type": "object",
+            "properties": {
+              "passed": {
+                "type": "boolean"
+              },
+              "duration_ms": {
+                "type": "integer"
+              },
+              "tokens": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "skill_name": {
+          "type": "string"
+        },
+        "skill_path": {
+          "type": "string"
+        },
+        "evals_path": {
+          "type": "string"
+        },
+        "iteration": {
+          "type": "integer",
+          "description": "Which iteration this benchmark represents"
+        },
+        "total_runs": {
+          "type": "integer",
+          "description": "Total number of eval runs"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "config_stats": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "description": "Number of evals run"
+        },
+        "passed": {
+          "type": "integer"
+        },
+        "failed": {
+          "type": "integer"
+        },
+        "pass_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "duration_ms": {
+          "type": "object",
+          "properties": {
+            "mean": {
+              "type": "number"
+            },
+            "stddev": {
+              "type": "number"
+            },
+            "min": {
+              "type": "integer"
+            },
+            "max": {
+              "type": "integer"
+            }
+          }
+        },
+        "tokens": {
+          "type": "object",
+          "properties": {
+            "mean": {
+              "type": "number"
+            },
+            "stddev": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    }
+  }
+}
