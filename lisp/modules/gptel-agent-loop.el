@@ -37,6 +37,10 @@
 (declare-function my/gptel--subagent-cache-get "gptel-tools-agent")
 (declare-function my/gptel--subagent-cache-put "gptel-tools-agent")
 
+(defvar my/gptel-subagent-stream nil
+  "Whether to use streaming mode for subagent requests.
+Defined in gptel-tools-agent.el.")
+
 (defvar gptel--fsm-last nil)
 (defvar gptel-agent--agents)
 (defvar gptel-agent-request--handlers nil)
@@ -440,7 +444,7 @@ summary turn.  When ALLOW-CACHE is non-nil, reuse cached results."
         (let* ((preset (nconc (list :include-reasoning nil
                                     :use-tools use-tools
                                     :use-context nil
-                                    :stream nil)
+                                    :stream my/gptel-subagent-stream)
                               (cdr (assoc agent-type gptel-agent--agents))))
                (syms (cons 'gptel--preset (gptel--preset-syms preset)))
                (vals (mapcar (lambda (sym)

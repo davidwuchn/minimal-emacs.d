@@ -32,6 +32,14 @@ to a temp file."
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defcustom my/gptel-subagent-stream t
+  "Whether to use streaming mode for subagent requests.
+When t (default), subagents use streaming mode for incremental display.
+When nil, subagents use non-streaming mode which is more reliable
+on backends with streaming issues (e.g., DashScope HTTP parse errors)."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
 (defcustom my/gptel-subagent-temp-file-ttl 300
   "Seconds before subagent temp files are auto-deleted.
 Set to 0 to disable auto-cleanup."
@@ -117,7 +125,7 @@ large-result truncation, and result caching."
   (let* ((preset (nconc (list :include-reasoning nil
                               :use-tools t
                               :use-context nil
-                              :stream nil)  ; Non-streaming for reliability
+                              :stream my/gptel-subagent-stream)
                         (cdr (assoc agent-type gptel-agent--agents))))
          (syms (cons 'gptel--preset (gptel--preset-syms preset)))
          (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
