@@ -363,9 +363,9 @@ Skips retries for subagent FSMs (they have their own timeout handler)."
              (not subagent-p)
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
              (my/gptel--transient-error-p error-data http-status))
-        (let* ((base-delay 2.0)
-               (factor 2.0)
-               (delay (min 30.0 (* base-delay (expt factor retries)))))
+(let* ((base-delay 4.0)
+                (factor 2.0)
+                (delay (min 30.0 (* base-delay (expt factor retries)))))
           (if my/gptel-max-retries
               (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..." 
                        (if (stringp error-data) (string-trim error-data)
