@@ -240,10 +240,16 @@ When CACHE-RESULT is non-nil, cache the delivered string first."
            (gptel-agent-loop--task-description state))))
 
 (defun gptel-agent-loop--continuation-prompt-for (state)
-  "Build continuation prompt for STATE."
-  (format "%s\n\n[CONTINUATION - Previous work done]\n\n%s"
-          gptel-agent-loop--continuation-prompt
-          (or (gptel-agent-loop--task-accumulated-output state) "")))
+  "Build continuation prompt for STATE.
+Truncates accumulated output to last 3000 chars to prevent prompt bloat."
+  (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
+         (truncated (if (> (length output) 3000)
+                        (concat "...[earlier output truncated]\n"
+                                (substring output -3000))
+                      output)))
+    (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
+            gptel-agent-loop--continuation-prompt
+            truncated)))
 
 (defun gptel-agent-loop--summary-prompt-for (state)
   "Build max-steps summary prompt for STATE."
@@ -256,11 +262,10 @@ When CACHE-RESULT is non-nil, cache the delivered string first."
   "Return non-nil when RESP looks like a completion message."
   (let ((lower-resp (downcase resp)))
     (or (string-match-p "all tasks.*complete" lower-resp)
-        (string-match-p "task.*done" lower-resp)
+        (string-match-p "^task done\\|task completed" lower-resp)
         (string-match-p "completed successfully" lower-resp)
         (string-match-p "finished.*tasks" lower-resp)
         (string-match-p "all tasks completed successfully" lower-resp)
-        (string-match-p "task completed" lower-resp)
         (string-match-p "^done\\." lower-resp)
         (string-match-p "✓.*complete" lower-resp))))
 
@@ -274,24 +279,31 @@ When CACHE-RESULT is non-nil, cache the delivered string first."
 Detects common patterns where model talks about doing work but didn't call tools."
   (let ((lower-resp (downcase resp)))
     (and (>= (length resp) 30)
-         (string-match-p "let me\\|i will\\|i need to\\|now i\\|going to\\|first,\\|step 1\\|todo\\|checklist" lower-resp))))
+         (string-match-p "\\blet me\\b\\|\\bi will\\b\\|\\bi need to\\b\\|\\bnow i need\\b\\|\\bgoing to\\b\\|\\bfirst,\\b\\|\\bstep 1\\b\\|\\btodo\\b\\|\\bchecklist\\b" lower-resp))))
 
 (defun gptel-agent-loop--looks-like-finishing-p (resp)
   "Return non-nil when RESP looks like model is about to finish.
 Detects patterns indicating the model is wrapping up, not planning more work."
   (let ((lower-resp (downcase resp)))
-    (string-match-p "summariz\\|conclude\\|conclusion\\|finish\\|wrap up\\|that's all\\|in summary\\|to summarize\\|final\\|overall\\|here ('s|is) (the |)\\(result\\|answer\\|output\\)" lower-resp)))
+    (or (string-match-p "summariz\\|conclude\\|conclusion\\|finish\\|wrap up\\|that's all\\|in summary\\|to summarize\\|final\\|overall" lower-resp)
+        (string-match-p "here's the \\(result\\|answer\\|output\\)" lower-resp)
+        (string-match-p "here is the \\(result\\|answer\\|output\\)" lower-resp)
+        (string-match-p "here's \\(result\\|answer\\|output\\)" lower-resp)
+        (string-match-p "here is \\(result\\|answer\\|output\\)" lower-resp))))
 
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP.
-Only continues if tools were called AND model seems to be planning without action."
-  (and gptel-agent-loop-force-completion
-       (not (gptel-agent-loop--seems-complete-p resp))
-       (not (gptel-agent-loop--looks-like-finishing-p resp))
-       (not (gptel-agent-loop--task-max-steps-reached state))
-       (> (gptel-agent-loop--task-step-count state) 0)
-       (or (gptel-agent-loop--turn-skipped-p resp)
-           (gptel-agent-loop--looks-like-planning-p resp))))
+Only continues if tools were called AND model seems to be planning without action.
+Also checks continuation count limit for early exit."
+  (let ((cont-count (or (gptel-agent-loop--task-continuation-count state) 0)))
+    (and gptel-agent-loop-force-completion
+         (< cont-count gptel-agent-loop-max-continuations)
+         (not (gptel-agent-loop--seems-complete-p resp))
+         (not (gptel-agent-loop--looks-like-finishing-p resp))
+         (not (gptel-agent-loop--task-max-steps-reached state))
+         (> (gptel-agent-loop--task-step-count state) 0)
+         (or (gptel-agent-loop--turn-skipped-p resp)
+             (gptel-agent-loop--looks-like-planning-p resp)))))
 
 (defun gptel-agent-loop--schedule (delay fn)
   "Run FN after DELAY seconds."
@@ -363,10 +375,21 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
               (when (overlayp ov) (delete-overlay ov))
               (gptel-agent-loop--deliver-aborted state))
           (let ((final-turn (not (plist-get info :tool-use))))
-            (when final-turn
-              (when (overlayp ov) (delete-overlay ov))
-              (cond
-               ((and (gptel-agent-loop--task-max-steps-reached state)
+(when final-turn
+               (when (overlayp ov) (delete-overlay ov))
+               (cond
+                ((string-blank-p resp)
+                 (if (= (gptel-agent-loop--task-step-count state) 0)
+                     (gptel-agent-loop--deliver-result
+                      state
+                      (format "Error: %s task '%s' returned empty response with no tool calls."
+                              (gptel-agent-loop--task-agent-type state)
+                              (gptel-agent-loop--task-description state)))
+                   (gptel-agent-loop--deliver-result
+                    state
+                    (gptel-agent-loop--build-final-result state "[empty response]"))))
+
+                ((and (gptel-agent-loop--task-max-steps-reached state)
                      (not (gptel-agent-loop--task-summary-requested state)))
                 (gptel-agent-loop--append-output state resp)
                 (setf (gptel-agent-loop--task-summary-requested state) t)
@@ -406,9 +429,9 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
                      (setf (gptel-agent-loop--task-continuation-count state) (1+ cont-count))
                      (if gptel-agent-loop-hard-loop
                          (progn
-                           (message "[RunAgent] Auto-continuing after %d steps (continuation %d/%d)..."
-                                    (gptel-agent-loop--task-step-count state)
-                                    cont-count gptel-agent-loop-max-continuations)
+(message "[RunAgent] Auto-continuing after %d steps (continuation %d/%d)..."
+                                     (gptel-agent-loop--task-step-count state)
+                                     (1+ cont-count) gptel-agent-loop-max-continuations)
                            (gptel-agent-loop--append-output state resp)
                            (gptel-agent-loop--schedule
                             0.1
@@ -438,7 +461,13 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 (defun gptel-agent-loop--request (state prompt use-tools allow-cache)
   "Start or continue a subagent request for STATE.
 PROMPT is the prompt to send.  When USE-TOOLS is nil, force a text-only
-summary turn.  When ALLOW-CACHE is non-nil, reuse cached results."
+summary turn.  When ALLOW-CACHE is non-nil, reuse cached results.
+
+Cache behavior:
+- Initial requests (from `gptel-agent-loop-task') pass ALLOW-CACHE t
+- Continuation and summary prompts pass ALLOW-CACHE nil intentionally
+  because each continuation prompt is unique and should not reuse
+  cached results from previous runs."
   (unless (gptel-agent-loop--task-finished state)
     (let* ((agent-type (gptel-agent-loop--task-agent-type state))
            (description (gptel-agent-loop--task-description state))
@@ -567,7 +596,7 @@ Reads `steps' from agent YAML to set max-steps per agent."
 Returns (STEPS . CLEANED-RESULT) if continuation needed, nil otherwise.
 Use this in the main agent to decide whether to re-call RunAgent."
   (when (stringp result)
-    (when (string-match "\\[RUNAGENT_INCOMPLETE:\\([0-9]+\\) steps\\]" result)
+    (when (string-match "\\[RUNAGENT_INCOMPLETE:\\([0-9]+\\) steps\\(?:, [0-9]+ continuations\\)?\\]" result)
       (let ((steps (string-to-number (match-string 1 result)))
             (cleaned (replace-match "" nil nil result)))
         (cons steps cleaned)))))
@@ -575,7 +604,7 @@ Use this in the main agent to decide whether to re-call RunAgent."
 (defun gptel-agent-loop-extract-result (result)
   "Extract clean result from RunAgent output, removing continuation markers."
   (if (stringp result)
-      (replace-regexp-in-string "\\[RUNAGENT_INCOMPLETE:[0-9]+ steps\\]\\s-*" "" result)
+      (replace-regexp-in-string "\\[RUNAGENT_INCOMPLETE:[0-9]+ steps\\(?:, [0-9]+ continuations\\)?\\]\\s-*" "" result)
     result))
 
 (provide 'gptel-agent-loop)
