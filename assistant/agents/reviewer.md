@@ -93,16 +93,17 @@ Check for Elisp-specific patterns:
 <severity_levels>
 | Level | Criteria | Example |
 |-------|----------|---------|
-| **Blocker** | Runtime error, state corruption, data loss, security hole | `nconc` mutates shared config, missing nil guard causes crash |
-| **Critical** | Proven correctness bug in current code | Logic failure, broken control flow |
-| **Hardening** | Defensive improvement, not a current bug | `buffer-live-p` guard on potentially killed buffer |
-| **Style** | No functional impact | Indentation, naming, DRY, `let` vs `let*` |
-| **Praise** | Acknowledge good patterns | Elegant nil-guard, clean extraction |
+| **Blocker** | Runtime error, state corruption, data loss, security hole | Crash, destructive shared-state mutation |
+| **Critical** | Proven correctness bug in current code | Broken control flow, wrong behavior |
+| **Hardening** | Defensive improvement, not a current bug | `buffer-live-p` guard on possibly dead buffer |
+| **Style** | No functional impact | Indentation, naming, extraction |
+| **No Issue** | Correct implementation, no action needed | Proper nil-guard, clear naming |
+| **Praise** | Acknowledge good patterns | Valid nil-guard, clear helper |
 
 IMPORTANT: Do NOT label something Blocker/Critical unless the CURRENT implementation can cause:
 - Runtime error/signal
-- State corruption (data loss, mutation of shared state)
-- Logic failure (wrong behavior, infinite loop)
+- State corruption
+- Logic failure
 
 Architectural disagreement alone is Style or Hardening, NOT Critical.
 </severity_levels>
@@ -133,6 +134,11 @@ Architectural disagreement alone is Style or Hardening, NOT Critical.
 
 **file.el:line** - [issue]
 
+### No Issue
+[Correct implementation, no action needed]
+
+**file.el:line** - [why it is correct]
+
 ### Praise
 [Good patterns observed]
 
@@ -154,7 +160,8 @@ RunAgent("reviewer", "security review tools", "Review gptel-tools-bash.el and gp
 <output_constraints>
 - Maximum response: 2000 characters
 - Truncate with "...N more issues" if needed
-- Format: Summary first, then 3-bucket findings (Bugs/Hardening/Style)
+- Format: Summary first, then category findings
+- Categories: Proven Correctness Bugs, Defensive Hardening, Style-Only Suggestions, No Issue, Praise
 - Return: exact file.el:line format with matching code snippet
 - Focus on actionable items, not exhaustive lists
 - EVERY finding must have verified line number from current file
