@@ -22,7 +22,7 @@
 
 (defconst test-agent-known-models
   '("qwen3.5-plus"
-    "qwen3-max"
+    "qwen3-max-2026-01-23"
     "qwen3-coder-plus"
     "qwen3-coder-next"
     "glm-5"

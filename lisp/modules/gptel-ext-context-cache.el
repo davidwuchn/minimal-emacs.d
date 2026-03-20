@@ -165,35 +165,35 @@ Sources:
      :pricing-input 0.3 :pricing-output 1.2
      :max-output 16384
      :features (streaming tools vision)
-     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp")
+     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf")
      :description "Qwen3 Coder Next - fast coding model, 131k context, VISION")
     ("qwen3-coder-plus"
      :context-window 1000000
      :pricing-input 0.6 :pricing-output 2.4
      :max-output 65536
      :features (streaming tools vision)
-     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp")
+     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf")
      :description "Qwen3 Coder Plus - advanced coding, 1M context, VISION")
     ("qwen3.5-plus"
      :context-window 1000000
      :pricing-input 0.8 :pricing-output 4.8
      :max-output 65536
      :features (streaming tools vision)
-     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "image/tiff" "image/heic")
+     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "image/tiff" "image/heic" "application/pdf")
      :description "Qwen3.5 Plus - 1M context, thinking mode, VISION ENABLED")
     ("qwen3.5-flash"
      :context-window 1000000
      :pricing-input 0.2 :pricing-output 2.0
      :max-output 65536
      :features (streaming tools vision)
-     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp")
+     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf")
      :description "Qwen3.5 Flash - fast, 1M context, VISION ENABLED")
     ("qwen3-max-2026-01-23"
      :context-window 262144
      :pricing-input 2.5 :pricing-output 10.0
      :max-output 32768
      :features (streaming tools vision)
-     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp")
+     :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf")
      :description "Qwen3 Max - best quality, 256k context, VISION ENABLED")
     ;; Gemini
     ("gemini-2.5-pro"
@@ -598,7 +598,7 @@ Description: %s"
       :notes "Qwen3.5-Plus has 1M context. Reasoning models need streaming or fast response."
       :context-windows
       ((qwen3-coder-next . 131072)
-       (qwen3-coder-plus . 131072)
+       (qwen3-coder-plus . 1000000)
        (qwen3.5-plus . 1000000)
        (qwen3.5-flash . 1000000)
        (qwen3-max-2026-01-23 . 262144)
