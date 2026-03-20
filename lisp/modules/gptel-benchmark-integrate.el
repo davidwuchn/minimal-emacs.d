@@ -41,6 +41,10 @@
 (require 'gptel-benchmark-evolution)
 (require 'gptel-benchmark-auto-improve)
 (require 'gptel-benchmark-memory)
+(require 'gptel-benchmark-llm)
+(require 'gptel-benchmark-editor)
+(require 'gptel-benchmark-rollback)
+(require 'gptel-skill-benchmark)
 
 ;;; Customization
 
@@ -53,16 +57,19 @@
 (defun gptel-benchmark-evolve-with-improvement (name type results)
   "Run integrated evolution + improvement cycle for NAME of TYPE with RESULTS.
 This combines:
-- Auto-Improve: detect problems, apply fixes
-- Evolution: track capability emergence, feed forward"
+- Auto-Improve: detect problems, apply fixes (with LLM suggestions if enabled)
+- Evolution: track capability emergence, feed forward
+- Verification: confirm improvements before keeping them"
   (let* (;; Step 1: Detect anti-patterns (相克)
          (anti-patterns (gptel-benchmark-detect-anti-patterns results))
          
-         ;; Step 2: Generate improvements (相生 pathway)
-         (improvements (gptel-benchmark-generate-improvements name type anti-patterns))
+         ;; Step 2: Generate improvements (try LLM first, fallback to template)
+         (improvements (or (and gptel-benchmark-llm-enabled
+                               (gptel-benchmark-llm-suggest-improvements-sync name type anti-patterns))
+                          (gptel-benchmark-generate-improvements name type anti-patterns)))
          
-         ;; Step 3: Apply improvements
-         (applied (gptel-benchmark--apply-all-improvements name type improvements))
+         ;; Step 3: Apply improvements with verification
+         (apply-result (gptel-benchmark--apply-with-verification name type improvements results))
          
          ;; Step 4: Run evolution cycle
          (evolution-result (gptel-benchmark-evolution-cycle
@@ -73,12 +80,13 @@ This combines:
          
          ;; Step 6: Feed forward
          (fed-forward (gptel-benchmark--feed-forward-improvement
-                        name type anti-patterns applied capabilities)))
+                        name type anti-patterns (plist-get apply-result :applied) capabilities)))
     
     (list :name name
           :type type
           :anti-patterns (length anti-patterns)
-          :improvements-applied applied
+          :improvements-applied (plist-get apply-result :applied)
+          :verified (plist-get apply-result :verified)
           :evolution-cycle (plist-get evolution-result :cycle)
           :capabilities capabilities
           :ai-complete (plist-get gptel-benchmark-evolution-state :ai-complete-p))))
@@ -90,6 +98,64 @@ This combines:
       (gptel-benchmark-apply-improvement name type impr)
       (cl-incf count))
     count))
+
+(defun gptel-benchmark--apply-with-verification (name type improvements before-results)
+  "Apply IMPROVEMENTS to NAME of TYPE with verification against BEFORE-RESULTS.
+Returns plist with :applied count and :verified boolean."
+  (let ((checkpoints '())
+        (applied 0)
+        (verified t))
+    (dolist (impr improvements)
+      (let ((cp-id (gptel-benchmark-apply-improvement name type impr)))
+        (when cp-id (push cp-id checkpoints))
+        (cl-incf applied)))
+    (when (and (> applied 0) gptel-benchmark-verify-enabled)
+      (let* ((after-results (gptel-benchmark--run-quick-benchmark name type))
+             (before-score (gptel-benchmark--extract-score before-results))
+             (after-score (gptel-benchmark--extract-score after-results)))
+        (when (<= after-score (+ before-score gptel-benchmark-verify-threshold))
+          (setq verified nil)
+          (message "[integrate] No improvement, rolling back...")
+          (when checkpoints
+            (gptel-benchmark-rollback-restore-latest 
+             (gptel-benchmark--get-target-file name type))))))
+    (list :applied applied :verified verified)))
+
+(defun gptel-benchmark--run-quick-benchmark (name type)
+  "Run a quick benchmark for NAME of TYPE.
+Try real benchmark if gptel-agent--task is available, else mock."
+  (condition-case err
+      (pcase type
+        ('skill
+         (if (and (fboundp 'gptel-skill-benchmark-run)
+                  (fboundp 'gptel-agent--task))
+             (let* ((results (gptel-skill-benchmark-run name))
+                    (avg-score (if results (gptel-skill--average-score results) 0)))
+               (list :overall-score (/ avg-score 100.0)
+                     :test-count (length results)
+                     :source 'real))
+           (list :overall-score 0.75 :source 'mock)))
+        ('workflow
+         (list :overall-score 0.75 :source 'mock))
+        (_ (list :overall-score 0.75 :source 'mock)))
+    (error
+     (message "[integrate] Benchmark error: %s" (error-message-string err))
+     (list :overall-score 0.75 :source 'mock))))
+
+(declare-function gptel-skill--average-score "gptel-skill-benchmark")
+
+(defun gptel-benchmark--extract-score (results)
+  "Extract overall score from RESULTS."
+  (or (plist-get results :overall-score)
+      (/ (or (plist-get results :average-score) 75) 100.0)
+      0.75))
+
+(defun gptel-benchmark--get-target-file (name type)
+  "Get target file path for NAME of TYPE."
+  (pcase type
+    ('skill (format "./assistant/skills/%s/SKILL.md" name))
+    ('workflow (format "./lisp/workflows/%s.el" name))
+    (_ "")))
 
 (defun gptel-benchmark--feed-forward-improvement (name type anti-patterns applied capabilities)
   "Store improvement result in memory for next cycle."

@@ -7,7 +7,7 @@ on:
     paths:
       - 'lisp/modules/gptel-benchmark-*.el'
       - 'mementum/**'
-      - 'assistant/skills/**'
+      - 'benchmarks/**'
   workflow_dispatch:
 
 concurrency:
@@ -39,17 +39,40 @@ jobs:
         run: |
           pip install jsonschema requests
 
-      - name: Run Evolution Cycle
+      - name: Load Historical Benchmark Data
+        id: load-data
+        run: |
+          echo "Loading historical benchmark data..."
+          BENCHMARK_COUNT=$(ls benchmarks/*-results.json 2>/dev/null | wc -l | tr -d ' ')
+          echo "benchmark_count=$BENCHMARK_COUNT" >> $GITHUB_OUTPUT
+          echo "Found $BENCHMARK_COUNT benchmark files"
+
+      - name: Run Evolution Cycle with Data
         id: evolution
         run: |
           emacs --batch -Q -L . -L lisp -L lisp/modules \
             --eval "(require 'gptel-benchmark-daily)" \
             --eval "(require 'gptel-benchmark-integrate)" \
             --eval "(require 'gptel-benchmark-memory)" \
+            --eval "(require 'gptel-benchmark-core)" \
             --eval "(gptel-benchmark-memory-init)" \
-            --eval "(message \"[evolution] Running Ouroboros cycle...\")" \
-            --eval "(let ((result (gptel-benchmark-evolution-cycle \"ci-trigger\"))) \
-                     (message \"[evolution] Cycle %d completed\" (plist-get result :cycle)))" \
+            --eval "(message \"[evolution] Loading historical benchmark data...\")" \
+            --eval "(let* ((bench-dir \"benchmarks/\")
+                          (all-results '()))
+                     (dolist (file (directory-files bench-dir t \"-results\\\\.json$\"))
+                       (when (file-exists-p file)
+                         (let* ((data (gptel-benchmark-read-json file))
+                                (skill-name (replace-regexp-in-string \"-results\\\\.json$\" \"\" (file-name-nondirectory file))))
+                           (push (list :skill skill-name :results data) all-results))))
+                     (message \"[evolution] Loaded %d benchmark results\" (length all-results))
+                     (dolist (skill-result all-results)
+                       (let* ((skill-name (plist-get skill-result :skill))
+                              (results (plist-get skill-result :results)))
+                         (message \"[evolution] Evolving %s...\" skill-name)
+                         (condition-case err
+                             (gptel-benchmark-evolve-with-improvement skill-name 'skill results)
+                           (error (message \"[evolution] Error evolving %s: %s\" skill-name err)))))
+                     (gptel-benchmark-evolution-cycle \"ci-with-data\"))" \
             --eval "(message \"[evolution] Checking capabilities...\")" \
             --eval "(gptel-benchmark-evolution-check-capabilities)" \
             --eval "(message \"[evolution] Evolution complete.\")"
@@ -79,7 +102,7 @@ jobs:
           git commit -m "🔄 evolution: Ouroboros cycle $(date +%Y-%m-%d)
 
           Evolution cycle triggered by push to main.
-          Capabilities: $(cat mementum/state.md 2>/dev/null | grep -c 'capability' || echo 0)
+          Benchmarks analyzed: ${{ steps.load-data.outputs.benchmark_count }}
           
           Co-evolved-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
           git push origin "$BRANCH_NAME"
@@ -103,6 +126,7 @@ jobs:
             This PR contains automatic updates from the Ouroboros evolution cycle.
             
             ### What Changed
+            - Analyzed ${{ steps.load-data.outputs.benchmark_count }} benchmark results
             - Updated mementum/state.md with latest evolution state
             - Synthesized memories into knowledge pages
             
@@ -122,9 +146,10 @@ jobs:
         run: |
           echo "## Evolution Cycle Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Benchmarks analyzed: ${{ steps.load-data.outputs.benchmark_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.changes.outputs.has_changes }}" == "true" ]; then
             echo "✅ Evolution cycle completed with changes" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
             echo "Branch: ${{ steps.changes.outputs.branch_name }}" >> $GITHUB_STEP_SUMMARY
           else
             echo "✅ Evolution cycle completed - no changes needed" >> $GITHUB_STEP_SUMMARY

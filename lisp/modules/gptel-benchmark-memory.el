@@ -180,16 +180,55 @@ Uses git grep for semantic search, git log for temporal search."
 
 (defun gptel-benchmark-memory-synthesize (topic)
   "Synthesize memories about TOPIC into knowledge.
-Triggered when >=3 memories exist on same topic."
-  (let ((related-memories (gptel-benchmark-memory-search topic)))
-    (when (>= (length related-memories) 3)
-      (let ((knowledge-content (format "---\ntitle: %s\nstatus: open\nrelated:\n  - %s\n---\n\nSynthesized from %d memories."
-                                        topic
-                                        (mapconcat #'identity related-memories "\n  - ")
-                                        (length related-memories))))
-        (gptel-benchmark-memory-create-knowledge topic 
-                                                 (format "---\ntitle: %s\nstatus: open\n---\n" topic)
-                                                 knowledge-content)))))
+Triggered when >=3 memories exist on same topic.
+Reads actual memory content and creates proper knowledge page."
+  (let* ((related-files (gptel-benchmark-memory-search topic))
+         (memories-with-content '()))
+    (when (>= (length related-files) 3)
+      (dolist (file related-files)
+        (let* ((file-path (if (string-prefix-p "/" file)
+                              file
+                            (expand-file-name file 
+                                             (expand-file-name "memories" gptel-benchmark-memory-dir))))
+               (content (when (file-exists-p file-path)
+                          (with-temp-buffer
+                            (insert-file-contents file-path)
+                            (buffer-string)))))
+          (when content
+            (push (list :file file :content content) memories-with-content))))
+      (when (>= (length memories-with-content) 3)
+        (let* ((synthesized-content (gptel-benchmark--synthesize-content topic memories-with-content))
+               (frontmatter (format "---\ntitle: %s\nstatus: open\ncategory: synthesized\ntags:\n  - %s\nrelated:\n%s\n---\n"
+                                    topic topic
+                                    (mapconcat (lambda (m) 
+                                                 (format "  - %s" (plist-get m :file)))
+                                               memories-with-content "\n"))))
+          (gptel-benchmark-memory-create-knowledge topic frontmatter synthesized-content)
+          (message "[memory] Synthesized %d memories into knowledge: %s" 
+                   (length memories-with-content) topic))))))
+
+(defun gptel-benchmark--synthesize-content (topic memories)
+  "Create synthesized content from MEMORIES about TOPIC."
+  (let ((sections '()))
+    (push (format "# %s\n\nSynthesized from %d memories on %s.\n" 
+                  topic (length memories) (format-time-string "%Y-%m-%d"))
+          sections)
+    (push "\n## Key Insights\n\n" sections)
+    (dolist (mem memories)
+      (let ((content (plist-get mem :content)))
+        (push (format "- %s\n" 
+                      (or (gptel-benchmark--extract-key-point content)
+                          (substring content 0 (min 100 (length content)))))
+              sections)))
+    (push "\n## Patterns\n\nPatterns identified across memories.\n" sections)
+    (push "\n## Actions\n\nRecommended actions based on synthesis.\n" sections)
+    (apply #'concat (nreverse sections))))
+
+(defun gptel-benchmark--extract-key-point (content)
+  "Extract the key point from CONTENT.
+Returns first sentence or nil."
+  (when (string-match "^\\(.+?[.!?]\\)" content)
+    (match-string 1 content)))
 
 ;;; Metabolism (Wu Xing aligned)
 
