@@ -28,6 +28,7 @@ lisp/modules/*.elc
 !docs/
 !docs/*.md
 !lisp/modules/gptel-skill-*.el
+!lisp/modules/gptel-benchmark*.el
 !eca/
 !eca/AGENTS.md
 !eca/README.md

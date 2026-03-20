@@ -35,7 +35,7 @@
 |------|---------|
 | `project-facts.md` | Architecture, modules, backend, configuration |
 | `patterns.md` | Pattern memory (32 patterns) |
-| `nucleus-patterns.md` | Eight Keys, core instincts |
+| `nucleus-patterns.md` | Eight Keys, Wu Xing, VSM, 9 First Principles (single source of truth for benchmarks) |
 | `learning-protocol.md` | λ-based pattern learning |
 | `planning-protocol.md` | File-based planning for complex tasks |
 | `sarcasmotron-protocol.md` | Eight Keys violation detection |
