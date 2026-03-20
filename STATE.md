@@ -152,9 +152,9 @@ Version 0.9.9.4 installed, but `.elc` files contain a **newer unreleased version
 
 ## Active Backend
 
-Default: `gptel--moonshot` / `kimi-k2.5` (`api.kimi.com`). Single source of truth in `gptel-config.el` lines 35-36. Switched from DashScope — better tool-calling reliability and streaming stability. DashScope, DeepSeek, Gemini, OpenRouter, Copilot, MiniMax, and CF-Gateway remain defined in `gptel-ext-backends.el` as available alternatives.
+Default: `gptel--dashscope` / `qwen3-coder-next` (`coding.dashscope.aliyuncs.com`). Single source of truth in `gptel-config.el` lines 41-42. Moonshot, DeepSeek, Gemini, OpenRouter, Copilot, MiniMax, and CF-Gateway remain defined in `gptel-ext-backends.el` as available alternatives.
 
-DeepSeek (`gptel--deepseek`) is available with `deepseek-chat` (V3) and `deepseek-reasoner` (R1). Considered for routing plan-mode queries to DeepSeek reasoner, but deferred — single backend is simpler to debug and Moonshot handles all modes well.
+DeepSeek (`gptel--deepseek`) is available with `deepseek-chat` (V3) and `deepseek-reasoner` (R1). Considered for routing plan-mode queries to DeepSeek reasoner, but deferred — single backend is simpler to debug and DashScope handles all modes well.
 
 ## Known Issues
 
@@ -168,7 +168,7 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 |---------|----------|-----------|
 | Three-layer defense (tool-level + history pruning + LLM compaction) | **Skip** | Already covered by our 3-layer retry/compaction system |
 | ECA-style recovery (proactive 75% + reactive overflow) | **Skip** | Pre-send compaction + retry trimming already covers this |
-| Explicit provider error classification | **Skip for now** | Single backend (Moonshot); retry handles main failure mode. Revisit if misclassified errors appear |
+| Explicit provider error classification | **Skip for now** | Single backend (DashScope); retry handles main failure mode. Revisit if misclassified errors appear |
 | Per-mode model routing (Roo-style 7 modes) | **Skip** | K2.5 handles all modes; per-preset model overrides already architecturally supported if needed later |
 | @-mention context selection | **Skip** | gptel-context + nucleus tools already provide this; agent can pull its own context via tools |
 | Prompt caching (explicit cache headers) | **Skip** | OpenAI-compatible backends do server-side caching automatically; no client changes needed |

@@ -32,11 +32,11 @@ to a temp file."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defcustom my/gptel-subagent-stream t
+(defcustom my/gptel-subagent-stream nil
   "Whether to use streaming mode for subagent requests.
-When t (default), subagents use streaming mode for incremental display.
-When nil, subagents use non-streaming mode which is more reliable
-on backends with streaming issues (e.g., DashScope HTTP parse errors)."
+When nil (default), subagents use non-streaming mode which is more reliable
+on backends with streaming issues (e.g., DashScope HTTP parse errors).
+When t, subagents use streaming mode for incremental display."
   :type 'boolean
   :group 'gptel-tools-agent)
 
@@ -108,8 +108,8 @@ Returns nil if cache disabled, not found, or expired."
 
 
 ;; PATCH: Override gptel-agent--task to add tracking-marker for parent buffer
-;; position and large-result truncation.  Uses non-streaming mode (matching
-;; upstream) so the callback receives complete responses.
+;; position and large-result truncation.  Respects `my/gptel-subagent-stream'
+;; (default nil = non-streaming for reliability with DashScope).
 
 (defun my/gptel-agent--task-override (main-cb agent-type description prompt)
   "Call a gptel agent to do specific compound tasks.
