@@ -85,8 +85,8 @@ Minibuffer dispatch: `y/n/k/a/i/p/q`. Upstream `n` = "defer" (FSM stays paused, 
 | `:readonly` | 19 | Plan mode, introspector subagent |
 | `:researcher` | 20 | Researcher subagent |
 | `:nucleus` | 31 | Agent mode, executor subagent |
-| `:explorer` | 3 | Explorer subagent (Glob/Grep/Read) |
-| `:reviewer` | 3 | Reviewer subagent (Glob/Grep/Read) |
+| `:explorer` | 5 | Explorer subagent (Glob/Grep/Read/Code_Map/Code_Inspect) |
+| `:reviewer` | 4 | Reviewer subagent (Glob/Grep/Read/Diagnostics) |
 | `:snippets` | (= `:nucleus`) | Derived from `:nucleus`; tools with supplemental prompts |
 
 ### Advice/Hook Chain
@@ -169,7 +169,7 @@ Evaluated OpenCode/Roo Code/Cursor-style features for applicability to nucleus. 
 | Three-layer defense (tool-level + history pruning + LLM compaction) | **Skip** | Already covered by our 3-layer retry/compaction system |
 | ECA-style recovery (proactive 75% + reactive overflow) | **Skip** | Pre-send compaction + retry trimming already covers this |
 | Explicit provider error classification | **Skip for now** | Single backend (DashScope); retry handles main failure mode. Revisit if misclassified errors appear |
-| Per-mode model routing (Roo-style 7 modes) | **Skip** | K2.5 handles all modes; per-preset model overrides already architecturally supported if needed later |
+| Per-mode model routing (Roo-style 7 modes) | **Skip** | DashScope/Qwen handles all modes; per-preset model overrides already architecturally supported if needed later |
 | @-mention context selection | **Skip** | gptel-context + nucleus tools already provide this; agent can pull its own context via tools |
 | Prompt caching (explicit cache headers) | **Skip** | OpenAI-compatible backends do server-side caching automatically; no client changes needed |
 | Compaction agent (LLM summarization) | **Skip** | Rare edge case for very long sessions; complexity not justified |
