@@ -28,7 +28,7 @@ Your Org mode configuration has been set up with comprehensive features for:
 
 | Key     | Command              | Description                    |
 |---------|---------------------|--------------------------------|
-| `C-c a` | `org-agenda`        | Open agenda view               |
+| `C-c g` | `org-agenda`        | Open agenda view               |
 | `C-c c` | `org-capture`       | Quick capture (task/note/etc)  |
 | `C-c l` | `org-store-link`    | Store link to current location |
 | `C-c o` | `org-open-at-point` | Open link at cursor            |
@@ -90,7 +90,7 @@ Colors:
 
 ## Agenda Views
 
-The agenda (`C-c a`) shows tasks grouped by:
+The agenda (`C-c g`) shows tasks grouped by:
 
 1. 🔴 Today - Scheduled for today
 2. 🟡 Overdue - Past deadline/schedule
@@ -114,7 +114,7 @@ C-c c t  →  Type task description  →  C-c C-c to save
 ### 2. View Your Agenda
 
 ```
-C-c a  →  Press 'd' for daily agenda
+C-c g  →  Press 'd' for daily agenda
 ```
 
 ### 3. Create a Note
@@ -139,17 +139,17 @@ C-c P  →  Start 25-minute focus timer
 ## Tips
 
 1. **Quick Capture**: Use `C-c c` to quickly capture thoughts without leaving your current context
-2. **Daily Review**: Start each day with `C-c a` to review your agenda
+2. **Daily Review**: Start each day with `C-c g` to review your agenda
 3. **Link Notes**: Use `C-c n i` to link related notes together
 4. **Refile Tasks**: Use `C-c C-w` to move tasks between files
-5. **Search**: Use `C-c a s` to search across all agenda files
+5. **Search**: Use `C-c g s` to search across all agenda files
 6. **Priorities**: Use `C-c ,` to set A (high), B (medium), or C (low) priority
 7. **Tags**: Use `C-c C-q` to add tags for better organization
 
 ## Sample Workflow
 
 ### Morning Routine
-1. `C-c a` - Review today's agenda
+1. `C-c g` - Review today's agenda
 2. `C-c n j` - Create daily journal entry
 3. Pick a task and start pomodoro: `C-c P`
 
@@ -177,7 +177,7 @@ All Org mode settings are in `lisp/init-org.el`. You can customize:
 2. Try the capture templates (`C-c c`)
 3. Set up Org-roam backlinks for networked thought
 4. Customize capture templates in `lisp/init-org.el`
-5. Explore org-super-agenda views with `C-c a`
+5. Explore org-super-agenda views with `C-c g`
 
 ## Troubleshooting
 

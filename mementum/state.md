@@ -7,11 +7,11 @@
 Removed redundant code:
 - Deleted 73-line gptel preview patch from `gptel-config.el` — upstream gptel.el v0.9.9.4 (commit c962243) already has the fix
 
-Committed fixes (e93f2ae):
+Committed fixes (e93f2ae, 6f698c4):
 - `gptel-config.el`: Patch gptel preview handle (now removed - upstream fixed)
 - `post-init.el`: Mode-line restoration for buffers created during startup
 - `init-ai.el`: Removed duplicate `ai-code--gptel-agent-setup-transform` call
-- `init-org.el`: Changed org-agenda binding (`C-c a` → `C-c C-a`), added org-attach
+- `init-org.el`: org-agenda `C-c a` → `C-c g` (C-c a used by ai-code-menu)
 
 ## Earlier (2026-03-20) — Mementum Cleanup
 
