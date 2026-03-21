@@ -277,6 +277,7 @@ Also removes supplementary private-use area chars (U+F0000-U+FFFFD, U+100000-U+1
 nil :content is encoded as {} by json-serialize, causing a 400 Bad Request.
 Also sanitizes ALL content strings that may contain problematic Unicode
 that breaks json-serialize (private-use chars, non-characters).
+Converts non-string content (e.g., symbols) to strings.
 
 Runs as :before advice on `gptel-curl--get-args'."
   (when-let* ((data (plist-get info :data))
@@ -288,14 +289,18 @@ Runs as :before advice on `gptel-curl--get-args'."
              (let* ((role (plist-get msg :role))
                     (content (plist-get msg :content))
                     (new-content nil))
-               (when (null content)
+               (cond
+                ((null content)
                  (unless (plist-get msg :tool_calls)
                    (message "gptel: sanitizing nil :content on %s message" role)
                    (setq new-content "")))
-               (when (stringp content)
+                ((stringp content)
                  (let ((sanitized (my/gptel--sanitize-string-for-json content)))
                    (unless (string= sanitized content)
                      (setq new-content sanitized))))
+                (t
+                 (message "gptel: converting non-string :content on %s message: %S" role content)
+                 (setq new-content (format "%S" content))))
                (when new-content
                  (aset msgs i (plist-put msg :content new-content)))))))
 

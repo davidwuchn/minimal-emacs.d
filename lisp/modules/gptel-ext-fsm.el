@@ -77,5 +77,22 @@ Silent by default to avoid duplicate logging with gptel--handle-error."
 
 (add-hook 'gptel-post-response-functions #'my/gptel--recover-fsm-on-error)
 
+;; --- Fix Status Not Updating After Tool Results ---
+;; When TRET → WAIT transition happens (tool results ready), the status
+;; stays as "Calling tool..." because there's no handler to update it.
+;; This advice updates status to " Waiting..." after tool results are processed.
+
+(defun my/gptel--update-status-after-tool-result (fsm)
+  "Update status to 'Waiting...' after tool results are processed.
+FSM is the state machine."
+  (when-let* ((info (gptel-fsm-info fsm))
+              (buf (plist-get info :buffer)))
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (when (bound-and-true-p gptel-mode)
+          (gptel--update-status " Waiting..." 'warning))))))
+
+(advice-add 'gptel--handle-tool-result :after #'my/gptel--update-status-after-tool-result)
+
 (provide 'gptel-ext-fsm)
 ;;; gptel-ext-fsm.el ends here
