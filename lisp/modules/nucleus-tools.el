@@ -226,25 +226,46 @@ Does nothing if no nucleus preset is active — plain `gptel' buffers
 \(created via `M-x gptel') are left alone with no tools.
 
 Only syncs tools when `gptel--preset' is explicitly `gptel-plan' or
-`gptel-agent', or when PRESET is provided by the caller."
+`gptel-agent', or when PRESET is provided by the caller.
+
+Race condition guard: If essential tools are not registered yet,
+defers sync via idle timer to allow tool registration to complete."
   (when (boundp 'gptel-tools)
     (let ((active-preset (or preset
                              (and (boundp 'gptel--preset)
                                   (memq gptel--preset '(gptel-plan gptel-agent))
                                   gptel--preset))))
       (if (not active-preset)
-          ;; No nucleus preset active — plain gptel buffer, leave tools alone
           (when nucleus-tools-verbose
             (message "[nucleus-tools] No nucleus preset active, skipping tool sync"))
-        (pcase active-preset
-          ('gptel-plan
-           (setq-local gptel-tools (nucleus-get-tools :readonly))
-           (when nucleus-tools-verbose
-             (message "[nucleus-tools] Tool profile synced to plan (readonly)")))
-          ('gptel-agent
-           (setq-local gptel-tools (nucleus-get-tools :nucleus))
-           (when nucleus-tools-verbose
-             (message "[nucleus-tools] Tool profile synced to agent (nucleus)"))))))))
+        (let ((toolset-key (pcase active-preset
+                             ('gptel-plan :readonly)
+                             ('gptel-agent :nucleus))))
+          (if (nucleus--tools-ready-p toolset-key)
+              (progn
+                (setq-local gptel-tools (nucleus-get-tools toolset-key))
+                (when nucleus-tools-verbose
+                  (message "[nucleus-tools] Tool profile synced to %s (%d tools)"
+                           active-preset (length gptel-tools))))
+            (progn
+              (when nucleus-tools-verbose
+                (message "[nucleus-tools] Tools not ready, deferring sync for %s" active-preset))
+              (run-with-idle-timer 0.5 nil
+                                    (lambda ()
+                                      (when (buffer-live-p (current-buffer))
+                                        (nucleus-sync-tool-profile preset)))))))))))
+
+(defun nucleus--tools-ready-p (toolset-key)
+  "Check if essential tools for TOOLSET-KEY are registered.
+Returns non-nil if at least 50% of expected tools are available."
+  (let* ((expected (alist-get toolset-key nucleus-toolsets))
+         (available 0)
+         (total (length expected)))
+    (when (and expected (fboundp 'gptel-get-tool))
+      (dolist (tool expected)
+        (when (ignore-errors (gptel-get-tool tool))
+          (cl-incf available))))
+    (>= available (* 0.5 total))))
 
 ;;; Interactive Commands
 

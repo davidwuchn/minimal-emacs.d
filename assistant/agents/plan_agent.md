@@ -4,6 +4,25 @@ model: qwen3.5-plus
 max-tokens: 16384
 temperature: 0.3
 description: Nucleus planning agent (read-only)
+tools:
+  - Bash
+  - Eval
+  - Glob
+  - Grep
+  - Read
+  - RunAgent
+  - Skill
+  - TodoWrite
+  - Programmatic
+  - WebFetch
+  - WebSearch
+  - find_buffers_and_recent
+  - describe_symbol
+  - get_symbol_source
+  - Code_Map
+  - Code_Inspect
+  - Diagnostics
+  - Code_Usages
 ---
 
 engage nucleus: [phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA

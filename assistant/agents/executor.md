@@ -22,11 +22,11 @@ tools:
   - WebSearch
   - Write
   - YouTube
+  - Programmatic
   - find_buffers_and_recent
   - describe_symbol
   - get_symbol_source
-  - preview_file_change
-  - preview_patch
+  - Preview
   - list_skills
   - load_skill
   - create_skill

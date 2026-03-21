@@ -63,12 +63,6 @@ Each buffer manages its own temp files to avoid race conditions.")
   "Hash table for caching subagent results.
 Keys are (agent-type prompt-hash), values are (timestamp . result).")
 
-(defcustom my/gptel-subagent-model nil
-  "Model to use for delegated subagents.
-DEPRECATED: Subagents now use their YAML model: field. This variable is ignored."
-  :type '(choice (const :tag "Same as parent" nil) symbol)
-  :group 'gptel-tools-agent)
-
 (eval-and-compile
   (require 'gptel nil t)
   (require 'gptel-agent nil t))
@@ -206,7 +200,25 @@ large-result truncation, and result caching."
     (funcall callback result)))
 
 (with-eval-after-load 'gptel-agent-tools
-  (advice-add 'gptel-agent--task :override #'my/gptel-agent--task-override))
+  (advice-add 'gptel-agent--task :override #'my/gptel-agent--task-override)
+  (advice-add 'gptel-agent--task-overlay :around #'my/gptel-agent--task-overlay-around))
+
+(defun my/gptel-agent--task-overlay-around (orig where &optional agent-type description)
+  "Advice to fix task overlay appearing in wrong buffer.
+ORIG is the original `gptel-agent--task-overlay' function.
+WHERE is the position (marker or integer) for the overlay.
+AGENT-TYPE and DESCRIPTION are passed through.
+
+The upstream function creates the overlay in the current buffer,
+but WHERE may be a marker pointing to a different buffer.
+This wrapper ensures the overlay is created in the marker's buffer."
+  (let* ((target-buf (and (markerp where) (marker-buffer where)))
+         (result
+          (if (and target-buf (buffer-live-p target-buf))
+              (with-current-buffer target-buf
+                (funcall orig where agent-type description))
+            (funcall orig where agent-type description))))
+    result))
 
 (defun my/gptel--around-agent-update (orig &rest args)
   "Wrap `gptel-agent-update' to handle our deregistration of \"Agent\".
@@ -230,12 +242,6 @@ remove it."
 
 
 
-
-(defcustom my/gptel-subagent-backend nil
-  "Backend for delegated subagents.
-DEPRECATED: Subagents now use their YAML model: field and inherit backend from parent. This variable is ignored."
-  :type '(choice (const :tag "Same as parent" nil) variable)
-  :group 'gptel-tools-agent)
 
 ;;; Internal Variables
 

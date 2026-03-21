@@ -404,6 +404,86 @@ gptel-auto-retry
     └── Retry request
 ```
 
+### Agent Workflow Sequence
+
+```
+┌─────────┐     ┌──────────┐     ┌─────────┐     ┌─────────┐     ┌──────────┐
+│  User   │     │  gptel   │     │   FSM   │     │RunAgent │     │Subagent │
+└────┬────┘     └────┬─────┘     └────┬────┘     └────┬────┘     └────┬────┘
+     │               │                │               │               │
+     │ Send prompt   │                │               │               │
+     │──────────────>│                │               │               │
+     │               │                │               │               │
+     │               │ Create FSM     │               │               │
+     │               │───────────────>│               │               │
+     │               │                │               │               │
+     │               │ INIT → WAIT    │               │               │
+     │               │                │               │               │
+     │               │ HTTP request   │               │               │
+     │               │─────────────────────────────────────────────>│
+     │               │                │               │               │
+     │               │                │               │  LLM Response│
+     │               │<─────────────────────────────────────────────│
+     │               │                │               │               │
+     │               │ WAIT → TYPE    │               │               │
+     │               │                │               │               │
+     │               │ Stream insert  │               │               │
+     │               │                │               │               │
+     │               │ Tool call?     │               │               │
+     │               │───────────────>│               │               │
+     │               │                │               │               │
+     │               │                │ TYPE → TOOL   │               │
+     │               │                │               │               │
+     │               │                │ RunAgent tool?│               │
+     │               │                │──────────────>│               │
+     │               │                │               │               │
+     │               │                │               │ Create sub-FSM│
+     │               │                │               │──────────────>│
+     │               │                │               │               │
+     │               │                │               │  Subagent loop│
+     │               │                │               │  (WAIT→TYPE→TOOL→TRET)
+     │               │                │               │               │
+     │               │                │               │  Tool results│
+     │               │                │               │<──────────────│
+     │               │                │               │               │
+     │               │                │ TOOL → TRET   │               │
+     │               │                │               │               │
+     │               │                │ TRET → WAIT   │               │
+     │               │                │ (or DONE/ERRS)│               │
+     │               │                │               │               │
+     │               │                │ Continue?     │               │
+     │               │                │───────┐       │               │
+     │               │                │       │ loop  │               │
+     │               │                │<──────┘       │               │
+     │               │                │               │               │
+     │               │                │ DONE          │               │
+     │               │<───────────────│               │               │
+     │               │                │               │               │
+     │ Response      │                │               │               │
+     │<──────────────│                │               │               │
+     │               │                │               │               │
+```
+
+**State Transitions:**
+
+| State | Trigger | Next State |
+|-------|---------|------------|
+| INIT | Request created | WAIT |
+| WAIT | Headers received | TYPE |
+| WAIT | Curl error (no headers) | TYPE (stuck) → ERRS |
+| TYPE | Response complete | WAIT, TOOL, DONE, ERRS |
+| TOOL | Tool execution complete | TRET |
+| TRET | Tool result processed | WAIT |
+| DONE | Final state | - |
+| ERRS | Error state | - |
+| ABRT | User cancelled | - |
+
+**Recovery Hooks:**
+
+- `gptel-ext-fsm.el` adds handlers for DONE, ERRS, ABRT
+- `gptel-ext-retry.el` catches transient errors
+- `my/gptel--recover-fsm-on-error` forces DONE if stuck
+
 ## File Organization
 
 ```

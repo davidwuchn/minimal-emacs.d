@@ -36,6 +36,7 @@
 (declare-function my/gptel--deliver-subagent-result "gptel-tools-agent")
 (declare-function my/gptel--subagent-cache-get "gptel-tools-agent")
 (declare-function my/gptel--subagent-cache-put "gptel-tools-agent")
+(declare-function my/gptel--transient-error-p "gptel-ext-retry")
 
 (defvar my/gptel-subagent-stream nil
   "Whether to use streaming mode for subagent requests.
@@ -87,7 +88,7 @@ Prevents infinite loops when model outputs planning text without tool calls."
   :type 'integer
   :group 'gptel-agent-loop)
 
-(defconst gptel-agent-loop--continuation-prompt
+(defcustom gptel-agent-loop-continuation-prompt
   "CRITICAL: You must CALL TOOLS, not write text.
 
 Previous response contained planning text but NO TOOL CALLS.
@@ -99,9 +100,12 @@ IMMEDIATELY call the next tool. Do NOT:
 - Output reasoning blocks without tool calls
 
 Call a tool NOW."
-  "Prompt injected when model stops but tasks remain.")
+  "Prompt injected when model stops but tasks remain.
+Customize this to adjust the urgency or style of the continuation prompt."
+  :type 'string
+  :group 'gptel-agent-loop)
 
-(defconst gptel-agent-loop--max-steps-prompt
+(defcustom gptel-agent-loop-max-steps-prompt
   "CRITICAL - MAXIMUM STEPS REACHED
 
 The maximum number of steps allowed for this task has been reached.
@@ -196,14 +200,9 @@ Called when table exceeds `gptel-agent-loop-max-active-tasks'."
 
 (defun gptel-agent-loop--transient-error-p (error-data)
   "Check if ERROR-DATA represents a transient/retryable error.
-Only returns t for errors that might succeed on retry."
+Delegates to `my/gptel--transient-error-p' for consistent error detection."
   (when error-data
-    (let ((msg (if (stringp error-data) error-data
-                 (plist-get error-data :message))))
-      (and msg
-           (string-match-p
-            "overloaded\\|timeout\\|rate limit\\|temporarily unavailable\\|503\\|502\\|429"
-            (downcase msg))))))
+    (my/gptel--transient-error-p error-data nil)))
 
 (defun gptel-agent-loop--maybe-cache-get (agent-type prompt)
   "Return cached subagent result for AGENT-TYPE and PROMPT if available."
@@ -220,10 +219,16 @@ Only returns t for errors that might succeed on retry."
 
 (defun gptel-agent-loop--deliver-result (state result &optional cache-result)
   "Deliver RESULT for STATE.
-When CACHE-RESULT is non-nil, cache the delivered string first."
+When CACHE-RESULT is non-nil, cache the delivered string first.
+
+Guards against delivering to a killed parent buffer by checking
+`gptel-agent-loop--task-parent-buffer' and `gptel-agent-loop--task-tracking-marker'."
   (unless (gptel-agent-loop--task-finished state)
     (setf (gptel-agent-loop--task-finished state) t)
     (gptel-agent-loop--cleanup-state state)
+    (let ((marker (gptel-agent-loop--task-tracking-marker state)))
+      (when (and marker (markerp marker) (not (marker-buffer marker)))
+        (message "[RunAgent] Warning: tracking marker no longer live")))
     (when cache-result
       (gptel-agent-loop--maybe-cache-put state result))
     (if (fboundp 'my/gptel--deliver-subagent-result)
@@ -248,13 +253,13 @@ Truncates accumulated output to last 3000 chars to prevent prompt bloat."
                                 (substring output -3000))
                       output)))
     (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
-            gptel-agent-loop--continuation-prompt
+            gptel-agent-loop-continuation-prompt
             truncated)))
 
 (defun gptel-agent-loop--summary-prompt-for (state)
   "Build max-steps summary prompt for STATE."
   (format "%s\n\nOriginal task:\n%s\n\nWork completed so far:\n%s"
-          gptel-agent-loop--max-steps-prompt
+          gptel-agent-loop-max-steps-prompt
           (gptel-agent-loop--task-prompt state)
           (or (gptel-agent-loop--task-accumulated-output state) "")))
 

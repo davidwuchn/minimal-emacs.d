@@ -39,9 +39,9 @@ This advice forces the final transition."
 ;; on errors or completion because the cleanup callback is never called.
 
 (with-eval-after-load 'gptel-agent-tools
-  (add-to-list 'gptel-agent-request--handlers '(DONE . (gptel--handle-post)))
-  (add-to-list 'gptel-agent-request--handlers '(ERRS . (gptel--handle-post)))
-  (add-to-list 'gptel-agent-request--handlers '(ABRT . (gptel--handle-post)))
+  (add-to-list 'gptel-agent-request--handlers '(DONE gptel--handle-post-insert gptel--fsm-last))
+  (add-to-list 'gptel-agent-request--handlers '(ERRS gptel--handle-error gptel--fsm-last))
+  (add-to-list 'gptel-agent-request--handlers '(ABRT gptel--handle-abort gptel--fsm-last))
 
   ;; Log subagent errors loudly but ALWAYS call main-cb so the parent FSM can
   ;; continue.  The old implementation swallowed the callback when the result
@@ -62,7 +62,8 @@ This advice forces the final transition."
 (defun my/gptel--recover-fsm-on-error (_start _end)
   "Force FSM to DONE state if it has error + STOP but is still cycling.
 START and END are the response positions (ignored).
-This handles the case where malformed JSON leaves FSM in limbo."
+This handles edge cases where FSM gets stuck in limbo after error handling.
+Silent by default to avoid duplicate logging with gptel--handle-error."
   (when (boundp 'gptel--fsm-last)
     (let* ((fsm (my/gptel--coerce-fsm gptel--fsm-last))
            (info (and fsm (gptel-fsm-info fsm)))
@@ -71,10 +72,7 @@ This handles the case where malformed JSON leaves FSM in limbo."
       (when (and error-msg
                  (eq stop-reason 'STOP)
                  (not (eq (gptel-fsm-state fsm) 'DONE)))
-        (message "gptel: Recovering FSM from error state: %s" error-msg)
-        ;; Force state to DONE to unstick the UI
         (setf (gptel-fsm-state fsm) 'DONE)
-        ;; Clear the in-progress indicator
         (force-mode-line-update t)))))
 
 (add-hook 'gptel-post-response-functions #'my/gptel--recover-fsm-on-error)

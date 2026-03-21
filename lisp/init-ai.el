@@ -35,9 +35,10 @@
 (with-eval-after-load 'gptel
   (require 'gptel-config)
   (require 'nucleus-config)
-  ;; Enable RunAgent loop control for task completion
   (require 'gptel-agent-loop)
-  (gptel-agent-loop-enable))
+  (gptel-agent-loop-enable)
+  (require 'ai-code-behaviors)
+  (ai-code--gptel-agent-setup-transform))
 
 (defcustom my/ai-code-gptel-helper-backend 'gptel--dashscope
   "Backend used for ai-code's synchronous gptel helper requests."

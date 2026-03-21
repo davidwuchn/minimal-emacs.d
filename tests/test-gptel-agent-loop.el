@@ -19,6 +19,20 @@
 (defun gptel-agent--task-overlay (&rest _args) nil)
 (defun my/gptel--coerce-fsm (obj) obj)
 (defun my/gptel--deliver-subagent-result (callback result) (funcall callback result))
+(defun my/gptel--transient-error-p (error-data _http-status)
+  "Test stub for transient error detection.
+Matches the patterns from gptel-ext-retry.el for consistency.
+Handles both string errors and plist formats like (:message \"...\") or
+nested in (:error (:message \"...\"))."
+  (let ((error-msg (when (listp error-data) (plist-get error-data :message))))
+    (or (and (stringp error-data)
+             (string-match-p
+              "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests\\|InvalidParameter\\|function\\.arguments"
+              error-data))
+        (and (listp error-data)
+             (stringp error-msg)
+             (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
+                             (downcase error-msg))))))
 
 (require 'gptel-agent-loop)
 
@@ -48,12 +62,17 @@
 
 (ert-deftest gptel-agent-loop-test-transient-error ()
   (should (gptel-agent-loop--transient-error-p "Service overloaded"))
-  (should (gptel-agent-loop--transient-error-p "Rate limit exceeded"))
+  (should (gptel-agent-loop--transient-error-p "Service Unavailable"))
   (should (gptel-agent-loop--transient-error-p "503 Service Unavailable"))
   (should (gptel-agent-loop--transient-error-p "502 Bad Gateway"))
   (should (gptel-agent-loop--transient-error-p "429 Too Many Requests"))
-  (should-not (gptel-agent-loop--transient-error-p "InvalidParameter error"))
-  (should-not (gptel-agent-loop--transient-error-p "User error")))
+  (should (gptel-agent-loop--transient-error-p "Malformed JSON in response"))
+  (should (gptel-agent-loop--transient-error-p "Gateway Timeout"))
+  (should (gptel-agent-loop--transient-error-p "InvalidParameter error"))
+  (should (gptel-agent-loop--transient-error-p "curl: (28) Connection timeout"))
+  (should (gptel-agent-loop--transient-error-p "Connection refused"))
+  (should-not (gptel-agent-loop--transient-error-p "User error"))
+  (should-not (gptel-agent-loop--transient-error-p "Permission denied")))
 
 (ert-deftest gptel-agent-loop-test-looks-like-planning ()
   (should (gptel-agent-loop--looks-like-planning-p "Let me create the files now. I will start with..."))
@@ -233,7 +252,7 @@
          (state (gptel-agent-loop--task-create
                  :accumulated-output long-output)))
     (let ((prompt (gptel-agent-loop--continuation-prompt-for state)))
-      (should (< (length prompt) (+ (length gptel-agent-loop--continuation-prompt) 3100)))
+      (should (< (length prompt) (+ (length gptel-agent-loop-continuation-prompt) 3100)))
       (should (string-match-p "truncated" prompt)))))
 
 (ert-deftest gptel-agent-loop-test-max-continuations-guard ()
