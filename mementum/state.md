@@ -1,8 +1,19 @@
 # Mementum State
 
-> Last session: 2026-03-20
+> Last session: 2026-03-21
 
-## Completed (2026-03-20) — Mementum Cleanup
+## Completed (2026-03-21) — Cleanup & Review
+
+Removed redundant code:
+- Deleted 73-line gptel preview patch from `gptel-config.el` — upstream gptel.el v0.9.9.4 (commit c962243) already has the fix
+
+Committed fixes (e93f2ae):
+- `gptel-config.el`: Patch gptel preview handle (now removed - upstream fixed)
+- `post-init.el`: Mode-line restoration for buffers created during startup
+- `init-ai.el`: Removed duplicate `ai-code--gptel-agent-setup-transform` call
+- `init-org.el`: Changed org-agenda binding (`C-c a` → `C-c C-a`), added org-attach
+
+## Earlier (2026-03-20) — Mementum Cleanup
 
 Noise memory prevention:
 - Deleted 45 auto-generated memory files (improvement-cycle-*, evolve-skill-*) with null results
