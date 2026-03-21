@@ -40,10 +40,12 @@ Dedup guard: only fires when the tracked state actually changes."
 (defun nucleus--inject-build-mode-reminder ()
   "Inject a system reminder when switching from plan to build mode.
 
-Inserts after the last assistant exchange, before the current prompt."
+Inserts after the last assistant exchange, before the current prompt.
+Skips injection during active tool execution to avoid contaminating output."
   (when (and (derived-mode-p 'gptel-mode)
              (boundp 'gptel--tracking-marker)
-             gptel--tracking-marker)
+             gptel--tracking-marker
+             (not (nucleus--request-in-progress-p)))
     (save-excursion
       (let ((insert-pos (marker-position gptel--tracking-marker)))
         (when insert-pos
@@ -63,10 +65,12 @@ Inserts after the last assistant exchange, before the current prompt."
 (defun nucleus--inject-plan-mode-reminder ()
   "Inject a system reminder when switching from build to plan mode.
 
-Inserts after the last assistant exchange, before the current prompt."
+Inserts after the last assistant exchange, before the current prompt.
+Skips injection during active tool execution to avoid contaminating output."
   (when (and (derived-mode-p 'gptel-mode)
              (boundp 'gptel--tracking-marker)
-             gptel--tracking-marker)
+             gptel--tracking-marker
+             (not (nucleus--request-in-progress-p)))
     (save-excursion
       (let ((insert-pos (marker-position gptel--tracking-marker)))
         (when insert-pos
@@ -82,6 +86,17 @@ Inserts after the last assistant exchange, before the current prompt."
             (unless (looking-back (regexp-quote "<system-reminder>")
                                   (max 0 (- (point) 100)))
               (insert reminder))))))))
+
+(defun nucleus--request-in-progress-p ()
+  "Check if there's an active gptel request in progress.
+Returns non-nil if FSM is in WAIT, TYPE, TOOL, or TRET state."
+  (when (and (boundp 'gptel--fsm-last)
+             gptel--fsm-last)
+    (let ((state (condition-case nil
+                     (gptel-fsm-state gptel--fsm-last)
+                   (error nil))))
+      (and state
+           (memq state '(WAIT TYPE TOOL TRET))))))
 
 ;;; Integration
 
