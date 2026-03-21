@@ -10,10 +10,11 @@
 
 ;;; Variables
 
-(defvar nucleus--plan-mode-active nil
-  "Tracks whether we were previously in plan mode.")
+(defvar nucleus--previous-preset nil
+  "Tracks the previous preset for transition detection.
+Values: nil (unset), 'gptel-plan, or 'gptel-agent.")
 
-(make-variable-buffer-local 'nucleus--plan-mode-active)
+(make-variable-buffer-local 'nucleus--previous-preset)
 
 ;;; Mode Transition Detection
 
@@ -22,20 +23,26 @@
 
 Detects plan<->agent transitions and injects a system reminder in both
 directions to break the LLM out of its prior mode mindset.
-Dedup guard: only fires when the tracked state actually changes."
+Only fires on actual transitions (not initial setup)."
   (when (and (boundp 'gptel--preset)
-             gptel--preset)
-    (let ((was-plan nucleus--plan-mode-active)
-          (is-plan (eq gptel--preset 'gptel-plan))
-          (is-agent (eq gptel--preset 'gptel-agent)))
-      ;; Only act when the state actually changes (dedup guard)
-      (unless (eq was-plan is-plan)
-        (setq-local nucleus--plan-mode-active is-plan)
+             gptel--preset
+             (memq gptel--preset '(gptel-plan gptel-agent)))
+    (let ((previous nucleus--previous-preset)
+          (current gptel--preset))
+      ;; Only inject on actual transitions (not first-time setup)
+      (when (and previous
+                 (not (eq previous current)))
         (cond
-         ((and was-plan is-agent)
+         ;; Plan → Agent: inject build reminder
+         ((and (eq previous 'gptel-plan)
+               (eq current 'gptel-agent))
           (nucleus--inject-build-mode-reminder))
-         ((and (not was-plan) is-plan)
-          (nucleus--inject-plan-mode-reminder)))))))
+         ;; Agent → Plan: inject plan reminder
+         ((and (eq previous 'gptel-agent)
+               (eq current 'gptel-plan))
+          (nucleus--inject-plan-mode-reminder))))
+      ;; Update tracked state
+      (setq-local nucleus--previous-preset current))))
 
 (defun nucleus--inject-build-mode-reminder ()
   "Inject a system reminder when switching from plan to build mode.
