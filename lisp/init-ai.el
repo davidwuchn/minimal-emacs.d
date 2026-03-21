@@ -37,8 +37,7 @@
   (require 'nucleus-config)
   (require 'gptel-agent-loop)
   (gptel-agent-loop-enable)
-  (require 'ai-code-behaviors)
-  (ai-code--gptel-agent-setup-transform))
+  (require 'ai-code-behaviors))
 
 (defcustom my/ai-code-gptel-helper-backend 'gptel--dashscope
   "Backend used for ai-code's synchronous gptel helper requests."

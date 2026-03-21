@@ -23,7 +23,7 @@
 (use-package org
   :ensure nil  ; Built-in
   :hook (org-mode . (lambda () (display-line-numbers-mode -1)))
-  :bind (("C-c a" . org-agenda)
+  :bind (("C-c C-a" . org-agenda)
          ("C-c c" . org-capture)
          ("C-c l" . org-store-link)
          ("C-c o" . org-open-at-point))
@@ -206,14 +206,28 @@
   (setq org-download-screenshot-method "screencapture -i %s"))
 
 ;; ==============================================================================
+;; ORG ATTACH (File attachments)
+;; ==============================================================================
+
+(use-package org-attach
+  :ensure nil  ; Built-in with Org
+  :after org
+  :bind (:map org-mode-map
+              ("C-c C-z" . org-attach))  ; Use C-c C-z to avoid conflict with org-agenda
+  :config
+  (setq org-attach-dir "~/org/attachments/")
+  (setq org-attach-id-dir "~/org/attachments/.id/")
+  (setq org-attach-auto-tag "ATTACH"))
+
+;; ==============================================================================
 ;; ORG MODERN (Visual enhancements)
 ;; ==============================================================================
 
 (use-package org-modern
   :ensure t
-  :hook ((org-mode . org-modern-mode)
-         (org-agenda-mode . org-modern-agenda-mode))
+  :hook (org-mode . org-modern-mode)
   :config
+  (add-hook 'org-agenda-finalize-hook #'org-modern-agenda)
   (setq org-modern-table-vertical 0.2)
   (setq org-modern-table-horizontal 0.2)
   (setq org-modern-priority-default "◎")

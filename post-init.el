@@ -31,4 +31,28 @@
 ;; Example: Custom key bindings
 ;; (global-set-key (kbd "C-c w") #'whitespace-mode)
 
+;; ==============================================================================
+;; FIX: Mode-line restoration for buffers created during startup
+;; ==============================================================================
+;; Upstream early-init.el only restores mode-line for buffers that had
+;; minimal-emacs--hidden-mode-line set. Buffers created during startup
+;; with nil mode-line are skipped. This fixes that.
+
+(defun my/fix-mode-line-for-all-buffers ()
+  "Ensure all buffers have a proper mode-line-format.
+Buffers created during startup may have nil mode-line if they
+were created after the hiding but before restoration."
+  (when (and (boundp 'minimal-emacs-disable-mode-line-during-startup)
+             minimal-emacs-disable-mode-line-during-startup)
+    (dolist (buf (buffer-list))
+      (when (buffer-live-p buf)
+        (with-current-buffer buf
+          ;; Buffer has nil mode-line as local var - restore to default
+          (when (and (local-variable-p 'mode-line-format)
+                     (eq mode-line-format nil))
+            (kill-local-variable 'mode-line-format)))))))
+
+;; Run after all init is complete
+(add-hook 'emacs-startup-hook #'my/fix-mode-line-for-all-buffers 100)
+
 ;;; post-init.el ends here
