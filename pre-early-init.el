@@ -1,5 +1,8 @@
 ;;; pre-early-init.el --- Pre-early init customizations -*- no-byte-compile: t; lexical-binding: t; -*-
 
+;; Enable debug mode (setq to nil to disable)
+(setq minimal-emacs-debug t)
+
 ;; Disable UI bloat to speed up startup
 (setq minimal-emacs-ui-features nil)
 
