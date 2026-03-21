@@ -121,7 +121,7 @@ large-result truncation, and result caching."
                               :use-context nil
                               :stream my/gptel-subagent-stream)
                         (cdr (assoc agent-type gptel-agent--agents))))
-(syms (cons 'gptel--preset (gptel--preset-syms preset)))
+         (syms (cons 'gptel--preset (gptel--preset-syms preset)))
          (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
     (cl-progv syms vals
       (gptel--apply-preset preset)
