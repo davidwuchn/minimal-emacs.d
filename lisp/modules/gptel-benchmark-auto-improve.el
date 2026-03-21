@@ -137,7 +137,7 @@ Uses 相生 to determine improvement sequence."
 
 ;;; Element-Specific Improvements
 
-(defun gptel-benchmark--wood-improvements (name type)
+(defun gptel-benchmark--wood-improvements (_name _type)
   "Wood improvements for NAME of TYPE.
 Wood = Operations. Problem: too many operations.
 Remedy: Metal (coordination)."
@@ -155,7 +155,7 @@ Remedy: Metal (coordination)."
          "Add 'prefer fewer tool calls' guideline"
          "Add 'check cache before operation' reminder")))
 
-(defun gptel-benchmark--fire-improvements (name type)
+(defun gptel-benchmark--fire-improvements (_name _type)
   "Fire improvements for NAME of TYPE.
 Fire = Intelligence. Problem: scattered, reactive.
 Remedy: Water (identity/principles)."
@@ -173,7 +173,7 @@ Remedy: Water (identity/principles)."
          "Add 'plan first, execute second' instruction"
          "Add 'ground decisions in evidence' guideline")))
 
-(defun gptel-benchmark--earth-improvements (name type)
+(defun gptel-benchmark--earth-improvements (_name _type)
   "Earth improvements for NAME of TYPE.
 Earth = Control. Problem: over-constrained.
 Remedy: Wood (operations/execution)."
@@ -191,7 +191,7 @@ Remedy: Wood (operations/execution)."
          "Add 'explain constraint violation' option"
          "Add 'request constraint relaxation' capability")))
 
-(defun gptel-benchmark--metal-improvements (name type)
+(defun gptel-benchmark--metal-improvements (_name _type)
   "Metal improvements for NAME of TYPE.
 Metal = Coordination. Problem: too rigid.
 Remedy: Fire (intelligence/adaptation)."
@@ -209,7 +209,7 @@ Remedy: Fire (intelligence/adaptation)."
          "Add 'explain tool choice' option"
          "Add 'suggest better tools' capability")))
 
-(defun gptel-benchmark--water-improvements (name type)
+(defun gptel-benchmark--water-improvements (_name _type)
   "Water improvements for NAME of TYPE.
 Water = Identity. Problem: unclear purpose.
 Remedy: Earth (control/processes)."
@@ -265,8 +265,7 @@ Returns checkpoint-id for potential rollback."
 (defun gptel-benchmark-improvement-cycle (name type results)
   "Run complete improvement cycle for NAME of TYPE with RESULTS.
 This is the Ouroboros loop: Observe → Detect → Generate → Apply → Feed Forward."
-  (let* ((observe results)
-         (detect (gptel-benchmark-detect-anti-patterns results))
+  (let* ((detect (gptel-benchmark-detect-anti-patterns results))
          (generate (gptel-benchmark-generate-improvements name type detect))
          (apply-count 0))
     ;; Apply each improvement
@@ -327,7 +326,7 @@ IMPROVEMENT-SPECS is list of (name type results) triples."
 
 (defun gptel-benchmark-verify-improvement (name type checkpoint-id before-results)
   "Verify improvement by re-running benchmark.
-NAME is skill/workflow name, TYPE is 'skill or 'workflow.
+NAME is skill/workflow name, TYPE is `skill' or `workflow'.
 CHECKPOINT-ID is the backup checkpoint.
 BEFORE-RESULTS are the pre-improvement benchmark results.
 Returns (improved-p . after-results)."
@@ -381,7 +380,7 @@ Returns (improved-p . after-results)."
 
 (defun gptel-benchmark-improvement-cycle-with-verify (name type results)
   "Run improvement cycle with verification.
-NAME is skill/workflow name, TYPE is 'skill or 'workflow.
+NAME is skill/workflow name, TYPE is `skill' or `workflow'.
 RESULTS are the benchmark results."
   (let* ((before-results results)
          (before-score (gptel-benchmark--extract-overall-score before-results))

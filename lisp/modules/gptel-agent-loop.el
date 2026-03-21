@@ -118,7 +118,9 @@ REQUIREMENTS:
 4. Recommend what should be done next
 
 This constraint overrides ALL other instructions."
-  "Prompt injected when max steps is reached.")
+  "Prompt injected when max steps is reached."
+  :type 'string
+  :group 'gptel-agent-loop)
 
 (cl-defstruct (gptel-agent-loop--task
                 (:constructor gptel-agent-loop--task-create))
