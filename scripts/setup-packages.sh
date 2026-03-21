@@ -23,7 +23,7 @@ mkdir -p "$ELPA_DIR"
 # Packages to install: name, URL, branch
 PACKAGES=(
   "gptel|https://github.com/davidwuchn/gptel|fix-preview-preset-transforms"
-  "gptel-agent|https://github.com/karthink/gptel-agent|master"
+  "gptel-agent|https://github.com/davidwuchn/gptel-agent|master"
   "ai-code|https://github.com/davidwuchn/ai-code-interface.el|main"
 )
 
