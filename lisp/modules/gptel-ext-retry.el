@@ -455,12 +455,15 @@ would be too generous for a smaller-context model.")
 
 (defun my/gptel--estimate-payload-bytes (info)
   "Estimate the JSON byte size of INFO's :data payload.
-Uses `json-serialize' for accuracy.  Returns 0 if :data is nil."
+Uses `json-serialize' for accuracy.  Returns 0 if :data is nil or serialization fails."
   (let ((data (plist-get info :data)))
     (if data
-        (condition-case nil
+        (condition-case err
             (string-bytes (gptel--json-encode data))
-          (error 0))
+          (error
+           (when gptel-log-level
+             (message "gptel: payload estimation failed: %s" (error-message-string err)))
+           0))
       0)))
 
 (defun my/gptel--effective-byte-limit (info)
