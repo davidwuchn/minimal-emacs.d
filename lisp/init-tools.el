@@ -119,12 +119,16 @@
   (setq easysession-save-interval 300))  ; Auto-save every 5 minutes
 
 ;; Auto-update packages on startup
+;; Disabled by default to prevent network hangs on startup.
+;; Run M-x auto-package-update-now manually when ready.
 (use-package auto-package-update
   :ensure t
   :config
   (setq auto-package-update-delete-old-versions t)
   (setq auto-package-update-hide-results t)
-  (auto-package-update-maybe))  ; Check and update on startup
+  ;; Don't auto-update on startup - can cause network hangs
+  ;; (auto-package-update-maybe)
+  )
 
 ;; Auto-kill unused buffers to save memory
 (use-package buffer-terminator
