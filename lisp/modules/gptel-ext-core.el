@@ -252,28 +252,52 @@ registered in nucleus-config."
 
 ;; Last-resort nil guard before JSON encoding: catches any nil :content that
 ;; slipped through earlier guards, preventing 400 Bad Request from APIs.
+(defun my/gptel--sanitize-string-for-json (string)
+  "Sanitize STRING for JSON serialization.
+Removes control characters, private-use chars, and non-characters that break json-serialize.
+Also removes supplementary private-use area chars (U+F0000-U+FFFFD, U+100000-U+10FFFD)."
+  (when (stringp string)
+    (let ((chars (string-to-list string))
+          (result-chars nil))
+      (dolist (c chars)
+        (unless (or
+                 (and (>= c 0) (<= c 8))
+                 (= c 11) (= c 12)
+                 (and (>= c 14) (<= c 31))
+                 (and (>= c #xfdd0) (<= c #xfdef))
+                 (and (>= c #xfff0) (<= c #xffff))
+                 (and (>= c #xf0000) (<= c #xffffd))
+                 (and (>= c #x100000) (<= c #x10fffd)))
+          (push c result-chars)))
+      (apply #'string (nreverse result-chars)))))
+
 (defun my/gptel--pre-serialize-sanitize-messages (info _token)
-  "Ensure no message has nil :content before JSON serialization.
+  "Ensure no message has nil :content and sanitize all content for JSON serialization.
 
-nil :content is encoded as {} by json-serialize, causing a 400 Bad Request
-from DashScope and OpenAI-compatible APIs that expect a string or array.
+nil :content is encoded as {} by json-serialize, causing a 400 Bad Request.
+Also sanitizes ALL content strings that may contain problematic Unicode
+that breaks json-serialize (private-use chars, non-characters).
 
-Runs as :before advice on `gptel-curl--get-args'.  Coerces nil :content to
-an empty string on messages that have no :tool_calls (i.e. text-role messages).
-Messages with :tool_calls legitimately have :content :null which is fine."
+Runs as :before advice on `gptel-curl--get-args'."
   (when-let* ((data (plist-get info :data))
               (msgs (plist-get data :messages)))
-    (cl-loop for msg across msgs
-             when (and (listp msg)
-                       (null (plist-get msg :content))
-                       ;; :tool_calls present means the assistant is calling tools;
-                       ;; its :content is intentionally :null — leave it alone.
-                       ;; But if it's nil with no tool_calls, it will serialize badly.
-                       (null (plist-get msg :tool_calls)))
-             do (progn
-                  (message "gptel: sanitizing nil :content on %s message"
-                           (plist-get msg :role))
-                  (plist-put msg :content "")))))
+    (cl-loop for i from 0 below (length msgs)
+             for msg = (aref msgs i)
+             when (listp msg)
+             do
+             (let* ((role (plist-get msg :role))
+                    (content (plist-get msg :content))
+                    (new-content nil))
+               (when (null content)
+                 (unless (plist-get msg :tool_calls)
+                   (message "gptel: sanitizing nil :content on %s message" role)
+                   (setq new-content "")))
+               (when (stringp content)
+                 (let ((sanitized (my/gptel--sanitize-string-for-json content)))
+                   (unless (string= sanitized content)
+                     (setq new-content sanitized))))
+               (when new-content
+                 (aset msgs i (plist-put msg :content new-content)))))))
 
 
 (provide 'gptel-ext-core)
