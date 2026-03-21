@@ -1,8 +1,49 @@
 # Mementum State
 
-> Last session: 2026-03-21
+> Last session: 2026-03-22
 
-## Completed (2026-03-21) — Cleanup & Review
+## Completed (2026-03-22) — Defensive Nil Guards & Startup Fix
+
+Committed fixes for `wrong-type-argument` crashes:
+
+| Commit | Issue | Fix |
+|--------|-------|-----|
+| `57d96ab` | FSM markers nil → overlay crash | Guard `(markerp m) (marker-position m)` before overlay/buffer ops |
+| `aa4e5e8` | HTTP status nil → `=` crash | Guard `(numberp status)` before `(= status 400)` |
+| `39b69d1` | Payload estimation silent fail | Add error logging to JSON serialization fallback |
+| `8a6c380` | Broken `let*` indentation | Fix `(syms ...)` binding alignment |
+| `87c03ed` | Startup hang on `package-refresh-contents` | Load archives from cache (< 24h) instead of network; disable `auto-package-update-maybe` |
+
+Files changed:
+- `gptel-tools-agent.el` — Marker validation + fallback to `(point-marker)`
+- `gptel-agent-loop.el` — Same marker guard pattern
+- `gptel-ext-tool-confirm.el` — Tool confirm marker fallback
+- `gptel-ext-retry.el` — `(numberp status)` guard, error logging
+- `pre-early-init.el` — `my/package-skip-network-refresh-p` cache advice
+- `lisp/init-tools.el` — Disable auto-package-update on startup
+
+## Key Pattern
+
+**Defensive nil guards for Elisp:**
+
+```elisp
+;; Before: crashes on nil
+(= status 400)
+(make-overlay start tracking-marker)
+
+;; After: guards prevent crash
+(and (numberp status) (= status 400))
+(and (markerp tm) (marker-position tm) tm)
+```
+
+## Related
+
+- mementum/knowledge/project-facts.md — Project architecture
+- mementum/knowledge/nucleus-patterns.md — Eight Keys, Wu Xing, VSM
+
+---
+
+## Earlier (2026-03-21) — Cleanup & Review
 
 Removed redundant code:
 - Deleted 73-line gptel preview patch from `gptel-config.el` — upstream gptel.el v0.9.9.4 (commit c962243) already has the fix
@@ -57,13 +98,6 @@ Auto-evolve cycle:
 Daily Work → Collect Metrics → Detect Anti-patterns (相克) → Auto-Improve (相生) → Store Memory → Update State → Evolve
 ```
 
-## Related
-
-- mementum/knowledge/project-facts.md — Project architecture
-- mementum/knowledge/nucleus-patterns.md — Eight Keys, Wu Xing, VSM (single source of truth)
-- .github/workflows/evolution.yml — CI evolution cycle (skills + workflows)
-- .github/workflows/skill-benchmark.yml — CI benchmark with anti-pattern detection
-
 ## Module Structure
 
 ```
@@ -109,8 +143,3 @@ benchmarks/
     ├── plan_agent-results.json
     └── code_agent-results.json
 ```
-### Run: skill/test-skill @ 19:51:46
-- Result: completed
-
-### Run: skill/test-skill @ 20:06:27
-- Result: completed
