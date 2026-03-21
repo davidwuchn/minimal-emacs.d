@@ -52,7 +52,13 @@ Skips injection during active tool execution to avoid contaminating output."
   (when (and (derived-mode-p 'gptel-mode)
              (boundp 'gptel--tracking-marker)
              gptel--tracking-marker
-             (not (nucleus--request-in-progress-p)))
+             (not (nucleus--request-in-progress-p))
+             ;; Only inject if tracking marker is at a clean position
+             ;; (not in the middle of a response)
+             (save-excursion
+               (goto-char gptel--tracking-marker)
+               (looking-back "```\n\\|</system-reminder>\n\\|\n\n"
+                             (max 0 (- (point) 50)))))
     (save-excursion
       (let ((insert-pos (marker-position gptel--tracking-marker)))
         (when insert-pos
@@ -77,7 +83,12 @@ Skips injection during active tool execution to avoid contaminating output."
   (when (and (derived-mode-p 'gptel-mode)
              (boundp 'gptel--tracking-marker)
              gptel--tracking-marker
-             (not (nucleus--request-in-progress-p)))
+             (not (nucleus--request-in-progress-p))
+             ;; Only inject if tracking marker is at a clean position
+             (save-excursion
+               (goto-char gptel--tracking-marker)
+               (looking-back "```\n\\|</system-reminder>\n\\|\n\n"
+                             (max 0 (- (point) 50)))))
     (save-excursion
       (let ((insert-pos (marker-position gptel--tracking-marker)))
         (when insert-pos
