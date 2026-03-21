@@ -331,16 +331,22 @@ with an additional `p' option to permit and remember a tool."
       (gptel--accept-tool-calls tool-calls nil)
     ;; Slow path: show confirmation UI
     (let* ((start-marker (plist-get info :position))
-         (tracking-marker (plist-get info :tracking-marker)))
-    (with-current-buffer (plist-get info :buffer)
-      (if (or use-minibuffer        ;prompt for confirmation from the minibuffer
-              buffer-read-only ;TEMP(tool-preview) Handle read-only buffers better
-              (get-char-property
-               (max (point-min) (1- (or tracking-marker start-marker)))
-               'read-only))
-          (my/gptel--confirm-tool-calls-minibuffer tool-calls info)
-        (my/gptel--confirm-tool-calls-overlay
-         tool-calls info start-marker tracking-marker))))))
+           (tracking-marker (plist-get info :tracking-marker))
+           (buf (or (plist-get info :buffer) (current-buffer)))
+           (fallback-pos (with-current-buffer buf (point-marker))))
+      (unless (and start-marker (markerp start-marker) (marker-position start-marker))
+        (setq start-marker fallback-pos))
+      (unless (and tracking-marker (markerp tracking-marker) (marker-position tracking-marker))
+        (setq tracking-marker start-marker))
+      (with-current-buffer buf
+        (if (or use-minibuffer
+                buffer-read-only
+                (get-char-property
+                 (max (point-min) (1- (or tracking-marker start-marker)))
+                 'read-only))
+            (my/gptel--confirm-tool-calls-minibuffer tool-calls info)
+          (my/gptel--confirm-tool-calls-overlay
+           tool-calls info start-marker tracking-marker))))))
 
 (defun my/gptel--programmatic-confirm-cleanup-overlay (ov)
   "Remove confirmation UI for nested Programmatic overlay OV."
