@@ -2,6 +2,33 @@
 
 > Last session: 2026-03-22
 
+## Completed (2026-03-22) — Code Review Bug Fixes
+
+Fixed correctness bugs, security vulnerabilities, and design issues across gptel AI assistant modules:
+
+### Commits
+
+| Module | Issues Fixed |
+|--------|--------------|
+| `gptel-tools-code.el` | Ripgrep word boundaries, truncation ratio configurable, Code_Usages caching |
+| `gptel-tools-agent.el` | Cache key collision, XML escape quotes, file path validation, cache max size, FSM unwind-protect |
+| `gptel-agent-loop.el` | Continuation context limit configurable, marker cleanup, cleanup functions |
+| `gptel-tools-edit.el` | Abort check race fix, multi-line fence regex, file validation, patch options |
+| `gptel-tools-preview.el` | Temp file cleanup, patch sanitization, callback order fix, max patch size |
+
+### Key Discoveries
+
+1. **`cl-return-from` pitfall**: `defun` doesn't create `cl-block` in Emacs Lisp
+2. **`t` is reserved**: Can't use `t` as lambda parameter
+3. **Buffer killed before callback**: Common pattern causing errors
+4. **Paren balance**: Critical for file loading
+
+### Verification
+
+All passes: `scripts/verify-nucleus.sh`
+
+---
+
 ## Completed (2026-03-22) — Code_Usages Caching
 
 Added caching mechanism for large Code_Usages results to prevent LLM token bloat:
