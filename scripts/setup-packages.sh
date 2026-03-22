@@ -48,10 +48,11 @@ for pkg in "${PACKAGES[@]}"; do
       (cd "$TARGET_DIR" && git remote set-url origin "$URL")
     fi
     # Update to latest version from remote
+    # Use FETCH_HEAD instead of origin/$BRANCH for shallow clone compatibility
     echo "Updating $NAME to latest from $BRANCH..."
     (cd "$TARGET_DIR" && \
       git fetch origin "$BRANCH" --depth 1 && \
-      git checkout -B "$BRANCH" "origin/$BRANCH")
+      git checkout -B "$BRANCH" FETCH_HEAD)
     cleanup_old_versions "$NAME" "$ELPA_DIR"
     echo "✓ $NAME updated"
     continue
