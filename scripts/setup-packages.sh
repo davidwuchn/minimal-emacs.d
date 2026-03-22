@@ -49,7 +49,10 @@ for pkg in "${PACKAGES[@]}"; do
     fi
     # Update to latest version from remote
     echo "Updating $NAME to latest from $BRANCH..."
-    (cd "$TARGET_DIR" && git fetch origin "$BRANCH" --depth 1 && git reset --hard "origin/$BRANCH")
+    (cd "$TARGET_DIR" && \
+      git fetch origin "$BRANCH" --depth 1 && \
+      git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/$BRANCH" && \
+      git reset --hard "origin/$BRANCH")
     cleanup_old_versions "$NAME" "$ELPA_DIR"
     echo "✓ $NAME updated"
     continue
