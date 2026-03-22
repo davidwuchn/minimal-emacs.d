@@ -37,26 +37,37 @@ Used for both Plan→Agent and Agent→Plan transitions to preserve context.")
 
 (defun nucleus--capture-last-assistant-response ()
   "Capture the last assistant response content.
-Returns text from last markdown heading (## or ###) to end of buffer.
-Returns nil if not found or content too short.
+
+Looks for content in this order:
+1. Text after last markdown heading (## or ###)
+2. Text after last assistant marker (### )
+3. Last N characters of buffer if nothing else
+
+Returns nil if buffer is too small.
 Logs to *Messages* when `nucleus-mode-switch-debug' is non-nil."
   (save-excursion
     (goto-char (point-max))
-    ;; Search for ## or ### heading (plan output format)
-    (let ((found-heading (re-search-backward "^##+ " nil t)))
-        (if found-heading
-            (let ((content (buffer-substring-no-properties (point) (point-max))))
-              (when (> (length content) 50)
-                (let ((result (if (> (length content) 3000)
-                                  (concat (substring content 0 3000) "\n...[truncated]")
-                                content)))
-                  (when nucleus-mode-switch-debug
-                    (message "[mode-switch] Captured %d chars from heading at pos %d"
-                             (length result) (point)))
-                  result)))
+    (let ((found-heading (re-search-backward "^##+ " nil t))
+          (found-assistant (re-search-backward "^### " nil t))
+          result)
+      ;; Prefer heading, fall back to assistant marker
+      (when (or found-heading found-assistant)
+        (goto-char (or found-heading found-assistant))
+        (let ((content (buffer-substring-no-properties (point) (point-max))))
+          (when (> (length content) 50)
+            (setq result (if (> (length content) 3000)
+                             (concat (substring content 0 3000) "\n...[truncated]")
+                           content)))))
+      ;; Log result
+      (if result
           (when nucleus-mode-switch-debug
-            (message "[mode-switch] No heading found, capture returned nil"))
-          nil))))
+            (message "[mode-switch] Captured %d chars from %s at pos %d"
+                     (length result)
+                     (if found-heading "heading" "assistant marker")
+                     (point)))
+        (when nucleus-mode-switch-debug
+          (message "[mode-switch] No heading or assistant marker found")))
+      result)))
 
 ;;; Mode Transition Detection
 
@@ -121,6 +132,7 @@ Skips injection during active tool execution to avoid contaminating output."
           (let* ((plan-content nucleus--last-response-content)
                  (reminder
                   (concat "\n\n<system-reminder>\n"
+                          "[NUCLEUS-MODE-SWITCH-v3.1]\n"
                           "Your operational mode has changed from plan to build.\n"
                           "You are no longer in read-only mode.\n"
                           "EXECUTE THE PLAN BELOW NOW. Do not announce. Do not ask for clarification.\n"
@@ -130,6 +142,9 @@ Skips injection during active tool execution to avoid contaminating output."
                                       plan-content)
                             "\n(Execute the task you just planned.)\n")
                           "</system-reminder>\n")))
+            (when nucleus-mode-switch-debug
+              (message "[mode-switch] Injecting reminder at pos %d, content has %d chars"
+                       insert-pos (length reminder)))
             (unless (looking-back (regexp-quote "<system-reminder>")
                                   (max 0 (- (point) 100)))
               (insert reminder))))))))
