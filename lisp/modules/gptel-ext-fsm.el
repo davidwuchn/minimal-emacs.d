@@ -79,20 +79,25 @@ Silent by default to avoid duplicate logging with gptel--handle-error."
 
 ;; --- Fix Status Not Updating After Tool Results ---
 ;; When TRET → WAIT transition happens (tool results ready), the status
-;; stays as "Calling tool..." because there's no handler to update it.
-;; This advice updates status to " Waiting..." after tool results are processed.
+;; stays as "Calling tool..." because gptel--update-wait is NOT called
+;; on TRET → WAIT transitions (only on INIT → WAIT).
+;; This advice monitors FSM transitions and updates status when entering WAIT.
 
-(defun my/gptel--update-status-after-tool-result (fsm)
-  "Update status to 'Waiting...' after tool results are processed.
-FSM is the state machine."
-  (when-let* ((info (gptel-fsm-info fsm))
-              (buf (plist-get info :buffer)))
-    (when (buffer-live-p buf)
-      (with-current-buffer buf
-        (when (bound-and-true-p gptel-mode)
-          (gptel--update-status " Waiting..." 'warning))))))
+(defun my/gptel--update-status-on-wait-entry (orig-fn machine &optional new-state)
+  "Update status to 'Waiting...' when FSM transitions to WAIT state.
+ORIG-FN is gptel--fsm-transition. MACHINE is the FSM. NEW-STATE is optional.
+This is called via :around advice on gptel--fsm-transition."
+  (funcall orig-fn machine new-state)
+  (let ((target-state (or new-state (gptel-fsm-state machine))))
+    (when (eq target-state 'WAIT)
+      (when-let* ((info (gptel-fsm-info machine))
+                  (buf (plist-get info :buffer)))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf
+            (when (bound-and-true-p gptel-mode)
+              (gptel--update-status " Waiting..." 'warning))))))))
 
-(advice-add 'gptel--handle-tool-result :after #'my/gptel--update-status-after-tool-result)
+(advice-add 'gptel--fsm-transition :around #'my/gptel--update-status-on-wait-entry)
 
 ;; --- Fix Error Display in Header-Line ---
 ;; gptel--handle-error uses :status (HTTP status line) for header-line display
