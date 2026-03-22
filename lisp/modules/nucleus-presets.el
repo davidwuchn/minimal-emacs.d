@@ -23,36 +23,14 @@
 (defvar nucleus-agent-default 'gptel-plan
   "Default gptel agent preset. Use `nucleus-agent-toggle' to switch.")
 
-(defvar nucleus--go-signals '("go" "execute" "implement" "fix" "do it")
-  "Signals that trigger plan→agent preset switch before request.")
+(defvar gptel-steps nil
+  "Max steps for agent loop. Read from agent YAML `steps' field.")
 
-(defun nucleus--maybe-switch-on-go (orig &rest args)
-  "Switch from gptel-plan to gptel-agent if prompt contains a go signal.
+(defvar gptel-max-tokens nil
+  "Max tokens for agent. Read from agent YAML `max-tokens' field.")
 
-ORIG is `gptel-send'. ARGS are passed through.
-
-This runs BEFORE gptel-request captures the system message,
-ensuring the agent prompt is used when executing 'go' commands."
-  (when (and (boundp 'gptel--preset)
-             (eq gptel--preset 'gptel-plan)
-             (derived-mode-p 'gptel-mode))
-    (let* ((prompt-text
-            (string-trim
-             (buffer-substring-no-properties
-              (if (use-region-p) (region-beginning) (point-min))
-              (if (use-region-p) (region-end) (point)))))
-           (lower-prompt (downcase prompt-text))
-           (has-go-signal (cl-some
-                           (lambda (sig) (string-match-p (regexp-quote sig) lower-prompt))
-                           nucleus--go-signals)))
-      (when has-go-signal
-        (message "[nucleus] Detected 'go' signal, switching to agent mode")
-        (setq nucleus-agent-default 'gptel-agent)
-        (gptel--apply-preset 'gptel-agent
-          (lambda (sym val) (set (make-local-variable sym) val)))
-        (nucleus-sync-tool-profile)
-        (nucleus--header-line-apply-preset-label))))
-  (apply orig args))
+(defvar gptel-temperature nil  
+  "Temperature for agent. Read from agent YAML `temperature' field.")
 
 (defun nucleus--read-agent-model (agent-file)
   "Read model from AGENT-FILE YAML frontmatter.
@@ -257,20 +235,31 @@ Signals an error if any agent has incorrect tools."
     (ignore-errors (nucleus--validate-agent-tool-contracts))))
 
 (defun nucleus--around-apply-preset (orig preset &optional setter)
-  "Around advice: ensure `gptel--preset' is set even when PRESET is a raw plist.
+  "Around advice: redirect preset names and ensure `gptel--preset' is set.
 
-`gptel--transform-apply-preset' passes a plist directly to
-`gptel--apply-preset', bypassing the name→plist lookup that normally sets
-`gptel--preset'.  This advice finds the matching preset name by scanning
-`gptel--known-presets' for a cell whose cdr is `eq' to PRESET, then sets
-`gptel--preset' buffer-locally before delegating."
-  (when (and (consp preset)
-             setter
-             (boundp 'gptel--known-presets))
-    (when-let* ((cell (cl-find preset gptel--known-presets
-                               :key #'cdr :test #'eq)))
-      (set (make-local-variable 'gptel--preset) (car cell))))
-  (funcall orig preset setter))
+Redirects gptel-agent → nucleus-gptel-agent and gptel-plan → nucleus-gptel-plan
+when nucleus presets are available.
+
+Also handles the case where `gptel--transform-apply-preset' passes a plist
+directly to `gptel--apply-preset', bypassing the name→plist lookup that
+normally sets `gptel--preset'."
+  (let ((effective-preset
+         (cond
+          ((and (eq preset 'gptel-agent)
+                (assq 'nucleus-gptel-agent gptel--known-presets))
+           'nucleus-gptel-agent)
+          ((and (eq preset 'gptel-plan)
+                (assq 'nucleus-gptel-plan gptel--known-presets))
+           'nucleus-gptel-plan)
+          ((and (consp preset)
+                setter
+                (boundp 'gptel--known-presets))
+           (when-let* ((cell (cl-find preset gptel--known-presets
+                                      :key #'cdr :test #'eq)))
+             (set (make-local-variable 'gptel--preset) (car cell))
+             preset))
+          (t preset))))
+    (funcall orig effective-preset setter)))
 
 (defun nucleus--after-transform-apply-preset (&rest args)
   "After advice on `gptel--transform-apply-preset': sync gptel--preset from header.
@@ -376,9 +365,7 @@ Call this after gptel-agent loads."
     (advice-add 'gptel--transform-apply-preset :after
                 #'nucleus--after-transform-apply-preset))
   
-  ;; Pre-send advice: switch plan→agent on "go" signals BEFORE request
-  (when (fboundp 'gptel-send)
-    (advice-add 'gptel-send :around #'nucleus--maybe-switch-on-go))
+  ;; Note: "go" signal advice is added in nucleus-config.el after gptel loads
   
   ;; Fix load-order issue: refresh open buffers after tools are registered
   ;; This ensures presets have access to all registered tools

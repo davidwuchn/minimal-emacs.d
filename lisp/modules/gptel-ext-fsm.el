@@ -3,8 +3,9 @@
 ;;; Commentary:
 ;; Workarounds for gptel FSM getting stuck:
 ;; - Fix FSM stuck in TYPE state when curl fails before headers
-;; - Add missing DONE/ERRS/ABRT handlers to gptel-agent-request--handlers
 ;; - Recover FSM from error+STOP limbo state
+;; 
+;; NOTE: DONE/ERRS/ABRT handlers are now included upstream in gptel-agent-tools.el
 
 ;;; Code:
 
@@ -33,20 +34,12 @@ This advice forces the final transition."
 
 (advice-add 'gptel-curl--stream-cleanup :around #'my/gptel-fix-fsm-stuck-in-type)
 
-;; --- Fix gptel-agent Missing FSM Handlers ---
-;; `gptel-agent` defines its own handlers for background tasks but forgets to
-;; include DONE, ERRS, and ABRT! This causes background agents to hang forever
-;; on errors or completion because the cleanup callback is never called.
+;; --- Log subagent errors loudly but ALWAYS call main-cb ---
+;; The old implementation swallowed the callback when the result
+;; matched "^Error: Task", leaving the parent tool-call result pending forever
+;; and causing the parent FSM to hang.
 
 (with-eval-after-load 'gptel-agent-tools
-  (add-to-list 'gptel-agent-request--handlers '(DONE gptel--handle-post-insert gptel--fsm-last))
-  (add-to-list 'gptel-agent-request--handlers '(ERRS gptel--handle-error gptel--fsm-last))
-  (add-to-list 'gptel-agent-request--handlers '(ABRT gptel--handle-abort gptel--fsm-last))
-
-  ;; Log subagent errors loudly but ALWAYS call main-cb so the parent FSM can
-  ;; continue.  The old implementation swallowed the callback when the result
-  ;; matched "^Error: Task", leaving the parent tool-call result pending forever
-  ;; and causing the parent FSM to hang.
   (advice-add 'gptel-agent--task :around
               (lambda (orig main-cb agent-type desc prompt)
                 (let* ((new-cb (lambda (result)
