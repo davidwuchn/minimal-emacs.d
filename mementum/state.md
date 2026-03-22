@@ -2,6 +2,47 @@
 
 > Last session: 2026-03-22
 
+## Completed (2026-03-22) — FSM & Preset System Fixes
+
+Fixed multiple bugs in gptel-agent FSM and nucleus preset integration:
+
+### Key Fixes
+
+| Issue | Root Cause | Fix |
+|-------|------------|-----|
+| `cl-return-from` error | `defun` doesn't create `cl-block` | Use nested `if` instead |
+| Header-line stuck on "Waiting..." | Missing DONE/ERRS/ABRT handlers | Now upstream in gptel-agent-tools.el |
+| Preset switch not working | `gptel-agent` ≠ `nucleus-gptel-agent` | Added redirect in `nucleus--around-apply-preset` |
+| `:steps` warning | gptel doesn't recognize agent YAML property | Added `gptel-steps` variable |
+
+### Files Modified
+
+- `lisp/eca-security.el` — Removed `cl-return-from`, restructured with `if`
+- `lisp/modules/nucleus-presets.el` — Preset redirect + agent YAML vars
+- `lisp/modules/gptel-ext-fsm.el` — Removed duplicate handler registration
+- `assistant/agents/plan_agent.md` — Next Step Wizard (replaced "say go")
+
+### Next Step Wizard
+
+Plan agent now suggests contextual `@preset` based on task type:
+
+```
+**Next Step:** @tdd-dev — Plan involves new API endpoints with test coverage
+```
+
+| Plan Type | Preset |
+|-----------|--------|
+| New feature + tests | `@tdd-dev` |
+| Bug fix with diagnosis | `@debug` |
+| Production code only | `@=code` |
+| Refactoring | `@=refactor` |
+
+### Memory Created
+
+`mementum/memories/cl-return-from-pitfall.md`
+
+---
+
 ## Completed (2026-03-22) — Workflow Benchmark Evolution
 
 Analyzed code_agent workflow and improved exploration task efficiency:
