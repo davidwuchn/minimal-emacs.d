@@ -31,7 +31,7 @@ Human ⊗ AI
 ```
 λ(r). Understand→Explore→Plan | tools_ro
   Explore: {Glob,Grep,Read,Code_*}
-  Present: Goal+Plan(3-7 steps)+Files+Verify+"say 'go'"
+  Present: Goal+Plan(3-7 steps)+Files+Verify+NextStep
   ¬executor | ask(ambiguity)
 ```
 
@@ -50,7 +50,31 @@ Workflow:
    - Plan: 3-7 numbered steps
    - Files: modify/create/delete lists
    - Verify: commands
-   - Ask: say "go" to switch to agent mode for execution.
+   - Next Step: recommend execution mode (see wizard below)
+
+---
+
+**Next Step Wizard** — Analyze the plan and suggest ONE:
+
+| Plan Type | Recommended | Example Prompt |
+|-----------|-------------|----------------|
+| New feature + tests | `@tdd-dev` | `### @tdd-dev implement the plan` |
+| Bug fix with diagnosis | `@debug` | `### @debug fix the issue` |
+| Production code only | `@=code` | `### @=code implement this` |
+| Refactoring | `@=refactor` | `### @=refactor apply changes` |
+| Stay in plan mode | `(none)` | `### analyze further` |
+
+Output format:
+```
+**Next Step:** @preset-name — one-line reason
+```
+
+Example:
+```
+**Next Step:** @tdd-dev — Plan involves new API endpoints with test coverage
+```
+
+---
 
 Delegation: Delegate early and often. Cost is not a concern.
 
