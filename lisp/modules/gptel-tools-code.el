@@ -85,30 +85,56 @@ as likely truncation errors. Set to 0 to disable truncation guard."
   (and (fboundp 'eglot-current-server)
        (eglot-current-server)))
 
+(defun my/gptel--git-grep-usages (symbol-name root)
+  "Find usages of SYMBOL-NAME using git grep in ROOT.
+Returns list of matching lines or nil if not in git repo or no matches.
+Only searches tracked files (respects .gitignore automatically).
+Nested git repos are NOT searched (use ripgrep fallback for those)."
+  (let ((default-directory root))
+    (when (and (executable-find "git")
+               (vc-git-root root))
+      (with-temp-buffer
+        (let* ((has-hyphen (string-match-p "-" symbol-name))
+               (pattern (if has-hyphen
+                            (format "\\b%s\\b" (regexp-quote symbol-name))
+                          (format "\\b%s\\b" (regexp-quote symbol-name))))
+               (args (list "-c" "grep.lineNumber=true"
+                           "grep" "-n" "--no-color"
+                           "-e" pattern))
+               (exit-code (apply #'call-process "git" nil t nil args)))
+          (when (= exit-code 0)
+            (goto-char (point-min))
+            (let (usages)
+              (while (not (eobp))
+                (let ((line (buffer-substring-no-properties
+                             (line-beginning-position)
+                             (line-end-position))))
+                  (unless (string-match-p "\\.pyc$\\|\\.elc$\\|__pycache__" line)
+                    (push line usages)))
+                (forward-line 1))
+              (nreverse usages))))))))
+
 (defun my/gptel--find-usages (symbol-name)
   "Find all usages of SYMBOL-NAME in the current project.
-Tries LSP references first, falls back to ripgrep.
-Includes enhanced retry logic for LSP startup race conditions.
-Reports which backend (LSP or ripgrep) was used."
+Fallback chain: LSP → git grep → ripgrep.
+LSP provides semantic references (most accurate).
+Git grep searches tracked files only (fast, respects .gitignore).
+Ripgrep searches all files including nested repos and untracked files.
+Reports which backend was used."
   (let* ((proj (project-current))
          (root (if proj (project-root proj) default-directory))
          (usages nil)
-         (lsp-retries 5)  ; Increased from 3 to 5
+         (lsp-retries 5)
          (lsp-ready nil)
          (lsp-server (and (my/gptel--lsp-active-p) (eglot-current-server)))
-         (backend "unknown"))  ; Track which backend was used
-    ;; Try LSP first with enhanced retry logic for startup race conditions.
-    ;; Uses xref-backend-references (programmatic API) instead of
-    ;; xref-find-references (interactive command that pops a UI buffer).
+         (backend "unknown"))
     (when lsp-server
-      ;; Wait for LSP to be fully ready (retry loop with exponential backoff)
       (while (and (> lsp-retries 0) (not lsp-ready))
         (condition-case nil
             (let* ((backend-type (xref-find-backend))
                    (refs (and backend-type
                               (xref-backend-references backend-type symbol-name))))
               (if (and refs (listp refs))
-                  ;; Got results, LSP is ready
                   (progn
                     (setq lsp-ready t)
                     (setq backend "LSP")
@@ -120,48 +146,43 @@ Reports which backend (LSP or ripgrep) was used."
                                               (xref-location-line loc)
                                               (xref-item-summary ref))))
                                   refs)))
-                ;; Got empty results, LSP might not be fully indexed yet
                 (setq lsp-retries (1- lsp-retries))
                 (when (> lsp-retries 0)
-                  ;; Exponential backoff: 0.5s, 1s, 2s, 4s, 8s (max ~15s total)
                   (sleep-for (* 0.5 (expt 2 (- 5 lsp-retries)))))))
           (error
-           ;; LSP not ready yet, retry
            (setq lsp-retries (1- lsp-retries))
            (when (> lsp-retries 0)
              (sleep-for (* 0.5 (expt 2 (- 5 lsp-retries))))))))
-      ;; If LSP failed after retries, clear usages to trigger ripgrep fallback
       (unless lsp-ready
         (setq usages nil)))
-    ;; Fallback to ripgrep if LSP found nothing or wasn't ready
     (unless usages
-      (let ((grepper (executable-find "rg")))
-        (if (not grepper)
-            (setq usages (list (format "Error: ripgrep (rg) not found in PATH.\nInstall with: brew install ripgrep  (macOS)\n                 apt install ripgrep    (Ubuntu)\n                 winget install BurntSushi.ripgrep.MSVC  (Windows)")))
-          (with-temp-buffer
-            ;; Use word-boundary matching for precise symbol search.
-            ;; For symbols with hyphens (Elisp), use regex mode.
-            ;; For simple symbols, -w flag suffices.
-            (let* ((has-hyphen (string-match-p "-" symbol-name))
-                   (args (if has-hyphen
-                             ;; Regex mode with word boundaries for hyphenated symbols
-                             (list "-n" "-e" (format "\\b%s\\b" (regexp-quote symbol-name))
-                                   (expand-file-name root))
-                           ;; Word-boundary flag for simple symbols
-                           (list "-n" "-w" "-F" symbol-name
-                                 (expand-file-name root))))
-                   (exit-code (apply #'call-process grepper nil t nil args)))
-              (when (= exit-code 0)
-                (goto-char (point-min))
-                (setq backend "ripgrep")
-                (setq usages nil)
-                (while (not (eobp))
-                  (let ((line (buffer-substring-no-properties
-                               (line-beginning-position)
-                               (line-end-position))))
-                    (when (not (string-match-p "\\.pyc$\\|\\.elc$\\|__pycache__" line))
-                      (push line usages)))
-                  (forward-line 1))))))))
+      (let ((git-result (my/gptel--git-grep-usages symbol-name root)))
+        (if git-result
+            (progn
+              (setq backend "git-grep")
+              (setq usages git-result))
+          (let ((grepper (executable-find "rg")))
+            (if (not grepper)
+                (setq usages (list (format "Error: ripgrep (rg) not found in PATH.\nInstall with: brew install ripgrep  (macOS)\n                 apt install ripgrep    (Ubuntu)\n                 winget install BurntSushi.ripgrep.MSVC  (Windows)")))
+              (with-temp-buffer
+                (let* ((has-hyphen (string-match-p "-" symbol-name))
+                       (args (if has-hyphen
+                                 (list "-n" "-e" (format "\\b%s\\b" (regexp-quote symbol-name))
+                                       (expand-file-name root))
+                               (list "-n" "-w" "-F" symbol-name
+                                     (expand-file-name root))))
+                       (exit-code (apply #'call-process grepper nil t nil args)))
+                  (when (= exit-code 0)
+                    (goto-char (point-min))
+                    (setq backend "ripgrep")
+                    (setq usages nil)
+                    (while (not (eobp))
+                      (let ((line (buffer-substring-no-properties
+                                   (line-beginning-position)
+                                   (line-end-position))))
+                        (unless (string-match-p "\\.pyc$\\|\\.elc$\\|__pycache__" line)
+                          (push line usages)))
+                      (forward-line 1))))))))))
     (let ((result (if usages
                       (format "Found %d usages of '%s' (via %s):\n\n%s"
                               (length usages)
