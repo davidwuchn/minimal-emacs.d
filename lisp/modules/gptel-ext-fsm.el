@@ -99,6 +99,26 @@ This is called via :around advice on gptel--fsm-transition."
 
 (advice-add 'gptel--fsm-transition :around #'my/gptel--update-status-on-wait-entry)
 
+;; Also add to TRET handler for immediate update when tool results are processed
+(defun my/gptel--update-status-after-tool-result (fsm)
+  "Update status after tool result is processed.
+FSM is the state machine. Runs as :after advice on gptel--handle-tool-result."
+  (when-let* ((info (gptel-fsm-info fsm))
+              (buf (plist-get info :buffer)))
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (when (bound-and-true-p gptel-mode)
+          ;; Small delay to let the transition complete
+          (run-with-timer 0.1 nil
+            (lambda (b)
+              (when (buffer-live-p b)
+                (with-current-buffer b
+                  (when (bound-and-true-p gptel-mode)
+                    (gptel--update-status " Waiting..." 'warning)))))
+            buf))))))
+
+(advice-add 'gptel--handle-tool-result :after #'my/gptel--update-status-after-tool-result)
+
 ;; --- Fix Error Display in Header-Line ---
 ;; gptel--handle-error uses :status (HTTP status line) for header-line display
 ;; instead of :error (actual error message like "Curl failed with exit code 28").
