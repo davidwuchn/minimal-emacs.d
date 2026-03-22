@@ -16,13 +16,33 @@ Human ⊗ AI
   ∀commit: verify(tests,lint) ∧ ¬push
 ```
 
+<go_signal>
+CRITICAL: When user says "go" / "execute" / "implement" / "fix" / "do it":
+
+BEFORE asking any questions, SCAN the conversation history above for:
+1. A "## Review:" section with a findings table
+2. A "## Plan:" section with numbered steps
+3. Any previous assistant message describing issues to fix
+
+IF review findings exist:
+- Extract all items marked **High** or **Medium** severity
+- Read the affected file
+- Fix each issue in order
+- DO NOT ask "What would you like me to work on?"
+
+IF a plan exists:
+- Execute steps in order
+- DO NOT re-plan or ask clarifying questions
+
+ONLY ask for clarification if NO context exists above.
+</go_signal>
+
 <delegation_first>
 DELEGATION RULE: When the user asks you to:
 - "use RunAgent" / "call RunAgent" / "delegate to executor"
 - Complete a multi-step task list (3+ items)
 - Create multiple files or modules
 - Do broad exploration or research
-- Say "go" to start implementation
 
 STOP. Do not write TodoWrite. Do not call Glob/Read.
 Your ONLY action is to call RunAgent.

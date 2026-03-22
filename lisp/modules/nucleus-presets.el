@@ -23,6 +23,37 @@
 (defvar nucleus-agent-default 'gptel-plan
   "Default gptel agent preset. Use `nucleus-agent-toggle' to switch.")
 
+(defvar nucleus--go-signals '("go" "execute" "implement" "fix" "do it")
+  "Signals that trigger plan→agent preset switch before request.")
+
+(defun nucleus--maybe-switch-on-go (orig &rest args)
+  "Switch from gptel-plan to gptel-agent if prompt contains a go signal.
+
+ORIG is `gptel-send'. ARGS are passed through.
+
+This runs BEFORE gptel-request captures the system message,
+ensuring the agent prompt is used when executing 'go' commands."
+  (when (and (boundp 'gptel--preset)
+             (eq gptel--preset 'gptel-plan)
+             (derived-mode-p 'gptel-mode))
+    (let* ((prompt-text
+            (string-trim
+             (buffer-substring-no-properties
+              (if (use-region-p) (region-beginning) (point-min))
+              (if (use-region-p) (region-end) (point)))))
+           (lower-prompt (downcase prompt-text))
+           (has-go-signal (cl-some
+                           (lambda (sig) (string-match-p (regexp-quote sig) lower-prompt))
+                           nucleus--go-signals)))
+      (when has-go-signal
+        (message "[nucleus] Detected 'go' signal, switching to agent mode")
+        (setq nucleus-agent-default 'gptel-agent)
+        (gptel--apply-preset 'gptel-agent
+          (lambda (sym val) (set (make-local-variable sym) val)))
+        (nucleus-sync-tool-profile)
+        (nucleus--header-line-apply-preset-label))))
+  (apply orig args))
+
 (defun nucleus--read-agent-model (agent-file)
   "Read model from AGENT-FILE YAML frontmatter.
 Returns model as symbol, or nil if not found."
@@ -344,6 +375,10 @@ Call this after gptel-agent loads."
   (when (fboundp 'gptel--transform-apply-preset)
     (advice-add 'gptel--transform-apply-preset :after
                 #'nucleus--after-transform-apply-preset))
+  
+  ;; Pre-send advice: switch plan→agent on "go" signals BEFORE request
+  (when (fboundp 'gptel-send)
+    (advice-add 'gptel-send :around #'nucleus--maybe-switch-on-go))
   
   ;; Fix load-order issue: refresh open buffers after tools are registered
   ;; This ensures presets have access to all registered tools
