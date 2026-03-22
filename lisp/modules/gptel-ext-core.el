@@ -301,6 +301,44 @@ Also removes supplementary private-use area chars (U+F0000-U+FFFFD, U+100000-U+1
           (push c result-chars)))
       (apply #'string (nreverse result-chars)))))
 
+(defun my/gptel--sanitize-tool-type-symbols (tools-vec)
+  "Convert :type symbols to strings in TOOLS-VEC for JSON serialization.
+gptel's tool spec allows :type as a symbol (e.g., string), but json-serialize
+requires string values. Recursively processes nested :properties and :items."
+  (when (vectorp tools-vec)
+    (cl-loop for i from 0 below (length tools-vec)
+             for tool = (aref tools-vec i)
+             when (listp tool)
+             do
+             (let ((fn-spec (plist-get tool :function)))
+               (when (listp fn-spec)
+                 (let ((params (plist-get fn-spec :parameters)))
+                   (when (listp params)
+                     (let ((props (plist-get params :properties)))
+                       (when (listp props)
+                         (my/gptel--sanitize-tool-props props)))))))))
+  tools-vec)
+
+(defun my/gptel--sanitize-tool-props (props)
+  "Recursively sanitize :type symbols in tool properties PROPS."
+  (cl-loop for (key val) on props by #'cddr
+           when (listp val)
+           do
+           (let ((type-val (plist-get val :type)))
+             (when (and type-val (symbolp type-val))
+               (plist-put val :type (symbol-name type-val))))
+           (let ((items (plist-get val :items)))
+             (when (listp items)
+               (let ((item-type (plist-get items :type)))
+                 (when (and item-type (symbolp item-type))
+                   (plist-put items :type (symbol-name item-type))))
+               (let ((item-props (plist-get items :properties)))
+                 (when (listp item-props)
+                   (my/gptel--sanitize-tool-props item-props)))))
+           (let ((nested-props (plist-get val :properties)))
+             (when (listp nested-props)
+               (my/gptel--sanitize-tool-props nested-props)))))
+
 (defun my/gptel--pre-serialize-sanitize-messages (info _token)
   "Ensure no message has nil :content and sanitize all content for JSON serialization.
 
@@ -308,34 +346,38 @@ nil :content is encoded as {} by json-serialize, causing a 400 Bad Request.
 Also sanitizes ALL content strings that may contain problematic Unicode
 that breaks json-serialize (private-use chars, non-characters).
 Converts non-string content (e.g., symbols, :null) to strings.
+Also sanitizes tool definitions to convert :type symbols to strings.
 
 Runs as :before advice on `gptel-curl--get-args'."
-  (when-let* ((data (plist-get info :data))
-              (msgs (plist-get data :messages)))
-    (cl-loop for i from 0 below (length msgs)
-             for msg = (aref msgs i)
-             when (listp msg)
-             do
-             (let* ((role (plist-get msg :role))
-                    (content (plist-get msg :content))
-                    (new-content nil))
-               (cond
-                ((null content)
-                 (unless (plist-get msg :tool_calls)
-                   (message "gptel: sanitizing nil :content on %s message" role)
-                   (setq new-content "")))
-                ((eq content :null)
-                 (message "gptel: sanitizing :null :content on %s message" role)
-                 (setq new-content ""))
-                ((stringp content)
-                 (let ((sanitized (my/gptel--sanitize-string-for-json content)))
-                   (unless (string= sanitized content)
-                     (setq new-content sanitized))))
-                (t
-                 (message "gptel: converting non-string :content on %s message: %S" role content)
-                 (setq new-content (format "%S" content))))
-               (when new-content
-                 (aset msgs i (plist-put msg :content new-content)))))))
+  (when-let* ((data (plist-get info :data)))
+    (let ((tools (plist-get data :tools)))
+      (when (vectorp tools)
+        (my/gptel--sanitize-tool-type-symbols tools)))
+    (when-let* ((msgs (plist-get data :messages)))
+      (cl-loop for i from 0 below (length msgs)
+               for msg = (aref msgs i)
+               when (listp msg)
+               do
+               (let* ((role (plist-get msg :role))
+                      (content (plist-get msg :content))
+                      (new-content nil))
+                 (cond
+                  ((null content)
+                   (unless (plist-get msg :tool_calls)
+                     (message "gptel: sanitizing nil :content on %s message" role)
+                     (setq new-content "")))
+                  ((eq content :null)
+                   (message "gptel: sanitizing :null :content on %s message" role)
+                   (setq new-content ""))
+                  ((stringp content)
+                   (let ((sanitized (my/gptel--sanitize-string-for-json content)))
+                     (unless (string= sanitized content)
+                       (setq new-content sanitized))))
+                  (t
+                   (message "gptel: converting non-string :content on %s message: %S" role content)
+                   (setq new-content (format "%S" content))))
+                 (when new-content
+                   (aset msgs i (plist-put msg :content new-content))))))))
 
 
 (provide 'gptel-ext-core)
