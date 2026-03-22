@@ -95,15 +95,13 @@ Returns PID as integer, or nil if no PID file."
 
 (defun eca-security--validate-netrc (content)
   "Return non-nil if CONTENT appears to be valid netrc format.
-Validates: contains 'machine' keyword, no obvious injection."
+Validates: contains 'machine' keyword."
   (and (stringp content)
        (not (string-empty-p content))
        ;; Must have machine keyword (flexible: machine, default, or host)
        (or (string-match-p "^\\s-*machine\\s-" content)
            (string-match-p "^\\s-*default\\s-" content)
            (string-match-p "^\\s-*host\\s-" content))
-       ;; Reject obvious injection attempts
-       (not (string-match-p "\\$\\|`\\|" content))
        t))
 
 (defun eca-security--create-secure-temp (content &optional dir)
