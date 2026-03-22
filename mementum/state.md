@@ -2,6 +2,36 @@
 
 > Last session: 2026-03-22
 
+## Completed (2026-03-22) — Code_Usages Caching
+
+Added caching mechanism for large Code_Usages results to prevent LLM token bloat:
+
+### Implementation
+
+| Component | Description |
+|-----------|-------------|
+| Cache directory | `var/tmp/usages/` |
+| Threshold | Results >50k chars cached to file |
+| TTL | 1 hour auto-expiry |
+| Format | Header with metadata + usages |
+
+### Files Modified
+
+- `lisp/modules/gptel-tools-code.el`:
+  - Added `my/gptel-find-usages-cache-dir`, `my/gptel-find-usages-async-threshold`
+  - Added cache management functions: `my/gptel--usages-cache-init`, `my/gptel--usages-cache-file`, `my/gptel--usages-cache-get`, `my/gptel--usages-cache-write`
+  - Modified `my/gptel--find-usages` to cache large results
+  - Fixed `cl-return-from` pitfall in `gptel-tools-code--diagnostics`
+- `lisp/modules/gptel-tools.el`:
+  - Reordered requires: `gptel-tools-code` before `gptel-tools-agent`
+  - Prevents load-order race where `gptel-agent-tools` loads before `gptel-tools-code-register` is defined
+
+### Key Insight
+
+`gptel-tools-agent.el` has `(eval-and-compile (require 'gptel-agent))` which loads `gptel-agent-tools`, triggering `with-eval-after-load` callbacks. If `gptel-tools-code` isn't loaded yet, `gptel-tools-code-register` is void.
+
+---
+
 ## Completed (2026-03-22) — FSM & Preset System Fixes
 
 Fixed multiple bugs in gptel-agent FSM and nucleus preset integration:
