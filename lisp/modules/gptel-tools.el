@@ -57,6 +57,18 @@ Call this after gptel-agent-tools loads."
 
   ;; Register standard gptel-agent tools
   (when (fboundp 'gptel-make-tool)
+    ;; Invalid tool - catches malformed tool calls from models
+    (gptel-make-tool
+     :name "invalid"
+     :function (lambda (tool error)
+                 "Handle invalid/malformed tool calls from the model."
+                 (format "Error: Invalid tool call. Tool: %s. Error: %s" tool error))
+     :description "Internal tool for handling malformed tool calls. Do not call directly."
+     :args '((:name "tool" :type string)
+             (:name "error" :type string))
+     :category "gptel-agent"
+     :include nil)
+
     ;; Write tool
     (gptel-make-tool
      :name "Write"
