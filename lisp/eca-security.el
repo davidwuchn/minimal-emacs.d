@@ -95,15 +95,15 @@ Returns PID as integer, or nil if no PID file."
 
 (defun eca-security--validate-netrc (content)
   "Return non-nil if CONTENT appears to be valid netrc format.
-Validates: contains 'machine' keyword, has password field, no obvious injection."
+Validates: contains 'machine' keyword, no obvious injection."
   (and (stringp content)
        (not (string-empty-p content))
-       ;; Must have machine keyword
-       (string-match-p "^\\s-*machine\\s-" content)
-       ;; Must have password field
-       (string-match-p "\\s-+password\\s-+" content)
-       ;; Reject obvious injection attempts (multiple machine entries could be valid,
-       ;; but flag for review - for now, allow multiple machines)
+       ;; Must have machine keyword (flexible: machine, default, or host)
+       (or (string-match-p "^\\s-*machine\\s-" content)
+           (string-match-p "^\\s-*default\\s-" content)
+           (string-match-p "^\\s-*host\\s-" content))
+       ;; Reject obvious injection attempts
+       (not (string-match-p "\\$\\|`\\|" content))
        t))
 
 (defun eca-security--create-secure-temp (content &optional dir)
@@ -261,20 +261,25 @@ Returns non-nil if signature is valid."
   
   ;; Decrypt ~/.authinfo.gpg to secure temporary file
   (let* ((authinfo-gpg (expand-file-name "~/.authinfo.gpg"))
-         (decrypted
-          (when (and (file-exists-p authinfo-gpg)
-                     ;; Verify signature if .sig file exists
-                     (eca-security--verify-signature authinfo-gpg))
-            ;; Use gpg-agent only - no hardcoded passphrase fallback
-            (eca-security--decrypt-gpg-agent authinfo-gpg))))
-    (if (eca-security--validate-netrc decrypted)
-        (let ((tmp-file (eca-security--create-secure-temp decrypted)))
-          (when tmp-file
-            (setq eca-security--temp-file tmp-file)
-            (setenv "ECA_NETRC_FILE" tmp-file)
-            (add-hook 'kill-emacs-hook #'eca-security--cleanup)
-            (message "[eca-security] Credentials loaded from %s" authinfo-gpg)))
-      (message "[eca-security] Warning: Failed to decrypt or validate %s" authinfo-gpg))))
+         (decrypted nil))
+    (cond
+     ((not (file-exists-p authinfo-gpg))
+      (message "[eca-security] No %s found, skipping" authinfo-gpg))
+     ((not (eca-security--verify-signature authinfo-gpg))
+      (message "[eca-security] Signature verification failed for %s" authinfo-gpg))
+     ((not (setq decrypted (eca-security--decrypt-gpg-agent authinfo-gpg)))
+      (message "[eca-security] Decryption failed for %s (gpg-agent may need passphrase)" authinfo-gpg))
+     ((not (eca-security--validate-netrc decrypted))
+      (message "[eca-security] Invalid netrc format in %s" authinfo-gpg))
+     (t
+      (let ((tmp-file (eca-security--create-secure-temp decrypted)))
+        (if tmp-file
+            (progn
+              (setq eca-security--temp-file tmp-file)
+              (setenv "ECA_NETRC_FILE" tmp-file)
+              (add-hook 'kill-emacs-hook #'eca-security--cleanup)
+              (message "[eca-security] Credentials loaded from %s" authinfo-gpg))
+          (message "[eca-security] Failed to create temp file for credentials")))))))
 
 (provide 'eca-security)
 
