@@ -41,6 +41,12 @@ for pkg in "${PACKAGES[@]}"; do
   TARGET_DIR="$ELPA_DIR/$NAME"
   
   if [ -d "$TARGET_DIR/.git" ] && [ -z "$FORCE" ]; then
+    # Check if remote URL matches expected fork
+    CURRENT_URL=$(cd "$TARGET_DIR" && git remote get-url origin 2>/dev/null || echo "")
+    if [ "$CURRENT_URL" != "$URL" ]; then
+      echo "Switching $NAME to correct fork: $URL"
+      (cd "$TARGET_DIR" && git remote set-url origin "$URL")
+    fi
     # Update to latest version from remote
     echo "Updating $NAME to latest from $BRANCH..."
     (cd "$TARGET_DIR" && git fetch origin "$BRANCH" --depth 1 && git reset --hard "origin/$BRANCH")
