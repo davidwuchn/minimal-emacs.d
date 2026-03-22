@@ -2,7 +2,16 @@
 * Release history
 
 ** Main branch change
+- Feat: Add constraint bundles system with 20 tech stack presets (@rust-stack, @react-stack, etc.)
+- Feat: Expand constraint catalog with 50+ constraints (testing, safety, error handling, performance, API design, logging)
+- Feat: Auto-detect constraints from project config files (tsconfig.json, pyproject.toml, Cargo.toml, etc.)
+- Feat: Add project-scoped constraint persistence (.ai-behaviors/constraints)
+- Feat: Mode-line integration for constraint bundles with gptel-plan filtering
+- Feat: Completion support for @bundle-name in prompts
 - Feat: Add clickable in-repo file and URL links in AI session buffers
+- Fix: Glob pattern matching for *.csproj and similar patterns in auto-detect
+- Fix: Bundle loading from persistence file with space handling
+- Fix: Mode-line update on bundle apply/clear
 
 ** 1.62
 - Fix: Preserve AI session reuse for attached and newly opened files when lookup context changes
