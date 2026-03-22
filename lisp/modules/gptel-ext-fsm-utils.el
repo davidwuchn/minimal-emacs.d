@@ -13,7 +13,12 @@
 
 OBJECT may already be an FSM struct, a request-alist entry of the form
 `(PROCESS FSM . CLEANUP)', a cons cell like `(FSM . CLEANUP)', or an
-accidentally wrapped list like `(FSM)'."
+accidentally wrapped list like `(FSM)'.
+
+TODO: This returns the first FSM found, which may be incorrect in
+nested subagent scenarios where parent and child FSMs coexist.
+A proper fix would require FSM ID tracking or parent pointers.
+For now, callers should validate the returned FSM matches expected context."
   (cond
    ((my/gptel--fsm-p object) object)
    ((consp object)
