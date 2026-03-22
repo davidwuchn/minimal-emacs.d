@@ -30,6 +30,18 @@
 (defvar gptel-agent-loop--task-step-count)
 (defvar gptel-agent-loop--task-continuation-count)
 
+;;; Helpers
+
+(defun gptel-workflow--tool-calls-list (run)
+  "Return tool-calls from RUN as a list (handles vector)."
+  (let ((tc (gptel-workflow-run-tool-calls run)))
+    (if (vectorp tc) (append tc nil) tc)))
+
+(defun gptel-workflow--tool-names (run)
+  "Return list of tool names from RUN."
+  (mapcar (lambda (tc) (plist-get tc :tool))
+          (gptel-workflow--tool-calls-list run)))
+
 ;;; Customization
 
 (defgroup gptel-workflow-benchmark nil
@@ -178,7 +190,7 @@ Returns list of relevant memory content strings."
 (defun gptel-workflow-detect-phases (run)
   "Detect phase transitions for RUN based on tool calls and output.
 Returns list of phase entries."
-  (let ((tool-calls (gptel-workflow-run-tool-calls run))
+  (let ((tool-calls (gptel-workflow--tool-calls-list run))
         (output (or (gptel-workflow-run-output run) ""))
         (phases '()))
     (let ((p1-entry (gptel-workflow--detect-p1 tool-calls))
@@ -193,7 +205,7 @@ Returns list of phase entries."
   "Detect P1 phase from TOOL-CALLS.
 P1 = Understand → Explore → Decide → Present
 Indicators: grep/read tools used, no edit/write yet."
-  (let ((tools (mapcar #'car tool-calls)))
+  (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
     (when (and (or (memq 'grep tools)
                    (memq 'Grep tools)
                    (cl-member "grep" tools :test #'equal :key #'symbol-name))
@@ -203,13 +215,13 @@ Indicators: grep/read tools used, no edit/write yet."
       (list :phase 'P1
             :entered t
             :timestamp (float-time)
-            :tools-used (delete-dups (mapcar #'car tool-calls))))))
+            :tools-used (delete-dups tools)))))
 
 (defun gptel-workflow--detect-p2 (tool-calls output)
   "Detect P2 phase from TOOL-CALLS and OUTPUT.
 P2 = refine (plan created, updates made)
 Indicators: plan file mentioned, Updates in output, or edit tools used."
-  (let ((tools (mapcar #'car tool-calls)))
+  (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
     (when (or (string-match-p "[Pp]lan" output)
               (string-match-p "[Uu]pdates" output)
               (memq 'edit tools)
@@ -227,7 +239,7 @@ Indicators: plan file mentioned, Updates in output, or edit tools used."
   "Detect P3 phase from TOOL-CALLS.
 P3 = preview (preview_file_change tool called)
 Indicators: preview tool used."
-  (let ((tools (mapcar #'car tool-calls)))
+  (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
     (when (or (memq 'preview_file_change tools)
               (memq 'Preview tools)
               (cl-member "preview" tools :test #'equal :key #'symbol-name)
@@ -419,9 +431,9 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
 
 (defun gptel-workflow--score-tools (run tools-cfg)
   "Score tool usage of RUN against TOOLS-CFG."
-  (let* ((tool-calls (gptel-workflow-run-tool-calls run))
+  (let* ((tool-calls (gptel-workflow--tool-calls-list run))
          (used-tools (mapcar (lambda (tc)
-                               (let ((tool (car tc)))
+                               (let ((tool (plist-get tc :tool)))
                                  (if (symbolp tool)
                                      (symbol-name tool)
                                    tool)))
@@ -441,7 +453,7 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
                             (mapcar (lambda (tc)
                                       (when (plist-get (gptel-workflow-run-phase-trace run)
                                                        :phase)
-                                        (let ((tool (car tc)))
+                                        (let ((tool (plist-get tc :tool)))
                                           (if (symbolp tool)
                                               (symbol-name tool)
                                             tool))))
@@ -489,10 +501,10 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
                                       :continuation_count (gptel-workflow-run-continuation-count run)
                                       :completed (gptel-workflow-run-completed-p run)
                                       :phases (vconcat (gptel-workflow-run-phase-trace run))
-                                      :tool_calls (vconcat (mapcar (lambda (tc)
-                                                                     (list :tool (car tc)
-                                                                           :timestamp (nth 2 tc)))
-                                                                   (reverse (gptel-workflow-run-tool-calls run)))))
+:tool_calls (vconcat (mapcar (lambda (tc)
+                                                                      (list :tool (plist-get tc :tool)
+                                                                            :timestamp (plist-get tc :timestamp)))
+                                                                    (reverse (gptel-workflow--tool-calls-list run)))))
                         :scores scores))
            (existing (when (file-exists-p results-file)
                        (condition-case nil
@@ -599,7 +611,7 @@ TEST-ID is the test case ID."
           (when (gptel-workflow-run-tool-calls run)
             (princ "  Tools: ")
             (princ (mapconcat #'symbol-name
-                              (delete-dups (mapcar #'car (gptel-workflow-run-tool-calls run)))
+                              (delete-dups (gptel-workflow--tool-names run))
                               ", "))
             (princ "\n"))
           (when (gptel-workflow-run-phase-trace run)
