@@ -46,6 +46,9 @@
 (require 'gptel-benchmark-auto-improve)
 (require 'gptel-benchmark-integrate)
 (require 'gptel-benchmark-daily)
+(require 'gptel-benchmark-instincts)
+(require 'gptel-workflow-benchmark)
+(require 'gptel-skill-benchmark)
 
 ;; Enable daily benchmark integration (auto-collect metrics on skill/workflow runs)
 (gptel-benchmark-daily-setup)

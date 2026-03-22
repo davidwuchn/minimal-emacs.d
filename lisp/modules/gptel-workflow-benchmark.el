@@ -740,11 +740,11 @@ Returns plist with :direction, :velocity, :recommendation."
           (princ (format "=== Eight Keys Breakdown: %s ===\n\n" workflow-name))
           (dolist (key-def gptel-benchmark-eight-keys-definitions)
             (let* ((key (car key-def))
-(symbol (plist-get (alist-get key gptel-benchmark-eight-keys-definitions) :symbol))
-                 (name (plist-get (alist-get key gptel-benchmark-eight-keys-definitions) :name))
+                   (symbol (plist-get (alist-get key gptel-benchmark-eight-keys-definitions) :symbol))
+                   (name (plist-get (alist-get key gptel-benchmark-eight-keys-definitions) :name))
                    (score (alist-get key breakdown)))
               (princ (format "%s %s: %.1f%%\n" symbol name (* 100 (or score 0))))))
-          (princ "\n")))))))
+          (princ "\n"))))))
 
 (defun gptel-workflow--eight-keys-breakdown (results)
   "Generate Eight Keys breakdown from RESULTS."
