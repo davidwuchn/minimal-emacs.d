@@ -11,6 +11,7 @@
 (require 'bytecomp)
 
 (declare-function package-lint-buffer "package-lint")
+(declare-function my/gptel-make-temp-file "gptel-ext-core")
 
 ;;; Customization
 
@@ -32,13 +33,25 @@ instead of being returned directly to avoid LLM token bloat."
   :type 'integer
   :group 'gptel-tools)
 
+(defcustom my/gptel-code-replace-truncation-ratio 0.1
+  "Minimum ratio of new/old code length before rejecting as truncation.
+A value of 0.1 means replacements < 10% of original length are rejected
+as likely truncation errors. Set to 0 to disable truncation guard."
+  :type 'number
+  :group 'gptel-tools)
+
 ;;; Cache Management
 
+(defvar my/gptel--usages-cache-initialized nil
+  "Whether the usages cache directory has been initialized.")
+
 (defun my/gptel--usages-cache-init ()
-  "Initialize usages cache directory."
-  (unless (file-directory-p my/gptel-find-usages-cache-dir)
-    (make-directory my/gptel-find-usages-cache-dir t))
-  (set-file-modes my/gptel-find-usages-cache-dir #o700))
+  "Initialize usages cache directory. Idempotent."
+  (unless my/gptel--usages-cache-initialized
+    (unless (file-directory-p my/gptel-find-usages-cache-dir)
+      (make-directory my/gptel-find-usages-cache-dir t))
+    (set-file-modes my/gptel-find-usages-cache-dir #o700)
+    (setq my/gptel--usages-cache-initialized t)))
 
 (defun my/gptel--usages-cache-file (symbol-name root)
   "Generate cache file path for SYMBOL-NAME in ROOT."
@@ -124,12 +137,20 @@ Reports which backend (LSP or ripgrep) was used."
     (unless usages
       (let ((grepper (executable-find "rg")))
         (if (not grepper)
-            (setq usages (list (format "Error: ripgrep (rg) not found in PATH.\nInstall with: brew install ripgrep  (macOS)\n                 apt install ripgrep    (Ubuntu)")))
+            (setq usages (list (format "Error: ripgrep (rg) not found in PATH.\nInstall with: brew install ripgrep  (macOS)\n                 apt install ripgrep    (Ubuntu)\n                 winget install BurntSushi.ripgrep.MSVC  (Windows)")))
           (with-temp-buffer
-            (let ((exit-code (call-process grepper nil t nil
-                                           "-n" "-F"
-                                           symbol-name
-                                           (expand-file-name root))))
+            ;; Use word-boundary matching for precise symbol search.
+            ;; For symbols with hyphens (Elisp), use regex mode.
+            ;; For simple symbols, -w flag suffices.
+            (let* ((has-hyphen (string-match-p "-" symbol-name))
+                   (args (if has-hyphen
+                             ;; Regex mode with word boundaries for hyphenated symbols
+                             (list "-n" "-e" (format "\\b%s\\b" (regexp-quote symbol-name))
+                                   (expand-file-name root))
+                           ;; Word-boundary flag for simple symbols
+                           (list "-n" "-w" "-F" symbol-name
+                                 (expand-file-name root))))
+                   (exit-code (apply #'call-process grepper nil t nil args)))
               (when (= exit-code 0)
                 (goto-char (point-min))
                 (setq backend "ripgrep")
@@ -379,6 +400,9 @@ Syncs buffer with disk, validates parser, guards against truncation."
   (condition-case err
       (with-timeout (5 (format "Error: Code_Replace timed out on %s" file_path))
         (with-current-buffer (find-file-noselect file_path)
+          ;; Check for unsaved user changes before syncing with disk.
+          (when (buffer-modified-p)
+            (error "Buffer has unsaved changes. Save or revert manually before Code_Replace."))
           ;; Sync buffer with disk before operating — prevents
           ;; "changed since visited" prompts when multiple
           ;; Code_Replace calls target the same file in sequence.
@@ -393,9 +417,11 @@ Syncs buffer with disk, validates parser, guards against truncation."
                "Edit tool (manual paren balancing required)")
             (let ((old-code (treesit-agent-extract-node node_name)))
               ;; Guard: reject likely-truncated replacements.
+              ;; Only applies when threshold > 0 and old-code > 200 chars.
               (if (and old-code
+                       (> my/gptel-code-replace-truncation-ratio 0)
                        (> (length old-code) 200)
-                       (< (length new_code) (* 0.2 (length old-code))))
+                       (< (length new_code) (* my/gptel-code-replace-truncation-ratio (length old-code))))
                   (format "Error: Replacement rejected — new code (%d chars) is suspiciously shorter than original (%d chars).\nThis usually means the function body was truncated.\n\nACTION: Provide the COMPLETE replacement including the full function body."
                           (length new_code) (length old-code))
                 (if (treesit-agent-replace-node node_name new_code)
