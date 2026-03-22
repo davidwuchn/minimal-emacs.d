@@ -28,10 +28,12 @@ Used for both Plan→Agent and Agent→Plan transitions to preserve context.")
 
 (defun nucleus--capture-last-assistant-response ()
   "Capture the last assistant response content.
-Returns text from last '###' heading to end of buffer, or nil if not found."
+Returns text from last markdown heading (## or ###) to end of buffer.
+Returns nil if not found or content too short."
   (save-excursion
     (goto-char (point-max))
-    (when (re-search-backward "^### " nil t)
+    ;; Search for ## or ### heading (plan output format)
+    (when (re-search-backward "^##+ " nil t)
       (let ((content (buffer-substring-no-properties (point) (point-max))))
         (when (> (length content) 50)
           (if (> (length content) 3000)
