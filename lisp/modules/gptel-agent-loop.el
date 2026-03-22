@@ -88,6 +88,12 @@ Prevents infinite loops when model outputs planning text without tool calls."
   :type 'integer
   :group 'gptel-agent-loop)
 
+(defcustom gptel-agent-loop-continuation-context-limit 3000
+  "Maximum characters of accumulated output to include in continuation prompts.
+Prevents prompt bloat for long-running tasks. Set to nil for unlimited."
+  :type '(choice (const :tag "Unlimited" nil) integer)
+  :group 'gptel-agent-loop)
+
 (defcustom gptel-agent-loop-continuation-prompt
   "CRITICAL: You must CALL TOOLS, not write text.
 
@@ -163,6 +169,43 @@ Called when table exceeds `gptel-agent-loop-max-active-tasks'."
                  (remhash id gptel-agent-loop--active-tasks)))
              gptel-agent-loop--active-tasks)))
 
+(defun gptel-agent-loop-cleanup-all ()
+  "Force cleanup of all finished tasks from active table.
+Also cancels any orphaned timeout timers. Use this to reclaim
+memory after long sessions or if tasks appear stuck."
+  (interactive)
+  (let ((count 0))
+    (maphash
+     (lambda (id state)
+       (when (gptel-agent-loop--task-finished state)
+         ;; Cancel any lingering timer
+         (when (timerp (gptel-agent-loop--task-timeout-timer state))
+           (cancel-timer (gptel-agent-loop--task-timeout-timer state)))
+         (remhash id gptel-agent-loop--active-tasks)
+         (cl-incf count)))
+     gptel-agent-loop--active-tasks)
+    (when (> (hash-table-count gptel-agent-loop--active-tasks) 0)
+      (message "[RunAgent] Cleanup: removed %d finished tasks, %d active remain"
+               count (hash-table-count gptel-agent-loop--active-tasks)))
+    count))
+
+(defun gptel-agent-loop-list-active ()
+  "List all active RunAgent tasks. For debugging."
+  (interactive)
+  (let ((tasks nil))
+    (maphash
+     (lambda (_id state)
+       (push (list (gptel-agent-loop--task-agent-type state)
+                   (gptel-agent-loop--task-description state)
+                   :steps (gptel-agent-loop--task-step-count state)
+                   :finished (gptel-agent-loop--task-finished state))
+             tasks))
+     gptel-agent-loop--active-tasks)
+(if tasks
+         (message "[RunAgent] Active tasks:\n%s"
+                  (mapconcat (lambda (task) (format "  %s: %s" (car task) (cadr task))) tasks "\n"))
+       (message "[RunAgent] No active tasks"))))
+
 (defvar gptel-agent-loop--original-task-fn nil
   "Stores original `gptel-agent--task' before advice.")
 
@@ -228,9 +271,13 @@ Guards against delivering to a killed parent buffer by checking
   (unless (gptel-agent-loop--task-finished state)
     (setf (gptel-agent-loop--task-finished state) t)
     (gptel-agent-loop--cleanup-state state)
+    ;; Clean up marker to allow GC. Check if still live first.
     (let ((marker (gptel-agent-loop--task-tracking-marker state)))
-      (when (and marker (markerp marker) (not (marker-buffer marker)))
-        (message "[RunAgent] Warning: tracking marker no longer live")))
+      (when (and marker (markerp marker))
+        (if (marker-buffer marker)
+            (set-marker marker nil)  ; Detach from buffer, allow GC
+          (message "[RunAgent] Warning: tracking marker no longer live"))
+        (setf (gptel-agent-loop--task-tracking-marker state) nil)))
     (when cache-result
       (gptel-agent-loop--maybe-cache-put state result))
     (if (fboundp 'my/gptel--deliver-subagent-result)
@@ -248,11 +295,12 @@ Guards against delivering to a killed parent buffer by checking
 
 (defun gptel-agent-loop--continuation-prompt-for (state)
   "Build continuation prompt for STATE.
-Truncates accumulated output to last 3000 chars to prevent prompt bloat."
+Truncates accumulated output to last `gptel-agent-loop-continuation-context-limit' chars."
   (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
-         (truncated (if (> (length output) 3000)
+         (limit gptel-agent-loop-continuation-context-limit)
+         (truncated (if (and limit (> (length output) limit))
                         (concat "...[earlier output truncated]\n"
-                                (substring output -3000))
+                                (substring output (- limit)))
                       output)))
     (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
             gptel-agent-loop-continuation-prompt
