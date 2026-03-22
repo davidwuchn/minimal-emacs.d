@@ -29,6 +29,7 @@
 (require 'gptel-benchmark-auto-improve)
 (require 'gptel-benchmark-integrate)
 (require 'gptel-benchmark-memory)
+(require 'gptel-benchmark-instincts nil t)
 
 ;;; Customization
 
@@ -68,7 +69,8 @@
 (defun gptel-benchmark-daily-setup ()
   "Setup daily benchmark integration.
 Adds hooks to auto-collect metrics on skill/workflow runs.
-Reads mementum state on session start for continuity."
+Reads mementum state on session start for continuity.
+Starts weekly instincts evolution timer."
   (interactive)
   (gptel-benchmark-memory-orient)
   (advice-add 'gptel-workflow-benchmark-run :around
@@ -77,10 +79,13 @@ Reads mementum state on session start for continuity."
               #'gptel-benchmark-daily--wrap-skill-run)
   (when gptel-benchmark-daily-report-time
     (gptel-benchmark-daily--setup-report-timer))
-  (message "[daily-bench] Integration enabled"))
+  (when (featurep 'gptel-benchmark-instincts)
+    (gptel-benchmark-instincts-start-weekly-timer))
+  (message "[daily-bench] Integration enabled (weekly instincts timer active)"))
 
 (defun gptel-benchmark-daily-teardown ()
-  "Remove daily benchmark integration hooks."
+  "Remove daily benchmark integration hooks.
+Stops weekly instincts evolution timer."
   (interactive)
   (advice-remove 'gptel-workflow-benchmark-run
                  #'gptel-benchmark-daily--wrap-workflow-run)
@@ -88,6 +93,8 @@ Reads mementum state on session start for continuity."
                  #'gptel-benchmark-daily--wrap-skill-run)
   (when gptel-benchmark-daily-timer
     (cancel-timer gptel-benchmark-daily-timer))
+  (when (featurep 'gptel-benchmark-instincts)
+    (gptel-benchmark-instincts-stop-weekly-timer))
   (message "[daily-bench] Integration disabled"))
 
 ;;; Collection Hooks

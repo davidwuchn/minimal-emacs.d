@@ -120,6 +120,19 @@
   ;; Enable inline ghost-text code completion in programming modes
   (add-hook 'prog-mode-hook #'eca-completion-mode))
 
+;;; ==============================================================================
+;;; BENCHMARK & φ EVOLUTION
+;;; ==============================================================================
+
+;; Load benchmark modules for skill/workflow testing and φ evolution
+(let ((modules-dir (expand-file-name "lisp/modules" minimal-emacs-user-directory)))
+  (when (file-directory-p modules-dir)
+    (add-to-list 'load-path modules-dir)))
+
+;; Defer benchmark daily setup until after init
+(with-eval-after-load 'gptel-benchmark-daily
+  (gptel-benchmark-daily-setup))
+
 (provide 'init-ai)
 
 ;;; init-ai.el ends here

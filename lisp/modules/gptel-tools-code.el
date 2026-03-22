@@ -12,6 +12,14 @@
 
 (declare-function package-lint-buffer "package-lint")
 
+;;; Customization
+
+(defcustom my/gptel-find-usages-max-chars 50000
+  "Maximum characters to return from find-usages.
+Prevents large results from causing JSON serialization issues."
+  :type 'integer
+  :group 'gptel-agent)
+
 (defun my/gptel--lsp-active-p ()
   "Check if an LSP server is active for the current buffer."
   (and (fboundp 'eglot-current-server)
@@ -88,13 +96,19 @@ Reports which backend (LSP or ripgrep) was used."
                     (when (not (string-match-p "\\.pyc$\\|\\.elc$\\|__pycache__" line))
                       (push line usages)))
                   (forward-line 1))))))))
-    (if usages
-        (format "Found %d usages of '%s' (via %s):\n\n%s"
-                (length usages)
-                symbol-name
-                backend
-                (string-join (nreverse usages) "\n"))
-      (format "No usages found for '%s' in %s" symbol-name root))))
+    (let ((result (if usages
+                      (format "Found %d usages of '%s' (via %s):\n\n%s"
+                              (length usages)
+                              symbol-name
+                              backend
+                              (string-join (nreverse usages) "\n"))
+                    (format "No usages found for '%s' in %s" symbol-name root))))
+      (if (> (length result) my/gptel-find-usages-max-chars)
+          (format "%s\n\n...[Result truncated to %d chars. %d total usages found]"
+                  (substring result 0 my/gptel-find-usages-max-chars)
+                  my/gptel-find-usages-max-chars
+                  (length usages))
+        result))))
 
 (defun my/gptel--run-fallback-linter (dir &optional file-path)
   "Run a fallback linter in DIR if LSP is not available.

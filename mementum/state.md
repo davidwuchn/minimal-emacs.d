@@ -2,6 +2,44 @@
 
 > Last session: 2026-03-22
 
+## Completed (2026-03-22) — DashScope Timeout Solutions
+
+Implemented two-pronged solution for DashScope timeout errors at high token counts:
+
+### 1. Backend-Aware Auto-Compact Threshold
+
+| Backend | Threshold | Reason |
+|---------|-----------|--------|
+| DashScope | 60% | Server-side timeout limits (~100k tokens max) |
+| Others | 80% | Standard headroom for response generation |
+
+New functions:
+- `my/gptel--backend-type` — Detect current backend (:dashscope, :gemini, etc.)
+- `my/gptel--effective-threshold` — Return backend-specific threshold
+- `my/gptel--current-tokens` — Calculate current token count
+
+### 2. Auto-Delegation
+
+When context exceeds threshold:
+1. Intercept `gptel-request` via advice
+2. Smart context selection (full/recent/task-only)
+3. Delegate to "explorer" subagent with clean context
+4. Return result to original callback
+
+New customizations:
+- `my/gptel-auto-compact-threshold-dashscope` (default 0.60)
+- `my/gptel-auto-delegate-enabled` (default t)
+- `my/gptel-auto-delegate-threshold-absolute` (default nil)
+
+Commands:
+- `M-x my/gptel-auto-delegate-enable`
+- `M-x my/gptel-auto-delegate-disable`
+- `M-x my/gptel-context-window-show` — Shows backend, threshold, delegate status
+
+File: `lisp/modules/gptel-ext-context.el` (v3.0.0, +200 lines)
+
+---
+
 ## Completed (2026-03-22) — Defensive Nil Guards & Startup Fix
 
 Committed fixes for `wrong-type-argument` crashes:

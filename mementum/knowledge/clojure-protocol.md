@@ -4,6 +4,77 @@ status: active
 category: protocol
 tags: [clojure, repl, functional, idioms]
 related: [mementum/memories/use-repl-driven-development.md, mementum/memories/prefer-clojure-data-structures.md]
+instincts:
+  repl-first:
+    φ: 0.83
+    eight-keys:
+      vitality: 0.85
+      clarity: 0.78
+      purpose: 0.82
+      wisdom: 0.75
+      synthesis: 0.80
+      directness: 0.88
+      truth: 0.90
+      vigilance: 0.83
+    evidence: 5
+    last-tested: 2026-03-22
+    last-updated: 2026-03-22
+  functional:
+    φ: 0.80
+    eight-keys:
+      vitality: 0.82
+      clarity: 0.75
+      purpose: 0.78
+      wisdom: 0.80
+      synthesis: 0.82
+      directness: 0.85
+      truth: 0.78
+      vigilance: 0.80
+    evidence: 4
+    last-tested: 2026-03-20
+    last-updated: 2026-03-22
+  immutable:
+    φ: 0.78
+    eight-keys:
+      vitality: 0.80
+      clarity: 0.72
+      purpose: 0.75
+      wisdom: 0.78
+      synthesis: 0.80
+      directness: 0.82
+      truth: 0.76
+      vigilance: 0.78
+    evidence: 3
+    last-tested: 2026-03-18
+    last-updated: 2026-03-22
+  threading:
+    φ: 0.80
+    eight-keys:
+      vitality: 0.82
+      clarity: 0.78
+      purpose: 0.80
+      wisdom: 0.78
+      synthesis: 0.82
+      directness: 0.80
+      truth: 0.80
+      vigilance: 0.80
+    evidence: 4
+    last-tested: 2026-03-19
+    last-updated: 2026-03-22
+  edge-cases:
+    φ: 0.75
+    eight-keys:
+      vitality: 0.78
+      clarity: 0.70
+      purpose: 0.75
+      wisdom: 0.72
+      synthesis: 0.78
+      directness: 0.80
+      truth: 0.75
+      vigilance: 0.72
+    evidence: 3
+    last-tested: 2026-03-17
+    last-updated: 2026-03-22
 ---
 
 # Clojure Protocol

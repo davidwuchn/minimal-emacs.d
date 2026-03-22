@@ -94,5 +94,32 @@ FSM is the state machine."
 
 (advice-add 'gptel--handle-tool-result :after #'my/gptel--update-status-after-tool-result)
 
+;; --- Fix Error Display in Header-Line ---
+;; gptel--handle-error uses :status (HTTP status line) for header-line display
+;; instead of :error (actual error message like "Curl failed with exit code 28").
+;; This advice fixes the status display to show the meaningful error.
+
+(defun my/gptel--fix-error-display (fsm)
+  "Fix header-line to show actual error instead of HTTP status.
+FSM is the state machine. Called after gptel--handle-error."
+  (when-let* ((info (gptel-fsm-info fsm))
+              (error-data (plist-get info :error))
+              (gptel-buffer (plist-get info :buffer)))
+    (when (and error-data (buffer-live-p gptel-buffer))
+      (with-current-buffer gptel-buffer
+        (when (bound-and-true-p gptel-mode)
+          (let* ((error-str (if (stringp error-data)
+                                (string-trim error-data)
+                              (or (plist-get error-data :message)
+                                  (plist-get error-data :type)
+                                  "Unknown error")))
+                 (short-error (if (> (length error-str) 50)
+                                  (concat (substring error-str 0 47) "...")
+                                error-str)))
+            (gptel--update-status
+             (format " Error: %s" short-error) 'error)))))))
+
+(advice-add 'gptel--handle-error :after #'my/gptel--fix-error-display)
+
 (provide 'gptel-ext-fsm)
 ;;; gptel-ext-fsm.el ends here

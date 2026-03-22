@@ -6,6 +6,161 @@ tags: [nucleus, eight-keys, wu-xing, vsm, ooda, core]
 φ: 1.0
 e: nucleus-core
 λ: always
+instincts:
+  vitality:
+    φ: 0.88
+    eight-keys:
+      vitality: 0.90
+      clarity: 0.85
+      purpose: 0.88
+      wisdom: 0.85
+      synthesis: 0.90
+      directness: 0.92
+      truth: 0.88
+      vigilance: 0.85
+    evidence: 8
+    last-tested: 2026-03-22
+    last-updated: 2026-03-22
+  clarity:
+    φ: 0.85
+    eight-keys:
+      vitality: 0.88
+      clarity: 0.82
+      purpose: 0.85
+      wisdom: 0.82
+      synthesis: 0.88
+      directness: 0.90
+      truth: 0.85
+      vigilance: 0.82
+    evidence: 7
+    last-tested: 2026-03-21
+    last-updated: 2026-03-22
+  purpose:
+    φ: 0.82
+    eight-keys:
+      vitality: 0.85
+      clarity: 0.78
+      purpose: 0.82
+      wisdom: 0.80
+      synthesis: 0.85
+      directness: 0.88
+      truth: 0.82
+      vigilance: 0.80
+    evidence: 6
+    last-tested: 2026-03-20
+    last-updated: 2026-03-22
+  wisdom:
+    φ: 0.80
+    eight-keys:
+      vitality: 0.82
+      clarity: 0.78
+      purpose: 0.80
+      wisdom: 0.75
+      synthesis: 0.82
+      directness: 0.85
+      truth: 0.82
+      vigilance: 0.78
+    evidence: 5
+    last-tested: 2026-03-19
+    last-updated: 2026-03-22
+  synthesis:
+    φ: 0.78
+    eight-keys:
+      vitality: 0.80
+      clarity: 0.75
+      purpose: 0.78
+      wisdom: 0.78
+      synthesis: 0.72
+      directness: 0.82
+      truth: 0.80
+      vigilance: 0.78
+    evidence: 5
+    last-tested: 2026-03-18
+    last-updated: 2026-03-22
+  directness:
+    φ: 0.84
+    eight-keys:
+      vitality: 0.85
+      clarity: 0.82
+      purpose: 0.85
+      wisdom: 0.82
+      synthesis: 0.85
+      directness: 0.80
+      truth: 0.88
+      vigilance: 0.82
+    evidence: 6
+    last-tested: 2026-03-20
+    last-updated: 2026-03-22
+  truth:
+    φ: 0.87
+    eight-keys:
+      vitality: 0.88
+      clarity: 0.85
+      purpose: 0.88
+      wisdom: 0.85
+      synthesis: 0.90
+      directness: 0.92
+      truth: 0.85
+      vigilance: 0.85
+    evidence: 7
+    last-tested: 2026-03-21
+    last-updated: 2026-03-22
+  vigilance:
+    φ: 0.83
+    eight-keys:
+      vitality: 0.85
+      clarity: 0.80
+      purpose: 0.83
+      wisdom: 0.82
+      synthesis: 0.85
+      directness: 0.88
+      truth: 0.85
+      vigilance: 0.78
+    evidence: 6
+    last-tested: 2026-03-20
+    last-updated: 2026-03-22
+  test-first:
+    φ: 0.87
+    eight-keys:
+      vitality: 0.90
+      clarity: 0.85
+      purpose: 0.88
+      wisdom: 0.85
+      synthesis: 0.90
+      directness: 0.92
+      truth: 0.88
+      vigilance: 0.82
+    evidence: 8
+    last-tested: 2026-03-22
+    last-updated: 2026-03-22
+  verify-intent:
+    φ: 0.85
+    eight-keys:
+      vitality: 0.88
+      clarity: 0.82
+      purpose: 0.85
+      wisdom: 0.88
+      synthesis: 0.85
+      directness: 0.90
+      truth: 0.85
+      vigilance: 0.80
+    evidence: 7
+    last-tested: 2026-03-21
+    last-updated: 2026-03-22
+  simplicity-first:
+    φ: 0.82
+    eight-keys:
+      vitality: 0.85
+      clarity: 0.80
+      purpose: 0.82
+      wisdom: 0.82
+      synthesis: 0.85
+      directness: 0.88
+      truth: 0.82
+      vigilance: 0.78
+    evidence: 6
+    last-tested: 2026-03-20
+    last-updated: 2026-03-22
 ---
 
 # Nucleus Core Patterns

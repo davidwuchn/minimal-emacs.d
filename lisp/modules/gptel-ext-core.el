@@ -53,6 +53,19 @@ PREFIX, DIR-FLAG, and SUFFIX are passed to `make-temp-file'."
         (make-face face)
         (set-face-attribute face nil :inherit 'markdown-header-face-6)))))
 
+;; --- Fix gptel--file-binary-p for directories ---
+;; Upstream doesn't check if path is a directory before trying to read it.
+;; This causes "Read error: Is a directory" when context contains directories.
+
+(defun my/gptel--file-binary-p-fix (orig path)
+  "Fix for gptel--file-binary-p to handle directories.
+ORIG is the original function, PATH is the file path."
+  (if (file-directory-p path)
+      nil  ; Directories are not binary files
+    (funcall orig path)))
+
+(advice-add 'gptel--file-binary-p :around #'my/gptel--file-binary-p-fix)
+
 ;; --- Forward declarations ---
 (defvar gptel--openrouter) ; defined later; forward-declared for byte-compiler
 (defvar gptel--minimax)   ; defined later; forward-declared for byte-compiler

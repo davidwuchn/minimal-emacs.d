@@ -1,10 +1,13 @@
 ;;; gptel-ext-context.el --- Auto-compact gptel buffers -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
-;; Version: 2.0.0
+;; Version: 3.0.0
 ;;
 ;; Auto-compaction: monitors gptel buffer size and triggers LLM-based
 ;; summarization when tokens approach the context window threshold.
+;;
+;; Auto-delegation: when context exceeds backend-specific limits,
+;; automatically delegates to a subagent with clean context.
 
 ;;; Code:
 
@@ -19,7 +22,9 @@
 (declare-function my/gptel--estimate-text-tokens "gptel-ext-context-cache")
 (declare-function my/gptel--count-context-image-tokens "gptel-ext-context-images")
 (declare-function my/gptel--context-image-count "gptel-ext-context-images")
+(declare-function my/gptel--run-agent-tool "gptel-tools-agent")
 (defvar my/gptel--context-window-cache)
+(defvar gptel-backend)
 
 ;;; Customization
 
@@ -74,6 +79,38 @@ Preview mode never requires confirmation since original is preserved."
   :type 'boolean
   :group 'my/gptel-auto-compact)
 
+(defcustom my/gptel-auto-compact-threshold-dashscope 0.60
+  "Fraction of context window at which to compact for DashScope backends.
+
+DashScope has undocumented server-side timeout limits that cause failures
+at high token counts even with long client timeouts. Default 0.60 means
+compact at 60% of context window to stay within safe limits."
+  :type 'number
+  :group 'my/gptel-auto-compact)
+
+(defcustom my/gptel-auto-delegate-enabled t
+  "When non-nil, auto-delegate to subagent when context exceeds limits.
+
+This prevents timeout errors on backends with strict server-side limits
+by delegating work to a subagent with a clean context."
+  :type 'boolean
+  :group 'my/gptel-auto-compact)
+
+(defcustom my/gptel-auto-delegate-threshold-absolute nil
+  "Absolute token limit for auto-delegation, regardless of context window.
+
+When set, triggers auto-delegation when tokens exceed this value.
+Useful for backends with undocumented limits. Set to nil to use
+percentage-based threshold only."
+  :type '(choice (const :tag "Use percentage threshold" nil) integer)
+  :group 'my/gptel-auto-compact)
+
+(defcustom my/gptel-tool-result-truncate-size 4000
+  "Maximum characters to keep from each tool result during compaction.
+Tool results larger than this are truncated with a marker."
+  :type 'integer
+  :group 'my/gptel-auto-compact)
+
 ;;; Internal Variables
 
 (defvar-local my/gptel-auto-compact-running nil
@@ -89,6 +126,38 @@ Preview mode never requires confirmation since original is preserved."
   "Number of compactions performed in this buffer session.")
 
 ;;; Helpers
+
+(defun my/gptel--backend-type ()
+  "Return backend type keyword for current `gptel-backend'.
+Returns :dashscope, :gemini, :openai, :copilot, or :unknown."
+  (cond
+   ((not (boundp 'gptel-backend)) :unknown)
+   ((not gptel-backend) :unknown)
+   ((eq gptel-backend (bound-and-true-p gptel--dashscope)) :dashscope)
+   ((eq gptel-backend (bound-and-true-p gptel--gemini)) :gemini)
+   ((eq gptel-backend (bound-and-true-p gptel--copilot)) :copilot)
+   ((eq gptel-backend (bound-and-true-p gptel--deepseek)) :deepseek)
+   ((eq gptel-backend (bound-and-true-p gptel--moonshot)) :moonshot)
+   ((eq gptel-backend (bound-and-true-p gptel--minimax)) :minimax)
+   (t :unknown)))
+
+(defun my/gptel--effective-threshold ()
+  "Return effective threshold based on backend type.
+DashScope uses lower threshold due to server-side timeout limits."
+  (let ((backend-type (my/gptel--backend-type)))
+    (cond
+     ((eq backend-type :dashscope)
+      my/gptel-auto-compact-threshold-dashscope)
+     (t my/gptel-auto-compact-threshold))))
+
+(defun my/gptel--current-tokens ()
+  "Return estimated token count for current buffer."
+  (let* ((chars (buffer-size))
+         (text-tokens (my/gptel--estimate-text-tokens chars))
+         (image-tokens (or (and (fboundp 'my/gptel--count-context-image-tokens)
+                                (my/gptel--count-context-image-tokens))
+                           0)))
+    (+ text-tokens image-tokens)))
 
 (defun my/gptel--compact-safe-p ()
   "Return non-nil if auto-compact is safe for the current buffer."
@@ -109,7 +178,7 @@ Preview mode never requires confirmation since original is preserved."
   "Return non-nil when current buffer should be compacted.
 
 Only returns t when tokens >= threshold% of context window.
-The interval check is a secondary safeguard, not the primary control."
+Uses backend-specific thresholds (lower for DashScope)."
   (let* ((chars (buffer-size))
          (text-tokens (my/gptel--estimate-text-tokens chars))
          (image-tokens (or (and (fboundp 'my/gptel--count-context-image-tokens)
@@ -117,7 +186,8 @@ The interval check is a secondary safeguard, not the primary control."
                            0))
          (tokens (+ text-tokens image-tokens))
          (window (my/gptel--context-window))
-         (threshold (* window my/gptel-auto-compact-threshold))
+         (threshold-fraction (my/gptel--effective-threshold))
+         (threshold (* window threshold-fraction))
          (needed (and my/gptel-auto-compact-enabled
                       (bound-and-true-p gptel-mode)
                       (>= chars my/gptel-auto-compact-min-chars)
@@ -125,10 +195,11 @@ The interval check is a secondary safeguard, not the primary control."
     (when (and my/gptel-auto-compact-enabled
                (bound-and-true-p gptel-mode)
                (>= chars my/gptel-auto-compact-min-chars))
-      (message "[compact] Check: %d tokens (text:%d + images:%d) vs %d threshold (window: %d, %.0f%%) -> %s"
+      (message "[compact] Check: %d tokens (text:%d + images:%d) vs %d threshold (window: %d, %.0f%%, backend: %s) -> %s"
                (round tokens) (round text-tokens) (round image-tokens)
                (round threshold) window
-               (* 100 (/ (float tokens) window))
+               (* 100 threshold-fraction)
+               (my/gptel--backend-type)
                (if needed "NEEDED" "skipped")))
     needed))
 
@@ -139,7 +210,9 @@ The interval check is a secondary safeguard, not the primary control."
          (model gptel-model)
          (model-id (my/gptel--model-id-string model))
          (cached (and model-id (gethash model-id my/gptel--context-window-cache)))
-         (threshold (* window my/gptel-auto-compact-threshold))
+         (backend-type (my/gptel--backend-type))
+         (threshold-fraction (my/gptel--effective-threshold))
+         (threshold (* window threshold-fraction))
          (chars (buffer-size))
          (text-tokens (my/gptel--estimate-text-tokens chars))
          (image-tokens (or (and (fboundp 'my/gptel--count-context-image-tokens)
@@ -148,17 +221,24 @@ The interval check is a secondary safeguard, not the primary control."
          (image-count (or (and (fboundp 'my/gptel--context-image-count)
                                (my/gptel--context-image-count))
                           0))
-         (tokens (+ text-tokens image-tokens)))
+         (tokens (+ text-tokens image-tokens))
+         (delegate-status (if (my/gptel--delegate-threshold-exceeded-p)
+                              "EXCEEDED (would auto-delegate)"
+                            "OK")))
     (message "Context window: %d tokens (threshold: %d, %.0f%%)
+Backend: %s (effective threshold: %.0f%%)
 Model: %s
 Model ID: %s
 Cached: %s
-Current: %d chars, ~%d tokens (text:%d + images:%d [%d]) (%.0f%% of window)"
-             window threshold (* 100 my/gptel-auto-compact-threshold)
+Current: %d chars, ~%d tokens (text:%d + images:%d [%d]) (%.0f%% of window)
+Auto-delegate: %s"
+             window threshold (* 100 threshold-fraction)
+             backend-type (* 100 threshold-fraction)
              model model-id
              (if cached (format "yes (%d)" cached) "no")
              chars (round tokens) (round text-tokens) (round image-tokens) image-count
-             (* 100 (/ (float tokens) window)))))
+             (* 100 (/ (float tokens) window))
+             delegate-status)))
 
 (defun my/gptel--directive-text (sym)
   "Resolve directive SYM to a string.
@@ -267,9 +347,123 @@ Hook for `gptel-post-response-functions'."
               (my/gptel--auto-compact-needed-p))
     (my/gptel--do-compact)))
 
+;;; Auto-Delegation
+
+(defun my/gptel--delegate-threshold-exceeded-p ()
+  "Return non-nil if context exceeds auto-delegation threshold."
+  (when my/gptel-auto-delegate-enabled
+    (let* ((tokens (my/gptel--current-tokens))
+           (window (my/gptel--context-window))
+           (threshold-fraction (my/gptel--effective-threshold))
+           (percentage-threshold (* window threshold-fraction))
+           (absolute-threshold my/gptel-auto-delegate-threshold-absolute))
+      (or (and absolute-threshold (>= tokens absolute-threshold))
+          (>= tokens percentage-threshold)))))
+
+(defun my/gptel--extract-last-task (buffer-string)
+  "Extract the most recent task/request from BUFFER-STRING.
+Returns a short description of what the user was asking for."
+  (let* ((lines (split-string buffer-string "\n"))
+         (user-lines (cl-remove-if-not
+                      (lambda (line)
+                        (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
+                      lines))
+         (last-user (car (last user-lines 3))))
+    (if last-user
+        (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" last-user)
+      "Continue the task")))
+
+(defun my/gptel--smart-delegate-context (buffer-string last-task)
+  "Build context for subagent delegation.
+BUFFER-STRING is the full conversation. LAST-TASK is the extracted task.
+Returns plist with :strategy and :context keys."
+  (let* ((lines (split-string buffer-string "\n"))
+         (total-lines (length lines))
+         (recent-lines (last lines (min 50 total-lines)))
+         (has-tool-results (cl-some
+                            (lambda (line)
+                              (string-match-p "tool_result\\|tool-result\\|Tool result" line))
+                            recent-lines)))
+    (cond
+     ((and has-tool-results (< total-lines 100))
+      (list :strategy 'recent-history
+            :context (string-join recent-lines "\n")
+            :reason "Task involves recent tool results"))
+     ((< total-lines 30)
+      (list :strategy 'full-context
+            :context buffer-string
+            :reason "Short conversation, full context safe"))
+     (t
+      (list :strategy 'task-only
+            :context last-task
+            :reason "Large conversation, delegating with task only")))))
+
+(defun my/gptel--do-auto-delegate (prompt callback &optional buffer)
+  "Auto-delegate to subagent when context is too large.
+PROMPT is the pending user request. CALLBACK receives the result.
+BUFFER is the gptel buffer (default current)."
+  (let* ((buf (or buffer (current-buffer)))
+         (buffer-string (with-current-buffer buf (buffer-string)))
+         (tokens (with-current-buffer buf (my/gptel--current-tokens)))
+         (last-task (my/gptel--extract-last-task buffer-string))
+         (context-info (my/gptel--smart-delegate-context buffer-string last-task))
+         (strategy (plist-get context-info :strategy))
+         (context (plist-get context-info :context))
+         (reason (plist-get context-info :reason)))
+    (message "[auto-delegate] Context at %d tokens, delegating (strategy: %s, %s)"
+             (round tokens) strategy reason)
+    (if (not (fboundp 'my/gptel--run-agent-tool))
+        (progn
+          (message "[auto-delegate] Error: RunAgent tool not available")
+          (funcall callback "Error: Auto-delegation failed - RunAgent tool not available"))
+      (my/gptel--run-agent-tool
+       callback
+       "explorer"
+       (format "Auto-delegated task (%d tokens)" (round tokens))
+       (format "%s\n\n<context_from_parent>\n%s\n</context_from_parent>"
+               (or prompt last-task)
+               context)
+       nil
+       nil
+       nil))))
+
+(defvar-local my/gptel--in-auto-delegate-check nil
+  "Non-nil while checking auto-delegate to prevent recursion.
+Buffer-local to allow concurrent auto-delegation in different gptel buffers.")
+
+(defun my/gptel--maybe-auto-delegate-advice (orig-fn prompt &rest args)
+  "Advice around `gptel-request' to check for auto-delegation.
+ORIG-FN is `gptel-request'. PROMPT and ARGS are passed through."
+  (if my/gptel--in-auto-delegate-check
+      (apply orig-fn prompt args)
+    (let ((my/gptel--in-auto-delegate-check t))
+      (if (and my/gptel-auto-delegate-enabled
+               (bound-and-true-p gptel-mode)
+               (my/gptel--delegate-threshold-exceeded-p))
+          (let* ((tokens (my/gptel--current-tokens))
+                 (window (my/gptel--context-window))
+                 (callback (plist-get args :callback)))
+            (message "[auto-delegate] Threshold exceeded: %d/%d tokens (%.0f%%)"
+                     (round tokens) (round window) (* 100 (/ (float tokens) window)))
+            (my/gptel--do-auto-delegate prompt callback))
+        (apply orig-fn prompt args)))))
+
+(defun my/gptel-auto-delegate-enable ()
+  "Enable auto-delegation advice."
+  (interactive)
+  (advice-add 'gptel-request :around #'my/gptel--maybe-auto-delegate-advice)
+  (message "[auto-delegate] Enabled"))
+
+(defun my/gptel-auto-delegate-disable ()
+  "Disable auto-delegation advice."
+  (interactive)
+  (advice-remove 'gptel-request #'my/gptel--maybe-auto-delegate-advice)
+  (message "[auto-delegate] Disabled"))
+
 ;;; Hook Registration
 
 (add-hook 'gptel-post-response-functions #'my/gptel-auto-compact)
+(my/gptel-auto-delegate-enable)
 
 ;;; Interactive Context Commands
 

@@ -2,6 +2,12 @@
 # The .gitignore uses `*` (deny-all) + allowlist, which causes rg
 # to skip force-added files. This file restores search visibility.
 !*
-var/
-temp/
-*.elc
+var/tmp/
+var/eca/
+var/autosave/
+var/backup/
+var/cache/
+var/lockfiles/
+var/undo-fu-session/
+var/tramp-autosave/
+var/tree-sitter/

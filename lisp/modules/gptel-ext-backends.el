@@ -44,7 +44,7 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
     :endpoint "/v1/chat/completions"
     :key (lambda () (my/gptel-api-key "coding.dashscope.aliyuncs.com"))
     :stream t
-    :curl-args '("--http1.1" "--max-time" "100")
+    :curl-args '("--http1.1" "--max-time" "300")
     :models '((qwen3.5-plus :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf"))
               (kimi-k2.5 :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf"))
               (qwen3-max-2026-01-23 :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf"))

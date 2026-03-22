@@ -36,6 +36,7 @@
 (require 'gptel-benchmark-editor)
 (require 'gptel-benchmark-rollback)
 (require 'gptel-benchmark-llm)
+(require 'gptel-benchmark-instincts nil t)
 
 ;;; Customization
 
@@ -409,6 +410,9 @@ RESULTS are the benchmark results."
                    (if improved-p "Verified" "Rolled back")
                    (* 100 before-score)
                    (* 100 (gptel-benchmark--extract-overall-score after-results))))
+          (when (featurep 'gptel-benchmark-instincts)
+            (let ((eight-keys (gptel-benchmark--extract-eight-keys after-results)))
+              (gptel-benchmark-auto-improve--record-instincts name type improved-p eight-keys)))
           (list :name name
                 :type type
                 :verified improved-p
@@ -446,6 +450,60 @@ Returns (checkpoint-id . result)."
     (message "[auto-improve] Applied %s improvement to %s/%s: %s"
              element type name action)
     (cons checkpoint-id t)))
+
+;;; φ Evolution Integration
+
+(defvar mementum-knowledge-dir nil
+  "Directory containing mementum knowledge files.")
+
+(defun gptel-benchmark-auto-improve--get-protocol-for-type (type)
+  "Get protocol file path for TYPE (skill or workflow).
+Returns the path to the appropriate protocol file in mementum/knowledge/."
+  (let ((knowledge-dir (or mementum-knowledge-dir
+                           (expand-file-name "mementum/knowledge/"
+                                            (or (bound-and-true-p mementum-root)
+                                                (expand-file-name "~/.emacs.d"))))))
+    (pcase type
+      ('skill
+       (let ((clojure-protocol (expand-file-name "clojure-protocol.md" knowledge-dir)))
+         (when (file-exists-p clojure-protocol)
+           clojure-protocol)))
+      ('workflow
+       (let ((nucleus-protocol (expand-file-name "nucleus-patterns.md" knowledge-dir)))
+         (when (file-exists-p nucleus-protocol)
+           nucleus-protocol)))
+      (_ nil))))
+
+(defun gptel-benchmark--extract-eight-keys (results)
+  "Extract Eight Keys plist from benchmark RESULTS.
+Returns plist with :vitality :clarity :purpose :wisdom :synthesis :directness :truth :vigilance."
+  (list :vitality (or (plist-get results :vitality-score) 0.75)
+        :clarity (or (plist-get results :clarity-score) 0.75)
+        :purpose (or (plist-get results :purpose-score) 0.75)
+        :wisdom (or (plist-get results :wisdom-score) 0.75)
+        :synthesis (or (plist-get results :synthesis-score) 0.75)
+        :directness (or (plist-get results :directness-score) 0.75)
+        :truth (or (plist-get results :truth-score) 0.75)
+        :vigilance (or (plist-get results :vigilance-score) 0.75)))
+
+(defun gptel-benchmark-auto-improve--record-instincts (name type improved-p eight-keys)
+  "Record Eight Keys evolution for NAME of TYPE based on IMPROVED-P outcome.
+EIGHT-KEYS is the full Eight Keys scores from benchmark."
+  (when-let* ((protocol-file (gptel-benchmark-auto-improve--get-protocol-for-type type))
+              (pattern-name (pcase type
+                              ('skill "repl-first")
+                              ('workflow "test-first")
+                              (_ nil))))
+    (when pattern-name
+      (gptel-benchmark-instincts-record
+       protocol-file
+       pattern-name
+       eight-keys
+       (if improved-p 'validated 'corrected))
+      (message "[instincts] Recorded %s for %s in %s"
+               (if improved-p "validated" "corrected")
+               pattern-name
+               (file-name-nondirectory protocol-file)))))
 
 ;;; Provide
 
