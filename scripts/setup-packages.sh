@@ -47,14 +47,16 @@ for pkg in "${PACKAGES[@]}"; do
       echo "Switching $NAME to correct fork: $URL"
       (cd "$TARGET_DIR" && git remote set-url origin "$URL")
     fi
+    # Show current branch before update
+    CURRENT_BRANCH=$(cd "$TARGET_DIR" && git branch --show-current 2>/dev/null || echo "unknown")
+    echo "Updating $NAME (branch: $BRANCH, current: $CURRENT_BRANCH)..."
     # Update to latest version from remote
     # Use FETCH_HEAD instead of origin/$BRANCH for shallow clone compatibility
-    echo "Updating $NAME to latest from $BRANCH..."
     (cd "$TARGET_DIR" && \
       git fetch origin "$BRANCH" --depth 1 && \
       git checkout -f -B "$BRANCH" FETCH_HEAD)
     cleanup_old_versions "$NAME" "$ELPA_DIR"
-    echo "✓ $NAME updated"
+    echo "✓ $NAME updated to branch: $BRANCH"
     continue
   fi
   
@@ -74,9 +76,19 @@ for pkg in "${PACKAGES[@]}"; do
   # Cleanup old versioned directories after successful install
   cleanup_old_versions "$NAME" "$ELPA_DIR"
   
-  echo "✓ $NAME installed"
+  echo "✓ $NAME installed (branch: $BRANCH)"
 done
 
 echo ""
 echo "All packages installed in var/elpa/:"
-ls -d "$ELPA_DIR"/gptel* "$ELPA_DIR"/ai-code 2>/dev/null | xargs -n1 basename
+echo "NAME          BRANCH    COMMIT"
+echo "----------------------------------------"
+for pkg in "${PACKAGES[@]}"; do
+  IFS='|' read -r NAME URL BRANCH <<< "$pkg"
+  TARGET_DIR="$ELPA_DIR/$NAME"
+  if [ -d "$TARGET_DIR/.git" ]; then
+    CURRENT_BRANCH=$(cd "$TARGET_DIR" && git branch --show-current 2>/dev/null || echo "?")
+    COMMIT=$(cd "$TARGET_DIR" && git rev-parse --short HEAD 2>/dev/null || echo "?")
+    printf "%-13s %-9s %s\n" "$NAME" "$CURRENT_BRANCH" "$COMMIT"
+  fi
+done
