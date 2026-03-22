@@ -20,7 +20,7 @@ Prevents large results from causing JSON serialization issues."
   :type 'integer
   :group 'gptel-tools)
 
-(defcustom my/gptel-find-usages-cache-dir (expand-file-name "var/tmp/usages/" user-emacs-directory)
+(defcustom my/gptel-find-usages-cache-dir (expand-file-name "tmp/usages/" user-emacs-directory)
   "Directory to cache Code_Usages results."
   :type 'directory
   :group 'gptel-tools)
