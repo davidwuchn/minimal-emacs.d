@@ -43,7 +43,7 @@ Uses ripgrep to find candidate files, then extracts the exact AST blocks."
       (let ((exit-code (call-process grepper nil t nil
                                      "--no-ignore" "-l" "-F"
                                      "--glob" "!*.elc"
-                                     "--glob" "!var/elpa/"
+                                     "--glob" "!var/tmp/"
                                      symbol-name (expand-file-name root))))
         (when (= exit-code 0)
           (goto-char (point-min))

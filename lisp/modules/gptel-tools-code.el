@@ -82,7 +82,7 @@ Reports which backend (LSP or ripgrep) was used."
             (let ((exit-code (call-process grepper nil t nil
                                            "--no-ignore" "-n" "-F"
                                            "--glob" "!*.elc"
-                                           "--glob" "!var/elpa/"
+                                           "--glob" "!var/tmp/"
                                            symbol-name
                                            (expand-file-name root))))
               (when (= exit-code 0)
