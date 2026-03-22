@@ -289,6 +289,93 @@
       (when (buffer-live-p buffer)
         (kill-buffer buffer)))))
 
+(ert-deftest test-ai-code-backends-infra-reuse-session-window-refreshes-hidden-buffer ()
+  "Reusing a hidden session should refresh its state and display it."
+  (let* ((working-dir "/tmp/ai-code-reuse-hidden/")
+         (prefix "codex")
+         (buffer (get-buffer-create "*codex[reuse-hidden]*"))
+         (calls nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'get-buffer-window)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'ai-code-backends-infra--set-session-directory)
+                   (lambda (target-buffer directory)
+                     (push (list :set-directory target-buffer directory) calls)))
+                  ((symbol-function 'ai-code-backends-infra--configure-session-buffer)
+                   (lambda (target-buffer escape-fn multiline-input-sequence)
+                     (push (list :configure target-buffer escape-fn multiline-input-sequence) calls)))
+                  ((symbol-function 'ai-code-backends-infra--remember-session-buffer)
+                   (lambda (target-prefix directory target-buffer)
+                     (push (list :remember target-prefix directory target-buffer) calls)))
+                  ((symbol-function 'ai-code-backends-infra--display-buffer-in-side-window)
+                   (lambda (target-buffer)
+                     (push (list :display target-buffer) calls)
+                     nil)))
+          (ai-code-backends-infra--reuse-session-window
+           buffer
+           working-dir
+           prefix
+           "\\\r\n")
+          (should (equal (nreverse calls)
+                         (list (list :set-directory buffer working-dir)
+                               (list :configure buffer nil "\\\r\n")
+                               (list :remember prefix working-dir buffer)
+                               (list :display buffer)))))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(ert-deftest test-ai-code-backends-infra-resolve-session-target-prefers-explicit-instance ()
+  "Explicit INSTANCE-NAME should bypass prompting and produce stable target info."
+  (let* ((working-dir "/tmp/ai-code-session-target/")
+         (prefix "codex")
+         (context nil)
+         (prompt-called nil))
+    (cl-letf (((symbol-function 'ai-code-backends-infra--prompt-for-instance-name)
+               (lambda (&rest _args)
+                 (setq prompt-called t)
+                 "prompted-instance")))
+      (setq context
+            (ai-code-backends-infra--resolve-session-target
+             working-dir
+             nil
+             prefix
+             "review"
+             nil))
+      (should (equal (plist-get context :instance-name) "review"))
+      (should (equal (plist-get context :buffer-name)
+                     "*codex[ai-code-session-target:review]*"))
+      (should (equal (plist-get context :session-key)
+                     (cons working-dir "review")))
+      (should-not prompt-called))))
+
+(ert-deftest test-ai-code-backends-infra-resolve-session-context-includes-runtime-state ()
+  "Resolved session context should include target data plus buffer and process."
+  (let* ((working-dir "/tmp/ai-code-session-context/")
+         (buffer-name "*ai-code-session-context*")
+         (process-table (make-hash-table :test 'equal))
+         (buffer (get-buffer-create buffer-name))
+         (process 'mock-process)
+         (context nil))
+    (unwind-protect
+        (progn
+          (puthash (cons working-dir "default") process process-table)
+          (setq context
+                (ai-code-backends-infra--resolve-session-context
+                 working-dir
+                 buffer-name
+                 process-table
+                 nil
+                 nil
+                 nil))
+          (should (equal (plist-get context :instance-name) "default"))
+          (should (equal (plist-get context :buffer-name) buffer-name))
+          (should (equal (plist-get context :session-key)
+                         (cons working-dir "default")))
+          (should (eq (plist-get context :buffer) buffer))
+          (should (eq (plist-get context :existing-process) process)))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
 (ert-deftest test-ai-code-backends-infra-cleanup-session-kills-buffer-on-normal-exit ()
   "Buffer is killed when the process exits normally (event starts with \"finished\")."
   (let* ((table (make-hash-table :test 'equal))
@@ -910,6 +997,85 @@
              (setq called (list created-buffer created-process created-instance))))
           (should (equal (list buffer process "default")
                          called)))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(ert-deftest test-ai-code-backends-infra-finalize-started-session-configures-and-displays ()
+  "Successful startup finalization should wire buffer state and UI updates."
+  (let* ((working-dir "/tmp/ai-code-finalize-start/")
+         (prefix "codex")
+         (buffer-name "*codex[finalize-start]*")
+         (buffer (get-buffer-create buffer-name))
+         (process 'mock-process)
+         (sentinel nil)
+         (post-start-args nil)
+         (calls nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'set-process-sentinel)
+                   (lambda (_process fn)
+                     (setq sentinel fn)
+                     (push :sentinel calls)))
+                  ((symbol-function 'ai-code-backends-infra--configure-session-buffer)
+                   (lambda (target-buffer escape-fn multiline-input-sequence)
+                     (push (list :configure target-buffer escape-fn multiline-input-sequence) calls)))
+                  ((symbol-function 'ai-code-backends-infra--remember-session-buffer)
+                   (lambda (target-prefix directory target-buffer)
+                     (push (list :remember target-prefix directory target-buffer) calls)))
+                  ((symbol-function 'ai-code-backends-infra--display-buffer-in-side-window)
+                   (lambda (target-buffer)
+                     (push (list :display target-buffer) calls)
+                     nil)))
+          (ai-code-backends-infra--finalize-started-session
+           buffer
+           process
+           working-dir
+           buffer-name
+           (make-hash-table :test 'equal)
+           "default"
+           prefix
+           'mock-escape
+           'mock-cleanup
+           "\\\r\n"
+           (lambda (created-buffer created-process created-instance)
+             (setq post-start-args
+                   (list created-buffer created-process created-instance))
+             (push :post-start calls)))
+          (should sentinel)
+          (should (equal post-start-args (list buffer process "default")))
+          (should (equal (nreverse calls)
+                         (list :sentinel
+                               (list :configure buffer 'mock-escape "\\\r\n")
+                               :post-start
+                               (list :remember prefix working-dir buffer)
+                               (list :display buffer)))))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(ert-deftest test-ai-code-backends-infra-handle-session-start-failure-shows-live-buffer ()
+  "Startup failure should preserve and show a live buffer with an error message."
+  (let* ((session-key '("/tmp/ai-code-start-failure/" . "default"))
+         (process-table (make-hash-table :test 'equal))
+         (buffer (get-buffer-create "*ai-code-start-failure*"))
+         (calls nil))
+    (unwind-protect
+        (progn
+          (puthash session-key 'mock-process process-table)
+          (cl-letf (((symbol-function 'pop-to-buffer)
+                     (lambda (target-buffer &rest _args)
+                       (push (list :pop target-buffer) calls)
+                       nil))
+                    ((symbol-function 'message)
+                     (lambda (format-string &rest args)
+                       (push (apply #'format format-string args) calls)
+                       nil)))
+            (ai-code-backends-infra--handle-session-start-failure
+             buffer
+             session-key
+             process-table)
+            (should-not (gethash session-key process-table))
+            (should (equal (nreverse calls)
+                           (list (list :pop buffer)
+                                 "CLI failed to start - see buffer for error details")))))
       (when (buffer-live-p buffer)
         (kill-buffer buffer)))))
 
