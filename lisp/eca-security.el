@@ -189,7 +189,6 @@ Returns decrypted content on success, nil on failure."
 
 (defun eca-security--decrypt-gpg-agent (gpg-file)
   "Decrypt GPG-FILE using gpg-agent (no passphrase argument).
-Uses --status-fd for machine-readable output.
 Returns decrypted content on success, nil on failure.
 Enforces size limit to prevent memory exhaustion."
   (if (not (eca-security--gpg-available-p))
@@ -197,23 +196,16 @@ Enforces size limit to prevent memory exhaustion."
         (message "[eca-security] GPG binary not found")
         nil)
     (let ((output-buffer (generate-new-buffer " *gpg-decrypt-output*"))
-          (status-buffer (generate-new-buffer " *gpg-status*"))
           (exit-code nil)
-          (status-output nil)
           (result nil))
       (unwind-protect
           (progn
-            (setq exit-code (call-process "gpg" nil output-buffer status-buffer
-                                          "--batch"
-                                          "--status-fd" "2"
-                                          "-d" gpg-file))
-            (setq status-output (with-current-buffer status-buffer (buffer-string)))
-            (when (and (zerop exit-code)
-                       (string-match-p "DECRYPTION_OKAY" status-output))
+            (setq exit-code (call-process "gpg" nil output-buffer nil
+                                          "--batch" "-d" gpg-file))
+            (when (zerop exit-code)
               (setq result (with-current-buffer output-buffer (buffer-string)))))
-        (kill-buffer output-buffer)
-        (kill-buffer status-buffer))
-      (when (and result (stringp result))
+        (kill-buffer output-buffer))
+      (when (and result (stringp result) (> (length result) 0))
         (if (> (length result) eca-security--max-decrypt-size)
             (progn
               (message "[eca-security] Decrypted content exceeds %d bytes, rejecting"
