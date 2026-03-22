@@ -41,9 +41,7 @@ Uses ripgrep to find candidate files, then extracts the exact AST blocks."
     ;; 1. Use ripgrep to find candidate files very quickly
     (with-temp-buffer
       (let ((exit-code (call-process grepper nil t nil
-                                     "--no-ignore" "-l" "-F"
-                                     "--glob" "!*.elc"
-                                     "--glob" "!var/tmp/"
+                                     "-l" "-F"
                                      symbol-name (expand-file-name root))))
         (when (= exit-code 0)
           (goto-char (point-min))

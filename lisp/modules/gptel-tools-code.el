@@ -80,9 +80,7 @@ Reports which backend (LSP or ripgrep) was used."
             (setq usages (list (format "Error: ripgrep (rg) not found in PATH.\nInstall with: brew install ripgrep  (macOS)\n                 apt install ripgrep    (Ubuntu)")))
           (with-temp-buffer
             (let ((exit-code (call-process grepper nil t nil
-                                           "--no-ignore" "-n" "-F"
-                                           "--glob" "!*.elc"
-                                           "--glob" "!var/tmp/"
+                                           "-n" "-F"
                                            symbol-name
                                            (expand-file-name root))))
               (when (= exit-code 0)
