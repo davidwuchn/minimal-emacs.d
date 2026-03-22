@@ -52,7 +52,7 @@ for pkg in "${PACKAGES[@]}"; do
     echo "Updating $NAME to latest from $BRANCH..."
     (cd "$TARGET_DIR" && \
       git fetch origin "$BRANCH" --depth 1 && \
-      git checkout -B "$BRANCH" FETCH_HEAD)
+      git checkout -f -B "$BRANCH" FETCH_HEAD)
     cleanup_old_versions "$NAME" "$ELPA_DIR"
     echo "✓ $NAME updated"
     continue
