@@ -78,15 +78,21 @@ Keys are (agent-type prompt-hash), values are (timestamp . result).")
 
 ;;; Subagent Result Cache
 
-(defun my/gptel--subagent-cache-key (agent-type prompt)
-  "Generate cache key for (AGENT-TYPE, PROMPT)."
-  (list agent-type (md5 prompt)))
+(defun my/gptel--subagent-cache-key (agent-type prompt &optional files include-history include-diff)
+  "Generate cache key for (AGENT-TYPE, PROMPT, FILES, INCLUDE-HISTORY, INCLUDE-DIFF).
+Context parameters are included to prevent stale cache hits when the same
+prompt is used with different context (files, history, diff)."
+  (list agent-type
+        (md5 (concat prompt
+                     (when files (format "%S" (sort (append files nil) #'string<)))
+                     (when include-history (format "-hist:%s" include-history))
+                     (when include-diff (format "-diff:%s" include-diff))))))
 
-(defun my/gptel--subagent-cache-get (agent-type prompt)
-  "Get cached result for (AGENT-TYPE, PROMPT) if still valid.
+(defun my/gptel--subagent-cache-get (agent-type prompt &optional files include-history include-diff)
+  "Get cached result for (AGENT-TYPE, PROMPT, ...) if still valid.
 Returns nil if cache disabled, not found, or expired."
   (when (> my/gptel-subagent-cache-ttl 0)
-    (let* ((key (my/gptel--subagent-cache-key agent-type prompt))
+    (let* ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff))
            (cached (gethash key my/gptel--subagent-cache)))
       (when cached
         (let ((timestamp (car cached))
@@ -95,10 +101,10 @@ Returns nil if cache disabled, not found, or expired."
               (progn (remhash key my/gptel--subagent-cache) nil)
             result))))))
 
-(defun my/gptel--subagent-cache-put (agent-type prompt result)
-  "Cache RESULT for (AGENT-TYPE, PROMPT)."
+(defun my/gptel--subagent-cache-put (agent-type prompt result &optional files include-history include-diff)
+  "Cache RESULT for (AGENT-TYPE, PROMPT, ...)."
   (when (> my/gptel-subagent-cache-ttl 0)
-    (let ((key (my/gptel--subagent-cache-key agent-type prompt)))
+    (let ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff)))
       (puthash key (cons (float-time) result) my/gptel--subagent-cache))))
 
 (defun my/gptel--subagent-cache-clear ()
@@ -190,20 +196,23 @@ large-result truncation, and result caching."
       (let* ((temp-file (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt"))
              (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
                                 (substring result 0 my/gptel-subagent-result-limit)
-                                temp-file))
-             (file-list (if (buffer-live-p (current-buffer))
-                            'my/gptel--subagent-temp-files
-                          'my/gptel--global-temp-files)))
+                                temp-file)))
         (with-temp-file temp-file
           (insert result))
-        (push temp-file (symbol-value file-list))
+        ;; Always push to global list for reliable cleanup.
+        ;; Also push to buffer-local if available (for session tracking).
+        (push temp-file my/gptel--global-temp-files)
+        (when (buffer-live-p (current-buffer))
+          (push temp-file my/gptel--subagent-temp-files))
         (when (> my/gptel-subagent-temp-file-ttl 0)
           (run-at-time my/gptel-subagent-temp-file-ttl nil
-                       (lambda (f list-var)
+                       (lambda (f)
                          (when (file-exists-p f)
                            (delete-file f))
-                         (set list-var (delete f (symbol-value list-var))))
-                       temp-file file-list))
+                         ;; Only modify global list - buffer-local may be inaccessible.
+                         (setq my/gptel--global-temp-files
+                               (delete f my/gptel--global-temp-files)))
+                       temp-file))
         (funcall callback trunc-msg))
     (funcall callback result)))
 
@@ -218,9 +227,18 @@ WHERE is the position (marker or integer) for the overlay.
 AGENT-TYPE and DESCRIPTION are passed through.
 
 The upstream function creates the overlay in the current buffer,
-but WHERE may be a marker pointing to a different buffer.
-This wrapper ensures the overlay is created in the marker's buffer."
-  (let* ((target-buf (and (markerp where) (marker-buffer where)))
+but WHERE may be a marker pointing to a different buffer, or an
+integer position that should be in the parent chat buffer.
+This wrapper ensures the overlay is created in the correct buffer."
+  (let* ((target-buf (cond
+                      ;; Marker case: use marker's buffer
+                      ((markerp where) (marker-buffer where))
+                      ;; Integer case: try to get parent buffer from FSM
+                      ((integerp where)
+                       (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
+                              (info (and parent-fsm (gptel-fsm-info parent-fsm))))
+                         (when info (plist-get info :buffer))))
+                      (t nil)))
          (result
           (if (and target-buf (buffer-live-p target-buf))
               (with-current-buffer target-buf
@@ -258,6 +276,22 @@ remove it."
 
 ;;; Context Builder
 
+(defun my/gptel--xml-escape (text)
+  "Escape XML special characters in TEXT.
+Prevents XML injection when inserting file contents into context tags."
+  (with-temp-buffer
+    (insert text)
+    (goto-char (point-min))
+    (while (search-forward "&" nil t)
+      (replace-match "&amp;"))
+    (goto-char (point-min))
+    (while (search-forward "<" nil t)
+      (replace-match "&lt;"))
+    (goto-char (point-min))
+    (while (search-forward ">" nil t)
+      (replace-match "&gt;"))
+    (buffer-string)))
+
 (defun my/gptel--build-subagent-context (prompt files include-history include-diff &optional origin-buf)
   "Package context for a subagent payload.
 Appends contents of FILES, git diff if INCLUDE-DIFF, and recent buffer history
@@ -274,15 +308,17 @@ explicitly to avoid capturing the wrong buffer."
                    (if (file-readable-p filepath)
                        (with-temp-buffer
                          (insert-file-contents filepath)
-                         (setq file-context (concat file-context (format "<file path=\"%s\">\n%s\n</file>\n" f (buffer-string)))))
+                         (setq file-context (concat file-context
+                                                    (format "<file path=\"%s\">\n%s\n</file>\n"
+                                                            f (my/gptel--xml-escape (buffer-string))))))
                      (setq file-context (concat file-context (format "<file path=\"%s\">\n[Error: File not found or not readable]\n</file>\n" f))))))
-        (when (not (string-empty-p file-context))
+(when (not (string-empty-p file-context))
           (setq context (concat context "<files>\n" file-context "</files>\n\n")))))
 
-(when include-diff
+    (when include-diff
       (let* ((proj-root (and (fboundp 'project-current)
-                              (project-current)
-                              (project-root (project-current))))
+                             (project-current)
+                             (project-root (project-current))))
              (default-directory
               (cond
                ((and proj-root (file-in-directory-p default-directory proj-root))
@@ -290,17 +326,19 @@ explicitly to avoid capturing the wrong buffer."
                ((and proj-root (file-exists-p (expand-file-name ".git" proj-root)))
                 proj-root)
                (t default-directory)))
-              (diff-out (with-temp-buffer
-                          (condition-case err
-                              (let ((exit-code (call-process "git" nil '(t nil) nil "diff" "HEAD")))
-                                (unless (eq exit-code 0)
-                                  (message "[gptel] git diff exit code %s" exit-code))
-                                (buffer-string))
-                            (error
-                             (message "[gptel] git diff error: %s" (error-message-string err))
-                             "")))))
+             (diff-out (with-temp-buffer
+                         (condition-case err
+                             (let ((exit-code (call-process "git" nil '(t nil) nil "diff" "HEAD")))
+                               (unless (eq exit-code 0)
+                                 (message "[gptel] git diff exit code %s" exit-code))
+                               (buffer-string))
+                           (error
+                            (message "[gptel] git diff error: %s" (error-message-string err))
+                            "")))))
         (when (not (string-empty-p diff-out))
-          (setq context (concat context "<git_diff>\n" diff-out "\n</git_diff>\n\n")))))
+          (setq context (concat context "<git_diff>\n"
+                                (my/gptel--xml-escape diff-out)
+                                "\n</git_diff>\n\n")))))
 
     (when include-history
       (let* ((src-buf (or (and (buffer-live-p origin-buf) origin-buf)
@@ -310,7 +348,9 @@ explicitly to avoid capturing the wrong buffer."
                               (max (point-min) (- (point-max) 8000))
                               (point-max)))))
         (when (not (string-empty-p history-text))
-          (setq context (concat context "<parent_conversation_history>\n" history-text "\n</parent_conversation_history>\n\n")))))
+          (setq context (concat context "<parent_conversation_history>\n"
+                                (my/gptel--xml-escape history-text)
+                                "\n</parent_conversation_history>\n\n")))))
 
     (if (string-empty-p context)
         prompt
@@ -329,34 +369,34 @@ CALLBACK is called with the result or a timeout error."
          (parent-fsm (buffer-local-value 'gptel--fsm-last (current-buffer)))
          (origin-buf (current-buffer))
          (packaged-prompt (my/gptel--build-subagent-context prompt files include-history include-diff origin-buf))
-(wrapped-cb
-(lambda (result)
-              (unless done
-                (setq done t)
-                (when (timerp timeout-timer) (cancel-timer timeout-timer))
-                (when (timerp progress-timer) (cancel-timer progress-timer))
-                (message "[nucleus] Subagent '%s' completed in %.1fs, result-len=%d"
-                         agent-type (float-time (time-since start-time))
-                         (if (stringp result) (length result) 0))
-                (when (buffer-live-p origin-buf)
-                  (with-current-buffer origin-buf
-                    (setq-local gptel--fsm-last parent-fsm))
-                  (setq-local gptel--fsm-last parent-fsm))
-                (funcall callback result)))))
+         (wrapped-cb
+          (lambda (result)
+            (unless done
+              (setq done t)
+              (when (timerp timeout-timer) (cancel-timer timeout-timer))
+              (when (timerp progress-timer) (cancel-timer progress-timer))
+              (message "[nucleus] Subagent '%s' completed in %.1fs, result-len=%d"
+                       agent-type (float-time (time-since start-time))
+                       (if (stringp result) (length result) 0))
+              ;; Restore FSM state in origin buffer only.
+              (when (buffer-live-p origin-buf)
+                (with-current-buffer origin-buf
+                  (setq-local gptel--fsm-last parent-fsm)))
+              (funcall callback result)))))
 
-(message "[nucleus] Delegating to subagent '%s'%s..."
-              agent-type
-              (if my/gptel-agent-task-timeout
-                  (format " (timeout: %ds)" my/gptel-agent-task-timeout)
-                ""))
+    (message "[nucleus] Delegating to subagent '%s'%s..."
+             agent-type
+             (if my/gptel-agent-task-timeout
+                 (format " (timeout: %ds)" my/gptel-agent-task-timeout)
+               ""))
 
     (setq progress-timer
           (run-at-time my/gptel-subagent-progress-interval
                        my/gptel-subagent-progress-interval
-           (lambda ()
-             (unless done
-               (message "[nucleus] Subagent '%s' still running... (%.1fs elapsed)"
-                        agent-type (float-time (time-since start-time)))))))
+                       (lambda ()
+                         (unless done
+                           (message "[nucleus] Subagent '%s' still running... (%.1fs elapsed)"
+                                    agent-type (float-time (time-since start-time)))))))
 
     (when my/gptel-agent-task-timeout
       (setq timeout-timer
@@ -368,6 +408,7 @@ CALLBACK is called with the result or a timeout error."
                  (when (timerp progress-timer) (cancel-timer progress-timer))
                  (message "[nucleus] Subagent '%s' timed out after %ds"
                           agent-type my/gptel-agent-task-timeout)
+                 ;; Restore FSM state in origin buffer only.
                  (when (buffer-live-p origin-buf)
                    (with-current-buffer origin-buf
                      (setq-local gptel--fsm-last parent-fsm)))
@@ -483,7 +524,7 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
                                                'face '(:inherit shadow :strike-through t))))
                      ("in_progress"
                       (concat "● " (propertize (plist-get todo :activeForm)
-                                               'face '(:inherit bold :inherit warning))))
+                                               'face '(:inherit (bold warning)))))
                      (_ (concat "○ " (plist-get todo :content)))))
                  todos "\n"))
                (todo-display
@@ -491,7 +532,7 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
                  (unless (= (char-before (overlay-end existing-ov)) 10) "\n")
                  gptel-agent--hrule
                  (propertize "Task list: [ "
-                             'face '(:inherit font-lock-comment-face :inherit bold))
+                             'face '(:inherit (font-lock-comment-face bold)))
                  (propertize "TAB to toggle display ]\n" 'face 'font-lock-comment-face)
                  formatted-todos "\n"
                  gptel-agent--hrule)))
