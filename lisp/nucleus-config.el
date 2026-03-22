@@ -18,14 +18,12 @@
 (require 'nucleus-prompts)
 (require 'nucleus-header-line)
 (require 'nucleus-presets)
-(require 'nucleus-mode-switch)
 
 ;;; Deferred Initialization
 
 ;; Phase 1: Register directives and hooks (needs gptel-config only)
 (with-eval-after-load 'gptel-config
   (nucleus--register-gptel-directives)
-  (nucleus-mode-switch-setup)
 
   (add-hook 'gptel-mode-hook #'nucleus-sync-tool-profile)
   (add-hook 'gptel-mode-hook #'nucleus-tool-sanity-check)

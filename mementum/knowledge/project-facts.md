@@ -46,7 +46,6 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 | `gptel-tools-programmatic.el` | Programmatic tool registration + restricted orchestration | 46 |
 | `gptel-programmatic-benchmark.el` | Local benchmark harness | 386 |
 | `gptel-sandbox.el` | Restricted evaluator for serial Programmatic tool orchestration | 593 |
-| `nucleus-mode-switch.el` | Plan/Agent mode switching with system reminders | 97 |
 | `nucleus-presets.el` | Preset management, agent patching, tool contract validation | 354 |
 | `nucleus-prompts.el` | Prompt loading from assistant/prompts/ | 288 |
 | `nucleus-tools.el` | Toolset definitions, tool filtering, agent-tool contracts | 559 |

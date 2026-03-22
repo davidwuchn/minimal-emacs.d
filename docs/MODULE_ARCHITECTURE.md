@@ -21,7 +21,7 @@ The nucleus system is built on **gptel** (upstream LLM chat engine) with layered
                             │
 ┌───────────────────────────▼─────────────────────────────────────────┐
 │                        Preset Layer                                  │
-│  nucleus-presets.el  │  nucleus-mode-switch.el  │  nucleus-prompts  │
+│  nucleus-presets.el  │  nucleus-prompts  │
 │  (gptel-plan ↔ gptel-agent toggle, system prompt injection)         │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │
@@ -118,7 +118,6 @@ graph TB
         NTOOLS[nucleus-tools.el]
         PRESETS[nucleus-presets.el]
         PROMPTS[nucleus-prompts.el]
-        MODE[nucleus-mode-switch.el]
         HEADER[nucleus-header-line.el]
     end
 
@@ -149,7 +148,6 @@ graph TB
 
     CONFIG --> NTOOLS
     NTOOLS --> PRESETS
-    PRESETS --> MODE
     PRESETS --> HEADER
     CONFIG --> PROMPTS
 
@@ -532,7 +530,6 @@ lisp/modules/
 │   ├── nucleus-tools.el           # Toolsets, contracts
 │   ├── nucleus-presets.el         # Preset management
 │   ├── nucleus-prompts.el         # Prompt loading
-│   ├── nucleus-mode-switch.el     # Plan/agent toggle
 │   ├── nucleus-header-line.el     # UI indicator
 │   ├── nucleus-tools-validate.el  # Signature check
 │   └── nucleus-tools-verify.el    # Registration check
