@@ -1,0 +1,126 @@
+{
+  "workflow": "code_agent",
+  "version": "1.0",
+  "metadata": {
+    "category": "execution",
+    "description": "Tests for gptel code agent workflow with tool orchestration"
+  },
+  "test_cases": [
+    {
+      "id": "code-001",
+      "name": "add_simple_function",
+      "description": "Agent should add a simple utility function",
+      "task": "Add a function `my/transpose-strings` to lisp/modules/gptel-workflow-benchmark.el that takes two strings and returns them concatenated in reverse order (second + first). Include a brief docstring.",
+      "context": {
+        "language": "elisp",
+        "target_file": "lisp/modules/gptel-workflow-benchmark.el"
+      },
+      "success_criteria": {
+        "completion": {
+          "must_complete": true,
+          "timeout_seconds": 120,
+          "allow_continuation": true
+        },
+        "efficiency": {
+          "min_steps": 2,
+          "max_steps": 15,
+          "max_continuations": 3,
+          "max_duration_seconds": 90
+        },
+        "tools": {
+          "required": ["read", "edit"],
+          "forbidden_before_phase": {}
+        },
+        "phases": {
+          "expected": []
+        },
+        "eight_keys": {
+          "min_overall": 0.6
+        }
+      },
+      "expected_outputs": {
+        "artifacts": ["function added"],
+        "file_operations": ["modify:lisp/modules/gptel-workflow-benchmark.el"]
+      }
+    },
+    {
+      "id": "code-002",
+      "name": "find_and_document",
+      "description": "Agent should find code and add documentation",
+      "task": "Find the function `gptel-workflow-score` in lisp/modules/gptel-workflow-benchmark.el and add a more detailed docstring explaining each of the score components.",
+      "context": {
+        "language": "elisp",
+        "target_file": "lisp/modules/gptel-workflow-benchmark.el"
+      },
+      "success_criteria": {
+        "completion": {
+          "must_complete": true,
+          "timeout_seconds": 120,
+          "allow_continuation": true
+        },
+        "efficiency": {
+          "min_steps": 2,
+          "max_steps": 10,
+          "max_continuations": 2,
+          "max_duration_seconds": 60
+        },
+        "tools": {
+          "required": ["grep", "read", "edit"],
+          "forbidden_before_phase": {}
+        },
+        "phases": {
+          "expected": []
+        },
+        "eight_keys": {
+          "min_overall": 0.6,
+          "min_per_key": {
+            "fractal-clarity": 0.7
+          }
+        }
+      },
+      "expected_outputs": {
+        "artifacts": ["docstring improved"]
+      }
+    },
+    {
+      "id": "code-003",
+      "name": "explore_and_summarize",
+      "description": "Agent should explore codebase and provide summary",
+      "task": "Explore the skill benchmark infrastructure in lisp/modules/ to understand Eight Keys scoring. SCOPE: Focus on gptel-benchmark-principles.el (primary) and gptel-skill-*.el (secondary, max 3 files). Provide a concise summary of how Eight Keys scoring works. List the 8 keys and their purpose.",
+      "context": {
+        "language": "elisp",
+        "scope": "lisp/modules/gptel-benchmark-principles.el",
+        "exploration_budget": "3-5 files max"
+      },
+      "success_criteria": {
+        "completion": {
+          "must_complete": true,
+          "timeout_seconds": 150,
+          "allow_continuation": true
+        },
+        "efficiency": {
+          "min_steps": 3,
+          "max_steps": 15,
+          "max_continuations": 2,
+          "max_duration_seconds": 90
+        },
+        "tools": {
+          "required": ["glob", "read"],
+          "forbidden_before_phase": {}
+        },
+        "phases": {
+          "expected": []
+        },
+        "eight_keys": {
+          "min_overall": 0.6,
+          "min_per_key": {
+            "pi-synthesis": 0.7
+          }
+        }
+      },
+      "expected_outputs": {
+        "artifacts": ["summary of Eight Keys", "list of all 8 keys"]
+      }
+    }
+  ]
+}
