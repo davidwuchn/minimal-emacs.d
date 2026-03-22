@@ -1,13 +1,15 @@
 ;;; nucleus-mode-switch.el --- Mode transition handler for nucleus -*- no-byte-compile: t; lexical-binding: t; -*-
 
 ;; Author: David Wu
-;; Version: 3.0.0
+;; Version: 3.1.0
 ;;
 ;; Handles mode transitions (plan <-> agent) and injects appropriate
 ;; system reminders to break LLM context carryover.
 ;;
 ;; IMPORTANT: Captures last assistant response on both transitions
 ;; so context is preserved when switching modes.
+;;
+;; Debug: C-c P to show captured context
 
 (require 'cl-lib)
 
@@ -21,29 +23,45 @@ Values: nil (unset), 'gptel-plan, or 'gptel-agent.")
   "Captured last assistant response before mode switch.
 Used for both Plan→Agent and Agent→Plan transitions to preserve context.")
 
+(defvar nucleus--last-transition-direction nil
+  "Direction of last mode transition: 'plan->agent or 'agent->plan.")
+
+(defvar nucleus-mode-switch-debug t
+  "When non-nil, log context capture to *Messages*.")
+
 (make-variable-buffer-local 'nucleus--previous-preset)
 (make-variable-buffer-local 'nucleus--last-response-content)
+(make-variable-buffer-local 'nucleus--last-transition-direction)
 
 ;;; Response Capture
 
 (defun nucleus--capture-last-assistant-response ()
   "Capture the last assistant response content.
 Returns text from last markdown heading (## or ###) to end of buffer.
-Returns nil if not found or content too short."
+Returns nil if not found or content too short.
+Logs to *Messages* when `nucleus-mode-switch-debug' is non-nil."
   (save-excursion
     (goto-char (point-max))
     ;; Search for ## or ### heading (plan output format)
-    (when (re-search-backward "^##+ " nil t)
-      (let ((content (buffer-substring-no-properties (point) (point-max))))
-        (when (> (length content) 50)
-          (if (> (length content) 3000)
-              (concat (substring content 0 3000) "\n...[truncated]")
-            content))))))
+    (let ((found-heading (re-search-backward "^##+ " nil t)))
+        (if found-heading
+            (let ((content (buffer-substring-no-properties (point) (point-max))))
+              (when (> (length content) 50)
+                (let ((result (if (> (length content) 3000)
+                                  (concat (substring content 0 3000) "\n...[truncated]")
+                                content)))
+                  (when nucleus-mode-switch-debug
+                    (message "[mode-switch] Captured %d chars from heading at pos %d"
+                             (length result) (point)))
+                  result)))
+          (when nucleus-mode-switch-debug
+            (message "[mode-switch] No heading found, capture returned nil"))
+          nil))))
 
 ;;; Mode Transition Detection
 
 (defun nucleus--check-mode-transition (&rest _)
-  "Advice to run after `gptel--apply-preset`.
+  "Advice to run after `gptel--apply-preset'.
 
 Detects plan<->agent transitions and injects a system reminder in both
 directions to break the LLM out of its prior mode mindset.
@@ -54,6 +72,8 @@ Only fires on actual transitions (not initial setup)."
              (memq gptel--preset '(gptel-plan gptel-agent)))
     (let ((previous nucleus--previous-preset)
           (current gptel--preset))
+      (when nucleus-mode-switch-debug
+        (message "[mode-switch] Check: previous=%s current=%s" previous current))
       ;; Only inject on actual transitions (not first-time setup)
       (when (and previous
                  (not (eq previous current)))
@@ -64,10 +84,18 @@ Only fires on actual transitions (not initial setup)."
          ;; Plan → Agent: inject build reminder with plan
          ((and (eq previous 'gptel-plan)
                (eq current 'gptel-agent))
+          (setq-local nucleus--last-transition-direction 'plan->agent)
+          (when nucleus-mode-switch-debug
+            (message "[mode-switch] Plan → Agent, captured %d chars"
+                     (length (or nucleus--last-response-content ""))))
           (nucleus--inject-build-mode-reminder))
          ;; Agent → Plan: inject plan reminder with agent findings
          ((and (eq previous 'gptel-agent)
                (eq current 'gptel-plan))
+          (setq-local nucleus--last-transition-direction 'agent->plan)
+          (when nucleus-mode-switch-debug
+            (message "[mode-switch] Agent → Plan, captured %d chars"
+                     (length (or nucleus--last-response-content ""))))
           (nucleus--inject-plan-mode-reminder))))
       ;; Update tracked state
       (setq-local nucleus--previous-preset current))))
@@ -151,6 +179,55 @@ Returns non-nil if FSM is in WAIT, TYPE, TOOL, or TRET state."
                    (error nil))))
       (and state
            (memq state '(WAIT TYPE TOOL TRET))))))
+
+;;; Debug Commands
+
+(defun nucleus-show-captured-context ()
+  "Show the captured context from the last mode transition.
+Useful for debugging what was captured before mode switch."
+  (interactive)
+  (let ((content nucleus--last-response-content)
+        (direction nucleus--last-transition-direction)
+        (previous nucleus--previous-preset))
+    (if content
+        (let ((buf (get-buffer-create "*nucleus-context*")))
+          (with-current-buffer buf
+            (erase-buffer)
+            (insert (format "Direction: %s\n" direction))
+            (insert (format "Previous preset: %s\n" previous))
+            (insert (format "Content length: %d chars\n\n" (length content)))
+            (insert "--- CAPTURED CONTENT ---\n")
+            (insert content)
+            (insert "\n--- END ---\n"))
+          (pop-to-buffer buf))
+      (message "[mode-switch] No context captured yet"))))
+
+(defun nucleus-inject-reminder-now ()
+  "Manually inject the mode-switch reminder with captured context.
+Useful for testing or when auto-injection was skipped."
+  (interactive)
+  (let ((direction nucleus--last-transition-direction))
+    (cond
+     ((eq direction 'plan->agent)
+      (nucleus--inject-build-mode-reminder)
+      (message "[mode-switch] Injected build reminder"))
+     ((eq direction 'agent->plan)
+      (nucleus--inject-plan-mode-reminder)
+      (message "[mode-switch] Injected plan reminder"))
+     (t
+      (message "[mode-switch] No transition recorded yet")))))
+
+(defun nucleus-recapture-context ()
+  "Recapture context from current buffer and show it."
+  (interactive)
+  (setq-local nucleus--last-response-content
+              (nucleus--capture-last-assistant-response))
+  (nucleus-show-captured-context))
+
+;;; Keybinding
+
+(with-eval-after-load 'gptel-mode
+  (define-key gptel-mode-map (kbd "C-c P") #'nucleus-show-captured-context))
 
 ;;; Integration
 
