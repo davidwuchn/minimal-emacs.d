@@ -52,6 +52,13 @@ Set to 0 to disable caching."
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defcustom my/gptel-subagent-include-history-default t
+  "Default value for include_history when LLM doesn't specify.
+When t (default), subagents receive recent conversation history.
+When nil, subagents start with clean context unless explicitly requested."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
 (defvar-local my/gptel--subagent-temp-files nil
   "Buffer-local list of temp files created by subagent results.
 Each buffer manages its own temp files to avoid race conditions.")
@@ -373,7 +380,9 @@ CALLBACK is called with the result or a timeout error."
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.
 
-AGENT-NAME must exist in `gptel-agent--agents`."
+AGENT-NAME must exist in `gptel-agent--agents`.
+
+INCLUDE-HISTORY defaults to `my/gptel-subagent-include-history-default' when nil."
   (unless (require 'gptel-agent nil t)
     (funcall callback "Error: gptel-agent is not available")
     (cl-return-from my/gptel--run-agent-tool))
@@ -398,7 +407,10 @@ AGENT-NAME must exist in `gptel-agent--agents`."
   (unless (fboundp 'gptel-agent--task)
     (funcall callback "Error: gptel-agent task runner not available")
     (cl-return-from my/gptel--run-agent-tool))
-  (my/gptel--agent-task-with-timeout callback agent-name description prompt files include-history include-diff))
+  ;; Apply default for include-history when not specified
+  (let ((include-history (or include-history
+                             (when my/gptel-subagent-include-history-default "true"))))
+    (my/gptel--agent-task-with-timeout callback agent-name description prompt files include-history include-diff)))
 
 ;;; Tool Registration
 
@@ -427,7 +439,7 @@ AGENT-NAME must exist in `gptel-agent--agents`."
              (:name "include_history"
               :type string
               :optional t
-              :description "Set to \"true\" to inject recent conversation history into subagent context.")
+              :description "Set to \"false\" to exclude conversation history. Default: history IS included (see my/gptel-subagent-include-history-default).")
              (:name "include_diff"
               :type string
               :optional t
