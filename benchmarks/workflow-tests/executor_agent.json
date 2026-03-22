@@ -1,0 +1,231 @@
+{
+  "workflow": "executor_agent",
+  "version": "1.0",
+  "metadata": {
+    "category": "subagent",
+    "description": "Tests for executor subagent workflow via RunAgent tool"
+  },
+  "test_cases": [
+    {
+      "id": "exec-001",
+      "name": "create_simple_file",
+      "description": "Executor should create a new file with specified content",
+      "task": "Use the executor agent to create a new file at lisp/modules/test-executor-output.el with a simple helper function called `my/test-hello` that returns the string 'Hello from executor'. Include a provide statement.",
+      "context": {
+        "language": "elisp",
+        "subagent": "executor",
+        "target_file": "lisp/modules/test-executor-output.el"
+      },
+      "success_criteria": {
+        "completion": {
+          "must_complete": true,
+          "timeout_seconds": 120,
+          "allow_continuation": true
+        },
+        "efficiency": {
+          "min_steps": 1,
+          "max_steps": 10,
+          "max_continuations": 2,
+          "max_duration_seconds": 90
+        },
+        "tools": {
+          "required": ["RunAgent"],
+          "forbidden_before_phase": {}
+        },
+        "subagent": {
+          "type": "executor",
+          "expected_tools": ["Write", "Edit"]
+        },
+        "phases": {
+          "expected": []
+        },
+        "eight_keys": {
+          "min_overall": 0.6
+        }
+      },
+      "expected_outputs": {
+        "artifacts": ["file created"],
+        "file_operations": ["create:lisp/modules/test-executor-output.el"],
+        "cleanup": ["delete:lisp/modules/test-executor-output.el"]
+      }
+    },
+    {
+      "id": "exec-002",
+      "name": "modify_existing_file",
+      "description": "Executor should modify an existing file",
+      "task": "Use the executor agent to add a new function `my/test-helper-two` to lisp/modules/gptel-workflow-benchmark.el. The function should take no arguments and return the number 42. Add it near the end of the file before the provide statement.",
+      "context": {
+        "language": "elisp",
+        "subagent": "executor",
+        "target_file": "lisp/modules/gptel-workflow-benchmark.el"
+      },
+      "success_criteria": {
+        "completion": {
+          "must_complete": true,
+          "timeout_seconds": 120,
+          "allow_continuation": true
+        },
+        "efficiency": {
+          "min_steps": 2,
+          "max_steps": 12,
+          "max_continuations": 2,
+          "max_duration_seconds": 90
+        },
+        "tools": {
+          "required": ["RunAgent"],
+          "forbidden_before_phase": {}
+        },
+        "subagent": {
+          "type": "executor",
+          "expected_tools": ["Read", "Edit"]
+        },
+        "phases": {
+          "expected": []
+        },
+        "eight_keys": {
+          "min_overall": 0.6,
+          "min_per_key": {
+            "lambda-learning": 0.6
+          }
+        }
+      },
+      "expected_outputs": {
+        "artifacts": ["function added"],
+        "file_operations": ["modify:lisp/modules/gptel-workflow-benchmark.el"]
+      }
+    },
+    {
+      "id": "exec-003",
+      "name": "explore_and_execute",
+      "description": "Executor should explore codebase then make changes",
+      "task": "Use the executor agent to find where `gptel-workflow-score` is defined and add a comment above it explaining what the function does. The comment should start with ';;; Commentary:' and be 2-3 lines.",
+      "context": {
+        "language": "elisp",
+        "subagent": "executor",
+        "scope": "lisp/modules/"
+      },
+      "success_criteria": {
+        "completion": {
+          "must_complete": true,
+          "timeout_seconds": 150,
+          "allow_continuation": true
+        },
+        "efficiency": {
+          "min_steps": 2,
+          "max_steps": 15,
+          "max_continuations": 3,
+          "max_duration_seconds": 120
+        },
+        "tools": {
+          "required": ["RunAgent"],
+          "forbidden_before_phase": {}
+        },
+        "subagent": {
+          "type": "executor",
+          "expected_tools": ["Grep", "Read", "Edit"]
+        },
+        "phases": {
+          "expected": []
+        },
+        "eight_keys": {
+          "min_overall": 0.6,
+          "min_per_key": {
+            "tau-wisdom": 0.6
+          }
+        }
+      },
+      "expected_outputs": {
+        "artifacts": ["comment added"]
+      }
+    },
+    {
+      "id": "exec-004",
+      "name": "multi_step_task",
+      "description": "Executor should complete a multi-step task efficiently",
+      "task": "Use the executor agent to: 1) Read the contents of lisp/modules/gptel-workflow-benchmark.el, 2) Count how many defun forms exist in the file, 3) Add a comment at the top of the file noting the count.",
+      "context": {
+        "language": "elisp",
+        "subagent": "executor",
+        "target_file": "lisp/modules/gptel-workflow-benchmark.el"
+      },
+      "success_criteria": {
+        "completion": {
+          "must_complete": true,
+          "timeout_seconds": 180,
+          "allow_continuation": true
+        },
+        "efficiency": {
+          "min_steps": 3,
+          "max_steps": 20,
+          "max_continuations": 3,
+          "max_duration_seconds": 150
+        },
+        "tools": {
+          "required": ["RunAgent"],
+          "forbidden_before_phase": {}
+        },
+        "subagent": {
+          "type": "executor",
+          "expected_tools": ["Read", "Edit"]
+        },
+        "phases": {
+          "expected": []
+        },
+        "eight_keys": {
+          "min_overall": 0.6,
+          "min_per_key": {
+            "forall-vigilance": 0.6
+          }
+        }
+      },
+      "expected_outputs": {
+        "artifacts": ["comment with count added"]
+      }
+    },
+    {
+      "id": "exec-005",
+      "name": "error_recovery",
+      "description": "Executor should handle errors gracefully",
+      "task": "Use the executor agent to read a non-existent file at lisp/modules/nonexistent-file-xyz.el and report what happened. The agent should not crash but return an informative error message.",
+      "context": {
+        "language": "elisp",
+        "subagent": "executor",
+        "expected_failure": true
+      },
+      "success_criteria": {
+        "completion": {
+          "must_complete": true,
+          "timeout_seconds": 60,
+          "allow_continuation": false
+        },
+        "efficiency": {
+          "min_steps": 1,
+          "max_steps": 5,
+          "max_continuations": 1,
+          "max_duration_seconds": 45
+        },
+        "tools": {
+          "required": ["RunAgent"],
+          "forbidden_before_phase": {}
+        },
+        "subagent": {
+          "type": "executor",
+          "expected_behavior": "error_message"
+        },
+        "phases": {
+          "expected": []
+        },
+        "eight_keys": {
+          "min_overall": 0.5,
+          "min_per_key": {
+            "delta-concretization": 0.6
+          }
+        }
+      },
+      "expected_outputs": {
+        "artifacts": ["error message returned"],
+        "file_operations": []
+      }
+    }
+  ]
+}

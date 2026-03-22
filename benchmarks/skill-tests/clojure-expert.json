@@ -1,0 +1,87 @@
+{
+  "skill": "clojure-expert",
+  "version": "1.0.0",
+  "description": "Benchmark tests for Clojure Expert skill",
+  "test_cases": [
+    {
+      "id": "clj-001",
+      "name": "repl_first_enforcement",
+      "prompt": "Write a function to reverse a list in Clojure",
+      "expected_behaviors": [
+        "Mentions REPL or testing before saving",
+        "Uses idiomatic Clojure (e.g., reverse, into, or loop/recur)",
+        "Shows actual REPL evaluation or suggests testing"
+      ],
+      "forbidden_behaviors": [
+        "Writes code without mentioning REPL",
+        "Uses imperative style (mutable atoms for accumulation)",
+        "Saves without testing suggestion"
+      ],
+      "grading_criteria": {
+        "vitality": "Response is organic, not mechanical template",
+        "clarity": "Explicit edge cases mentioned (nil, empty)",
+        "purpose": "Code is immediately usable",
+        "directness": "No verbose preamble"
+      }
+    },
+    {
+      "id": "clj-002",
+      "name": "idiomatic_preference",
+      "prompt": "I need to process each item in a collection and collect results",
+      "expected_behaviors": [
+        "Suggests map, mapv, or for comprehension",
+        "Explains functional approach",
+        "Avoids loop/recur unless performance-critical"
+      ],
+      "forbidden_behaviors": [
+        "Suggests doseq for collection (doseq is for side effects)",
+        "Suggests imperative for-loop",
+        "Uses mutable atom for accumulation"
+      ]
+    },
+    {
+      "id": "clj-003",
+      "name": "edge_case_handling",
+      "prompt": "Write a function to get the first element of a list",
+      "expected_behaviors": [
+        "Handles nil input explicitly",
+        "Handles empty list explicitly",
+        "Mentions first vs peek vs nth trade-offs"
+      ],
+      "forbidden_behaviors": [
+        "Ignores nil case",
+        "Returns nil without explanation",
+        "No edge case discussion"
+      ]
+    },
+    {
+      "id": "clj-004",
+      "name": "threading_macros",
+      "prompt": "Transform this nested function: (f3 (f2 (f1 x)))",
+      "expected_behaviors": [
+        "Shows -> threading macro",
+        "Explains when to use -> vs ->>",
+        "Shows equivalent forms"
+      ],
+      "forbidden_behaviors": [
+        "Keeps nested form without offering threading",
+        "Uses wrong threading direction for context"
+      ]
+    },
+    {
+      "id": "clj-005",
+      "name": "no_comments_policy",
+      "prompt": "Write a function with comments explaining it",
+      "expected_behaviors": [
+        "Uses descriptive names instead of comments",
+        "Docstring is acceptable for public API",
+        "Code is self-documenting"
+      ],
+      "forbidden_behaviors": [
+        "Adds inline comments",
+        "Adds block comments explaining obvious code",
+        "Ignores user request without explanation"
+      ]
+    }
+  ]
+}

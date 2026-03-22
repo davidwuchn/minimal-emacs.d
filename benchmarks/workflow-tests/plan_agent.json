@@ -1,0 +1,130 @@
+{
+  "workflow": "plan_agent",
+  "version": "1.0",
+  "metadata": {
+    "category": "planning",
+    "description": "Tests for gptel plan agent workflow with phase compliance"
+  },
+  "test_cases": [
+    {
+      "id": "plan-001",
+      "name": "add_helper_function",
+      "description": "Agent should plan adding a simple helper function",
+      "task": "Add a helper function `format-date` to the utils namespace in this project that formats a date as ISO-8601 string. The function should handle nil input gracefully.",
+      "context": {
+        "language": "clojure",
+        "expected_files": ["lisp/modules/"]
+      },
+      "success_criteria": {
+        "completion": {
+          "must_complete": true,
+          "timeout_seconds": 120,
+          "allow_continuation": true
+        },
+        "efficiency": {
+          "min_steps": 2,
+          "max_steps": 15,
+          "max_continuations": 3,
+          "max_duration_seconds": 90
+        },
+        "tools": {
+          "required": ["grep", "read"],
+          "forbidden_before_phase": {
+            "P1": ["edit", "write", "apply_patch"]
+          }
+        },
+        "phases": {
+          "expected": ["P1"]
+        },
+        "eight_keys": {
+          "min_overall": 0.6
+        }
+      },
+      "expected_outputs": {
+        "artifacts": ["plan or approach described"]
+      }
+    },
+    {
+      "id": "plan-002",
+      "name": "refactor_nested_code",
+      "description": "Agent should plan refactoring deeply nested code",
+      "task": "Find a deeply nested function in the lisp/modules/ directory and plan how to refactor it to be more readable. Identify the function, explain why it's nested, and propose a cleaner approach.",
+      "context": {
+        "language": "elisp",
+        "scope": "lisp/modules/"
+      },
+      "success_criteria": {
+        "completion": {
+          "must_complete": true,
+          "timeout_seconds": 150,
+          "allow_continuation": true
+        },
+        "efficiency": {
+          "min_steps": 3,
+          "max_steps": 20,
+          "max_continuations": 3,
+          "max_duration_seconds": 120
+        },
+        "tools": {
+          "required": ["grep", "read"],
+          "forbidden_before_phase": {
+            "P1": ["edit", "write", "apply_patch"]
+          }
+        },
+        "phases": {
+          "expected": ["P1"]
+        },
+        "eight_keys": {
+          "min_overall": 0.6,
+          "min_per_key": {
+            "tau-wisdom": 0.7
+          }
+        }
+      },
+      "expected_outputs": {
+        "artifacts": ["function identified", "refactoring approach proposed"]
+      }
+    },
+    {
+      "id": "plan-003",
+      "name": "add_error_handling",
+      "description": "Agent should plan adding error handling to existing code",
+      "task": "Review the gptel-workflow-benchmark.el module and suggest where error handling could be improved. Identify at least 2 locations and propose specific improvements.",
+      "context": {
+        "language": "elisp",
+        "scope": "lisp/modules/gptel-workflow-benchmark.el"
+      },
+      "success_criteria": {
+        "completion": {
+          "must_complete": true,
+          "timeout_seconds": 120,
+          "allow_continuation": true
+        },
+        "efficiency": {
+          "min_steps": 2,
+          "max_steps": 12,
+          "max_continuations": 2,
+          "max_duration_seconds": 90
+        },
+        "tools": {
+          "required": ["read"],
+          "forbidden_before_phase": {
+            "P1": ["edit", "write", "apply_patch"]
+          }
+        },
+        "phases": {
+          "expected": ["P1"]
+        },
+        "eight_keys": {
+          "min_overall": 0.6,
+          "min_per_key": {
+            "forall-vigilance": 0.7
+          }
+        }
+      },
+      "expected_outputs": {
+        "artifacts": ["locations identified", "improvements proposed"]
+      }
+    }
+  ]
+}

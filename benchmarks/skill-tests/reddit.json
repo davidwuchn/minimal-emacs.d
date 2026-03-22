@@ -1,0 +1,225 @@
+{
+  "skill": "reddit",
+  "version": "1.0",
+  "description": "Test suite for Reddit API skill",
+  "test_cases": [
+    {
+      "id": "reddit-001",
+      "name": "fetches_hot_posts",
+      "prompt": "Get the top 10 hot posts from r/python",
+      "expected_behaviors": [
+        "Constructs correct API URL with .json suffix",
+        "Uses hot sort (default)",
+        "Limits to 10 results",
+        "Formats output as readable table or structured list",
+        "Includes post titles, upvotes, comment counts"
+      ],
+      "forbidden_behaviors": [
+        "Returns raw JSON without formatting",
+        "Missing upvote/comment counts",
+        "Exceeds rate limits"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "basic-fetch",
+        "difficulty": "easy",
+        "tags": ["hot-posts", "basic"]
+      }
+    },
+    {
+      "id": "reddit-002",
+      "name": "fetches_top_posts_with_time",
+      "prompt": "Show me the top 20 posts from r/ClaudeAI this month",
+      "expected_behaviors": [
+        "Uses top sort with time=month",
+        "Limits to 20 results",
+        "Includes time filter in API call",
+        "Shows posts sorted by upvotes"
+      ],
+      "forbidden_behaviors": [
+        "Uses wrong time filter",
+        "Returns wrong number of posts",
+        "Doesn't sort by top"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "sorted-fetch",
+        "difficulty": "easy",
+        "tags": ["top-posts", "time-filter"]
+      }
+    },
+    {
+      "id": "reddit-003",
+      "name": "searches_posts",
+      "prompt": "Search for posts about 'MCP server' on Reddit",
+      "expected_behaviors": [
+        "Uses search API endpoint",
+        "Includes search query in request",
+        "Returns relevant posts with snippets",
+        "Shows subreddit source for each post"
+      ],
+      "forbidden_behaviors": [
+        "Returns unrelated posts",
+        "Missing search query in URL",
+        "No relevance indication"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "search",
+        "difficulty": "medium",
+        "tags": ["search", "query"]
+      }
+    },
+    {
+      "id": "reddit-004",
+      "name": "searches_within_subreddit",
+      "prompt": "Find posts about 'async python' in r/learnpython",
+      "expected_behaviors": [
+        "Combines search with subreddit filter",
+        "Restricts results to specified subreddit",
+        "Shows relevant posts only from that subreddit"
+      ],
+      "forbidden_behaviors": [
+        "Searches all of Reddit",
+        "Returns posts from wrong subreddits",
+        "Ignores subreddit constraint"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "search",
+        "difficulty": "medium",
+        "tags": ["search", "subreddit-filter"]
+      }
+    },
+    {
+      "id": "reddit-005",
+      "name": "fetches_subreddit_info",
+      "prompt": "Tell me about the r/programming subreddit - how many subscribers, description, etc.",
+      "expected_behaviors": [
+        "Fetches subreddit metadata",
+        "Shows subscriber count",
+        "Shows subreddit description",
+        "Shows creation date and other stats"
+      ],
+      "forbidden_behaviors": [
+        "Returns posts instead of info",
+        "Missing key metadata",
+        "Wrong subreddit"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "subreddit-info",
+        "difficulty": "easy",
+        "tags": ["metadata", "subreddit"]
+      }
+    },
+    {
+      "id": "reddit-006",
+      "name": "fetches_post_with_comments",
+      "prompt": "Get post abc123 and its top 50 comments",
+      "expected_behaviors": [
+        "Fetches post by ID",
+        "Retrieves comments (up to 50)",
+        "Shows comment thread structure",
+        "Includes upvotes on comments"
+      ],
+      "forbidden_behaviors": [
+        "Returns post without comments",
+        "Flattens comment threads incorrectly",
+        "Missing comment metadata"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "post-comments",
+        "difficulty": "medium",
+        "tags": ["comments", "thread"]
+      }
+    },
+    {
+      "id": "reddit-007",
+      "name": "fetches_user_profile",
+      "prompt": "Show me the profile for user spez",
+      "expected_behaviors": [
+        "Fetches user karma (post and comment)",
+        "Shows account age",
+        "Shows recent activity summary"
+      ],
+      "forbidden_behaviors": [
+        "Returns wrong user",
+        "Missing karma info",
+        "No account metadata"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "user-profile",
+        "difficulty": "easy",
+        "tags": ["user", "profile"]
+      }
+    },
+    {
+      "id": "reddit-008",
+      "name": "handles_rate_limit",
+      "prompt": "Get posts from 5 different subreddits quickly",
+      "expected_behaviors": [
+        "Respects 100 requests/minute limit",
+        "Spaces out requests if needed",
+        "Warns if approaching rate limit",
+        "Handles rate limit errors gracefully"
+      ],
+      "forbidden_behaviors": [
+        "Makes all requests at once",
+        "Ignores rate limit warnings",
+        "Crashes on rate limit error"
+      ],
+      "eight_keys_score": 0.8,
+      "metadata": {
+        "category": "error-handling",
+        "difficulty": "hard",
+        "tags": ["rate-limit", "∀ Vigilance"]
+      }
+    },
+    {
+      "id": "reddit-009",
+      "name": "handles_invalid_subreddit",
+      "prompt": "Get posts from r/thissubredditdoesnotexist12345",
+      "expected_behaviors": [
+        "Detects invalid subreddit",
+        "Returns clear error message",
+        "Suggests checking subreddit name",
+        "Doesn't crash or hang"
+      ],
+      "forbidden_behaviors": [
+        "Returns empty results without explanation",
+        "Crashes with stack trace",
+        "Pretends subreddit exists"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "error-handling",
+        "difficulty": "medium",
+        "tags": ["error", "invalid-input", "∃ Truth"]
+      }
+    },
+    {
+      "id": "reddit-010",
+      "name": "uses_correct_sort_options",
+      "prompt": "Show me controversial posts from last week",
+      "expected_behaviors": [
+        "Uses controversial sort",
+        "Applies time=week filter",
+        "Explains what controversial means (mixed votes)"
+      ],
+      "forbidden_behaviors": [
+        "Uses wrong sort type",
+        "Missing time filter",
+        "Doesn't explain sort type"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "sort-options",
+        "difficulty": "easy",
+        "tags": ["controversial", "sort"]
+      }
+    }
+  ]
+}

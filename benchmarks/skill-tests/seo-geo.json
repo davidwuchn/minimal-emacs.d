@@ -1,0 +1,342 @@
+{
+  "skill": "seo-geo",
+  "version": "1.0",
+  "description": "Test suite for SEO/GEO optimization skill",
+  "test_cases": [
+    {
+      "id": "seo-001",
+      "name": "requests_target_url",
+      "prompt": "I want to optimize my website for search",
+      "expected_behaviors": [
+        "Asks for target URL",
+        "Asks about primary keywords",
+        "Asks about target audience/market",
+        "Asks about current search visibility issues"
+      ],
+      "forbidden_behaviors": [
+        "Provides generic advice without URL",
+        "Doesn't ask for target URL",
+        "Assumes keywords without asking"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "scope-definition",
+        "difficulty": "easy",
+        "tags": ["clarification", "ε Purpose"]
+      }
+    },
+    {
+      "id": "seo-002",
+      "name": "generates_audit_command",
+      "prompt": "Audit example.com for SEO issues",
+      "expected_behaviors": [
+        "Generates seo_audit.py command with URL",
+        "Explains what the audit checks",
+        "Mentions it's a free/basic audit",
+        "Lists what's checked (title, meta, H1, robots, sitemap, load time)"
+      ],
+      "forbidden_behaviors": [
+        "Missing URL in command",
+        "Wrong script name",
+        "Doesn't explain what's audited"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "audit",
+        "difficulty": "easy",
+        "tags": ["audit", "command"]
+      }
+    },
+    {
+      "id": "seo-003",
+      "name": "checks_robots_txt",
+      "prompt": "Check if AI bots can crawl my site",
+      "expected_behaviors": [
+        "Provides curl command for robots.txt",
+        "Lists AI bots that should be allowed (Googlebot, Bingbot, PerplexityBot, ChatGPT-User, ClaudeBot, GPTBot)",
+        "Explains how to verify bot access",
+        "Mentions allowing vs blocking"
+      ],
+      "forbidden_behaviors": [
+        "Only mentions Googlebot",
+        "Doesn't list AI-specific bots",
+        "Wrong curl command"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "technical-seo",
+        "difficulty": "medium",
+        "tags": ["robots.txt", "AI-bots", "∀ Vigilance"]
+      }
+    },
+    {
+      "id": "seo-004",
+      "name": "generates_faq_schema",
+      "prompt": "Generate FAQ schema for my product page",
+      "expected_behaviors": [
+        "Generates valid JSON-LD FAQPage schema",
+        "Includes @context and @type",
+        "Shows mainEntity with Question/Answer structure",
+        "Explains where to place schema in HTML",
+        "Mentions +40% AI visibility boost"
+      ],
+      "forbidden_behaviors": [
+        "Invalid JSON syntax",
+        "Missing required fields",
+        "Doesn't mention visibility boost"
+      ],
+      "eight_keys_score": 0.8,
+      "metadata": {
+        "category": "schema",
+        "difficulty": "medium",
+        "tags": ["FAQPage", "JSON-LD", "GEO"]
+      }
+    },
+    {
+      "id": "seo-005",
+      "name": "applies_geo_methods",
+      "prompt": "How do I optimize for AI search engines like ChatGPT and Perplexity?",
+      "expected_behaviors": [
+        "Explains GEO (Generative Engine Optimization)",
+        "Lists 9 Princeton GEO methods",
+        "Mentions citation over ranking concept",
+        "Highlights best combination (Fluency + Statistics)",
+        "Warns against keyword stuffing"
+      ],
+      "forbidden_behaviors": [
+        "Only mentions traditional SEO",
+        "Doesn't explain citation concept",
+        "Recommends keyword stuffing"
+      ],
+      "eight_keys_score": 0.8,
+      "metadata": {
+        "category": "GEO",
+        "difficulty": "hard",
+        "tags": ["GEO", "AI-search", "π Synthesis"]
+      }
+    },
+    {
+      "id": "seo-006",
+      "name": "generates_meta_tags",
+      "prompt": "Generate meta tags for my homepage",
+      "expected_behaviors": [
+        "Generates title tag with primary keyword and brand",
+        "Generates meta description (150-160 chars)",
+        "Includes Open Graph tags (og:title, og:description, og:image, og:url, og:type)",
+        "Includes Twitter Card tags",
+        "Explains each tag's purpose"
+      ],
+      "forbidden_behaviors": [
+        "Missing Open Graph tags",
+        "Description too long/short",
+        "Missing Twitter Cards"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "meta-tags",
+        "difficulty": "medium",
+        "tags": ["meta", "Open-Graph", "Twitter"]
+      }
+    },
+    {
+      "id": "seo-007",
+      "name": "validates_schema",
+      "prompt": "How do I validate my schema markup?",
+      "expected_behaviors": [
+        "Provides Google Rich Results Test URL",
+        "Provides Schema.org Validator URL",
+        "Explains how to use validators",
+        "Mentions what valid schema looks like"
+      ],
+      "forbidden_behaviors": [
+        "Only provides one validator",
+        "Doesn't explain how to use",
+        "Wrong validator URLs"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "validation",
+        "difficulty": "easy",
+        "tags": ["validation", "schema"]
+      }
+    },
+    {
+      "id": "seo-008",
+      "name": "checks_indexing_status",
+      "prompt": "How do I check if my site is indexed?",
+      "expected_behaviors": [
+        "Provides Google site: search query",
+        "Provides Bing site: search query",
+        "Mentions Google Search Console",
+        "Explains what indexed means"
+      ],
+      "forbidden_behaviors": [
+        "Only checks Google",
+        "Doesn't mention Search Console",
+        "Wrong search syntax"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "indexing",
+        "difficulty": "easy",
+        "tags": ["indexing", "site-search"]
+      }
+    },
+    {
+      "id": "seo-009",
+      "name": "optimizes_for_chatgpt",
+      "prompt": "How do I get cited by ChatGPT?",
+      "expected_behaviors": [
+        "Mentions branded domain authority (11% more citations)",
+        "Recommends updating content within 30 days (3.2x citations)",
+        "Suggests building backlinks (>350K domains = 8.4 citations)",
+        "Explains matching ChatGPT response style"
+      ],
+      "forbidden_behaviors": [
+        "Generic SEO advice only",
+        "Doesn't mention recency factor",
+        "No specific statistics"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "platform-specific",
+        "difficulty": "hard",
+        "tags": ["ChatGPT", "citation", "∃ Truth"]
+      }
+    },
+    {
+      "id": "seo-010",
+      "name": "optimizes_for_perplexity",
+      "prompt": "How do I optimize for Perplexity?",
+      "expected_behaviors": [
+        "Mentions allowing PerplexityBot in robots.txt",
+        "Recommends FAQ Schema",
+        "Suggests hosting PDF documents",
+        "Explains semantic relevance over keywords"
+      ],
+      "forbidden_behaviors": [
+        "Doesn't mention PerplexityBot",
+        "Only mentions traditional SEO",
+        "Recommends keyword focus"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "platform-specific",
+        "difficulty": "medium",
+        "tags": ["Perplexity", "PerplexityBot"]
+      }
+    },
+    {
+      "id": "seo-011",
+      "name": "optimizes_for_claude",
+      "prompt": "How do I get Claude to cite my content?",
+      "expected_behaviors": [
+        "Mentions Brave Search indexing (Claude uses Brave)",
+        "Recommends high factual density",
+        "Suggests clear structural clarity",
+        "Explains difference from Google optimization"
+      ],
+      "forbidden_behaviors": [
+        "Only mentions Google",
+        "Doesn't mention Brave Search",
+        "Generic advice without Claude specifics"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "platform-specific",
+        "difficulty": "medium",
+        "tags": ["Claude", "Brave-Search"]
+      }
+    },
+    {
+      "id": "seo-012",
+      "name": "generates_structured_report",
+      "prompt": "Generate an SEO/GEO optimization report for my site",
+      "expected_behaviors": [
+        "Creates structured Markdown report",
+        "Includes Current Status section with checkmarks",
+        "Includes Recommendations section prioritized",
+        "Includes GEO Optimizations Applied checklist",
+        "Provides concrete implementation steps"
+      ],
+      "forbidden_behaviors": [
+        "Unstructured text",
+        "Vague recommendations",
+        "Missing prioritization",
+        "No implementation steps"
+      ],
+      "eight_keys_score": 0.8,
+      "metadata": {
+        "category": "reporting",
+        "difficulty": "hard",
+        "tags": ["report", "structure", "actionable"]
+      }
+    },
+    {
+      "id": "seo-013",
+      "name": "warns_against_keyword_stuffing",
+      "prompt": "Should I add my keyword 50 times to the page?",
+      "expected_behaviors": [
+        "Warns against keyword stuffing",
+        "Explains it hurts visibility (-10%)",
+        "Recommends natural keyword usage",
+        "Suggests focusing on quality content instead"
+      ],
+      "forbidden_behaviors": [
+        "Encourages keyword stuffing",
+        "Doesn't warn about negative impact",
+        "Suggests high keyword density"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "best-practices",
+        "difficulty": "easy",
+        "tags": ["keyword-stuffing", "warning", "τ Wisdom"]
+      }
+    },
+    {
+      "id": "seo-014",
+      "name": "checks_page_speed",
+      "prompt": "My page loads slowly, how does this affect SEO?",
+      "expected_behaviors": [
+        "Explains page speed impact on rankings",
+        "Mentions < 3 second target",
+        "Mentions < 2 second for Copilot/Bing",
+        "Suggests speed testing tools"
+      ],
+      "forbidden_behaviors": [
+        "Doesn't mention speed impact",
+        "No specific targets",
+        "No tool recommendations"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "technical-seo",
+        "difficulty": "medium",
+        "tags": ["page-speed", "performance"]
+      }
+    },
+    {
+      "id": "seo-015",
+      "name": "handles_international_keywords",
+      "prompt": "My keyword 'OPC' isn't working in English markets",
+      "expected_behaviors": [
+        "Explains international keyword conflicts",
+        "Gives OPC example (industrial automation in English)",
+        "Suggests researching local keyword meanings",
+        "Recommends market-specific keyword research"
+      ],
+      "forbidden_behaviors": [
+        "Ignores international aspect",
+        "Doesn't explain the conflict",
+        "Generic keyword advice only"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "keyword-research",
+        "difficulty": "hard",
+        "tags": ["international", "keyword-conflict"]
+      }
+    }
+  ]
+}

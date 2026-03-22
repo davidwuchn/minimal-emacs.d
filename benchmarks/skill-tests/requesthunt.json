@@ -1,0 +1,273 @@
+{
+  "skill": "requesthunt",
+  "version": "1.0",
+  "description": "Test suite for RequestHunt user demand research skill",
+  "test_cases": [
+    {
+      "id": "rh-001",
+      "name": "defines_research_scope",
+      "prompt": "I want to research user demand for AI coding assistants",
+      "expected_behaviors": [
+          "Asks clarifying questions about scope",
+          "Requests platform preferences (Reddit, X, GitHub)",
+          "Asks about time range",
+          "Asks about specific products/competitors",
+          "Asks about report purpose"
+        ],
+      "forbidden_behaviors": [
+        "Runs scrape immediately without clarification",
+        "Assumes default platform without asking",
+        "Doesn't ask about time range"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "scope-definition",
+        "difficulty": "easy",
+        "tags": ["clarification", "ε Purpose"]
+      }
+    },
+    {
+      "id": "rh-002",
+      "name": "generates_correct_scrape_command",
+      "prompt": "Research AI coding assistants on Reddit and X from last month",
+      "expected_behaviors": [
+        "Generates scrape_topic.py command",
+        "Includes correct topic slug (ai-coding-assistant)",
+        "Specifies --platforms reddit,x",
+        "Explains what the command does"
+      ],
+      "forbidden_behaviors": [
+        "Uses wrong script name",
+        "Missing platform specification",
+        "Wrong topic format (spaces instead of hyphens)"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "command-generation",
+        "difficulty": "easy",
+        "tags": ["scrape", "command"]
+      }
+    },
+    {
+      "id": "rh-003",
+      "name": "generates_search_command_with_expand",
+      "prompt": "Find user complaints about Cursor IDE",
+      "expected_behaviors": [
+        "Uses search_requests.py script",
+        "Includes --expand flag for realtime data",
+        "Suggests relevant search terms",
+        "Explains expansion increases API usage"
+      ],
+      "forbidden_behaviors": [
+        "Uses list_requests.py instead",
+        "Missing --expand flag",
+        "Doesn't warn about API usage"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "command-generation",
+        "difficulty": "medium",
+        "tags": ["search", "expand"]
+      }
+    },
+    {
+      "id": "rh-004",
+      "name": "generates_structured_report",
+      "prompt": "Generate a demand research report from the collected data",
+      "expected_behaviors": [
+        "Creates structured Markdown report",
+        "Includes Overview section with scope",
+        "Includes Key Findings section",
+        "Includes Top Feature Requests table",
+        "Includes Pain Points Analysis",
+        "Includes Methodology section with sample size"
+      ],
+      "forbidden_behaviors": [
+        "Returns unstructured text",
+        "Missing data sources",
+        "No sample size cited",
+        "Missing methodology"
+      ],
+      "eight_keys_score": 0.8,
+      "metadata": {
+        "category": "report-generation",
+        "difficulty": "hard",
+        "tags": ["report", "structure", "π Synthesis"]
+      }
+    },
+    {
+      "id": "rh-005",
+      "name": "checks_api_usage_before_scrape",
+      "prompt": "Scrape realtime data for AI tools",
+      "expected_behaviors": [
+        "Suggests checking API usage first",
+        "Mentions get_usage.py command",
+        "Explains realtime scraping is expensive",
+        "Warns about rate limits (500/month)"
+      ],
+      "forbidden_behaviors": [
+        "Runs scrape without checking usage",
+        "Doesn't mention rate limits",
+        "Doesn't warn about cost"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "api-usage",
+        "difficulty": "medium",
+        "tags": ["rate-limit", "τ Wisdom"]
+      }
+    },
+    {
+      "id": "rh-006",
+      "name": "lists_requests_by_topic",
+      "prompt": "Show me recent requests about AI tools",
+      "expected_behaviors": [
+        "Uses list_requests.py with --topic flag",
+        "Includes --limit parameter",
+        "Explains how to interpret results"
+      ],
+      "forbidden_behaviors": [
+        "Uses wrong script",
+        "Missing topic filter",
+        "No limit specified"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "command-generation",
+        "difficulty": "easy",
+        "tags": ["list", "topic-filter"]
+      }
+    },
+    {
+      "id": "rh-007",
+      "name": "filters_by_platform",
+      "prompt": "Show me GitHub requests only",
+      "expected_behaviors": [
+        "Uses --platforms github flag",
+        "Explains platform filtering",
+        "Shows correct command syntax"
+      ],
+      "forbidden_behaviors": [
+        "Returns all platforms",
+        "Wrong platform name",
+        "Missing platforms flag"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "filtering",
+        "difficulty": "easy",
+        "tags": ["platform-filter", "github"]
+      }
+    },
+    {
+      "id": "rh-008",
+      "name": "sorts_by_votes",
+      "prompt": "Show me the top voted requests",
+      "expected_behaviors": [
+        "Uses --sortBy top flag",
+        "Explains sorting by votes",
+        "Includes --limit parameter"
+      ],
+      "forbidden_behaviors": [
+        "Returns unsorted results",
+        "Wrong sort parameter",
+        "Missing limit"
+      ],
+      "eight_keys_score": 0.7,
+      "metadata": {
+        "category": "sorting",
+        "difficulty": "easy",
+        "tags": ["sort", "top-voted"]
+      }
+    },
+    {
+      "id": "rh-009",
+      "name": "handles_api_key_missing",
+      "prompt": "I'm getting an authentication error",
+      "expected_behaviors": [
+        "Checks for REQUESTHUNT_API_KEY env var",
+        "Provides instructions to set API key",
+        "Mentions ~/.zshrc configuration",
+        "Links to API key settings page"
+      ],
+      "forbidden_behaviors": [
+        "Ignores auth error",
+        "Doesn't mention API key",
+        "Wrong configuration path"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "error-handling",
+        "difficulty": "medium",
+        "tags": ["auth", "api-key", "∃ Truth"]
+      }
+    },
+    {
+      "id": "rh-010",
+      "name": "provides_competitive_analysis",
+      "prompt": "Compare user feedback for Cursor vs GitHub Copilot",
+      "expected_behaviors": [
+        "Generates competitive comparison table",
+        "Includes Feature column",
+        "Includes Product A and Product B columns",
+        "Includes User Expectations column",
+        "Searches for both products separately"
+      ],
+      "forbidden_behaviors": [
+        "Returns generic comparison",
+        "Missing data sources",
+        "No user feedback cited"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "competitive-analysis",
+        "difficulty": "hard",
+        "tags": ["comparison", "competitive"]
+      }
+    },
+    {
+      "id": "rh-011",
+      "name": "identifies_opportunities",
+      "prompt": "What opportunities do you see from this data?",
+      "expected_behaviors": [
+        "Lists specific opportunities from data",
+        "Ties opportunities to user requests",
+        "Prioritizes by frequency/impact",
+        "Provides actionable recommendations"
+      ],
+      "forbidden_behaviors": [
+        "Generic business advice",
+        "Not tied to collected data",
+        "No prioritization"
+      ],
+      "eight_keys_score": 0.75,
+      "metadata": {
+        "category": "analysis",
+        "difficulty": "hard",
+        "tags": ["opportunities", "actionable"]
+      }
+    },
+    {
+      "id": "rh-012",
+      "name": "cites_data_sources",
+      "prompt": "Generate report on project management tools",
+      "expected_behaviors": [
+        "Cites specific data sources in report",
+        "Includes platform for each data point",
+        "Includes date/time range",
+        "Includes sample size (N requests)"
+      ],
+      "forbidden_behaviors": [
+        "Uncited claims",
+        "Missing sample size",
+        "No date range specified"
+      ],
+      "eight_keys_score": 0.8,
+      "metadata": {
+        "category": "reporting",
+        "difficulty": "medium",
+        "tags": ["citations", "∃ Truth", "∀ Vigilance"]
+      }
+    }
+  ]
+}

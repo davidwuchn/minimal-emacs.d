@@ -1,0 +1,13 @@
+{
+  "id": "suite-code-gen",
+  "name": "Code Generation Benchmark Suite",
+  "description": "Test cases for evaluating code generation capabilities",
+  "evals": [
+    "eval-example.json"
+  ],
+  "config": {
+    "iterations": 3,
+    "timeout": 120,
+    "save_outputs": true
+  }
+}
