@@ -52,6 +52,12 @@ Set to 0 to disable caching."
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defcustom my/gptel-subagent-cache-max-size 100
+  "Maximum number of entries in the subagent cache.
+When exceeded, oldest entries are evicted. Set to 0 for unlimited."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
 (defcustom my/gptel-subagent-include-history-default t
   "Default value for include_history when LLM doesn't specify.
 When t (default), subagents receive recent conversation history.
@@ -81,12 +87,13 @@ Keys are (agent-type prompt-hash), values are (timestamp . result).")
 (defun my/gptel--subagent-cache-key (agent-type prompt &optional files include-history include-diff)
   "Generate cache key for (AGENT-TYPE, PROMPT, FILES, INCLUDE-HISTORY, INCLUDE-DIFF).
 Context parameters are included to prevent stale cache hits when the same
-prompt is used with different context (files, history, diff)."
+prompt is used with different context (files, history, diff).
+Always includes all params to distinguish nil from \"false\"."
   (list agent-type
         (md5 (concat prompt
-                     (when files (format "%S" (sort (append files nil) #'string<)))
-                     (when include-history (format "-hist:%s" include-history))
-                     (when include-diff (format "-diff:%s" include-diff))))))
+                     (format "-files:%S" (when files (sort (append files nil) #'string<)))
+                     (format "-hist:%s" (or include-history "nil"))
+                     (format "-diff:%s" (or include-diff "nil"))))))
 
 (defun my/gptel--subagent-cache-get (agent-type prompt &optional files include-history include-diff)
   "Get cached result for (AGENT-TYPE, PROMPT, ...) if still valid.
@@ -102,16 +109,47 @@ Returns nil if cache disabled, not found, or expired."
             result))))))
 
 (defun my/gptel--subagent-cache-put (agent-type prompt result &optional files include-history include-diff)
-  "Cache RESULT for (AGENT-TYPE, PROMPT, ...)."
+  "Cache RESULT for (AGENT-TYPE, PROMPT, ...).
+Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
   (when (> my/gptel-subagent-cache-ttl 0)
     (let ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff)))
-      (puthash key (cons (float-time) result) my/gptel--subagent-cache))))
+      (puthash key (cons (float-time) result) my/gptel--subagent-cache)
+      ;; Evict oldest entries if over limit
+      (when (and (> my/gptel-subagent-cache-max-size 0)
+                 (> (hash-table-count my/gptel--subagent-cache)
+                    my/gptel-subagent-cache-max-size))
+        (let ((oldest-key nil)
+              (oldest-time most-positive-fixnum))
+          (maphash
+           (lambda (k v)
+             (when (< (car v) oldest-time)
+               (setq oldest-time (car v)
+                     oldest-key k)))
+           my/gptel--subagent-cache)
+          (when oldest-key
+            (remhash oldest-key my/gptel--subagent-cache)))))))
 
 (defun my/gptel--subagent-cache-clear ()
   "Clear all cached subagent results."
   (interactive)
   (clrhash my/gptel--subagent-cache)
   (message "Subagent cache cleared."))
+
+(defun my/gptel--subagent-cache-cleanup ()
+  "Remove expired entries from cache.
+Call periodically to prevent memory growth from unaccessed entries."
+  (interactive)
+  (let ((count 0)
+        (now (float-time)))
+    (maphash
+     (lambda (key value)
+       (when (> (- now (car value)) my/gptel-subagent-cache-ttl)
+         (remhash key my/gptel--subagent-cache)
+         (cl-incf count)))
+     my/gptel--subagent-cache)
+    (when (> count 0)
+      (message "[gptel] Cleaned %d expired cache entries" count))
+    count))
 
 
 ;; PATCH: Override gptel-agent--task to add tracking-marker for parent buffer
@@ -278,7 +316,8 @@ remove it."
 
 (defun my/gptel--xml-escape (text)
   "Escape XML special characters in TEXT.
-Prevents XML injection when inserting file contents into context tags."
+Prevents XML injection when inserting file contents into context tags.
+Escapes &, <, >, \", and ' per XML spec."
   (with-temp-buffer
     (insert text)
     (goto-char (point-min))
@@ -290,7 +329,23 @@ Prevents XML injection when inserting file contents into context tags."
     (goto-char (point-min))
     (while (search-forward ">" nil t)
       (replace-match "&gt;"))
+    (goto-char (point-min))
+    (while (search-forward "\"" nil t)
+      (replace-match "&quot;"))
+    (goto-char (point-min))
+    (while (search-forward "'" nil t)
+      (replace-match "&apos;"))
     (buffer-string)))
+
+(defun my/gptel--safe-file-p (filepath)
+  "Return non-nil if FILEPATH is safe to include in subagent context.
+Rejects files outside project root, symlinks, and unreadable files."
+  (when-let* ((expanded (expand-file-name filepath))
+              (proj (project-current))
+              (proj-root (expand-file-name (project-root proj))))
+    (and (file-readable-p expanded)
+         (not (file-symlink-p expanded))
+         (string-prefix-p proj-root expanded))))
 
 (defun my/gptel--build-subagent-context (prompt files include-history include-diff &optional origin-buf)
   "Package context for a subagent payload.
@@ -299,20 +354,32 @@ if INCLUDE-HISTORY to the base PROMPT.
 
 ORIGIN-BUF is the parent chat buffer to read history from.  Defaults to
 `current-buffer' if not provided, but callers should always pass it
-explicitly to avoid capturing the wrong buffer."
+explicitly to avoid capturing the wrong buffer.
+
+FILES are validated against project root for security."
   (let ((context ""))
     (when (and files (sequencep files))
       (let ((file-context ""))
         (cl-loop for f in (append files nil) do
                  (let ((filepath (expand-file-name f)))
-                   (if (file-readable-p filepath)
-                       (with-temp-buffer
-                         (insert-file-contents filepath)
-                         (setq file-context (concat file-context
-                                                    (format "<file path=\"%s\">\n%s\n</file>\n"
-                                                            f (my/gptel--xml-escape (buffer-string))))))
-                     (setq file-context (concat file-context (format "<file path=\"%s\">\n[Error: File not found or not readable]\n</file>\n" f))))))
-(when (not (string-empty-p file-context))
+                   (cond
+                    ;; Security check: file must be within project, not a symlink
+                    ((not (my/gptel--safe-file-p filepath))
+                     (setq file-context (concat file-context
+                                                (format "<file path=\"%s\">\n[Error: File not in project or is a symlink]\n</file>\n"
+                                                        (my/gptel--xml-escape f)))))
+                    ((file-readable-p filepath)
+                     (with-temp-buffer
+                       (insert-file-contents filepath)
+                       (setq file-context (concat file-context
+                                                  (format "<file path=\"%s\">\n%s\n</file>\n"
+                                                          (my/gptel--xml-escape f)
+                                                          (my/gptel--xml-escape (buffer-string)))))))
+                    (t
+                     (setq file-context (concat file-context
+                                                (format "<file path=\"%s\">\n[Error: File not found or not readable]\n</file>\n"
+                                                        (my/gptel--xml-escape f))))))))
+        (when (not (string-empty-p file-context))
           (setq context (concat context "<files>\n" file-context "</files>\n\n")))))
 
     (when include-diff
@@ -416,7 +483,14 @@ CALLBACK is called with the result or a timeout error."
                           (format "Error: Task \"%s\" (%s) timed out after %ds."
                                   description agent-type my/gptel-agent-task-timeout)))))))
 
-    (gptel-agent--task wrapped-cb agent-type description packaged-prompt)))
+    ;; Use unwind-protect to guarantee FSM restoration on synchronous errors.
+    ;; Async callbacks handle their own FSM restoration.
+    (unwind-protect
+        (gptel-agent--task wrapped-cb agent-type description packaged-prompt)
+      ;; Cleanup on synchronous error (async errors handled in wrapped-cb)
+      (when (and (not done) (buffer-live-p origin-buf))
+        (with-current-buffer origin-buf
+          (setq-local gptel--fsm-last parent-fsm))))))
 
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.
