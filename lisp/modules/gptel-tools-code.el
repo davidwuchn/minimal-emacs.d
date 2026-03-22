@@ -18,7 +18,54 @@
   "Maximum characters to return from find-usages.
 Prevents large results from causing JSON serialization issues."
   :type 'integer
-  :group 'gptel-agent)
+  :group 'gptel-tools)
+
+(defcustom my/gptel-find-usages-cache-dir (expand-file-name "var/tmp/usages/" user-emacs-directory)
+  "Directory to cache Code_Usages results."
+  :type 'directory
+  :group 'gptel-tools)
+
+(defcustom my/gptel-find-usages-async-threshold 100
+  "Number of usages above which to use async caching.
+Results with more than this many usages are written to a temp file
+instead of being returned directly to avoid LLM token bloat."
+  :type 'integer
+  :group 'gptel-tools)
+
+;;; Cache Management
+
+(defun my/gptel--usages-cache-init ()
+  "Initialize usages cache directory."
+  (unless (file-directory-p my/gptel-find-usages-cache-dir)
+    (make-directory my/gptel-find-usages-cache-dir t))
+  (set-file-modes my/gptel-find-usages-cache-dir #o700))
+
+(defun my/gptel--usages-cache-file (symbol-name root)
+  "Generate cache file path for SYMBOL-NAME in ROOT."
+  (my/gptel--usages-cache-init)
+  (let* ((safe-symbol (replace-regexp-in-string "[^a-zA-Z0-9_-]" "_" symbol-name))
+         (safe-root (replace-regexp-in-string "[^a-zA-Z0-9_-]" "_" (file-name-nondirectory (directory-file-name root))))
+         (filename (format "%s--%s.txt" safe-root safe-symbol)))
+    (expand-file-name filename my/gptel-find-usages-cache-dir)))
+
+(defun my/gptel--usages-cache-get (symbol-name root)
+  "Get cached usages for SYMBOL-NAME in ROOT if fresh (< 1 hour)."
+  (let ((cache-file (my/gptel--usages-cache-file symbol-name root)))
+    (when (and (file-exists-p cache-file)
+               (< (- (float-time) (float-time (nth 5 (file-attributes cache-file)))) 3600))
+      cache-file)))
+
+(defun my/gptel--usages-cache-write (symbol-name root usages backend)
+  "Write USAGES to cache file for SYMBOL-NAME in ROOT."
+  (let ((cache-file (my/gptel--usages-cache-file symbol-name root)))
+    (with-temp-file cache-file
+      (insert (format "# Code_Usages: %s\n" symbol-name))
+      (insert (format "# Backend: %s\n" backend))
+      (insert (format "# Root: %s\n" root))
+      (insert (format "# Total: %d usages\n\n" (length usages)))
+      (insert (string-join usages "\n")))
+    (set-file-modes cache-file #o600)
+    cache-file))
 
 (defun my/gptel--lsp-active-p ()
   "Check if an LSP server is active for the current buffer."
@@ -102,10 +149,9 @@ Reports which backend (LSP or ripgrep) was used."
                               (string-join (nreverse usages) "\n"))
                     (format "No usages found for '%s' in %s" symbol-name root))))
       (if (> (length result) my/gptel-find-usages-max-chars)
-          (format "%s\n\n...[Result truncated to %d chars. %d total usages found]"
-                  (substring result 0 my/gptel-find-usages-max-chars)
-                  my/gptel-find-usages-max-chars
-                  (length usages))
+          (let ((cache-file (my/gptel--usages-cache-write symbol-name root usages backend)))
+            (format "Found %d usages of '%s' (via %s).\nResult too large, cached to: %s\n\nUse `Read' tool with file_path to view specific sections."
+                    (length usages) symbol-name backend cache-file))
         result))))
 
 (defun my/gptel--run-fallback-linter (dir &optional file-path)
@@ -395,35 +441,33 @@ When ALL is non-nil, include notes and low-severity diagnostics.
 
 For .el files, uses checkdoc/byte-compile/package-lint instead of LSP."
   ;; Handle .el files specially
-  (when (and file-path (string-match-p "\\.el\\'" file-path))
-    (cl-return-from gptel-tools-code--diagnostics
-      (gptel-tools-code--elisp-diagnostics file-path)))
-  
-  ;; Non-elisp files: use LSP or CLI fallback
-  (if (not (fboundp 'flymake--project-diagnostics))
-      "Error: flymake--project-diagnostics not available.\n\nThis usually means Flymake is not initialized. Try opening a source file first."
-    (let* ((proj (project-current))
-           (dir (if proj (project-root proj) default-directory))
-           (lsp-active (my/gptel--lsp-active-p))
-           (diags (and proj (flymake--project-diagnostics proj)))
-           (high-severity '(:error :warning))
-           (filtered
-            (seq-filter
-             (lambda (d)
-               (let ((type (flymake-diagnostic-type d)))
-                 (or (memq type high-severity)
-                     (and all (eq type :note)))))
-             diags)))
-      (if (not filtered)
-          (if lsp-active
-              "No compiler or LSP diagnostics found for the current project. (LSP server is running, code is clean)."
-            (concat "Note: No LSP server running for this project.\nFalling back to CLI linter:\n\n"
-                    (my/gptel--run-fallback-linter dir file-path)))
-        (let ((formatted (mapcar #'gptel-tools-code--format-diagnostic filtered)))
-          (format "Found %d diagnostic(s)%s:\n\n%s"
-                  (length formatted)
-                  (if all " (including notes)" "")
-                  (string-join formatted "\n\n")))))))
+  (if (and file-path (string-match-p "\\.el\\'" file-path))
+      (gptel-tools-code--elisp-diagnostics file-path)
+    ;; Non-elisp files: use LSP or CLI fallback
+    (if (not (fboundp 'flymake--project-diagnostics))
+        "Error: flymake--project-diagnostics not available.\n\nThis usually means Flymake is not initialized. Try opening a source file first."
+      (let* ((proj (project-current))
+             (dir (if proj (project-root proj) default-directory))
+             (lsp-active (my/gptel--lsp-active-p))
+             (diags (and proj (flymake--project-diagnostics proj)))
+             (high-severity '(:error :warning))
+             (filtered
+              (seq-filter
+               (lambda (d)
+                 (let ((type (flymake-diagnostic-type d)))
+                   (or (memq type high-severity)
+                       (and all (eq type :note)))))
+               diags)))
+        (if (not filtered)
+            (if lsp-active
+                "No compiler or LSP diagnostics found for the current project. (LSP server is running, code is clean)."
+              (concat "Note: No LSP server running for this project.\nFalling back to CLI linter:\n\n"
+                      (my/gptel--run-fallback-linter dir file-path)))
+          (let ((formatted (mapcar #'gptel-tools-code--format-diagnostic filtered)))
+            (format "Found %d diagnostic(s)%s:\n\n%s"
+                    (length formatted)
+                    (if all " (including notes)" "")
+                    (string-join formatted "\n\n"))))))))
 
 (defun gptel-tools-code-register ()
   "Register the unified Code tools with gptel."

@@ -18,18 +18,21 @@
 Use this to refresh presets or update buffers that depend on tool availability.")
 
 ;; Load individual tool modules
+;; Load gptel-tools-code BEFORE gptel-tools-agent because the latter
+;; triggers gptel-agent loading via eval-and-compile, which runs the
+;; with-eval-after-load callbacks that need gptel-tools-code-register.
 (require 'gptel-tools-bash)
 (require 'gptel-tools-grep)
 (require 'gptel-tools-glob)
 (require 'gptel-tools-edit)
 (require 'gptel-tools-apply)
-(require 'gptel-tools-agent)
 (require 'gptel-tools-preview)
 (require 'gptel-tools-programmatic)
-;; (require 'gptel-tools-lsp)  ; Deprecated, functionality merged into gptel-tools-code
 (require 'gptel-tools-introspection)
-;; (require 'gptel-tools-ast)  ; Deprecated, functionality merged into gptel-tools-code
 (require 'gptel-tools-code)
+;; (require 'gptel-tools-lsp)  ; Deprecated, functionality merged into gptel-tools-code
+;; (require 'gptel-tools-ast)  ; Deprecated, functionality merged into gptel-tools-code
+(require 'gptel-tools-agent)
 
 ;;; Customization
 
@@ -47,13 +50,13 @@ Call this after gptel-agent-tools loads."
   (gptel-tools-glob-register)
   (gptel-tools-edit-register)
   (gptel-tools-apply-register)
-  (gptel-tools-agent-register)
   (gptel-tools-preview-register)
   (gptel-tools-programmatic-register)
-  ;; (gptel-tools-lsp-register)  ; Deprecated by gptel-tools-code
   (gptel-tools-introspection-register)
-  ;; (gptel-tools-ast-register)  ; Deprecated by gptel-tools-code
   (gptel-tools-code-register)
+  ;; (gptel-tools-lsp-register)  ; Deprecated by gptel-tools-code
+  ;; (gptel-tools-ast-register)  ; Deprecated by gptel-tools-code
+  (gptel-tools-agent-register)
 
   ;; Register standard gptel-agent tools
   (when (fboundp 'gptel-make-tool)
