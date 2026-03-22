@@ -54,24 +54,45 @@ Workflow:
 
 ---
 
-**Next Step Wizard** — Analyze the plan and suggest ONE:
+**Next Step Wizard** — Analyze the plan and recommend @preset + optional @bundle:
 
-| Plan Type | Recommended | Example Prompt |
-|-----------|-------------|----------------|
-| New feature + tests | `@tdd-dev` | `### @tdd-dev implement the plan` |
-| Bug fix with diagnosis | `@debug` | `### @debug fix the issue` |
-| Production code only | `@=code` | `### @=code implement this` |
-| Refactoring | `@=refactor` | `### @=refactor apply changes` |
-| Stay in plan mode | `(none)` | `### analyze further` |
+**Behavior Presets** (choose ONE based on task intent):
 
-Output format:
+| Preset | Use When | Example |
+|--------|----------|---------|
+| `@tdd-dev` | New feature with tests | API endpoint + unit tests |
+| `@quick-fix` | Simple code change | One-liner bug fix |
+| `@thorough-debug` | Complex bug investigation | Multi-file race condition |
+| `@quick-review` | Fast code review | PR sanity check |
+| `@deep-review` | Thorough code review | Security audit |
+| `@research-deep` | Explore codebase | Understand architecture |
+| `@mentor-learn` | Learn/explain concepts | How does X work? |
+| `@spec-planning` | Architecture/planning | Design new module |
+
+**Constraint Bundles** (add ONE for tech stack):
+
+| Bundle | Stack | Key Constraints |
+|--------|-------|-----------------|
+| `@rust-stack` | Rust | strict-types, immutable, memory-safe |
+| `@python-stack` | Python | strict-types, test-after, secure |
+| `@node-stack` | Node.js | strict-types, async-await, minimal |
+| `@go-stack` | Go | errors-checked, minimal, performant |
+| `@clojure-stack` | Clojure | functional, immutable, errors-result |
+| `@react-stack` | React | strict-types, functional, async-await |
+| `@fastapi-stack` | FastAPI | strict-types, async-await, api-rest |
+| `@cli-tool-stack` | CLI tools | minimal, errors-checked, stateless |
+
+**Output Format:**
 ```
-**Next Step:** @preset-name — one-line reason
+**Next Step:** @preset [@bundle] — one-line reason
 ```
 
-Example:
+**Examples:**
 ```
-**Next Step:** @tdd-dev — Plan involves new API endpoints with test coverage
+**Next Step:** @tdd-dev @rust-stack — New parser module with safety tests
+**Next Step:** @thorough-debug @python-stack — Race condition in async handler
+**Next Step:** @quick-fix — Typo in error message
+**Next Step:** @deep-review @clojure-stack — Refactor core namespace
 ```
 
 ---
