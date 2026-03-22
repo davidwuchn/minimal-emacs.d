@@ -63,6 +63,13 @@ DEPRECATED: Use `my/gptel-clear-permits' instead."
   :group 'gptel-tools-preview
   :version "3.1.0")
 
+(defcustom gptel-tools-preview-max-patch-size 100000
+  "Maximum patch size in characters before rejecting.
+Prevents DoS via memory exhaustion from extremely large patches.
+Set to 0 for unlimited."
+  :type 'integer
+  :group 'gptel-tools-preview)
+
 ;;; Core Preview Functions
 
 (defun my/gptel--preview-bypass-p ()
@@ -186,10 +193,11 @@ Prompts in minibuffer: 'Apply changes? (y/n/!/q)'
 This is a blocking call - user must respond before Emacs continues."
   (if gptel-tools-preview--never-ask-again
       ;; Never-ask-again was set earlier - auto-confirm (backward compat)
-      (progn
-        (when (buffer-live-p buffer)
-          (kill-buffer buffer))
-        (funcall on-confirm))
+      ;; Call callback FIRST, then clean up buffer (callback may reference it)
+      (prog2
+          (funcall on-confirm)
+          (when (buffer-live-p buffer)
+            (kill-buffer buffer)))
     ;; Normal flow - prompt user
     (unwind-protect
         (let ((prompt (format "Apply changes? [y=yes, n=no, !=permit+apply, q=quit]: ")))
@@ -233,33 +241,60 @@ CALLBACK is called when user confirms or aborts.
 Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
   (if (my/gptel--preview-bypass-p)
       (funcall callback "Preview disabled, auto-confirmed.")
-    (condition-case err
-        (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-               (temp1 (my/gptel-make-temp-file "gptel-preview-orig-"))
-               (temp2 (my/gptel-make-temp-file "gptel-preview-new-"))
-               (diff-output
-                (progn
-                  (write-region original nil temp1 nil 'silent)
-                  (write-region replacement nil temp2 nil 'silent)
-                  (my/gptel--run-diff temp1 temp2))))
-          (unwind-protect
-(let ((diff-buf (my/gptel--create-diff-buffer
-                                (my/gptel--unique-preview-buffer-name "*gptel-preview*")
-                                (format "Preview: %s" path)
-                                diff-output
-                                #'diff-mode)))
-                 (my/gptel--insert-preview-instructions diff-buf)
-                 (my/gptel--display-preview-buffer diff-buf)
-                (my/gptel--prompt-for-preview-action
-                 diff-buf
-                 (lambda () (funcall wrapped-cb "Preview confirmed."))
-                 (lambda () (funcall wrapped-cb "Preview aborted."))))
-            (delete-file temp1)
-            (delete-file temp2)))
-      (error
-       (funcall callback (format "Preview error: %s" (error-message-string err)))))))
+    (let (temp1 temp2)
+      (condition-case err
+          (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
+                 (diff-output
+                  (progn
+                    (setq temp1 (my/gptel-make-temp-file "gptel-preview-orig-"))
+                    (setq temp2 (my/gptel-make-temp-file "gptel-preview-new-"))
+                    (write-region original nil temp1 nil 'silent)
+                    (write-region replacement nil temp2 nil 'silent)
+                    (my/gptel--run-diff temp1 temp2))))
+            (unwind-protect
+                (let ((diff-buf (my/gptel--create-diff-buffer
+                                 (my/gptel--unique-preview-buffer-name "*gptel-preview*")
+                                 (format "Preview: %s" path)
+                                 diff-output
+                                 #'diff-mode)))
+                  (my/gptel--insert-preview-instructions diff-buf)
+                  (my/gptel--display-preview-buffer diff-buf)
+                  (my/gptel--prompt-for-preview-action
+                   diff-buf
+                   (lambda () (funcall wrapped-cb "Preview confirmed."))
+                   (lambda () (funcall wrapped-cb "Preview aborted."))))
+              ;; Cleanup temp files even on error/quit
+              (when (and temp1 (file-exists-p temp1))
+                (delete-file temp1))
+              (when (and temp2 (file-exists-p temp2))
+                (delete-file temp2))))
+        (error
+         ;; Cleanup on error
+         (when (and temp1 (file-exists-p temp1))
+           (delete-file temp1))
+         (when (and temp2 (file-exists-p temp2))
+           (delete-file temp2))
+         (funcall callback (format "Preview error: %s" (error-message-string err))))))))
 
 ;;; Patch Preview (raw unified diff)
+
+(defun my/gptel--sanitize-patch (patch)
+  "Sanitize PATCH content for safe display.
+Strips control characters and validates format.
+Returns (SANITIZED-PATCH . WARNING) or (nil . ERROR) if invalid."
+  (cond
+   ((not (stringp patch))
+    (cons nil "Patch must be a string"))
+   ((and (> gptel-tools-preview-max-patch-size 0)
+         (> (length patch) gptel-tools-preview-max-patch-size))
+    (cons nil (format "Patch too large (%d chars, max %d)"
+                      (length patch) gptel-tools-preview-max-patch-size)))
+   (t
+    (let* ((sanitized (replace-regexp-in-string "[\000-\010\013-\037]" "" patch))
+           (has-header (string-match-p "^---" sanitized)))
+      (cons sanitized
+            (unless has-header
+              "Warning: Patch lacks standard --- header, may not apply correctly"))))))
 
 (defun my/gptel--preview-patch (patch buffer callback header)
   "Show patch preview.
@@ -269,21 +304,30 @@ BUFFER is the originating buffer.
 CALLBACK is called with the result.
 HEADER is the prompt to show.
 
+Validates patch size and format before display.
 Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
   (if (my/gptel--preview-bypass-p)
       (funcall callback "Preview disabled, auto-confirmed.")
-    (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-           (diff-buf (my/gptel--create-diff-buffer
-                      (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
-                      header
-                      patch
-                      #'diff-mode)))
-      (my/gptel--insert-preview-instructions diff-buf)
-      (my/gptel--display-preview-buffer diff-buf)
-      (my/gptel--prompt-for-preview-action
-       diff-buf
-       (lambda () (funcall wrapped-cb "Patch confirmed."))
-       (lambda () (funcall wrapped-cb "Patch aborted."))))))
+    (let* ((sanitized (my/gptel--sanitize-patch patch))
+           (patch-content (car sanitized))
+           (warning (cdr sanitized)))
+      (if (not patch-content)
+          (funcall callback (format "Error: %s" warning))
+        (progn
+          (when warning
+            (message "[gptel-preview] %s" warning))
+          (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
+                 (diff-buf (my/gptel--create-diff-buffer
+                            (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
+                            header
+                            patch-content
+                            #'diff-mode)))
+            (my/gptel--insert-preview-instructions diff-buf)
+            (my/gptel--display-preview-buffer diff-buf)
+            (my/gptel--prompt-for-preview-action
+             diff-buf
+             (lambda () (funcall wrapped-cb "Patch confirmed."))
+             (lambda () (funcall wrapped-cb "Patch aborted.")))))))))
 
 (defun my/gptel--preview-patch-async (patch buffer callback on-confirm on-abort header &optional tool-name)
   "Show patch preview asynchronously for ApplyPatch/Edit tool integration.
@@ -296,23 +340,32 @@ ON-ABORT is called with wrapped callback when user aborts.
 HEADER is the prompt to show.
 TOOL-NAME is the name of the calling tool (for \"!\" permit action).
 
+Validates patch size and format before display.
 Skips preview when `my/gptel--preview-bypass-p' returns non-nil.
 When user types \"!\", TOOL-NAME is added to `my/gptel-permitted-tools'."
   (let ((my/gptel--preview-tool-name tool-name))
     (if (my/gptel--preview-bypass-p)
         (funcall on-confirm callback)
-      (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-             (diff-buf (my/gptel--create-diff-buffer
-                        (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
-                        header
-                        patch
-                        #'diff-mode)))
-        (my/gptel--insert-preview-instructions diff-buf)
-        (my/gptel--display-preview-buffer diff-buf)
-        (my/gptel--prompt-for-preview-action
-         diff-buf
-         (lambda () (funcall on-confirm wrapped-cb))
-         (lambda () (funcall on-abort wrapped-cb)))))))
+      (let* ((sanitized (my/gptel--sanitize-patch patch))
+             (patch-content (car sanitized))
+             (warning (cdr sanitized)))
+        (if (not patch-content)
+            (funcall callback (format "Error: %s" warning))
+          (progn
+            (when warning
+              (message "[gptel-preview] %s" warning))
+            (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
+                   (diff-buf (my/gptel--create-diff-buffer
+                              (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
+                              header
+                              patch-content
+                              #'diff-mode)))
+              (my/gptel--insert-preview-instructions diff-buf)
+              (my/gptel--display-preview-buffer diff-buf)
+              (my/gptel--prompt-for-preview-action
+               diff-buf
+               (lambda () (funcall on-confirm wrapped-cb))
+               (lambda () (funcall on-abort wrapped-cb))))))))))
 
 ;;; Tool Registration
 
