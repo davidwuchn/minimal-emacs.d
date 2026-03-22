@@ -41,8 +41,11 @@ for pkg in "${PACKAGES[@]}"; do
   TARGET_DIR="$ELPA_DIR/$NAME"
   
   if [ -d "$TARGET_DIR/.git" ] && [ -z "$FORCE" ]; then
-    echo "✓ $NAME already installed (use --force to reinstall)"
+    # Update to latest version from remote
+    echo "Updating $NAME to latest from $BRANCH..."
+    (cd "$TARGET_DIR" && git fetch origin "$BRANCH" --depth 1 && git reset --hard "origin/$BRANCH")
     cleanup_old_versions "$NAME" "$ELPA_DIR"
+    echo "✓ $NAME updated"
     continue
   fi
   
