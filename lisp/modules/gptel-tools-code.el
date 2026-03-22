@@ -40,6 +40,35 @@ as likely truncation errors. Set to 0 to disable truncation guard."
   :type 'number
   :group 'gptel-tools)
 
+(defcustom my/gptel-code-replace-min-old-chars 200
+  "Minimum old code length before truncation guard applies.
+Replacements shorter than this threshold are always allowed."
+  :type 'integer
+  :group 'gptel-tools)
+
+(defcustom my/gptel-usages-cache-ttl 3600
+  "Cache time-to-live in seconds for Code_Usages results.
+Default is 1 hour. Set to 0 to disable caching."
+  :type 'integer
+  :group 'gptel-tools)
+
+(defcustom my/gptel-lsp-retry-max 5
+  "Maximum number of LSP connection retries.
+Each retry uses exponential backoff (0.5s, 1s, 2s, 4s, 8s)."
+  :type 'integer
+  :group 'gptel-tools)
+
+(defcustom my/gptel-search-timeout 30
+  "Timeout in seconds for git-grep and ripgrep searches."
+  :type 'integer
+  :group 'gptel-tools)
+
+(defcustom my/gptel-elisp-diag-max-files 10
+  "Maximum number of .el files to check in project-wide diagnostics.
+Prevents long waits in large projects."
+  :type 'integer
+  :group 'gptel-tools)
+
 ;;; Cache Management
 
 (defvar my/gptel--usages-cache-initialized nil
@@ -62,11 +91,14 @@ as likely truncation errors. Set to 0 to disable truncation guard."
     (expand-file-name filename my/gptel-find-usages-cache-dir)))
 
 (defun my/gptel--usages-cache-get (symbol-name root)
-  "Get cached usages for SYMBOL-NAME in ROOT if fresh (< 1 hour)."
-  (let ((cache-file (my/gptel--usages-cache-file symbol-name root)))
-    (when (and (file-exists-p cache-file)
-               (< (- (float-time) (float-time (nth 5 (file-attributes cache-file)))) 3600))
-      cache-file)))
+  "Get cached usages for SYMBOL-NAME in ROOT if fresh.
+Uses `my/gptel-usages-cache-ttl' for freshness check."
+  (when (> my/gptel-usages-cache-ttl 0)
+    (let ((cache-file (my/gptel--usages-cache-file symbol-name root)))
+      (when (and (file-exists-p cache-file)
+                 (< (- (float-time) (float-time (nth 5 (file-attributes cache-file))))
+                    my/gptel-usages-cache-ttl))
+        cache-file))))
 
 (defun my/gptel--usages-cache-write (symbol-name root usages backend)
   "Write USAGES to cache file for SYMBOL-NAME in ROOT."
@@ -89,30 +121,29 @@ as likely truncation errors. Set to 0 to disable truncation guard."
   "Find usages of SYMBOL-NAME using git grep in ROOT.
 Returns list of matching lines or nil if not in git repo or no matches.
 Only searches tracked files (respects .gitignore automatically).
-Nested git repos are NOT searched (use ripgrep fallback for those)."
+Nested git repos are NOT searched (use ripgrep fallback for those).
+Honors `my/gptel-search-timeout' for large repos."
   (let ((default-directory root))
     (when (and (executable-find "git")
                (vc-git-root root))
-      (with-temp-buffer
-        (let* ((has-hyphen (string-match-p "-" symbol-name))
-               (pattern (if has-hyphen
-                            (format "\\b%s\\b" (regexp-quote symbol-name))
-                          (format "\\b%s\\b" (regexp-quote symbol-name))))
-               (args (list "-c" "grep.lineNumber=true"
-                           "grep" "-n" "--no-color"
-                           "-e" pattern))
-               (exit-code (apply #'call-process "git" nil t nil args)))
-          (when (= exit-code 0)
-            (goto-char (point-min))
-            (let (usages)
-              (while (not (eobp))
-                (let ((line (buffer-substring-no-properties
-                             (line-beginning-position)
-                             (line-end-position))))
-                  (unless (string-match-p "\\.pyc$\\|\\.elc$\\|__pycache__" line)
-                    (push line usages)))
-                (forward-line 1))
-              (nreverse usages))))))))
+      (with-timeout (my/gptel-search-timeout nil)
+        (with-temp-buffer
+          (let* ((pattern (format "\\b%s\\b" (regexp-quote symbol-name)))
+                 (args (list "-c" "grep.lineNumber=true"
+                             "grep" "-n" "--no-color"
+                             "-e" pattern))
+                 (exit-code (apply #'call-process "git" nil t nil args)))
+            (when (= exit-code 0)
+              (goto-char (point-min))
+              (let (usages)
+                (while (not (eobp))
+                  (let ((line (buffer-substring-no-properties
+                               (line-beginning-position)
+                               (line-end-position))))
+                    (unless (string-match-p "\\.pyc$\\|\\.elc$\\|__pycache__" line)
+                      (push line usages)))
+                  (forward-line 1))
+                (nreverse usages)))))))))
 
 (defun my/gptel--find-usages (symbol-name)
   "Find all usages of SYMBOL-NAME in the current project.
@@ -124,7 +155,7 @@ Reports which backend was used."
   (let* ((proj (project-current))
          (root (if proj (project-root proj) default-directory))
          (usages nil)
-         (lsp-retries 5)
+         (lsp-retries my/gptel-lsp-retry-max)
          (lsp-ready nil)
          (lsp-server (and (my/gptel--lsp-active-p) (eglot-current-server)))
          (backend "unknown"))
@@ -148,11 +179,13 @@ Reports which backend was used."
                                   refs)))
                 (setq lsp-retries (1- lsp-retries))
                 (when (> lsp-retries 0)
-                  (sleep-for (* 0.5 (expt 2 (- 5 lsp-retries)))))))
+                  (message "[LSP] Waiting for server... (%d retries left)" lsp-retries)
+                  (sleep-for (* 0.5 (expt 2 (- my/gptel-lsp-retry-max lsp-retries)))))))
           (error
            (setq lsp-retries (1- lsp-retries))
            (when (> lsp-retries 0)
-             (sleep-for (* 0.5 (expt 2 (- 5 lsp-retries))))))))
+             (message "[LSP] Connection error, retrying... (%d left)" lsp-retries)
+             (sleep-for (* 0.5 (expt 2 (- my/gptel-lsp-retry-max lsp-retries))))))))
       (unless lsp-ready
         (setq usages nil)))
     (unless usages
@@ -164,25 +197,27 @@ Reports which backend was used."
           (let ((grepper (executable-find "rg")))
             (if (not grepper)
                 (setq usages (list (format "Error: ripgrep (rg) not found in PATH.\nInstall with: brew install ripgrep  (macOS)\n                 apt install ripgrep    (Ubuntu)\n                 winget install BurntSushi.ripgrep.MSVC  (Windows)")))
-              (with-temp-buffer
-                (let* ((has-hyphen (string-match-p "-" symbol-name))
-                       (args (if has-hyphen
-                                 (list "-n" "-e" (format "\\b%s\\b" (regexp-quote symbol-name))
-                                       (expand-file-name root))
-                               (list "-n" "-w" "-F" symbol-name
-                                     (expand-file-name root))))
-                       (exit-code (apply #'call-process grepper nil t nil args)))
-                  (when (= exit-code 0)
-                    (goto-char (point-min))
-                    (setq backend "ripgrep")
-                    (setq usages nil)
-                    (while (not (eobp))
-                      (let ((line (buffer-substring-no-properties
-                                   (line-beginning-position)
-                                   (line-end-position))))
-                        (unless (string-match-p "\\.pyc$\\|\\.elc$\\|__pycache__" line)
-                          (push line usages)))
-                      (forward-line 1))))))))))
+              (with-timeout (my/gptel-search-timeout
+                             (setq usages (list (format "Error: Search timed out after %d seconds" my/gptel-search-timeout))))
+                (with-temp-buffer
+                  (let* ((has-hyphen (string-match-p "-" symbol-name))
+                         (args (if has-hyphen
+                                   (list "-n" "-e" (format "\\b%s\\b" (regexp-quote symbol-name))
+                                         (expand-file-name root))
+                                 (list "-n" "-w" "-F" symbol-name
+                                       (expand-file-name root))))
+                         (exit-code (apply #'call-process grepper nil t nil args)))
+                    (when (= exit-code 0)
+                      (goto-char (point-min))
+                      (setq backend "ripgrep")
+                      (setq usages nil)
+                      (while (not (eobp))
+                        (let ((line (buffer-substring-no-properties
+                                     (line-beginning-position)
+                                     (line-end-position))))
+                          (unless (string-match-p "\\.pyc$\\|\\.elc$\\|__pycache__" line)
+                            (push line usages)))
+                        (forward-line 1)))))))))))
     (let ((result (if usages
                       (format "Found %d usages of '%s' (via %s):\n\n%s"
                               (length usages)
@@ -199,48 +234,63 @@ Reports which backend was used."
 (defun my/gptel--run-fallback-linter (dir &optional file-path)
   "Run a fallback linter in DIR if LSP is not available.
 If FILE-PATH is provided, check only that file.
-Reports what was checked, even if no standard project files found."
+Reports what was checked, even if no standard project files found.
+Uses call-process instead of shell commands for security."
   (let ((default-directory dir)
         (py-ext "\\.py\\'")
         (el-ext "\\.el\\'"))
     (cond
-     ;; Emacs Lisp - use built-in checkdoc/byte-compile + optional package-lint
      ((or (and file-path (string-match-p el-ext file-path))
           (directory-files dir nil el-ext))
       (if file-path
           (gptel-tools-code--elisp-diagnostics file-path)
-        ;; Project-wide: check all .el files in lisp/ and init files
         (let ((el-files (append
                          (directory-files dir t el-ext t)
                          (when (file-directory-p (expand-file-name "lisp" dir))
                            (directory-files-recursively
                             (expand-file-name "lisp" dir) el-ext)))))
           (if el-files
-              (mapconcat
-               (lambda (f) (format "=== %s ===\n%s" f
-                                   (gptel-tools-code--elisp-diagnostics f)))
-               (seq-take el-files 10) "\n\n")
+              (let ((files-to-check (seq-take el-files my/gptel-elisp-diag-max-files)))
+                (concat
+                 (mapconcat
+                  (lambda (f) (format "=== %s ===\n%s" f
+                                      (gptel-tools-code--elisp-diagnostics f)))
+                  files-to-check "\n\n")
+                 (when (> (length el-files) my/gptel-elisp-diag-max-files)
+                   (format "\n\n[Checked %d of %d .el files (limited for performance)]"
+                           my/gptel-elisp-diag-max-files (length el-files)))))
             "No .el files found in project"))))
-     ;; JavaScript/TypeScript
      ((file-exists-p "package.json")
-      (let ((res (shell-command-to-string "npm run lint --silent 2>/dev/null || npx eslint . 2>/dev/null")))
+      (let ((res (with-temp-buffer
+                   (or (and (executable-find "npm")
+                            (= 0 (call-process "npm" nil t nil "run" "lint" "--silent")))
+                       (and (executable-find "npx")
+                            (= 0 (call-process "npx" nil t nil "eslint" ".")))
+                       "")
+                   (buffer-string))))
         (if (string-empty-p (string-trim res))
             "✓ No linter errors (ESLint) - checked package.json (JavaScript/Node.js)"
           res)))
-     ;; Python
      ((or (file-exists-p "pyproject.toml") (file-exists-p "setup.py") (directory-files dir nil py-ext))
-      (let ((res (shell-command-to-string "ruff check . 2>/dev/null || flake8 . 2>/dev/null")))
+      (let ((res (with-temp-buffer
+                   (or (and (executable-find "ruff")
+                            (= 0 (call-process "ruff" nil t nil "check" ".")))
+                       (and (executable-find "flake8")
+                            (= 0 (call-process "flake8" nil t nil ".")))
+                       "")
+                   (buffer-string))))
         (if (string-empty-p (string-trim res))
             "✓ No linter errors (ruff/flake8) - checked Python project (pyproject.toml/setup.py)"
           res)))
-     ;; Rust
      ((file-exists-p "Cargo.toml")
-      (let ((res (shell-command-to-string "cargo check 2>&1")))
+      (let ((res (with-temp-buffer
+                   (when (executable-find "cargo")
+                     (call-process "cargo" nil t nil "check"))
+                   (buffer-string))))
         (if (string-match-p "Finished\\|Compiling" res)
             "✓ No compiler errors (cargo check) - checked Cargo.toml (Rust)"
           res)))
      (t
-      ;; No standard project files found - report what we looked for
       (concat "Note: No standard project files found (package.json, pyproject.toml, Cargo.toml, *.el).\n"
               "Searched for: JavaScript (package.json), Python (pyproject.toml/setup.py/*.py), "
               "Rust (Cargo.toml), Emacs Lisp (*.el).\n"
@@ -421,12 +471,8 @@ Syncs buffer with disk, validates parser, guards against truncation."
   (condition-case err
       (with-timeout (5 (format "Error: Code_Replace timed out on %s" file_path))
         (with-current-buffer (find-file-noselect file_path)
-          ;; Check for unsaved user changes before syncing with disk.
           (when (buffer-modified-p)
             (error "Buffer has unsaved changes. Save or revert manually before Code_Replace."))
-          ;; Sync buffer with disk before operating — prevents
-          ;; "changed since visited" prompts when multiple
-          ;; Code_Replace calls target the same file in sequence.
           (when (and (buffer-file-name)
                      (file-exists-p (buffer-file-name))
                      (not (verify-visited-file-modtime)))
@@ -437,17 +483,18 @@ Syncs buffer with disk, validates parser, guards against truncation."
                file_path (my/gptel--detect-treesit-language file_path)
                "Edit tool (manual paren balancing required)")
             (let ((old-code (treesit-agent-extract-node node_name)))
-              ;; Guard: reject likely-truncated replacements.
-              ;; Only applies when threshold > 0 and old-code > 200 chars.
               (if (and old-code
                        (> my/gptel-code-replace-truncation-ratio 0)
-                       (> (length old-code) 200)
+                       (> (length old-code) my/gptel-code-replace-min-old-chars)
                        (< (length new_code) (* my/gptel-code-replace-truncation-ratio (length old-code))))
                   (format "Error: Replacement rejected — new code (%d chars) is suspiciously shorter than original (%d chars).\nThis usually means the function body was truncated.\n\nACTION: Provide the COMPLETE replacement including the full function body."
                           (length new_code) (length old-code))
                 (if (treesit-agent-replace-node node_name new_code)
                     (progn
-                      ;; Suppress supersession warnings during save.
+                      (when (and (buffer-file-name)
+                                 (file-exists-p (buffer-file-name))
+                                 (not (verify-visited-file-modtime)))
+                        (error "File changed externally after revert. Re-run Code_Replace."))
                       (cl-letf (((symbol-function 'ask-user-about-supersession-threat) #'ignore))
                         (save-buffer))
                       (format "Successfully replaced '%s' in %s" node_name file_path))
