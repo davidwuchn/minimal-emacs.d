@@ -226,8 +226,27 @@ Useful for testing or when auto-injection was skipped."
 
 ;;; Keybinding
 
-(with-eval-after-load 'gptel-mode
-  (define-key gptel-mode-map (kbd "C-c P") #'nucleus-show-captured-context))
+;; NOTE: C-c P is already bound by ai-code-behaviors to
+;; `ai-code-behaviors-show-last-prompt'. We add advice to show
+;; nucleus context alongside behaviors context.
+
+(defun nucleus--append-to-behaviors-show-last-prompt (&rest _)
+  "Append nucleus context to ai-code-behaviors prompt display."
+  (when (and nucleus--last-response-content
+             (buffer-live-p (get-buffer "*ai-code-behaviors-last-prompt*")))
+    (with-current-buffer "*ai-code-behaviors-last-prompt*"
+      (goto-char (point-max))
+      (insert "\n\n=== NUCLEUS MODE-SWITCH CONTEXT ===\n\n")
+      (insert (format "Direction: %s\n" (or nucleus--last-transition-direction "none")))
+      (insert (format "Previous preset: %s\n" (or nucleus--previous-preset "none")))
+      (insert (format "Content length: %d chars\n\n" (length nucleus--last-response-content)))
+      (insert "--- CAPTURED CONTENT ---\n")
+      (insert nucleus--last-response-content)
+      (insert "\n--- END ---\n"))))
+
+(with-eval-after-load 'ai-code-behaviors
+  (advice-add 'ai-code-behaviors-show-last-prompt :after
+              #'nucleus--append-to-behaviors-show-last-prompt))
 
 ;;; Integration
 
