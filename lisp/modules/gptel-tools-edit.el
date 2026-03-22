@@ -21,17 +21,25 @@
   :type 'integer
   :group 'gptel-tools-edit)
 
+(defcustom my/gptel-edit-patch-options '("-p1" "--forward" "--verbose" "--batch")
+  "Options passed to the `patch' command.
+Default handles standard git diff format with a/ and b/ prefixes.
+Use '(\"-p0\" \"--forward\" \"--verbose\" \"--batch\") for diffs without prefixes."
+  :type '(repeat string)
+  :group 'gptel-tools-edit)
+
 ;;; Helper Functions
 
 (defun my/gptel--agent--strip-diff-fences (text)
-  "Strip leading/trailing fenced code block markers from TEXT, if present."
+  "Strip leading/trailing fenced code block markers from TEXT, if present.
+Handles multi-line whitespace before/after fences."
   (let ((result text))
     ;; Strip opening fence (```diff, ```patch, or ```)
     (when (string-match-p "^\\s-*```\\(diff\\|patch\\)?\\s-*" result)
       (setq result (replace-regexp-in-string "^\\s-*```\\(diff\\|patch\\)?\\s-*\\n?" "" result)))
-    ;; Strip closing fence (``` at end of string, with optional whitespace)
+    ;; Strip closing fence (``` at end of string, with any preceding whitespace/newlines)
     (when (string-match-p "```\\s-*\\'" result)
-      (setq result (replace-regexp-in-string "\\n?\\s-*```\\s-*\\'" "" result)))
+      (setq result (replace-regexp-in-string "\\s-*```\\s-*\\'" "" result)))
     (string-trim result)))
 
 ;;; Edit Tool Implementation
@@ -42,7 +50,9 @@
 This is only truly async/interruptible for patch mode (DIFFP true).
 For simple string replacements it executes synchronously.
 
-CALLBACK is called exactly once unless the buffer has been aborted."
+CALLBACK is called exactly once. Errors are always delivered.
+Success results are only delivered if the origin buffer is still live
+and the generation hasn't been aborted."
   (let* ((origin (current-buffer))
          (gen my/gptel--abort-generation)
          (done nil)
@@ -50,22 +60,31 @@ CALLBACK is called exactly once unless the buffer has been aborted."
           (lambda (result)
             (unless done
               (setq done t)
-              ;; Always deliver error results so the FSM doesn't hang.
-              (when (or (and (stringp result) (string-prefix-p "Error" result))
-                         (and (buffer-live-p origin)
-                              (with-current-buffer origin
-                                (= gen my/gptel--abort-generation))))
-                (funcall callback result))))))
+              (let ((is-error (and (stringp result) (string-prefix-p "Error" result))))
+                ;; Always deliver errors so FSM doesn't hang.
+                ;; For success, check if buffer is still valid and not aborted.
+                (if is-error
+                    (funcall callback result)
+                  (when (and (buffer-live-p origin)
+                             (with-current-buffer origin
+                               (= gen my/gptel--abort-generation)))
+                    (funcall callback result))))))))
     (condition-case err
         (progn
+          ;; Validate file exists and is a regular file (not directory).
+          (unless (file-exists-p file_path)
+            (error "File %s does not exist" file_path))
+          (unless (file-regular-p file_path)
+            (error "%s is not a regular file (directories not supported)" file_path))
           (unless (file-readable-p file_path)
-            (error "File or directory %s is not readable" file_path))
+            (error "File %s is not readable" file_path))
           (unless new_str
             (error "Required argument `new_str' missing"))
           (let ((patch-mode (and diffp (not (eq diffp :json-false)))))
             (if (not patch-mode)
                 (funcall finish
                          (gptel-agent--edit-files file_path old_str new_str diffp))
+              ;; Patch mode: verify patch command available at runtime
               (unless (executable-find "patch")
                 (error "Command \"patch\" not available, cannot apply diffs"))
               (let* ((target (expand-file-name file_path))
@@ -73,6 +92,9 @@ CALLBACK is called exactly once unless the buffer has been aborted."
                      (patch-text (if (string-suffix-p "\n" patch-text)
                                      patch-text
                                    (concat patch-text "\n"))))
+                ;; Validate patch format (look for standard diff headers)
+                (unless (string-match-p "^---" patch-text)
+                  (message "[gptel-edit] Warning: patch-text lacks standard --- header"))
                 (with-temp-buffer
                   (insert patch-text)
                   (goto-char (point-min))
@@ -92,17 +114,16 @@ CALLBACK is called exactly once unless the buffer has been aborted."
   "Apply PATCH-TEXT to TARGET file asynchronously.
 
 CALLBACK is called with the result.
-This is the core patch application logic for preview integration."
+This is the core patch application logic for preview integration.
+Uses `my/gptel-edit-patch-options' for patch command options."
   (let* ((out-buf (generate-new-buffer " *gptel-patch*"))
          (default-directory (file-name-directory target))
-         ;; Use -p1 to strip a/ and b/ prefixes from git diff output
-         (patch-options '("-p1" "--forward" "--verbose" "--batch"))
          (cb-called nil)
          (proc
           (make-process
            :name "gptel-patch"
            :buffer out-buf
-           :command (cons "patch" patch-options)
+           :command (cons "patch" my/gptel-edit-patch-options)
            :noquery t
            :connection-type 'pipe
            :sentinel
