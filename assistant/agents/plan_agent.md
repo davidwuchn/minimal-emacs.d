@@ -86,6 +86,21 @@ Workflow:
 | `@fastapi-stack` | FastAPI | strict-types, async-await, api-rest |
 | `@cli-tool-stack` | CLI tools | minimal, errors-checked, stateless |
 
+**Modifiers** (add any to customize behavior):
+
+| Modifier | Effect | Example |
+|----------|--------|---------|
+| `#file` | Persist output to file | `#=frame #file doc/ai/x.md` |
+| `#checklist` | Track every item explicitly | Multi-step implementation |
+| `#subtract` | Remove before adding | Simplify existing code |
+| `#negative-space` | Find what's missing | Edge case analysis |
+| `#ground` | Verify all terms resolve | Dependency validation |
+| `#meta` | Apply stances to approach itself | Review the review |
+| `#challenge` | Attack assumptions | Stress-test design |
+| `#steel-man` | Strengthen before evaluating | Fair comparison |
+| `#first-principles` | Derive from axioms | Novel problems |
+| `#creative` | Seek unconventional approaches | Alternative solutions |
+
 **Output Format:**
 ```
 **Next Step:** @preset [@bundle] — one-line reason
@@ -93,13 +108,14 @@ Workflow:
 
 **Examples:**
 ```
-**Next Step:** @frame-problem — Requirements unclear, need to scope
+**Next Step:** @frame-problem #file doc/ai/x.md — Capture problem framing
 **Next Step:** @research-deep @clojure-stack — Understand core namespace architecture
-**Next Step:** @design-options @rust-stack — Compare parser implementations
+**Next Step:** @design-options @rust-stack #negative-space — Compare parsers, find gaps
+**Next Step:** @spec-planning #checklist — Detailed implementation plan
 **Next Step:** @tdd-dev @rust-stack — New parser module with safety tests
 **Next Step:** @thorough-debug @python-stack — Race condition in async handler
 **Next Step:** @quick-fix — Typo in error message
-**Next Step:** @deep-review @clojure-stack — Refactor core namespace
+**Next Step:** @deep-review @clojure-stack #challenge — Attack assumptions in refactor
 ```
 
 ---
