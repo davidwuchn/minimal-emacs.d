@@ -2,6 +2,40 @@
 
 > Last session: 2026-03-23
 
+## Completed (2026-03-23) — Skills Standardization
+
+Aligned skill frontmatter with agentskills.io spec:
+
+### Fields Added (5 skills × 4 fields = 20 new fields)
+
+| Field | Purpose |
+|-------|---------|
+| `summary` | One-line summary for quick reference |
+| `author` | David Wu |
+| `license` | MIT |
+| `triggers` | Keywords for skill discovery |
+
+### Skills Updated
+
+- `assistant/skills/_template/SKILL.md`
+- `assistant/skills/clojure-expert/SKILL.md`
+- `assistant/skills/reddit/SKILL.md`
+- `assistant/skills/requesthunt/SKILL.md`
+- `assistant/skills/seo-geo/SKILL.md`
+
+### Commits
+
+- `f9e4c2b` ◈ skills: standardize frontmatter with agentskills.io fields (+25 lines)
+
+### Key Insight
+
+```
+λ standardize(x).    agentskills.io ∨ de_facto_standard(x) → adopt(x)
+                     | keep_local(extensions ∨ different_scope)
+```
+
+---
+
 ## Completed (2026-03-23) — Remove Redundant Skill Tools
 
 Simplified by reusing gptel-agent's skill support:

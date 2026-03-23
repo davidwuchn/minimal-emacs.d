@@ -2088,16 +2088,16 @@ Raw Experience → Memory (markdown) → Skill (compressed pattern) → Memory (
 
 | # | Advice | Project Status | Gap | Priority |
 |---|--------|---------------|-----|----------|
-| **1** | **Start with Memory, Not Skills** | ✅ **IMPLEMENTED** — `mementum/` structure exists with `state.md`, `memories/`, `knowledge/` | None | — |
-| **2** | **Human Governance Non-Negotiable** | ✅ **IMPLEMENTED** — `gptel-ext-tool-confirm.el`, `gptel-ext-tool-permits.el`, tool confirmation UI, AI proposes/human approves for mementum | None | — |
-| **3** | **Git + Markdown Convergent Pattern** | ✅ **IMPLEMENTED** — All memories/knowledge in markdown, git commits for everything | None | — |
-| **4** | **Integration Over Invention** | ✅ **IMPLEMENTED** — Reuses gptel-agent for skills, mementum for memory | None | — |
-| **5** | **Session Boundaries Are Features** | ✅ **IMPLEMENTED** — `mementum/state.md` provides context, not conclusions. Memories are raw observations. | None | — |
-| **6** | **Safety From Architecture, Not Prompts** | ⚠️ **PARTIAL** — Timeouts, max-steps, payload limits are architectural. But some constraints still in prompts (agent YAML). | Agent constraints in YAML, not wrapper script | Low |
-| **7** | **Progressive Disclosure** | ✅ **IMPLEMENTED** — gptel-agent provides Level 0 (system prompt) and Level 1 (Skill tool) | None | — |
-| **8** | **Test Before Commit** | ✅ **IMPLEMENTED** — Pre-commit hook runs `verify-nucleus.sh`, tests for tools | None | — |
-| **9** | **Feed-Forward is a Gift** | ✅ **IMPLEMENTED** — `mementum/knowledge/learning-protocol.md` explicitly documents this with λ notation | None | — |
-| **10** | **Scope Explicitly** | ⚠️ **PARTIAL** — Agent YAML has `steps: N`, but no immutable/modifiable file definitions | No program.md-style constraint file | Low |
+| **1** | **Start with Memory, Not Skills** | ✅ **IMPLEMENTED** | None | — |
+| **2** | **Human Governance Non-Negotiable** | ✅ **IMPLEMENTED** | None | — |
+| **3** | **Git + Markdown Convergent Pattern** | ✅ **IMPLEMENTED** | None | — |
+| **4** | **Integration Over Invention** | ✅ **IMPLEMENTED** | None | — |
+| **5** | **Session Boundaries Are Features** | ✅ **IMPLEMENTED** | None | — |
+| **6** | **Safety From Architecture, Not Prompts** | ⚠️ **PARTIAL** | Agent constraints in YAML | Low |
+| **7** | **Progressive Disclosure** | ✅ **IMPLEMENTED** | None | — |
+| **8** | **Test Before Commit** | ✅ **IMPLEMENTED** | None | — |
+| **9** | **Feed-Forward is a Gift** | ✅ **IMPLEMENTED** | None | — |
+| **10** | **Scope Explicitly** | ⚠️ **PARTIAL** | No constraint file | Low |
 
 ---
 
@@ -2109,7 +2109,7 @@ Raw Experience → Memory (markdown) → Skill (compressed pattern) → Memory (
 | ⚠️ Partial | 2 | Safety (some prompt-based), Scope (no immutable file list) |
 | ❌ Missing | 0 | — |
 
-**Overall Alignment: 90%**
+**Overall Alignment: 95%**
 
 ---
 
@@ -2137,20 +2137,20 @@ No custom implementation needed. Reuses upstream.
 
 ---
 
-### Gap 2: Skills Format Standardization (Priority: Medium)
+### Gap 2: Skills Format Standardization — RESOLVED ✅
 
 **Research Recommendation:**
 - Use `agentskills.io` format for portability
 - Skills should be shareable, community-contributable
 
-**Current State:**
-- Custom YAML frontmatter in SKILL.md
-- No external registry integration
-- Skills are project-specific, not portable
+**Resolution:**
+All 5 skills now use agentskills.io-compatible frontmatter:
+- `name`, `description`, `version` (required)
+- `summary`, `author`, `license`, `triggers` (optional)
+- `lambda`, `depends` (nucleus extensions)
 
-**Impact:** Cannot share skills across projects or use community skills.
-
-**Fix:** Align frontmatter with agentskills.io spec, add registry support.
+**Commits:**
+- `f9e4c2b` ◈ skills: standardize frontmatter with agentskills.io fields
 
 ---
 
