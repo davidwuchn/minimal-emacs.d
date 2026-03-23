@@ -29,7 +29,9 @@ $EMACS -Q --batch \
          (add-to-list 'load-path (expand-file-name \"lisp\" \"$DIR\"))
          (add-to-list 'load-path (expand-file-name \"lisp/modules\" \"$DIR\"))
          (require 'gptel-config)
-         (message \"\n[1/3] Verifying Agent Tool Contracts...\")
+         ;; Ensure gptel-agent-tools is loaded so Skill/Agent/RunAgent are registered
+         (require 'gptel-agent-tools)
+         (message \"\\n[1/3] Verifying Agent Tool Contracts...\")
          (require 'nucleus-presets)
          (condition-case err
              (progn
@@ -39,7 +41,7 @@ $EMACS -Q --batch \
             (message \"✗ Agent tool contracts validation failed: %s\" (error-message-string err))
             (kill-emacs 1)))
 
-         (message \"\n[2/3] Verifying Tool Registrations...\")
+         (message \"\\n[2/3] Verifying Tool Registrations...\")
          (require 'nucleus-tools-verify)
          (let ((missing (cl-loop for item in (nucleus--verify-tools)
                                  when (not (eq (cdr item) 'registered))
@@ -50,7 +52,7 @@ $EMACS -Q --batch \
                  (kill-emacs 1))
              (message \"✓ All tools correctly registered.\")))
 
-         (message \"\n[3/3] Verifying Tool Signatures...\")
+         (message \"\\n[3/3] Verifying Tool Signatures...\")
          (require 'nucleus-tools-validate)
          (let* ((results (nucleus--validate-all-tools))
                 (errors (cl-loop for (_ . (status . _)) in results count (eq status 'error))))
