@@ -920,17 +920,30 @@ HYPOTHESIS: [your hypothesis here]"
                 (prompt (gptel-auto-experiment-build-prompt
                          target experiment-id max-experiments analysis baseline)))
            (message "[auto-exp] Step 2: Running executor with %ds timeout..." gptel-auto-experiment-time-budget)
-           (setq timeout-timer
-                 (run-with-timer gptel-auto-experiment-time-budget nil
-                                 (lambda ()
-                                   (unless finished
-                                     (message "[auto-exp] TIMEOUT after %ds" gptel-auto-experiment-time-budget)
-                                     (setq finished t)
-                                     (gptel-auto-workflow-delete-worktree)
-                                     (funcall callback
-                                              (list :target target
-                                                    :id experiment-id
-                                                    :error "timeout"))))))
+(setq timeout-timer
+                  (run-with-timer gptel-auto-experiment-time-budget nil
+                                  (lambda ()
+                                    (unless finished
+                                      (message "[auto-exp] TIMEOUT after %ds" gptel-auto-experiment-time-budget)
+                                      (setq finished t)
+                                      (gptel-auto-workflow-delete-worktree)
+                                      (let ((exp-result (list :target target
+                                                              :id experiment-id
+                                                              :hypothesis "timeout"
+                                                              :score-before baseline
+                                                              :score-after 0
+                                                              :kept nil
+                                                              :duration gptel-auto-experiment-time-budget
+                                                              :grader-quality 0
+                                                              :grader-reason "timeout"
+                                                              :comparator-reason "timeout"
+                                                              :analyzer-patterns "timeout")))
+                                        (gptel-auto-experiment-log-tsv
+                                         (format-time-string "%Y-%m-%d") exp-result))
+                                      (funcall callback
+                                               (list :target target
+                                                     :id experiment-id
+                                                     :error "timeout"))))))
            (if gptel-auto-experiment-mock-mode
                (run-with-timer 1 nil
                                (lambda ()
