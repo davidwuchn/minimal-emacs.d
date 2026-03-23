@@ -11,10 +11,10 @@
 
 | Date | What | Status |
 |------|------|--------|
+| 2026-03-23 | OUROBOROS compress: 2870 → 376 lines | ✓ |
 | 2026-03-23 | OUROBOROS v5.1: autoresearch convergence | ✓ |
 | 2026-03-23 | Mementum optimization + weekly job integration | ✓ |
 | 2026-03-23 | Autonomous Research Agent complete | ✓ |
-| 2026-03-23 | Skill auto-evolution + 10min budget | ✓ |
 
 ## Pointers
 
