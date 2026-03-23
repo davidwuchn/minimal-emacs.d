@@ -2091,10 +2091,10 @@ Raw Experience → Memory (markdown) → Skill (compressed pattern) → Memory (
 | **1** | **Start with Memory, Not Skills** | ✅ **IMPLEMENTED** — `mementum/` structure exists with `state.md`, `memories/`, `knowledge/` | None | — |
 | **2** | **Human Governance Non-Negotiable** | ✅ **IMPLEMENTED** — `gptel-ext-tool-confirm.el`, `gptel-ext-tool-permits.el`, tool confirmation UI, AI proposes/human approves for mementum | None | — |
 | **3** | **Git + Markdown Convergent Pattern** | ✅ **IMPLEMENTED** — All memories/knowledge in markdown, git commits for everything | None | — |
-| **4** | **Integration Over Invention** | ⚠️ **PARTIAL** — mementum integrated, but skills system is custom (not agentskills.io) | Skills format is custom, not standard | Medium |
+| **4** | **Integration Over Invention** | ✅ **IMPLEMENTED** — Reuses gptel-agent for skills, mementum for memory | None | — |
 | **5** | **Session Boundaries Are Features** | ✅ **IMPLEMENTED** — `mementum/state.md` provides context, not conclusions. Memories are raw observations. | None | — |
 | **6** | **Safety From Architecture, Not Prompts** | ⚠️ **PARTIAL** — Timeouts, max-steps, payload limits are architectural. But some constraints still in prompts (agent YAML). | Agent constraints in YAML, not wrapper script | Low |
-| **7** | **Progressive Disclosure** | ❌ **MISSING** — Skills load full content, no tiered loading | Skills have no summary/list/detail levels | Medium |
+| **7** | **Progressive Disclosure** | ✅ **IMPLEMENTED** — gptel-agent provides Level 0 (system prompt) and Level 1 (Skill tool) | None | — |
 | **8** | **Test Before Commit** | ✅ **IMPLEMENTED** — Pre-commit hook runs `verify-nucleus.sh`, tests for tools | None | — |
 | **9** | **Feed-Forward is a Gift** | ✅ **IMPLEMENTED** — `mementum/knowledge/learning-protocol.md` explicitly documents this with λ notation | None | — |
 | **10** | **Scope Explicitly** | ⚠️ **PARTIAL** — Agent YAML has `steps: N`, but no immutable/modifiable file definitions | No program.md-style constraint file | Low |
@@ -2105,17 +2105,17 @@ Raw Experience → Memory (markdown) → Skill (compressed pattern) → Memory (
 
 | Status | Count | Items |
 |--------|-------|-------|
-| ✅ Implemented | 6 | Memory, Human Governance, Git+Markdown, Session Boundaries, Test Before Commit, Feed-Forward |
-| ⚠️ Partial | 3 | Integration (custom skills), Safety (some prompt-based), Scope (no immutable file list) |
-| ❌ Missing | 1 | Progressive Disclosure for skills |
+| ✅ Implemented | 8 | Memory, Human Governance, Git+Markdown, Integration, Session Boundaries, Progressive Disclosure, Test Before Commit, Feed-Forward |
+| ⚠️ Partial | 2 | Safety (some prompt-based), Scope (no immutable file list) |
+| ❌ Missing | 0 | — |
 
-**Overall Alignment: 85%**
+**Overall Alignment: 90%**
 
 ---
 
 ## Detailed Gap Analysis
 
-### Gap 1: Progressive Disclosure (Priority: Medium)
+### Gap 1: Progressive Disclosure — RESOLVED ✅
 
 **Research Recommendation:**
 ```
@@ -2125,18 +2125,15 @@ Level 1: skill_view(name) → Full SKILL.md
 Level 2: skill_view(name, path) → Specific file
 ```
 
-**Current State:**
-- Skills in `assistant/skills/` are full markdown files
-- No programmatic `skills_list` or `skill_view` tools
-- AI reads full SKILL.md on every invocation
+**Resolution:**
+gptel-agent provides progressive disclosure:
+- **Level 0:** Skills listed in system prompt via `{{SKILLS}}` template
+- **Level 1:** `Skill` tool loads SKILL.md content
 
-**Impact:** Token bloat when many skills are available.
+No custom implementation needed. Reuses upstream.
 
-**Fix:** Add skills tools:
-```elisp
-(defun skills-list () "Return all skill metadata")
-(defun skill-view (name &optional path) "Load skill content")
-```
+**Commits:**
+- `3314e74` Δ gptel-tools: remove redundant skill tools, use gptel-agent
 
 ---
 
