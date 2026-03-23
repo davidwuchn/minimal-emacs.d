@@ -1431,6 +1431,140 @@ Manual: M-x gptel-auto-workflow-run-autonomous"
       (gptel-auto-workflow-metabolize run-id all-results)
       (message "[autonomous] Complete: %d experiments" (length all-results)))))
 
+;;; Mementum Optimization
+
+(defvar gptel-mementum-index-file "mementum/.index"
+  "Path to recall index file.")
+
+(defun gptel-mementum-build-index ()
+  "Build recall index from all knowledge files.
+Creates .index file with topic → file mapping for O(1) lookup."
+  (let* ((index-file (expand-file-name gptel-mementum-index-file
+                                        (expand-file-name user-emacs-directory)))
+         (knowledge-dir (expand-file-name "mementum/knowledge"
+                                          (expand-file-name user-emacs-directory)))
+         (index (make-hash-table :test 'equal)))
+    (when (file-exists-p knowledge-dir)
+      (dolist (file (directory-files-recursively knowledge-dir "\\.md$"))
+        (let ((content (with-temp-buffer
+                         (insert-file-contents file)
+                         (buffer-string)))
+              (filename (file-relative-name file knowledge-dir)))
+          (dolist (keyword '("caching" "lazy" "simplification" "retry" "context"
+                             "code" "nucleus" "learning" "pattern" "evolution"
+                             "safety" "upstream" "skill" "benchmark"))
+            (when (string-match-p (regexp-quote keyword) content)
+              (puthash keyword
+                       (cons filename (gethash keyword index))
+                       index))))))
+    (with-temp-file index-file
+      (insert "# Mementum Recall Index\n")
+      (insert "# Auto-generated. Do not edit.\n\n")
+      (maphash
+       (lambda (keyword files)
+         (insert (format "%s: %s\n" keyword (string-join (delete-dups files) ", "))))
+       index))
+    (message "[mementum] Index built: %d keywords" (hash-table-count index))))
+
+(defun gptel-mementum-recall (query)
+  "Quick lookup for QUERY in recall index.
+Returns list of matching files."
+  (let* ((index-file (expand-file-name gptel-mementum-index-file
+                                        (expand-file-name user-emacs-directory)))
+         (result '()))
+    (when (file-exists-p index-file)
+      (with-temp-buffer
+        (insert-file-contents index-file)
+        (goto-char (point-min))
+        (when (re-search-forward (format "^%s: " (regexp-quote query)) nil t)
+          (let ((line (buffer-substring-no-properties (point) (line-end-position))))
+            (setq result (split-string line ",\\s-*")))))
+    (or result
+        (progn
+          (message "[mementum] Index miss, using git grep for: %s" query)
+          (let ((default-directory (expand-file-name user-emacs-directory)))
+            (split-string
+             (shell-command-to-string
+              (format "git grep -l '%s' -- mementum/knowledge/ 2>/dev/null || true" query))
+             "\n" t))))))
+
+(defun gptel-mementum-decay-skills ()
+  "Apply decay to skill files not tested in 4+ weeks.
+Run weekly via cron."
+  (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
+                                        (expand-file-name user-emacs-directory)))
+         (mutations-dir (expand-file-name "mementum/knowledge/mutations"
+                                          (expand-file-name user-emacs-directory)))
+         (now (float-time))
+         (four-weeks (* 4 7 24 60 60))
+         (decayed 0)
+         (archived 0))
+    (dolist (dir (list skills-dir mutations-dir))
+      (when (file-exists-p dir)
+        (dolist (file (directory-files dir t "\\.md$"))
+          (let ((content (with-temp-buffer
+                           (insert-file-contents file)
+                           (buffer-string))))
+            (when (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content)
+              (let* ((date-str (match-string 1 content))
+                     (last-tested (encode-time 0 0 0 (string-to-number (substring date-str 8 10))
+                                               (string-to-number (substring date-str 5 7))
+                                               (string-to-number (substring date-str 0 4))))
+                     (age (- now (float-time last-tested))))
+                (when (> age four-weeks)
+                  (let ((new-phi (max 0.3 (- (if (string-match "^phi:[[:space:]]*\\([0-9.]+\\)" content)
+                                                  (string-to-number (match-string 1 content))
+                                                0.5)
+                                              0.02))))
+                    (if (< new-phi 0.3)
+                        (progn
+                          (let ((archive-dir (expand-file-name "archive" dir)))
+                            (make-directory archive-dir t)
+                            (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir))
+                            (cl-incf archived)))
+                      (with-temp-buffer
+                        (insert content)
+                        (goto-char (point-min))
+                        (when (re-search-forward "^phi:[[:space:]]*[0-9.]+" nil t)
+                          (replace-match (format "phi: %.2f" new-phi)))
+                        (write-region (point-min) (point-max) file)
+                        (cl-incf decayed))))))))))))
+    (message "[mementum] Decay: %d decayed, %d archived" decayed archived)))
+
+(defun gptel-mementum-check-synthesis-candidates ()
+  "Check for topics with ≥3 memories and suggest synthesis.
+Returns list of synthesis candidates."
+  (let* ((memories-dir (expand-file-name "mementum/memories"
+                                          (expand-file-name user-emacs-directory)))
+         (by-topic (make-hash-table :test 'equal))
+         (candidates '()))
+    (when (file-exists-p memories-dir)
+      (dolist (file (directory-files memories-dir t "\\.md$"))
+        (let ((slug (file-name-sans-extension (file-name-nondirectory file))))
+          (dolist (topic (split-string slug "[-_]"))
+            (when (> (length topic) 3)
+              (puthash topic (cons file (gethash topic by-topic)) by-topic)))))
+      (maphash
+       (lambda (topic files)
+         (when (>= (length files) 3)
+           (push (list :topic topic :count (length files) :files files) candidates)))
+       by-topic))
+    (when candidates
+      (message "[mementum] Synthesis candidates: %s"
+               (mapcar (lambda (c) (plist-get c :topic)) candidates)))
+    candidates))
+
+(defun gptel-mementum-weekly-job ()
+  "Weekly mementum maintenance: decay + index rebuild + synthesis check."
+  (interactive)
+  (message "[mementum] Starting weekly maintenance...")
+  (gptel-mementum-build-index)
+  (gptel-mementum-decay-skills)
+  (let ((candidates (gptel-mementum-check-synthesis-candidates)))
+    (when candidates
+      (message "[mementum] Synthesis candidates found: %d" (length candidates))))
+  (message "[mementum] Weekly maintenance complete."))
+
 (provide 'gptel-tools-agent)
 
 ;;; gptel-tools-agent.el ends here

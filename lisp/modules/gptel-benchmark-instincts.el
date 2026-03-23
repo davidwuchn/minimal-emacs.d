@@ -474,8 +474,10 @@ Runs every Sunday at 00:00."
     (setq gptel-benchmark-instincts-timer nil)))
 
 (defun gptel-benchmark-instincts-weekly-job ()
-  "Weekly job: commit Eight Keys updates and apply decay."
+  "Weekly job: commit Eight Keys updates, apply decay, run mementum maintenance."
   (message "[instincts] Weekly evolution cycle starting...")
+
+  (gptel-mementum-weekly-job)
 
   (let ((files-updated (gptel-benchmark-instincts-commit-batch)))
     (when (> files-updated 0)
