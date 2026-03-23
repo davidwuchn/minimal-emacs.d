@@ -2,6 +2,40 @@
 
 > Last session: 2026-03-23
 
+## Completed (2026-03-23) — Document gptel-Agent Safety Reuse
+
+Created memory documenting safety architecture:
+
+### What We Reuse (Upstream)
+
+| Mechanism | Implementation |
+|-----------|----------------|
+| Tool confirmation | `:confirm t` on Bash, Eval, Edit, Write, etc. |
+| Confirmation UI | `gptel-agent--confirm-overlay` |
+| Web timeout | 30s via `gptel-agent--fetch-with-timeout` |
+
+### What We Added (Local)
+
+| Mechanism | Purpose |
+|-----------|---------|
+| Max steps limit | Prevent runaway loops (50 steps default) |
+| Doom-loop detection | Abort on 3 identical tool calls |
+| Payload size limits | Prevent oversized edits (1MB default) |
+| Immutable file protection | ⚠️ Planned, not yet implemented |
+
+### Key Insight
+
+```
+λ safety(x).    upstream_has(x) → reuse(x)
+                | project_specific(x) → local(x)
+```
+
+### Commits
+
+- `4a269eb` 💡 gptel-agent-safety: document reuse vs local extensions
+
+---
+
 ## Completed (2026-03-23) — Skills Standardization
 
 Aligned skill frontmatter with agentskills.io spec:
