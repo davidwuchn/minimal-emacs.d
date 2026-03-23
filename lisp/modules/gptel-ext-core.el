@@ -2,8 +2,12 @@
 
 ;;; Commentary:
 ;; Core configuration for gptel: project temp directory, markdown face compat,
-;; plain model/mode setup, default-directory, tool registry audit, curl parse
-;; hardening, and pre-serialization content sanitizer.
+;; plain model/mode setup, default-directory, tool registry audit, and
+;; pre-serialization content sanitizer.
+;;
+;; REMOVED (upstream gptel now handles):
+;;   - :null symbol filtering in stream insertion (gptel-openai.el:136-137)
+;;   - curl parse error hardening (gptel-request.el:3007-3008)
 ;;
 ;; Extracted modules (loaded separately via gptel-config.el):
 ;;   gptel-ext-streaming.el     — jit-lock protection during streaming
@@ -226,49 +230,8 @@ registered in nucleus-config."
   (define-key gptel-mode-map (kbd "C-c C-p") #'my/gptel-add-project-files)
   (define-key gptel-mode-map (kbd "C-c C-x") #'gptel-toggle-tool-profile))
 
-;; --- Filter :null from Stream Insertion ---
-;; When the model returns null as content (e.g., between reasoning and tool calls),
-;; the :null symbol may be passed to stream-insert-response and rendered as text.
-;; This advice filters out :null before insertion.
-
-(defun my/gptel--filter-null-response (response)
-  "Return RESPONSE unchanged unless it's the :null symbol.
-Returns empty string for :null to prevent literal ':null' in buffer."
-  (if (eq response :null)
-      ""
-    response))
-
-(advice-add 'gptel-curl--stream-insert-response :filter-args
-            (lambda (args)
-              (pcase-let ((`(,response ,info ,raw) args))
-                (list (my/gptel--filter-null-response response) info raw))))
-
-;; --- Curl Response Parse Hardening ---
-;; gptel uses curl's -w token marker to locate the header/body boundary.
-;; When curl fails early, the marker may be missing and gptel throws an
-;; uncaught `search-failed` from the process sentinel.  Convert this into a
-;; normal gptel error so the UI can show it and keep running.
-
-(defun my/gptel--curl-parse-response-safe (orig proc-info)
-  "Around-advice: convert uncaught errors in curl response parsing to gptel errors."
-  (condition-case err
-      (funcall orig proc-info)
-    (search-failed
-     (list nil
-           "000"
-           "(curl) Could not parse HTTP response (missing curl token marker)."
-           (format "curl token missing: %s" (error-message-string err))))
-    (error
-     (list nil
-           "000"
-           "(curl) Could not parse HTTP response (unexpected parser error)."
-           (format "curl parser error: %s" (error-message-string err))))))
-
 (with-eval-after-load 'gptel-request
-  ;; Curl hardening
-  (advice-add 'gptel-curl--parse-response :around #'my/gptel--curl-parse-response-safe)
-  ;; Pre-serialization content sanitizer
-  (advice-add 'gptel-curl--get-args       :before #'my/gptel--pre-serialize-sanitize-messages))
+  (advice-add 'gptel-curl--get-args :before #'my/gptel--pre-serialize-sanitize-messages))
 
 ;; ==============================================================================
 ;; PRE-SERIALIZATION CONTENT SANITIZER
