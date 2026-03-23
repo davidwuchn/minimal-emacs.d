@@ -58,7 +58,7 @@ Agent-driven: Read git history + optimization skills to generate hypotheses.
 
 Allowed mutation types:
 - [x] caching
-- [x] lazy-initialization
+- [x] lazy-init
 - [x] simplification
 - [ ] parallel-processing (experimental)
 

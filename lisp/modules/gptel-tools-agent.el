@@ -1101,10 +1101,17 @@ Manual: M-x gptel-auto-workflow-run"
 (defvar gptel-auto-workflow--skills nil
   "Loaded optimization skills for current run.")
 
+(defun gptel-auto-workflow--base-dir ()
+  "Return the project base directory.
+Uses `minimal-emacs-user-directory' if available, else `user-emacs-directory'."
+  (if (boundp 'minimal-emacs-user-directory)
+      minimal-emacs-user-directory
+    user-emacs-directory))
+
 (defun gptel-auto-workflow-load-program ()
   "Load and parse docs/auto-workflow-program.md."
   (let* ((file (expand-file-name gptel-auto-workflow-program-file
-                                 (expand-file-name user-emacs-directory)))
+                                 (gptel-auto-workflow--base-dir)))
          (content (when (file-exists-p file)
                     (with-temp-buffer
                       (insert-file-contents file)
@@ -1117,8 +1124,7 @@ Manual: M-x gptel-auto-workflow-run"
         (insert content)
         (goto-char (point-min))
         (when (re-search-forward "^## Targets" nil t)
-          (forward-line 2)
-          (when (looking-at "```")
+          (when (re-search-forward "^```" nil t)
             (forward-line 1)
             (while (and (not (looking-at "```")) (not (eobp)))
               (let ((line (string-trim (thing-at-point 'line t))))
@@ -1127,8 +1133,7 @@ Manual: M-x gptel-auto-workflow-run"
               (forward-line 1))))
         (goto-char (point-min))
         (when (re-search-forward "^### Immutable Files" nil t)
-          (forward-line 2)
-          (when (looking-at "```")
+          (when (re-search-forward "^```" nil t)
             (forward-line 1)
             (while (and (not (looking-at "```")) (not (eobp)))
               (let ((line (string-trim (thing-at-point 'line t))))
@@ -1139,7 +1144,7 @@ Manual: M-x gptel-auto-workflow-run"
         (when (re-search-forward "^Allowed mutation types:" nil t)
           (forward-line 1)
           (while (and (not (looking-at "^##")) (not (eobp)))
-            (when (looking-at "- \\[x\\] \\([^ ]+\\)")
+            (when (looking-at "- \\[x\\] \\([a-z-]+\\)")
               (push (match-string 1) mutations))
             (forward-line 1)))))
     (list :targets (nreverse targets)
@@ -1157,7 +1162,7 @@ Manual: M-x gptel-auto-workflow-run"
 
 (defun gptel-auto-workflow-skill-load (skill-file)
   "Load skill from SKILL-FILE."
-  (let ((file (expand-file-name skill-file (expand-file-name user-emacs-directory))))
+  (let ((file (expand-file-name skill-file (gptel-auto-workflow--base-dir))))
     (when (file-exists-p file)
       (let ((content (with-temp-buffer
                        (insert-file-contents file)
@@ -1218,7 +1223,7 @@ Manual: M-x gptel-auto-workflow-run"
 (defun gptel-auto-workflow-update-target-skill (target results)
   "Update TARGET skill file with RESULTS from night."
   (let* ((skill-file (gptel-auto-workflow-skill-path target 'target))
-         (file (expand-file-name skill-file (expand-file-name user-emacs-directory))))
+         (file (expand-file-name skill-file (gptel-auto-workflow--base-dir))))
     (when (file-exists-p file)
       (let* ((content (with-temp-buffer
                         (insert-file-contents file)
@@ -1316,7 +1321,7 @@ Manual: M-x gptel-auto-workflow-run"
   "Update MUTATION-TYPE skill file with ALL-RESULTS."
   (let* ((skill-file (format "%s/mutations/%s.md"
                              gptel-auto-workflow-skills-dir mutation-type))
-         (file (expand-file-name skill-file (expand-file-name user-emacs-directory))))
+         (file (expand-file-name skill-file (gptel-auto-workflow--base-dir))))
     (when (file-exists-p file)
       (let* ((content (with-temp-buffer
                         (insert-file-contents file)
@@ -1371,7 +1376,7 @@ Manual: M-x gptel-auto-workflow-run"
 (defun gptel-auto-workflow-metabolize (run-id all-results)
   "Synthesize RUN-ID ALL-RESULTS to mementum + evolve skills."
   (let ((memory-dir (expand-file-name "mementum/memories"
-                                       (expand-file-name user-emacs-directory)))
+                                       (gptel-auto-workflow--base-dir)))
         (by-target (make-hash-table :test 'equal)))
     (make-directory memory-dir t)
     (let ((file (expand-file-name (format "auto-workflow-%s.md" run-id) memory-dir)))
@@ -1449,9 +1454,9 @@ Manual: M-x gptel-auto-workflow-run-autonomous"
   "Build recall index from all knowledge files.
 Creates .index file with topic → file mapping for O(1) lookup."
   (let* ((index-file (expand-file-name gptel-mementum-index-file
-                                        (expand-file-name user-emacs-directory)))
+                                        (gptel-auto-workflow--base-dir)))
          (knowledge-dir (expand-file-name "mementum/knowledge"
-                                          (expand-file-name user-emacs-directory)))
+                                          (gptel-auto-workflow--base-dir)))
          (index (make-hash-table :test 'equal)))
     (when (file-exists-p knowledge-dir)
       (dolist (file (directory-files-recursively knowledge-dir "\\.md$"))
@@ -1479,7 +1484,7 @@ Creates .index file with topic → file mapping for O(1) lookup."
   "Quick lookup for QUERY in recall index.
 Returns list of matching files."
   (let* ((index-file (expand-file-name gptel-mementum-index-file
-                                        (expand-file-name user-emacs-directory)))
+                                        (gptel-auto-workflow--base-dir)))
          (result '()))
     (when (file-exists-p index-file)
       (with-temp-buffer
@@ -1491,7 +1496,7 @@ Returns list of matching files."
     (or result
         (progn
           (message "[mementum] Index miss, using git grep for: %s" query)
-          (let ((default-directory (expand-file-name user-emacs-directory)))
+          (let ((default-directory (gptel-auto-workflow--base-dir)))
             (split-string
              (shell-command-to-string
               (format "git grep -l '%s' -- mementum/knowledge/ 2>/dev/null || true" query))
@@ -1501,9 +1506,9 @@ Returns list of matching files."
   "Apply decay to skill files not tested in 4+ weeks.
 Run weekly via cron."
   (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
-                                        (expand-file-name user-emacs-directory)))
+                                        (gptel-auto-workflow--base-dir)))
          (mutations-dir (expand-file-name "mementum/knowledge/mutations"
-                                          (expand-file-name user-emacs-directory)))
+                                          (gptel-auto-workflow--base-dir)))
          (now (float-time))
          (four-weeks (* 4 7 24 60 60))
          (decayed 0)
@@ -1544,7 +1549,7 @@ Run weekly via cron."
   "Check for topics with ≥3 memories and suggest synthesis.
 Returns list of synthesis candidates."
   (let* ((memories-dir (expand-file-name "mementum/memories"
-                                          (expand-file-name user-emacs-directory)))
+                                          (gptel-auto-workflow--base-dir)))
          (by-topic (make-hash-table :test 'equal))
          (candidates '()))
     (when (file-exists-p memories-dir)
