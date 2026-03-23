@@ -649,8 +649,9 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
   :type 'directory
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-time-budget 600
-  "Time budget per experiment in seconds (default: 10 min)."
+(defcustom gptel-auto-experiment-time-budget 900
+  "Time budget per experiment in seconds (default: 15 min).
+Should be >= curl timeout (300s) + retry delays."
   :type 'integer
   :group 'gptel-tools-agent)
 
@@ -666,6 +667,12 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 
 (defcustom gptel-auto-experiment-use-subagents t
   "Use analyzer/grader/comparator subagents."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-experiment-mock-mode nil
+  "When non-nil, mock subagent responses for testing.
+Useful for testing callback chain without API calls."
   :type 'boolean
   :group 'gptel-tools-agent)
 
@@ -924,7 +931,93 @@ HYPOTHESIS: [your hypothesis here]"
                                               (list :target target
                                                     :id experiment-id
                                                     :error "timeout"))))))
-           (my/gptel--run-agent-tool
+           (if gptel-auto-experiment-mock-mode
+               (run-with-timer 1 nil
+                               (lambda ()
+                                 (let ((mock-output (format "HYPOTHESIS: Mock optimization for %s\n\nThis is a mock response for testing the callback chain." target)))
+                                   (message "[auto-exp] MOCK MODE: simulating agent response")
+                                   (when timeout-timer (cancel-timer timeout-timer))
+                                   (unless finished
+                                     (message "[auto-exp] Step 2 DONE (mock): %d chars" (length mock-output))
+                                     (gptel-auto-experiment-grade
+                                      mock-output
+                                      (lambda (grade)
+                                        (message "[auto-exp] Step 3 DONE: grade=%S passed=%S"
+                                                 (plist-get grade :score) (plist-get grade :passed))
+                                        (let* ((grade-score (plist-get grade :score))
+                                               (grade-passed (plist-get grade :passed))
+                                               (hypothesis (gptel-auto-experiment--extract-hypothesis mock-output)))
+                                          (if (not grade-passed)
+                                              (progn
+                                                (message "[auto-exp] Early discard (grade failed)")
+                                                (setq finished t)
+                                                (gptel-auto-workflow-delete-worktree)
+                                                (let ((exp-result (list :target target
+                                                                        :id experiment-id
+                                                                        :hypothesis hypothesis
+                                                                        :score-before baseline
+                                                                        :score-after 0
+                                                                        :kept nil
+                                                                        :duration (- (float-time) start-time)
+                                                                        :grader-quality grade-score
+                                                                        :grader-reason "mock-grade-failed"
+                                                                        :comparator-reason "early-discard"
+                                                                        :analyzer-patterns "mock"))))
+                                                  (gptel-auto-experiment-log-tsv
+                                                   (format-time-string "%Y-%m-%d") exp-result)
+                                                  (funcall callback exp-result)))
+                                            (message "[auto-exp] Step 4: Running benchmark...")
+                                            (let* ((bench (gptel-auto-experiment-benchmark))
+                                                   (passed (plist-get bench :passed))
+                                                   (score-after (or (plist-get bench :eight-keys) baseline)))
+                                              (message "[auto-exp] Step 4 DONE: passed=%S score=%S" passed score-after)
+                                              (if (not passed)
+                                                  (progn
+                                                    (message "[auto-exp] Tests failed, discarding")
+                                                    (setq finished t)
+                                                    (magit-git-success "checkout" "--" ".")
+                                                    (gptel-auto-workflow-delete-worktree)
+                                                    (let ((exp-result (list :target target
+                                                                            :id experiment-id
+                                                                            :hypothesis hypothesis
+                                                                            :score-before baseline
+                                                                            :score-after 0
+                                                                            :kept nil
+                                                                            :duration (- (float-time) start-time)
+                                                                            :grader-quality grade-score
+                                                                            :grader-reason "mock"
+                                                                            :comparator-reason "tests-failed"
+                                                                            :analyzer-patterns "mock"))))
+                                                      (gptel-auto-experiment-log-tsv
+                                                       (format-time-string "%Y-%m-%d") exp-result)
+                                                      (funcall callback exp-result)))
+                                                (message "[auto-exp] Step 5: Deciding keep/discard...")
+                                                (gptel-auto-experiment-decide
+                                                 (list :score baseline)
+                                                 (list :score score-after :output mock-output)
+                                                 (lambda (decision)
+                                                   (message "[auto-exp] Step 5 DONE: keep=%S" (plist-get decision :keep))
+                                                   (setq finished t)
+                                                   (let* ((keep (plist-get decision :keep))
+                                                          (reasoning (plist-get decision :reasoning))
+                                                          (exp-result (list :target target
+                                                                            :id experiment-id
+                                                                            :hypothesis hypothesis
+                                                                            :score-before baseline
+                                                                            :score-after score-after
+                                                                            :kept keep
+                                                                            :duration (- (float-time) start-time)
+                                                                            :grader-quality grade-score
+                                                                            :grader-reason "mock"
+                                                                            :comparator-reason reasoning
+:analyzer-patterns "mock")))
+                                                      (message "[auto-exp] Logging TSV (final)...")
+                                                      (gptel-auto-experiment-log-tsv
+                                                       (format-time-string "%Y-%m-%d") exp-result)
+                                                      (gptel-auto-workflow-delete-worktree)
+                                                      (message "[auto-exp] Experiment %d COMPLETE (mock)" experiment-id)
+                                                      (funcall callback exp-result)))))))))))))
+            (my/gptel--run-agent-tool
             (lambda (agent-output)
               (message "[auto-exp] Step 2 DONE: agent returned %d chars" (length agent-output))
               (when timeout-timer (cancel-timer timeout-timer))
@@ -1070,6 +1163,69 @@ HYPOTHESIS: [your hypothesis here]"
                        (push result gptel-auto-experiment--results)
                        (run-next (1+ exp-id)))))))
       (run-next 1))))
+
+;;; Mock Test (no API)
+
+(defun gptel-auto-experiment-test-mock ()
+  "Test the experiment callback chain with mocked responses.
+Does not call the API. Useful for verifying TSV logging and cleanup."
+  (interactive)
+  (let* ((target "lisp/modules/gptel-ext-retry.el")
+         (worktree (gptel-auto-workflow-create-worktree target 1))
+         (start-time (float-time))
+         (mock-output "HYPOTHESIS: Add caching to gptel-auto-experiment-benchmark to avoid redundant git calls.\n\nI will add a cache variable and memoize the benchmark results.")
+         (baseline 0.5)
+         (result nil))
+    (if (not worktree)
+        (message "[mock-test] Failed to create worktree")
+      (unwind-protect
+          (progn
+            (message "[mock-test] Worktree created: %s" worktree)
+            (message "[mock-test] Simulating grade step...")
+            (let* ((hypothesis (gptel-auto-experiment--extract-hypothesis mock-output))
+                   (grade (list :score 85 :passed t))
+                   (bench (gptel-auto-experiment-benchmark))
+                   (score-after (or (plist-get bench :eight-keys) baseline)))
+              (message "[mock-test] Hypothesis: %s" hypothesis)
+              (message "[mock-test] Grade: score=%S passed=%S" 
+                       (plist-get grade :score) (plist-get grade :passed))
+              (message "[mock-test] Benchmark: passed=%S score=%S" 
+                       (plist-get bench :passed) score-after)
+              (message "[mock-test] Simulating decide step...")
+              (let* ((keep (> score-after baseline))
+                     (decision (list :keep keep :reasoning "Mock decision"))
+                     (exp-result (list :target target
+                                       :id 1
+                                       :hypothesis hypothesis
+                                       :score-before baseline
+                                       :score-after score-after
+                                       :kept keep
+                                       :duration (- (float-time) start-time)
+                                       :grader-quality (plist-get grade :score)
+                                       :grader-reason "Mock grader"
+                                       :comparator-reason (plist-get decision :reasoning)
+                                       :analyzer-patterns "mock patterns")))
+                (message "[mock-test] Decision: keep=%S" keep)
+                (message "[mock-test] Logging TSV...")
+                (gptel-auto-experiment-log-tsv (format-time-string "%Y-%m-%d") exp-result)
+                (setq result exp-result)
+                (message "[mock-test] SUCCESS! Result: %S" result))))
+        (progn
+          (message "[mock-test] Cleaning up worktree...")
+          (gptel-auto-workflow-delete-worktree)))
+      result)))
+
+(defun gptel-auto-experiment-test-full-cycle ()
+  "Test the full experiment cycle with mock mode enabled.
+Runs gptel-auto-experiment-run with mocked subagent response."
+  (interactive)
+  (let ((gptel-auto-experiment-mock-mode t)
+        (gptel-auto-experiment-max-per-target 1)
+        (gptel-auto-experiment-use-subagents nil))
+    (gptel-auto-experiment-loop
+     "lisp/modules/gptel-ext-retry.el"
+     (lambda (results)
+       (message "[full-cycle-test] COMPLETE! Results: %S" results)))))
 
 ;;; Main Entry Point
 
