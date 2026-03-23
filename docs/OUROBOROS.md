@@ -2217,15 +2217,16 @@ Research Advice → Benchmark Test → Auto-Evolve Detects → Improvement
 
 ## Benchmark Tests to Add
 
-### Test 1: Progressive Disclosure
+### Test 1: Progressive Disclosure (via gptel-agent)
 
 ```elisp
 (defun gptel-workflow-benchmark--test-progressive-disclosure ()
-  "Test that skills-list/skill-view exist and work.
-Level 0: skills-list returns metadata (< 1000 tokens)
-Level 1: skill-view loads full content"
-  (let ((level-0-pass (fboundp 'skills-list))
-        (level-1-pass (fboundp 'skill-view)))
+  "Test that gptel-agent provides progressive disclosure.
+Level 0: Skills in system prompt via {{SKILLS}} template
+Level 1: Skill tool loads SKILL.md"
+  (let ((level-0-pass (and (boundp 'gptel-agent--skills)
+                           (hash-table-p gptel-agent--skills)))
+        (level-1-pass (fboundp 'gptel-agent--get-skill)))
     (list :test "progressive-disclosure"
           :level-0 level-0-pass
           :level-1 level-1-pass
