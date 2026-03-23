@@ -60,14 +60,18 @@ Workflow:
 
 | Preset | Use When | Example |
 |--------|----------|---------|
+| `@frame-problem` | Scope the problem first | Unclear requirements |
+| `@research-deep` | Explore codebase | Understand architecture |
+| `@design-options` | Explore solution options | Compare approaches |
+| `@spec-planning` | Architecture/planning | Design new module |
 | `@tdd-dev` | New feature with tests | API endpoint + unit tests |
 | `@quick-fix` | Simple code change | One-liner bug fix |
 | `@thorough-debug` | Complex bug investigation | Multi-file race condition |
 | `@quick-review` | Fast code review | PR sanity check |
 | `@deep-review` | Thorough code review | Security audit |
-| `@research-deep` | Explore codebase | Understand architecture |
 | `@mentor-learn` | Learn/explain concepts | How does X work? |
-| `@spec-planning` | Architecture/planning | Design new module |
+
+**Workflow Pipeline:** `@frame-problem` → `@research-deep` → `@design-options` → `@spec-planning` → `@tdd-dev`
 
 **Constraint Bundles** (add ONE for tech stack):
 
@@ -89,6 +93,9 @@ Workflow:
 
 **Examples:**
 ```
+**Next Step:** @frame-problem — Requirements unclear, need to scope
+**Next Step:** @research-deep @clojure-stack — Understand core namespace architecture
+**Next Step:** @design-options @rust-stack — Compare parser implementations
 **Next Step:** @tdd-dev @rust-stack — New parser module with safety tests
 **Next Step:** @thorough-debug @python-stack — Race condition in async handler
 **Next Step:** @quick-fix — Typo in error message
