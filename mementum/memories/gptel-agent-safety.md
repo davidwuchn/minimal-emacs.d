@@ -79,16 +79,17 @@ We reuse gptel-agent's confirmation and timeout mechanisms directly. Local exten
 
 **Why local:** Defensive pattern, not in upstream.
 
-### 3. Immutable File Protection
+### 3. Tool Permits System (`gptel-ext-tool-permits.el`)
 
-**Purpose:** Protect critical files from AI modification.
+**Purpose:** Session-scoped tool approval memory.
 
-**Status:** ⚠️ **NOT YET IMPLEMENTED** (Gap #10)
+**Modes:**
+- `auto` — No confirmation (trusted)
+- `confirm-all` — Every tool requires approval
 
-**Planned:**
-- `constraints.md` defining immutable/modifiable files
-- `my/gptel-can-modify-p` function
-- Hook into Write/Edit/Insert tools
+**Emergency:** `my/gptel-emergency-stop` aborts all requests, clears permits.
+
+**Why local:** Not in upstream.
 
 ### 4. Payload Size Limits
 
@@ -104,6 +105,19 @@ We reuse gptel-agent's confirmation and timeout mechanisms directly. Local exten
 
 **Why local:** Project-specific threshold.
 
+### 5. ~~Immutable File Protection~~ NOT NEEDED
+
+**Why NOT implemented:**
+
+1. **User choice** — Auto mode is intentional. User wants speed.
+2. **Sandbox covers it** — Plan mode has Bash whitelist, Eval blacklist
+3. **Permit system** — Confirm-all mode requires approval
+4. **Git is memory** — Can revert any accidental change
+5. **Emergency stop** — `my/gptel-emergency-stop` for disasters
+6. **Workspace boundary** — Already blocks out-of-workspace modifications
+
+**Conclusion:** Sandbox + permit system provides sufficient architectural safety. If user wants protection, they use confirm-all mode.
+
 ---
 
 ## Decision Matrix
@@ -115,8 +129,9 @@ We reuse gptel-agent's confirmation and timeout mechanisms directly. Local exten
 | Web timeout (30s) | ✅ | — | Upstream provides |
 | Max steps limit | ❌ | ✅ | Project-specific |
 | Doom-loop detection | ❌ | ✅ | Defensive pattern |
-| Immutable file protection | ❌ | ⚠️ Planned | Project-specific |
+| Tool permits system | ❌ | ✅ | Session-scoped approval |
 | Payload size limits | ❌ | ✅ | Project-specific |
+| Immutable file protection | — | ❌ NOT NEEDED | Sandbox + permits sufficient |
 
 ---
 
@@ -127,6 +142,7 @@ We reuse gptel-agent's confirmation and timeout mechanisms directly. Local exten
                 | project_specific(x) ∨ defensive(x) → local(x)
                 | confirm(t) ∧ timeout(x) → upstream
                 | limit(x) ∧ threshold(x) → local
+                | immutable(x) → ¬needed(sandbox ∧ permits ∧ git ∧ emergency_stop)
 ```
 
 ---
@@ -138,7 +154,8 @@ We reuse gptel-agent's confirmation and timeout mechanisms directly. Local exten
 | Max steps as tool property | High | Low (~10 lines) | Consider PR |
 | Payload size limit | Medium | Low (~5 lines) | Consider PR |
 | Doom-loop detection | Medium | Low (~20 lines) | Keep local (opinionated) |
-| Immutable file protection | High | Medium | Keep local (config-heavy) |
+| Tool permits system | Medium | Medium (~50 lines) | Keep local (UX preference) |
+| Immutable file protection | — | — | NOT NEEDED |
 
 ---
 
