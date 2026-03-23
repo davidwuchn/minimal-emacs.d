@@ -435,30 +435,34 @@ FILES are validated against project root for security."
 ;;; Subagent Functions
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
-  "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
+  "Run agent AGENT-TYPE with CALLBACK, adding timeout and progress messages.
 
-CALLBACK is called with the result or a timeout error."
+Uses gptel-with-preset + gptel-request instead of gptel-agent--task
+for better compatibility with DashScope backend."
   (let* ((done nil)
          (timeout-timer nil)
          (progress-timer nil)
          (start-time (current-time))
-         (parent-fsm (buffer-local-value 'gptel--fsm-last (current-buffer)))
          (origin-buf (current-buffer))
          (packaged-prompt (my/gptel--build-subagent-context prompt files include-history include-diff origin-buf))
+         (agent-config (cdr (assoc agent-type gptel-agent--agents)))
+         (accumulated-result nil)
          (wrapped-cb
-          (lambda (result)
-            (unless done
+          (lambda (result info)
+            (when (stringp result)
+              (setq accumulated-result (concat (or accumulated-result "") result)))
+            (when (and (not done) (stringp result) (not (plist-get info :tool-use)))
               (setq done t)
               (when (timerp timeout-timer) (cancel-timer timeout-timer))
               (when (timerp progress-timer) (cancel-timer progress-timer))
               (message "[nucleus] Subagent '%s' completed in %.1fs, result-len=%d"
                        agent-type (float-time (time-since start-time))
-                       (if (stringp result) (length result) 0))
-              ;; Restore FSM state in origin buffer only.
-              (when (buffer-live-p origin-buf)
-                (with-current-buffer origin-buf
-                  (setq-local gptel--fsm-last parent-fsm)))
-              (funcall callback result)))))
+                       (length accumulated-result))
+              (funcall callback accumulated-result)))))
+
+    (unless agent-config
+      (funcall callback (format "Error: unknown agent '%s'" agent-type))
+      (cl-return-from my/gptel--agent-task-with-timeout))
 
     (message "[nucleus] Delegating to subagent '%s'%s..."
              agent-type
@@ -484,22 +488,17 @@ CALLBACK is called with the result or a timeout error."
                  (when (timerp progress-timer) (cancel-timer progress-timer))
                  (message "[nucleus] Subagent '%s' timed out after %ds"
                           agent-type my/gptel-agent-task-timeout)
-                 ;; Restore FSM state in origin buffer only.
-                 (when (buffer-live-p origin-buf)
-                   (with-current-buffer origin-buf
-                     (setq-local gptel--fsm-last parent-fsm)))
                  (funcall callback
                           (format "Error: Task \"%s\" (%s) timed out after %ds."
                                   description agent-type my/gptel-agent-task-timeout)))))))
 
-    ;; Use unwind-protect to guarantee FSM restoration on synchronous errors.
-    ;; Async callbacks handle their own FSM restoration.
-    (unwind-protect
-        (gptel-agent--task wrapped-cb agent-type description packaged-prompt)
-      ;; Cleanup on synchronous error (async errors handled in wrapped-cb)
-      (when (and (not done) (buffer-live-p origin-buf))
-        (with-current-buffer origin-buf
-          (setq-local gptel--fsm-last parent-fsm))))))
+    (condition-case err
+        (gptel-with-preset agent-config
+          (gptel-request packaged-prompt
+            :callback wrapped-cb))
+      (error
+       (message "[nucleus] gptel-request ERROR: %S" err)
+       (funcall callback (format "Error: %S" err))))))
 
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.
