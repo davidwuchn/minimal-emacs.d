@@ -905,18 +905,19 @@ HYPOTHESIS: [your hypothesis here]"
          (result nil))
     (if (not worktree)
         (funcall callback (list :target target :error "Failed to create worktree"))
-      ;; Step 1: Analyze previous results
+      (message "[auto-exp] Step 1: Analyzing previous results...")
       (gptel-auto-experiment-analyze
        previous-results
        (lambda (analysis)
          (let* ((patterns (when analysis (plist-get analysis :patterns)))
                 (prompt (gptel-auto-experiment-build-prompt
                          target experiment-id max-experiments analysis baseline)))
-           ;; Step 2: Run code agent with timeout
+           (message "[auto-exp] Step 2: Running executor with %ds timeout..." gptel-auto-experiment-time-budget)
            (setq timeout-timer
                  (run-with-timer gptel-auto-experiment-time-budget nil
                                  (lambda ()
                                    (unless finished
+                                     (message "[auto-exp] TIMEOUT after %ds" gptel-auto-experiment-time-budget)
                                      (setq finished t)
                                      (gptel-auto-workflow-delete-worktree)
                                      (funcall callback
@@ -925,18 +926,21 @@ HYPOTHESIS: [your hypothesis here]"
                                                     :error "timeout"))))))
            (my/gptel--run-agent-tool
             (lambda (agent-output)
+              (message "[auto-exp] Step 2 DONE: agent returned %d chars" (length agent-output))
               (when timeout-timer (cancel-timer timeout-timer))
               (unless finished
-                ;; Step 3: Grade output (LLM decides threshold)
+                (message "[auto-exp] Step 3: Grading output...")
                 (gptel-auto-experiment-grade
                  agent-output
                  (lambda (grade)
+                   (message "[auto-exp] Step 3 DONE: grade=%S passed=%S" 
+                            (plist-get grade :score) (plist-get grade :passed))
                    (let* ((grade-score (plist-get grade :score))
                           (grade-passed (plist-get grade :passed))
                           (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
                      (if (not grade-passed)
-                         ;; Early discard
                          (progn
+                           (message "[auto-exp] Early discard (grade failed)")
                            (setq finished t)
                            (gptel-auto-workflow-delete-worktree)
                            (let ((exp-result (list :target target
@@ -950,16 +954,18 @@ HYPOTHESIS: [your hypothesis here]"
                                                    :grader-reason (plist-get grade :details)
                                                    :comparator-reason "early-discard"
                                                    :analyzer-patterns (format "%s" patterns))))
+                             (message "[auto-exp] Logging TSV (early-discard)...")
                              (gptel-auto-experiment-log-tsv
                               (format-time-string "%Y-%m-%d") exp-result)
                              (funcall callback exp-result)))
-                       ;; Step 4: Run benchmark
+                       (message "[auto-exp] Step 4: Running benchmark...")
                        (let* ((bench (gptel-auto-experiment-benchmark))
                               (passed (plist-get bench :passed))
                               (score-after (plist-get bench :eight-keys)))
+                         (message "[auto-exp] Step 4 DONE: passed=%S score=%S" passed score-after)
                          (if (not passed)
-                             ;; Tests failed
                              (progn
+                               (message "[auto-exp] Tests failed, discarding")
                                (setq finished t)
                                (magit-git-success "checkout" "--" ".")
                                (gptel-auto-workflow-delete-worktree)
@@ -974,14 +980,16 @@ HYPOTHESIS: [your hypothesis here]"
                                                        :grader-reason (plist-get grade :details)
                                                        :comparator-reason "tests-failed"
                                                        :analyzer-patterns (format "%s" patterns))))
+                                 (message "[auto-exp] Logging TSV (tests-failed)...")
                                  (gptel-auto-experiment-log-tsv
                                   (format-time-string "%Y-%m-%d") exp-result)
                                  (funcall callback exp-result)))
-                           ;; Step 5: Compare (decide keep/discard)
+                           (message "[auto-exp] Step 5: Deciding keep/discard...")
                            (gptel-auto-experiment-decide
                             (list :score baseline)
                             (list :score score-after :output agent-output)
                             (lambda (decision)
+                              (message "[auto-exp] Step 5 DONE: keep=%S" (plist-get decision :keep))
                               (setq finished t)
                               (let* ((keep (plist-get decision :keep))
                                      (reasoning (plist-get decision :reasoning))
@@ -997,24 +1005,26 @@ HYPOTHESIS: [your hypothesis here]"
                                                        :comparator-reason reasoning
                                                        :analyzer-patterns (format "%s" patterns))))
                                 (if keep
-                                    ;; Commit
                                     (let ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\nExperiment %d/%d. Score: %.2f → %.2f"
                                                        target
                                                        (gptel-auto-experiment--summarize hypothesis)
                                                        hypothesis
                                                        experiment-id max-experiments
                                                        baseline score-after)))
+                                      (message "[auto-exp] KEEPING changes, committing...")
                                       (magit-git-success "add" "-A")
                                       (magit-git-success "commit" "-m" msg)
                                       (setq gptel-auto-experiment--best-score score-after
                                             gptel-auto-experiment--no-improvement-count 0))
-                                  ;; Discard
                                   (progn
+                                    (message "[auto-exp] DISCARDING changes")
                                     (magit-git-success "checkout" "--" ".")
                                     (cl-incf gptel-auto-experiment--no-improvement-count)))
+                                (message "[auto-exp] Logging TSV (final)...")
                                 (gptel-auto-experiment-log-tsv
                                  (format-time-string "%Y-%m-%d") exp-result)
                                 (gptel-auto-workflow-delete-worktree)
+                                (message "[auto-exp] Experiment %d COMPLETE" experiment-id)
                                 (funcall callback exp-result))))))))))))
             "executor"
             (format "Experiment %d: optimize %s" experiment-id target)
