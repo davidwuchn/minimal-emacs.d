@@ -2,7 +2,11 @@
 name: clojure-expert
 description: Writing/generating Clojure code with REPL-first methodology. Use when Clojure REPL tools available.
 version: 2.0.0
-λ: write.repl.test.save
+summary: Write idiomatic Clojure using REPL-first development with verification gates.
+author: David Wu
+license: MIT
+triggers: ["clojure", "repl", "clj", "cljs"]
+lambda: write.repl.test.save
 depends: mementum/knowledge/clojure-protocol.md
 ---
 

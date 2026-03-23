@@ -5,7 +5,11 @@ description: >
   Use this as starting point for new skills.
   Modify name, description, and content for your use case.
 version: 1.0.0
-λ: template.example
+summary: Template for creating new skills with best practices and structure.
+author: Your Name
+license: MIT
+triggers: ["template", "example"]
+lambda: template.example
 ---
 
 # Template Skill

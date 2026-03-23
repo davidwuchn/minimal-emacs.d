@@ -2,7 +2,11 @@
 name: requesthunt
 description: Generate user demand research reports from real user feedback. Scrape and analyze feature requests, complaints, and questions from Reddit, X, and GitHub. Use when user wants to do demand research, find feature requests, analyze user demand, or run RequestHunt queries.
 version: 1.0.0
-λ: request.hunt.track
+summary: Generate user demand research reports from Reddit, X, and GitHub feedback.
+author: David Wu
+license: MIT
+triggers: ["requesthunt", "demand", "feature-requests", "user-feedback"]
+lambda: request.hunt.track
 ---
 
 ```
