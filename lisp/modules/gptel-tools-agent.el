@@ -622,12 +622,16 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 (declare-function magit-worktree-branch "magit-worktree")
 (declare-function magit-worktree-delete "magit-worktree")
 (declare-function magit-git-success "magit-git")
+(declare-function gptel-benchmark-analyze "gptel-benchmark-subagent")
+(declare-function gptel-benchmark-grade "gptel-benchmark-subagent")
+(declare-function gptel-benchmark-compare "gptel-benchmark-subagent")
+(declare-function gptel-benchmark-eight-keys-score "gptel-benchmark-principles")
+
+;;; Configuration
 
 (defcustom gptel-auto-workflow-targets
   '("gptel-ext-retry.el" "gptel-ext-context.el" "gptel-tools-code.el")
-  "Target files for scheduled auto-workflow runs.
-Each target will be optimized following docs/auto-workflow.md.
-Used by `gptel-auto-workflow-run'."
+  "Target files for scheduled auto-workflow runs."
   :type '(repeat string)
   :group 'gptel-tools-agent)
 
@@ -636,35 +640,54 @@ Used by `gptel-auto-workflow-run'."
   :type 'directory
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-workflow-max-retries 1
-  "Maximum retries per target when tests fail."
+(defcustom gptel-auto-experiment-time-budget 900
+  "Time budget per experiment in seconds (default: 15 min)."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defvar gptel-auto-workflow--worktree-dir nil
-  "Current worktree directory for auto-workflow run.")
+(defcustom gptel-auto-experiment-max-per-target 10
+  "Maximum experiments per target."
+  :type 'integer
+  :group 'gptel-tools-agent)
 
-(defvar gptel-auto-workflow--current-branch nil
-  "Current branch name for auto-workflow run.")
+(defcustom gptel-auto-experiment-no-improvement-threshold 3
+  "Stop after N consecutive no-improvements."
+  :type 'integer
+  :group 'gptel-tools-agent)
 
-(defun gptel-auto-workflow--branch-name (target)
-  "Generate meaningful branch name for TARGET.
-e.g. gptel-ext-retry.el → optimize/retry-async-handling"
+(defcustom gptel-auto-experiment-use-subagents t
+  "Use analyzer/grader/comparator subagents."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
+;;; State
+
+(defvar gptel-auto-workflow--worktree-dir nil)
+(defvar gptel-auto-workflow--current-branch nil)
+(defvar gptel-auto-experiment--results nil)
+(defvar gptel-auto-experiment--best-score nil)
+(defvar gptel-auto-experiment--no-improvement-count 0)
+
+;;; Worktree Management
+
+(defun gptel-auto-workflow--branch-name (target &optional experiment-id)
+  "Generate branch name for TARGET. Optional EXPERIMENT-ID for experiments."
   (let* ((basename (file-name-sans-extension (file-name-nondirectory target)))
-         (parts (split-string basename "-"))
-         (name (string-join (last parts 1) "-")))
-    (format "optimize/%s" name)))
+         (name (car (last (split-string basename "-")))))
+    (if experiment-id
+        (format "optimize/%s-exp%d" name experiment-id)
+      (format "optimize/%s" name))))
 
-(defun gptel-auto-workflow-create-worktree (target)
-  "Create worktree for TARGET. Return worktree directory or nil."
-  (let* ((branch (gptel-auto-workflow--branch-name target))
+(defun gptel-auto-workflow-create-worktree (target &optional experiment-id)
+  "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch."
+  (let* ((branch (gptel-auto-workflow--branch-name target experiment-id))
          (worktree-dir (expand-file-name
                         (format "%s/%s" gptel-auto-workflow-worktree-base branch))))
     (condition-case err
         (progn
           (make-directory (file-name-directory worktree-dir) t)
           (magit-worktree-branch worktree-dir branch "main")
-          (message "[auto-workflow] Created branch: %s" branch)
+          (message "[auto-workflow] Created: %s" branch)
           (setq gptel-auto-workflow--worktree-dir worktree-dir
                 gptel-auto-workflow--current-branch branch)
           worktree-dir)
@@ -683,173 +706,373 @@ e.g. gptel-ext-retry.el → optimize/retry-async-handling"
     (setq gptel-auto-workflow--worktree-dir nil
           gptel-auto-workflow--current-branch nil)))
 
-(defun gptel-auto-workflow-benchmark ()
-  "Run nucleus verification. Return plist with :passed and :time."
-  (let ((start (float-time))
-        (default-directory (or gptel-auto-workflow--worktree-dir
-                               (expand-file-name user-emacs-directory))))
-    (message "[auto-workflow] Running tests...")
-    (let ((exit-code (call-process "bash" nil nil nil
-                                   (expand-file-name "scripts/verify-nucleus.sh"
-                                                     (expand-file-name user-emacs-directory)))))
-      (list :passed (zerop exit-code)
-            :time (- (float-time) start)))))
+;;; Benchmark & Evaluation
 
-(defun gptel-auto-workflow-commit (target)
-  "Commit changes for TARGET with proper message format."
-  (let ((msg (format "◈ Optimize %s" target))
-        (default-directory (or gptel-auto-workflow--worktree-dir
-                               (expand-file-name user-emacs-directory))))
-    (when (magit-git-success "add" "-A")
-      (when (magit-git-success "commit" "-m" msg)
-        (message "[auto-workflow] Committed: %s" msg)
-        t))))
+(defun gptel-auto-experiment-benchmark ()
+  "Run nucleus verification + Eight Keys scoring."
+  (let* ((start (float-time))
+         (default-directory (or gptel-auto-workflow--worktree-dir
+                                (expand-file-name user-emacs-directory)))
+         (verify-result (call-process "bash" nil nil nil
+                                      (expand-file-name "scripts/verify-nucleus.sh"
+                                                        (expand-file-name user-emacs-directory)))))
+    (list :passed (zerop verify-result)
+          :time (- (float-time) start)
+          :eight-keys (when (zerop verify-result)
+                        (gptel-auto-experiment--eight-keys-score)))))
 
-(defun gptel-auto-workflow-save-metrics (run-id results)
-  "Save RUN-ID RESULTS to JSON file."
+(defun gptel-auto-experiment--eight-keys-score ()
+  "Get Eight Keys overall score from current codebase."
+  (when (fboundp 'gptel-benchmark-eight-keys-score)
+    (let* ((output (shell-command-to-string
+                    (format "cd %s && git diff HEAD~1 --stat 2>/dev/null || echo 'no changes'"
+                            (or gptel-auto-workflow--worktree-dir
+                                (expand-file-name user-emacs-directory)))))
+           (scores (gptel-benchmark-eight-keys-score output)))
+      (alist-get 'overall scores))))
+
+;;; Subagent Integrations
+
+(defun gptel-auto-experiment-analyze (previous-results callback)
+  "Analyze patterns from PREVIOUS-RESULTS. Call CALLBACK with analysis."
+  (if (and gptel-auto-experiment-use-subagents
+           (fboundp 'gptel-benchmark-analyze)
+           previous-results)
+      (gptel-benchmark-analyze
+       previous-results
+       "Experiment patterns"
+       callback)
+    (funcall callback nil)))
+
+(defun gptel-auto-experiment-grade (output callback)
+  "Grade experiment OUTPUT. LLM decides quality threshold."
+  (if (and gptel-auto-experiment-use-subagents
+           (fboundp 'gptel-benchmark-grade))
+      (gptel-benchmark-grade
+       output
+       '("hypothesis clearly stated"
+         "change is minimal"
+         "tests mentioned")
+       '("large refactor"
+         "changed security files"
+         "no hypothesis")
+       callback)
+    (funcall callback (list :score 100 :passed t))))
+
+(defun gptel-auto-experiment-decide (before after callback)
+  "Compare BEFORE vs AFTER. CALLBACK receives keep/discard decision with reasoning."
+  (if (and gptel-auto-experiment-use-subagents
+           (fboundp 'gptel-benchmark-compare))
+      (gptel-benchmark-compare
+       before after
+       "Experiment comparison"
+       (lambda (result)
+         (let* ((winner (plist-get result :winner))
+                (keep (string= winner "B"))
+                (analysis (plist-get result :analysis))
+                (rec (plist-get result :recommendation)))
+           (funcall callback
+                    (list :keep keep
+                          :reasoning rec
+                          :analysis analysis
+                          :improvement (plist-get result :improvement))))))
+    (let ((score-before (plist-get before :score))
+          (score-after (plist-get after :score)))
+      (funcall callback
+               (list :keep (> score-after score-before)
+                     :reasoning (format "Score: %.2f → %.2f" score-before score-after)
+                     :improvement (list :score (- score-after score-before)))))))
+
+;;; Prompt Building
+
+(defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline)
+  "Build prompt for experiment EXPERIMENT-ID on TARGET."
+  (let* ((git-history (shell-command-to-string
+                       (format "cd %s && git log --oneline -20 2>/dev/null || echo 'no history'"
+                               (or gptel-auto-workflow--worktree-dir
+                                   (expand-file-name user-emacs-directory)))))
+         (patterns (when analysis (plist-get analysis :patterns)))
+         (suggestions (when analysis (plist-get analysis :recommendations))))
+    (format "You are running experiment %d of %d to optimize %s.
+
+## Previous Experiment Analysis
+%s
+
+## Suggestions
+%s
+
+## Git History (recent commits)
+%s
+
+## Current Baseline
+Overall Eight Keys score: %.2f
+
+## Objective
+Improve the Eight Keys score for %s.
+Focus on one improvement at a time.
+Make minimal, targeted changes.
+
+## Constraints
+- Time budget: %d minutes
+- Immutable files: early-init.el, pre-early-init.el, lisp/eca-security.el
+- Must pass tests: ./scripts/verify-nucleus.sh
+
+## Instructions
+1. First, write your HYPOTHESIS: What change might improve the score? Why?
+2. Implement the change minimally
+3. Run tests to verify
+
+Format your hypothesis at the start as:
+HYPOTHESIS: [your hypothesis here]"
+            experiment-id max-experiments target
+            (or patterns "No previous experiments")
+            (or suggestions "None")
+            git-history
+            (or baseline 0.5)
+            target
+            (/ gptel-auto-experiment-time-budget 60))))
+
+;;; TSV Logging (Explainable)
+
+(defun gptel-auto-experiment-log-tsv (run-id experiment)
+  "Append EXPERIMENT to results.tsv for RUN-ID."
   (let* ((base-dir (expand-file-name user-emacs-directory))
          (file (expand-file-name
-                (format "%s/%s/metrics.json"
-                        gptel-auto-workflow-worktree-base run-id)
+                (format "%s/%s/results.tsv" gptel-auto-workflow-worktree-base run-id)
                 base-dir)))
     (make-directory (file-name-directory file) t)
-    (let ((json (format "{\n  \"run_id\": \"%s\",\n  \"targets\": [\n%s\n  ],\n  \"summary\": {\n    \"passed\": %d,\n    \"failed\": %d\n  }\n}"
-                       run-id
-                       (mapconcat
-                        (lambda (r)
-                          (format "    {\"target\": \"%s\", \"branch\": \"%s\", \"passed\": %s, \"time\": %.2f}"
-                                  (plist-get r :target)
-                                  (or (plist-get r :branch) "unknown")
-                                  (if (plist-get r :passed) "true" "false")
-                                  (or (plist-get r :time) 0)))
-                        results
-                        ",\n")
-                       (cl-count-if (lambda (r) (plist-get r :passed)) results)
-                       (cl-count-if-not (lambda (r) (plist-get r :passed)) results))))
-      (with-temp-file file (insert json))
-      (message "[auto-workflow] Metrics saved: %s" file))))
+    (unless (file-exists-p file)
+      (with-temp-file file
+        (insert "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\n")))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-max))
+      (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\n"
+                      (or (plist-get experiment :id) "?")
+                      (or (plist-get experiment :target) "?")
+                      (or (plist-get experiment :hypothesis) "unknown")
+                      (or (plist-get experiment :score-before) 0)
+                      (or (plist-get experiment :score-after) 0)
+                      (- (or (plist-get experiment :score-after) 0)
+                         (or (plist-get experiment :score-before) 0))
+                      (if (plist-get experiment :kept) "kept" "discarded")
+                      (or (plist-get experiment :duration) 0)
+                      (or (plist-get experiment :grader-quality) "?")
+                      (or (plist-get experiment :grader-reason) "N/A")
+                      (or (plist-get experiment :comparator-reason) "N/A")
+                      (or (plist-get experiment :analyzer-patterns) "N/A")))
+      (write-region (point-min) (point-max) file))))
 
-(defun gptel-auto-workflow-generate-morning-summary (run-id results)
-  "Generate morning summary for RUN-ID RESULTS."
-  (let* ((base-dir (expand-file-name user-emacs-directory))
-         (file (expand-file-name
-                (format "%s/%s/summary.md"
-                        gptel-auto-workflow-worktree-base run-id)
-                base-dir))
-         (passed (cl-remove-if-not (lambda (r) (plist-get r :passed)) results))
-         (failed (cl-remove-if (lambda (r) (plist-get r :passed)) results)))
-    (make-directory (file-name-directory file) t)
-    (with-temp-file file
-      (insert (format "# Auto-Workflow: %s\n\n" run-id))
-      (insert (format "**Started:** %s\n\n" (format-time-string "%Y-%m-%d %H:%M")))
-      (insert "## Summary\n\n")
-      (insert "| Status | Count |\n")
-      (insert "|--------|-------|\n")
-      (insert (format "| ✓ Passed | %d |\n" (length passed)))
-      (insert (format "| ✗ Failed | %d |\n" (length failed)))
-      (insert (format "| Total | %d |\n\n" (length results)))
-      (when passed
-        (insert "## ✓ Successful Branches\n\n")
-        (dolist (r passed)
-          (insert (format "- `%s` — %s (%.1fs)\n"
-                          (or (plist-get r :branch) "unknown")
-                          (plist-get r :target)
-                          (or (plist-get r :time) 0))))
-        (insert "\n"))
-      (when failed
-        (insert "## ✗ Failed\n\n")
-        (dolist (r failed)
-          (insert (format "- `%s` — %s\n"
-                          (or (plist-get r :branch) "unknown")
-                          (plist-get r :target))))
-        (insert "\n"))
-      (insert "## Morning Commands\n\n")
-      (insert "```bash\n")
-      (insert "# Review branches\n")
-      (insert (format "git branch --list 'optimize/*'\n\n"))
-      (insert "# Merge successful branches\n")
-      (dolist (r passed)
-        (insert (format "git checkout main && git merge %s\n" (or (plist-get r :branch) "unknown"))))
-      (insert "\n# Or cherry-pick specific commits\n")
-      (insert "git cherry-pick <commit-sha>\n")
-      (insert "```\n"))
-    (message "[auto-workflow] Summary: %s" file)
-    file))
+;;; Dynamic Stop
 
-(defun gptel-auto-workflow-run-target (target run-id retry-count)
-  "Run optimization for TARGET. RETRY-COUNT tracks attempts."
-  (message "[auto-workflow] Processing: %s%s"
-           target (if (> retry-count 0) (format " (retry %d)" retry-count) ""))
-  (let ((worktree (gptel-auto-workflow-create-worktree target)))
+(defun gptel-auto-experiment-should-stop-p (threshold)
+  "Check if should stop based on no-improvement count >= THRESHOLD."
+  (>= gptel-auto-experiment--no-improvement-count threshold))
+
+;;; Single Experiment
+
+(defun gptel-auto-experiment-run (target experiment-id max-experiments baseline previous-results callback)
+  "Run single experiment. Call CALLBACK with result plist."
+  (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
+  (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
+         (start-time (float-time))
+         (timeout-timer nil)
+         (finished nil)
+         (result nil))
     (if (not worktree)
-        (list :target target :passed nil :error "Failed to create worktree")
-      (condition-case err
-          (let* ((start-time (float-time))
-                 (default-directory worktree)
-                 (branch gptel-auto-workflow--current-branch))
-            (my/gptel--run-agent-tool
-             (lambda (_result)
-               (message "[auto-workflow] Agent completed: %s" target))
-             "code"
-             (format "optimize %s" target)
-             (format "Optimize %s. Minimal changes. Run tests after." target)
-             nil "false" nil)
-            (sit-for 2)
-            (let* ((metrics (gptel-auto-workflow-benchmark))
-                   (passed (plist-get metrics :passed)))
-              (if passed
-                  (progn
-                    (gptel-auto-workflow-commit target)
-                    (prog1
-                        (list :target target
-                              :branch branch
-                              :passed t
-                              :time (- (float-time) start-time)
-                              :retries retry-count)
-                      (gptel-auto-workflow-delete-worktree)))
-                (if (< retry-count gptel-auto-workflow-max-retries)
-                    (progn
-                      (message "[auto-workflow] Tests failed, retrying: %s" target)
-                      (magit-git-success "checkout" "--" ".")
-                      (sit-for 1)
-                      (gptel-auto-workflow-delete-worktree)
-                      (gptel-auto-workflow-run-target target run-id (1+ retry-count)))
-                  (prog1
-                      (list :target target
-                            :branch branch
-                            :passed nil
-                            :time (- (float-time) start-time)
-                            :retries retry-count)
-                    (gptel-auto-workflow-delete-worktree))))))
-        (error
-         (gptel-auto-workflow-delete-worktree)
-         (message "[auto-workflow] Error: %s: %s" target err)
-         (list :target target :passed nil :error (format "%s" err)))))))
+        (funcall callback (list :target target :error "Failed to create worktree"))
+      ;; Step 1: Analyze previous results
+      (gptel-auto-experiment-analyze
+       previous-results
+       (lambda (analysis)
+         (let* ((patterns (when analysis (plist-get analysis :patterns)))
+                (prompt (gptel-auto-experiment-build-prompt
+                         target experiment-id max-experiments analysis baseline)))
+           ;; Step 2: Run code agent with timeout
+           (setq timeout-timer
+                 (run-with-timer gptel-auto-experiment-time-budget nil
+                                 (lambda ()
+                                   (unless finished
+                                     (setq finished t)
+                                     (gptel-auto-workflow-delete-worktree)
+                                     (funcall callback
+                                              (list :target target
+                                                    :id experiment-id
+                                                    :error "timeout"))))))
+           (my/gptel--run-agent-tool
+            (lambda (agent-output)
+              (when timeout-timer (cancel-timer timeout-timer))
+              (unless finished
+                ;; Step 3: Grade output (LLM decides threshold)
+                (gptel-auto-experiment-grade
+                 agent-output
+                 (lambda (grade)
+                   (let* ((grade-score (plist-get grade :score))
+                          (grade-passed (plist-get grade :passed))
+                          (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
+                     (if (not grade-passed)
+                         ;; Early discard
+                         (progn
+                           (setq finished t)
+                           (gptel-auto-workflow-delete-worktree)
+                           (let ((exp-result (list :target target
+                                                   :id experiment-id
+                                                   :hypothesis hypothesis
+                                                   :score-before baseline
+                                                   :score-after 0
+                                                   :kept nil
+                                                   :duration (- (float-time) start-time)
+                                                   :grader-quality grade-score
+                                                   :grader-reason (plist-get grade :details)
+                                                   :comparator-reason "early-discard"
+                                                   :analyzer-patterns (format "%s" patterns))))
+                             (gptel-auto-experiment-log-tsv
+                              (format-time-string "%Y-%m-%d") exp-result)
+                             (funcall callback exp-result)))
+                       ;; Step 4: Run benchmark
+                       (let* ((bench (gptel-auto-experiment-benchmark))
+                              (passed (plist-get bench :passed))
+                              (score-after (plist-get bench :eight-keys)))
+                         (if (not passed)
+                             ;; Tests failed
+                             (progn
+                               (setq finished t)
+                               (magit-git-success "checkout" "--" ".")
+                               (gptel-auto-workflow-delete-worktree)
+                               (let ((exp-result (list :target target
+                                                       :id experiment-id
+                                                       :hypothesis hypothesis
+                                                       :score-before baseline
+                                                       :score-after 0
+                                                       :kept nil
+                                                       :duration (- (float-time) start-time)
+                                                       :grader-quality grade-score
+                                                       :grader-reason (plist-get grade :details)
+                                                       :comparator-reason "tests-failed"
+                                                       :analyzer-patterns (format "%s" patterns))))
+                                 (gptel-auto-experiment-log-tsv
+                                  (format-time-string "%Y-%m-%d") exp-result)
+                                 (funcall callback exp-result)))
+                           ;; Step 5: Compare (decide keep/discard)
+                           (gptel-auto-experiment-decide
+                            (list :score baseline)
+                            (list :score score-after :output agent-output)
+                            (lambda (decision)
+                              (setq finished t)
+                              (let* ((keep (plist-get decision :keep))
+                                     (reasoning (plist-get decision :reasoning))
+                                     (exp-result (list :target target
+                                                       :id experiment-id
+                                                       :hypothesis hypothesis
+                                                       :score-before baseline
+                                                       :score-after score-after
+                                                       :kept keep
+                                                       :duration (- (float-time) start-time)
+                                                       :grader-quality grade-score
+                                                       :grader-reason (plist-get grade :details)
+                                                       :comparator-reason reasoning
+                                                       :analyzer-patterns (format "%s" patterns))))
+                                (if keep
+                                    ;; Commit
+                                    (let ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\nExperiment %d/%d. Score: %.2f → %.2f"
+                                                       target
+                                                       (gptel-auto-experiment--summarize hypothesis)
+                                                       hypothesis
+                                                       experiment-id max-experiments
+                                                       baseline score-after)))
+                                      (magit-git-success "add" "-A")
+                                      (magit-git-success "commit" "-m" msg)
+                                      (setq gptel-auto-experiment--best-score score-after
+                                            gptel-auto-experiment--no-improvement-count 0))
+                                  ;; Discard
+                                  (progn
+                                    (magit-git-success "checkout" "--" ".")
+                                    (cl-incf gptel-auto-experiment--no-improvement-count)))
+                                (gptel-auto-experiment-log-tsv
+                                 (format-time-string "%Y-%m-%d") exp-result)
+                                (gptel-auto-workflow-delete-worktree)
+                                (funcall callback exp-result))))))))))))
+            "code"
+            (format "Experiment %d: optimize %s" experiment-id target)
+            prompt
+            nil "false" nil)))))))
+
+(defun gptel-auto-experiment--extract-hypothesis (output)
+  "Extract HYPOTHESIS from agent OUTPUT."
+  (if (string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
+      (match-string 1 output)
+    "No hypothesis stated"))
+
+(defun gptel-auto-experiment--summarize (hypothesis)
+  "Create short summary of HYPOTHESIS."
+  (let ((words (split-string hypothesis)))
+    (string-join (cl-subseq words 0 (min 6 (length words))) " ")))
+
+;;; Experiment Loop
+
+(defun gptel-auto-experiment-loop (target callback)
+  "Run experiments for TARGET until stop condition. Call CALLBACK with results."
+  (setq gptel-auto-experiment--results nil
+        gptel-auto-experiment--best-score nil
+        gptel-auto-experiment--no-improvement-count 0)
+  (let ((baseline (gptel-auto-experiment-benchmark))
+        (max-exp gptel-auto-experiment-max-per-target)
+        (threshold gptel-auto-experiment-no-improvement-threshold))
+    (setq gptel-auto-experiment--best-score (plist-get baseline :eight-keys))
+    (message "[auto-experiment] Baseline for %s: %.2f" target gptel-auto-experiment--best-score)
+    (cl-labels ((run-next (exp-id)
+                  (if (or (> exp-id max-exp)
+                          (gptel-auto-experiment-should-stop-p threshold))
+                      (progn
+                        (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
+                                 target (length gptel-auto-experiment--results)
+                                 (or gptel-auto-experiment--best-score 0))
+                        (funcall callback (nreverse gptel-auto-experiment--results)))
+                    (gptel-auto-experiment-run
+                     target exp-id max-exp
+                     gptel-auto-experiment--best-score
+                     gptel-auto-experiment--results
+                     (lambda (result)
+                       (push result gptel-auto-experiment--results)
+                       (run-next (1+ exp-id)))))))
+      (run-next 1))))
+
+;;; Main Entry Point
 
 (defun gptel-auto-workflow-run (&optional targets)
-  "Run semi-autonomous auto-workflow on TARGETS.
-Creates per-target branch (optimize/{name}), runs optimization,
-commits if tests pass. Branches persist for morning review.
+  "Run ~32 experiments overnight (dynamic stop per target).
+
+Each target runs up to gptel-auto-experiment-max-per-target experiments.
+Stops early if gptel-auto-experiment-no-improvement-threshold consecutive
+experiments show no improvement.
+
+Uses subagents:
+- analyzer: detect patterns, guide hypotheses
+- grader: validate experiment quality (LLM decides threshold)
+- comparator: decide keep/discard with reasoning
+
+Results logged to var/tmp/experiments/{date}/results.tsv
 
 Cron: emacsclient -e '(gptel-auto-workflow-run)'
 Manual: M-x gptel-auto-workflow-run"
   (interactive)
   (unless (require 'magit-worktree nil t)
-    (user-error "magit-worktree is required for auto-workflow"))
+    (user-error "magit-worktree is required"))
   (unless (require 'magit-git nil t)
-    (user-error "magit-git is required for auto-workflow"))
+    (user-error "magit-git is required"))
   (let* ((targets (or targets gptel-auto-workflow-targets))
          (run-id (format-time-string "%Y-%m-%d"))
-         (results '()))
+         (all-results '()))
     (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
     (dolist (target targets)
-      (push (gptel-auto-workflow-run-target target run-id 0) results))
-    (setq results (nreverse results))
-    (gptel-auto-workflow-save-metrics run-id results)
-    (gptel-auto-workflow-generate-morning-summary run-id results)
-    (message "[auto-workflow] Complete: %d/%d passed. Branches: git branch --list 'optimize/*'"
-             (cl-count-if (lambda (r) (plist-get r :passed)) results)
-             (length results))))
+      (gptel-auto-experiment-loop
+       target
+       (lambda (results)
+         (setq all-results (append all-results results)))))
+    (message "[auto-workflow] Complete: %d total experiments"
+             (length all-results))
+    (message "[auto-workflow] Results: %s/%s/results.tsv"
+             gptel-auto-workflow-worktree-base run-id)))
 
 ;;; Footer
 

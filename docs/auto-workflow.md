@@ -1,55 +1,141 @@
 # Auto-Workflow
 
-> Semi-autonomous overnight optimization with morning review.
+> ~32 experiments/night with agent-driven mutation and subagent validation.
 
 ## Implementation Status
 
-| Component | Status | Automation |
-|-----------|--------|------------|
-| Per-target branches | ✓ Implemented | `optimize/{name}` |
-| Worktree isolation | ✓ Implemented | magit-worktree |
-| Agent optimization | ✓ Implemented | Automatic |
-| Benchmark runner | ✓ Implemented | Automatic |
-| Auto-commit on pass | ✓ Implemented | Automatic |
-| Retry on failure | ✓ Implemented | Automatic (1 retry) |
-| Metrics collection | ✓ Implemented | Automatic (JSON) |
-| Morning summary | ✓ Implemented | Automatic (markdown) |
-| Cron scheduling | ✓ Implemented | Automatic (2 AM daily) |
-| Human review | ✓ Implemented | Morning cherry-pick/reject |
+| Component | Status | Description |
+|-----------|--------|-------------|
+| Experiment loop | ✓ Implemented | Dynamic stop after N no-improvements |
+| Single experiment | ✓ Implemented | 15 min budget, worktree isolation |
+| Analyzer integration | ✓ Implemented | Pattern detection, hypothesis guidance |
+| Grader integration | ✓ Implemented | LLM-decided quality threshold |
+| Comparator integration | ✓ Implemented | Keep/discard with reasoning |
+| Eight Keys metric | ✓ Implemented | Overall score optimization |
+| TSV logging | ✓ Implemented | Explainable results with all columns |
+| Cron scheduling | ✓ Implemented | 2 AM daily |
 
 **Entry point:** `gptel-auto-workflow-run` in `gptel-tools-agent.el`
 
-## Branch Naming
-
-Each target gets its own branch like a draft PR:
-
-| Target | Branch Name |
-|--------|-------------|
-| `gptel-ext-retry.el` | `optimize/retry` |
-| `gptel-ext-context.el` | `optimize/context` |
-| `gptel-tools-code.el` | `optimize/code` |
-
-## Semi-Autonomous Flow
+## Architecture
 
 ```
-Human (once)           Agent (overnight)              Human (morning)
-    │                        │                              │
-    ├─ Set objectives ──────►│                              │
-    │   (gptel-auto-         ├─ For each target:            │
-    │    workflow-targets)   │  ├─ Create branch             │
-    │                        │  ├─ Create worktree           │
-    │                        │  ├─ Run agent                 │
-    │                        │  ├─ Run tests                 │
-    │                        │  ├─ Pass → commit             │
-    │                        │  ├─ Fail → retry once         │
-    │                        │  └─ Delete worktree           │
-    │                        ├─ Generate summary             │
-    │                                                       │
-    │◄─────────────────────────────────────────────────────►│
-                       Morning review                         │
-                  git branch --list 'optimize/*'             │
-                  (cherry-pick or merge each branch)          │
+Human (once)                    Agent (overnight ~32 experiments)
+    │                                    │
+    ├─ Set targets ─────────────────────►│
+    │   gptel-auto-workflow-targets      │
+    │                                    ├─ For each target:
+    │                                    │  └─ Experiment loop (max 10)
+    │                                    │      ├─ analyzer: detect patterns
+    │                                    │      ├─ code: implement hypothesis
+    │                                    │      ├─ grader: validate (LLM decides)
+    │                                    │      ├─ benchmark: Eight Keys score
+    │                                    │      ├─ comparator: keep/discard + why
+    │                                    │      └─ log to TSV
+    │                                    │
+    │◄───────────────────────────────────┤
+    │         Morning review              │
+    │   var/tmp/experiments/{date}/       │
+    │   results.tsv (explainable)         │
 ```
+
+## Configuration
+
+```elisp
+;; Time budget per experiment (default: 15 min)
+(setq gptel-auto-experiment-time-budget 900)
+
+;; Max experiments per target (default: 10)
+(setq gptel-auto-experiment-max-per-target 10)
+
+;; Stop after N consecutive no-improvements (default: 3)
+(setq gptel-auto-experiment-no-improvement-threshold 3)
+
+;; Use analyzer/grader/comparator subagents (default: t)
+(setq gptel-auto-experiment-use-subagents t)
+
+;; Target files to optimize
+(setq gptel-auto-workflow-targets
+      '("gptel-ext-retry.el" "gptel-ext-context.el" "gptel-tools-code.el"))
+```
+
+## Subagent Pipeline
+
+Each experiment goes through:
+
+| Stage | Subagent | Purpose |
+|-------|----------|---------|
+| 1. Analyze | `analyzer` | Detect patterns from previous experiments, suggest hypotheses |
+| 2. Implement | `code` | Run agent with guided prompt (reads git history + analyzer output) |
+| 3. Validate | `grader` | Check hypothesis clarity, minimal changes. LLM decides if quality sufficient |
+| 4. Benchmark | — | Run verify-nucleus.sh + Eight Keys scoring |
+| 5. Decide | `comparator` | Compare before/after, provide reasoning for keep/discard |
+
+## TSV Format (Explainable Results)
+
+```
+experiment_id  target  hypothesis           score_before  score_after  delta   decision   duration  grader_quality  grader_reason           comparator_reason                    analyzer_patterns
+001            retry   add caching          0.72          0.78         +0.06   kept       842       85              "Hypothesis clear"      "KEEP - improvement"                  "caching pattern"
+002            retry   simplify error       0.78          0.75         -0.03   discarded  603       70              "Larger than ideal"     "DISCARD - regression"                "simplification (1/2)"
+003            retry   lazy initialize      0.78          0.81         +0.03   kept       915       90              "Excellent hypothesis"  "KEEP - better performance"           "caching (3/3), lazy-init"
+```
+
+## Dynamic Stop Condition
+
+The experiment loop stops when:
+- Max experiments reached (`gptel-auto-experiment-max-per-target`), OR
+- `gptel-auto-experiment-no-improvement-threshold` consecutive experiments show no improvement
+
+This prevents wasting time when:
+- The optimization space is exhausted
+- The analyzer detects pattern exhaustion
+- Scores plateau
+
+## Usage
+
+### Cron (Scheduled)
+
+```bash
+# 2 AM daily
+emacsclient -e '(gptel-auto-workflow-run)'
+```
+
+### Manual
+
+```elisp
+M-x gptel-auto-workflow-run
+
+;; Or programmatically
+(gptel-auto-workflow-run '("gptel-ext-retry.el"))
+```
+
+### Morning Review
+
+```bash
+# View results
+cat var/tmp/experiments/$(date +%Y-%m-%d)/results.tsv | column -t -s $'\t'
+
+# Review branches
+git branch --list 'optimize/*'
+
+# Merge successful experiments
+git checkout main && git merge optimize/retry-exp3
+
+# Or cherry-pick specific commits
+git cherry-pick <sha>
+```
+
+## Key Functions
+
+| Function | Purpose |
+|----------|---------|
+| `gptel-auto-workflow-run` | Main entry (~32 experiments/night) |
+| `gptel-auto-experiment-loop` | Per-target experiment loop with dynamic stop |
+| `gptel-auto-experiment-run` | Single experiment with full subagent pipeline |
+| `gptel-auto-experiment-analyze` | Pattern detection from previous experiments |
+| `gptel-auto-experiment-grade` | Validate experiment quality (LLM threshold) |
+| `gptel-auto-experiment-decide` | Compare before/after, decide keep/discard |
+| `gptel-auto-experiment-log-tsv` | Log with explainable columns |
 
 ---
 

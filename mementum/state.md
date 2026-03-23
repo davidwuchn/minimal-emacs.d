@@ -2,46 +2,60 @@
 
 > Last session: 2026-03-23
 
-## Completed (2026-03-23) — Semi-Autonomous Auto-Workflow
+## Completed (2026-03-23) — ~32 Experiments/Night Auto-Workflow
 
-Replaced async spawn with semi-autonomous overnight optimization:
+Implemented autoresearch-inspired experiment loop with subagent integration:
 
 ### What Changed
 
 | Component | Before | After |
 |-----------|--------|-------|
-| Agent spawn | Async (fire-and-forget) | Synchronous with result tracking |
-| Branch strategy | None | Single nightly branch `auto-workflow-{date}` |
-| Test validation | Manual | Automatic with `verify-nucleus.sh` |
-| Commit strategy | None | Auto-commit if tests pass |
-| Failure handling | None | Retry once, then skip |
+| Experiments | 1 per target | ~10 per target (dynamic stop) |
+| Time budget | None | 15 min per experiment |
+| Metric | Binary (pass/fail) | Eight Keys overall score |
+| Mutation | Fixed prompt | Agent-driven (reads git history + analyzer) |
+| Validation | None | grader subagent (LLM decides threshold) |
+| Decision | `score_after > score_before` | comparator subagent (reasoning) |
+| Logging | JSON metrics | TSV with explainable columns |
 
-### Functions Added (6 functions, ~180 lines)
+### Functions Added (~350 lines)
 
 | Function | Purpose |
 |----------|---------|
-| `gptel-auto-workflow-run` | Main entry (orchestrates all phases) |
-| `gptel-auto-workflow-run-target` | Single target with retry logic |
-| `gptel-auto-workflow-create-nightly-branch` | Create `auto-workflow-{date}` branch |
-| `gptel-auto-workflow-benchmark` | Run nucleus validation |
-| `gptel-auto-workflow-commit` | Commit with ◈ prefix |
-| `gptel-auto-workflow-save-metrics` | Save JSON metrics |
-| `gptel-auto-workflow-generate-morning-summary` | Morning review markdown |
+| `gptel-auto-workflow-run` | Main entry (~32 experiments/night) |
+| `gptel-auto-experiment-loop` | Per-target loop with dynamic stop |
+| `gptel-auto-experiment-run` | Single experiment with subagent pipeline |
+| `gptel-auto-experiment-analyze` | Pattern detection (reuses `gptel-benchmark-analyze`) |
+| `gptel-auto-experiment-grade` | Quality validation (reuses `gptel-benchmark-grade`) |
+| `gptel-auto-experiment-decide` | Keep/discard (reuses `gptel-benchmark-compare`) |
+| `gptel-auto-experiment-benchmark` | Eight Keys scoring |
+| `gptel-auto-experiment-log-tsv` | Explainable TSV logging |
+| `gptel-auto-experiment-build-prompt` | Hypothesis prompt with git history |
 
-### Flow
+### Subagent Pipeline
 
 ```
-Cron (2 AM) → gptel-auto-workflow-run
-  → Create nightly branch
-  → For each target:
-      → Run agent (code)
-      → Run tests
-      → Pass → commit
-      → Fail → retry once
-  → Save metrics + generate summary
-  → Return to main
-  → Morning: human reviews, cherry-picks or rejects
+Experiment N:
+  1. analyzer → detect patterns from N-1 experiments
+  2. code → implement with guided hypothesis
+  3. grader → validate (LLM decides threshold)
+  4. benchmark → Eight Keys score
+  5. comparator → decide keep/discard + reasoning
+  6. log to TSV with all columns
 ```
+
+### TSV Columns (Explainable)
+
+```
+experiment_id, target, hypothesis, score_before, score_after, delta,
+decision, duration, grader_quality, grader_reason, comparator_reason, analyzer_patterns
+```
+
+### Dynamic Stop
+
+Stops when:
+- Max experiments reached (default: 10), OR
+- N consecutive no-improvements (default: 3)
 
 ### Cron Jobs
 
@@ -49,15 +63,6 @@ Cron (2 AM) → gptel-auto-workflow-run
 0 2 * * *   emacsclient -e '(gptel-auto-workflow-run)'         # Daily 2 AM
 0 3 * * 0   emacsclient -e '(gptel-benchmark-instincts-weekly-job)'  # Sunday 3 AM
 ```
-
-### Usage
-
-```bash
-# Install cron jobs
-crontab cron.d/auto-workflow
-
-# Manual trigger
-emacsclient -e '(gptel-auto-workflow-run)'
 
 # Configure targets
 (setq gptel-auto-workflow-targets '("file1.el" "file2.el"))
