@@ -2,46 +2,44 @@
 
 > Last session: 2026-03-24
 
-## Active
+## Complete ✓
 
-- **Autonomous Research Agent** — Fixed! Subagent now works with DashScope
+**Autonomous Research Agent** — Fully functional!
 
-## Fixed
+### Test Results
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Subagent stuck | `gptel-agent--task` requires `gptel--fsm-last` | Use `gptel-with-preset` + `gptel-request` |
-| No callback | FSM state nil in server buffer | Direct preset application |
-| Slow API | Not API, was callback not firing | Fixed by above |
+| Step | Status | Time |
+|------|--------|------|
+| Create worktree | ✓ | <1s |
+| Run executor | ✓ | 122.4s (with retry) |
+| Grade output | ✓ | 100, passed |
+| Run benchmark | ✓ | passed |
+| Decide | ✓ | discarded (no delta) |
+| Log TSV | ✓ | logged |
+| Cleanup | ✓ | done |
 
-## Test Results
-
-| Test | Time | Result |
-|------|------|--------|
-| Simple query "2+2" | 2.9s | "4" ✓ |
-| Optimization task | 64.4s | 1247 chars ✓ |
-
-## Recommended Settings
+### Configuration
 
 ```elisp
-;; For auto-workflow: set timeout longer than expected subagent time
-(setq gptel-auto-experiment-time-budget 300)  ; 5 min
+;; Recommended for production
+(setq gptel-auto-experiment-time-budget 300)  ; 5 min per experiment
+(setq gptel-auto-experiment-max-per-target 10) ; 10 experiments per file
+```
+
+### Cron
+
+```bash
+0 2 * * * emacsclient -e '(gptel-auto-workflow-run-autonomous)'   # Daily 2 AM
 ```
 
 ## Commits
 
-- f2b0614: ⚒ fix auto-experiment: mock mode callback chain, worktree directory handling
-- 81e722d: ⚒ fix subagent: use gptel-with-preset + gptel-request instead of gptel-agent--task
+- 81e722d: ⚒ fix subagent: gptel-with-preset + gptel-request
+- 989421d: ◈ update state
 
 ## Entry Points
 
 ```elisp
+M-x gptel-auto-workflow-run
 M-x gptel-auto-workflow-run-autonomous
-```
-
-## Cron
-
-```bash
-0 2 * * * emacsclient -e '(gptel-auto-workflow-run-autonomous)'   # Daily 2 AM
-0 3 * * 0 emacsclient -e '(gptel-benchmark-instincts-weekly-job)' # Sunday 3 AM
 ```
