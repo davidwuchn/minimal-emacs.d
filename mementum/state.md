@@ -2,46 +2,49 @@
 
 > Last session: 2026-03-23
 
-## Completed (2026-03-23) — OUROBOROS Gap Detection Framework
+## Completed (2026-03-23) — OUROBOROS Documentation
 
-Created comprehensive documentation linking research to implementation:
+Simplified documentation to use existing auto-evolve instead of separate gap detection:
+
+### Key Decision
+
+**No separate gap detection system needed.**
+
+Existing auto-evolve already detects:
+- Anti-patterns in behavior
+- Low benchmark scores
+- Low φ instincts
+
+**Simpler approach:**
+```
+Research Advice → Benchmark Test → Auto-Evolve Detects → Improvement
+```
 
 ### Document Updates
 
-| File | Lines Added | Content |
-|------|-------------|---------|
-| `docs/OUROBOROS.md` | +2479 | Advice, Gap Analysis, Detection Framework, Integration |
+| File | Commit | Change |
+|------|--------|--------|
+| `docs/OUROBOROS.md` | `f9e13ad` | Removed gap detection, added benchmark tests |
+| `mementum/memories/ouroboros-benchmark-tests.md` | new | Simplified memory |
 
-### Gap Analysis Results
+### Benchmark Tests to Add
 
-| Status | Count | Items |
-|--------|-------|-------|
-| ✅ Implemented | 6 | Memory, Human Governance, Git+Markdown, Session Boundaries, Test Before Commit, Feed-Forward |
-| ⚠️ Partial | 3 | Integration (custom skills), Safety (some prompt-based), Scope (no immutable file list) |
-| ❌ Missing | 1 | Progressive Disclosure for skills |
+| Test | What It Checks |
+|------|----------------|
+| `progressive-disclosure` | `skills-list`/`skill-view` exist |
+| `skills-format-compliance` | agentskills.io format |
+| `constraints-immutable-files` | Write protection works |
+| `architectural-safety` | Timeouts, max-steps, sandbox |
 
-**Overall Alignment: 85%**
+### Alignment Status
 
-### Key Gaps Identified
+| Status | Count |
+|--------|-------|
+| ✅ Implemented | 6 |
+| ⚠️ Partial | 3 |
+| ❌ Missing | 1 |
 
-| Gap | Priority | Fix |
-|-----|----------|-----|
-| Progressive Disclosure | Medium | Add `skills-list`, `skill-view` tools |
-| Skills Standardization | Medium | Align with agentskills.io format |
-| Immutable File Definitions | Low | Create `constraints.md` |
-| Architectural Safety | Low | Move constraints from prompts to code |
-
-### Detection Framework
-
-Four methods implemented:
-1. Static Analysis — Check expected files/functions exist
-2. Benchmark Threshold — Compare scores to thresholds
-3. Pattern Compliance — Compare documented vs tested
-4. OUROBOROS Alignment — Compare research advice to project
-
-### Commits
-
-- `17cd823` ◈ docs/OUROBOROS: add advice, gap analysis, detection framework
+**Overall: 85%**
 
 ---
 
