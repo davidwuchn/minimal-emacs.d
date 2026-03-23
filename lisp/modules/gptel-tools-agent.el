@@ -716,9 +716,15 @@ Useful for testing callback chain without API calls."
        nil))))
 
 (defun gptel-auto-workflow-delete-worktree ()
-  "Delete current worktree if exists."
+  "Delete current worktree if exists.
+Also kills any stale magit buffers referencing old worktrees."
   (let* ((main-repo (gptel-auto-workflow--base-dir))
          (default-directory main-repo))
+    ;; Kill stale magit buffers from previous experiments
+    (dolist (b (buffer-list))
+      (when (and (buffer-live-p b)
+                 (string-match-p "magit: retry-exp" (buffer-name b)))
+        (kill-buffer b)))
     (when (and gptel-auto-workflow--worktree-dir
                (file-exists-p gptel-auto-workflow--worktree-dir))
       (let ((dir gptel-auto-workflow--worktree-dir)
@@ -1264,6 +1270,13 @@ Manual: M-x gptel-auto-workflow-run"
     (user-error "magit-worktree is required"))
   (unless (require 'magit-git nil t)
     (user-error "magit-git is required"))
+  ;; Clean up stale state from previous runs
+  (setq gptel-auto-workflow--worktree-dir nil
+        gptel-auto-workflow--current-branch nil)
+  (dolist (b (buffer-list))
+    (when (and (buffer-live-p b)
+               (string-match-p "magit: retry-exp\\|magit: optimize" (buffer-name b)))
+      (kill-buffer b)))
   (let* ((targets (or targets gptel-auto-workflow-targets))
          (run-id (format-time-string "%Y-%m-%d"))
          (all-results '()))
