@@ -21,10 +21,14 @@
   :type 'integer
   :group 'gptel-tools-edit)
 
-(defcustom my/gptel-edit-patch-options '("-p1" "--forward" "--verbose" "--batch")
+(defcustom my/gptel-edit-patch-options
+  (if (eq system-type 'darwin)
+      '("-p1" "--forward")
+    '("-p1" "--forward" "--verbose" "--batch"))
   "Options passed to the `patch' command.
 Default handles standard git diff format with a/ and b/ prefixes.
-Use '(\"-p0\" \"--forward\" \"--verbose\" \"--batch\") for diffs without prefixes."
+macOS uses BSD patch which doesn't support --verbose or --batch.
+Use '(\"-p0\" \"--forward\") for diffs without prefixes."
   :type '(repeat string)
   :group 'gptel-tools-edit)
 
@@ -42,6 +46,25 @@ Handles multi-line whitespace before/after fences."
       (setq result (replace-regexp-in-string "\\s-*```\\s-*\\'" "" result)))
     (string-trim result)))
 
+(defun my/gptel--validate-patch-target (patch-text expected-file)
+  "Verify PATCH-TEXT targets EXPECTED-FILE, not arbitrary paths.
+Returns t if validation passes, signals error if mismatch.
+This prevents path traversal via crafted diff headers."
+  (when (string-match "^--- \\([^\t\n]+\\)" patch-text)
+    (let* ((from-header (match-string 1 patch-text))
+           (patch-file (cond
+                        ((string-match "^a/" from-header)
+                         (substring from-header 2))
+                        ((string= from-header "/dev/null")
+                         (file-name-nondirectory expected-file))
+                        (t from-header)))
+           (expected-name (file-name-nondirectory expected-file))
+           (patch-name (file-name-nondirectory patch-file)))
+      (unless (string= expected-name patch-name)
+        (error "Patch target mismatch: patch targets '%s', expected '%s'"
+               patch-name expected-name))))
+  t)
+
 ;;; Edit Tool Implementation
 
 (defun my/gptel--agent-edit-async (callback file_path &optional old_str new_str diffp)
@@ -50,7 +73,7 @@ Handles multi-line whitespace before/after fences."
 This is only truly async/interruptible for patch mode (DIFFP true).
 For simple string replacements it executes synchronously.
 
-CALLBACK is called exactly once. Errors are always delivered.
+CALLBACK is called at most once. Errors are always delivered.
 Success results are only delivered if the origin buffer is still live
 and the generation hasn't been aborted."
   (let* ((origin (current-buffer))
@@ -71,28 +94,25 @@ and the generation hasn't been aborted."
                     (funcall callback result))))))))
     (condition-case err
         (progn
-          ;; Validate file exists and is a regular file (not directory).
-          (unless (file-exists-p file_path)
-            (error "File %s does not exist" file_path))
-          (unless (file-regular-p file_path)
-            (error "%s is not a regular file (directories not supported)" file_path))
-          (unless (file-readable-p file_path)
-            (error "File %s is not readable" file_path))
-          (unless new_str
-            (error "Required argument `new_str' missing"))
           (let ((patch-mode (and diffp (not (eq diffp :json-false)))))
+            (when (and patch-mode (not (executable-find "patch")))
+              (error "Command \"patch\" not available, cannot apply diffs"))
+            (unless (file-exists-p file_path)
+              (error "File %s does not exist" file_path))
+            (unless (file-regular-p file_path)
+              (error "%s is not a regular file (directories not supported)" file_path))
+            (unless (file-readable-p file_path)
+              (error "File %s is not readable" file_path))
+            (unless new_str
+              (error "Required argument `new_str' missing"))
             (if (not patch-mode)
                 (funcall finish
                          (gptel-agent--edit-files file_path old_str new_str diffp))
-              ;; Patch mode: verify patch command available at runtime
-              (unless (executable-find "patch")
-                (error "Command \"patch\" not available, cannot apply diffs"))
               (let* ((target (expand-file-name file_path))
                      (patch-text (my/gptel--agent--strip-diff-fences new_str))
                      (patch-text (if (string-suffix-p "\n" patch-text)
                                      patch-text
                                    (concat patch-text "\n"))))
-                ;; Validate patch format (look for standard diff headers)
                 (unless (string-match-p "^---" patch-text)
                   (message "[gptel-edit] Warning: patch-text lacks standard --- header"))
                 (with-temp-buffer
@@ -101,6 +121,7 @@ and the generation hasn't been aborted."
                   (when (fboundp 'gptel-agent--fix-patch-headers)
                     (gptel-agent--fix-patch-headers))
                   (setq patch-text (buffer-string)))
+                (my/gptel--validate-patch-target patch-text target)
                 (my/gptel--preview-patch-async
                  patch-text (current-buffer) finish
                  (lambda (cb) (my/gptel--agent-edit-apply-patch cb target patch-text))
@@ -113,12 +134,14 @@ and the generation hasn't been aborted."
 (defun my/gptel--agent-edit-apply-patch (callback target patch-text)
   "Apply PATCH-TEXT to TARGET file asynchronously.
 
-CALLBACK is called with the result.
+CALLBACK is called at most once with the result.
 This is the core patch application logic for preview integration.
 Uses `my/gptel-edit-patch-options' for patch command options."
-  (let* ((out-buf (generate-new-buffer " *gptel-patch*"))
+  (let* ((out-buf (generate-new-buffer
+                   (format " *gptel-patch-%s*" (file-name-nondirectory target))))
          (default-directory (file-name-directory target))
          (cb-called nil)
+         (timer nil)
          (proc
           (make-process
            :name "gptel-patch"
@@ -129,6 +152,7 @@ Uses `my/gptel-edit-patch-options' for patch command options."
            :sentinel
            (lambda (p _event)
              (when (memq (process-status p) '(exit signal))
+               (when timer (cancel-timer timer))
                (unless cb-called
                  (setq cb-called t)
                  (let* ((status (process-exit-status p))
@@ -144,18 +168,19 @@ Uses `my/gptel-edit-patch-options' for patch command options."
     (process-put proc 'my/gptel-managed t)
     (process-send-string proc patch-text)
     (process-send-eof proc)
-    (run-at-time my/gptel-edit-timeout nil
-                 (lambda (p buf)
-                   (unless cb-called
-                     (when (process-live-p p)
-                       (message "gptel-edit: patch timed out, cleaning up process")
-                       (ignore-errors (set-process-filter p #'ignore))
-                       (ignore-errors (set-process-sentinel p #'ignore))
-                       (delete-process p))
-                     (when (buffer-live-p buf) (kill-buffer buf))
-                     (setq cb-called t)
-                     (funcall callback "Error: edit/patch timed out.")))
-                 proc out-buf)))
+    (setq timer
+          (run-at-time my/gptel-edit-timeout nil
+                       (lambda (p buf)
+                         (unless cb-called
+                           (when (process-live-p p)
+                             (message "gptel-edit: patch timed out, cleaning up process")
+                             (ignore-errors (set-process-filter p #'ignore))
+                             (ignore-errors (set-process-sentinel p #'ignore))
+                             (delete-process p))
+                           (when (buffer-live-p buf) (kill-buffer buf))
+                           (setq cb-called t)
+                           (funcall callback "Error: edit/patch timed out.")))
+                       proc out-buf))))
 
 ;;; Tool Registration
 
