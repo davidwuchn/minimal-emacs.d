@@ -720,11 +720,12 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 (defun gptel-auto-experiment-benchmark ()
   "Run nucleus verification + Eight Keys scoring."
   (let* ((start (float-time))
+         (base-dir (gptel-auto-workflow--base-dir))
          (default-directory (or gptel-auto-workflow--worktree-dir
-                                (expand-file-name user-emacs-directory)))
+                                base-dir))
          (verify-result (call-process "bash" nil nil nil
                                       (expand-file-name "scripts/verify-nucleus.sh"
-                                                        (expand-file-name user-emacs-directory)))))
+                                                        base-dir))))
     (list :passed (zerop verify-result)
           :time (- (float-time) start)
           :eight-keys (when (zerop verify-result)
@@ -733,10 +734,11 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 (defun gptel-auto-experiment--eight-keys-score ()
   "Get Eight Keys overall score from current codebase."
   (when (fboundp 'gptel-benchmark-eight-keys-score)
-    (let* ((output (shell-command-to-string
+    (let* ((base-dir (gptel-auto-workflow--base-dir))
+           (output (shell-command-to-string
                     (format "cd %s && git diff HEAD~1 --stat 2>/dev/null || echo 'no changes'"
                             (or gptel-auto-workflow--worktree-dir
-                                (expand-file-name user-emacs-directory)))))
+                                base-dir))))
            (scores (gptel-benchmark-eight-keys-score output)))
       (alist-get 'overall scores))))
 
@@ -796,10 +798,10 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline)
   "Build prompt for experiment EXPERIMENT-ID on TARGET."
-  (let* ((git-history (shell-command-to-string
+  (let* ((base-dir (gptel-auto-workflow--base-dir))
+         (git-history (shell-command-to-string
                        (format "cd %s && git log --oneline -20 2>/dev/null || echo 'no history'"
-                               (or gptel-auto-workflow--worktree-dir
-                                   (expand-file-name user-emacs-directory)))))
+                               (or gptel-auto-workflow--worktree-dir base-dir))))
          (patterns (when analysis (plist-get analysis :patterns)))
          (suggestions (when analysis (plist-get analysis :recommendations))))
     (format "You are running experiment %d of %d to optimize %s.
@@ -845,7 +847,7 @@ HYPOTHESIS: [your hypothesis here]"
 
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
   "Append EXPERIMENT to results.tsv for RUN-ID."
-  (let* ((base-dir (expand-file-name user-emacs-directory))
+  (let* ((base-dir (gptel-auto-workflow--base-dir))
          (file (expand-file-name
                 (format "%s/%s/results.tsv" gptel-auto-workflow-worktree-base run-id)
                 base-dir)))
@@ -1001,7 +1003,7 @@ HYPOTHESIS: [your hypothesis here]"
                                  (format-time-string "%Y-%m-%d") exp-result)
                                 (gptel-auto-workflow-delete-worktree)
                                 (funcall callback exp-result))))))))))))
-            "code"
+            "executor"
             (format "Experiment %d: optimize %s" experiment-id target)
             prompt
             nil "false" nil)))))))
@@ -1028,7 +1030,7 @@ HYPOTHESIS: [your hypothesis here]"
         (max-exp gptel-auto-experiment-max-per-target)
         (threshold gptel-auto-experiment-no-improvement-threshold))
     (setq gptel-auto-experiment--best-score (plist-get baseline :eight-keys))
-    (message "[auto-experiment] Baseline for %s: %.2f" target gptel-auto-experiment--best-score)
+    (message "[auto-experiment] Baseline for %s: %s" target (or gptel-auto-experiment--best-score "N/A"))
     (cl-labels ((run-next (exp-id)
                   (if (or (> exp-id max-exp)
                           (gptel-auto-experiment-should-stop-p threshold))
