@@ -207,58 +207,28 @@ Call this after gptel-agent-tools loads."
                              :properties (:content (:type string :minLength 1)
                                                    :status (:type string :enum ["pending" "in_progress" "completed"])
                                                    :activeForm (:type string :minLength 1 :optional t)))))
-      :category "gptel-agent"
+:category "gptel-agent"
       :include nil)
 
-     ;; Skill tool
-    (gptel-make-tool
-     :name "Skill"
-     :function #'my/gptel--skill-tool
-     :description "Load a skill by name."
-     :args '((:name "skill" :type string)
-             (:name "args" :type string :optional t))
-     :category "gptel-agent"
-     :include t)
-
-    ;; Skill management tools
-    (gptel-make-tool
-     :name "list_skills"
-     :function (lambda (&optional dir)
-                 (let* ((dir (or dir (expand-file-name "assistant/skills/" user-emacs-directory)))
-                        (skills (when (file-directory-p dir)
-                                  (seq-filter (lambda (d) (file-directory-p (expand-file-name d dir)))
-                                              (directory-files dir)))))
-                   (if skills
-                       (format "Available skills:\n%s" (string-join (sort skills 'string-lessp) "\n"))
-                     "No skills found.")))
-     :description "List available skills in the skills directory."
-     :args '((:name "dir" :type string :optional t))
-     :category "gptel-agent")
-    (gptel-make-tool
-     :name "load_skill"
-     :function #'my/gptel--skill-tool
-     :description "Load a skill by name (alias for Skill tool)."
-     :args '((:name "name" :type string)
-             (:name "dir" :type string :optional t))
-     :category "gptel-agent")
-    (gptel-make-tool
-     :name "create_skill"
-     :function (lambda (skill-name user-prompt &optional dir)
-                 (let* ((dir (or dir (expand-file-name "assistant/skills/" user-emacs-directory)))
-                        (skill-dir (expand-file-name skill-name dir)))
-                   (unless (file-directory-p dir)
-                     (make-directory dir t))
-                   (unless (file-directory-p skill-dir)
-                     (make-directory skill-dir t))
-                   (with-temp-file (expand-file-name "SKILL.md" skill-dir)
-                     (insert (format "# Skill: %s\n\n%s\n" skill-name user-prompt)))
-                   (format "Created skill: %s" skill-dir)))
-     :description "Create a new skill with the given name and prompt."
-     :args '((:name "skillName" :type string)
-             (:name "userPrompt" :type string)
-             (:name "dir" :type string :optional t))
-     :category "gptel-agent"
-     :confirm t))
+     ;; Skill creation tool (gptel-agent provides Skill tool for loading)
+     (gptel-make-tool
+      :name "create_skill"
+      :function (lambda (skill-name user-prompt &optional dir)
+                  (let* ((dir (or dir (expand-file-name "assistant/skills/" user-emacs-directory)))
+                         (skill-dir (expand-file-name skill-name dir)))
+                    (unless (file-directory-p dir)
+                      (make-directory dir t))
+                    (unless (file-directory-p skill-dir)
+                      (make-directory skill-dir t))
+                    (with-temp-file (expand-file-name "SKILL.md" skill-dir)
+                      (insert (format "# Skill: %s\n\n%s\n" skill-name user-prompt)))
+                    (format "Created skill: %s" skill-dir)))
+      :description "Create a new skill with the given name and prompt."
+      :args '((:name "skillName" :type string)
+              (:name "userPrompt" :type string)
+              (:name "dir" :type string :optional t))
+      :category "gptel-agent"
+      :confirm t))
 
   ;; Default toolset is set by nucleus-sync-tool-profile in gptel-mode-hook.
   ;; Use (nucleus-get-tools :readonly) or (nucleus-get-tools :nucleus) directly.
@@ -359,19 +329,6 @@ Wraps `gptel-agent--read-url' with better error recovery."
         (funcall cb "Error: HTTP response headers not found. The search may have failed or been blocked."))
     (error
      (funcall cb (format "Error parsing search results: %s" (error-message-string err))))))
-
-(defun my/gptel--skill-tool (skill &optional args)
-  "Wrapper for gptel-agent Skill tool."
-  (let* ((skill (string-trim skill))
-         (try (lambda (k)
-                (car-safe (alist-get k gptel-agent--skills nil nil #'string-equal))))
-         (hit (or (funcall try skill) (funcall try (downcase skill)))))
-    (when (and (not hit) (fboundp 'gptel-agent-update))
-      (ignore-errors (gptel-agent-update))
-      (setq hit (or (funcall try skill) (funcall try (downcase skill)))))
-    (if (not hit)
-        (format "Error: skill %s not found." (if (string-empty-p skill) "<empty>" skill))
-      (gptel-agent--get-skill (if (funcall try skill) skill (downcase skill)) args))))
 
 ;;; Integration
 
