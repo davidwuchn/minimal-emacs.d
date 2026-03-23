@@ -64,7 +64,9 @@
 (ert-deftest wrapped-fsm/recover-on-error-coerces-buffer-local-wrapper ()
   (with-temp-buffer
     (let* ((fsm (gptel-make-fsm :state 'WAIT
-                                :info '(:error "boom" :stop-reason STOP)))
+                                :info (list :error "boom"
+                                            :stop-reason 'STOP
+                                            :buffer (current-buffer))))
            (wrapped (cons fsm #'ignore)))
       (setq-local gptel--fsm-last wrapped)
       (my/gptel--recover-fsm-on-error nil nil)
