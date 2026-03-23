@@ -76,11 +76,20 @@ Each buffer manages its own temp files to avoid race conditions.")
   "Hash table for caching subagent results.
 Keys are (agent-type prompt-hash), values are (timestamp . result).")
 
-(eval-and-compile
-  (require 'gptel nil t)
-  (require 'gptel-agent nil t))
+(declare-function gptel--preset-syms "gptel")
+(declare-function gptel--apply-preset "gptel")
+(declare-function gptel-fsm-info "gptel")
+(declare-function gptel--update-status "gptel")
+(declare-function gptel-request "gptel")
+(declare-function gptel-make-fsm "gptel")
+(declare-function gptel--display-tool-calls "gptel")
+(declare-function gptel-get-tool "gptel")
+(declare-function gptel-make-tool "gptel")
+(declare-function my/gptel--coerce-fsm "gptel-ext-fsm-utils")
 
-(require 'gptel-ext-fsm-utils)
+(defvar gptel--fsm-last nil)
+(defvar gptel-agent--agents nil)
+(defvar gptel-agent-request--handlers nil)
 
 ;;; Subagent Result Cache
 
