@@ -1074,7 +1074,179 @@ Manual: M-x gptel-auto-workflow-run"
     (message "[auto-workflow] Results: %s/%s/results.tsv"
              gptel-auto-workflow-worktree-base run-id)))
 
-;;; Footer
+;;; Autonomous Research Agent (program.md + skills + mementum)
+
+(defcustom gptel-auto-workflow-program-file "docs/auto-workflow-program.md"
+  "Path to program.md (human-editable objectives)."
+  :type 'file
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-skills-dir "mementum/knowledge"
+  "Directory containing optimization-skills/ and mutations/."
+  :type 'directory
+  :group 'gptel-tools-agent)
+
+(defvar gptel-auto-workflow--program nil
+  "Parsed program.md content.")
+
+(defvar gptel-auto-workflow--skills nil
+  "Loaded optimization skills for current run.")
+
+(defun gptel-auto-workflow-load-program ()
+  "Load and parse docs/auto-workflow-program.md."
+  (let* ((file (expand-file-name gptel-auto-workflow-program-file
+                                 (expand-file-name user-emacs-directory)))
+         (content (when (file-exists-p file)
+                    (with-temp-buffer
+                      (insert-file-contents file)
+                      (buffer-string))))
+         (targets '())
+         (immutable '())
+         (mutations '()))
+    (when content
+      (with-temp-buffer
+        (insert content)
+        (goto-char (point-min))
+        (when (re-search-forward "^## Targets" nil t)
+          (forward-line 2)
+          (when (looking-at "```")
+            (forward-line 1)
+            (while (and (not (looking-at "```")) (not (eobp)))
+              (let ((line (string-trim (thing-at-point 'line t))))
+                (when (and (> (length line) 0) (not (string-match-p "^#" line)))
+                  (push line targets)))
+              (forward-line 1))))
+        (goto-char (point-min))
+        (when (re-search-forward "^### Immutable Files" nil t)
+          (forward-line 2)
+          (when (looking-at "```")
+            (forward-line 1)
+            (while (and (not (looking-at "```")) (not (eobp)))
+              (let ((line (string-trim (thing-at-point 'line t))))
+                (when (> (length line) 0)
+                  (push line immutable)))
+              (forward-line 1))))
+        (goto-char (point-min))
+        (when (re-search-forward "^Allowed mutation types:" nil t)
+          (forward-line 1)
+          (while (and (not (looking-at "^##")) (not (eobp)))
+            (when (looking-at "- \\[x\\] \\([^ ]+\\)")
+              (push (match-string 1) mutations))
+            (forward-line 1)))))
+    (list :targets (nreverse targets)
+          :immutable (nreverse immutable)
+          :mutations (nreverse mutations)
+          :file file)))
+
+(defun gptel-auto-workflow-skill-path (target type)
+  "Get skill path for TARGET. TYPE is 'target or 'mutation."
+  (let* ((name (file-name-sans-extension (file-name-nondirectory target)))
+         (skill-name (car (last (split-string name "-")))))
+    (if (eq type 'target)
+        (format "%s/optimization-skills/%s.md" gptel-auto-workflow-skills-dir skill-name)
+      (format "%s/mutations/%s.md" gptel-auto-workflow-skills-dir target))))
+
+(defun gptel-auto-workflow-skill-load (skill-file)
+  "Load skill from SKILL-FILE."
+  (let ((file (expand-file-name skill-file (expand-file-name user-emacs-directory))))
+    (when (file-exists-p file)
+      (let ((content (with-temp-buffer
+                       (insert-file-contents file)
+                       (buffer-string)))
+            (skill (list :file skill-file)))
+        (when (string-match "^phi:[[:space:]]*\\([0-9.]+\\)" content)
+          (plist-put skill :phi (string-to-number (match-string 1 content))))
+        (when (string-match "^mutation-skills:[[:space:]]*\n\\(\\(?:  - .+\n\\)+\\)" content)
+          (let ((refs (match-string 1 content)))
+            (plist-put skill :mutation-skills
+                       (mapcar (lambda (line)
+                                 (string-trim (replace-regexp-in-string "^  - " "" line)))
+                               (split-string refs "\n" t)))))
+        (plist-put skill :content content)
+        skill))))
+
+(defun gptel-auto-workflow-recall-skills (target)
+  "Load target skill + referenced mutation skills for TARGET."
+  (let* ((target-skill-file (gptel-auto-workflow-skill-path target 'target))
+         (target-skill (gptel-auto-workflow-skill-load target-skill-file))
+         (mutation-skills '()))
+    (when target-skill
+      (dolist (ref (plist-get target-skill :mutation-skills))
+        (let ((ms (gptel-auto-workflow-skill-load ref)))
+          (when ms (push ms mutation-skills)))))
+    (list :target-skill target-skill
+          :mutation-skills (nreverse mutation-skills))))
+
+(defun gptel-auto-workflow-skill-suggest-hypothesis (skills)
+  "Get suggested hypothesis from SKILLS."
+  (let* ((target-skill (plist-get skills :target-skill))
+         (content (when target-skill (plist-get target-skill :content))))
+    (when (and content (string-match "^## Next Hypothesis\n\n\\(.+\\)" content))
+      (match-string 1 content))))
+
+(defun gptel-auto-workflow-orient ()
+  "Orient for auto-workflow run. Load program.md and skills."
+  (let ((program (gptel-auto-workflow-load-program)))
+    (setq gptel-auto-workflow--program program)
+    (message "[autonomous] Loaded program: %d targets"
+             (length (plist-get program :targets)))
+    (let ((skills '()))
+      (dolist (target (plist-get program :targets))
+        (push (cons target (gptel-auto-workflow-recall-skills target)) skills))
+      (setq gptel-auto-workflow--skills skills))
+    program))
+
+(defun gptel-auto-workflow-metabolize (run-id all-results)
+  "Synthesize RUN-ID ALL-RESULTS to mementum."
+  (let ((memory-dir (expand-file-name "mementum/memories"
+                                       (expand-file-name user-emacs-directory))))
+    (make-directory memory-dir t)
+    (let ((file (expand-file-name (format "auto-workflow-%s.md" run-id) memory-dir)))
+      (with-temp-file file
+        (insert (format "---\ntitle: Auto-Workflow %s\ndate: %s\n---\n\n" run-id run-id))
+        (insert (format "# Auto-Workflow: %s\n\n" run-id))
+        (insert "## Summary\n\n")
+        (let ((kept (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
+              (total (length all-results)))
+          (insert (format "- Experiments: %d\n" total))
+          (insert (format "- Kept: %d\n" kept))
+          (insert (format "- Discarded: %d\n\n" (- total kept))))
+        (insert "## Key Learnings\n\n")
+        (dolist (r (cl-remove-if-not (lambda (r) (plist-get r :kept)) all-results))
+          (insert (format "- **%s**: %s\n"
+                          (plist-get r :target)
+                          (or (plist-get r :hypothesis) "unknown"))))))
+    (message "[autonomous] Metabolized to mementum/memories/auto-workflow-%s.md" run-id)))
+
+(defun gptel-auto-workflow-run-autonomous ()
+  "Run Autonomous Research Agent with program.md + skills + mementum.
+
+Flow:
+  1. orient() - load program.md + skills
+  2. run experiments with skill guidance
+  3. metabolize() - synthesize to mementum
+
+Cron: emacsclient -e '(gptel-auto-workflow-run-autonomous)'
+Manual: M-x gptel-auto-workflow-run-autonomous"
+  (interactive)
+  (unless (require 'magit-worktree nil t)
+    (user-error "magit-worktree is required"))
+  (unless (require 'magit-git nil t)
+    (user-error "magit-git is required"))
+  (let* ((program (gptel-auto-workflow-orient))
+         (targets (plist-get program :targets))
+         (run-id (format-time-string "%Y-%m-%d"))
+         (all-results '()))
+    (if (null targets)
+        (message "[autonomous] No targets in %s" gptel-auto-workflow-program-file)
+      (message "[autonomous] Starting %s with %d targets" run-id (length targets))
+      (dolist (target targets)
+        (gptel-auto-experiment-loop
+         target
+         (lambda (results)
+           (setq all-results (append all-results results)))))
+      (gptel-auto-workflow-metabolize run-id all-results)
+      (message "[autonomous] Complete: %d experiments" (length all-results)))))
 
 (provide 'gptel-tools-agent)
 
