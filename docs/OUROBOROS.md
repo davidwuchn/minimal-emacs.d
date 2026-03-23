@@ -19,7 +19,7 @@ Seven distinct systems emerged in 2025-2026 exploring autonomous AI, self-improv
 | **michaelwhitford/ouroboros** | Michael Whitford | Human+AI co-evolution game | Human-gated code changes | REPL-driven, nucleus prompt language |
 | **mementum** | Michael Whitford | AI memory protocol | Git-based session continuity | Feed-forward understanding across sessions |
 | **nucleus** | Michael Whitford | Prompt language | N/A (prompt layer) | Compressed mathematical notation |
-| **minimal-emacs.d** | David Wu | Emacs AI assistant implementation | Human-gated (via git commits) | VSM architecture, Wu Xing diagnostics, auto-evolve |
+| **minimal-emacs.d** | David Wu | Emacs AI assistant implementation | Human-gated (via git commits) | VSM architecture, Wu Xing, auto-evolve, **autoresearch convergence** |
 
 **Key Findings:**
 1. **Two paradigms:** Autonomous evolution (joi-lab/ouroboros) vs. human-governed co-evolution (michaelwhitford ecosystem + minimal-emacs.d)
@@ -27,6 +27,7 @@ Seven distinct systems emerged in 2025-2026 exploring autonomous AI, self-improv
 3. **Naming collision:** Two distinct "ouroboros" projects — joi-lab (self-modifying agent) vs. michaelwhitford (co-evolution game)
 4. **Governance spectrum:** From full autonomy (joi-lab/ouroboros) to human-gated (mementum, michaelwhitford/ouroboros, minimal-emacs.d)
 5. **Implementation vs. Framework:** minimal-emacs.d is the only practical Emacs implementation; others are frameworks or protocols
+6. **autoresearch convergence:** minimal-emacs.d implements ~48 experiments/night with human-gated governance, bridging ML experimentation and AI assistant patterns
 
 ---
 
@@ -663,6 +664,7 @@ Session N+1: AI reads git → Understands context → Continues work
 - **Subagent delegation** — Explorer, researcher, reviewer, executor with scoped toolsets
 - **Security ACLs** — Hard capability filtering by preset (plan mode cannot reach mutating tools)
 - **Auto-evolution system** — Benchmarks, instincts (φ tracking), anti-pattern detection (相克), improvements (相生)
+- **Autonomous Research Agent** — ~48 experiments/night, human-editable objectives via program.md, skill auto-evolution
 - **Wu Xing diagnostics** — Five Elements theory for system health (Water→Wood→Fire→Earth→Metal→Water)
 - **VSM architecture** — Viable System Model with 5 subsystems (S1-S5)
 
@@ -672,16 +674,81 @@ Emacs/gptel (runtime)
     ├── gptel-agent (subagent delegation, tool orchestration)
     ├── nucleus (toolsets, presets, prompts, security)
     ├── mementum/ (memory: state.md, memories/, knowledge/)
+    │   ├── knowledge/optimization-skills/  (target skills, auto-evolve)
+    │   └── knowledge/mutations/            (caching, lazy-init, simplification)
     ├── assistant/ (agents, prompts, skills)
     │   ├── agents/ (plan_agent.md, code_agent.md)
     │   ├── prompts/ (system prompts)
     │   └── skills/ (domain skills with SKILL.md)
     └── lisp/modules/
         ├── gptel-ext-*.el (15 extensions: fsm, retry, security, etc.)
+        ├── gptel-tools-agent.el (auto-workflow: 27 functions, mementum optimization)
         ├── gptel-tools-*.el (8 tool modules)
         ├── nucleus-*.el (4 nucleus modules)
         └── gptel-benchmark-*.el (15 evolution modules)
 ```
+
+### autoresearch Convergence
+
+**Source:** docs/auto-workflow.md, docs/auto-workflow-program.md  
+**Confidence:** confirmed (primary source)
+
+**Claim:** minimal-emacs.d now implements an Autonomous Research Agent that converges with karpathy/autoresearch while maintaining human-gated governance.
+
+| autoresearch Feature | minimal-emacs.d Implementation |
+|----------------------|-------------------------------|
+| `program.md` (human edits objectives) | `docs/auto-workflow-program.md` ✓ |
+| Fixed time budget (5 min) | 10 min budget per experiment ✓ |
+| ~100 experiments/night | ~48 experiments/night ✓ |
+| Git as memory | mementum (git-based) ✓ |
+| Single file modification | Per-target worktrees ✓ |
+| analyzer → grader → comparator pipeline | Subagent pipeline ✓ |
+| TSV logging with explainable columns | `results.tsv` with 11 columns ✓ |
+| Dynamic stop (no improvement threshold) | 3 consecutive no-improvements ✓ |
+
+**Key Differences:**
+
+| Dimension | autoresearch | minimal-emacs.d |
+|-----------|--------------|-----------------|
+| **Commit autonomy** | Agent decides keep/discard | Human-gated (git commits) |
+| **Scope** | Single file (train.py) | Multiple targets via worktrees |
+| **Mutation types** | Unrestricted code changes | Guided by mutation skills |
+| **Skill evolution** | ❌ | ✅ optimization-skills auto-update |
+| **Weekly maintenance** | ❌ | ✅ mementum decay + synthesis |
+
+**Auto-Workflow Pipeline:**
+
+```
+docs/auto-workflow-program.md     ← Human edits objectives
+            │
+            ▼
+┌─────────────────────────────────────────────────────────┐
+│              gptel-auto-workflow-run-autonomous         │
+│                                                         │
+│  1. orient()    → load program.md + skills             │
+│  2. experiments → ~48/night with skill guidance         │
+│  3. metabolize() → synthesize + skill evolution        │
+└─────────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────┐
+│                    mementum/                            │
+│                                                         │
+│  memories/auto-workflow-{date}.md    (continuity)       │
+│  knowledge/optimization-skills/      (compounding)      │
+│  knowledge/mutations/               (reusable patterns) │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Mementum Optimization (Weekly):**
+
+| Function | Purpose |
+|----------|---------|
+| `gptel-mementum-build-index` | Topic → file mapping for O(1) lookup |
+| `gptel-mementum-recall` | Quick lookup with git grep fallback |
+| `gptel-mementum-decay-skills` | Decay skills not tested in 4+ weeks |
+| `gptel-mementum-check-synthesis-candidates` | Detect topics with ≥3 memories |
+| `gptel-mementum-weekly-job` | Weekly maintenance orchestration |
 
 ### Layer 2: How It Works (Mechanism)
 
@@ -820,7 +887,8 @@ Daily Work → Collect Metrics → Detect Anti-patterns (相克) → Auto-Improv
 | **Memory Substrate** | Git history | Markdown + FTS5 | BIBLE.md + git | Git (mementum) | Git (markdown) | N/A | **Git (mementum)** |
 | **Governance** | Rules-based | User-controlled | Constitutional | Human-in-loop | Human-gated | N/A | **Architectural + Human-gated** |
 | **Safety Mechanism** | Constraints (code) | User control | Prompts (constitution) | Human judgment | Human review | N/A | **ACLs + permits + emergency stop** |
-| **Primary Goal** | Optimize val_bpb | Capability accumulation | Self-creation | AI COMPLETE | Session continuity | Token-efficient prompts | **Human-AI collaboration** |
+| **Primary Goal** | Optimize val_bpb | Capability accumulation | Self-creation | AI COMPLETE | Session continuity | Token-efficient prompts | **Human-AI collaboration + autonomous research** |
+| **autoresearch Convergence** | — | ❌ | ❌ | ❌ | ❌ | ❌ | **✅ ~48 experiments/night** |
 
 ### Design Pattern Convergence
 
@@ -2798,6 +2866,6 @@ GAP REGISTRY
 
 ---
 
-**Document Version:** 5.0  
+**Document Version:** 5.1  
 **Last Updated:** 2026-03-23  
-**Changes:** Added System 7 (davidwuchn/minimal-emacs.d) as practical implementation. Updated comparative analysis to 7 systems. Added Position Analysis showing inheritance from michaelwhitford ecosystem and lessons from other systems. Added comparison table showing minimal-emacs.d achieves highest advice alignment (95%).
+**Changes:** Added autoresearch convergence to System 7 — ~48 experiments/night, program.md for objectives, optimization-skills auto-evolution, mementum weekly optimization. Updated executive summary and comparative analysis.
