@@ -12,6 +12,7 @@
 | **Mutations** | mutation skills | ✓ |
 | **Engine** | ~32 experiments/night | ✓ |
 | **Validation** | analyzer/grader/comparator | ✓ |
+| **Maintenance** | mementum weekly optimization | ✓ |
 
 ## Entry Points
 
@@ -195,6 +196,18 @@ git cherry-pick <sha>
 | `gptel-auto-experiment-grade` | Validate experiment quality (LLM threshold) |
 | `gptel-auto-experiment-decide` | Compare before/after, decide keep/discard |
 | `gptel-auto-experiment-log-tsv` | Log with explainable columns |
+| `gptel-auto-workflow-metabolize` | Synthesize results, update skills |
+| `gptel-auto-workflow-update-target-skill` | Update target skill after experiment |
+| `gptel-auto-workflow-update-mutation-skill` | Update mutation skill after experiment |
+
+### Mementum Functions
+
+| Function | Purpose |
+|----------|---------|
+| `gptel-mementum-build-index` | Build recall index for O(1) lookup |
+| `gptel-mementum-recall` | Quick topic lookup |
+| `gptel-mementum-decay-skills` | Decay stale skills (weekly) |
+| `gptel-mementum-weekly-job` | Weekly maintenance orchestration |
 
 ---
 
@@ -712,6 +725,36 @@ emacsclient -e '(gptel-auto-workflow-run)'
 
 ---
 
-**Document Version:** 1.1  
+## Mementum Optimization
+
+Weekly maintenance runs automatically (Sunday 3 AM) via `gptel-benchmark-instincts-weekly-job`:
+
+| Function | Purpose |
+|----------|---------|
+| `gptel-mementum-build-index` | Build topic → file mapping for O(1) lookup |
+| `gptel-mementum-recall` | Quick lookup with git grep fallback |
+| `gptel-mementum-decay-skills` | Decay skills not tested in 4+ weeks |
+| `gptel-mementum-check-synthesis-candidates` | Detect topics with ≥3 memories |
+
+### Decay Logic
+
+Skills with `last-tested:` older than 4 weeks:
+1. **phi decay**: -0.02 per week
+2. **Archive**: When phi < 0.3, move to `archive/` subdirectory
+
+### Synthesis Detection
+
+When ≥3 memories share a topic keyword, suggest creating a knowledge page.
+
+### Cron Integration
+
+```cron
+# Weekly: instincts evolution + mementum optimization
+0 3 * * 0 emacsclient -e '(gptel-benchmark-instincts-weekly-job)'
+```
+
+---
+
+**Document Version:** 1.2  
 **Last Updated:** 2026-03-23  
-**Changes:** Added Scheduled Runs (Cron) section
+**Changes:** Added Mementum Optimization section
