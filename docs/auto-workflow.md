@@ -1,62 +1,121 @@
 # Auto-Workflow
 
-> ~32 experiments/night with agent-driven mutation and subagent validation.
+> Autonomous Research Agent with continuity + compounding.
 
 ## Implementation Status
 
-| Component | Status | Description |
-|-----------|--------|-------------|
-| Experiment loop | ✓ Implemented | Dynamic stop after N no-improvements |
-| Single experiment | ✓ Implemented | 15 min budget, worktree isolation |
-| Analyzer integration | ✓ Implemented | Pattern detection, hypothesis guidance |
-| Grader integration | ✓ Implemented | LLM-decided quality threshold |
-| Comparator integration | ✓ Implemented | Keep/discard with reasoning |
-| Eight Keys metric | ✓ Implemented | Overall score optimization |
-| TSV logging | ✓ Implemented | Explainable results with all columns |
-| Cron scheduling | ✓ Implemented | 2 AM daily |
+| Layer | Component | Status |
+|-------|-----------|--------|
+| **Objectives** | program.md (human-editable) | ✓ |
+| **Continuity** | mementum memories | ✓ |
+| **Compounding** | optimization skills | ✓ |
+| **Mutations** | mutation skills | ✓ |
+| **Engine** | ~32 experiments/night | ✓ |
+| **Validation** | analyzer/grader/comparator | ✓ |
 
-**Entry point:** `gptel-auto-workflow-run` in `gptel-tools-agent.el`
+## Entry Points
+
+```elisp
+;; Autonomous Research Agent (recommended)
+M-x gptel-auto-workflow-run-autonomous
+
+;; Legacy (uses elisp variable)
+M-x gptel-auto-workflow-run
+```
 
 ## Architecture
 
 ```
-Human (once)                    Agent (overnight ~32 experiments)
-    │                                    │
-    ├─ Set targets ─────────────────────►│
-    │   gptel-auto-workflow-targets      │
-    │                                    ├─ For each target:
-    │                                    │  └─ Experiment loop (max 10)
-    │                                    │      ├─ analyzer: detect patterns
-    │                                    │      ├─ code: implement hypothesis
-    │                                    │      ├─ grader: validate (LLM decides)
-    │                                    │      ├─ benchmark: Eight Keys score
-    │                                    │      ├─ comparator: keep/discard + why
-    │                                    │      └─ log to TSV
-    │                                    │
-    │◄───────────────────────────────────┤
-    │         Morning review              │
-    │   var/tmp/experiments/{date}/       │
-    │   results.tsv (explainable)         │
+docs/auto-workflow-program.md     ← Human edits objectives
+            │
+            ▼
+┌─────────────────────────────────────────────────────────┐
+│              gptel-auto-workflow-run-autonomous         │
+│                                                         │
+│  1. orient()    → load program.md + skills             │
+│  2. experiments → ~32/night with skill guidance         │
+│  3. metabolize() → synthesize to mementum              │
+└─────────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────┐
+│                    mementum/                            │
+│                                                         │
+│  memories/auto-workflow-{date}.md    (continuity)       │
+│  knowledge/optimization-skills/      (compounding)      │
+│  knowledge/mutations/               (reusable patterns) │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Configuration
+## program.md
 
-```elisp
-;; Time budget per experiment (default: 15 min)
-(setq gptel-auto-experiment-time-budget 900)
+Human-editable objectives at `docs/auto-workflow-program.md`:
 
-;; Max experiments per target (default: 10)
-(setq gptel-auto-experiment-max-per-target 10)
+```markdown
+## Targets
+lisp/modules/gptel-ext-retry.el
+lisp/modules/gptel-ext-context.el
 
-;; Stop after N consecutive no-improvements (default: 3)
-(setq gptel-auto-experiment-no-improvement-threshold 3)
+## Constraints
+### Immutable Files
+early-init.el
+lisp/eca-security.el
 
-;; Use analyzer/grader/comparator subagents (default: t)
-(setq gptel-auto-experiment-use-subagents t)
+## Mutation Strategy
+- [x] caching
+- [x] lazy-initialization
+- [x] simplification
+```
 
-;; Target files to optimize
-(setq gptel-auto-workflow-targets
-      '("gptel-ext-retry.el" "gptel-ext-context.el" "gptel-tools-code.el"))
+## Skills
+
+### Target Skills
+
+`mementum/knowledge/optimization-skills/{target}.md`
+
+Track successful/failed mutations per target:
+
+```yaml
+---
+title: Optimization Skill: retry
+phi: 0.85
+runs: 3
+---
+
+## Successful Mutations
+| Mutation | Success Rate | Avg Delta |
+|----------|-------------|-----------|
+| caching  | 3/3         | +0.06     |
+
+## Nightly History
+| Date       | Kept | Score Δ |
+|------------|------|---------|
+| 2026-03-22 | 3    | +0.12   |
+```
+
+### Mutation Skills
+
+`mementum/knowledge/mutations/{type}.md`
+
+Reusable hypothesis templates:
+
+```yaml
+---
+title: Mutation Skill: caching
+phi: 0.75
+---
+
+## Hypothesis Templates
+"Add caching to {component} to reduce redundant {operation}"
+
+## When to Apply
+- Repeated lookups detected
+- Same computation called multiple times
+
+## Success History
+| Target | Date | Delta |
+|--------|------|-------|
+| retry  | 2026-03-22 | +0.06 |
 ```
 
 ## Subagent Pipeline

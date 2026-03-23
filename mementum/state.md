@@ -2,38 +2,68 @@
 
 > Last session: 2026-03-23
 
-## Completed (2026-03-23) — ~32 Experiments/Night Auto-Workflow
+## Completed (2026-03-23) — Autonomous Research Agent
 
-Implemented autoresearch-inspired experiment loop with subagent integration:
+Built complete Autonomous Research Agent with continuity + compounding:
 
-### What Changed
+### Commits (6 total)
 
-| Component | Before | After |
-|-----------|--------|-------|
-| Experiments | 1 per target | ~10 per target (dynamic stop) |
-| Time budget | None | 15 min per experiment |
-| Metric | Binary (pass/fail) | Eight Keys overall score |
-| Mutation | Fixed prompt | Agent-driven (reads git history + analyzer) |
-| Validation | None | grader subagent (LLM decides threshold) |
-| Decision | `score_after > score_before` | comparator subagent (reasoning) |
-| Logging | JSON metrics | TSV with explainable columns |
+| Commit | Description |
+|--------|-------------|
+| `0d8e8df` | Phased autonomous agent + cron scheduling |
+| `eb3ad90` | Semi-autonomous overnight optimization |
+| `10bcb9c` | Magit + per-target branches |
+| `ed8532b` | ~32 experiments/night + subagent pipeline |
+| `e89712c` | program.md + skills infrastructure |
+| `e05bbd9` | Wire program.md + skills + mementum |
 
-### Functions Added (~350 lines)
+### What Was Built
 
-| Function | Purpose |
-|----------|---------|
-| `gptel-auto-workflow-run` | Main entry (~32 experiments/night) |
-| `gptel-auto-experiment-loop` | Per-target loop with dynamic stop |
-| `gptel-auto-experiment-run` | Single experiment with subagent pipeline |
-| `gptel-auto-experiment-analyze` | Pattern detection (reuses `gptel-benchmark-analyze`) |
-| `gptel-auto-experiment-grade` | Quality validation (reuses `gptel-benchmark-grade`) |
-| `gptel-auto-experiment-decide` | Keep/discard (reuses `gptel-benchmark-compare`) |
-| `gptel-auto-experiment-benchmark` | Eight Keys scoring |
-| `gptel-auto-experiment-log-tsv` | Explainable TSV logging |
-| `gptel-auto-experiment-build-prompt` | Hypothesis prompt with git history |
+| Layer | Components |
+|-------|------------|
+| **Objectives** | `docs/auto-workflow-program.md` — human-editable |
+| **Continuity** | `mementum/memories/auto-workflow-{date}.md` |
+| **Compounding** | `mementum/knowledge/optimization-skills/{target}.md` |
+| **Mutations** | `mementum/knowledge/mutations/{type}.md` |
+| **Engine** | ~32 experiments/night with subagent pipeline |
 
-### Subagent Pipeline
+### Entry Points
 
+```elisp
+;; Legacy (uses elisp variable for targets)
+M-x gptel-auto-workflow-run
+
+;; Autonomous Research Agent (uses program.md)
+M-x gptel-auto-workflow-run-autonomous
+```
+
+### Flow (Autonomous Research Agent)
+
+```
+orient()              → load program.md + skills
+run experiments       → ~32/night with skill guidance
+metabolize()          → synthesize to mementum
+morning review        → human reviews, edits program.md
+```
+
+### Skills Architecture
+
+```
+optimization-skills/
+├── retry.md     → successful mutations for retry.el
+├── context.md   → successful mutations for context.el
+└── code.md      → successful mutations for code.el
+
+mutations/
+├── caching.md       → hypothesis templates for caching
+├── lazy-init.md     → hypothesis templates for lazy-init
+└── simplification.md → hypothesis templates for simplification
+```
+
+### Cron
+
+```
+0 2 * * *   emacsclient -e '(gptel-auto-workflow-run-autonomous)'
 ```
 Experiment N:
   1. analyzer → detect patterns from N-1 experiments
