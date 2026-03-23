@@ -689,14 +689,18 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 
 (defun gptel-auto-workflow-create-worktree (target &optional experiment-id)
   "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch."
-  (let* ((branch (gptel-auto-workflow--branch-name target experiment-id))
+  (let* ((base-dir (gptel-auto-workflow--base-dir))
+         (branch (gptel-auto-workflow--branch-name target experiment-id))
          (worktree-dir (expand-file-name
-                        (format "%s/%s" gptel-auto-workflow-worktree-base branch))))
+                        (format "%s/%s" gptel-auto-workflow-worktree-base branch)
+                        base-dir)))
+    (setq gptel-auto-workflow--worktree-dir nil
+          gptel-auto-workflow--current-branch nil)
     (condition-case err
         (progn
           (make-directory (file-name-directory worktree-dir) t)
           (magit-worktree-branch worktree-dir branch "main")
-          (message "[auto-workflow] Created: %s" branch)
+          (message "[auto-workflow] Created: optimize/%s" branch)
           (setq gptel-auto-workflow--worktree-dir worktree-dir
                 gptel-auto-workflow--current-branch branch)
           worktree-dir)
@@ -708,12 +712,21 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
   "Delete current worktree if exists."
   (when (and gptel-auto-workflow--worktree-dir
              (file-exists-p gptel-auto-workflow--worktree-dir))
-    (condition-case err
-        (magit-worktree-delete gptel-auto-workflow--worktree-dir)
-      (error
-       (message "[auto-workflow] Failed to delete worktree: %s" err)))
-    (setq gptel-auto-workflow--worktree-dir nil
-          gptel-auto-workflow--current-branch nil)))
+    (let ((dir gptel-auto-workflow--worktree-dir)
+          (branch gptel-auto-workflow--current-branch)
+          (main-repo (gptel-auto-workflow--base-dir)))
+      (setq gptel-auto-workflow--worktree-dir nil
+            gptel-auto-workflow--current-branch nil)
+      (condition-case err
+          (progn
+            (when (file-exists-p dir)
+              (delete-directory dir t))
+            (let ((default-directory main-repo))
+              (magit-git-success "worktree" "prune")
+              (when branch
+                (magit-git-success "branch" "-D" branch))))
+        (error
+         (message "[auto-workflow] Failed to delete worktree: %s" err))))))
 
 ;;; Benchmark & Evaluation
 
