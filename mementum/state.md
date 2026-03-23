@@ -1,6 +1,75 @@
 # Mementum State
 
-> Last session: 2026-03-22
+> Last session: 2026-03-23
+
+## Completed (2026-03-23) — Upstream PR for nil/null Tool Names
+
+Created upstream PR for bug discovered through local defensive code:
+
+### PR Details
+
+| Item | Value |
+|------|-------|
+| **PR #** | 1305 |
+| **Repo** | karthink/gptel |
+| **Branch** | `fix-nil-tool-names` |
+| **Files** | `gptel-openai.el` (+20/-16) |
+| **URL** | https://github.com/karthink/gptel/pull/1305 |
+
+### The Bug
+
+When LLM returns tool call with nil/null function name during streaming, code incorrectly treats it as "old tool block continues", creating malformed entries that hang FSM.
+
+### The Fix
+
+Changed `if` to `cond` to explicitly handle:
+1. Valid function name → new tool block
+2. Invalid function name at start → skip with warning
+3. Continuing previous block → collect arguments
+
+### What Stayed Local
+
+- `my/gptel--sanitize-tool-calls` — defensive pre-check
+- `my/gptel--nil-tool-call-p` — redundant with PR
+- "invalid" tool registration — defensive fallback
+- Doom-loop detection — defensive framework
+
+### Key Insight
+
+```
+λ pr_scope(x).    minimal_fix(x) > defensive_framework(x)
+                  | clean_branch(upstream/master) > fork_branch(x)
+```
+
+### Memories Created
+
+- `upstream-pr-workflow.md` — workflow for future PRs
+
+---
+
+## Completed (2026-03-23) — DashScope Upstream Review
+
+Reviewed DashScope-specific code for potential upstream contributions:
+
+### Analysis
+
+| Local Fix | Upstream Handling | Decision |
+|-----------|-------------------|----------|
+| `:null` stream filter | gptel-openai.el:136-137, gptel-gemini.el:98, gptel-anthropic.el:93 | Removed (redundant) |
+| `search-failed` handler | gptel-request.el:3007-3008 returns error message | Removed (redundant) |
+| `:curl-args '("--http1.1")` | Already uses upstream `:curl-args` slot | Keep (no PR needed) |
+| 60% auto-compact threshold | Local-specific logic | Keep (defensive) |
+| nil content sanitizer | Defensive JSON guard | Keep (edge-case) |
+
+### Commits
+
+- `0c52754` Δ gptel-ext-core: remove redundant :null filter and curl hardening (-44 lines)
+
+### Key Insight
+
+Upstream gptel already filters `:null` in streaming parsers before reaching `gptel-curl--stream-insert-response`. Local code was redundant defensive layer.
+
+---
 
 ## Completed (2026-03-22) — Code Review Bug Fixes
 

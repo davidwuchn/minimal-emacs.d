@@ -111,3 +111,59 @@ upstream = general_core + happy_path
 ## Captured
 
 2026-03-23 — From gptel-ext-fsm refactor verification
+
+---
+
+## PR Workflow Example (2026-03-23)
+
+### Case: nil/null Tool Name Hangs FSM
+
+**Discovery:** DashScope returns tool calls with nil/null function names, causing FSM to hang.
+
+**Analysis:**
+1. Found local fix in fork (`7a03645`)
+2. Checked upstream — bug exists, no fix
+3. Identified as general bug, not DashScope-specific
+
+**PR Process:**
+
+```bash
+# 1. Create clean branch from upstream
+git checkout -b fix-nil-tool-names upstream/master
+
+# 2. Cherry-pick or re-implement minimal fix
+#    (not the full defensive "invalid tool" pattern)
+# 3. Commit with clear message
+# 4. Push to fork
+git push origin fix-nil-tool-names
+
+# 5. Create PR against upstream
+gh pr create --repo karthink/gptel --head davidwuchn:fix-nil-tool-names --base master
+```
+
+**Key Insight:**
+
+```
+λ pr_scope(x).    minimal_fix(x) > defensive_framework(x)
+                  | clean_branch(upstream/master) > fork_branch(x)
+                  | general_benefit(x) → PR(upstream)
+                  | edge_case_only(x) → local_patch
+```
+
+**PR #1305:** https://github.com/karthink/gptel/pull/1305
+
+### What We Did NOT Upstream
+
+| Local Code | Reason |
+|------------|--------|
+| `my/gptel--sanitize-tool-calls` | Defensive pre-check, upstream handles in parser |
+| `my/gptel--nil-tool-call-p` | Redundant with PR fix |
+| "invalid" tool registration | Defensive fallback pattern |
+| Doom-loop detection | Defensive, not a bug fix |
+
+### Lesson
+
+When local defensive code reveals an upstream bug:
+1. **Extract the core fix** — minimal change to fix the bug
+2. **Leave defensive layers local** — they may still be useful
+3. **Don't upstream defensive frameworks** — maintainers prefer simple fixes
