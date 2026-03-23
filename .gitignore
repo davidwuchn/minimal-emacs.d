@@ -53,3 +53,5 @@ lisp/modules/*.elc
 !benchmarks/workflows/*.json
 !assistant/
 !assistant/**
+!cron.d/
+!cron.d/*

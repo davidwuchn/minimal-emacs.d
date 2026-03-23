@@ -617,6 +617,49 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 (with-eval-after-load 'gptel-agent-tools
   (advice-add 'gptel-agent--write-todo :around #'my/gptel-agent--write-todo-around))
 
+;;; Auto-Workflow (Scheduled Runs)
+
+(defcustom gptel-auto-workflow-targets
+  '("gptel-ext-retry.el" "gptel-ext-context.el" "gptel-tools-code.el")
+  "Target files for scheduled auto-workflow runs.
+Each target will be optimized following docs/auto-workflow.md.
+Used by `gptel-auto-workflow-run'."
+  :type '(repeat string)
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-workflow-run (&optional targets)
+  "Run auto-workflow on TARGETS (default: gptel-auto-workflow-targets).
+Entry point for cron-scheduled runs via emacsclient.
+
+Each target is optimized following docs/auto-workflow.md.
+Results stored in var/tmp/experiments/{run-id}/.
+
+Usage from cron:
+  emacsclient -e '(gptel-auto-workflow-run)'
+
+Usage with specific targets:
+  emacsclient -e '(gptel-auto-workflow-run (quote (\"file1.el\" \"file2.el\")))'"
+  (interactive)
+  (let ((targets (or targets gptel-auto-workflow-targets))
+        (run-id (format-time-string "%Y-%m-%d")))
+    (message "[auto-workflow] Starting run %s with %d targets: %s"
+             run-id (length targets) targets)
+    (dolist (target targets)
+      (condition-case err
+          (progn
+            (message "[auto-workflow] Spawning agent for: %s" target)
+            (my/gptel--run-agent-tool
+             (lambda (result)
+               (message "[auto-workflow] Completed %s: %s" target result))
+             "code"
+             (format "optimize %s" target)
+             (format "Optimize %s for performance following docs/auto-workflow.md" target)
+             nil "false" nil))
+        (error
+         (message "[auto-workflow] Error spawning agent for %s: %s" target err))))
+    (message "[auto-workflow] Run %s started. Check var/tmp/experiments/%s/ for results."
+             run-id run-id)))
+
 ;;; Footer
 
 (provide 'gptel-tools-agent)

@@ -152,6 +152,8 @@ earlier external startup path.
   `lisp/gptel-config.el` for presets, subagents, and routing.
 - **CI and regression coverage** - dedicated suites for Programmatic flows,
   confirmation UI, payload trimming, and nucleus tool validation.
+- **Auto-workflow** - phased autonomous agent for optimization experiments
+  with auto-evolution via 相生/相克. See [docs/auto-workflow.md](docs/auto-workflow.md).
 
 ## Architecture
 
@@ -189,6 +191,58 @@ Configured for Moonshot/Kimi (default), DashScope/Qwen, DeepSeek, Gemini,
 OpenRouter, GitHub Copilot, MiniMax, and Cloudflare Workers AI. Backend/model
 selection is centralized so presets and subagents inherit the active default
 instead of hardcoding provider-specific values.
+
+## Auto-Workflow
+
+Phased autonomous agent for optimization experiments with auto-evolution.
+
+### Usage
+
+```
+#=frame #file var/tmp/experiments/{run-id}/{target}/frame.md
+#=research #ground #file
+#=design #subtract #file
+#=code #checklist
+#=review #file
+#=review #meta #file
+```
+
+### Parallel Overnight (via RunAgent)
+
+```
+RunAgent("code", "optimize gptel-ext-retry.el following docs/auto-workflow.md")
+RunAgent("code", "optimize gptel-ext-context.el following docs/auto-workflow.md")
+```
+
+### Scheduled Runs (Cron)
+
+```bash
+# Install cron job for nightly runs at 2 AM
+crontab cron.d/auto-workflow
+
+# Manual trigger
+emacsclient -e '(gptel-auto-workflow-run)'
+```
+
+### Phases
+
+| Phase | Trigger | Purpose |
+|-------|---------|---------|
+| **Frame** | `#=frame #file` | Define target, goal, constraints |
+| **Research** | `#=research #ground #file` | Understand, benchmark baseline |
+| **Design** | `#=design #subtract #file` | Propose minimal approach |
+| **Execute** | `#=code #checklist` | Implement in worktree, validate |
+| **Review** | `#=review #file` | Summary, recommendation |
+| **Learn** | `#=review #meta #file` | Auto-evolve via 相生/相克 |
+
+### Safety
+
+- Git worktree isolation per experiment
+- Test gate: `./scripts/verify-nucleus.sh` must pass
+- Benchmark validation required
+- Token/time budget enforcement
+
+See [docs/auto-workflow.md](docs/auto-workflow.md) for full specification.
 
 ## ECA + ai-code Integration
 

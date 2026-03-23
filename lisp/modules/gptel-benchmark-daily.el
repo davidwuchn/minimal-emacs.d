@@ -47,12 +47,6 @@
   :type 'integer
   :group 'gptel-benchmark-daily)
 
-(defcustom gptel-benchmark-daily-report-time "18:00"
-  "Time to show daily report (24h format, or nil to disable)."
-  :type '(choice (string :tag "Time")
-                 (const :tag "Disabled" nil))
-  :group 'gptel-benchmark-daily)
-
 ;;; State
 
 (defvar gptel-benchmark-daily-runs nil
@@ -61,40 +55,28 @@
 (defvar gptel-benchmark-daily-run-count 0
   "Count of runs since last evolution cycle.")
 
-(defvar gptel-benchmark-daily-timer nil
-  "Timer for daily report.")
-
 ;;; Setup
 
 (defun gptel-benchmark-daily-setup ()
   "Setup daily benchmark integration.
 Adds hooks to auto-collect metrics on skill/workflow runs.
 Reads mementum state on session start for continuity.
-Starts weekly instincts evolution timer."
+All scheduled tasks moved to cron (see cron.d/auto-workflow)."
   (interactive)
   (gptel-benchmark-memory-orient)
   (advice-add 'gptel-workflow-benchmark-run :around
               #'gptel-benchmark-daily--wrap-workflow-run)
   (advice-add 'gptel-skill-benchmark-run :around
               #'gptel-benchmark-daily--wrap-skill-run)
-  (when gptel-benchmark-daily-report-time
-    (gptel-benchmark-daily--setup-report-timer))
-  (when (featurep 'gptel-benchmark-instincts)
-    (gptel-benchmark-instincts-start-weekly-timer))
-  (message "[daily-bench] Integration enabled (weekly instincts timer active)"))
+  (message "[daily-bench] Integration enabled (scheduled tasks via cron)"))
 
 (defun gptel-benchmark-daily-teardown ()
-  "Remove daily benchmark integration hooks.
-Stops weekly instincts evolution timer."
+  "Remove daily benchmark integration hooks."
   (interactive)
   (advice-remove 'gptel-workflow-benchmark-run
                  #'gptel-benchmark-daily--wrap-workflow-run)
   (advice-remove 'gptel-skill-benchmark-run
                  #'gptel-benchmark-daily--wrap-skill-run)
-  (when gptel-benchmark-daily-timer
-    (cancel-timer gptel-benchmark-daily-timer))
-  (when (featurep 'gptel-benchmark-instincts)
-    (gptel-benchmark-instincts-stop-weekly-timer))
   (message "[daily-bench] Integration disabled"))
 
 ;;; Collection Hooks
@@ -300,33 +282,6 @@ Triggers gptel-benchmark-memory-synthesize for topics with >= 3 memories."
                              (plist-get impr :name)
                              (plist-get (plist-get impr :improvement) :action)))))
         (princ "  None today\n")))))
-
-;;; Report Timer
-
-(defun gptel-benchmark-daily--setup-report-timer ()
-  "Setup timer for daily report."
-  (when gptel-benchmark-daily-timer
-    (cancel-timer gptel-benchmark-daily-timer))
-  (let* ((time-parts (split-string gptel-benchmark-daily-report-time ":"))
-         (hour (string-to-number (car time-parts)))
-         (min (string-to-number (cadr time-parts)))
-         (now (decode-time))
-         (now-hour (decoded-time-hour now))
-         (now-min (decoded-time-minute now))
-         (secs-until (+ (* (- hour now-hour) 3600)
-                        (* (- min now-min) 60)))
-         (run-today (or (> hour now-hour)
-                        (and (= hour now-hour) (> min now-min)))))
-    (setq gptel-benchmark-daily-timer
-          (run-with-timer secs-until nil
-                          #'gptel-benchmark-daily--show-report))))
-
-(defun gptel-benchmark-daily--show-report ()
-  "Show daily report notification."
-  (message "[daily-bench] Daily report: %d runs, %d improvements, %d capabilities"
-           (length gptel-benchmark-daily-runs)
-           (length gptel-benchmark-improvements)
-           (length (plist-get gptel-benchmark-evolution-state :capabilities))))
 
 ;;; Auto-benchmark on Save/Commit
 

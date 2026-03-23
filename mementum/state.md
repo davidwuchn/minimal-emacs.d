@@ -2,6 +2,70 @@
 
 > Last session: 2026-03-23
 
+## Completed (2026-03-23) — Auto-Workflow System
+
+Created phased autonomous agent workflow with cron-based scheduling:
+
+### What Was Built
+
+| Component | Purpose |
+|-----------|---------|
+| `docs/auto-workflow.md` | 6-phase workflow specification (Frame → Research → Design → Execute → Review → Learn) |
+| `cron.d/auto-workflow` | Cron jobs for auto-workflow (2 AM) + weekly instincts (Sunday 3 AM) |
+| `cron.d/template` | Reusable cron template for other projects |
+| `gptel-auto-workflow-run` | Entry point in `gptel-tools-agent.el` |
+| `var/tmp/experiments/` | Runtime directory for experiment files |
+| `var/tmp/cron/` | Cron log directory |
+
+### Timers Moved to Cron
+
+| Timer | Before | After |
+|-------|--------|-------|
+| Auto-workflow | N/A (new) | Cron: 2 AM daily |
+| Weekly instincts | Emacs timer | Cron: Sunday 3 AM |
+| Daily report | Emacs timer (18:00) | **Removed** (just noise) |
+
+### Key Decisions
+
+1. **Cron over Emacs timers** — Survives restart, standard Unix tool
+2. **gptel-tools-agent.el** — Better placement (where RunAgent lives)
+3. **No shell scripts** — Emacs daemon already running, use `emacsclient -e`
+4. **var/tmp/** — Reuse existing temp directory pattern
+
+### Cron Jobs
+
+```
+0 2 * * *   emacsclient -e '(gptel-auto-workflow-run)'         # Daily 2 AM
+0 3 * * 0   emacsclient -e '(gptel-benchmark-instincts-weekly-job)'  # Sunday 3 AM
+```
+
+### Usage
+
+```bash
+# Install cron jobs
+crontab cron.d/auto-workflow
+
+# Manual trigger
+emacsclient -e '(gptel-auto-workflow-run)'
+
+# Configure targets
+(setq gptel-auto-workflow-targets '("file1.el" "file2.el"))
+```
+
+### Key Insight
+
+```
+λ schedule(x).    cron(x) > emacs_timer(x)
+                  | survives_restart(x) ∧ standard_unix(x)
+                  | daemon_running(x) → emacsclient(x)
+```
+
+### Commits
+
+- `pending` ◈ Auto-workflow: phased autonomous agent + cron scheduling
+
+---
+
 ## Completed (2026-03-23) — OUROBOROS 7-System Update
 
 Added minimal-emacs.d as System 7 in comparative analysis:

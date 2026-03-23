@@ -1,0 +1,51 @@
+# Cron Template for Emacs-based Projects
+#
+# This template shows how to schedule Emacs Lisp functions via cron.
+# Copy and modify for your project.
+
+SHELL=/bin/bash
+LOGDIR=~/.emacs.d/var/tmp/cron
+
+# Ensure log directory exists
+@reboot mkdir -p $LOGDIR
+
+# ─────────────────────────────────────────────────────────────
+# Daily jobs
+# ─────────────────────────────────────────────────────────────
+
+# Template: Run function daily at 2 AM
+# 0 2 * * * emacsclient -e '(my-scheduled-function)' >> $LOGDIR/project.log 2>&1
+
+# Template: Run function with arguments
+# 0 2 * * * emacsclient -e '(my-function-with-args "arg1" "arg2")' >> $LOGDIR/project.log 2>&1
+
+# Template: Run function hourly
+# 0 * * * * emacsclient -e '(my-hourly-task)' >> $LOGDIR/project.log 2>&1
+
+# ─────────────────────────────────────────────────────────────
+# Weekly jobs
+# ─────────────────────────────────────────────────────────────
+
+# Template: Run function weekly (Sunday at 3 AM)
+# 0 3 * * 0 emacsclient -e '(my-weekly-task)' >> $LOGDIR/project.log 2>&1
+
+# ─────────────────────────────────────────────────────────────
+# Prerequisites
+# ─────────────────────────────────────────────────────────────
+
+# Emacs daemon must be running:
+#   emacs --daemon
+# Or start in cron:
+#   @reboot emacs --daemon
+
+# ─────────────────────────────────────────────────────────────
+# Cron syntax reference
+# ─────────────────────────────────────────────────────────────
+
+# ┌───────────── minute (0-59)
+# │ ┌───────────── hour (0-23)
+# │ │ ┌───────────── day of month (1-31)
+# │ │ │ ┌───────────── month (1-12)
+# │ │ │ │ ┌───────────── day of week (0-6, Sunday=0)
+# │ │ │ │ │
+# * * * * * command
