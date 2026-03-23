@@ -308,15 +308,13 @@ Also retries model-side bugs like malformed tool arguments."
   (let ((status (if (stringp http-status) (string-to-number http-status) http-status))
         (error-msg (when (listp error-data) (plist-get error-data :message))))
     (or (and (stringp error-data)
-             (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests\\|InvalidParameter\\|function\\.arguments" error-data))
+             (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|exit code 28\\|exit code 6\\|exit code 7\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests\\|InvalidParameter\\|function\\.arguments" error-data))
         (and (numberp status) (memql status '(408 429 500 502 503 504)))
-        ;; HTTP 400 with model-side tool argument bugs (retryable)
         (and (numberp status)
              (= status 400)
              (listp error-data)
              (stringp error-msg)
              (string-match-p "InvalidParameter\\|function\\.arguments\\|must be in JSON" error-msg))
-        ;; Catch dictionary format errors from OpenCode style backend responses
         (and (listp error-data)
              (stringp error-msg)
              (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
