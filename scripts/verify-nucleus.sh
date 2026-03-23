@@ -7,8 +7,7 @@
 # Loads early-init.el (for package paths) but NOT init.el/post-init.el,
 # avoiding unrelated packages (evil, eca, etc.) that may break in batch.
 #
-# Prerequisites: Run scripts/setup-packages.sh first, or ensure packages
-# are installed in var/elpa/ (gptel, gptel-agent, ai-code).
+# Prerequisites: Packages installed in var/elpa/ (gptel, gptel-agent, ai-code).
 
 set -e
 
