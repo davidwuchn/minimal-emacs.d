@@ -6,7 +6,7 @@
 
 Built complete Autonomous Research Agent with continuity + compounding:
 
-### Commits (6 total)
+### Commits (8 total)
 
 | Commit | Description |
 |--------|-------------|
@@ -16,54 +16,70 @@ Built complete Autonomous Research Agent with continuity + compounding:
 | `ed8532b` | ~32 experiments/night + subagent pipeline |
 | `e89712c` | program.md + skills infrastructure |
 | `e05bbd9` | Wire program.md + skills + mementum |
+| `c072dfa` | Documentation update |
+| `182218a` | Skill auto-evolution + 10min budget |
 
-### What Was Built
+### Architecture
 
-| Layer | Components |
-|-------|------------|
-| **Objectives** | `docs/auto-workflow-program.md` — human-editable |
+```
+docs/auto-workflow-program.md     ← Human edits objectives
+            │
+            ▼
+┌─────────────────────────────────────────────────────────┐
+│              gptel-auto-workflow-run-autonomous         │
+│                                                         │
+│  1. orient()    → load program.md + skills             │
+│  2. experiments → ~48/night with skill guidance         │
+│  3. metabolize() → memory + skill evolution            │
+└─────────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────┐
+│                    mementum/                            │
+│                                                         │
+│  memories/auto-workflow-{date}.md    (continuity)       │
+│  knowledge/optimization-skills/      (compounding)      │
+│  knowledge/mutations/               (reusable patterns) │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Continuity + Compounding
+
+| Feature | Implementation |
+|---------|---------------|
 | **Continuity** | `mementum/memories/auto-workflow-{date}.md` |
 | **Compounding** | `mementum/knowledge/optimization-skills/{target}.md` |
-| **Mutations** | `mementum/knowledge/mutations/{type}.md` |
-| **Engine** | ~32 experiments/night with subagent pipeline |
+| **Auto-evolution** | `gptel-auto-workflow-update-*-skill` functions |
+| **Time budget** | 10 min → ~48 experiments/night |
 
-### Entry Points
+### Skill Auto-Evolution
+
+```
+After each night, metabolize() updates:
+
+Target Skills (optimization-skills/{target}.md):
+  - Successful Mutations table (success rate, avg delta, best hypothesis)
+  - Failed Mutations table (what didn't work)
+  - Nightly History table (experiments, kept, score delta)
+  - Next Hypothesis (best suggestion for next night)
+  - phi = success_rate
+
+Mutation Skills (mutations/{type}.md):
+  - Success History table (target, date, hypothesis, delta)
+  - Statistics (total uses, success rate, avg delta)
+  - phi = success_rate
+```
+
+### Entry Point
 
 ```elisp
-;; Legacy (uses elisp variable for targets)
-M-x gptel-auto-workflow-run
-
-;; Autonomous Research Agent (uses program.md)
 M-x gptel-auto-workflow-run-autonomous
-```
-
-### Flow (Autonomous Research Agent)
-
-```
-orient()              → load program.md + skills
-run experiments       → ~32/night with skill guidance
-metabolize()          → synthesize to mementum
-morning review        → human reviews, edits program.md
-```
-
-### Skills Architecture
-
-```
-optimization-skills/
-├── retry.md     → successful mutations for retry.el
-├── context.md   → successful mutations for context.el
-└── code.md      → successful mutations for code.el
-
-mutations/
-├── caching.md       → hypothesis templates for caching
-├── lazy-init.md     → hypothesis templates for lazy-init
-└── simplification.md → hypothesis templates for simplification
 ```
 
 ### Cron
 
-```
-0 2 * * *   emacsclient -e '(gptel-auto-workflow-run-autonomous)'
+```bash
+0 2 * * * emacsclient -e '(gptel-auto-workflow-run-autonomous)'
 ```
 Experiment N:
   1. analyzer → detect patterns from N-1 experiments
