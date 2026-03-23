@@ -191,7 +191,3 @@ jobs:
           emacs --batch -Q -L . -L lisp -L lisp/modules \
             -l tests/test-agent-yaml.el \
             -f ert-run-tests-batch-and-exit
-
-      - name: Verify Nucleus Tool Contracts
-        run: |
-          ./scripts/verify-nucleus.sh

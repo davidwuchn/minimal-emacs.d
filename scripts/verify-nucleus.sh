@@ -6,14 +6,14 @@
 #
 # Loads early-init.el (for package paths) but NOT init.el/post-init.el,
 # avoiding unrelated packages (evil, eca, etc.) that may break in batch.
+#
+# Prerequisites: Run scripts/setup-packages.sh first, or ensure packages
+# are installed in var/elpa/ (gptel, gptel-agent, ai-code).
 
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EMACS=${EMACS:-emacs}
-
-# Ensure packages are installed
-"$DIR/scripts/setup-packages.sh" 2>/dev/null
 
 echo "Running Nucleus Tool Validations..."
 
