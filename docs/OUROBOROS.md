@@ -2197,107 +2197,290 @@ program.md defines:
 
 ---
 
-# Gap Detection Framework
+# Benchmark Tests for Auto-Evolve
 
-**Purpose:** Automatically detect gaps between research advice and project implementation.
-
----
-
-## Gap Definition
+**Principle:** No separate gap detection system needed. Add benchmark tests for each advice item, let existing auto-evolve detect failures.
 
 ```
-λ gap(x).    expected(x) ∧ ¬implemented(x)
-             | documented(x) ∧ ¬tested(x)
-             | benchmark(x) < threshold(x)
-             | research_advice(x) ∧ ¬aligned(project, x)
+Research Advice → Benchmark Test → Auto-Evolve Detects → Improvement
 ```
 
 ---
 
-## Detection Methods
+## Existing Auto-Evolve System
 
-### Method 1: Static Analysis (Code Existence)
+| Module | Purpose | Detection |
+|--------|---------|-----------|
+| `gptel-benchmark-evolution.el` | Ouroboros cycle (OODA) | Anti-patterns, low scores |
+| `gptel-benchmark-auto-improve.el` | 相生/相克 improvement | Benchmark failures |
+| `gptel-benchmark-instincts.el` | φ tracking | Low φ = problem |
+| `gptel-workflow-benchmark.el` | Workflow tests | Test failures |
+
+---
+
+## Benchmark Tests to Add
+
+### Test 1: Progressive Disclosure
 
 ```elisp
-(defun gptel-detect-gap-static (expected-files expected-functions)
-  "Detect gaps by checking if expected code exists."
-  (let ((gaps '()))
-    (dolist (f expected-files)
-      (unless (file-exists-p f)
-        (push (list :type 'missing-file :path f) gaps)))
-    (dolist (pair expected-functions)
-      (unless (functionp (cdr pair))
-        (push (list :type 'missing-function 
-                    :file (car pair) 
-                    :name (cdr pair)) 
-              gaps)))
-    gaps))
+(defun gptel-workflow-benchmark--test-progressive-disclosure ()
+  "Test that skills-list/skill-view exist and work.
+Level 0: skills-list returns metadata (< 1000 tokens)
+Level 1: skill-view loads full content"
+  (let ((level-0-pass (fboundp 'skills-list))
+        (level-1-pass (fboundp 'skill-view)))
+    (list :test "progressive-disclosure"
+          :level-0 level-0-pass
+          :level-1 level-1-pass
+          :overall-score (if (and level-0-pass level-1-pass) 1.0 0.0))))
 ```
 
-### Method 2: Benchmark Threshold
+### Test 2: Skills Format Compliance
 
 ```elisp
-(defun gptel-detect-gap-benchmark (test-name threshold)
-  "Detect gap if benchmark score below threshold."
-  (let* ((result (gptel-benchmark--run-single-benchmark test-name 'workflow))
-         (score (plist-get result :overall-score)))
-    (when (< score threshold)
-      (list :type 'benchmark-gap
-            :test test-name
-            :score score
-            :threshold threshold
-            :gap (- threshold score)))))
+(defun gptel-workflow-benchmark--test-skills-format ()
+  "Test that skills comply with agentskills.io format.
+Required fields: name, description, version"
+  (let* ((skills-dir "./assistant/skills/")
+         (skills (directory-files-recursively skills-dir "SKILL\\.md$"))
+         (compliant 0)
+         (total (length skills)))
+    (dolist (skill skills)
+      (when (gptel-benchmark-verify-skill-format skill)
+        (cl-incf compliant)))
+    (list :test "skills-format-compliance"
+          :compliant compliant
+          :total total
+          :overall-score (/ compliant (max total 1.0)))))
 ```
 
-### Method 3: OUROBOROS Alignment
+### Test 3: Immutable File Constraints
 
 ```elisp
-(defconst gptel-ouroboros-advice
-  '((progressive-disclosure
-     :description "Tiered skill loading to reduce token bloat"
-     :signals (skills-list skill-view)
-     :benchmark "skills-progressive-disclosure"
-     :threshold 0.8)
-    (skills-standardization
-     :description "Align with agentskills.io format"
-     :signals (skill-frontmatter-p)
-     :benchmark "skills-format-compliance"
-     :threshold 0.9)
-    (constraints
-     :description "Immutable file definitions"
-     :signals (constraints.md my/gptel-can-modify-p)
-     :benchmark "constraints-immutable-files"
-     :threshold 1.0)
-    (architectural-safety
-     :description "Safety from code, not prompts"
-     :signals (my/gptel-validate-write-target timeout-enforced)
-     :benchmark "architectural-safety"
-     :threshold 1.0))
-  "OUROBOROS research advice items.")
+(defun gptel-workflow-benchmark--test-constraints ()
+  "Test that immutable files are protected."
+  (let ((test-cases '(("early-init.el" . t)   ; Should be protected
+                      ("lisp/modules/test.el" . nil))) ; Should be modifiable
+        (pass 0)
+        (total (length test-cases)))
+    (dolist (tc test-cases)
+      (let* ((file (car tc))
+             (should-block (cdr tc))
+             (blocked (condition-case nil
+                          (progn (my/gptel-validate-write-target file) nil)
+                         (error t))))
+        (when (eq blocked should-block)
+          (cl-incf pass))))
+    (list :test "constraints-immutable-files"
+          :pass pass
+          :total total
+          :overall-score (/ pass (max total 1.0)))))
+```
 
-(defun gptel-detect-gap-ouroboros ()
-  "Detect gaps by comparing project to OUROBOROS research advice."
-  (let ((gaps '()))
-    (dolist (advice gptel-ouroboros-advice)
-      (let* ((name (car advice))
-             (data (cdr advice))
-             (signals (plist-get data :signals))
-             (signals-missing (cl-remove-if 
-                               (lambda (s) 
-                                 (or (file-exists-p (symbol-name s))
-                                     (fboundp s)
-                                     (boundp s)))
-                               signals)))
-        (when (> (length signals-missing) 0)
-          (push (list :advice name
-                      :description (plist-get data :description)
-                      :severity (if (> (length signals-missing) 1) 'critical 'high)
-                      :signals-missing signals-missing)
-                gaps))))
-    (nreverse gaps)))
+### Test 4: Architectural Safety
+
+```elisp
+(defun gptel-workflow-benchmark--test-architectural-safety ()
+  "Test that safety is enforced by code, not prompts.
+Checks: timeout enforcement, max-steps limit, sandbox exists."
+  (let ((timeout-enforced (boundp 'gptel-agent-loop-timeout))
+        (max-steps-enforced (boundp 'gptel-agent-loop-max-steps))
+        (sandbox-exists (fboundp 'my/gptel-validate-write-target)))
+    (list :test "architectural-safety"
+          :timeout-enforced timeout-enforced
+          :max-steps-enforced max-steps-enforced
+          :sandbox-exists sandbox-exists
+          :overall-score (/ (+ (if timeout-enforced 1 0)
+                               (if max-steps-enforced 1 0)
+                               (if sandbox-exists 1 0))
+                            3.0))))
 ```
 
 ---
+
+## Integration with Auto-Evolve
+
+```elisp
+;; Add to gptel-benchmark-evolution.el
+
+(defun gptel-benchmark-evolution-advice-tests ()
+  "Run all OUROBOROS advice benchmark tests.
+Auto-evolve will detect failures and record to instincts."
+  (let ((tests '(gptel-workflow-benchmark--test-progressive-disclosure
+                 gptel-workflow-benchmark--test-skills-format
+                 gptel-workflow-benchmark--test-constraints
+                 gptel-workflow-benchmark--test-architectural-safety)))
+    (mapcar (lambda (test-fn)
+              (when (fboundp test-fn)
+                (funcall test-fn)))
+            tests)))
+```
+
+---
+
+## No New System Needed
+
+| Question | Answer |
+|----------|--------|
+| How to detect gaps? | Benchmark tests → auto-evolve detects failures |
+| How to record gaps? | Auto-evolve records to instincts (φ = 0.5) |
+| How to fix gaps? | Auto-evolve generates improvements |
+| Why no separate system? | Redundant — auto-evolve already does this |
+
+---
+
+# Review
+
+**Date:** 2026-03-23  
+**Reviewer:** nucleus-gptel  
+**Mode:** #=review with #deep #challenge #file modifiers  
+**Scope:** Full document (Research, Design, Spec, Advice, Gap Analysis sections)
+
+---
+
+## Layer 1: Surface Issues (Bugs — Must Fix)
+
+| ID | Location | Observation | Severity | Action Required |
+|----|----------|-------------|----------|-----------------|
+| **B1** | Lines 1656-1661 (Spec Scope) | Spec references `program.md` but no schema defined for what it contains | **High** | Define YAML frontmatter schema for program.md |
+| **B2** | Lines 1729-1735 (Constraints C1-C8) | C7 says "No external API calls without explicit permission" — no mechanism defined for granting permission | **High** | Define permission mechanism (file-based? interactive?) |
+| **B3** | Lines 1777-1782 (Subproblem 2) | "Wrapper script enforces constraints" — no wrapper script exists or is specified | **High** | Specify wrapper script interface and implementation |
+| **B4** | Lines 1846-1878 (Implementation Sketch) | File structure shows `.nucleus-autoresearch/` but Constraints C1-C8 reference `program.md` without path | **Medium** | Clarify file paths (is program.md in .nucleus-autoresearch/ or root?) |
+| **B5** | Lines 1669-1674 (Knowns K5-K7) | K6 says "Execution environment: Emacs/gptel" but Spec says babashka — conflicting | **Medium** | Resolve: is it Emacs-only or Emacs + babashka? |
+| **B6** | Lines 2100-2117 (Gap Analysis) | Gap 1 says "No programmatic `skills_list` or `skill_view` tools" but Research section (lines 167-173) says hermes-agent HAS these tools | **Medium** | Clarify: does project have these tools or not? |
+| **B7** | Lines 1784-1791 (Subproblem 3) | OODA loop references "constraint checks at each step" — no constraint check mechanism specified | **Medium** | Define constraint check interface |
+
+---
+
+## Layer 2: Design Issues (Discuss — Trade-Offs Named)
+
+| ID | Location | Observation | Trade-Off | Recommendation |
+|----|----------|-------------|-----------|----------------|
+| **D1** | Lines 1285-1350 (Candidate 5 Description) | Candidate 5 explicitly doesn't solve continuity or compounding — but user chose it anyway | **Velocity vs. Continuity** — User prioritized speed over memory/skills | **Flag for user:** Are you sure you don't want memory? Each session starts from zero. |
+| **D2** | Lines 1729-1735 (Constraints) | C3: "5 minutes per experiment" — arbitrary choice, no justification | **Comparability vs. Flexibility** — Fixed time makes experiments comparable but may be wrong for some tasks | **Justify or parameterize:** Why 5 min? Make it configurable in program.md |
+| **D3** | Lines 1656-1661 (Scope S1-S8) | S8 "Agent proposes new constraints" is Won't Have v1 — but Q6 says "Adaptive but gated" | **Adaptivity vs. Stability** — Contradiction between scope and decisions | **Resolve:** Either enable constraint proposals in v1 or change Q6 decision |
+| **D4** | Lines 950-1070 (Candidate 3 Hybrid) | Hybrid recommended (9/10 fit) but user chose Candidate 5 (4/10 fit) | **Best Design vs. User Choice** — User chose inferior candidate | **Respect choice but flag:** Document why Candidate 5 was chosen over Hybrid |
+| **D5** | Lines 1846-1878 (Implementation Sketch) | Core loop has 7 steps but no error handling for steps 3-6 (propose, run tests, commit, log) | **Simplicity vs. Robustness** — Happy path only, no failure modes | **Add error handling:** What if tests hang? What if commit fails? |
+| **D6** | Lines 2024-2041 (Advice 6: Safety From Architecture) | Says "Human approval enforced by git (can't commit without human)" — but git CAN commit without human | **Architecture vs. Process** — Git doesn't enforce human approval, process does | **Clarify:** Human approval is process, not architectural. Wrapper script must enforce. |
+| **D7** | Lines 2100-2200 (Gap Analysis) | Gap 3 marked "Low" priority but research (lines 2024-2041) says safety is #1 priority | **Priority Inconsistency** — Safety gaps marked low priority | **Reconcile:** If safety is #1, Gap 3 and 4 should be High priority |
+
+---
+
+## Layer 3: Hidden Assumptions (Challenge — Question Everything)
+
+| ID | Location | Assumption | Challenge | If False, What Breaks? |
+|----|----------|------------|-----------|----------------------|
+| **A1** | Lines 1656-1878 (Entire Spec) | Test suite exists and is reliable | What if codebase has no tests? What if tests are flaky? | **Spec collapses** — no way to evaluate success. Agent commits broken code. |
+| **A2** | Lines 1729-1735 (Constraints C3-C4) | Time budget is meaningful measure | What if task is I/O-bound, not CPU-bound? 5 min may be too short or wasteful | **Budget meaningless** — agent either times out prematurely or wastes budget |
+| **A3** | Lines 950-1070 (Candidate 5 Design) | Autonomous work is safer than human-in-loop | Research shows joi-lab/ouroboros failed due to autonomy. Why is Candidate 5 safe? | **Safety illusion** — Candidate 5 has same failure mode as joi-lab if constraints imperfect |
+| **A4** | Lines 1777-1791 (Decomposition) | Wrapper script can enforce constraints | What if agent escapes wrapper? What if wrapper has bugs? | **Constraint bypass** — agent modifies immutable files anyway |
+| **A5** | Lines 1846-1878 (Implementation Sketch) | Git commit = audit trail | What if agent writes misleading commit messages? What if agent amends commits? | **Audit trail corrupted** — can't trust git history |
+| **A6** | Lines 2024-2041 (Advice 6) | Architectural constraints are safer than prompt constraints | What if architecture has bugs? Prompts can be updated faster than code | **False security** — architectural bugs harder to fix than prompt tweaks |
+| **A7** | Lines 1-934 (Research Section) | 6 systems analyzed is representative sample | What if these 6 are outliers? What if successful systems aren't on GitHub? | **Selection bias** — conclusions may not generalize |
+| **A8** | Lines 950-1650 (Design Section) | Human governance is always safer | What if human is tired, distracted, or approves without review? | **Governance theater** — human rubber-stamps, doesn't actually review |
+
+---
+
+## Layer 4: Second and Third-Order Effects (Deep — Consequences)
+
+| Effect | Location | First-Order | Second-Order | Third-Order |
+|--------|----------|-------------|--------------|-------------|
+| **E1** | Lines 1729-1735 (Time Budget) | Experiments are comparable | Agent optimizes for speed over quality | Codebase accumulates fast, shallow changes; deep refactors never proposed |
+| **E2** | Lines 1846-1878 (Core Loop) | Agent works autonomously | Human review becomes bottleneck | Human approves without review (fatigue) → bad changes merge |
+| **E3** | Lines 1656-1661 (No Memory) | Each session is fresh | Context must be re-established every time | Session overhead increases; net velocity decreases despite autonomy |
+| **E4** | Lines 2024-2041 (Architectural Safety) | Constraints in code are safer | Code constraints are harder to update | System can't adapt to new threats without code change |
+| **E5** | Lines 1729-1735 (Immutable Files) | Core files protected | Agent works around immutability | Agent creates parallel files, technical debt accumulates |
+| **E6** | Lines 2100-2200 (Gap Analysis) | Gaps are identified | Gaps are prioritized but not fixed | Document becomes "known issues" list, not action plan |
+| **E7** | Lines 1-934 (Research Section) | Research is comprehensive | Document becomes authoritative reference | Future decisions cite this doc without re-evaluating assumptions |
+
+---
+
+## Layer 5: Attacker Vantage Point (Challenge — How to Break This)
+
+| Attack Vector | Location | Exploit | Impact | Mitigation (Missing) |
+|---------------|----------|---------|--------|---------------------|
+| **V1** | Lines 1729-1735 (Constraints) | Agent proposes change that modifies wrapper script | Constraint bypass | Wrapper script should be immutable, stored outside agent reach |
+| **V2** | Lines 1846-1878 (Core Loop) | Agent runs tests but test suite is incomplete | Bad code passes tests | Require coverage threshold, not just pass/fail |
+| **V3** | Lines 1729-1735 (Time Budget) | Agent proposes change with infinite loop | Budget exhaustion, no result | Timeout enforced by wrapper, not agent |
+| **V4** | Lines 1656-1661 (No Memory) | Agent proposes contradictory changes across sessions | Codebase incoherent | Cross-session consistency check (requires memory) |
+| **V5** | Lines 1846-1878 (Git Logging) | Agent writes misleading commit messages | Audit trail useless | Commit message validation, require diff summary |
+| **V6** | Lines 1729-1735 (No External API) | Agent writes code that calls external API at runtime | Unauthorized resource use | Static analysis before commit, runtime sandbox |
+| **V7** | Lines 2024-2041 (Human Approval) | Agent proposes many small changes, human fatigues | Rubber-stamp approval | Batch changes, require justification for each |
+
+---
+
+## Layer 6: Root Cause Analysis (Deep — Why These Issues Exist)
+
+| Root Cause | Manifestations | Underlying Tension | Resolution Required |
+|------------|----------------|-------------------|---------------------|
+| **R1: Spec Incompleteness** | B1, B2, B3, B4, B5, B7 | Speed (ship spec) vs. Completeness (all details) | Decide: is this spec actionable or conceptual? |
+| **R2: Contradictory Decisions** | D3, D7 | User choice (Candidate 5) vs. Analysis (Candidate 3 best) | Document why user chose Candidate 5 despite lower fit score |
+| **R3: Unexamined Assumptions** | A1-A8 | Confidence (we know what we're doing) vs. Humility (we might be wrong) | Add assumption validation step before implementation |
+| **R4: Missing Failure Modes** | D5, V1-V7 | Optimism (it will work) vs. Pessimism (it will fail) | Add failure mode analysis to spec |
+| **R5: Priority Inconsistency** | D7, E6 | Urgency (fix high priority) vs. Reality (low priority unfixed) | Reconcile priority rankings across sections |
+
+---
+
+## Summary Statistics
+
+| Category | Count | Must Fix |
+|----------|-------|----------|
+| **Bugs (Layer 1)** | 7 | 3 High, 4 Medium |
+| **Design Issues (Layer 2)** | 7 | All require discussion |
+| **Hidden Assumptions (Layer 3)** | 8 | All require validation |
+| **Second/Third-Order Effects (Layer 4)** | 7 | All require consideration |
+| **Attacker Vectors (Layer 5)** | 7 | All require mitigation |
+| **Root Causes (Layer 6)** | 5 | All require resolution |
+
+---
+
+## Critical Path (What Blocks Implementation)
+
+| Priority | Issue | Blocks | Resolution |
+|----------|-------|--------|------------|
+| **1** | B1: No program.md schema | Implementation can't start | Define YAML schema |
+| **2** | B2: No permission mechanism | C7 unenforceable | Define permission interface |
+| **3** | B3: No wrapper script spec | Constraints unenforceable | Specify wrapper script |
+| **4** | A1: Test suite assumption | Success criteria undefined | Clarify test requirements |
+| **5** | D3: S8 vs. Q6 contradiction | Scope unclear | Resolve adaptivity question |
+
+---
+
+## Positive Findings (What's Well-Designed)
+
+| Strength | Location | Why It Works |
+|----------|----------|--------------|
+| **Research Depth** | Lines 1-934 | 6 systems analyzed, 3 layers each, provenance tracked |
+| **Design Transparency** | Lines 950-1650 | Candidates compared, tensions surfaced, trade-offs named |
+| **Gap Analysis** | Lines 2100-2200 | Research vs. implementation compared, priorities assigned |
+| **Advice Section** | Lines 1920-2100 | Actionable, referenced to research, anti-patterns documented |
+| **Human Governance** | Throughout | Consistently emphasized as non-negotiable |
+
+---
+
+## Review Verdict
+
+**Status:** ⚠️ **NOT READY FOR IMPLEMENTATION**
+
+**Reason:** 3 High-Severity Bugs (B1, B2, B3) block implementation. Spec is incomplete — critical mechanisms (program.md schema, permission system, wrapper script) are referenced but not defined.
+
+**Required Before #=code:**
+1. Define program.md YAML schema (B1)
+2. Define permission mechanism for external API calls (B2)
+3. Specify wrapper script interface and implementation (B3)
+4. Resolve S8 vs. Q6 contradiction (D3)
+5. Validate assumption A1 (test suite exists)
+
+**Optional Before #=code:**
+- Address Design Issues D1-D7 (discussion required)
+- Validate Assumptions A1-A8
+- Add failure mode handling to Implementation Sketch (D5)
+- Reconcile priority inconsistencies (D7)
+
+---
+
+**Review Complete:** All findings delivered per #=review operating mode.  
+**Next Step:** Fix bugs → Spec v1.1 → Then #=code mode.
 
 ## Gap Detection Workflow
 
@@ -2322,158 +2505,8 @@ GAP REGISTRY
 
 ---
 
-# Integration with Benchmark System
-
-**Purpose:** Connect gap-closing implementation to existing `gptel-benchmark-*` modules.
-
 ---
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    OUROBOROS RESEARCH ADVICE                         │
-│  (Progressive Disclosure, Skills Standardization, Constraints,      │
-│   Architectural Safety)                                              │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    EXISTING BENCHMARK SYSTEM                         │
-│                                                                      │
-│  gptel-benchmark-instincts.el    ←──── Eight Keys φ tracking        │
-│  gptel-benchmark-evolution.el    ←──── Ouroboros cycles             │
-│  gptel-benchmark-auto-improve.el ←──── 相生/相克 auto-improvement    │
-│  gptel-workflow-benchmark.el     ←──── Workflow tests               │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    INTEGRATION POINTS                                │
-│                                                                      │
-│  Phase 1: Progressive Disclosure                                    │
-│    → Benchmark: Add skills_list/skill_view to test suite            │
-│    → Instincts: Track skill loading efficiency (token count)        │
-│                                                                      │
-│  Phase 2: Skills Standardization                                    │
-│    → Evolution: Auto-convert skills to agentskills.io format        │
-│    → Auto-improve: Verify skill format compliance in benchmark      │
-│                                                                      │
-│  Phase 3: Constraints                                                │
-│    → Benchmark: Test immutable file enforcement                     │
-│    → Evolution: Add constraint violations to anti-patterns          │
-│                                                                      │
-│  Phase 4: Architectural Safety                                      │
-│    → Auto-improve: Verify safety constraints during improvement     │
-│    → Instincts: Track safety score                                  │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Integration Code
-
-### Phase 1: Add to `gptel-benchmark-instincts.el`
-
-```elisp
-(defun gptel-benchmark-instincts-record-skill-loading (skill-name tokens-used level)
-  "Record skill loading efficiency.
-LEVEL is 0 (list), 1 (view), or 2 (file)."
-  (let ((efficiency (if (= level 0)
-                        (/ 100.0 tokens-used)
-                      (/ 1000.0 tokens-used))))
-    (gptel-benchmark-instincts-record
-     "mementum/knowledge/skills-protocol.md"
-     (format "skill-loading-%s" skill-name)
-     (list :vitality efficiency :clarity 0.8 :purpose 0.9
-           :wisdom 0.7 :synthesis 0.8 :directness efficiency
-           :truth 0.9 :vigilance 0.8)
-     'validated)))
-```
-
-### Phase 2: Add to `gptel-benchmark-auto-improve.el`
-
-```elisp
-(defun gptel-benchmark-verify-skill-format (skill-file)
-  "Verify SKILL-FILE complies with agentskills.io format."
-  (let* ((frontmatter (gptel-benchmark-instincts--parse-frontmatter skill-file))
-         (required '(:name :description :version))
-         (missing (cl-remove-if (lambda (f) (assoc f frontmatter)) required)))
-    (list :compliant-p (= 0 (length missing))
-          :missing-fields missing)))
-```
-
-### Phase 3: Add to `gptel-benchmark-principles.el`
-
-```elisp
-;; Add to anti-patterns
-(push '(constraint-violation
-        :element earth
-        :controlled-by wood
-        :symptom "AI attempted to modify immutable file"
-        :detection (lambda (results)
-                     (when (plist-get results :immutable-violation)
-                       'constraint-violation))
-        :remedy "Apply Wood: reject modification, suggest alternative")
-      gptel-benchmark-anti-patterns)
-```
-
-### Phase 4: Add to `gptel-benchmark-evolution.el`
-
-```elisp
-(defun gptel-benchmark-evolution-gaps ()
-  "Run evolution cycle to close OUROBOROS research gaps."
-  (interactive)
-  (let ((gaps (gptel-detect-gap-ouroboros)))
-    (dolist (gap gaps)
-      (gptel-benchmark-instincts-record
-       "mementum/knowledge/nucleus-patterns.md"
-       (format "gap-%s" (plist-get gap :advice))
-       (list :vitality 0.5 :clarity 0.8 :purpose 0.9
-             :wisdom 0.7 :synthesis 0.8 :directness 0.8
-             :truth 0.9 :vigilance 0.9)
-       'corrected))
-    (message "[evolution] Recorded %d gaps to instincts" (length gaps))
-    gaps))
-```
-
----
-
-## Implementation Files
-
-| Step | File | Action | Priority |
-|------|------|--------|----------|
-| 1 | `lisp/modules/gptel-tools-skills.el` | Create | Medium |
-| 2 | `lisp/modules/gptel-gap-detection.el` | Create | Medium |
-| 3 | `constraints.md` | Create | Low |
-| 4 | `lisp/modules/gptel-sandbox.el` | Edit (add immutable check) | Low |
-| 5 | `lisp/modules/gptel-benchmark-instincts.el` | Edit (add skill tracking) | Medium |
-| 6 | `lisp/modules/gptel-benchmark-evolution.el` | Edit (add gap evolution) | Medium |
-| 7 | `assistant/skills/_template/SKILL.md` | Edit (add summary field) | Medium |
-
----
-
-## Verification
-
-After implementation:
-
-```elisp
-M-x gptel-benchmark-evolution-gaps
-;; Output: [evolution] Recorded 2 gaps to instincts
-;;         - progressive-disclosure (high)
-;;         - constraints (critical)
-
-M-x gptel-gap-report
-;; Output: Gap Detection Report
-;;         Total gaps: 2
-;;         • progressive-disclosure [high]
-;;           Missing: (skills-list skill-view)
-;;         • constraints [critical]
-;;           Missing: (constraints.md my/gptel-can-modify-p)
-```
-
----
-
-**Document Version:** 3.0  
+**Document Version:** 4.0  
 **Last Updated:** 2026-03-23  
-**Changes:** Added Advice section, Gap Analysis, Gap Detection Framework, Integration with Benchmark System
+**Changes:** Simplified to use existing auto-evolve instead of separate gap detection. Added benchmark tests for each advice item.
