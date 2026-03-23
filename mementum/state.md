@@ -2,6 +2,44 @@
 
 > Last session: 2026-03-23
 
+## Completed (2026-03-23) — Remove Redundant Skill Tools
+
+Simplified by reusing gptel-agent's skill support:
+
+### What Was Removed
+
+| Tool | Reason |
+|------|--------|
+| `Skill` | gptel-agent already provides this |
+| `list_skills` | Skills in system prompt via `{{SKILLS}}` template |
+| `load_skill` | Redundant with gptel-agent's `Skill` tool |
+| `my/gptel--skill-tool` | Helper no longer needed |
+
+### What gptel-Agent Provides
+
+| Feature | Implementation |
+|---------|----------------|
+| Level 0: List skills | `gptel-agent--skills-system-message` in system prompt |
+| Level 1: Load skill | `Skill` tool calls `gptel-agent--get-skill` |
+| Metadata cache | `gptel-agent--skills` variable |
+
+### Kept
+
+- `create_skill` — Not in gptel-agent, useful for creating new skills
+
+### Commits
+
+- `3314e74` Δ gptel-tools: remove redundant skill tools, use gptel-agent (-44 lines)
+
+### Key Insight
+
+```
+λ reuse(x).    upstream_has(x) → remove_local(x)
+               | keep_local(different_scope ∨ not_in_upstream)
+```
+
+---
+
 ## Completed (2026-03-23) — OUROBOROS Documentation
 
 Simplified documentation to use existing auto-evolve instead of separate gap detection:
