@@ -640,8 +640,8 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
   :type 'directory
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-time-budget 900
-  "Time budget per experiment in seconds (default: 15 min)."
+(defcustom gptel-auto-experiment-time-budget 600
+  "Time budget per experiment in seconds (default: 10 min)."
   :type 'integer
   :group 'gptel-tools-agent)
 
@@ -1196,10 +1196,174 @@ Manual: M-x gptel-auto-workflow-run"
       (setq gptel-auto-workflow--skills skills))
     program))
 
+;;; Skill Evolution (Continuity + Compounding)
+
+(defun gptel-auto-workflow-detect-mutation (hypothesis)
+  "Detect mutation type from HYPOTHESIS string."
+  (cond
+   ((string-match-p "cache\\|Cache\\|memoize\\|memo" hypothesis) "caching")
+   ((string-match-p "lazy\\|defer\\|on-demand\\|delay" hypothesis) "lazy-init")
+   ((string-match-p "simplif\\|remove\\|merge\\|reduce\\|eliminate" hypothesis) "simplification")
+   (t "unknown")))
+
+(defun gptel-auto-workflow-update-target-skill (target results)
+  "Update TARGET skill file with RESULTS from night."
+  (let* ((skill-file (gptel-auto-workflow-skill-path target 'target))
+         (file (expand-file-name skill-file (expand-file-name user-emacs-directory))))
+    (when (file-exists-p file)
+      (let* ((content (with-temp-buffer
+                        (insert-file-contents file)
+                        (buffer-string)))
+             (by-mutation (make-hash-table :test 'equal))
+             (successful '())
+             (failed '())
+             (best-hypothesis nil)
+             (best-delta 0)
+             (total-kept 0)
+             (score-before nil)
+             (score-after nil))
+        (dolist (r results)
+          (let* ((hypothesis (or (plist-get r :hypothesis) ""))
+                 (mutation (gptel-auto-workflow-detect-mutation hypothesis))
+                 (kept (plist-get r :kept))
+                 (delta (or (plist-get r :delta) 0)))
+            (when (and kept (> delta best-delta))
+              (setq best-delta delta
+                    best-hypothesis hypothesis))
+            (when kept (cl-incf total-kept))
+            (unless score-before
+              (setq score-before (plist-get r :score-before)))
+            (when (and kept (plist-get r :score-after))
+              (setq score-after (plist-get r :score-after)))
+            (puthash mutation (cons r (gethash mutation by-mutation)) by-mutation)))
+        (maphash
+         (lambda (mutation mutation-results)
+           (let* ((kept-count (cl-count-if (lambda (r) (plist-get r :kept)) mutation-results))
+                  (total (length mutation-results))
+                  (success-rate (if (> total 0) (/ (* 100 kept-count) total) 0))
+                  (kept-results (cl-remove-if-not (lambda (r) (plist-get r :kept)) mutation-results))
+                  (avg-delta (if kept-results
+                                 (/ (apply #'+ (mapcar (lambda (r) (or (plist-get r :delta) 0)) kept-results))
+                                    (length kept-results))
+                               0))
+                  (best (car (sort kept-results (lambda (a b)
+                                                   (> (or (plist-get a :delta) 0)
+                                                      (or (plist-get b :delta) 0))))))
+                  (best-hyp (when best (plist-get best :hypothesis))))
+             (if (>= success-rate 50)
+                 (push (list mutation success-rate avg-delta best-hyp) successful)
+               (when (< success-rate 50)
+                 (push (list mutation success-rate 
+                             (if (< success-rate 50) "Low success rate" ""))
+                       failed)))))
+         by-mutation)
+        (with-temp-buffer
+          (insert content)
+          (goto-char (point-min))
+          (when (re-search-forward "^runs:[[:space:]]*\\([0-9]+\\)" nil t)
+            (replace-match (format "runs: %d" (1+ (string-to-number (match-string 1))))))
+          (goto-char (point-min))
+          (when (re-search-forward "^phi:[[:space:]]*\\([0-9.]+\\)" nil t)
+            (let* ((total (length results))
+                   (new-phi (if (> total 0) (/ (float total-kept) total) 0.5)))
+              (replace-match (format "phi: %.2f" new-phi))))
+          (goto-char (point-min))
+          (when (re-search-forward "^## Successful Mutations" nil t)
+            (forward-line 3)
+            (delete-region (point) (when (re-search-forward "^## " nil t) (match-beginning 0)))
+            (backward-char 1)
+            (dolist (s (nreverse successful))
+              (insert (format "| %s | %.0f%% | %+.2f | %s |\n"
+                              (nth 0 s) (nth 1 s) (nth 2 s) (or (nth 3 s) "-")))))
+          (goto-char (point-min))
+          (when (re-search-forward "^## Failed Mutations" nil t)
+            (forward-line 3)
+            (delete-region (point) (when (re-search-forward "^## " nil t) (match-beginning 0)))
+            (backward-char 1)
+            (dolist (f (nreverse failed))
+              (insert (format "| %s | %.0f%% | %s |\n"
+                              (nth 0 f) (nth 1 f) (nth 2 f)))))
+          (goto-char (point-min))
+          (when (re-search-forward "^## Nightly History" nil t)
+            (forward-line 3)
+            (let ((date (format-time-string "%Y-%m-%d"))
+                  (exp-count (length results)))
+              (insert (format "| %s | %d | %d | %.2f | %.2f | %+.2f |\n"
+                              date exp-count total-kept
+                              (or score-before 0)
+                              (or score-after 0)
+                              (if (and score-before score-after)
+                                  (- score-after score-before)
+                                0)))))
+          (goto-char (point-min))
+          (when (re-search-forward "^## Next Hypothesis" nil t)
+            (forward-line 1)
+            (delete-region (point) (when (re-search-forward "^## " nil t) (match-beginning 0)))
+            (backward-char 1)
+            (insert (format "\n%s\n" (or best-hypothesis "(Run more experiments)"))))
+          (write-region (point-min) (point-max) file))))))
+
+(defun gptel-auto-workflow-update-mutation-skill (mutation-type all-results)
+  "Update MUTATION-TYPE skill file with ALL-RESULTS."
+  (let* ((skill-file (format "%s/mutations/%s.md"
+                             gptel-auto-workflow-skills-dir mutation-type))
+         (file (expand-file-name skill-file (expand-file-name user-emacs-directory))))
+    (when (file-exists-p file)
+      (let* ((content (with-temp-buffer
+                        (insert-file-contents file)
+                        (buffer-string)))
+             (relevant (cl-remove-if-not
+                        (lambda (r)
+                          (let ((hyp (or (plist-get r :hypothesis) "")))
+                            (eq (gptel-auto-workflow-detect-mutation hyp)
+                                (intern mutation-type))))
+                        all-results))
+             (kept-relevant (cl-remove-if-not (lambda (r) (plist-get r :kept)) relevant))
+             (total (length relevant))
+             (kept-count (length kept-relevant))
+             (success-rate (if (> total 0) (/ (* 100 kept-count) total) 0))
+             (avg-delta (if kept-relevant
+                            (/ (apply #'+ (mapcar (lambda (r) (or (plist-get r :delta) 0)) kept-relevant))
+                               (length kept-relevant))
+                          0))
+             (history-rows '()))
+        (dolist (r kept-relevant)
+          (push (list (plist-get r :target)
+                      (format-time-string "%Y-%m-%d")
+                      (plist-get r :hypothesis)
+                      (plist-get r :delta))
+                history-rows))
+        (with-temp-buffer
+          (insert content)
+          (goto-char (point-min))
+          (when (re-search-forward "^phi:[[:space:]]*\\([0-9.]+\\)" nil t)
+            (replace-match (format "phi: %.2f" (/ success-rate 100.0))))
+          (goto-char (point-min))
+          (when (re-search-forward "^## Success History" nil t)
+            (forward-line 3)
+            (dolist (row (nreverse history-rows))
+              (insert (format "| %s | %s | %s | %+.2f |\n"
+                              (nth 0 row) (nth 1 row)
+                              (truncate-string-to-width (or (nth 2 row) "-") 40 nil nil "...")
+                              (or (nth 3 row) 0)))))
+          (goto-char (point-min))
+          (when (re-search-forward "^## Statistics" nil t)
+            (forward-line 6)
+            (delete-region (point) (line-end-position))
+            (insert (format "| Total uses | %d |" total))
+            (forward-line 1)
+            (delete-region (point) (line-end-position))
+            (insert (format "| Success rate | %.0f%% |" success-rate))
+            (forward-line 1)
+            (delete-region (point) (line-end-position))
+            (insert (format "| Avg delta | %+.2f |" avg-delta)))
+          (write-region (point-min) (point-max) file))))))
+
 (defun gptel-auto-workflow-metabolize (run-id all-results)
-  "Synthesize RUN-ID ALL-RESULTS to mementum."
+  "Synthesize RUN-ID ALL-RESULTS to mementum + evolve skills."
   (let ((memory-dir (expand-file-name "mementum/memories"
-                                       (expand-file-name user-emacs-directory))))
+                                       (expand-file-name user-emacs-directory)))
+        (by-target (make-hash-table :test 'equal)))
     (make-directory memory-dir t)
     (let ((file (expand-file-name (format "auto-workflow-%s.md" run-id) memory-dir)))
       (with-temp-file file
@@ -1216,7 +1380,26 @@ Manual: M-x gptel-auto-workflow-run"
           (insert (format "- **%s**: %s\n"
                           (plist-get r :target)
                           (or (plist-get r :hypothesis) "unknown"))))))
-    (message "[autonomous] Metabolized to mementum/memories/auto-workflow-%s.md" run-id)))
+    (message "[autonomous] Memory: mementum/memories/auto-workflow-%s.md" run-id)
+    (dolist (r all-results)
+      (let ((target (plist-get r :target)))
+        (puthash target (cons r (gethash target by-target)) by-target)))
+    (maphash
+     (lambda (target results)
+       (gptel-auto-workflow-update-target-skill target results))
+     by-target)
+    (let ((mutation-types '()))
+      (dolist (r all-results)
+        (let ((mutation (gptel-auto-workflow-detect-mutation
+                         (or (plist-get r :hypothesis) ""))))
+          (when (not (member mutation mutation-types))
+            (push mutation mutation-types))))
+      (dolist (mutation-type mutation-types)
+        (when (not (equal mutation-type "unknown"))
+          (gptel-auto-workflow-update-mutation-skill mutation-type all-results))))
+    (message "[autonomous] Skills evolved: %d targets, %d mutation types"
+             (hash-table-count by-target)
+             (length (cl-remove "unknown" (hash-table-keys by-target))))))
 
 (defun gptel-auto-workflow-run-autonomous ()
   "Run Autonomous Research Agent with program.md + skills + mementum.
