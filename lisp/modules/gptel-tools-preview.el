@@ -70,6 +70,13 @@ Set to 0 for unlimited."
   :type 'integer
   :group 'gptel-tools-preview)
 
+(defcustom gptel-tools-preview-max-replacement-size 1000000
+  "Maximum replacement content size in characters.
+Prevents DoS via memory exhaustion from extremely large replacements.
+Set to 0 for unlimited."
+  :type 'integer
+  :group 'gptel-tools-preview)
+
 ;;; Core Preview Functions
 
 (defun my/gptel--preview-bypass-p ()
@@ -84,6 +91,22 @@ Permits are NOT checked here - they control the tool confirm UI,
 not the preview.  Preview is the final safety check before applying changes."
   (or (not gptel-tools-preview-enabled)
       gptel-tools-preview--never-ask-again))
+
+(defun my/gptel--validate-file-path (path)
+  "Validate PATH for safety in file operations.
+Returns nil if safe, or error message string if unsafe."
+  (cond
+   ((not (stringp path))
+    "Path must be a string")
+   ((string-empty-p path)
+    "Path cannot be empty")
+   ((string-match-p "\\`\\.\\./" path)
+    "Path traversal detected (starts with ../)")
+   ((string-match-p "/\\.\\./" path)
+    "Path traversal detected (contains /../)")
+   ((string-match-p "\0" path)
+    "Null byte in path")
+   (t nil)))
 
 (defun my/gptel--make-preview-callback (buffer callback)
   "Wrap CALLBACK as an idempotent, FSM-restoring preview callback.
@@ -238,49 +261,73 @@ This is a blocking call - user must respond before Emacs continues."
 Shows diff between ORIGINAL and REPLACEMENT for PATH.
 CALLBACK is called when user confirms or aborts.
 
+Validates PATH for traversal attacks and REPLACEMENT size.
 Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
-  (if (my/gptel--preview-bypass-p)
-      (funcall callback "Preview disabled, auto-confirmed.")
-    (let (temp1 temp2)
-      (condition-case err
-          (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-                 (diff-output
-                  (progn
-                    (setq temp1 (my/gptel-make-temp-file "gptel-preview-orig-"))
-                    (setq temp2 (my/gptel-make-temp-file "gptel-preview-new-"))
-                    (write-region original nil temp1 nil 'silent)
-                    (write-region replacement nil temp2 nil 'silent)
-                    (my/gptel--run-diff temp1 temp2))))
-            (unwind-protect
-                (let ((diff-buf (my/gptel--create-diff-buffer
-                                 (my/gptel--unique-preview-buffer-name "*gptel-preview*")
-                                 (format "Preview: %s" path)
-                                 diff-output
-                                 #'diff-mode)))
-                  (my/gptel--insert-preview-instructions diff-buf)
-                  (my/gptel--display-preview-buffer diff-buf)
-                  (my/gptel--prompt-for-preview-action
-                   diff-buf
-                   (lambda () (funcall wrapped-cb "Preview confirmed."))
-                   (lambda () (funcall wrapped-cb "Preview aborted."))))
-              ;; Cleanup temp files even on error/quit
-              (when (and temp1 (file-exists-p temp1))
-                (delete-file temp1))
-              (when (and temp2 (file-exists-p temp2))
-                (delete-file temp2))))
-        (error
-         ;; Cleanup on error
-         (when (and temp1 (file-exists-p temp1))
-           (delete-file temp1))
-         (when (and temp2 (file-exists-p temp2))
-           (delete-file temp2))
-         (funcall callback (format "Preview error: %s" (error-message-string err))))))))
+  (let ((path-error (my/gptel--validate-file-path path)))
+    (cond
+     (path-error
+      (funcall callback (format "Error: %s" path-error)))
+     ((and (> gptel-tools-preview-max-replacement-size 0)
+           replacement
+           (> (length replacement) gptel-tools-preview-max-replacement-size))
+      (funcall callback (format "Error: Replacement too large (%d chars, max %d)"
+                                (length replacement) gptel-tools-preview-max-replacement-size)))
+     ((my/gptel--preview-bypass-p)
+      (funcall callback "Preview disabled, auto-confirmed."))
+(t
+      (let (temp1 temp2)
+        (condition-case err
+            (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
+                   (diff-output
+                    (progn
+                      (setq temp1 (my/gptel-make-temp-file "gptel-preview-orig-"))
+                      (setq temp2 (my/gptel-make-temp-file "gptel-preview-new-"))
+                      (write-region original nil temp1 nil 'silent)
+                      (write-region replacement nil temp2 nil 'silent)
+                      (my/gptel--run-diff temp1 temp2))))
+              (unwind-protect
+                  (let ((diff-buf (my/gptel--create-diff-buffer
+                                   (my/gptel--unique-preview-buffer-name "*gptel-preview*")
+                                   (format "Preview: %s" path)
+                                   diff-output
+                                   #'diff-mode)))
+                    (my/gptel--insert-preview-instructions diff-buf)
+                    (my/gptel--display-preview-buffer diff-buf)
+                    (my/gptel--prompt-for-preview-action
+                     diff-buf
+                     (lambda () (funcall wrapped-cb "Preview confirmed."))
+                     (lambda () (funcall wrapped-cb "Preview aborted."))))
+                (when (and temp1 (file-exists-p temp1))
+                  (delete-file temp1))
+                (when (and temp2 (file-exists-p temp2))
+                  (delete-file temp2))))
+          (error
+           (when (and temp1 (file-exists-p temp1))
+             (delete-file temp1))
+           (when (and temp2 (file-exists-p temp2))
+             (delete-file temp2))
+           (funcall callback (format "Preview error: %s" (error-message-string err))))))))))
 
 ;;; Patch Preview (raw unified diff)
+
+(defun my/gptel--validate-patch-path (path-str)
+  "Validate PATH-STR from patch header for safety.
+Returns nil if safe, or error message string if unsafe."
+  (cond
+   ((string-match-p "\\`\\.\\./" path-str)
+    "Path traversal detected (starts with ../)")
+   ((string-match-p "/\\.\\./" path-str)
+    "Path traversal detected (contains /../)")
+   ((string-match-p "\\`/" path-str)
+    "Absolute paths not allowed in patches")
+   ((string-match-p "\0" path-str)
+    "Null byte in path")
+   (t nil)))
 
 (defun my/gptel--sanitize-patch (patch)
   "Sanitize PATCH content for safe display.
 Strips control characters and validates format.
+Checks for path traversal in ---/+++ lines.
 Returns (SANITIZED-PATCH . WARNING) or (nil . ERROR) if invalid."
   (cond
    ((not (stringp patch))
@@ -291,10 +338,23 @@ Returns (SANITIZED-PATCH . WARNING) or (nil . ERROR) if invalid."
                       (length patch) gptel-tools-preview-max-patch-size)))
    (t
     (let* ((sanitized (replace-regexp-in-string "[\000-\010\013-\037]" "" patch))
-           (has-header (string-match-p "^---" sanitized)))
-      (cons sanitized
-            (unless has-header
-              "Warning: Patch lacks standard --- header, may not apply correctly"))))))
+           (has-minus-header (string-match-p "^---" sanitized))
+           (has-plus-header (string-match-p "^\\+\\+\\+" sanitized))
+           (has-hunk (string-match-p "^@@" sanitized))
+           (path-error
+            (when (string-match "^--- \\([^\t\n]+\\)" sanitized)
+              (my/gptel--validate-patch-path (match-string 1 sanitized)))))
+      (cond
+       (path-error
+        (cons nil path-error))
+       ((not has-minus-header)
+        (cons nil "Patch lacks --- header"))
+       ((not has-plus-header)
+        (cons nil "Patch lacks +++ header"))
+       ((not has-hunk)
+        (cons nil "Patch lacks @@ hunk marker"))
+       (t
+        (cons sanitized nil)))))))
 
 (defun my/gptel--preview-patch (patch buffer callback header)
   "Show patch preview.

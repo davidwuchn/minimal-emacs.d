@@ -284,6 +284,81 @@
     (gptel-tools-preview-reset-confirmation)
     (should-not gptel-tools-preview--never-ask-again)))
 
+;;; Tests for path validation
+
+(ert-deftest preview/validate-path/safe-path ()
+  "Should accept safe relative paths."
+  (should-not (my/gptel--validate-file-path "src/main.el"))
+  (should-not (my/gptel--validate-file-path "test.el"))
+  (should-not (my/gptel--validate-file-path "lisp/modules/foo.el")))
+
+(ert-deftest preview/validate-path/rejects-traversal-start ()
+  "Should reject paths starting with ../"
+  (should (string-match-p "traversal" (my/gptel--validate-file-path "../etc/passwd"))))
+
+(ert-deftest preview/validate-path/rejects-traversal-middle ()
+  "Should reject paths containing /../"
+  (should (string-match-p "traversal" (my/gptel--validate-file-path "foo/../bar.el"))))
+
+(ert-deftest preview/validate-path/rejects-null-byte ()
+  "Should reject paths with null bytes."
+  (should (string-match-p "Null" (my/gptel--validate-file-path "foo\0bar.el"))))
+
+(ert-deftest preview/validate-path/rejects-empty ()
+  "Should reject empty paths."
+  (should (my/gptel--validate-file-path "")))
+
+(ert-deftest preview/validate-path/rejects-non-string ()
+  "Should reject non-string paths."
+  (should (my/gptel--validate-file-path 123))
+  (should (my/gptel--validate-file-path nil)))
+
+;;; Tests for patch validation
+
+(ert-deftest preview/validate-patch-path/safe-path ()
+  "Should accept safe patch paths."
+  (should-not (my/gptel--validate-patch-path "a/foo.el"))
+  (should-not (my/gptel--validate-patch-path "b/bar.el")))
+
+(ert-deftest preview/validate-patch-path/rejects-traversal ()
+  "Should reject path traversal in patch paths."
+  (should (my/gptel--validate-patch-path "../etc/passwd"))
+  (should (my/gptel--validate-patch-path "a/../../etc/passwd")))
+
+(ert-deftest preview/validate-patch-path/rejects-absolute ()
+  "Should reject absolute paths in patches."
+  (should (my/gptel--validate-patch-path "/etc/passwd")))
+
+(ert-deftest preview/sanitize-patch/rejects-missing-minus-header ()
+  "Should reject patches without --- header."
+  (let ((result (my/gptel--sanitize-patch "+++ b/foo.el\n@@ -1 +1 @@\n-bar\n+foo")))
+    (should-not (car result))
+    (should (string-match-p "---" (cdr result)))))
+
+(ert-deftest preview/sanitize-patch/rejects-missing-plus-header ()
+  "Should reject patches without +++ header."
+  (let ((result (my/gptel--sanitize-patch "--- a/foo.el\n@@ -1 +1 @@\n-bar\n+foo")))
+    (should-not (car result))
+    (should (string-match-p "\\+\\+\\+" (cdr result)))))
+
+(ert-deftest preview/sanitize-patch/rejects-missing-hunk ()
+  "Should reject patches without @@ hunk marker."
+  (let ((result (my/gptel--sanitize-patch "--- a/foo.el\n+++ b/foo.el\n-bar\n+foo")))
+    (should-not (car result))
+    (should (string-match-p "@@" (cdr result)))))
+
+(ert-deftest preview/sanitize-patch/rejects-traversal-in-patch ()
+  "Should reject path traversal in patch headers."
+  (let ((result (my/gptel--sanitize-patch "--- ../../etc/passwd\n+++ b/foo.el\n@@ -1 +1 @@\n-bar\n+foo")))
+    (should-not (car result))
+    (should (string-match-p "traversal" (cdr result)))))
+
+(ert-deftest preview/sanitize-patch/accepts-valid-patch ()
+  "Should accept valid unified diff."
+  (let ((result (my/gptel--sanitize-patch "--- a/foo.el\n+++ b/foo.el\n@@ -1 +1 @@\n-bar\n+foo")))
+    (should (car result))
+    (should-not (cdr result))))
+
 (provide 'test-gptel-tools-preview)
 
 ;;; Window Management Tests
@@ -556,7 +631,5 @@
     (should-not lock)))
 
 (provide 'test-gptel-tools-preview)
-
-;;; test-gptel-tools-preview.el ends here
 
 ;;; test-gptel-tools-preview.el ends here
