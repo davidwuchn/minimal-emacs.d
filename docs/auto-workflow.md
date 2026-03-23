@@ -6,7 +6,8 @@
 
 | Component | Status | Automation |
 |-----------|--------|------------|
-| Nightly branch creation | ✓ Implemented | Automatic |
+| Per-target branches | ✓ Implemented | `optimize/{name}` |
+| Worktree isolation | ✓ Implemented | magit-worktree |
 | Agent optimization | ✓ Implemented | Automatic |
 | Benchmark runner | ✓ Implemented | Automatic |
 | Auto-commit on pass | ✓ Implemented | Automatic |
@@ -18,24 +19,36 @@
 
 **Entry point:** `gptel-auto-workflow-run` in `gptel-tools-agent.el`
 
+## Branch Naming
+
+Each target gets its own branch like a draft PR:
+
+| Target | Branch Name |
+|--------|-------------|
+| `gptel-ext-retry.el` | `optimize/retry` |
+| `gptel-ext-context.el` | `optimize/context` |
+| `gptel-tools-code.el` | `optimize/code` |
+
 ## Semi-Autonomous Flow
 
 ```
 Human (once)           Agent (overnight)              Human (morning)
     │                        │                              │
     ├─ Set objectives ──────►│                              │
-    │   (gptel-auto-         ├─ Create nightly branch       │
-    │    workflow-targets)   ├─ For each target:            │
+    │   (gptel-auto-         ├─ For each target:            │
+    │    workflow-targets)   │  ├─ Create branch             │
+    │                        │  ├─ Create worktree           │
     │                        │  ├─ Run agent                 │
     │                        │  ├─ Run tests                 │
     │                        │  ├─ Pass → commit             │
-    │                        │  └─ Fail → retry once         │
+    │                        │  ├─ Fail → retry once         │
+    │                        │  └─ Delete worktree           │
     │                        ├─ Generate summary             │
-    │                        └─ Return to main               │
     │                                                       │
     │◄─────────────────────────────────────────────────────►│
-                      Morning review                         │
-                    (cherry-pick or reject)                  │
+                       Morning review                         │
+                  git branch --list 'optimize/*'             │
+                  (cherry-pick or merge each branch)          │
 ```
 
 ---

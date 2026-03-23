@@ -619,7 +619,9 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 
 ;;; Auto-Workflow (Semi-Autonomous Overnight Experiments)
 
-(require 'magit-worktree nil t)
+(declare-function magit-worktree-branch "magit-worktree")
+(declare-function magit-worktree-delete "magit-worktree")
+(declare-function magit-git-success "magit-git")
 
 (defcustom gptel-auto-workflow-targets
   '("gptel-ext-retry.el" "gptel-ext-context.el" "gptel-tools-code.el")
@@ -639,50 +641,85 @@ Used by `gptel-auto-workflow-run'."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defun gptel-auto-workflow--call-git (&rest args)
-  "Call git with ARGS, return exit code."
-  (apply #'call-process "git" nil nil nil args))
+(defvar gptel-auto-workflow--worktree-dir nil
+  "Current worktree directory for auto-workflow run.")
 
-(defun gptel-auto-workflow-create-nightly-branch (run-id)
-  "Create nightly branch auto-workflow-{RUN-ID}. Return branch name or nil."
-  (let ((branch (format "auto-workflow-%s" run-id)))
-    (if (zerop (gptel-auto-workflow--call-git "checkout" "-b" branch))
+(defvar gptel-auto-workflow--current-branch nil
+  "Current branch name for auto-workflow run.")
+
+(defun gptel-auto-workflow--branch-name (target)
+  "Generate meaningful branch name for TARGET.
+e.g. gptel-ext-retry.el → optimize/retry-async-handling"
+  (let* ((basename (file-name-sans-extension (file-name-nondirectory target)))
+         (parts (split-string basename "-"))
+         (name (string-join (last parts 1) "-")))
+    (format "optimize/%s" name)))
+
+(defun gptel-auto-workflow-create-worktree (target)
+  "Create worktree for TARGET. Return worktree directory or nil."
+  (let* ((branch (gptel-auto-workflow--branch-name target))
+         (worktree-dir (expand-file-name
+                        (format "%s/%s" gptel-auto-workflow-worktree-base branch))))
+    (condition-case err
         (progn
+          (make-directory (file-name-directory worktree-dir) t)
+          (magit-worktree-branch worktree-dir branch "main")
           (message "[auto-workflow] Created branch: %s" branch)
-          branch)
-      (message "[auto-workflow] Failed to create branch: %s" branch)
-      nil)))
+          (setq gptel-auto-workflow--worktree-dir worktree-dir
+                gptel-auto-workflow--current-branch branch)
+          worktree-dir)
+      (error
+       (message "[auto-workflow] Failed to create worktree: %s" err)
+       nil))))
+
+(defun gptel-auto-workflow-delete-worktree ()
+  "Delete current worktree if exists."
+  (when (and gptel-auto-workflow--worktree-dir
+             (file-exists-p gptel-auto-workflow--worktree-dir))
+    (condition-case err
+        (magit-worktree-delete gptel-auto-workflow--worktree-dir)
+      (error
+       (message "[auto-workflow] Failed to delete worktree: %s" err)))
+    (setq gptel-auto-workflow--worktree-dir nil
+          gptel-auto-workflow--current-branch nil)))
 
 (defun gptel-auto-workflow-benchmark ()
   "Run nucleus verification. Return plist with :passed and :time."
   (let ((start (float-time))
-        (default-directory (expand-file-name user-emacs-directory)))
+        (default-directory (or gptel-auto-workflow--worktree-dir
+                               (expand-file-name user-emacs-directory))))
     (message "[auto-workflow] Running tests...")
     (let ((exit-code (call-process "bash" nil nil nil
-                                   (expand-file-name "scripts/verify-nucleus.sh"))))
+                                   (expand-file-name "scripts/verify-nucleus.sh"
+                                                     (expand-file-name user-emacs-directory)))))
       (list :passed (zerop exit-code)
             :time (- (float-time) start)))))
 
 (defun gptel-auto-workflow-commit (target)
   "Commit changes for TARGET with proper message format."
-  (let ((msg (format "◈ auto-workflow: optimize %s" target)))
-    (when (zerop (gptel-auto-workflow--call-git "add" "-A"))
-      (when (zerop (gptel-auto-workflow--call-git "commit" "-m" msg))
+  (let ((msg (format "◈ Optimize %s" target))
+        (default-directory (or gptel-auto-workflow--worktree-dir
+                               (expand-file-name user-emacs-directory))))
+    (when (magit-git-success "add" "-A")
+      (when (magit-git-success "commit" "-m" msg)
         (message "[auto-workflow] Committed: %s" msg)
         t))))
 
 (defun gptel-auto-workflow-save-metrics (run-id results)
   "Save RUN-ID RESULTS to JSON file."
-  (let ((file (expand-file-name
-               (format "%s/%s/metrics.json"
-                       gptel-auto-workflow-worktree-base run-id))))
+  (let* ((base-dir (expand-file-name user-emacs-directory))
+         (file (expand-file-name
+                (format "%s/%s/metrics.json"
+                        gptel-auto-workflow-worktree-base run-id)
+                base-dir)))
     (make-directory (file-name-directory file) t)
     (let ((json (format "{\n  \"run_id\": \"%s\",\n  \"targets\": [\n%s\n  ],\n  \"summary\": {\n    \"passed\": %d,\n    \"failed\": %d\n  }\n}"
                        run-id
                        (mapconcat
                         (lambda (r)
-                          (format "    {\"target\": \"%s\", \"passed\": %s, \"time\": %.2f}"
+                          (format "    {\"target\": \"%s\", \"branch\": \"%s\", \"passed\": %s, \"time\": %.2f}"
                                   (plist-get r :target)
+                                  (or (plist-get r :branch) "unknown")
                                   (if (plist-get r :passed) "true" "false")
                                   (or (plist-get r :time) 0)))
                         results
@@ -694,11 +731,13 @@ Used by `gptel-auto-workflow-run'."
 
 (defun gptel-auto-workflow-generate-morning-summary (run-id results)
   "Generate morning summary for RUN-ID RESULTS."
-  (let ((file (expand-file-name
-               (format "%s/%s/summary.md"
-                       gptel-auto-workflow-worktree-base run-id)))
-        (passed (cl-remove-if-not (lambda (r) (plist-get r :passed)) results))
-        (failed (cl-remove-if (lambda (r) (plist-get r :passed)) results)))
+  (let* ((base-dir (expand-file-name user-emacs-directory))
+         (file (expand-file-name
+                (format "%s/%s/summary.md"
+                        gptel-auto-workflow-worktree-base run-id)
+                base-dir))
+         (passed (cl-remove-if-not (lambda (r) (plist-get r :passed)) results))
+         (failed (cl-remove-if (lambda (r) (plist-get r :passed)) results)))
     (make-directory (file-name-directory file) t)
     (with-temp-file file
       (insert (format "# Auto-Workflow: %s\n\n" run-id))
@@ -710,21 +749,29 @@ Used by `gptel-auto-workflow-run'."
       (insert (format "| ✗ Failed | %d |\n" (length failed)))
       (insert (format "| Total | %d |\n\n" (length results)))
       (when passed
-        (insert "## ✓ Successful\n\n")
+        (insert "## ✓ Successful Branches\n\n")
         (dolist (r passed)
-          (insert (format "- %s (%.1fs)\n"
+          (insert (format "- `%s` — %s (%.1fs)\n"
+                          (or (plist-get r :branch) "unknown")
                           (plist-get r :target)
                           (or (plist-get r :time) 0))))
         (insert "\n"))
       (when failed
         (insert "## ✗ Failed\n\n")
         (dolist (r failed)
-          (insert (format "- %s\n" (plist-get r :target))))
+          (insert (format "- `%s` — %s\n"
+                          (or (plist-get r :branch) "unknown")
+                          (plist-get r :target))))
         (insert "\n"))
       (insert "## Morning Commands\n\n")
       (insert "```bash\n")
-      (insert (format "git log main..auto-workflow-%s\n" run-id))
-      (insert (format "git checkout main && git merge auto-workflow-%s\n" run-id))
+      (insert "# Review branches\n")
+      (insert (format "git branch --list 'optimize/*'\n\n"))
+      (insert "# Merge successful branches\n")
+      (dolist (r passed)
+        (insert (format "git checkout main && git merge %s\n" (or (plist-get r :branch) "unknown"))))
+      (insert "\n# Or cherry-pick specific commits\n")
+      (insert "git cherry-pick <commit-sha>\n")
       (insert "```\n"))
     (message "[auto-workflow] Summary: %s" file)
     file))
@@ -733,65 +780,76 @@ Used by `gptel-auto-workflow-run'."
   "Run optimization for TARGET. RETRY-COUNT tracks attempts."
   (message "[auto-workflow] Processing: %s%s"
            target (if (> retry-count 0) (format " (retry %d)" retry-count) ""))
-  (condition-case err
-      (let ((start-time (float-time)))
-        (my/gptel--run-agent-tool
-         (lambda (_result)
-           (message "[auto-workflow] Agent completed: %s" target))
-         "code"
-         (format "optimize %s" target)
-         (format "Optimize %s. Minimal changes. Run tests after." target)
-         nil "false" nil)
-        (sit-for 2)
-        (let* ((metrics (gptel-auto-workflow-benchmark))
-               (passed (plist-get metrics :passed)))
-          (if passed
-              (progn
-                (gptel-auto-workflow-commit target)
-                (list :target target
-                      :passed t
-                      :time (- (float-time) start-time)
-                      :retries retry-count))
-            (if (< retry-count gptel-auto-workflow-max-retries)
-                (progn
-                  (message "[auto-workflow] Tests failed, retrying: %s" target)
-                  (gptel-auto-workflow--call-git "checkout" "--" ".")
-                  (sit-for 1)
-                  (gptel-auto-workflow-run-target target run-id (1+ retry-count)))
-              (list :target target
-                    :passed nil
-                    :time (- (float-time) start-time)
-                    :retries retry-count)))))
-    (error
-     (message "[auto-workflow] Error: %s: %s" target err)
-     (list :target target :passed nil :error (format "%s" err)))))
+  (let ((worktree (gptel-auto-workflow-create-worktree target)))
+    (if (not worktree)
+        (list :target target :passed nil :error "Failed to create worktree")
+      (condition-case err
+          (let* ((start-time (float-time))
+                 (default-directory worktree)
+                 (branch gptel-auto-workflow--current-branch))
+            (my/gptel--run-agent-tool
+             (lambda (_result)
+               (message "[auto-workflow] Agent completed: %s" target))
+             "code"
+             (format "optimize %s" target)
+             (format "Optimize %s. Minimal changes. Run tests after." target)
+             nil "false" nil)
+            (sit-for 2)
+            (let* ((metrics (gptel-auto-workflow-benchmark))
+                   (passed (plist-get metrics :passed)))
+              (if passed
+                  (progn
+                    (gptel-auto-workflow-commit target)
+                    (prog1
+                        (list :target target
+                              :branch branch
+                              :passed t
+                              :time (- (float-time) start-time)
+                              :retries retry-count)
+                      (gptel-auto-workflow-delete-worktree)))
+                (if (< retry-count gptel-auto-workflow-max-retries)
+                    (progn
+                      (message "[auto-workflow] Tests failed, retrying: %s" target)
+                      (magit-git-success "checkout" "--" ".")
+                      (sit-for 1)
+                      (gptel-auto-workflow-delete-worktree)
+                      (gptel-auto-workflow-run-target target run-id (1+ retry-count)))
+                  (prog1
+                      (list :target target
+                            :branch branch
+                            :passed nil
+                            :time (- (float-time) start-time)
+                            :retries retry-count)
+                    (gptel-auto-workflow-delete-worktree))))))
+        (error
+         (gptel-auto-workflow-delete-worktree)
+         (message "[auto-workflow] Error: %s: %s" target err)
+         (list :target target :passed nil :error (format "%s" err)))))))
 
 (defun gptel-auto-workflow-run (&optional targets)
   "Run semi-autonomous auto-workflow on TARGETS.
-Creates nightly branch, runs optimization, commits if tests pass.
-Generates morning summary for human review.
+Creates per-target branch (optimize/{name}), runs optimization,
+commits if tests pass. Branches persist for morning review.
 
 Cron: emacsclient -e '(gptel-auto-workflow-run)'
 Manual: M-x gptel-auto-workflow-run"
   (interactive)
+  (unless (require 'magit-worktree nil t)
+    (user-error "magit-worktree is required for auto-workflow"))
+  (unless (require 'magit-git nil t)
+    (user-error "magit-git is required for auto-workflow"))
   (let* ((targets (or targets gptel-auto-workflow-targets))
          (run-id (format-time-string "%Y-%m-%d"))
-         (branch (gptel-auto-workflow-create-nightly-branch run-id))
          (results '()))
-    (if (not branch)
-        (message "[auto-workflow] Failed to create nightly branch")
-      (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
-      (unwind-protect
-          (progn
-            (dolist (target targets)
-              (push (gptel-auto-workflow-run-target target run-id 0) results))
-            (setq results (nreverse results))
-            (gptel-auto-workflow-save-metrics run-id results)
-            (gptel-auto-workflow-generate-morning-summary run-id results)
-            (message "[auto-workflow] Complete: %d/%d passed"
-                     (cl-count-if (lambda (r) (plist-get r :passed)) results)
-                     (length results)))
-        (gptel-auto-workflow--call-git "checkout" "main")))))
+    (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
+    (dolist (target targets)
+      (push (gptel-auto-workflow-run-target target run-id 0) results))
+    (setq results (nreverse results))
+    (gptel-auto-workflow-save-metrics run-id results)
+    (gptel-auto-workflow-generate-morning-summary run-id results)
+    (message "[auto-workflow] Complete: %d/%d passed. Branches: git branch --list 'optimize/*'"
+             (cl-count-if (lambda (r) (plist-get r :passed)) results)
+             (length results))))
 
 ;;; Footer
 
