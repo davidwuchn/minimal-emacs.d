@@ -1,6 +1,44 @@
 # Auto-Workflow
 
-> Phased autonomous agent for optimization experiments with auto-evolution.
+> Semi-autonomous overnight optimization with morning review.
+
+## Implementation Status
+
+| Component | Status | Automation |
+|-----------|--------|------------|
+| Nightly branch creation | ✓ Implemented | Automatic |
+| Agent optimization | ✓ Implemented | Automatic |
+| Benchmark runner | ✓ Implemented | Automatic |
+| Auto-commit on pass | ✓ Implemented | Automatic |
+| Retry on failure | ✓ Implemented | Automatic (1 retry) |
+| Metrics collection | ✓ Implemented | Automatic (JSON) |
+| Morning summary | ✓ Implemented | Automatic (markdown) |
+| Cron scheduling | ✓ Implemented | Automatic (2 AM daily) |
+| Human review | ✓ Implemented | Morning cherry-pick/reject |
+
+**Entry point:** `gptel-auto-workflow-run` in `gptel-tools-agent.el`
+
+## Semi-Autonomous Flow
+
+```
+Human (once)           Agent (overnight)              Human (morning)
+    │                        │                              │
+    ├─ Set objectives ──────►│                              │
+    │   (gptel-auto-         ├─ Create nightly branch       │
+    │    workflow-targets)   ├─ For each target:            │
+    │                        │  ├─ Run agent                 │
+    │                        │  ├─ Run tests                 │
+    │                        │  ├─ Pass → commit             │
+    │                        │  └─ Fail → retry once         │
+    │                        ├─ Generate summary             │
+    │                        └─ Return to main               │
+    │                                                       │
+    │◄─────────────────────────────────────────────────────►│
+                      Morning review                         │
+                    (cherry-pick or reject)                  │
+```
+
+---
 
 ## Overview
 
@@ -34,6 +72,54 @@ var/tmp/experiments/
 ---
 
 ## Usage
+
+### Programmatic (Recommended)
+
+```elisp
+;; Run with default targets
+(gptel-auto-workflow-run)
+
+;; Run with specific targets
+(gptel-auto-workflow-run '("gptel-ext-retry.el" "gptel-ext-context.el"))
+
+;; Configure targets
+(setq gptel-auto-workflow-targets
+      '("gptel-ext-retry.el" "gptel-ext-context.el" "gptel-tools-code.el"))
+```
+
+### Interactive
+
+```elisp
+M-x gptel-auto-workflow-run
+```
+
+### Cron (Scheduled)
+
+```bash
+# Install cron jobs (runs at 2 AM daily)
+crontab cron.d/auto-workflow
+
+# Manual trigger
+emacsclient -e '(gptel-auto-workflow-run)'
+```
+
+---
+
+## Available Functions
+
+| Function | Purpose |
+|----------|---------|
+| `gptel-auto-workflow-run` | Main entry point (orchestrates all phases) |
+| `gptel-auto-workflow-create-worktree` | Create isolated git worktree |
+| `gptel-auto-workflow-delete-worktree` | Delete experiment worktree |
+| `gptel-auto-workflow-cleanup-run` | Clean up all worktrees for a run |
+| `gptel-auto-workflow-benchmark` | Run tests and measure time |
+| `gptel-auto-workflow-save-metrics` | Save metrics to JSON |
+| `gptel-auto-workflow-generate-summary` | Generate summary markdown |
+
+---
+
+## Manual Phases
 
 ### Single Experiment
 

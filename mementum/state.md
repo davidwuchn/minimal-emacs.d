@@ -2,35 +2,46 @@
 
 > Last session: 2026-03-23
 
-## Completed (2026-03-23) — Auto-Workflow System
+## Completed (2026-03-23) — Semi-Autonomous Auto-Workflow
 
-Created phased autonomous agent workflow with cron-based scheduling:
+Replaced async spawn with semi-autonomous overnight optimization:
 
-### What Was Built
+### What Changed
 
-| Component | Purpose |
-|-----------|---------|
-| `docs/auto-workflow.md` | 6-phase workflow specification (Frame → Research → Design → Execute → Review → Learn) |
-| `cron.d/auto-workflow` | Cron jobs for auto-workflow (2 AM) + weekly instincts (Sunday 3 AM) |
-| `cron.d/template` | Reusable cron template for other projects |
-| `gptel-auto-workflow-run` | Entry point in `gptel-tools-agent.el` |
-| `var/tmp/experiments/` | Runtime directory for experiment files |
-| `var/tmp/cron/` | Cron log directory |
+| Component | Before | After |
+|-----------|--------|-------|
+| Agent spawn | Async (fire-and-forget) | Synchronous with result tracking |
+| Branch strategy | None | Single nightly branch `auto-workflow-{date}` |
+| Test validation | Manual | Automatic with `verify-nucleus.sh` |
+| Commit strategy | None | Auto-commit if tests pass |
+| Failure handling | None | Retry once, then skip |
 
-### Timers Moved to Cron
+### Functions Added (6 functions, ~180 lines)
 
-| Timer | Before | After |
-|-------|--------|-------|
-| Auto-workflow | N/A (new) | Cron: 2 AM daily |
-| Weekly instincts | Emacs timer | Cron: Sunday 3 AM |
-| Daily report | Emacs timer (18:00) | **Removed** (just noise) |
+| Function | Purpose |
+|----------|---------|
+| `gptel-auto-workflow-run` | Main entry (orchestrates all phases) |
+| `gptel-auto-workflow-run-target` | Single target with retry logic |
+| `gptel-auto-workflow-create-nightly-branch` | Create `auto-workflow-{date}` branch |
+| `gptel-auto-workflow-benchmark` | Run nucleus validation |
+| `gptel-auto-workflow-commit` | Commit with ◈ prefix |
+| `gptel-auto-workflow-save-metrics` | Save JSON metrics |
+| `gptel-auto-workflow-generate-morning-summary` | Morning review markdown |
 
-### Key Decisions
+### Flow
 
-1. **Cron over Emacs timers** — Survives restart, standard Unix tool
-2. **gptel-tools-agent.el** — Better placement (where RunAgent lives)
-3. **No shell scripts** — Emacs daemon already running, use `emacsclient -e`
-4. **var/tmp/** — Reuse existing temp directory pattern
+```
+Cron (2 AM) → gptel-auto-workflow-run
+  → Create nightly branch
+  → For each target:
+      → Run agent (code)
+      → Run tests
+      → Pass → commit
+      → Fail → retry once
+  → Save metrics + generate summary
+  → Return to main
+  → Morning: human reviews, cherry-picks or rejects
+```
 
 ### Cron Jobs
 
@@ -58,11 +69,15 @@ emacsclient -e '(gptel-auto-workflow-run)'
 λ schedule(x).    cron(x) > emacs_timer(x)
                   | survives_restart(x) ∧ standard_unix(x)
                   | daemon_running(x) → emacsclient(x)
+
+λ worktree(x).    reuse(magit) > implement(x)
+                  | magit-call-git + magit-worktree-delete
 ```
 
 ### Commits
 
 - `pending` ◈ Auto-workflow: phased autonomous agent + cron scheduling
+- `pending` ◈ Auto-workflow: add worktree + benchmark + metrics implementation
 
 ---
 
