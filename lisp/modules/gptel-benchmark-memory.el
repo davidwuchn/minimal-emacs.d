@@ -284,7 +284,8 @@ Returns first sentence or nil."
 
 (defun gptel-benchmark-memory-metabolize (observations)
   "Process OBSERVATIONS through memory metabolism cycle.
-Aligned with Wu Xing: observe(Wood) -> memory(Fire) -> synthesize(Earth) -> knowledge(Metal) -> archive(Water)"
+Aligned with Wu Xing: observe(Wood) -> memory(Fire) ->
+synthesize(Earth) -> knowledge(Metal) -> archive(Water)."
   (dolist (obs observations)
     (let* ((symbol (plist-get obs :symbol))
            (slug (plist-get obs :slug))
@@ -320,8 +321,7 @@ Should be first action in every session."
 
 (defun gptel-benchmark-memory-store-eight-keys-insight (key insights)
   "Store Eight Keys INSIGHTS for KEY as memory."
-  (let* ((symbol (alist-get key gptel-benchmark-memory-symbols))
-         (slug (format "eight-keys-%s" key))
+  (let* ((slug (format "eight-keys-%s" key))
          (content (mapconcat #'identity insights "\n")))
     (gptel-benchmark-memory-create slug key content)))
 

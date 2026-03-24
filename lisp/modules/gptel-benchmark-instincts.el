@@ -42,6 +42,8 @@
 
 (require 'cl-lib)
 
+(declare-function gptel-mementum-weekly-job "gptel-tools-agent")
+
 ;;; Customization
 
 (defgroup gptel-benchmark-instincts nil
@@ -70,12 +72,12 @@
 
 (defcustom gptel-benchmark-instincts-evidence-threshold 5
   "Minimum tests before φ is considered confident.
-Patterns with evidence < threshold show as 'emerging' in reports."
+Patterns with evidence < threshold show as `emerging' in reports."
   :type 'integer
   :group 'gptel-benchmark-instincts)
 
 (defcustom gptel-benchmark-instincts-weak-threshold 0.8
-  "Threshold below which a key is considered 'weak' in diagnostic."
+  "Threshold below which a key is considered `weak' in diagnostic."
   :type 'number
   :group 'gptel-benchmark-instincts)
 
@@ -130,7 +132,7 @@ EIGHT-KEYS is plist with keys from `gptel-benchmark-instincts-eight-keys'."
 
 (defun gptel-benchmark-instincts-record (protocol-file pattern-name eight-keys outcome)
   "Record Eight Keys for PATTERN-NAME in PROTOCOL-FILE based on OUTCOME.
-OUTCOME is 'validated or 'corrected.
+OUTCOME is `validated' or `corrected'.
 EIGHT-KEYS is plist with all Eight Keys scores from benchmark.
 Accumulates in memory for batch commit."
   (let* ((key (cons protocol-file pattern-name))
@@ -264,7 +266,7 @@ Returns plist with :phi, :eight-keys, :evidence, :last-tested, :last-updated."
 
 (defun gptel-benchmark-instincts-status (phi evidence)
   "Return status symbol for pattern with PHI and EVIDENCE.
-Returns 'confident, 'emerging, or 'deprecated."
+Returns `confident', `emerging', or `deprecated'."
   (cond
    ((< phi gptel-benchmark-instincts-phi-minimum) 'deprecated)
    ((< evidence gptel-benchmark-instincts-evidence-threshold) 'emerging)
@@ -278,7 +280,8 @@ Returns 'confident, 'emerging, or 'deprecated."
 
 (defun gptel-benchmark-instincts-format-compact (pattern-name data)
   "Format PATTERN-NAME and DATA as compact string.
-Returns: repl-first φ=0.83 [v:0.85 c:0.78 p:0.82 w:0.75 s:0.80 d:0.88 t:0.90 v:0.83] ev=5"
+Returns: repl-first φ=0.83 [v:0.85 c:0.78 p:0.82 w:0.75 s:0.80 d:0.88 t:0.90]
+ev=5"
   (let* ((phi (or (cdr (assoc :phi data)) 0.5))
          (eight-keys (cdr (assoc :eight-keys data)))
          (evidence (or (cdr (assoc :evidence data)) 0))
@@ -326,10 +329,7 @@ Returns number of files updated."
 UPDATES is list of (pattern-name . entry) pairs.
 Returns t if file was updated."
   (when (file-exists-p file)
-    (let* ((content (with-temp-buffer
-                      (insert-file-contents file)
-                      (buffer-string)))
-           (existing-instincts (gptel-benchmark-instincts--get-existing-instincts file))
+    (let* ((existing-instincts (gptel-benchmark-instincts--get-existing-instincts file))
            (updated-instincts (gptel-benchmark-instincts--merge-updates existing-instincts updates)))
       (gptel-benchmark-instincts--write-frontmatter file updated-instincts)
       (message "[instincts] Updated %s with %d patterns"
@@ -358,7 +358,6 @@ Returns updated instincts alist."
             (let* ((existing-data (cdr existing))
                    (existing-eight-keys (cdr (assoc :eight-keys existing-data)))
                    (existing-evidence (or (cdr (assoc :evidence existing-data)) 0))
-                   (existing-phi (or (cdr (assoc :phi existing-data)) 0.5))
                    (merged-keys (gptel-benchmark-instincts--merge-eight-keys
                                  existing-eight-keys eight-keys-delta count))
                    (new-phi (gptel-benchmark-instincts-compute-phi merged-keys)))
@@ -376,8 +375,9 @@ Returns updated instincts alist."
                 result))))
     result))
 
-(defun gptel-benchmark-instincts--merge-eight-keys (existing delta weight)
-  "Merge DELTA into EXISTING eight-keys with WEIGHT.
+(defun gptel-benchmark-instincts--merge-eight-keys (existing delta _weight)
+  "Merge DELTA into EXISTING eight-keys.
+_WEIGHT is reserved for future weighted averaging.
 Returns merged eight-keys plist."
   (let ((result '()))
     (dolist (key gptel-benchmark-instincts-eight-keys)
@@ -540,8 +540,7 @@ Runs every Sunday at 00:00."
     (push "═══════════════════════════════════════════════════" report-lines)
 
     (dolist (protocol protocols)
-      (let* ((name (file-name-nondirectory protocol))
-             (frontmatter (gptel-benchmark-instincts--parse-frontmatter protocol))
+      (let* ((frontmatter (gptel-benchmark-instincts--parse-frontmatter protocol))
              (instincts-raw (cdr (assoc :instincts frontmatter)))
              (instincts (gptel-benchmark-instincts--parse-instincts instincts-raw)))
         (dolist (instinct instincts)

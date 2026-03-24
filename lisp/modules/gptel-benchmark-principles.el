@@ -111,7 +111,8 @@
                 "3-strike protocol" "failed attempts tracked" "approach mutates")
      :anti-patterns '("accepting failures" "repeating mistakes" "no error handling"
                       "ignores edge cases" "gives up easily" "static after failure")))
-  "Eight Keys definitions. See mementum/knowledge/nucleus-patterns.md for documentation.")
+  "Eight Keys definitions.
+See mementum/knowledge/nucleus-patterns.md for documentation.")
 
 (defun gptel-benchmark-eight-keys-criteria (key)
   "Return criteria list for KEY."

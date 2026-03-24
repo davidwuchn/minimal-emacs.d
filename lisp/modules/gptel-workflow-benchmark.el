@@ -28,6 +28,7 @@
 
 (defvar gptel-agent-loop--state)
 (defvar gptel-agent-loop--task-step-count)
+(defvar gptel-benchmark-eight-keys-definitions)
 (defvar gptel-agent-loop--task-continuation-count)
 
 ;;; Helpers
@@ -723,15 +724,15 @@ Returns plist with :direction, :velocity, :recommendation."
           (let* ((avg-first (/ (apply #'+ first-half) (length first-half)))
                  (avg-second (/ (apply #'+ second-half) (length second-half)))
                  (velocity (- avg-second avg-first)))
-            (plist-put result :velocity velocity)
-            (plist-put result :direction
-                       (cond ((> velocity 0.05) 'improving)
-                             ((< velocity -0.05) 'declining)
-                             (t 'stable)))
-            (plist-put result :recommendation
-                       (cond ((> velocity 0.05) "Continue current approach")
-                             ((< velocity -0.05) "Investigate and apply fixes")
-                             (t "Consider optimization"))))))))
+            (setq result (plist-put result :velocity velocity))
+            (setq result (plist-put result :direction
+                                    (cond ((> velocity 0.05) 'improving)
+                                          ((< velocity -0.05) 'declining)
+                                          (t 'stable))))
+            (setq result (plist-put result :recommendation
+                                    (cond ((> velocity 0.05) "Continue current approach")
+                                          ((< velocity -0.05) "Investigate and apply fixes")
+                                          (t "Consider optimization")))))))))
     result))
 
 ;;; Eight Keys Breakdown
@@ -790,7 +791,7 @@ Returns plist with :direction, :velocity, :recommendation."
   "File storing workflow benchmark feedback and improvement suggestions.")
 
 (defun gptel-workflow-analyze-results (workflow-name)
-  "Analyze benchmark results for WORKFLOW-NAME and generate improvement suggestions.
+  "Analyze benchmark results for WORKFLOW-NAME and generate suggestions.
 Returns plist with :patterns, :issues, and :recommendations."
   (interactive
    (list (completing-read "Workflow: " '("plan_agent" "code_agent"))))
@@ -815,8 +816,6 @@ Returns plist with :patterns, :issues, and :recommendations."
         (total (length results))
         (low-completion 0)
         (low-efficiency 0)
-        (tool-violations 0)
-        (phase-violations 0)
         (tool-usage (make-hash-table :test 'equal)))
     (dolist (r results)
       (let* ((scores (plist-get r :scores))

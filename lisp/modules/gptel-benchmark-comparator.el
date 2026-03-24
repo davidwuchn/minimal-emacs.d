@@ -18,8 +18,8 @@
 
 ;;; Version Comparison
 
-(defun gptel-benchmark-compare-versions (name version-a version-b)
-  "Compare VERSION-A and VERSION-B of benchmark NAME."
+(defun gptel-benchmark-compare-file-versions (name version-a version-b)
+  "Compare VERSION-A and VERSION-B of benchmark NAME using file-based approach."
   (let* ((benchmark-a (gptel-benchmark-load-result name version-a))
          (benchmark-b (gptel-benchmark-load-result name version-b))
          (summary-a (gptel-benchmark-summarize-results benchmark-a))
@@ -30,11 +30,11 @@
           :summary-b summary-b
           :comparison (gptel-benchmark-compare-summaries summary-a summary-b))))
 
-(defun gptel-benchmark-baseline-compare (name)
-  "Compare current version of NAME against baseline."
+(defun gptel-benchmark-baseline-file-compare (name)
+  "Compare current version of NAME against baseline using file-based approach."
   (let* ((current-version (gptel-benchmark-current-version name))
          (baseline-version (gptel-benchmark-baseline-version name))
-         (comparison (gptel-benchmark-compare-versions name current-version baseline-version)))
+         (comparison (gptel-benchmark-compare-file-versions name current-version baseline-version)))
     comparison))
 
 (defun gptel-benchmark-version-trend (name &optional versions)

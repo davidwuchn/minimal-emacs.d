@@ -267,7 +267,8 @@ Delegates to `my/gptel--transient-error-p' for consistent error detection."
 When CACHE-RESULT is non-nil, cache the delivered string first.
 
 Guards against delivering to a killed parent buffer by checking
-`gptel-agent-loop--task-parent-buffer' and `gptel-agent-loop--task-tracking-marker'."
+`gptel-agent-loop--task-parent-buffer' and
+`gptel-agent-loop--task-tracking-marker'."
   (unless (gptel-agent-loop--task-finished state)
     (setf (gptel-agent-loop--task-finished state) t)
     (gptel-agent-loop--cleanup-state state)
@@ -295,7 +296,8 @@ Guards against delivering to a killed parent buffer by checking
 
 (defun gptel-agent-loop--continuation-prompt-for (state)
   "Build continuation prompt for STATE.
-Truncates accumulated output to last `gptel-agent-loop-continuation-context-limit' chars."
+Truncates accumulated output to last
+`gptel-agent-loop-continuation-context-limit' chars."
   (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
          (limit gptel-agent-loop-continuation-context-limit)
          (truncated (if (and limit (> (length output) limit))
@@ -331,14 +333,16 @@ Truncates accumulated output to last `gptel-agent-loop-continuation-context-limi
 
 (defun gptel-agent-loop--looks-like-planning-p (resp)
   "Return non-nil when RESP looks like planning text without tool calls.
-Detects common patterns where model talks about doing work but didn't call tools."
+Detects common patterns where model talks about doing work
+but didn't call tools."
   (let ((lower-resp (downcase resp)))
     (and (>= (length resp) 30)
          (string-match-p "\\blet me\\b\\|\\bi will\\b\\|\\bi need to\\b\\|\\bnow i need\\b\\|\\bgoing to\\b\\|\\bfirst,\\b\\|\\bstep 1\\b\\|\\btodo\\b\\|\\bchecklist\\b" lower-resp))))
 
 (defun gptel-agent-loop--looks-like-finishing-p (resp)
   "Return non-nil when RESP looks like model is about to finish.
-Detects patterns indicating the model is wrapping up, not planning more work."
+Detects patterns indicating the model is wrapping up,
+not planning more work."
   (let ((lower-resp (downcase resp)))
     (or (string-match-p "summariz\\|conclude\\|conclusion\\|finish\\|wrap up\\|that's all\\|in summary\\|to summarize\\|final\\|overall" lower-resp)
         (string-match-p "here's the \\(result\\|answer\\|output\\)" lower-resp)
@@ -348,8 +352,9 @@ Detects patterns indicating the model is wrapping up, not planning more work."
 
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP.
-Only continues if tools were called AND model seems to be planning without action.
-Also checks continuation count limit for early exit."
+Only continues if tools were called AND model seems to be
+planning without action.  Also checks continuation count
+limit for early exit."
   (let ((cont-count (or (gptel-agent-loop--task-continuation-count state) 0)))
     (and gptel-agent-loop-force-completion
          (< cont-count gptel-agent-loop-max-continuations)
