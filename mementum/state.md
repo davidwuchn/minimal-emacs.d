@@ -2,7 +2,88 @@
 
 > Last session: 2026-03-24
 
-## Session Summary: Autonomous Research Agent Complete
+## Session Summary: Prompt Enhancement with Skills + Weakest Keys
+
+### Commits (3)
+
+| Hash | Description |
+|------|-------------|
+| `8014387` | λ Prompt uses skills + weakest Eight Keys for focused hypotheses |
+| `32b8aa1` | Δ Update ai-code submodule |
+| `3120ee5` | λ Add tests for Eight Keys weakest functions |
+
+### Problem Solved
+
+**Critical Gap Found:** `gptel-auto-workflow--skills` was loaded in `gptel-auto-workflow-orient` but **never read** in prompt building. The function `gptel-auto-workflow-skill-suggest-hypothesis` existed but was **never called**.
+
+### What Was Missing
+
+- Per-key Eight Keys breakdown (only overall score shown)
+- Weakest key identification
+- Mutation templates from skills
+- Suggested hypotheses from skills
+
+### New Functions
+
+| Function | Purpose |
+|----------|---------|
+| `gptel-benchmark-eight-keys-weakest` | Return N weakest keys from scores |
+| `gptel-benchmark-eight-keys-weakest-with-signals` | Return weakest keys with improvement signals |
+| `gptel-auto-workflow--extract-mutation-templates` | Extract hypothesis templates from mutation skills |
+| `gptel-auto-workflow--format-weakest-keys` | Format weakest keys for prompt |
+
+### Prompt Now Includes
+
+```
+## Weakest Keys (Priority Focus)
+- π Synthesis: 38% (focus: connects findings, integrates knowledge, holistic view)
+- φ Vitality: 45% (focus: builds on discoveries, adapts to new information, progressive improvement)
+
+## Suggested Hypothesis (from skill)
+(Populated by metabolize after each night)
+
+## Hypothesis Templates
+- "Add caching to {component} to reduce redundant {operation}"
+- "Memoize {function} for {scenario}"
+```
+
+### Tests Added
+
+```
+grader/eight-keys-weakest-excludes-overall    ✓
+grader/eight-keys-weakest-returns-sorted      ✓
+grader/eight-keys-weakest-with-signals-returns-list  ✓
+grader/format-weakest-keys-produces-string    ✓
+```
+
+### Docs Updated
+
+- `docs/auto-workflow-program.md` - Added Priority Focus and Target-Specific Patterns sections
+
+### Bug Fixed
+
+Fixed quoted list extraction in `gptel-benchmark-eight-keys-weakest-with-signals`:
+```elisp
+(if (and (listp signals-raw) (eq (car signals-raw) 'quote))
+    (cadr signals-raw)
+  signals-raw)
+```
+
+---
+
+## λ Summary
+
+```
+λ fix. Skills loaded but never used → now injected into prompt
+λ target. Weakest Eight Keys guide hypothesis generation
+λ template. Mutation skills provide hypothesis templates
+λ test. 4 new tests for weakest functions
+λ doc. Priority Focus + Target-Specific Patterns sections added
+```
+
+---
+
+## Previous Session: Autonomous Research Agent Complete
 
 ### Commits (36)
 
