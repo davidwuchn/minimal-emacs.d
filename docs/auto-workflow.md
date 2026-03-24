@@ -677,6 +677,68 @@ git branch -D $(git branch --list 'experiment-*')
 
 ---
 
+## Multi-Machine Workflow
+
+When multiple machines run auto-evolution on the same targets, branch conflicts are prevented by including the hostname in the branch name.
+
+### Branch Format
+
+```
+optimize/{target}-{hostname}-exp{N}
+```
+
+**Examples:**
+
+| Machine | Target | Branch |
+|---------|--------|--------|
+| `pi5.local` | gptel-ext-retry.el | `optimize/retry-pi5.local-exp1` |
+| `debian.local` | gptel-ext-retry.el | `optimize/retry-debian.local-exp1` |
+| `pi5.local` | gptel-ext-context.el | `optimize/context-pi5.local-exp1` |
+
+### Configuration
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `gptel-auto-experiment-auto-push` | `t` | Auto-push to origin after commit |
+
+### Workflow
+
+1. **Machine runs experiment** → Creates branch with hostname
+2. **Commit succeeds** → Branch pushed to origin (Forgejo)
+3. **Morning review** → Human reviews and merges via PR
+
+### Merge Process (Forgejo)
+
+```bash
+# Fetch all branches
+git fetch origin
+
+# List optimize branches from all machines
+git branch -r 'origin/optimize/*'
+
+# Review specific branch
+git log main..origin/optimize/retry-pi5.local-exp1
+
+# Squash merge to main
+git checkout main
+git merge --squash origin/optimize/retry-pi5.local-exp1
+git commit -m "◈ Optimize retry: {hypothesis summary}"
+git push origin main
+
+# Delete experiment branch
+git push origin --delete optimize/retry-pi5.local-exp1
+```
+
+### PR Workflow
+
+On Forgejo web UI:
+1. Navigate to **Pull Requests** → **New Pull Request**
+2. Select branch: `optimize/retry-pi5.local-exp1` → `main`
+3. Review changes, approve, merge
+4. Delete branch after merge
+
+---
+
 ## Optimization Targets (Priority)
 
 | Priority | Target | Focus | Expected |
@@ -869,7 +931,7 @@ Logs: `var/tmp/cron/*.log`
 
 ---
 
-**Document Version:** 1.5  
+**Document Version:** 1.6  
 **Last Updated:** 2026-03-24  
 **Release:** v2026.03.24  
-**Changes:** Fixed pipeline to 5 stages (code quality integrated into decide), clarified comparator receives code quality, clarified 70/30 is fallback only
+**Changes:** Added multi-machine workflow section with hostname-based branch naming, auto-push config, Forgejo PR workflow
