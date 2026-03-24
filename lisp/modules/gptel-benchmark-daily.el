@@ -211,60 +211,84 @@ Triggers synthesis for:
 ;;; Dashboard
 
 (defun gptel-benchmark-dashboard ()
-  "Show benchmark dashboard."
+  "Show benchmark dashboard with emergence metrics."
   (interactive)
   (let* ((evolution-state gptel-benchmark-evolution-state)
+         (status (gptel-benchmark-evolution-status-report))
          (capabilities (plist-get evolution-state :capabilities))
          (cycle (plist-get evolution-state :cycle))
+         (emergence-rate (plist-get status :emergence-rate))
+         (growth-mode (plist-get status :growth-mode))
+         (corrections (plist-get evolution-state :corrections))
+         (emergences (plist-get evolution-state :emergences))
+         (effective-interval (gptel-benchmark-daily--adaptive-interval))
          (improvements gptel-benchmark-improvements)
          (today-runs gptel-benchmark-daily-runs))
     (with-output-to-temp-buffer "*Benchmark Dashboard*"
-      (princ "╔══════════════════════════════════════════════════╗\n")
-      (princ "║          BENCHMARK DAILY DASHBOARD               ║\n")
-      (princ "╚══════════════════════════════════════════════════╝\n\n")
+      (princ "╔════════════════════════════════════════════════════════════╗\n")
+      (princ "║              BENCHMARK DAILY DASHBOARD                     ║\n")
+      (princ "╚════════════════════════════════════════════════════════════╝\n\n")
+      
+      ;; Growth Mode Banner
+      (princ "┌────────────────────────────────────────────────────────────┐\n")
+      (princ (format "│  GROWTH MODE: %-12s  Emergence Rate: %4.2f           │\n"
+                     (pcase growth-mode
+                       ('growing "🟢 GROWING")
+                       ('maintenance "🟡 MAINTENANCE")
+                       ('stagnant "🔴 STAGNANT"))
+                     emergence-rate))
+      (princ "├────────────────────────────────────────────────────────────┤\n")
+      (princ (format "│  Emergences: %-3d    Corrections: %-3d    Interval: %-2d      │\n"
+                     emergences corrections effective-interval))
+      (princ "└────────────────────────────────────────────────────────────┘\n\n")
       
       ;; Evolution Status
-      (princ "┌─────────────────────────────────────────────────┐\n")
-      (princ "│ EVOLUTION STATUS                               │\n")
-      (princ "├─────────────────────────────────────────────────┤\n")
-      (princ (format "│ Cycles: %-5d  Capabilities: %-2d  COMPLETE: %s │\n"
+      (princ "┌────────────────────────────────────────────────────────────┐\n")
+      (princ "│ EVOLUTION STATUS                                          │\n")
+      (princ "├────────────────────────────────────────────────────────────┤\n")
+      (princ (format "│ Cycles: %-5d  Capabilities: %-2d/5  COMPLETE: %-3s        │\n"
                      cycle
                      (length capabilities)
                      (if (plist-get evolution-state :ai-complete-p) "YES" "No ")))
-      (princ "└─────────────────────────────────────────────────┘\n\n")
+      (princ "└────────────────────────────────────────────────────────────┘\n\n")
       
-      ;; Capabilities
-      (princ "┌─────────────────────────────────────────────────┐\n")
-      (princ "│ CAPABILITY EMERGENCE (相生 Pathway)            │\n")
-      (princ "├─────────────────────────────────────────────────┤\n")
-      (dolist (cap '(interface capability self-awareness extension memory))
-        (princ (format "│ %s %-13s                            │\n"
-                       (if (memq cap capabilities) "✓" "○")
-                       cap)))
-      (princ "└─────────────────────────────────────────────────┘\n\n")
+      ;; Capabilities with Emergence History
+      (princ "┌────────────────────────────────────────────────────────────┐\n")
+      (princ "│ CAPABILITY EMERGENCE (相生 Pathway)                       │\n")
+      (princ "├────────────────────────────────────────────────────────────┤\n")
+      (let ((emergence-history (plist-get evolution-state :emergence-history)))
+        (dolist (cap '(interface capability self-awareness extension memory))
+          (let* ((emerged (memq cap capabilities))
+                 (cycle-info (cl-find-if (lambda (x) (eq (cdr x) cap)) emergence-history)))
+            (princ (format "│ %s %-13s  %s                              │\n"
+                           (if emerged "✓" "○")
+                           cap
+                           (if cycle-info (format "@ cycle %d" (car cycle-info)) ""))))))
+      (princ "└────────────────────────────────────────────────────────────┘\n\n")
       
       ;; Today's Activity
-      (princ "┌─────────────────────────────────────────────────┐\n")
-      (princ (format "│ TODAY'S ACTIVITY (%s)                    │\n"
+      (princ "┌────────────────────────────────────────────────────────────┐\n")
+      (princ (format "│ TODAY'S ACTIVITY (%s)                              │\n"
                      (format-time-string "%Y-%m-%d")))
-      (princ "├─────────────────────────────────────────────────┤\n")
-      (princ (format "│ Runs: %-4d  Improvements: %-4d               │\n"
+      (princ "├────────────────────────────────────────────────────────────┤\n")
+      (princ (format "│ Runs: %-4d  Improvements: %-4d  Runs-to-evolve: %-2d       │\n"
                      (length today-runs)
-                     (length improvements)))
-      (princ "└─────────────────────────────────────────────────┘\n\n")
+                     (length improvements)
+                     (- effective-interval gptel-benchmark-daily-run-count)))
+      (princ "└────────────────────────────────────────────────────────────┘\n\n")
       
       ;; Wu Xing Health
-      (princ "┌─────────────────────────────────────────────────┐\n")
-      (princ "│ WU XING ELEMENT HEALTH                         │\n")
-      (princ "├─────────────────────────────────────────────────┤\n")
+      (princ "┌────────────────────────────────────────────────────────────┐\n")
+      (princ "│ WU XING ELEMENT HEALTH                                    │\n")
+      (princ "├────────────────────────────────────────────────────────────┤\n")
       (let ((diagnosis (gptel-benchmark-diagnose-elements
-                         (list (cons nil (list :overall-score 0.8)))))
+                        (list (cons nil (list :overall-score 0.8)))))
             (elements '(water wood fire earth metal)))
         (dolist (el elements)
           (let* ((d (cl-find-if (lambda (x) (eq (plist-get x :element) el)) diagnosis))
                  (score (if d (plist-get d :score) 0.5))
                  (status (if d (plist-get d :status) 'unknown)))
-            (princ (format "│ %-5s %s %-6.0f%%  %-10s              │\n"
+            (princ (format "│ %-5s %s %-6.0f%%  %-10s                         │\n"
                            el
                            (pcase status
                              ('excellent "████")
@@ -275,16 +299,16 @@ Triggers synthesis for:
                              (_ "████"))
                            (* 100 score)
                            status)))))
-      (princ "└─────────────────────────────────────────────────┘\n\n")
+      (princ "└────────────────────────────────────────────────────────────┘\n\n")
       
       ;; Quick Actions
-      (princ "┌─────────────────────────────────────────────────┐\n")
-      (princ "│ QUICK ACTIONS                                  │\n")
-      (princ "├─────────────────────────────────────────────────┤\n")
-      (princ "│ M-x gptel-benchmark-daily-review    Review day │\n")
-      (princ "│ M-x gptel-benchmark-evolution-cycle Next cycle │\n")
-      (princ "│ M-x gptel-benchmark-improvement-report History │\n")
-      (princ "└─────────────────────────────────────────────────┘\n"))))
+      (princ "┌────────────────────────────────────────────────────────────┐\n")
+      (princ "│ QUICK ACTIONS                                             │\n")
+      (princ "├────────────────────────────────────────────────────────────┤\n")
+      (princ "│ M-x gptel-benchmark-daily-review    Review day            │\n")
+      (princ "│ M-x gptel-benchmark-evolution-cycle Next cycle            │\n")
+      (princ "│ M-x gptel-benchmark-improvement-report History            │\n")
+      (princ "└────────────────────────────────────────────────────────────┘\n"))))
 
 ;;; Daily Review
 
