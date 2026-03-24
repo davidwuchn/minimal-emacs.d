@@ -744,7 +744,20 @@ Skills with `last-tested:` older than 4 weeks:
 
 ### Synthesis Detection
 
-When ≥3 memories share a topic keyword, suggest creating a knowledge page.
+When ≥3 memories share a topic keyword, synthesis loop runs:
+
+1. **Detect** — `gptel-mementum-check-synthesis-candidates` finds topics
+2. **Preview** — Show buffer with source memories + proposed content
+3. **Approve** — `y-or-n-p` implements human termination gate
+4. **Create** — Write `mementum/knowledge/{topic}.md`
+5. **Commit** — `💡 synthesis: {topic}`
+
+### Interactive Commands
+
+| Command | Purpose |
+|---------|---------|
+| `M-x gptel-mementum-synthesis-run` | Run synthesis on all candidates |
+| `M-x gptel-mementum-weekly-job` | Full weekly maintenance + synthesis |
 
 ### Cron Integration
 

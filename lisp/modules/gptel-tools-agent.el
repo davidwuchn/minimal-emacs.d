@@ -2104,16 +2104,78 @@ Returns list of synthesis candidates."
                (mapcar (lambda (c) (plist-get c :topic)) candidates)))
     candidates))
 
+(defun gptel-mementum-synthesize-candidate (candidate)
+  "Synthesize CANDIDATE into knowledge page with human approval.
+CANDIDATE is plist with :topic :count :files.
+Implements λ termination(x): synthesis ≡ AI | approval ≡ human."
+  (let* ((topic (plist-get candidate :topic))
+         (files (plist-get candidate :files))
+         (memories-content '())
+         (synthesized nil))
+    (dolist (file files)
+      (when (file-exists-p file)
+        (with-temp-buffer
+          (insert-file-contents file)
+          (push (buffer-string) memories-content))))
+    (when (>= (length memories-content) 3)
+      (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
+        (with-current-buffer preview-buffer
+          (erase-buffer)
+          (insert (format "# Synthesis Preview: %s\n\n" topic))
+          (insert (format "## Source Memories (%d)\n\n" (length memories-content)))
+          (dolist (content memories-content)
+            (insert (format "### %s\n\n%s\n\n" 
+                           (truncate-string-to-width content 50 nil nil "...")
+                           content)))
+          (insert "\n## Proposed Knowledge Page\n\n")
+          (insert (format "---\ntitle: %s\nstatus: open\ncategory: synthesized\n---\n\n" topic))
+          (insert (format "# %s\n\nSynthesized from %d memories.\n\n" topic (length memories-content)))
+          (insert "## Key Patterns\n\n(Auto-detected patterns)\n\n")
+          (goto-char (point-min)))
+        (display-buffer preview-buffer)
+        (when (y-or-n-p (format "Create knowledge page for '%s'? " topic))
+          (let* ((frontmatter (format "---\ntitle: %s\nstatus: open\ncategory: synthesized\ntags:\n  - %s\nsynthesized: %s\n---"
+                                      topic topic (format-time-string "%Y-%m-%d")))
+                 (content (format "\n\n# %s\n\nSynthesized from %d memories.\n\n## Key Patterns\n\nPatterns identified from:\n%s\n"
+                                  topic (length memories-content)
+                                  (mapconcat (lambda (f) (format "- %s" (file-name-nondirectory f))) files "\n")))
+                 (know-dir (expand-file-name "mementum/knowledge" (gptel-auto-workflow--base-dir)))
+                 (know-file (expand-file-name (format "%s.md" topic) know-dir)))
+            (make-directory know-dir t)
+            (with-temp-file know-file
+              (insert frontmatter)
+              (insert content))
+            (message "[mementum] Created knowledge page: %s" know-file)
+            (shell-command-to-string 
+             (format "git add %s && git commit -m \"💡 synthesis: %s\"" know-file topic))
+            (setq synthesized t)))))
+    synthesized))
+
+(defun gptel-mementum-synthesize-all-candidates (&optional candidates)
+  "Synthesize all CANDIDATES (or detect if nil) with human approval."
+  (let* ((cands (or candidates (gptel-mementum-check-synthesis-candidates)))
+         (synthesized 0))
+    (dolist (candidate cands)
+      (when (gptel-mementum-synthesize-candidate candidate)
+        (cl-incf synthesized)))
+    (message "[mementum] Synthesized %d/%d candidates" synthesized (length cands))
+    synthesized))
+
 (defun gptel-mementum-weekly-job ()
-  "Weekly mementum maintenance: decay + index rebuild + synthesis check."
+  "Weekly mementum maintenance: decay + index rebuild + synthesis.
+Implements λ synthesize(topic): ≥3 memories → candidate → human approval."
   (interactive)
   (message "[mementum] Starting weekly maintenance...")
   (gptel-mementum-build-index)
   (gptel-mementum-decay-skills)
-  (let ((candidates (gptel-mementum-check-synthesis-candidates)))
-    (when candidates
-      (message "[mementum] Synthesis candidates found: %d" (length candidates))))
-  (message "[mementum] Weekly maintenance complete."))
+  (let ((synthesized (gptel-mementum-synthesize-all-candidates)))
+    (message "[mementum] Weekly maintenance complete. Synthesized: %d" synthesized)))
+
+(defun gptel-mementum-synthesis-run ()
+  "Interactively run synthesis on all candidates.
+M-x gptel-mementum-synthesis-run"
+  (interactive)
+  (gptel-mementum-synthesize-all-candidates))
 
 ;;; A/B Testing Framework
 

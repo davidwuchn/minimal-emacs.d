@@ -86,6 +86,18 @@ else
 fi
 
 echo ""
+echo "Test 4: SYNTHESIS - Detect candidates"
+echo "─────────────────────────────────────"
+
+emacs --batch -Q -L "$ROOT_DIR" -L "$ROOT_DIR/lisp" -L "$ROOT_DIR/lisp/modules" \
+    --eval "(require 'gptel-tools-agent)" \
+    --eval "(setq default-directory \"$TEMP_DIR\")" \
+    --eval "(let ((candidates (gptel-mementum-check-synthesis-candidates)))
+             (if (>= (length candidates) 1)
+                 (message \"OK: %d candidates\" (length candidates))
+               (message \"ERROR: no candidates\")))" 2>&1 | grep -q "OK:" && echo "✓ Synthesis candidates detected" || echo "✗ No candidates"
+
+echo ""
 echo "═══════════════════════════════════════════════════════════════"
 echo "         E2E: MEMENTUM INTEGRATION TEST PASSED"
 echo "═══════════════════════════════════════════════════════════════"

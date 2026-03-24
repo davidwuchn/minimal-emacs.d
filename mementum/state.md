@@ -2,57 +2,53 @@
 
 > Last session: 2026-03-24
 
-## Session Complete ✓
+## Session: Synthesis Loop ✓
 
-**24 commits** | **Streaming fixed** | **Git submodules migrated**
+**Implemented**: Auto-evolve synthesis loop with human approval gate.
 
-### Major Changes
+### New Functions
 
-| Change | Status |
-|--------|--------|
-| DashScope streaming | ✅ Fixed & verified |
-| Subagent streaming | ✅ Enabled |
-| Fork packages | ✅ Git submodules |
+| Function | Purpose |
+|----------|---------|
+| `gptel-mementum-synthesize-candidate` | Synthesize candidate → preview → approval → create |
+| `gptel-mementum-synthesize-all-candidates` | Batch synthesis with human gates |
+| `gptel-mementum-synthesis-run` | Interactive: M-x gptel-mementum-synthesis-run |
 
-### Git Submodules Migration
-
-Moved fork packages from script-based clones to git submodules:
+### Synthesis Flow
 
 ```
-packages/
-├── gptel/        → davidwuchn/gptel (master)
-├── gptel-agent/  → davidwuchn/gptel-agent (master)
-└── ai-code/      → davidwuchn/ai-code-interface.el (main)
-```
-
-**Benefits:**
-- Exact commits tracked in `.gitmodules`
-- `git clone --recursive` for full setup
-- `git submodule update --remote` for updates
-
-**Commands:**
-```bash
-# Fresh clone
-git clone --recursive <repo>
-
-# Update packages
-./scripts/setup-packages.sh --update
+detect candidates (≥3 memories)
+       ↓
+preview buffer (source memories + proposed content)
+       ↓
+y-or-n-p approval (λ termination: human gate)
+       ↓
+create mementum/knowledge/{topic}.md
+       ↓
+commit: 💡 synthesis: {topic}
 ```
 
 ### Files Changed
 
 | File | Change |
 |------|--------|
-| `.gitignore` | Added `!packages/` whitelist |
-| `.gitmodules` | New: tracks submodule commits |
-| `pre-early-init.el` | Added packages/ to load-path |
-| `scripts/setup-packages.sh` | Rewritten for submodules |
+| `lisp/modules/gptel-tools-agent.el` | Added synthesis functions |
+| `docs/auto-workflow.md` | Updated synthesis documentation |
+| `scripts/test-mementum-integration.sh` | Added synthesis test |
 
-### Session Stats
+### Test Results
 
-| Metric | Count |
-|--------|-------|
-| Total commits | 24 |
-| Streaming fixes | 8 |
-| Code quality fixes | 22+ |
-| Knowledge pages | 10 |
+```
+Test 4: SYNTHESIS - Detect candidates
+✓ Synthesis candidates detected
+```
+
+### Previous Session
+
+**24 commits** | **Streaming fixed** | **Git submodules migrated**
+
+| Change | Status |
+|--------|--------|
+| DashScope streaming | ✅ Fixed & verified |
+| Subagent streaming | ✅ Enabled |
+| Fork packages | ✅ Git submodules |
