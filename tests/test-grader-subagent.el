@@ -474,5 +474,44 @@ Result: Tests pass."))
   (require 'gptel-tools-agent)
   (should gptel-auto-experiment-auto-push))
 
+;;; Test 44-47: Eight Keys Weakest Functions
+
+(ert-deftest grader/eight-keys-weakest-excludes-overall ()
+  "Weakest keys should exclude 'overall from results."
+  (require 'gptel-benchmark-principles)
+  (let* ((scores '((phi-vitality . 0.45) (pi-synthesis . 0.38) (overall . 0.52)))
+         (weakest (gptel-benchmark-eight-keys-weakest scores 2)))
+    (should (not (assoc 'overall weakest)))
+    (should (= (length weakest) 2))
+    (should (eq (car (car weakest)) 'pi-synthesis))))
+
+(ert-deftest grader/eight-keys-weakest-returns-sorted ()
+  "Weakest keys should be sorted ascending by score."
+  (require 'gptel-benchmark-principles)
+  (let* ((scores '((phi-vitality . 0.45) (pi-synthesis . 0.38) (exists-truth . 0.75)))
+         (weakest (gptel-benchmark-eight-keys-weakest scores 2)))
+    (should (< (cdr (car weakest)) (cdr (cadr weakest))))))
+
+(ert-deftest grader/eight-keys-weakest-with-signals-returns-list ()
+  "Weakest with signals should return plist with :key, :score, :signals."
+  (require 'gptel-benchmark-principles)
+  (let* ((scores '((phi-vitality . 0.45) (pi-synthesis . 0.38) (overall . 0.52)))
+         (result (gptel-benchmark-eight-keys-weakest-with-signals scores 1))
+         (first (car result)))
+    (should (plist-member first :key))
+    (should (plist-member first :score))
+    (should (plist-member first :signals))
+    (should (= (length (plist-get first :signals)) 3))))
+
+(ert-deftest grader/format-weakest-keys-produces-string ()
+  "Format weakest keys should produce human-readable string."
+  (require 'gptel-benchmark-principles)
+  (require 'gptel-tools-agent)
+  (let* ((scores '((phi-vitality . 0.45) (pi-synthesis . 0.38) (overall . 0.52)))
+         (formatted (gptel-auto-workflow--format-weakest-keys scores)))
+    (should (stringp formatted))
+    (should (string-match-p "π Synthesis" formatted))
+    (should (string-match-p "38%" formatted))))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here
