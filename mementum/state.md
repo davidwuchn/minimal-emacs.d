@@ -2,49 +2,61 @@
 
 > Last session: 2026-03-24
 
-## Major Achievement ✓
+## Session Complete ✓
 
-**DashScope Streaming: FIXED + Subagent Streaming Enabled**
+**20 commits** | **3 workarounds fixed** | **22+ code improvements**
 
-| Before | After |
-|--------|-------|
-| Main API: `:stream nil` | Main API: `:stream t` ✓ |
-| Subagent: `:stream nil` | Subagent: `:stream t` ✓ |
-| 4 tools (lite-executor) | 27 tools (executor) viable |
+### Major Achievement: Streaming Fixed
 
-### Commits
+| Component | Before | After |
+|-----------|--------|-------|
+| DashScope API | `:stream nil` | `:stream t` ✓ |
+| Subagent calls | `:stream nil` | `:stream t` ✓ |
+| Executor tools | 4 (lite) | 27 (full) viable |
+
+### Fix Chain
 
 ```
-d60312c: Fix DashScope streaming (custom SSE parser)
-fcda2ae: Enable subagent streaming by default
+630fbd4: "disable streaming" (workaround)
+    ↓ documented root cause: SSE format differs
+6fb1a0d: Custom gptel-dashscope struct
+54f5c37: Fixed parser (skip-chars-forward)
+8591cfe: Fixed model format (plain symbols)
+31cc8e7: Added protocol parameter
+d60312c: Fixed URL nil issue
+fcda2ae: Enabled subagent streaming
+    → STREAMING WORKS!
 ```
 
-### Workaround Resolution
+### Commits Summary
 
-| Commit | Workaround | Status |
-|--------|------------|--------|
-| `630fbd4` | DashScope streaming disabled | ✅ Fixed |
-| `6e09a87` | Subagent streaming disabled | ✅ Fixed |
-| `a7b0931` | lite-executor (4 tools) | Keep as minimal option |
+| Category | Count |
+|----------|-------|
+| Streaming fixes | 8 |
+| Code quality | 3 |
+| Knowledge/docs | 4 |
+| State updates | 5 |
 
-## Session Summary
+### Knowledge Created
 
-| Metric | Count |
-|--------|-------|
-| Commits | 15 |
-| Streaming fixes | 2 |
-| Knowledge pages | 3 |
-| Quality fixes | 22+ |
+| Page | Purpose |
+|------|---------|
+| dashscope-backend.md | Configuration & fixes |
+| ab-testing.md | Framework usage |
+| git-history-improvement-strategy.md | Updated with results |
 
-## Current State
+### Pattern Validated ✓
 
-- **All streaming working**: Main API + Subagents
-- **Code quality**: Clean (1 false positive warning)
-- **Documentation**: 10 knowledge pages
-- **Tests**: A/B test framework ready
+**Git History → Workarounds → Fixes**
 
-## Next Steps
+This pattern successfully resolved:
+1. DashScope streaming (630fbd4 → d60312c)
+2. Subagent streaming (6e09a87 → fcda2ae)
 
-1. Run A/B test to compare executors
+Use this pattern for future workarounds.
+
+### Next Session
+
+1. Run A/B test comparing executors
 2. Monitor streaming reliability
-3. Consider auto-evolution with full executor
+3. Continue auto-evolution with full executor
