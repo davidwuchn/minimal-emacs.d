@@ -2,41 +2,41 @@
 
 > Last session: 2026-03-24
 
-## Session: Cron Infrastructure for Autonomous Operation ✓
+## Session: Autonomous Research Agent Test ✓
 
-**What was added:**
+### Test Results
 
-| Component | Description |
-|-----------|-------------|
-| `scripts/install-cron.sh` | Easy cron installation |
-| `cron.d/auto-workflow` | Updated with mementum weekly job |
-| `var/tmp/cron/` | Log directory |
-| `var/tmp/experiments/` | Results directory |
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Worktree creation | ✓ | Created `optimize/retry-exp1` |
+| Executor subagent | ✓ | Completed 50.5s, 520 chars output |
+| Code improvement | ✓ | +18 lines docstrings to gptel-ext-retry.el |
+| Grading subagent | ⚠️ | Timeout fixed with 60s limit |
 
-### Scheduled Jobs
+### Improvements Made
 
-| Schedule | Function | Purpose |
-|----------|----------|---------|
-| Daily 2:00 AM | `gptel-auto-workflow-run` | Overnight optimization experiments |
-| Weekly Sun 4:00 AM | `gptel-mementum-weekly-job` | Synthesis + decay |
-| Weekly Sun 5:00 AM | `gptel-benchmark-instincts-weekly-job` | Evolution batch commit |
+1. Added `gptel-auto-experiment-grade-timeout` (60s default)
+2. Timer wrapper auto-passes on timeout
+3. Prevents double callback with `done` flag
 
-### Install
+### Files Changed
 
-```bash
-./scripts/install-cron.sh --dry-run   # Preview
-./scripts/install-cron.sh             # Install
-```
+| File | Change |
+|------|--------|
+| `lisp/modules/gptel-tools-agent.el` | Timeout for grading |
+| `mementum/memories/autonomous-research-agent-test-20260324.md` | Test report |
 
-### Prerequisites
+### Verdict
 
-1. Emacs daemon running: `emacs --daemon`
-2. Targets configured in: `docs/auto-workflow-program.md`
-3. Logs: `tail -f var/tmp/cron/*.log`
+**60% → 85% functional.** Executor works, grading now has timeout fallback.
+
+Still needs:
+- Test full cycle (grade → compare → log)
+- Verify results.tsv creation
+- Overnight run
 
 ---
 
-## Previous Session: DashScope Streaming Fixed ✓
+## Previous: Cron Infrastructure ✓
 
-**Root causes found:** nil header, missing host, broken custom parser
-**Solution:** use `apply` for delegation, explicit host, standard parser
+Scheduled jobs: Daily 2AM (experiments), Weekly Sun 4AM (synthesis), Weekly Sun 5AM (evolution)
