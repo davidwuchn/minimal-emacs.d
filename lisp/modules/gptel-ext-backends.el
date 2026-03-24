@@ -64,6 +64,7 @@ INFO is the request info plist."
           (header (lambda () (when-let* ((key (gptel--get-api-key)))
                           `(("Authorization" . ,(concat "Bearer " key))))))
           (host "coding.dashscope.aliyuncs.com")
+          (protocol "https")
           (endpoint "/v1/chat/completions")
           models)
   "Register a DashScope backend with NAME.
@@ -73,6 +74,7 @@ that handles DashScope's SSE format differences."
   (let ((backend (gptel--make-dashscope
                   :name name
                   :host host
+                  :protocol protocol
                   :header header
                   :endpoint endpoint
                   :curl-args curl-args

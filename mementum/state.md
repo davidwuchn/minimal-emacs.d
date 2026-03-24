@@ -4,61 +4,50 @@
 
 ## Built ✓
 
-**DashScope Streaming Fixed**
+**DashScope Streaming Fix - In Progress**
 
-| Before | After |
-|--------|-------|
-| `:stream nil` (workaround) | `:stream t` (fixed) |
-| HTTP parsing errors | Robust SSE parser |
-| lite-executor only | Full executor viable |
+| Component | Status |
+|-----------|--------|
+| Custom backend struct | ✓ gptel-dashscope |
+| Custom stream parser | ✓ Implemented |
+| Model format fix | ✓ Plain symbols |
+| Full streaming test | ⚠ Debugging |
 
-### Technical Details
+### Issue Discovered
 
-```elisp
-(cl-defstruct (gptel-dashscope (:include gptel-openai)))
-(cl-defmethod gptel-curl--parse-stream ((_backend gptel-dashscope) info)
-  ;; Custom parser handles DashScope's SSE format differences
-  )
+`gptel--sanitize-model` uses `member` to check model availability. When models are stored as `(symbol :capabilities ...)` lists, the check fails and sets `gptel-model` to the entire list instead of the symbol.
+
+**Fix**: Use plain symbol list: `'(qwen3.5-plus ...)` instead of `'((qwen3.5-plus :capabilities ...))`
+
+### Current Error
+
+```
+gptel: converting non-string :content on user message
+Wrong type argument: stringp, nil
 ```
 
-### A/B Test
+May be related to message formatting in gptel.
 
-Run in Emacs (not emacsclient due to async limitations):
-
-```elisp
-(gptel-ab-test-run "Simple prompt")
-```
-
-Compares:
-- :lite-executor (4 tools, no stream)
-- :executor (27 tools, streaming)
-
-### Session Commits
+### Commits
 
 | Commit | Description |
 |--------|-------------|
+| `8591cfe` | Δ fix DashScope models: plain symbols |
+| `54f5c37` | Δ fix stream parser: skip-chars-forward |
 | `6fb1a0d` | ⚡ fix DashScope streaming: custom SSE parser |
-| `59bcd6e` | 💡 dashscope-streaming-fix: custom SSE parser pattern |
-| `f9d19a7` | ◈ state: A/B test framework |
-| `1d2ebaa` | Δ fix A/B test |
-| `4d7676a` | ⚡ add A/B test framework |
-| `1f5583a` | Δ fix quality scoring |
-| `5ff621d` | Δ fix code quality issues |
+| `59bcd6e` | 💡 dashscope-streaming-fix pattern |
 
-## Pattern Discovered 🔁
+### Next Steps
 
-**Git History → Workarounds → Proper Fixes**
+1. Debug the "stringp, nil" error in gptel-request
+2. Complete streaming test
+3. Run A/B test comparing executors
 
-```
-git log --grep="workaround\|fix\|bypass"
-  → identify root cause
-  → implement proper fix
-  → A/B test to compare
-  → remove workaround
-```
+## Pattern: API Compatibility
 
-## Next Steps
+When extending gptel backends:
 
-1. Run A/B test in Emacs to compare lite-executor vs executor
-2. If streaming is reliable, remove lite-executor fallback
-3. Consider fixing other backends with similar issues
+1. Use `cl-defstruct` with `:include gptel-openai`
+2. Models must be plain symbols or `(symbol :props...)` in backend
+3. Custom stream parser via `cl-defmethod gptel-curl--parse-stream`
+4. Test with `gptel-request` in Emacs (not emacsclient)
