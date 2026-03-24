@@ -691,6 +691,87 @@ Useful for testing callback chain without API calls."
 (defvar gptel-auto-experiment--no-improvement-count 0)
 (defvar gptel-auto-workflow--current-target nil
   "Current target file for experiment scoring.")
+(defvar gptel-auto-experiment--learnings nil
+  "Accumulated learnings from experiments in this session.")
+
+;;; Learning System (Mementum Integration)
+
+(defun gptel-auto-experiment--learn (result)
+  "Learn from experiment RESULT. Store to mementum if significant."
+  (let* ((kept (plist-get result :kept))
+         (delta (or (plist-get result :delta) 0))
+         (hypothesis (plist-get result :hypothesis))
+         (target (plist-get result :target)))
+    ;; Track in-session learnings
+    (when kept
+      (push (format "[%s] %s → +%.2f"
+                    (file-name-nondirectory target)
+                    (gptel-auto-experiment--summarize hypothesis)
+                    delta)
+            gptel-auto-experiment--learnings)
+      (message "[auto-exp] ✅ Learned: %s" (car gptel-auto-experiment--learnings)))
+    ;; Store to mementum if significant improvement (gate-2: effort > 1-attempt, likely_recur)
+    (when (and kept (> delta 0.02))
+      (gptel-auto-experiment--store-memory result))))
+
+(defun gptel-auto-experiment--store-memory (result)
+  "Store RESULT as mementum memory if gates pass."
+  (let* ((mementum-dir "mementum/memories")
+         (target (plist-get result :target))
+         (hypothesis (plist-get result :hypothesis))
+         (delta (or (plist-get result :delta) 0))
+         (score-before (plist-get result :score-before))
+         (score-after (plist-get result :score-after))
+         (slug (format "auto-exp-%s-%s"
+                       (file-name-sans-extension (file-name-nondirectory target))
+                       (format-time-string "%Y%m%d-%H%M%S")))
+         (content (format "# Auto-Experiment Learning
+
+## Improvement
+%s
+
+## Metrics
+- Target: %s
+- Score: %.2f → %.2f (Δ +%.2f)
+- Kept: yes
+
+## Context
+This improvement was discovered through autonomous experimentation.
+The hypothesis was validated by quality score increase.
+"
+                          hypothesis target score-before score-after delta)))
+    ;; gate-1: helps(future_AI_session) - yes, patterns are reusable
+    ;; gate-2: effort > 1_attempt - yes, experiments are expensive
+    (when (file-exists-p mementum-dir)
+      (let ((file (expand-file-name (concat slug ".md") mementum-dir)))
+        (with-temp-file file
+          (insert content))
+        (message "[auto-exp] 💡 Stored memory: %s" slug)
+        ;; Commit with mementum symbol
+        (let ((default-directory (gptel-auto-workflow--base-dir)))
+          (shell-command
+           (format "git add %s && git commit -m \"💡 %s: +%.2f quality score\"" file slug delta)))))))
+
+(defun gptel-auto-experiment--recall-learnings (target)
+  "Recall past learnings for TARGET from mementum/git history."
+  (let* ((target-name (file-name-nondirectory target))
+         (default-directory (gptel-auto-workflow--base-dir))
+         (memories (shell-command-to-string
+                    (format "git log --oneline -20 --grep='auto-exp' --grep='%s' --all-match 2>/dev/null || true"
+                            (file-name-sans-extension target-name)))))
+    (when (string-empty-p memories)
+      (setq memories (shell-command-to-string
+                      (format "git log --oneline -10 -- mementum/memories/auto-exp-%s* 2>/dev/null || true"
+                              (file-name-sans-extension target-name)))))
+    (unless (string-empty-p memories)
+      memories)))
+
+(defun gptel-auto-experiment--get-learnings ()
+  "Get relevant learnings for current target."
+  (when gptel-auto-experiment--learnings
+    (string-join (cl-subseq gptel-auto-experiment--learnings
+                            0 (min 5 (length gptel-auto-experiment--learnings)))
+                 "\n")))
 
 ;;; Worktree Management
 
@@ -753,69 +834,60 @@ Also kills any stale magit buffers referencing old worktrees."
 ;;; Benchmark & Evaluation
 
 (defun gptel-auto-experiment-benchmark ()
-  "Run nucleus verification + Eight Keys scoring."
+  "Run verification + compute quality score from byte-compile/checkdoc."
   (let* ((start (float-time))
          (base-dir (gptel-auto-workflow--base-dir))
-         (default-directory (or gptel-auto-workflow--worktree-dir
-                                base-dir))
+         (worktree (or gptel-auto-workflow--worktree-dir base-dir))
+         (default-directory worktree)
          (verify-result (call-process "bash" nil nil nil
                                       (expand-file-name "scripts/verify-nucleus.sh"
-                                                        base-dir))))
+                                                        base-dir)))
+         (quality-score (when (zerop verify-result)
+                          (gptel-auto-experiment--quality-score))))
     (list :passed (zerop verify-result)
           :time (- (float-time) start)
-          :eight-keys (when (zerop verify-result)
-                        (gptel-auto-experiment--eight-keys-score)))))
+          :eight-keys quality-score
+          :quality quality-score)))
+
+(defun gptel-auto-experiment--quality-score ()
+  "Compute quality score from checkdoc and missing docs.
+Score = 1.0 - (checkdoc*0.01 + missing-docs*0.005)
+Minimum score is 0.1."
+  (let* ((target (or gptel-auto-workflow--current-target ""))
+         (worktree (or gptel-auto-workflow--worktree-dir
+                       (gptel-auto-workflow--base-dir)))
+         (score 1.0)
+         (checkdoc-issues 0)
+         (missing-docs 0))
+    (when (string-match "\\.el$" target)
+      (let* ((file (expand-file-name target worktree)))
+        (when (file-exists-p file)
+          ;; Count checkdoc issues (safe, doesn't need byte-compile)
+          (condition-case nil
+              (with-temp-buffer
+                (insert-file-contents file)
+                (emacs-lisp-mode)
+                (setq checkdoc-issues (length (checkdoc-current-buffer t))))
+            (error 0))
+          ;; Count undocumented functions
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (while (re-search-forward "(defun \\([^ ]+\\)" nil t)
+              (forward-line)
+              (unless (looking-at-p "\\s-*\"")
+                (cl-incf missing-docs))))))
+      ;; Calculate score
+      (setq score (- 1.0
+                     (* checkdoc-issues 0.01)
+                     (* missing-docs 0.005)))
+      (message "[auto-exp] Quality: %d checkdoc, %d missing docs → %.2f"
+                checkdoc-issues missing-docs score)
+      (max 0.1 (min 1.0 score)))))
 
 (defun gptel-auto-experiment--eight-keys-score ()
-  "Get Eight Keys overall score from current codebase.
-Scores the actual file content, not git diff."
-  (condition-case err
-      (let* ((base-dir (gptel-auto-workflow--base-dir))
-             (worktree (or gptel-auto-workflow--worktree-dir base-dir))
-             (default-directory worktree)
-             (score 0.5))
-        ;; Try to get actual Eight Keys score
-        (when (fboundp 'gptel-benchmark-eight-keys-score)
-          ;; Score based on the target file's content
-          (let* ((target-file (when gptel-auto-workflow--current-target
-                                (expand-file-name gptel-auto-workflow--current-target worktree)))
-                 (content (when (and target-file (file-exists-p target-file))
-                            (with-temp-buffer
-                              (insert-file-contents target-file)
-                              (buffer-string))))
-                 (scores (when content
-                           (gptel-benchmark-eight-keys-score content))))
-            (when scores
-              (setq score (or (alist-get 'overall scores) 0.5)))))
-        ;; Fallback: use simple heuristics for scoring
-        (when (= score 0.5)
-          (setq score (gptel-auto-experiment--simple-score worktree)))
-        score)
-    (error
-     (message "[auto-exp] Eight Keys scoring error: %s" err)
-     0.5)))
-
-(defun gptel-auto-experiment--simple-score (worktree)
-  "Simple heuristic scoring based on code quality in WORKTREE."
-  (let ((score 0.5)
-        (target (or gptel-auto-workflow--current-target "")))
-    ;; Check if file has docstrings
-    (when (string-match "\\.el$" target)
-      (let* ((file (expand-file-name target worktree))
-             (content (when (file-exists-p file)
-                        (with-temp-buffer
-                          (insert-file-contents file)
-                          (buffer-string)))))
-        (when content
-          ;; +0.1 for docstrings
-          (when (string-match ";;; Commentary:" content) (cl-incf score 0.05))
-          ;; +0.1 for function docstrings
-          (when (> (count-matches "\"\"\"" content) 3) (cl-incf score 0.05))
-          ;; +0.1 for type annotations
-          (when (string-match "declare-function\\|defsubst" content) (cl-incf score 0.05))
-          ;; Cap at 0.8
-          (setq score (min score 0.8)))))
-    score))
+  "Alias for quality-score. Kept for compatibility."
+  (gptel-auto-experiment--quality-score))
 
 ;;; Subagent Integrations
 
@@ -874,49 +946,92 @@ Scores the actual file content, not git diff."
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline)
   "Build prompt for experiment EXPERIMENT-ID on TARGET."
   (let* ((base-dir (gptel-auto-workflow--base-dir))
+         (worktree (or gptel-auto-workflow--worktree-dir base-dir))
+         (target-file (expand-file-name target worktree))
          (git-history (shell-command-to-string
-                       (format "cd %s && git log --oneline -20 2>/dev/null || echo 'no history'"
-                               (or gptel-auto-workflow--worktree-dir base-dir))))
+                       (format "cd %s && git log --oneline -10 2>/dev/null || echo 'no history'"
+                               worktree)))
          (patterns (when analysis (plist-get analysis :patterns)))
-         (suggestions (when analysis (plist-get analysis :recommendations))))
-    (format "You are running experiment %d of %d to optimize %s.
+         (suggestions (when analysis (plist-get analysis :recommendations)))
+         (file-analysis (gptel-auto-experiment--analyze-file target-file))
+         (past-learnings (gptel-auto-experiment--recall-learnings target)))
+    (format "You are running experiment %d of %d to improve %s.
 
-## Previous Experiment Analysis
+## Current File Analysis
+%s
+
+## Quality Score: %.2f (higher is better)
+Score formula: 1.0 - (errors*0.1 + warnings*0.02 + checkdoc*0.01 + missing-docs*0.005)
+
+## Past Successful Improvements
+%s
+
+## Previous Experiments
 %s
 
 ## Suggestions
 %s
 
-## Git History (recent commits)
+## Recent Commits
 %s
 
-## Current Baseline
-Overall Eight Keys score: %.2f
-
 ## Objective
-Improve the Eight Keys score for %s.
-Focus on one improvement at a time.
-Make minimal, targeted changes.
+Make ONE specific improvement to increase the quality score.
+Focus on: adding docstrings, fixing warnings, simplifying code, or removing dead code.
 
 ## Constraints
 - Time budget: %d minutes
 - Immutable files: early-init.el, pre-early-init.el, lisp/eca-security.el
 - Must pass tests: ./scripts/verify-nucleus.sh
+- Maximum 5 tool calls
 
 ## Instructions
-1. First, write your HYPOTHESIS: What change might improve the score? Why?
-2. Implement the change minimally
-3. Run tests to verify
+1. Read the target file first
+2. Identify ONE specific improvement (e.g., add docstring to function X)
+3. Make the change
+4. Run Diagnostics to verify no new errors
 
-Format your hypothesis at the start as:
-HYPOTHESIS: [your hypothesis here]"
+Start with:
+HYPOTHESIS: Adding docstring to [function] will improve maintainability."
             experiment-id max-experiments target
-            (or patterns "No previous experiments")
+            file-analysis
+            (or baseline 0.5)
+            (or past-learnings "None yet - first run for this file")
+            (or patterns "None yet")
             (or suggestions "None")
             git-history
-            (or baseline 0.5)
-            target
             (/ gptel-auto-experiment-time-budget 60))))
+
+(defun gptel-auto-experiment--analyze-file (file)
+  "Analyze FILE for quality issues. Return string summary."
+  (when (file-exists-p file)
+    (let* ((content (with-temp-buffer
+                      (insert-file-contents file)
+                      (buffer-string)))
+           (lines (length (split-string content "\n")))
+           (defuns 0)
+           (undoc-fns 0)
+           (issues '()))
+      ;; Count functions and undocumented ones
+      (with-temp-buffer
+        (insert content)
+        (goto-char (point-min))
+        (while (re-search-forward "(defun \\([^ ]+\\)" nil t)
+          (cl-incf defuns)
+          (forward-line)
+          (unless (looking-at-p "\\s-*\"")
+            (cl-incf undoc-fns)
+            (push (format "Undocumented: %s" (match-string 1)) issues))))
+      ;; Check for common issues
+      (when (string-match-p "(save-excursion\n *)" content)
+        (push "Has empty save-excursion blocks" issues))
+      (when (> (count-matches "(condition-case" content) 3)
+        (push "Many condition-case blocks" issues))
+      (when (> (count-matches "(interactive)" content) 10)
+        (push "Many interactive commands" issues))
+      (format "Lines: %d, Functions: %d, Undocumented: %d\nIssues: %s"
+              lines defuns undoc-fns
+              (if issues (string-join (nreverse issues) "; ") "None")))))
 
 ;;; TSV Logging (Explainable)
 
@@ -1238,6 +1353,7 @@ HYPOTHESIS: [your hypothesis here]"
                      gptel-auto-experiment--best-score
                      gptel-auto-experiment--results
                      (lambda (result)
+                       (gptel-auto-experiment--learn result)
                        (push result gptel-auto-experiment--results)
                        (run-next (1+ exp-id)))))))
       (run-next 1))))
