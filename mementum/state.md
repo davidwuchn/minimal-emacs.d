@@ -2,47 +2,52 @@
 
 > Last session: 2026-03-24
 
-## Verified ✓
+## Complete ✓
 
-**Autonomous Research Agent** — All tests pass
+**Autonomous Research Agent** — Fully functional with DashScope
 
-### Test Results
+### Key Fixes
 
-| Test | Status | Time |
-|------|--------|------|
-| Mock mode (2 exp) | ✓ | ~10s |
-| Real API (1 exp) | ✓ | 113s |
-| Subagent | ✓ | 110.2s |
-| Grading | ✓ | 100 passed |
-| Benchmark | ✓ | passed |
-| Decision | ✓ | correct |
-| TSV logging | ✓ | logged |
-| Cleanup | ✓ | no stale state |
-
-### Fixes Applied
-
-| Commit | Issue | Fix |
-|--------|-------|-----|
-| f41a74f | Stale magit buffers | Kill on start/delete |
-| 81e722d | gptel-agent--task fails | Use gptel-with-preset + gptel-request |
-| f2b0614 | Mock mode callback chain | Fix async, nil scores |
+| Issue | Root Cause | Solution |
+|-------|------------|----------|
+| HTTP parsing errors | DashScope SSE differs from OpenAI | Disable streaming |
+| Slow API (100-200s) | 27 tools in payload | lite-executor (4 tools) |
+| Callback chain failure | gptel-agent--task needs FSM | Use gptel-with-preset |
+| Stale magit buffers | Worktree paths cached | Kill buffers on start/delete |
 
 ### Configuration
 
 ```elisp
-(setq gptel-auto-experiment-time-budget 180)  ; 3 min per experiment
-(setq gptel-auto-experiment-max-per-target 10) ; 10 experiments per file
+;; DashScope: non-streaming for reliability
+(setq gptel-auto-experiment-lite-mode t)  ; 4 tools vs 27
+(setq gptel-auto-experiment-time-budget 120)  ; 2 min per experiment
+```
+
+### Test Results
+
+| Test | Time | Status |
+|------|------|--------|
+| Simple query | 2.5s | ✓ |
+| Auto-workflow (1 exp) | 73s | ✓ |
+| Subagent completion | ✓ | No HTTP errors |
+
+### Commits
+
+| Commit | Description |
+|--------|-------------|
+| 630fbd4 | ⚡ fix DashScope: disable streaming |
+| a7b0931 | ⚡ add lite-executor: 4 tools instead of 27 |
+| 3073567 | ⚡ improve auto-experiment: better scoring |
+
+### Entry Points
+
+```elisp
+M-x gptel-auto-workflow-run
+(gptel-auto-workflow-run '("lisp/modules/gptel-ext-retry.el"))
 ```
 
 ### Cron
 
 ```bash
 0 2 * * * emacsclient -e '(gptel-auto-workflow-run-autonomous)'
-```
-
-## Entry Points
-
-```elisp
-M-x gptel-auto-workflow-run
-M-x gptel-auto-workflow-run-autonomous
 ```
