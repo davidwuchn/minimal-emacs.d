@@ -8,33 +8,44 @@ Git history contains workarounds that could be properly fixed. Each workaround i
 workaround commit → "fix X by doing Y" → root cause documented but not fixed
 ```
 
-## Current Workarounds
+## Workarounds Fixed ✓
 
-| Commit | Workaround | Root Cause | Potential Fix |
-|--------|------------|------------|---------------|
-| `630fbd4` | Disable DashScope streaming | SSE format differs from OpenAI | Custom SSE parser for DashScope |
-| `a7b0931` | lite-executor (4 tools) | 27 tools too slow without streaming | Fix SSE → re-enable streaming → use full executor |
-| `5f5b90d` | Explicit `:stream nil` in preset | Same SSE issue | Same as above |
+| Commit | Workaround | Fix | Result |
+|--------|------------|-----|--------|
+| `630fbd4` | Disable DashScope streaming | `d60312c` - Custom gptel-dashscope backend | ✅ Streaming works! |
+| `a7b0931` | lite-executor (4 tools) | Can now use full executor | Ready for A/B test |
 
-## A/B Test Strategy
+## Fix Chain for DashScope
 
-| Variant | Config | Hypothesis |
-|---------|--------|------------|
-| A (current) | lite-executor, no streaming | Fast but limited tools |
-| B | executor, no streaming | More tools, same reliability |
-| C (target) | executor, streaming | Best UX, incremental output |
+```
+630fbd4: "fix DashScope: disable streaming"
+   ↓ commit message documents root cause
+6fb1a0d: Create gptel-dashscope struct
+   ↓ extends gptel-openai with custom parser
+54f5c37: Fix parser regex issues
+   ↓ use skip-chars-forward not match-end
+8591cfe: Fix model format (plain symbols)
+   ↓ gptel--sanitize-model expects symbols
+31cc8e7: Add protocol parameter
+   ↓ URL construction needs protocol
+d60312c: Fix URL nil issue
+   ↓ setf gptel-backend-url after creation
+   → STREAMING WORKS!
+```
+
+## Remaining Workarounds
+
+| Commit | Workaround | Status |
+|--------|------------|--------|
+| `a7b0931` | lite-executor | A/B test pending |
 
 ## Process
 1. Extract workarounds from git log: `git log --grep="workaround\|fix\|bypass"`
 2. Identify root cause in commit message
 3. Design proper fix
-4. A/B test to compare
-5. Keep winner, remove workaround
-
-## Decision Criteria
-- Benchmark scores (completion, efficiency)
-- Reliability (no HTTP errors)
-- UX (streaming vs batch)
+4. Test thoroughly
+5. Commit with reference to original workaround
+6. Remove workaround if no longer needed
 
 ---
-*Learned: 2026-03-24*
+*Updated: 2026-03-24*
