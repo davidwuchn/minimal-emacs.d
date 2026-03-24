@@ -20,32 +20,15 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
                               (:constructor gptel--make-dashscope)))
 
 (cl-defmethod gptel-curl--parse-stream ((_backend gptel-dashscope) info)
-  "Parse DashScope streaming response with robust error handling.
+  "Parse DashScope streaming response.
 INFO is the request info plist.
-Consumes parsed data by advancing point (no save-excursion)."
+Uses same pattern as gptel-openai: re-search-forward consumes buffer."
   (let ((content-strs nil))
-    (cl-block nil
-      (condition-case nil
-          (while (not (eobp))
-            (skip-chars-forward "\r\n")
-            (when (eobp) (cl-return))
-            (cond
-             ((looking-at-p "\\[DONE\\]")
-              (goto-char (point-max)))
-             ((looking-at-p "data:")
-              (forward-char 5)
-              (skip-chars-forward " \t")
-              (unless (looking-at-p "\\[DONE\\]")
-                (condition-case nil
-                    (when-let* ((response (gptel--json-read))
-                                (delta (map-nested-elt response '(:choices 0 :delta))))
-                      (when-let* ((content (plist-get delta :content))
-                                  ((stringp content))
-                                  ((not (string-empty-p content))))
-                        (push content content-strs)))
-                  (error nil)))
-              (forward-line 1))
-             ((looking-at-p "{")
+    (condition-case nil
+        (while (re-search-forward "^data:" nil t)
+          (save-match-data
+            (skip-chars-forward " \t")
+            (unless (looking-at-p "\\[DONE\\]")
               (condition-case nil
                   (when-let* ((response (gptel--json-read))
                               (delta (map-nested-elt response '(:choices 0 :delta))))
@@ -53,10 +36,8 @@ Consumes parsed data by advancing point (no save-excursion)."
                                 ((stringp content))
                                 ((not (string-empty-p content))))
                       (push content content-strs)))
-                (error nil))
-              (forward-line 1))
-             (t (forward-line 1))))
-        (error nil)))
+                (error nil)))))
+      (error nil))
     (apply #'concat (nreverse content-strs))))
 
 ;;;###autoload
