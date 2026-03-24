@@ -32,11 +32,13 @@ to a temp file."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defcustom my/gptel-subagent-stream nil
+(defcustom my/gptel-subagent-stream t
   "Whether to use streaming mode for subagent requests.
-When nil (default), subagents use non-streaming mode which is more reliable
-on backends with streaming issues (e.g., DashScope HTTP parse errors).
-When t, subagents use streaming mode for incremental display."
+When t (default), subagents use streaming mode for incremental display.
+When nil, subagents use non-streaming mode (batch response).
+
+Note: Streaming is now reliable for DashScope after the custom SSE parser
+was added in commit d60312c. Set to nil only if you encounter issues."
   :type 'boolean
   :group 'gptel-tools-agent)
 
