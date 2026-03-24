@@ -44,6 +44,7 @@ gptel-auto-workflow-run
 ```
 grader/*               17/17 ✓
 retry/*                32/32 ✓
+Combined (grader+retry): 49/49 ✓
 Full suite: 1048/1113 (test isolation issues remain)
 ```
 
