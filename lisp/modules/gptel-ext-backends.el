@@ -12,64 +12,29 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
         (result (auth-source-user-and-password host "api")))
     (cadr result)))
 
-;;; DashScope Backend with Custom Stream Parser
-;;; Extends gptel-openai with more robust SSE parsing
-
-(cl-defstruct (gptel-dashscope (:include gptel-openai)
-                              (:copier nil)
-                              (:constructor gptel--make-dashscope)))
-
-(cl-defmethod gptel-curl--parse-stream ((_backend gptel-dashscope) info)
-  "Parse DashScope streaming response.
-INFO is the request info plist.
-Uses same pattern as gptel-openai: re-search-forward consumes buffer."
-  (let ((content-strs nil))
-    (condition-case nil
-        (while (re-search-forward "^data:" nil t)
-          (save-match-data
-            (skip-chars-forward " \t")
-            (unless (looking-at-p "\\[DONE\\]")
-              (condition-case nil
-                  (when-let* ((response (gptel--json-read))
-                              (delta (map-nested-elt response '(:choices 0 :delta))))
-                    (when-let* ((content (plist-get delta :content))
-                                ((stringp content))
-                                ((not (string-empty-p content))))
-                      (push content content-strs)))
-                (error nil)))))
-      (error nil))
-    (apply #'concat (nreverse content-strs))))
+;;; DashScope Backend - uses OpenAI-compatible API
+;;; No custom parser needed - standard OpenAI SSE format
 
 ;;;###autoload
 (cl-defun gptel-make-dashscope
-    (name &key curl-args stream key request-params
-          (header (lambda () (when-let* ((key (gptel--get-api-key)))
-                          `(("Authorization" . ,(concat "Bearer " key))))))
+    (name &key
           (host "coding.dashscope.aliyuncs.com")
           (protocol "https")
           (endpoint "/v1/chat/completions")
-          models)
+          key stream models curl-args request-params header)
   "Register a DashScope backend with NAME.
-This is like `gptel-make-openai' but uses a custom stream parser
-that handles DashScope's SSE format differences."
+Uses standard OpenAI-compatible format - no custom parser needed."
   (declare (indent 1))
-  (let ((backend (gptel--make-dashscope
-                  :name name
-                  :host host
-                  :protocol protocol
-                  :header header
-                  :endpoint endpoint
-                  :curl-args curl-args
-                  :key key
-                  :models models
-                  :stream stream
-                  :request-params request-params)))
-    (setf (gptel-backend-url backend)
-          (if protocol
-              (concat protocol "://" host endpoint)
-            (concat host endpoint)))
-    (setf (alist-get name gptel--known-backends nil nil #'equal) backend)
-    backend))
+  (gptel-make-openai name
+    :host host
+    :protocol protocol
+    :endpoint endpoint
+    :key key
+    :stream stream
+    :models models
+    :curl-args curl-args
+    :request-params request-params
+    :header header))
 
 ;; --- Provider Backends ---
 (defvar gptel--copilot (gptel-make-gh-copilot "Copilot"))
