@@ -69,7 +69,7 @@
 ;;; ==============================================================================
 
 ;; VC-installed packages need manual load-path addition
-(let ((ai-code-dir (expand-file-name "ai-code" package-user-dir)))
+(let ((ai-code-dir (expand-file-name "packages/ai-code" minimal-emacs-user-directory)))
   (when (file-directory-p ai-code-dir)
     (add-to-list 'load-path ai-code-dir)))
 
