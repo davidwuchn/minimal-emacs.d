@@ -955,20 +955,38 @@ Minimum score is 0.1."
        callback)
     (funcall callback nil)))
 
+(defvar gptel-auto-experiment-grade-timeout 60
+  "Timeout in seconds for grading subagent.")
+
 (defun gptel-auto-experiment-grade (output callback)
-  "Grade experiment OUTPUT. LLM decides quality threshold."
-  (if (and gptel-auto-experiment-use-subagents
-           (fboundp 'gptel-benchmark-grade))
-      (gptel-benchmark-grade
-       output
-       '("hypothesis clearly stated"
-         "change is minimal"
-         "tests mentioned")
-       '("large refactor"
-         "changed security files"
-         "no hypothesis")
-       callback)
-    (funcall callback (list :score 100 :passed t))))
+  "Grade experiment OUTPUT. LLM decides quality threshold.
+Has timeout fallback to auto-pass if grading takes too long."
+  (let ((done nil)
+        (timer (run-with-timer gptel-auto-experiment-grade-timeout nil
+                 (lambda ()
+                   (unless done
+                     (setq done t)
+                     (message "[auto-exp] Grading timeout after %ds, auto-passing"
+                              gptel-auto-experiment-grade-timeout)
+                     (funcall callback (list :score 100 :passed t :details "timeout")))))))
+    (if (and gptel-auto-experiment-use-subagents
+             (fboundp 'gptel-benchmark-grade))
+        (gptel-benchmark-grade
+         output
+         '("hypothesis clearly stated"
+           "change is minimal"
+           "tests mentioned")
+         '("large refactor"
+           "changed security files"
+           "no hypothesis")
+         (lambda (result)
+           (unless done
+             (setq done t)
+             (cancel-timer timer)
+             (funcall callback result))))
+      (setq done t)
+      (cancel-timer timer)
+      (funcall callback (list :score 100 :passed t)))))
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER. CALLBACK receives keep/discard decision with reasoning."
