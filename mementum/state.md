@@ -2,71 +2,55 @@
 
 > Last session: 2026-03-24
 
-## Session Summary: Prompt Enhancement with Skills + Weakest Keys
+## Session Summary: Prompt Enhancement Complete
 
-### Commits (3)
+### Commits (5)
 
 | Hash | Description |
 |------|-------------|
 | `8014387` | λ Prompt uses skills + weakest Eight Keys for focused hypotheses |
 | `32b8aa1` | Δ Update ai-code submodule |
 | `3120ee5` | λ Add tests for Eight Keys weakest functions |
+| `f8f79db` | λ Fix mutation template extraction (non-greedy regex issue) |
+| `1a08b33` | λ Fix program.md parsing (targets now load correctly) |
 
-### Problem Solved
-
-**Critical Gap Found:** `gptel-auto-workflow--skills` was loaded in `gptel-auto-workflow-orient` but **never read** in prompt building. The function `gptel-auto-workflow-skill-suggest-hypothesis` existed but was **never called**.
-
-### What Was Missing
-
-- Per-key Eight Keys breakdown (only overall score shown)
-- Weakest key identification
-- Mutation templates from skills
-- Suggested hypotheses from skills
-
-### New Functions
-
-| Function | Purpose |
-|----------|---------|
-| `gptel-benchmark-eight-keys-weakest` | Return N weakest keys from scores |
-| `gptel-benchmark-eight-keys-weakest-with-signals` | Return weakest keys with improvement signals |
-| `gptel-auto-workflow--extract-mutation-templates` | Extract hypothesis templates from mutation skills |
-| `gptel-auto-workflow--format-weakest-keys` | Format weakest keys for prompt |
-
-### Prompt Now Includes
+### Verified Working
 
 ```
-## Weakest Keys (Priority Focus)
-- π Synthesis: 38% (focus: connects findings, integrates knowledge, holistic view)
-- φ Vitality: 45% (focus: builds on discoveries, adapts to new information, progressive improvement)
+[autonomous] Loaded program: 3 targets
 
 ## Suggested Hypothesis (from skill)
 (Populated by metabolize after each night)
 
 ## Hypothesis Templates
-- "Add caching to {component} to reduce redundant {operation}"
-- "Memoize {function} for {scenario}"
+- Add caching to {component} to reduce redundant {operation}
+- Cache {result} to avoid recomputing {input}
+- Memoize {function} for {scenario}
+- Lazy initialize {resource} to defer {cost} until needed
+- Defer {initialization} to first {usage}
+- Wrap {variable} in lazy-{pattern} for on-demand init
+- Simplify {logic} by removing {redundancy}
+- Merge {path-a} and {path-b} into unified {path}
+- Remove {unused} to reduce complexity
 ```
+
+### Bugs Fixed
+
+1. **Non-greedy regex issue**: `.+?` doesn't work well with newlines in Emacs regex
+   - Solution: Use position-based substring extraction
+2. **Program.md parsing**: `forward-line 2` wasn't enough to reach code block
+   - Solution: Use `re-search-forward` to find ` ``` ` marker
+3. **Mutations regex**: `[^ ]+` captured newlines
+   - Solution: Use `[a-z-]+` for mutation names
 
 ### Tests Added
 
 ```
-grader/eight-keys-weakest-excludes-overall    ✓
-grader/eight-keys-weakest-returns-sorted      ✓
-grader/eight-keys-weakest-with-signals-returns-list  ✓
-grader/format-weakest-keys-produces-string    ✓
-```
-
-### Docs Updated
-
-- `docs/auto-workflow-program.md` - Added Priority Focus and Target-Specific Patterns sections
-
-### Bug Fixed
-
-Fixed quoted list extraction in `gptel-benchmark-eight-keys-weakest-with-signals`:
-```elisp
-(if (and (listp signals-raw) (eq (car signals-raw) 'quote))
-    (cadr signals-raw)
-  signals-raw)
+grader/eight-keys-weakest-excludes-overall         ✓
+grader/eight-keys-weakest-returns-sorted           ✓
+grader/eight-keys-weakest-with-signals-returns-list ✓
+grader/format-weakest-keys-produces-string         ✓
+grader/extract-mutation-templates-returns-list     ✓
 ```
 
 ---
@@ -75,10 +59,12 @@ Fixed quoted list extraction in `gptel-benchmark-eight-keys-weakest-with-signals
 
 ```
 λ fix. Skills loaded but never used → now injected into prompt
+λ fix. Non-greedy regex replaced with position-based extraction
+λ fix. Program.md targets now load correctly
 λ target. Weakest Eight Keys guide hypothesis generation
-λ template. Mutation skills provide hypothesis templates
-λ test. 4 new tests for weakest functions
-λ doc. Priority Focus + Target-Specific Patterns sections added
+λ template. 9 mutation templates extracted from 3 skills
+λ test. 5 new tests for weakest/template functions
+λ verify. Full prompt includes templates + suggested hypothesis
 ```
 
 ---
