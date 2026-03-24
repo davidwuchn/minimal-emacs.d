@@ -246,5 +246,64 @@ Returns 1.0 if under max, 0.5 if over."
   (require 'gptel-tools-agent)
   (should (fboundp 'gptel-auto-experiment--code-quality-score)))
 
+;;; Test 17: LLM Quality Detection (Hallucination/Off-topic)
+
+(defun test--detect-llm-degradation (response expected-keywords forbidden-keywords)
+  "Detect if RESPONSE is degraded (hallucinating, off-topic, lost context).
+EXPECTED-KEYWORDS: should be present for on-topic response.
+FORBIDDEN-KEYWORDS: indicate degradation.
+Returns plist: (:degraded-p :reason :score)."
+  (let* ((expected-matches 0)
+         (forbidden-matches 0)
+         (reasons '()))
+    (dolist (kw expected-keywords)
+      (when (string-match-p (regexp-quote kw) response)
+        (cl-incf expected-matches)))
+    (dolist (kw forbidden-keywords)
+      (when (string-match-p (regexp-quote kw) response)
+        (cl-incf forbidden-matches)
+        (push kw reasons)))
+    (let* ((expected-score (/ (float expected-matches) (max 1 (length expected-keywords))))
+           ;; Degraded if: forbidden keywords present OR no expected keywords found
+           (degraded-p (or (> forbidden-matches 0)
+                           (and expected-keywords (= expected-matches 0))))
+           (score (cond
+                   ((> forbidden-matches 0) (- 1.0 (/ (float forbidden-matches) (max 1 (length forbidden-keywords)))))
+                   ((= expected-matches 0) 0.0)
+                   (t expected-score))))
+      (list :degraded-p degraded-p
+            :reason (if (> forbidden-matches 0)
+                        (mapconcat #'identity (nreverse reasons) ", ")
+                      (if (= expected-matches 0) "no expected keywords" ""))
+            :score score))))
+
+(ert-deftest grader/llm-quality/detects-repetition ()
+  "Should detect repetitive/degraded LLM output."
+  (let ((result (test--detect-llm-degradation
+                 "I apologize I apologize I apologize for the confusion"
+                 '()
+                 '("I apologize" "I'm sorry" "I understand your concern"))))
+    (should (plist-get result :degraded-p))
+    (should (< (plist-get result :score) 1.0))
+    (should (string-match-p "apologize" (plist-get result :reason)))))
+
+(ert-deftest grader/llm-quality/detects-off-topic ()
+  "Should detect off-topic response."
+  (let ((result (test--detect-llm-degradation
+                 "The quick brown fox jumps over the lazy dog."
+                 '("defun" "elisp" "emacs")
+                 '())))
+    (should (plist-get result :degraded-p))
+    (should (= 0 (plist-get result :score)))))
+
+(ert-deftest grader/llm-quality/passess-good-response ()
+  "Should pass non-degraded response."
+  (let ((result (test--detect-llm-degradation
+                 "The function (defun foo) is defined in elisp."
+                 '("defun" "elisp")
+                 '())))
+    (should-not (plist-get result :degraded-p))
+    (should (= 1.0 (plist-get result :score)))))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here

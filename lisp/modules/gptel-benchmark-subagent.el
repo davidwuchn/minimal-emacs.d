@@ -228,6 +228,45 @@ Returns a score from 0.0 to 1.0.
          (coverage (if (> funcs 0) (/ (float docstrings) funcs) 1.0)))
     coverage))
 
+;;; LLM Quality Detection
+
+(defcustom gptel-benchmark-llm-degradation-keywords
+  '("I apologize" "I'm sorry" "I understand your concern"
+    "As an AI" "I cannot" "I'm unable to"
+    "Let me try again" "Let me rephrase" "I apologize for the confusion")
+  "Keywords indicating LLM degradation (repetition, apology loops)."
+  :type '(repeat string)
+  :group 'gptel-benchmark-subagent)
+
+(defun gptel-benchmark--detect-llm-degradation (response expected-keywords)
+  "Detect if RESPONSE shows LLM degradation (hallucination, off-topic, lost context).
+EXPECTED-KEYWORDS: should be present for on-topic response.
+Returns plist: (:degraded-p :reason :score)."
+  (let* ((expected-matches 0)
+         (forbidden-matches 0)
+         (reasons '())
+         (forbidden gptel-benchmark-llm-degradation-keywords))
+    (dolist (kw expected-keywords)
+      (when (string-match-p (regexp-quote kw) response)
+        (cl-incf expected-matches)))
+    (dolist (kw forbidden)
+      (when (string-match-p (regexp-quote kw) response)
+        (cl-incf forbidden-matches)
+        (push kw reasons)))
+    (let* ((expected-score (/ (float expected-matches) (max 1 (length expected-keywords))))
+           (degraded-p (or (> forbidden-matches 0)
+                           (and expected-keywords (= expected-matches 0))))
+           (score (cond
+                   ((> forbidden-matches 0)
+                    (- 1.0 (/ (float forbidden-matches) (max 1 (length forbidden)))))
+                   ((= expected-matches 0) 0.0)
+                   (t expected-score))))
+      (list :degraded-p degraded-p
+            :reason (if (> forbidden-matches 0)
+                        (mapconcat #'identity (nreverse reasons) ", ")
+                      (if (= expected-matches 0) "no expected keywords" ""))
+            :score score))))
+
 ;;; Analyzer Subagent
 
 (defun gptel-benchmark-analyze (data description callback)
