@@ -15,26 +15,12 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
 ;;; DashScope Backend - uses OpenAI-compatible API
 ;;; No custom parser needed - standard OpenAI SSE format
 
-;;;###autoload
-(cl-defun gptel-make-dashscope
-    (name &key
-          (host "coding.dashscope.aliyuncs.com")
-          (protocol "https")
-          (endpoint "/v1/chat/completions")
-          key stream models curl-args request-params header)
+(defun gptel-make-dashscope (name &rest args)
   "Register a DashScope backend with NAME.
-Uses standard OpenAI-compatible format - no custom parser needed."
+Uses standard OpenAI-compatible format - no custom parser needed.
+ARGS are passed to `gptel-make-openai'."
   (declare (indent 1))
-  (gptel-make-openai name
-    :host host
-    :protocol protocol
-    :endpoint endpoint
-    :key key
-    :stream stream
-    :models models
-    :curl-args curl-args
-    :request-params request-params
-    :header header))
+  (apply #'gptel-make-openai name args))
 
 ;; --- Provider Backends ---
 (defvar gptel--copilot (gptel-make-gh-copilot "Copilot"))
