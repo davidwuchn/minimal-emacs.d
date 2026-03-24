@@ -41,6 +41,7 @@ ARGS are passed to `gptel-make-openai'."
 
 (defvar gptel--dashscope
   (gptel-make-dashscope "DashScope"
+    :host "coding.dashscope.aliyuncs.com"
     :key (lambda () (my/gptel-api-key "coding.dashscope.aliyuncs.com"))
     :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
