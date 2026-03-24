@@ -2,53 +2,43 @@
 
 > Last session: 2026-03-24
 
-## Session: Synthesis Loop ✓
+## Session: DashScope Streaming Fixed ✓
 
-**Implemented**: Auto-evolve synthesis loop with human approval gate.
+**Problem**: DashScope streaming returned 401 Unauthorized, then `cl-block-nil` errors.
 
-### New Functions
+### Root Causes Found
 
-| Function | Purpose |
-|----------|---------|
-| `gptel-mementum-synthesize-candidate` | Synthesize candidate → preview → approval → create |
-| `gptel-mementum-synthesize-all-candidates` | Batch synthesis with human gates |
-| `gptel-mementum-synthesis-run` | Interactive: M-x gptel-mementum-synthesis-run |
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| 401 Unauthorized | `:header nil` override | Use `apply` to delegate all args |
+| Wrong host | Missing `:host` param | Add explicit host |
+| cl-block-nil errors | Old broken custom parser | Remove custom parser, use standard |
+| nil tool names | DashScope sends malformed calls | Merged fix-nil-tool-names |
 
-### Synthesis Flow
-
-```
-detect candidates (≥3 memories)
-       ↓
-preview buffer (source memories + proposed content)
-       ↓
-y-or-n-p approval (λ termination: human gate)
-       ↓
-create mementum/knowledge/{topic}.md
-       ↓
-commit: 💡 synthesis: {topic}
-```
-
-### Files Changed
+### Changes Made
 
 | File | Change |
 |------|--------|
-| `lisp/modules/gptel-tools-agent.el` | Added synthesis functions |
-| `docs/auto-workflow.md` | Updated synthesis documentation |
-| `scripts/test-mementum-integration.sh` | Added synthesis test |
+| `lisp/modules/gptel-ext-backends.el` | Simplified to `apply #'gptel-make-openai`, added `:host` |
+| `packages/gptel/` | Merged `fix-nil-tool-names` branch |
 
-### Test Results
+### Verification
 
+```elisp
+(gptel-backend-host gptel--dashscope) => "coding.dashscope.aliyuncs.com"
+(gptel-backend-header gptel--dashscope) => #[...]  ; has header function
+
+;; Streaming test
+(gptel-request "Say exactly: test ok" :stream t) => "test ok" ✓
 ```
-Test 4: SYNTHESIS - Detect candidates
-✓ Synthesis candidates detected
-```
+
+### Key Learnings
+
+1. **No custom parser needed** - DashScope uses standard OpenAI SSE format
+2. **DashScope has reasoning_content** - qwen3.5-plus sends thinking blocks
+3. **Emacs caches methods** - Must restart daemon after changing generic methods
+4. **apply for delegation** - `(apply #'gptel-make-openai name args)` preserves defaults
 
 ### Previous Session
 
 **24 commits** | **Streaming fixed** | **Git submodules migrated**
-
-| Change | Status |
-|--------|--------|
-| DashScope streaming | ✅ Fixed & verified |
-| Subagent streaming | ✅ Enabled |
-| Fork packages | ✅ Git submodules |
