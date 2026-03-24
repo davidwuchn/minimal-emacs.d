@@ -2,40 +2,49 @@
 
 > Last session: 2026-03-24
 
-## Session: Grader Subagent Fixed ✓
+## Session: Autonomous Workflow Verified Working ✓
 
-**Bug:** Grader always fell back to local grading, never used LLM subagent.
-
-### Root Cause
+**Full flow tested and verified:**
 
 ```
-gptel-tools-agent.el → no require gptel-agent → gptel-agent--task undefined
-                                                   ↓
-                                        (fboundp 'gptel-agent--task) → nil
-                                                   ↓
-                                        local grading fallback
+gptel-auto-workflow-run
+  → worktree ✓
+  → executor subagent ✓ (80s)
+  → grader subagent ✓ (6/6 passed)
+  → benchmark ✓
+  → decision ✓ (discarded, no score improvement)
+  → TSV log ✓
 ```
 
-### Fixes
+### Experiment 1 Results
 
-| File | Change |
-|------|--------|
-| `gptel-tools-agent.el` | Added `(require 'gptel-agent)` at top |
-| `gptel-benchmark-subagent.el` | Parse JSON format from grader |
-| `tests/test-grader-subagent.el` | 8 TDD tests, all pass |
+| Metric | Value |
+|--------|-------|
+| Target | gptel-ext-retry.el |
+| Duration | 100s |
+| Grader | 6/6 passed |
+| Score | 1.0 → 1.0 (no change) |
+| Decision | Discarded |
 
-### Verification
+### Issues to Address
 
-```
-:gptel-agent-loaded t
-:gptel-agent--agents-count 13
-:grader-model "qwen3.5-plus" = :executor-model
-```
+1. **API timeouts** - DashScope slow, need retries
+2. **Metrics gap** - Docstring changes don't improve score
+3. **Duration** - 100s for simple change is high
 
-### Run Tests
+### Fixes Applied Today
+
+| Fix | Commit |
+|-----|--------|
+| Require gptel-agent | `b06c0dc` |
+| Parse JSON grader output | `fb3cb22` |
+| Grader model = executor | `1aa1d42` |
+| Timeout wrapper | `a55035a` |
+
+### Test Suite
 
 ```bash
-./scripts/run-tests.sh grader
+./scripts/run-tests.sh grader  # 8/8 pass
 ```
 
 ---
@@ -44,6 +53,6 @@ gptel-tools-agent.el → no require gptel-agent → gptel-agent--task undefined
 
 ```
 λ tdd. test_first > trial_and_error
-λ debug. test → red → trace → fix → green
-λ verify. 8/8 tests pass
+λ verify. autonomous workflow works end-to-end
+λ next. improve metrics, handle API timeouts
 ```
