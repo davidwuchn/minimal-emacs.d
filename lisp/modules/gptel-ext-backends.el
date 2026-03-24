@@ -21,37 +21,29 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
 
 (cl-defmethod gptel-curl--parse-stream ((_backend gptel-dashscope) info)
   "Parse DashScope streaming response with robust error handling.
-DashScope's SSE format can differ from OpenAI's in subtle ways:
-- May have extra whitespace
-- May have different line endings
-- JSON payload may be on same line as 'data:' or next line
-
 INFO is the request info plist."
   (let ((content-strs nil))
     (condition-case err
         (while (not (eobp))
+          (skip-chars-forward "\r\n")
+          (when (eobp) (cl-return))
           (cond
-           ((looking-at-p "^[\r\n]+$")
-            (forward-line 1))
-           ((looking-at-p ".*\\[DONE\\]")
+           ((looking-at-p "\\[DONE\\]")
             (goto-char (point-max)))
-           ((looking-at-p "^data:\\s-*")
-            (let ((json-start (match-end 0)))
-              (skip-chars-forward " \t")
-              (when (and (not (eobp))
-                         (not (looking-at-p "\\[DONE\\]")))
-                (condition-case nil
-                    (when-let* ((response (save-excursion
-                                            (goto-char json-start)
-                                            (gptel--json-read)))
-                                (delta (map-nested-elt response '(:choices 0 :delta))))
-                      (when-let* ((content (plist-get delta :content))
-                                  ((stringp content))
-                                  ((not (string-empty-p content))))
-                        (push content content-strs)))
-                  (error nil)))
-              (forward-line 1)))
-           ((looking-at-p "^{")
+           ((looking-at-p "data:")
+            (forward-char 5)
+            (skip-chars-forward " \t")
+            (unless (looking-at-p "\\[DONE\\]")
+              (condition-case nil
+                  (when-let* ((response (gptel--json-read))
+                              (delta (map-nested-elt response '(:choices 0 :delta))))
+                    (when-let* ((content (plist-get delta :content))
+                                ((stringp content))
+                                ((not (string-empty-p content))))
+                      (push content content-strs)))
+                (error nil)))
+            (forward-line 1))
+           ((looking-at-p "{")
             (condition-case nil
                 (when-let* ((response (gptel--json-read))
                             (delta (map-nested-elt response '(:choices 0 :delta))))

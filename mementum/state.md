@@ -2,63 +2,63 @@
 
 > Last session: 2026-03-24
 
-## Recent Learning 🔁
-
-**Git History as Improvement Source**
-
-Workarounds in git history are opportunities for proper fixes:
-
-```
-git log --grep="workaround\|fix\|bypass" → identify root cause → A/B test fix
-```
-
-### Current Workarounds to Fix
-
-| Commit | Workaround | Root Cause | Status |
-|--------|------------|------------|--------|
-| `630fbd4` | Disable DashScope streaming | SSE format differs from OpenAI | Needs fix |
-| `a7b0931` | lite-executor (4 tools) | 27 tools too slow without streaming | Needs A/B test |
-
-### A/B Test Framework Added
-
-```elisp
-(gptel-ab-test-run "prompt")  ; Compare lite-executor vs executor
-```
-
-**Limitation**: Async callbacks don't work via `emacsclient --eval`. Run interactively in Emacs.
-
 ## Built ✓
 
-**Systematic Code Review**
+**DashScope Streaming Fixed**
 
+| Before | After |
+|--------|-------|
+| `:stream nil` (workaround) | `:stream t` (fixed) |
+| HTTP parsing errors | Robust SSE parser |
+| lite-executor only | Full executor viable |
+
+### Technical Details
+
+```elisp
+(cl-defstruct (gptel-dashscope (:include gptel-openai)))
+(cl-defmethod gptel-curl--parse-stream ((_backend gptel-dashscope) info)
+  ;; Custom parser handles DashScope's SSE format differences
+  )
 ```
-scan repo → categorize issues → prioritize → fix
+
+### A/B Test
+
+Run in Emacs (not emacsclient due to async limitations):
+
+```elisp
+(gptel-ab-test-run "Simple prompt")
 ```
 
-| Category | Fixed |
-|----------|-------|
-| Duplicate functions | 2 |
-| Unused variables | 7 |
-| Docstring width >80 | 8 |
-| Wrong quote usage | 4 |
-| Free variable refs | 1 |
+Compares:
+- :lite-executor (4 tools, no stream)
+- :executor (27 tools, streaming)
 
-### Quality Scoring Fixed
-
-Now correctly counts only real TODOs/defuns, not patterns in strings.
-
-## Commits This Session
+### Session Commits
 
 | Commit | Description |
 |--------|-------------|
-| `5ff621d` | Δ fix code quality issues |
-| `cb539f4` | 💡 systematic-code-review learning |
-| `1f5583a` | Δ fix quality scoring |
+| `6fb1a0d` | ⚡ fix DashScope streaming: custom SSE parser |
+| `59bcd6e` | 💡 dashscope-streaming-fix: custom SSE parser pattern |
+| `f9d19a7` | ◈ state: A/B test framework |
+| `1d2ebaa` | Δ fix A/B test |
 | `4d7676a` | ⚡ add A/B test framework |
-| `1d2ebaa` | Δ fix A/B test: use agent-type |
+| `1f5583a` | Δ fix quality scoring |
+| `5ff621d` | Δ fix code quality issues |
+
+## Pattern Discovered 🔁
+
+**Git History → Workarounds → Proper Fixes**
+
+```
+git log --grep="workaround\|fix\|bypass"
+  → identify root cause
+  → implement proper fix
+  → A/B test to compare
+  → remove workaround
+```
 
 ## Next Steps
 
-1. Fix DashScope SSE parsing to re-enable streaming
-2. Run A/B test interactively to compare executors
-3. Consider: streaming + executor vs no-stream + lite-executor
+1. Run A/B test in Emacs to compare lite-executor vs executor
+2. If streaming is reliable, remove lite-executor fallback
+3. Consider fixing other backends with similar issues
