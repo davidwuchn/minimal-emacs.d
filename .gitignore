@@ -18,6 +18,7 @@ lisp/modules/*.elc
 !INTRO.md
 !SECURITY.md
 !.dir-locals.el
+!.gitmodules
 !assistant/
 !.ignore
 !tests/
@@ -55,3 +56,5 @@ lisp/modules/*.elc
 !assistant/**
 !cron.d/
 !cron.d/*
+!packages/
+!packages/**

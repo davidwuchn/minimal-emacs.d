@@ -11,6 +11,13 @@
 (setq user-emacs-directory (expand-file-name "var/" minimal-emacs-user-directory))
 (setq package-user-dir (expand-file-name "elpa" user-emacs-directory))
 
+;; Add git submodule packages to load-path
+;; These are packages from our forks tracked as submodules in packages/
+(dolist (pkg-dir '("gptel" "gptel-agent" "ai-code"))
+  (let ((path (expand-file-name (concat "packages/" pkg-dir) minimal-emacs-user-directory)))
+    (when (file-directory-p path)
+      (add-to-list 'load-path path))))
+
 ;; Prevent package-refresh-contents network hang on startup.
 ;; Load archive-contents from cache instead of fetching from network.
 (defun my/package-load-archive-cache ()

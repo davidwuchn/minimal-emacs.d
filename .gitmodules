@@ -1,0 +1,12 @@
+[submodule "packages/gptel"]
+	path = packages/gptel
+	url = https://github.com/davidwuchn/gptel
+	branch = master
+[submodule "packages/gptel-agent"]
+	path = packages/gptel-agent
+	url = https://github.com/davidwuchn/gptel-agent
+	branch = master
+[submodule "packages/ai-code"]
+	path = packages/ai-code
+	url = https://github.com/davidwuchn/ai-code-interface.el
+	branch = main

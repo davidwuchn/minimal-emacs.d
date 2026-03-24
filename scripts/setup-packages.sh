@@ -1,94 +1,64 @@
 #!/usr/bin/env bash
 
 # setup-packages.sh
-# Install required packages from Git for minimal-emacs.d
+# Initialize/update git submodules for fork packages
 #
 # Usage:
-#   ./scripts/setup-packages.sh [--force]
+#   ./scripts/setup-packages.sh [--update]
 #
 # Options:
-#   --force    Reinstall even if already installed
+#   --update    Update submodules to latest from tracked branches
 
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ELPA_DIR="$DIR/var/elpa"
-FORCE="${1:-}"
+cd "$DIR"
 
-echo "Setting up packages in $ELPA_DIR..."
+echo "Setting up package submodules..."
 
-# Create elpa directory if needed
-mkdir -p "$ELPA_DIR"
+# Check if .gitmodules exists
+if [ ! -f ".gitmodules" ]; then
+    echo "Error: No .gitmodules file found"
+    exit 1
+fi
 
-# Packages to install: name, URL, branch
-PACKAGES=(
-  "gptel|https://github.com/davidwuchn/gptel|master"
-  "gptel-agent|https://github.com/davidwuchn/gptel-agent|master"
-  "ai-code|https://github.com/davidwuchn/ai-code-interface.el|main"
-)
+# Initialize and update submodules
+if [ "$1" = "--update" ]; then
+    echo "Updating submodules to latest from tracked branches..."
+    git submodule update --init --recursive
+    git submodule update --remote --merge
+else
+    echo "Initializing submodules..."
+    git submodule update --init --recursive
+fi
 
-cleanup_old_versions() {
-  local NAME="$1"
-  local ELPA_DIR="$2"
-  # Remove old versioned directories (e.g., gptel-0.9.0, gptel-agent-1.0.0)
-  find "$ELPA_DIR" -maxdepth 1 -type d -name "${NAME}-[0-9]*" -exec rm -rf {} \; 2>/dev/null || true
-  # Remove old .signed files (e.g., gptel-0.9.9.4.signed)
-  find "$ELPA_DIR" -maxdepth 1 -type f -name "${NAME}-[0-9]*.signed" -delete 2>/dev/null || true
-}
-
-for pkg in "${PACKAGES[@]}"; do
-  IFS='|' read -r NAME URL BRANCH <<< "$pkg"
-  TARGET_DIR="$ELPA_DIR/$NAME"
-  
-  if [ -d "$TARGET_DIR/.git" ] && [ -z "$FORCE" ]; then
-    # Check if remote URL matches expected fork
-    CURRENT_URL=$(cd "$TARGET_DIR" && git remote get-url origin 2>/dev/null || echo "")
-    if [ "$CURRENT_URL" != "$URL" ]; then
-      echo "Switching $NAME to correct fork: $URL"
-      (cd "$TARGET_DIR" && git remote set-url origin "$URL")
+# Generate autoloads for each submodule package
+echo ""
+echo "Generating autoloads..."
+for pkg_dir in packages/*/; do
+    if [ -d "$pkg_dir" ]; then
+        pkg_name=$(basename "$pkg_dir")
+        echo "  $pkg_name"
+        emacs -Q --batch --eval "(progn
+          (require 'package)
+          (package-generate-autoloads '$pkg_name \"$pkg_dir\"))" 2>/dev/null || true
     fi
-    # Show current branch before update
-    CURRENT_BRANCH=$(cd "$TARGET_DIR" && git branch --show-current 2>/dev/null || echo "unknown")
-    echo "Updating $NAME (branch: $BRANCH, current: $CURRENT_BRANCH)..."
-    # Update to latest version from remote
-    # Use FETCH_HEAD instead of origin/$BRANCH for shallow clone compatibility
-    (cd "$TARGET_DIR" && \
-      git fetch origin "$BRANCH" --depth 1 && \
-      git checkout -f -B "$BRANCH" FETCH_HEAD)
-    cleanup_old_versions "$NAME" "$ELPA_DIR"
-    echo "✓ $NAME updated to branch: $BRANCH"
-    continue
-  fi
-  
-  echo "Installing $NAME from $URL (branch: $BRANCH)..."
-  
-  # Remove existing directory
-  rm -rf "$TARGET_DIR"
-  
-  # Clone with depth 1 for faster download
-  git clone --depth 1 --branch "$BRANCH" "$URL" "$TARGET_DIR"
-  
-  # Generate autoloads for git-cloned packages
-  emacs -Q --batch --eval "(progn
-    (require 'package)
-    (package-generate-autoloads '$NAME \"$TARGET_DIR\"))" 2>/dev/null || true
-  
-  # Cleanup old versioned directories after successful install
-  cleanup_old_versions "$NAME" "$ELPA_DIR"
-  
-  echo "✓ $NAME installed (branch: $BRANCH)"
 done
 
 echo ""
-echo "All packages installed in var/elpa/:"
+echo "Package submodules:"
 echo "NAME          BRANCH    COMMIT"
 echo "----------------------------------------"
-for pkg in "${PACKAGES[@]}"; do
-  IFS='|' read -r NAME URL BRANCH <<< "$pkg"
-  TARGET_DIR="$ELPA_DIR/$NAME"
-  if [ -d "$TARGET_DIR/.git" ]; then
-    CURRENT_BRANCH=$(cd "$TARGET_DIR" && git branch --show-current 2>/dev/null || echo "?")
-    COMMIT=$(cd "$TARGET_DIR" && git rev-parse --short HEAD 2>/dev/null || echo "?")
-    printf "%-13s %-9s %s\n" "$NAME" "$CURRENT_BRANCH" "$COMMIT"
-  fi
+git submodule status | while read line; do
+    commit=$(echo "$line" | awk '{print $1}' | sed 's/^+//;s/^-//;s/^//')
+    path=$(echo "$line" | awk '{print $2}')
+    name=$(basename "$path")
+    if [ -d "$path" ]; then
+        branch=$(cd "$path" && git branch --show-current 2>/dev/null || echo "?")
+        printf "%-13s %-9s %s\n" "$name" "$branch" "$commit"
+    fi
 done
+
+echo ""
+echo "Done. Packages are in packages/"
+echo "Use './scripts/setup-packages.sh --update' to update to latest versions."
