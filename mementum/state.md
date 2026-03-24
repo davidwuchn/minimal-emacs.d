@@ -4,50 +4,59 @@
 
 ## Built ✓
 
-**DashScope Streaming Fix - In Progress**
+**DashScope Streaming: WORKING!**
 
-| Component | Status |
-|-----------|--------|
-| Custom backend struct | ✓ gptel-dashscope |
-| Custom stream parser | ✓ Implemented |
-| Model format fix | ✓ Plain symbols |
-| Full streaming test | ⚠ Debugging |
+| Before | After |
+|--------|-------|
+| `:stream nil` workaround | `:stream t` working |
+| HTTP parsing errors | Robust SSE parser |
+| lite-executor only | Full executor viable |
 
-### Issue Discovered
+### Root Cause
 
-`gptel--sanitize-model` uses `member` to check model availability. When models are stored as `(symbol :capabilities ...)` lists, the check fails and sets `gptel-model` to the entire list instead of the symbol.
+1. **URL was nil** - struct constructor didn't set it
+2. **Model format** - needed plain symbols not plist specs
+3. **Stream parser** - DashScope SSE differs from OpenAI
 
-**Fix**: Use plain symbol list: `'(qwen3.5-plus ...)` instead of `'((qwen3.5-plus :capabilities ...))`
-
-### Current Error
+### Fix Chain
 
 ```
-gptel: converting non-string :content on user message
-Wrong type argument: stringp, nil
+6fb1a0d → Custom gptel-dashscope struct
+54f5c37 → Fixed parser regex issue
+8591cfe → Fixed model format
+d60312c → Fixed URL nil issue ← STREAMING WORKS
 ```
 
-May be related to message formatting in gptel.
+### Test
 
-### Commits
+```elisp
+(gptel-request "Say: test" :stream t :callback #'message)
+;; => "test"
+```
 
-| Commit | Description |
-|--------|-------------|
-| `8591cfe` | Δ fix DashScope models: plain symbols |
-| `54f5c37` | Δ fix stream parser: skip-chars-forward |
-| `6fb1a0d` | ⚡ fix DashScope streaming: custom SSE parser |
-| `59bcd6e` | 💡 dashscope-streaming-fix pattern |
+### Session Summary
 
-### Next Steps
+| Commits | Description |
+|---------|-------------|
+| 9 | DashScope streaming fix |
+| 6 | Code quality fixes |
+| 2 | A/B test framework |
+| 2 | Learning/mementum |
 
-1. Debug the "stringp, nil" error in gptel-request
-2. Complete streaming test
-3. Run A/B test comparing executors
+### Pattern: Git History → Fixes
 
-## Pattern: API Compatibility
+```
+commit 630fbd4: "fix DashScope: disable streaming"
+    ↓
+identify root cause: SSE format differs
+    ↓
+commit d60312c: "DashScope streaming: WORKING!"
+    ↓
+A/B test: lite-executor vs executor
+```
 
-When extending gptel backends:
+## Next Steps
 
-1. Use `cl-defstruct` with `:include gptel-openai`
-2. Models must be plain symbols or `(symbol :props...)` in backend
-3. Custom stream parser via `cl-defmethod gptel-curl--parse-stream`
-4. Test with `gptel-request` in Emacs (not emacsclient)
+1. Run A/B test comparing executors
+2. If streaming is reliable, remove lite-executor fallback
+3. Document the fix in mementum/knowledge/
