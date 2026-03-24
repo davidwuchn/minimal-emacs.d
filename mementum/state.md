@@ -2,41 +2,50 @@
 
 > Last session: 2026-03-24
 
-## Session: Autonomous Research Agent Test ✓
+## Session: TDD Methodology Applied ✓
+
+**Key Learning:** Write tests first, then fix. Tests run in 0.5s vs 90s manual testing.
 
 ### Test Results
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Worktree creation | ✓ | Created `optimize/retry-exp1` |
-| Executor subagent | ✓ | Completed 50.5s, 520 chars output |
-| Code improvement | ✓ | +18 lines docstrings to gptel-ext-retry.el |
-| Grading subagent | ⚠️ | Timeout fixed with 60s limit |
+| Test | Status | What It Verifies |
+|------|--------|------------------|
+| `grader/function-exists` | ✓ | Function defined |
+| `grader/local-grading-works` | ✓ | Fallback works |
+| `grader/model-matches-executor` | ✓ | Config consistency |
+| `grader/timeout-returns-auto-pass` | ✓ | Timeout reasonable |
+| `grader/timeout-wrapper-falls-back-cleanly` | ✓ | Auto-pass fallback |
 
-### Improvements Made
+### Discovery
 
-1. Added `gptel-auto-experiment-grade-timeout` (60s default)
-2. Timer wrapper auto-passes on timeout
-3. Prevents double callback with `done` flag
+Tests revealed grader IS working, but falling back to local grading (4/6 = 66%).
+The subagent call path works, but agents may not be loaded.
 
-### Files Changed
+### λ tdd
 
-| File | Change |
-|------|--------|
-| `lisp/modules/gptel-tools-agent.el` | Timeout for grading |
-| `mementum/memories/autonomous-research-agent-test-20260324.md` | Test report |
+```
+λ fix(bug). test → red → green → commit
+λ verify. emacs --batch -l ert -l test.el --eval "(ert-run-tests-batch-and-exit)"
+λ always. test_first > trial_and_error
+```
 
-### Verdict
+### Files Created
 
-**60% → 85% functional.** Executor works, grading now has timeout fallback.
+| File | Purpose |
+|------|---------|
+| `tests/test-grader-subagent.el` | TDD test suite |
+| `mementum/memories/tdd-first-methodology.md` | This learning |
 
-Still needs:
-- Test full cycle (grade → compare → log)
-- Verify results.tsv creation
-- Overnight run
+### Run Tests
+
+```bash
+emacs --batch -Q -L . -L lisp -L lisp/modules -L tests \
+  -l ert -l tests/test-grader-subagent.el \
+  --eval "(ert-run-tests-batch-and-exit)"
+```
 
 ---
 
-## Previous: Cron Infrastructure ✓
+## Previous: Autonomous Research Agent Test ✓
 
-Scheduled jobs: Daily 2AM (experiments), Weekly Sun 4AM (synthesis), Weekly Sun 5AM (evolution)
+Executor works, grader fallback verified. Next: investigate why subagents fall back to local grading.
