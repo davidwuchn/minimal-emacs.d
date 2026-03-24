@@ -992,25 +992,27 @@ HYPOTHESIS: [your hypothesis here]"
                                  (gptel-auto-experiment-log-tsv
                                   (format-time-string "%Y-%m-%d") exp-result)
                                  (funcall callback exp-result)))
-                           ;; Step 5: Compare (decide keep/discard)
-                           (gptel-auto-experiment-decide
-                            (list :score baseline)
-                            (list :score score-after :output agent-output)
-                            (lambda (decision)
+;; Step 5: Compare (decide keep/discard)
+                            (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
+                              (gptel-auto-experiment-decide
+                               (list :score baseline :code-quality 0.5)
+                               (list :score score-after :code-quality code-quality :output agent-output)
+                               (lambda (decision)
                               (setq finished t)
-                              (let* ((keep (plist-get decision :keep))
-                                     (reasoning (plist-get decision :reasoning))
-                                     (exp-result (list :target target
-                                                       :id experiment-id
-                                                       :hypothesis hypothesis
-                                                       :score-before baseline
-                                                       :score-after score-after
-                                                       :kept keep
-                                                       :duration (- (float-time) start-time)
-                                                       :grader-quality grade-score
-                                                       :grader-reason (plist-get grade :details)
-                                                       :comparator-reason reasoning
-                                                       :analyzer-patterns (format "%s" patterns))))
+(let* ((keep (plist-get decision :keep))
+                                       (reasoning (plist-get decision :reasoning))
+                                       (exp-result (list :target target
+                                                         :id experiment-id
+                                                         :hypothesis hypothesis
+                                                         :score-before baseline
+                                                         :score-after score-after
+                                                         :code-quality code-quality
+                                                         :kept keep
+                                                         :duration (- (float-time) start-time)
+                                                         :grader-quality grade-score
+                                                         :grader-reason (plist-get grade :details)
+                                                         :comparator-reason reasoning
+                                                         :analyzer-patterns (format "%s" patterns))))
                                 (if keep
                                     ;; Commit
                                     (let ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\nExperiment %d/%d. Score: %.2f → %.2f"
@@ -1027,10 +1029,10 @@ HYPOTHESIS: [your hypothesis here]"
                                   (progn
                                     (magit-git-success "checkout" "--" ".")
                                     (cl-incf gptel-auto-experiment--no-improvement-count)))
-                                (gptel-auto-experiment-log-tsv
-                                 (format-time-string "%Y-%m-%d") exp-result)
-                                (gptel-auto-workflow-delete-worktree)
-                                (funcall callback exp-result))))))))))))
+(gptel-auto-experiment-log-tsv
+                                  (format-time-string "%Y-%m-%d") exp-result)
+                                 (gptel-auto-workflow-delete-worktree)
+                                 (funcall callback exp-result)))))))))))))
             "code"
             (format "Experiment %d: optimize %s" experiment-id target)
             prompt
