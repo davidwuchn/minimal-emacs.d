@@ -251,7 +251,8 @@ Returns 1.0 if under max, 0.5 if over."
 (ert-deftest grader/decision-factors-code-quality ()
   "Decision should consider code quality improvement."
   (require 'gptel-tools-agent)
-  (let* ((before '(:score 1.0 :code-quality 0.5))
+  (let* ((gptel-auto-experiment-use-subagents nil)
+         (before '(:score 1.0 :code-quality 0.5))
          (after '(:score 1.0 :code-quality 1.0))
          (result nil))
     ;; When grader score same but code quality improved, should keep
