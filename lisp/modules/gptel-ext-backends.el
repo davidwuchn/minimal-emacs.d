@@ -12,6 +12,85 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
         (result (auth-source-user-and-password host "api")))
     (cadr result)))
 
+;;; DashScope Backend with Custom Stream Parser
+;;; Extends gptel-openai with more robust SSE parsing
+
+(cl-defstruct (gptel-dashscope (:include gptel-openai)
+                              (:copier nil)
+                              (:constructor gptel--make-dashscope)))
+
+(cl-defmethod gptel-curl--parse-stream ((_backend gptel-dashscope) info)
+  "Parse DashScope streaming response with robust error handling.
+DashScope's SSE format can differ from OpenAI's in subtle ways:
+- May have extra whitespace
+- May have different line endings
+- JSON payload may be on same line as 'data:' or next line
+
+INFO is the request info plist."
+  (let ((content-strs nil))
+    (condition-case err
+        (while (not (eobp))
+          (cond
+           ((looking-at-p "^[\r\n]+$")
+            (forward-line 1))
+           ((looking-at-p ".*\\[DONE\\]")
+            (goto-char (point-max)))
+           ((looking-at-p "^data:\\s-*")
+            (let ((json-start (match-end 0)))
+              (skip-chars-forward " \t")
+              (when (and (not (eobp))
+                         (not (looking-at-p "\\[DONE\\]")))
+                (condition-case nil
+                    (when-let* ((response (save-excursion
+                                            (goto-char json-start)
+                                            (gptel--json-read)))
+                                (delta (map-nested-elt response '(:choices 0 :delta))))
+                      (when-let* ((content (plist-get delta :content))
+                                  ((stringp content))
+                                  ((not (string-empty-p content))))
+                        (push content content-strs)))
+                  (error nil)))
+              (forward-line 1)))
+           ((looking-at-p "^{")
+            (condition-case nil
+                (when-let* ((response (gptel--json-read))
+                            (delta (map-nested-elt response '(:choices 0 :delta))))
+                  (when-let* ((content (plist-get delta :content))
+                              ((stringp content))
+                              ((not (string-empty-p content))))
+                    (push content content-strs)))
+              (error nil))
+            (forward-line 1))
+           (t (forward-line 1))))
+      (error
+       (message "[DashScope] Parse error at %d: %s" (point) err)))
+    (apply #'concat (nreverse content-strs))))
+
+;;;###autoload
+(cl-defun gptel-make-dashscope
+    (name &key curl-args stream key request-params
+          (header (lambda () (when-let* ((key (gptel--get-api-key)))
+                          `(("Authorization" . ,(concat "Bearer " key))))))
+          (host "coding.dashscope.aliyuncs.com")
+          (endpoint "/v1/chat/completions")
+          models)
+  "Register a DashScope backend with NAME.
+This is like `gptel-make-openai' but uses a custom stream parser
+that handles DashScope's SSE format differences."
+  (declare (indent 1))
+  (let ((backend (gptel--make-dashscope
+                  :name name
+                  :host host
+                  :header header
+                  :endpoint endpoint
+                  :curl-args curl-args
+                  :key key
+                  :models models
+                  :stream stream
+                  :request-params request-params)))
+    (setf (alist-get name gptel--known-backends nil nil #'equal) backend)
+    backend))
+
 ;; --- Provider Backends ---
 (defvar gptel--copilot (gptel-make-gh-copilot "Copilot"))
 
@@ -20,15 +99,6 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
     :key (lambda () (my/gptel-api-key "generativelanguage.googleapis.com"))
     :stream t
     :models '(gemini-3.1-pro-preview gemini-3-flash-preview)))
-
-;; DISABLED temporarily - OpenRouter causing HTTP parse errors
-;; (defvar gptel--openrouter
-;;   (gptel-make-openai "OpenRouter"
-;;     :host "openrouter.ai"
-;;     :endpoint "/api/v1/chat/completions"
-;;     :key (lambda () (my/gptel-api-key "api.openrouter.com"))
-;;     :stream t
-;;     :models '(openai/gpt-5.2-codex z-ai/glm-5 anthropic/claude-sonnet-4.6)))
 
 (defvar gptel--minimax
   (gptel-make-openai "MiniMax"
@@ -39,11 +109,9 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
     :models '(minimax-m2.5 minimax-m2.1)))
 
 (defvar gptel--dashscope
-  (gptel-make-openai "DashScope"
-    :host "coding.dashscope.aliyuncs.com"
-    :endpoint "/v1/chat/completions"
+  (gptel-make-dashscope "DashScope"
     :key (lambda () (my/gptel-api-key "coding.dashscope.aliyuncs.com"))
-    :stream nil
+    :stream t
     :curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "30")
     :models '((qwen3.5-plus :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf"))
               (kimi-k2.5 :capabilities (media) :mime-types ("image/jpeg" "image/png" "image/webp" "image/gif" "image/bmp" "application/pdf"))
@@ -82,8 +150,6 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
     :key (lambda () (my/gptel-api-key "gateway.ai.cloudflare.com"))
     :stream t
     :models '(\@cf/zai-org/glm-4.7-flash \@cf/openai/whisper \@cf/openai/whisper-large-v3-turbo)))
-
-;; --- Helper Functions ---
 
 (provide 'gptel-ext-backends)
 ;;; gptel-ext-backends.el ends here
