@@ -186,6 +186,16 @@ This prevents wasting time when:
 - The analyzer detects pattern exhaustion
 - Scores plateau
 
+## Configuration
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `gptel-auto-experiment-time-budget` | 600s | Max time per experiment |
+| `gptel-auto-experiment-grade-timeout` | 60s | Timeout for grading subagent |
+| `gptel-auto-experiment-max-per-target` | 10 | Max experiments per file |
+| `gptel-auto-experiment-no-improvement-threshold` | 3 | Stop after N no-improvements |
+| `gptel-auto-experiment-use-subagents` | t | Use analyzer/grader/comparator |
+
 ## Usage
 
 ### Cron (Scheduled)
@@ -254,8 +264,11 @@ git cherry-pick <sha>
 
 | Function | Purpose |
 |----------|---------|
-| `gptel-benchmark--code-quality-score` | Score docstring coverage (0.0-1.0) |
-| `gptel-benchmark--detect-llm-degradation` | Detect off-topic/repetition/loops |
+| `gptel-benchmark--code-quality-score` | Score docstring coverage (0.0-1.0) — internal |
+| `gptel-benchmark--detect-llm-degradation` | Detect off-topic/repetition/loops — internal |
+| `gptel-auto-experiment--code-quality-score` | Wrapper for experiment workflow |
+
+Note: Functions with `--` (double dash) are internal. Use the wrapper for experiment integration.
 
 ### Mementum Functions
 
@@ -842,6 +855,7 @@ Logs: `var/tmp/cron/*.log`
 
 ---
 
-**Document Version:** 1.3  
+**Document Version:** 1.4  
 **Last Updated:** 2026-03-24  
-**Changes:** Added code quality scoring, LLM degradation detection, updated decision logic (70% grader + 30% quality), updated TSV format with code_quality column
+**Release:** v2026.03.24  
+**Changes:** Added Configuration section, clarified internal vs public functions
