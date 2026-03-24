@@ -279,5 +279,33 @@ Result: Tests pass."))
     (should (string= (gptel-auto-experiment--extract-hypothesis output)
                      "No hypothesis stated"))))
 
+;;; Test 20: Experiment Loop Configuration
+
+(ert-deftest grader/experiment-config-exists ()
+  "Experiment configuration should be defined."
+  (require 'gptel-tools-agent)
+  (should (boundp 'gptel-auto-experiment-time-budget))
+  (should (boundp 'gptel-auto-experiment-max-per-target))
+  (should (boundp 'gptel-auto-experiment-no-improvement-threshold))
+  (should (boundp 'gptel-auto-workflow-targets)))
+
+(ert-deftest grader/experiment-time-budget-reasonable ()
+  "Time budget should be between 1-30 minutes."
+  (require 'gptel-tools-agent)
+  (should (>= gptel-auto-experiment-time-budget 60))    ; at least 1 minute
+  (should (<= gptel-auto-experiment-time-budget 1800))) ; at most 30 minutes
+
+(ert-deftest grader/experiment-max-per-target-reasonable ()
+  "Max experiments per target should be between 1-50."
+  (require 'gptel-tools-agent)
+  (should (>= gptel-auto-experiment-max-per-target 1))
+  (should (<= gptel-auto-experiment-max-per-target 50)))
+
+(ert-deftest grader/experiment-stop-threshold-reasonable ()
+  "No-improvement threshold should be between 1-10."
+  (require 'gptel-tools-agent)
+  (should (>= gptel-auto-experiment-no-improvement-threshold 1))
+  (should (<= gptel-auto-experiment-no-improvement-threshold 10)))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here

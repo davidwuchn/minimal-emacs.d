@@ -882,16 +882,17 @@ HYPOTHESIS: [your hypothesis here]"
     (make-directory (file-name-directory file) t)
     (unless (file-exists-p file)
       (with-temp-file file
-        (insert "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\n")))
+        (insert "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\n")))
     (with-temp-buffer
       (insert-file-contents file)
       (goto-char (point-max))
-      (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\n"
+      (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\n"
                       (or (plist-get experiment :id) "?")
                       (or (plist-get experiment :target) "?")
                       (or (plist-get experiment :hypothesis) "unknown")
                       (or (plist-get experiment :score-before) 0)
                       (or (plist-get experiment :score-after) 0)
+                      (or (plist-get experiment :code-quality) 0.5)
                       (- (or (plist-get experiment :score-after) 0)
                          (or (plist-get experiment :score-before) 0))
                       (if (plist-get experiment :kept) "kept" "discarded")
