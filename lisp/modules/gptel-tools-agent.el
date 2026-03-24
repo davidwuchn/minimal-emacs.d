@@ -905,21 +905,24 @@ Minimum score is 0.1."
             (error 0))
           (with-temp-buffer
             (insert-file-contents file)
-            ;; Count undocumented functions
+            (emacs-lisp-mode)
             (goto-char (point-min))
-            (while (re-search-forward "(defun \\([^ ]+\\)" nil t)
+            (while (re-search-forward "^(defun \\([^ ]+\\)" nil t)
               (let ((fn-start (line-number-at-pos)))
                 (forward-line)
                 (unless (looking-at-p "\\s-*\"")
                   (cl-incf missing-docs))
-                ;; Check for long functions (>50 lines)
-                (forward-sexp)
+                (condition-case nil
+                    (forward-sexp)
+                  (error (goto-char (point-max))))
                 (when (> (- (line-number-at-pos) fn-start) 50)
                   (cl-incf long-fns))))
-            ;; Count TODOs
             (goto-char (point-min))
             (while (re-search-forward "TODO\\|FIXME\\|XXX" nil t)
-              (cl-incf todos)))))
+              (let ((ppss (syntax-ppss)))
+                (when (and (not (nth 3 ppss))
+                           (not (nth 4 ppss)))
+                  (cl-incf todos)))))))
       ;; Calculate score
       (setq score (- 1.0
                      (* checkdoc-issues 0.01)
