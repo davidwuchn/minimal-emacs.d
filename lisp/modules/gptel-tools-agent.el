@@ -694,6 +694,18 @@ Useful for testing callback chain without API calls."
 (defvar gptel-auto-experiment--learnings nil
   "Accumulated learnings from experiments in this session.")
 
+(defvar gptel-auto-experiment--benchmark-files
+  '("lisp/modules/gptel-tools-agent.el"
+    "lisp/modules/gptel-benchmark-principles.el"
+    "lisp/modules/nucleus-tools.el"
+    "lisp/modules/nucleus-presets.el")
+  "Files that constitute the benchmark system itself.
+When target files can't be improved, the system can improve itself
+by targeting these files.")
+
+(defvar gptel-auto-experiment--meta-mode nil
+  "When non-nil, we're improving the benchmark system itself.")
+
 ;;; Learning System (Mementum Integration)
 
 (defun gptel-auto-experiment--learn (result)
@@ -851,39 +863,52 @@ Also kills any stale magit buffers referencing old worktrees."
           :quality quality-score)))
 
 (defun gptel-auto-experiment--quality-score ()
-  "Compute quality score from checkdoc and missing docs.
-Score = 1.0 - (checkdoc*0.01 + missing-docs*0.005)
+  "Compute quality score from checkdoc, missing docs, and code complexity.
+Score = 1.0 - (checkdoc*0.01 + missing-docs*0.005 + complexity penalties)
 Minimum score is 0.1."
   (let* ((target (or gptel-auto-workflow--current-target ""))
          (worktree (or gptel-auto-workflow--worktree-dir
                        (gptel-auto-workflow--base-dir)))
          (score 1.0)
          (checkdoc-issues 0)
-         (missing-docs 0))
+         (missing-docs 0)
+         (todos 0)
+         (long-fns 0))
     (when (string-match "\\.el$" target)
       (let* ((file (expand-file-name target worktree)))
         (when (file-exists-p file)
-          ;; Count checkdoc issues (safe, doesn't need byte-compile)
+          ;; Count checkdoc issues
           (condition-case nil
               (with-temp-buffer
                 (insert-file-contents file)
                 (emacs-lisp-mode)
                 (setq checkdoc-issues (length (checkdoc-current-buffer t))))
             (error 0))
-          ;; Count undocumented functions
           (with-temp-buffer
             (insert-file-contents file)
+            ;; Count undocumented functions
             (goto-char (point-min))
             (while (re-search-forward "(defun \\([^ ]+\\)" nil t)
-              (forward-line)
-              (unless (looking-at-p "\\s-*\"")
-                (cl-incf missing-docs))))))
+              (let ((fn-start (line-number-at-pos)))
+                (forward-line)
+                (unless (looking-at-p "\\s-*\"")
+                  (cl-incf missing-docs))
+                ;; Check for long functions (>50 lines)
+                (forward-sexp)
+                (when (> (- (line-number-at-pos) fn-start) 50)
+                  (cl-incf long-fns))))
+            ;; Count TODOs
+            (goto-char (point-min))
+            (while (re-search-forward "TODO\\|FIXME\\|XXX" nil t)
+              (cl-incf todos)))))
       ;; Calculate score
       (setq score (- 1.0
                      (* checkdoc-issues 0.01)
-                     (* missing-docs 0.005)))
-      (message "[auto-exp] Quality: %d checkdoc, %d missing docs → %.2f"
-                checkdoc-issues missing-docs score)
+                     (* missing-docs 0.005)
+                     (* todos 0.002)
+                     (* long-fns 0.01)))
+      (message "[auto-exp] Quality: %d checkdoc, %d missing docs, %d TODOs, %d long fns → %.2f"
+                checkdoc-issues missing-docs todos long-fns score)
       (max 0.1 (min 1.0 score)))))
 
 (defun gptel-auto-experiment--eight-keys-score ()
@@ -983,7 +1008,7 @@ Score formula: 1.0 - (errors*0.1 + warnings*0.02 + checkdoc*0.01 + missing-docs*
 
 ## Objective
 Make ONE specific improvement to increase the quality score.
-Focus on: adding docstrings, fixing warnings, simplifying code, or removing dead code.
+%s
 
 ## Constraints
 - Time budget: %d minutes
@@ -1008,6 +1033,9 @@ HYPOTHESIS: Adding docstring to [function] will improve maintainability."
             (or patterns "None yet")
             (or suggestions "None")
             git-history
+            (if gptel-auto-experiment--meta-mode
+                "This is a META-IMPROVEMENT: you are improving the benchmark system itself. Focus on: adding docstrings, refactoring complex functions, resolving TODOs, or improving the quality scoring logic."
+              "Focus on: adding docstrings, fixing warnings, simplifying code, or removing dead code.")
             (/ gptel-auto-experiment-time-budget 60)
             target-file)))
 
@@ -1360,16 +1388,50 @@ HYPOTHESIS: Adding docstring to [function] will improve maintainability."
                         (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
                                  target (length gptel-auto-experiment--results)
                                  (or gptel-auto-experiment--best-score 0))
-                        (funcall callback (nreverse gptel-auto-experiment--results)))
-                    (gptel-auto-experiment-run
-                     target exp-id max-exp
-                     gptel-auto-experiment--best-score
-                     gptel-auto-experiment--results
-                     (lambda (result)
-                       (gptel-auto-experiment--learn result)
-                       (push result gptel-auto-experiment--results)
-                       (run-next (1+ exp-id)))))))
+                        ;; Check if all experiments were discarded
+                        (let ((all-discarded (cl-every (lambda (r) (not (plist-get r :kept)))
+                                                        gptel-auto-experiment--results)))
+                          (if (and all-discarded
+                                   (not gptel-auto-experiment--meta-mode)
+                                   (> (length gptel-auto-experiment--results) 0))
+                              ;; No improvement possible - try meta-improvement
+                              (gptel-auto-experiment--meta-improve target callback)
+                            ;; Normal completion
+                            (funcall callback (nreverse gptel-auto-experiment--results)))))
+                  (gptel-auto-experiment-run
+                   target exp-id max-exp
+                   gptel-auto-experiment--best-score
+                   gptel-auto-experiment--results
+                   (lambda (result)
+                     (gptel-auto-experiment--learn result)
+                     (push result gptel-auto-experiment--results)
+                     (run-next (1+ exp-id)))))))
       (run-next 1))))
+
+(defun gptel-auto-experiment--meta-improve (original-target callback)
+  "When ORIGINAL-TARGET couldn't be improved, improve the benchmark system itself."
+  (message "[auto-exp] No improvement possible for %s - switching to meta-improvement" original-target)
+  (setq gptel-auto-experiment--meta-mode t
+        gptel-auto-experiment--results nil
+        gptel-auto-experiment--best-score nil
+        gptel-auto-experiment--no-improvement-count 0)
+  ;; Pick a benchmark file to improve
+  (let* ((benchmark-target (car gptel-auto-experiment--benchmark-files))
+         (baseline (progn
+                     (setq gptel-auto-workflow--current-target benchmark-target)
+                     (gptel-auto-experiment--quality-score))))
+    (setq gptel-auto-experiment--best-score (or baseline 0.5))
+    (message "[auto-exp] META: Targeting benchmark system: %s (score %.2f)" benchmark-target baseline)
+    ;; Run one experiment on the benchmark file
+    (gptel-auto-experiment-run
+     benchmark-target 1 1 baseline nil
+     (lambda (result)
+       (gptel-auto-experiment--learn result)
+       (push result gptel-auto-experiment--results)
+       (setq gptel-auto-experiment--meta-mode nil)
+       (message "[auto-exp] META: Complete. Improved benchmark system: %s"
+                (if (plist-get result :kept) "YES" "NO"))
+       (funcall callback (nreverse gptel-auto-experiment--results))))))
 
 ;;; Mock Test (no API)
 
