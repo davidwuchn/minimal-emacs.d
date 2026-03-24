@@ -682,6 +682,8 @@ Useful for testing callback chain without API calls."
 (defvar gptel-auto-experiment--results nil)
 (defvar gptel-auto-experiment--best-score nil)
 (defvar gptel-auto-experiment--no-improvement-count 0)
+(defvar gptel-auto-workflow--current-target nil
+  "Current target file for experiment scoring.")
 
 ;;; Worktree Management
 
@@ -758,15 +760,55 @@ Also kills any stale magit buffers referencing old worktrees."
                         (gptel-auto-experiment--eight-keys-score)))))
 
 (defun gptel-auto-experiment--eight-keys-score ()
-  "Get Eight Keys overall score from current codebase."
-  (when (fboundp 'gptel-benchmark-eight-keys-score)
-    (let* ((base-dir (gptel-auto-workflow--base-dir))
-           (output (shell-command-to-string
-                    (format "cd %s && git diff HEAD~1 --stat 2>/dev/null || echo 'no changes'"
-                            (or gptel-auto-workflow--worktree-dir
-                                base-dir))))
-           (scores (gptel-benchmark-eight-keys-score output)))
-      (alist-get 'overall scores))))
+  "Get Eight Keys overall score from current codebase.
+Scores the actual file content, not git diff."
+  (condition-case err
+      (let* ((base-dir (gptel-auto-workflow--base-dir))
+             (worktree (or gptel-auto-workflow--worktree-dir base-dir))
+             (default-directory worktree)
+             (score 0.5))
+        ;; Try to get actual Eight Keys score
+        (when (fboundp 'gptel-benchmark-eight-keys-score)
+          ;; Score based on the target file's content
+          (let* ((target-file (when gptel-auto-workflow--current-target
+                                (expand-file-name gptel-auto-workflow--current-target worktree)))
+                 (content (when (and target-file (file-exists-p target-file))
+                            (with-temp-buffer
+                              (insert-file-contents target-file)
+                              (buffer-string))))
+                 (scores (when content
+                           (gptel-benchmark-eight-keys-score content))))
+            (when scores
+              (setq score (or (alist-get 'overall scores) 0.5)))))
+        ;; Fallback: use simple heuristics for scoring
+        (when (= score 0.5)
+          (setq score (gptel-auto-experiment--simple-score worktree)))
+        score)
+    (error
+     (message "[auto-exp] Eight Keys scoring error: %s" err)
+     0.5)))
+
+(defun gptel-auto-experiment--simple-score (worktree)
+  "Simple heuristic scoring based on code quality in WORKTREE."
+  (let ((score 0.5)
+        (target (or gptel-auto-workflow--current-target "")))
+    ;; Check if file has docstrings
+    (when (string-match "\\.el$" target)
+      (let* ((file (expand-file-name target worktree))
+             (content (when (file-exists-p file)
+                        (with-temp-buffer
+                          (insert-file-contents file)
+                          (buffer-string)))))
+        (when content
+          ;; +0.1 for docstrings
+          (when (string-match ";;; Commentary:" content) (cl-incf score 0.05))
+          ;; +0.1 for function docstrings
+          (when (> (count-matches "\"\"\"" content) 3) (cl-incf score 0.05))
+          ;; +0.1 for type annotations
+          (when (string-match "declare-function\\|defsubst" content) (cl-incf score 0.05))
+          ;; Cap at 0.8
+          (setq score (min score 0.8)))))
+    score))
 
 ;;; Subagent Integrations
 
@@ -1146,9 +1188,17 @@ HYPOTHESIS: [your hypothesis here]"
 
 (defun gptel-auto-experiment--extract-hypothesis (output)
   "Extract HYPOTHESIS from agent OUTPUT."
-  (if (string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
-      (match-string 1 output)
-    "No hypothesis stated"))
+  (cond
+   ;; Look for explicit HYPOTHESIS: marker
+   ((string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
+    (string-trim (match-string 1 output)))
+   ;; Look for first sentence/paragraph
+   ((string-match "^\\([^.\n]+[.!?]\\)" output)
+    (string-trim (match-string 1 output)))
+   ;; Use first 100 chars
+   ((> (length output) 50)
+    (format "%s..." (substring output 0 (min 50 (length output)))))
+   (t "No hypothesis stated")))
 
 (defun gptel-auto-experiment--summarize (hypothesis)
   "Create short summary of HYPOTHESIS."
@@ -1161,7 +1211,8 @@ HYPOTHESIS: [your hypothesis here]"
   "Run experiments for TARGET until stop condition. Call CALLBACK with results."
   (setq gptel-auto-experiment--results nil
         gptel-auto-experiment--best-score nil
-        gptel-auto-experiment--no-improvement-count 0)
+        gptel-auto-experiment--no-improvement-count 0
+        gptel-auto-workflow--current-target target)
   (let ((baseline (gptel-auto-experiment-benchmark))
         (max-exp gptel-auto-experiment-max-per-target)
         (threshold gptel-auto-experiment-no-improvement-threshold))
