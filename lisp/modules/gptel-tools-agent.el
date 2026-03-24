@@ -7,6 +7,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'gptel-agent)  ; Must load before using gptel-agent--agents, gptel-agent--task
 
 ;;; Customization
 
@@ -90,7 +91,6 @@ Keys are (agent-type prompt-hash), values are (timestamp . result).")
 (declare-function my/gptel--coerce-fsm "gptel-ext-fsm-utils")
 
 (defvar gptel--fsm-last nil)
-(defvar gptel-agent--agents nil)
 (defvar gptel-agent-request--handlers nil)
 
 ;;; Subagent Result Cache

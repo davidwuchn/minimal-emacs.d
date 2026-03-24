@@ -79,5 +79,56 @@
     (should (plist-get result :passed))
     (should (= (plist-get result :score) 100))))
 
+;;; Test 6: Subagent Call Path
+
+(ert-deftest grader/subagent-call-path-exists ()
+  "gptel-benchmark-call-subagent should call gptel-agent--task when available."
+  (require 'gptel-benchmark-subagent)
+  (should (fboundp 'gptel-benchmark-call-subagent))
+  ;; Check that it uses gptel-agent--task
+  (let ((gptel-benchmark-use-subagents t))
+    ;; When gptel-agent--task is not fbound, should return mock
+    (cl-letf (((symbol-function 'gptel-agent--task) nil))
+      (let ((result nil))
+        (gptel-benchmark-call-subagent 'grader "Test" "Prompt"
+                                        (lambda (r) (setq result r)))
+        (sit-for 0.1)
+        (should (stringp result))
+        (should (string-match-p "\\[MOCK\\]" result))))))
+
+;;; Test 7: Grader Uses Subagent When Available
+
+(ert-deftest grader/uses-subagent-when-available ()
+  "Grader should call subagent when gptel-agent--task is available."
+  (require 'gptel-benchmark-subagent)
+  (let* ((call-count 0)
+         (gptel-benchmark-use-subagents t)
+         ;; Mock gptel-agent--task
+         (gptel-agent--task-mock (lambda (cb type desc prompt)
+                                   (cl-incf call-count)
+                                   (funcall cb "SCORE: 4/6\nSUMMARY: passed"))))
+    (cl-letf (((symbol-function 'gptel-agent--task) gptel-agent--task-mock))
+      (let ((result nil))
+        (gptel-benchmark-grade
+         "Test output"
+         '("hypothesis")
+         '("refactor")
+         (lambda (r) (setq result r)))
+        (sit-for 0.5)
+        (should (= call-count 1))
+        (should (plist-get result :score))))))
+
+;;; Test 8: gptel-agent Must Be Loaded
+
+(ert-deftest grader/gptel-agent-loaded ()
+  "gptel-agent must be loaded for subagents to work."
+  (require 'gptel-tools-agent)
+  (should (featurep 'gptel-agent))
+  (should (fboundp 'gptel-agent--task))
+  (should (boundp 'gptel-agent--agents))
+  ;; In batch mode, agents may not be populated (no project dir)
+  ;; But the variable should be bound
+  (should (listp gptel-agent--agents)))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here
