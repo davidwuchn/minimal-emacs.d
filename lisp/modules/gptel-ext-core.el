@@ -311,6 +311,8 @@ that breaks json-serialize (private-use chars, non-characters).
 Converts non-string content (e.g., symbols, :null) to strings.
 Also sanitizes tool definitions to convert :type symbols to strings.
 
+Handles multimodal content format: [(:type \"text\" :text \"...\")]
+
 Runs as :before advice on `gptel-curl--get-args'."
   (when-let* ((data (plist-get info :data)))
     (let ((tools (plist-get data :tools)))
@@ -332,6 +334,8 @@ Runs as :before advice on `gptel-curl--get-args'."
                   ((eq content :null)
                    (message "gptel: sanitizing :null :content on %s message" role)
                    (setq new-content ""))
+                  ((vectorp content)
+                   (my/gptel--sanitize-multimodal-content content))
                   ((stringp content)
                    (let ((sanitized (my/gptel--sanitize-string-for-json content)))
                      (unless (string= sanitized content)
@@ -341,6 +345,20 @@ Runs as :before advice on `gptel-curl--get-args'."
                    (setq new-content (format "%S" content))))
                  (when new-content
                    (aset msgs i (plist-put msg :content new-content))))))))
+
+(defun my/gptel--sanitize-multimodal-content (content-vec)
+  "Sanitize text parts in multimodal CONTENT-VEC.
+CONTENT-VEC is a vector like [(:type \"text\" :text \"...\")]."
+  (cl-loop for i from 0 below (length content-vec)
+           for part = (aref content-vec i)
+           when (and (listp part)
+                     (eq (plist-get part :type) 'text)
+                     (plist-get part :text))
+           do
+           (let* ((text (plist-get part :text))
+                  (sanitized (my/gptel--sanitize-string-for-json text)))
+             (unless (string= sanitized text)
+               (aset content-vec i (plist-put part :text sanitized))))))
 
 
 (provide 'gptel-ext-core)

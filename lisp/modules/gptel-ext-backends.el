@@ -23,27 +23,17 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
   "Parse DashScope streaming response with robust error handling.
 INFO is the request info plist."
   (let ((content-strs nil))
-    (condition-case err
-        (while (not (eobp))
-          (skip-chars-forward "\r\n")
-          (when (eobp) (cl-return))
-          (cond
-           ((looking-at-p "\\[DONE\\]")
-            (goto-char (point-max)))
-           ((looking-at-p "data:")
-            (forward-char 5)
-            (skip-chars-forward " \t")
-            (unless (looking-at-p "\\[DONE\\]")
-              (condition-case nil
-                  (when-let* ((response (gptel--json-read))
-                              (delta (map-nested-elt response '(:choices 0 :delta))))
-                    (when-let* ((content (plist-get delta :content))
-                                ((stringp content))
-                                ((not (string-empty-p content))))
-                      (push content content-strs)))
-                (error nil)))
-            (forward-line 1))
-           ((looking-at-p "{")
+    (save-excursion
+      (while (not (eobp))
+        (skip-chars-forward "\r\n")
+        (when (eobp) (cl-return))
+        (cond
+         ((looking-at-p "\\[DONE\\]")
+          (goto-char (point-max)))
+         ((looking-at-p "data:")
+          (forward-char 5)
+          (skip-chars-forward " \t")
+          (unless (looking-at-p "\\[DONE\\]")
             (condition-case nil
                 (when-let* ((response (gptel--json-read))
                             (delta (map-nested-elt response '(:choices 0 :delta))))
@@ -51,11 +41,19 @@ INFO is the request info plist."
                               ((stringp content))
                               ((not (string-empty-p content))))
                     (push content content-strs)))
-              (error nil))
-            (forward-line 1))
-           (t (forward-line 1))))
-      (error
-       (message "[DashScope] Parse error at %d: %s" (point) err)))
+              (error nil)))
+          (forward-line 1))
+         ((looking-at-p "{")
+          (condition-case nil
+              (when-let* ((response (gptel--json-read))
+                          (delta (map-nested-elt response '(:choices 0 :delta))))
+                (when-let* ((content (plist-get delta :content))
+                            ((stringp content))
+                            ((not (string-empty-p content))))
+                  (push content content-strs)))
+            (error nil))
+          (forward-line 1))
+         (t (forward-line 1)))))
     (apply #'concat (nreverse content-strs))))
 
 ;;;###autoload
@@ -82,6 +80,10 @@ that handles DashScope's SSE format differences."
                   :models models
                   :stream stream
                   :request-params request-params)))
+    (setf (gptel-backend-url backend)
+          (if protocol
+              (concat protocol "://" host endpoint)
+            (concat host endpoint)))
     (setf (alist-get name gptel--known-backends nil nil #'equal) backend)
     backend))
 
