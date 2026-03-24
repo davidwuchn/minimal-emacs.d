@@ -50,9 +50,9 @@ gptel-auto-workflow-run
 ### Test Status
 
 ```
-grader/*               23/23 ✓
+grader/*               29/29 ✓
 retry/*                32/32 ✓
-Combined (grader+retry): 55/55 ✓
+Combined (grader+retry): 61/61 ✓
 Full suite: 1048/1119 (test isolation issues remain)
 ```
 
