@@ -719,14 +719,22 @@ Multiple machines can optimize same target without conflicts."
 
 ;;; Benchmark & Evaluation
 
+(defun gptel-auto-workflow--project-root ()
+  "Return the project root directory."
+  (or (when (fboundp 'project-root)
+        (when-let ((proj (project-current)))
+          (project-root proj)))
+      (when (boundp 'minimal-emacs-user-directory)
+        minimal-emacs-user-directory)
+      default-directory))
+
 (defun gptel-auto-experiment-benchmark ()
   "Run nucleus verification + Eight Keys scoring."
   (let* ((start (float-time))
-         (default-directory (or gptel-auto-workflow--worktree-dir
-                                (expand-file-name user-emacs-directory)))
-         (verify-result (call-process "bash" nil nil nil
-                                      (expand-file-name "scripts/verify-nucleus.sh"
-                                                        (expand-file-name user-emacs-directory))))
+         (proj-root (gptel-auto-workflow--project-root))
+         (default-directory (or gptel-auto-workflow--worktree-dir proj-root))
+         (verify-result (call-process "/bin/bash" nil nil nil
+                                      (expand-file-name "scripts/verify-nucleus.sh" proj-root)))
          (scores (when (zerop verify-result)
                    (gptel-auto-experiment--eight-keys-scores))))
     (list :passed (zerop verify-result)
@@ -740,7 +748,7 @@ Multiple machines can optimize same target without conflicts."
     (let* ((output (shell-command-to-string
                     (format "cd %s && git diff HEAD~1 --stat 2>/dev/null || echo 'no changes'"
                             (or gptel-auto-workflow--worktree-dir
-                                (expand-file-name user-emacs-directory))))))
+                                (gptel-auto-workflow--project-root))))))
       (gptel-benchmark-eight-keys-score output))))
 
 (defun gptel-auto-experiment--eight-keys-score ()
@@ -752,7 +760,7 @@ Multiple machines can optimize same target without conflicts."
   "Get code quality score from current changes."
   (when (fboundp 'gptel-benchmark--code-quality-score)
     (let* ((worktree (or gptel-auto-workflow--worktree-dir
-                          (expand-file-name user-emacs-directory)))
+                          (gptel-auto-workflow--project-root)))
            (changed-files (shell-command-to-string
                            (format "cd %s && git diff --name-only HEAD~1 2>/dev/null | grep '\\.el$'"
                                    worktree))))
@@ -868,7 +876,7 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
   (let* ((git-history (shell-command-to-string
                        (format "cd %s && git log --oneline -20 2>/dev/null || echo 'no history'"
                                (or gptel-auto-workflow--worktree-dir
-                                   (expand-file-name user-emacs-directory)))))
+                                   (gptel-auto-workflow--project-root)))))
          (patterns (when analysis (plist-get analysis :patterns)))
          (suggestions (when analysis (plist-get analysis :recommendations)))
          (skills (cdr (assoc target gptel-auto-workflow--skills)))
@@ -935,7 +943,7 @@ HYPOTHESIS: [your hypothesis here]"
 
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
   "Append EXPERIMENT to results.tsv for RUN-ID."
-  (let* ((base-dir (expand-file-name user-emacs-directory))
+  (let* ((base-dir (gptel-auto-workflow--project-root))
          (file (expand-file-name
                 (format "%s/%s/results.tsv" gptel-auto-workflow-worktree-base run-id)
                 base-dir)))
@@ -1122,7 +1130,7 @@ HYPOTHESIS: [your hypothesis here]"
   (let ((baseline (gptel-auto-experiment-benchmark))
         (max-exp gptel-auto-experiment-max-per-target)
         (threshold gptel-auto-experiment-no-improvement-threshold))
-    (setq gptel-auto-experiment--best-score (plist-get baseline :eight-keys))
+    (setq gptel-auto-experiment--best-score (or (plist-get baseline :eight-keys) 0.0))
     (message "[auto-experiment] Baseline for %s: %.2f" target gptel-auto-experiment--best-score)
     (cl-labels ((run-next (exp-id)
                   (if (or (> exp-id max-exp)
@@ -1199,7 +1207,7 @@ Manual: M-x gptel-auto-workflow-run"
 (defun gptel-auto-workflow-load-program ()
   "Load and parse docs/auto-workflow-program.md."
   (let* ((file (expand-file-name gptel-auto-workflow-program-file
-                                 (expand-file-name user-emacs-directory)))
+                                 (gptel-auto-workflow--project-root)))
          (content (when (file-exists-p file)
                     (with-temp-buffer
                       (insert-file-contents file)
@@ -1252,7 +1260,7 @@ Manual: M-x gptel-auto-workflow-run"
 
 (defun gptel-auto-workflow-skill-load (skill-file)
   "Load skill from SKILL-FILE."
-  (let ((file (expand-file-name skill-file (expand-file-name user-emacs-directory))))
+  (let ((file (expand-file-name skill-file (gptel-auto-workflow--project-root))))
     (when (file-exists-p file)
       (let ((content (with-temp-buffer
                        (insert-file-contents file)
@@ -1351,7 +1359,7 @@ Returns formatted string with key names and signals."
 (defun gptel-auto-workflow-update-target-skill (target results)
   "Update TARGET skill file with RESULTS from night."
   (let* ((skill-file (gptel-auto-workflow-skill-path target 'target))
-         (file (expand-file-name skill-file (expand-file-name user-emacs-directory))))
+         (file (expand-file-name skill-file (gptel-auto-workflow--project-root))))
     (when (file-exists-p file)
       (let* ((content (with-temp-buffer
                         (insert-file-contents file)
@@ -1449,7 +1457,7 @@ Returns formatted string with key names and signals."
   "Update MUTATION-TYPE skill file with ALL-RESULTS."
   (let* ((skill-file (format "%s/mutations/%s.md"
                              gptel-auto-workflow-skills-dir mutation-type))
-         (file (expand-file-name skill-file (expand-file-name user-emacs-directory))))
+         (file (expand-file-name skill-file (gptel-auto-workflow--project-root))))
     (when (file-exists-p file)
       (let* ((content (with-temp-buffer
                         (insert-file-contents file)
@@ -1504,7 +1512,7 @@ Returns formatted string with key names and signals."
 (defun gptel-auto-workflow-metabolize (run-id all-results)
   "Synthesize RUN-ID ALL-RESULTS to mementum + evolve skills."
   (let ((memory-dir (expand-file-name "mementum/memories"
-                                       (expand-file-name user-emacs-directory)))
+                                       (gptel-auto-workflow--project-root)))
         (by-target (make-hash-table :test 'equal)))
     (make-directory memory-dir t)
     (let ((file (expand-file-name (format "auto-workflow-%s.md" run-id) memory-dir)))
@@ -1582,9 +1590,9 @@ Manual: M-x gptel-auto-workflow-run-autonomous"
   "Build recall index from all knowledge files.
 Creates .index file with topic → file mapping for O(1) lookup."
   (let* ((index-file (expand-file-name gptel-mementum-index-file
-                                        (expand-file-name user-emacs-directory)))
+                                        (gptel-auto-workflow--project-root)))
          (knowledge-dir (expand-file-name "mementum/knowledge"
-                                          (expand-file-name user-emacs-directory)))
+                                          (gptel-auto-workflow--project-root)))
          (index (make-hash-table :test 'equal)))
     (when (file-exists-p knowledge-dir)
       (dolist (file (directory-files-recursively knowledge-dir "\\.md$"))
@@ -1612,7 +1620,7 @@ Creates .index file with topic → file mapping for O(1) lookup."
   "Quick lookup for QUERY in recall index.
 Returns list of matching files."
   (let* ((index-file (expand-file-name gptel-mementum-index-file
-                                        (expand-file-name user-emacs-directory)))
+                                        (gptel-auto-workflow--project-root)))
          (result '()))
     (when (file-exists-p index-file)
       (with-temp-buffer
@@ -1624,7 +1632,7 @@ Returns list of matching files."
     (or result
         (progn
           (message "[mementum] Index miss, using git grep for: %s" query)
-          (let ((default-directory (expand-file-name user-emacs-directory)))
+          (let ((default-directory (gptel-auto-workflow--project-root)))
             (split-string
              (shell-command-to-string
               (format "git grep -l '%s' -- mementum/knowledge/ 2>/dev/null || true" query))
@@ -1634,9 +1642,9 @@ Returns list of matching files."
   "Apply decay to skill files not tested in 4+ weeks.
 Run weekly via cron."
   (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
-                                        (expand-file-name user-emacs-directory)))
+                                        (gptel-auto-workflow--project-root)))
          (mutations-dir (expand-file-name "mementum/knowledge/mutations"
-                                          (expand-file-name user-emacs-directory)))
+                                          (gptel-auto-workflow--project-root)))
          (now (float-time))
          (four-weeks (* 4 7 24 60 60))
          (decayed 0)
@@ -1677,7 +1685,7 @@ Run weekly via cron."
   "Check for topics with ≥3 memories and suggest synthesis.
 Returns list of synthesis candidates."
   (let* ((memories-dir (expand-file-name "mementum/memories"
-                                          (expand-file-name user-emacs-directory)))
+                                          (gptel-auto-workflow--project-root)))
          (by-topic (make-hash-table :test 'equal))
          (candidates '()))
     (when (file-exists-p memories-dir)
