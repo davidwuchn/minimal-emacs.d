@@ -759,6 +759,23 @@ When ≥3 memories share a topic keyword, synthesis loop runs:
 | `M-x gptel-mementum-synthesis-run` | Run synthesis on all candidates |
 | `M-x gptel-mementum-weekly-job` | Full weekly maintenance + synthesis |
 
+### Cron Scheduling
+
+Install scheduled jobs for autonomous operation:
+
+```bash
+./scripts/install-cron.sh --dry-run   # Preview
+./scripts/install-cron.sh             # Install
+```
+
+| Schedule | Function | Purpose |
+|----------|----------|---------|
+| Daily 2:00 AM | `gptel-auto-workflow-run` | Overnight optimization experiments |
+| Weekly Sun 4:00 AM | `gptel-mementum-weekly-job` | Synthesis + decay |
+| Weekly Sun 5:00 AM | `gptel-benchmark-instincts-weekly-job` | Evolution batch commit |
+
+Logs: `var/tmp/cron/*.log`
+
 ### Cron Integration
 
 ```cron

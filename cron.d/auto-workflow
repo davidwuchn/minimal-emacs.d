@@ -1,11 +1,10 @@
 # Auto-Workflow: Scheduled optimization experiments
 #
 # Install:
-#   crontab cron.d/auto-workflow
+#   ./scripts/install-cron.sh
 #
 # Or manually:
-#   crontab -e
-#   # Add the job lines below
+#   crontab cron.d/auto-workflow
 #
 # Logs: var/tmp/cron/
 
@@ -40,9 +39,17 @@ LOGDIR=~/.emacs.d/var/tmp/cron
 # 0 3 * * * emacsclient -e '(gptel-auto-workflow-run (quote ("gptel-tools-code.el")))' >> $LOGDIR/auto-workflow.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
+# Weekly Mementum: Synthesis + Decay
+# ─────────────────────────────────────────────────────────────
+
+# Run weekly synthesis every Sunday at 4 AM
+# Converts ≥3 memories into knowledge pages
+0 4 * * 0 emacsclient -e '(gptel-mementum-weekly-job)' >> $LOGDIR/mementum.log 2>&1
+
+# ─────────────────────────────────────────────────────────────
 # Weekly Instincts: Evolution batch commit
 # ─────────────────────────────────────────────────────────────
 
-# Run weekly instincts evolution every Sunday at 3 AM
+# Run weekly instincts evolution every Sunday at 5 AM
 # Commits Eight Keys updates and applies decay to mementum/knowledge/
-0 3 * * 0 emacsclient -e '(gptel-benchmark-instincts-weekly-job)' >> $LOGDIR/instincts.log 2>&1
+0 5 * * 0 emacsclient -e '(gptel-benchmark-instincts-weekly-job)' >> $LOGDIR/instincts.log 2>&1
