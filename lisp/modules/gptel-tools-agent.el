@@ -661,6 +661,12 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
   :type 'boolean
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-experiment-auto-push t
+  "Automatically push experiment branches to origin after successful commit.
+When non-nil, branches are pushed to origin for PR review on Forgejo."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
 ;;; State
 
 (defvar gptel-auto-workflow--worktree-dir nil)
@@ -672,12 +678,16 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 ;;; Worktree Management
 
 (defun gptel-auto-workflow--branch-name (target &optional experiment-id)
-  "Generate branch name for TARGET. Optional EXPERIMENT-ID for experiments."
+  "Generate branch name for TARGET with machine hostname.
+Format: optimize/{target}-{hostname}-exp{N}
+Base branch is always 'main'.
+Multiple machines can optimize same target without conflicts."
   (let* ((basename (file-name-sans-extension (file-name-nondirectory target)))
-         (name (car (last (split-string basename "-")))))
+         (name (car (last (split-string basename "-"))))
+         (host system-name))
     (if experiment-id
-        (format "optimize/%s-exp%d" name experiment-id)
-      (format "optimize/%s" name))))
+        (format "optimize/%s-%s-exp%d" name host experiment-id)
+      (format "optimize/%s-%s" name host))))
 
 (defun gptel-auto-workflow-create-worktree (target &optional experiment-id)
   "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch."
@@ -1044,10 +1054,12 @@ HYPOTHESIS: [your hypothesis here]"
                                                        hypothesis
                                                        experiment-id max-experiments
                                                        baseline score-after)))
-                                      (magit-git-success "add" "-A")
-                                      (magit-git-success "commit" "-m" msg)
-                                      (setq gptel-auto-experiment--best-score score-after
-                                            gptel-auto-experiment--no-improvement-count 0))
+(magit-git-success "add" "-A")
+                                       (magit-git-success "commit" "-m" msg)
+                                       (setq gptel-auto-experiment--best-score score-after
+                                             gptel-auto-experiment--no-improvement-count 0)
+                                       (when gptel-auto-experiment-auto-push
+                                         (magit-git-success "push" "origin" gptel-auto-workflow--current-branch)))
                                   ;; Discard
                                   (progn
                                     (magit-git-success "checkout" "--" ".")

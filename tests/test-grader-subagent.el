@@ -442,5 +442,37 @@ Result: Tests pass."))
   (require 'gptel-tools-agent)
   (should (= gptel-auto-experiment-grade-timeout 60)))
 
+;;; Test 43: Multi-Machine Branch Naming
+
+(ert-deftest grader/branch-name-includes-hostname ()
+  "Branch name should include system-name."
+  (require 'gptel-tools-agent)
+  (let ((branch (gptel-auto-workflow--branch-name "gptel-ext-retry.el" 1)))
+    (should (string-match-p (regexp-quote system-name) branch))))
+
+(ert-deftest grader/branch-name-format ()
+  "Branch name format: optimize/{target}-{host}-exp{N}"
+  (require 'gptel-tools-agent)
+  (let* ((host system-name)
+         (branch (gptel-auto-workflow--branch-name "gptel-ext-retry.el" 5)))
+    (should (string= branch (format "optimize/retry-%s-exp5" host)))))
+
+(ert-deftest grader/branch-name-without-experiment-id ()
+  "Branch name without experiment-id: optimize/{target}-{host}"
+  (require 'gptel-tools-agent)
+  (let* ((host system-name)
+         (branch (gptel-auto-workflow--branch-name "gptel-ext-context.el")))
+    (should (string= branch (format "optimize/context-%s" host)))))
+
+(ert-deftest grader/auto-push-config-exists ()
+  "Auto-push config variable should exist."
+  (require 'gptel-tools-agent)
+  (should (boundp 'gptel-auto-experiment-auto-push)))
+
+(ert-deftest grader/auto-push-config-default ()
+  "Auto-push should default to t."
+  (require 'gptel-tools-agent)
+  (should gptel-auto-experiment-auto-push))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here
