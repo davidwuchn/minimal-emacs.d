@@ -726,21 +726,27 @@ Multiple machines can optimize same target without conflicts."
                                 (expand-file-name user-emacs-directory)))
          (verify-result (call-process "bash" nil nil nil
                                       (expand-file-name "scripts/verify-nucleus.sh"
-                                                        (expand-file-name user-emacs-directory)))))
+                                                        (expand-file-name user-emacs-directory))))
+         (scores (when (zerop verify-result)
+                   (gptel-auto-experiment--eight-keys-scores))))
     (list :passed (zerop verify-result)
           :time (- (float-time) start)
-          :eight-keys (when (zerop verify-result)
-                        (gptel-auto-experiment--eight-keys-score)))))
+          :eight-keys (when scores (alist-get 'overall scores))
+          :eight-keys-scores scores)))
 
-(defun gptel-auto-experiment--eight-keys-score ()
-  "Get Eight Keys overall score from current codebase."
+(defun gptel-auto-experiment--eight-keys-scores ()
+  "Get full Eight Keys scores alist from current codebase."
   (when (fboundp 'gptel-benchmark-eight-keys-score)
     (let* ((output (shell-command-to-string
                     (format "cd %s && git diff HEAD~1 --stat 2>/dev/null || echo 'no changes'"
                             (or gptel-auto-workflow--worktree-dir
-                                (expand-file-name user-emacs-directory)))))
-           (scores (gptel-benchmark-eight-keys-score output)))
-      (alist-get 'overall scores))))
+                                (expand-file-name user-emacs-directory))))))
+      (gptel-benchmark-eight-keys-score output))))
+
+(defun gptel-auto-experiment--eight-keys-score ()
+  "Get Eight Keys overall score from current codebase."
+  (let ((scores (gptel-auto-experiment--eight-keys-scores)))
+    (when scores (alist-get 'overall scores))))
 
 (defun gptel-auto-experiment--code-quality-score ()
   "Get code quality score from current changes."
@@ -857,13 +863,19 @@ Uses comparator subagent if available, falls back to local comparison."
 ;;; Prompt Building
 
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline)
-  "Build prompt for experiment EXPERIMENT-ID on TARGET."
+  "Build prompt for experiment EXPERIMENT-ID on TARGET.
+Uses loaded skills and Eight Keys breakdown for focused improvements."
   (let* ((git-history (shell-command-to-string
                        (format "cd %s && git log --oneline -20 2>/dev/null || echo 'no history'"
                                (or gptel-auto-workflow--worktree-dir
                                    (expand-file-name user-emacs-directory)))))
          (patterns (when analysis (plist-get analysis :patterns)))
-         (suggestions (when analysis (plist-get analysis :recommendations))))
+         (suggestions (when analysis (plist-get analysis :recommendations)))
+         (skills (cdr (assoc target gptel-auto-workflow--skills)))
+         (scores (gptel-auto-experiment--eight-keys-scores))
+         (weakest-keys (when scores (gptel-auto-workflow--format-weakest-keys scores)))
+         (mutation-templates (when skills (gptel-auto-workflow--extract-mutation-templates skills)))
+         (suggested-hypothesis (when skills (gptel-auto-workflow-skill-suggest-hypothesis skills))))
     (format "You are running experiment %d of %d to optimize %s.
 
 ## Previous Experiment Analysis
@@ -877,6 +889,12 @@ Uses comparator subagent if available, falls back to local comparison."
 
 ## Current Baseline
 Overall Eight Keys score: %.2f
+
+%s
+
+%s
+
+%s
 
 ## Objective
 Improve the Eight Keys score for %s.
@@ -900,6 +918,16 @@ HYPOTHESIS: [your hypothesis here]"
             (or suggestions "None")
             git-history
             (or baseline 0.5)
+            (if weakest-keys
+                (format "## Weakest Keys (Priority Focus)\n%s" weakest-keys)
+              "")
+            (if suggested-hypothesis
+                (format "## Suggested Hypothesis (from skill)\n%s" suggested-hypothesis)
+              "")
+            (if mutation-templates
+                (format "## Hypothesis Templates\n%s"
+                        (mapconcat (lambda (tmpl) (format "- %s" tmpl)) mutation-templates "\n"))
+              "")
             target
             (/ gptel-auto-experiment-time-budget 60))))
 
@@ -1259,6 +1287,39 @@ Manual: M-x gptel-auto-workflow-run"
          (content (when target-skill (plist-get target-skill :content))))
     (when (and content (string-match "^## Next Hypothesis\n\n\\(.+\\)" content))
       (match-string 1 content))))
+
+(defun gptel-auto-workflow--extract-mutation-templates (skills)
+  "Extract hypothesis templates from mutation skills in SKILLS.
+Returns list of template strings for hypothesis generation."
+  (let* ((mutation-skills (plist-get skills :mutation-skills))
+         (templates '()))
+    (dolist (ms mutation-skills)
+      (let ((content (plist-get ms :content)))
+        (when (and content (string-match "## Hypothesis Templates\n+```\n\\(.+?\\)\n```" content))
+          (let ((raw (match-string 1 content)))
+            (dolist (line (split-string raw "\n" t))
+              (when (string-match-p "^\"" line)
+                (push (string-trim line "\"\\s-*" "\"\\s-*") templates))))))
+    (nreverse templates))))
+
+(defun gptel-auto-workflow--format-weakest-keys (baseline-scores)
+  "Format weakest keys for prompt from BASELINE-SCORES.
+Returns formatted string with key names and signals."
+  (when baseline-scores
+    (let* ((weakest (gptel-benchmark-eight-keys-weakest-with-signals baseline-scores 2))
+           (lines '()))
+      (dolist (item weakest)
+        (let* ((key (plist-get item :key))
+               (score (plist-get item :score))
+               (signals (plist-get item :signals))
+               (def (alist-get key gptel-benchmark-eight-keys-definitions))
+               (name (plist-get def :name))
+               (symbol (plist-get def :symbol)))
+          (push (format "- %s %s: %.0f%% (focus: %s)"
+                        symbol name (* 100 score)
+                        (string-join (or signals '("improve")) ", "))
+                lines)))
+      (mapconcat #'identity (nreverse lines) "\n"))))
 
 (defun gptel-auto-workflow-orient ()
   "Orient for auto-workflow run. Load program.md and skills."

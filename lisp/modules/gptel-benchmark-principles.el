@@ -170,6 +170,28 @@ SCORES is the alist returned by gptel-benchmark-eight-keys-score."
       (push (format "Overall: %.0f%%" (* 100 (or overall 0))) parts))
     (mapconcat #'identity (nreverse parts) "\n")))
 
+(defun gptel-benchmark-eight-keys-weakest (scores &optional n)
+  "Return N weakest keys from SCORES alist.
+Excludes 'overall from results.
+Returns list of (key . score) pairs sorted ascending by score."
+  (let ((key-scores (cl-remove-if (lambda (x) (eq (car x) 'overall)) scores)))
+    (cl-subseq (sort key-scores (lambda (a b) (< (cdr a) (cdr b)))) 0 (or n 2))))
+
+(defun gptel-benchmark-eight-keys-weakest-with-signals (scores &optional n)
+  "Return N weakest keys with their positive signals.
+For hypothesis generation targeting weak areas."
+  (let* ((weakest (gptel-benchmark-eight-keys-weakest scores n))
+         (result '()))
+    (dolist (item weakest)
+      (let* ((key (car item))
+             (score (cdr item))
+             (signals-raw (gptel-benchmark-eight-keys-signals key))
+             (signals (if (and (listp signals-raw) (eq (car signals-raw) 'quote))
+                          (cadr signals-raw)
+                        signals-raw)))
+        (push (list :key key :score score :signals (seq-take signals 3)) result)))
+    (nreverse result)))
+
 (defun gptel-benchmark--score-signals (output signals)
   "Score OUTPUT based on presence of SIGNALS."
   (let ((matches 0)
