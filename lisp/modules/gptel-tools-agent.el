@@ -706,6 +706,25 @@ by targeting these files.")
 (defvar gptel-auto-experiment--meta-mode nil
   "When non-nil, we're improving the benchmark system itself.")
 
+(defvar gptel-auto-experiment--failed-hypotheses nil
+  "List of hypotheses that didn't lead to improvement.
+Used to avoid repeating the same failed approaches.")
+
+(defvar gptel-auto-experiment--improvement-strategies
+  '((:docstring . "Add docstring to undocumented function")
+    (:refactor . "Refactor complex function into smaller parts")
+    (:todo . "Resolve TODO/FIXME comment")
+    (:simplify . "Simplify complex logic")
+    (:type . "Add type declarations")
+    (:test . "Add test for edge case")
+    (:performance . "Optimize performance bottleneck")
+    (:error . "Improve error handling")
+    (:naming . "Improve variable/function naming"))
+  "Improvement strategies to try in order.")
+
+(defvar gptel-auto-experiment--strategy-index 0
+  "Current strategy index being tried.")
+
 ;;; Learning System (Mementum Integration)
 
 (defun gptel-auto-experiment--learn (result)
@@ -1034,7 +1053,10 @@ HYPOTHESIS: Adding docstring to [function] will improve maintainability."
             (or suggestions "None")
             git-history
             (if gptel-auto-experiment--meta-mode
-                "This is a META-IMPROVEMENT: you are improving the benchmark system itself. Focus on: adding docstrings, refactoring complex functions, resolving TODOs, or improving the quality scoring logic."
+                (let* ((strategy (nth gptel-auto-experiment--strategy-index
+                                      gptel-auto-experiment--improvement-strategies))
+                       (hint (cdr strategy)))
+                  (format "This is AUTONOMOUS SELF-IMPROVEMENT. Strategy: %s. Try something DIFFERENT from previous attempts. Explore creative solutions." (or hint "improve quality")))
               "Focus on: adding docstrings, fixing warnings, simplifying code, or removing dead code.")
             (/ gptel-auto-experiment-time-budget 60)
             target-file)))
@@ -1409,29 +1431,74 @@ HYPOTHESIS: Adding docstring to [function] will improve maintainability."
       (run-next 1))))
 
 (defun gptel-auto-experiment--meta-improve (original-target callback)
-  "When ORIGINAL-TARGET couldn't be improved, improve the benchmark system itself."
-  (message "[auto-exp] No improvement possible for %s - switching to meta-improvement" original-target)
+  "When ORIGINAL-TARGET couldn't be improved, improve the benchmark system itself.
+Keeps trying different strategies and files until improvement is found."
+  (message "[auto-exp] No improvement for %s - starting autonomous self-improvement" original-target)
   (setq gptel-auto-experiment--meta-mode t
         gptel-auto-experiment--results nil
-        gptel-auto-experiment--best-score nil
-        gptel-auto-experiment--no-improvement-count 0)
-  ;; Pick a benchmark file to improve
-  (let* ((benchmark-target (car gptel-auto-experiment--benchmark-files))
-         (baseline (progn
-                     (setq gptel-auto-workflow--current-target benchmark-target)
-                     (gptel-auto-experiment--quality-score))))
-    (setq gptel-auto-experiment--best-score (or baseline 0.5))
-    (message "[auto-exp] META: Targeting benchmark system: %s (score %.2f)" benchmark-target baseline)
-    ;; Run one experiment on the benchmark file
-    (gptel-auto-experiment-run
-     benchmark-target 1 1 baseline nil
-     (lambda (result)
-       (gptel-auto-experiment--learn result)
-       (push result gptel-auto-experiment--results)
-       (setq gptel-auto-experiment--meta-mode nil)
-       (message "[auto-exp] META: Complete. Improved benchmark system: %s"
-                (if (plist-get result :kept) "YES" "NO"))
-       (funcall callback (nreverse gptel-auto-experiment--results))))))
+        gptel-auto-experiment--no-improvement-count 0
+        gptel-auto-experiment--strategy-index 0)
+  ;; Start continuous exploration
+  (gptel-auto-experiment--explore-strategies callback))
+
+(defun gptel-auto-experiment--explore-strategies (callback)
+  "Explore improvement strategies until one works."
+  (cl-labels
+      ((try-next (file-idx strat-idx)
+         (if (>= file-idx (length gptel-auto-experiment--benchmark-files))
+             ;; Tried all files with this strategy, try next strategy
+             (let ((next-strat (1+ strat-idx)))
+               (if (>= next-strat (length gptel-auto-experiment--improvement-strategies))
+                   ;; All strategies exhausted - evolve new strategies
+                   (gptel-auto-experiment--evolve-strategies callback)
+                 ;; Try next strategy
+                 (setq gptel-auto-experiment--strategy-index next-strat)
+                 (try-next 0 next-strat)))
+           ;; Try current file with current strategy
+           (let* ((file (nth file-idx gptel-auto-experiment--benchmark-files))
+                  (strategy (nth strat-idx gptel-auto-experiment--improvement-strategies))
+                  (strategy-hint (cdr strategy)))
+             (setq gptel-auto-workflow--current-target file)
+             (let ((baseline (gptel-auto-experiment--quality-score)))
+               (setq gptel-auto-experiment--best-score (or baseline 0.5))
+               (message "[auto-exp] EXPLORING: %s (score %.2f) - Strategy: %s"
+                        file baseline strategy-hint)
+               (gptel-auto-experiment-run
+                file 1 1 baseline nil
+                (lambda (result)
+                  (gptel-auto-experiment--learn result)
+                  (push result gptel-auto-experiment--results)
+                  (if (plist-get result :kept)
+                      (progn
+                        (message "[auto-exp] ✓ IMPROVEMENT FOUND!")
+                        (setq gptel-auto-experiment--meta-mode nil)
+                        (funcall callback (nreverse gptel-auto-experiment--results)))
+                    (message "[auto-exp] ✗ No improvement, trying next...")
+                    (push (plist-get result :hypothesis)
+                          gptel-auto-experiment--failed-hypotheses)
+                    (try-next (1+ file-idx) strat-idx)))))))))
+    (try-next 0 0)))
+
+(defun gptel-auto-experiment--evolve-strategies (callback)
+  "When all strategies failed, evolve new approaches based on what we learned."
+  (message "[auto-exp] All strategies exhausted - evolving new approaches...")
+  ;; Analyze what didn't work
+  (let ((failed (delete-dups gptel-auto-experiment--failed-hypotheses)))
+    (message "[auto-exp] Failed hypotheses: %d" (length failed))
+    ;; Generate new strategies based on failure patterns
+    (setq gptel-auto-experiment--improvement-strategies
+          (append gptel-auto-experiment--improvement-strategies
+                  (list (list :research . "Research better approaches to quality scoring")
+                        (list :instrument . "Add more quality metrics")
+                        (list :automate . "Automate a manual process")
+                        (list :document . "Improve system documentation")
+                        (list :benchmark . "Improve the benchmark system itself"))))
+    ;; Reset and try again with evolved strategies
+    (setq gptel-auto-experiment--strategy-index 0
+          gptel-auto-experiment--failed-hypotheses nil)
+    (message "[auto-exp] Evolved %d strategies, retrying..."
+             (length gptel-auto-experiment--improvement-strategies))
+    (gptel-auto-experiment--explore-strategies callback)))
 
 ;;; Mock Test (no API)
 
