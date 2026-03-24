@@ -165,7 +165,11 @@ Returns the number of messages whose reasoning_content was stripped."
 
 When the active model/backend requires a reasoning field (for example Moonshot's
 `reasoning_content`), every assistant message with `:tool_calls` must carry that
-field, even if it is the empty string.  Returns the number of messages repaired."
+field, even if it is the empty string.
+
+INFO is the request info plist containing :model, :backend, :data, and :buffer.
+
+Returns the number of messages repaired."
   (let* ((model (plist-get info :model))
          (backend (plist-get info :backend))
          (reasoning-key (and (fboundp 'my/gptel--reasoning-key-for-model)
@@ -249,8 +253,9 @@ Set to nil to disable old message truncation."
 (defun my/gptel--truncate-old-messages (info)
   "Truncate old user/assistant messages in INFO to reduce payload.
 
-Removes message content from older messages (beyond `my/gptel-truncate-old-messages-keep'),
-replacing with a truncation marker. Keeps the message structure intact for API compatibility.
+Removes message content from older messages (beyond
+`my/gptel-truncate-old-messages-keep'), replacing with a truncation marker.
+Keeps the message structure intact for API compatibility.
 
 Returns the number of messages truncated, or 0 if nothing was done."
   (if (null my/gptel-truncate-old-messages-keep)
@@ -305,7 +310,10 @@ Returns the number of image parts removed, or 0 if nothing was done."
 Matches network failures, overload responses, rate limits, and common
 curl error codes that are safe to retry with backoff.
 Also retries model-side bugs like malformed tool arguments."
-  (let ((status (if (stringp http-status) (string-to-number http-status) http-status))
+  (let ((status (cond
+                 ((stringp http-status) (string-to-number http-status))
+                 ((numberp http-status) http-status)
+                 (t nil)))
         (error-msg (when (listp error-data) (plist-get error-data :message))))
     (or (and (stringp error-data)
              (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|exit code 28\\|exit code 6\\|exit code 7\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests\\|InvalidParameter\\|function\\.arguments" error-data))
@@ -338,10 +346,23 @@ start <= tracking to avoid corrupting the buffer."
           (delete-region start-marker tracking-marker)
           (set-marker tracking-marker start-marker))))))
 
+(defun my/gptel--format-error-message (error-data http-status)
+  "Format error message from ERROR-DATA and HTTP-STATUS."
+  (if (stringp error-data)
+      (string-trim error-data)
+    (if (and http-status (not (eq http-status t)))
+        (format "HTTP %s" http-status)
+      "Transient API Error")))
+
 (defun my/gptel-auto-retry (orig-fn machine &optional new-state)
   "Intercept FSM transitions to ERRS and retry the request if transient.
+
 Implements OpenCode-style exponential backoff for network/overload errors.
-Skips retries for subagent FSMs (they have their own timeout handler)."
+Skips retries for subagent FSMs (they have their own timeout handler).
+
+ORIG-FN is the original `gptel--fsm-transition' function.
+MACHINE is the gptel FSM instance.
+NEW-STATE is the target state (defaults to next state in MACHINE)."
   (unless new-state (setq new-state (gptel--fsm-next machine)))
   (let* ((info (gptel-fsm-info machine))
          (error-data (plist-get info :error))
@@ -353,7 +374,7 @@ Skips retries for subagent FSMs (they have their own timeout handler)."
          ;; handler sets: gptel-send--handlers (interactive),
          ;; gptel-request--handlers (programmatic), or
          ;; gptel-agent-request--handlers (agent mode).
-(handlers (gptel-fsm-handlers machine))
+         (handlers (gptel-fsm-handlers machine))
           (subagent-p (not (or (eq handlers gptel-send--handlers)
                                (eq handlers gptel-request--handlers)
                                (and (boundp 'gptel-agent-request--handlers)
@@ -362,59 +383,56 @@ Skips retries for subagent FSMs (they have their own timeout handler)."
              (not subagent-p)
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
              (my/gptel--transient-error-p error-data http-status))
-(let* ((base-delay 4.0)
-                (factor 2.0)
-                (delay (min 30.0 (* base-delay (expt factor retries)))))
-          (if my/gptel-max-retries
-              (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..." 
-                       (if (stringp error-data) (string-trim error-data)
-                         (if http-status (format "HTTP %s" http-status) "Transient API Error"))
-                       (1+ retries) my/gptel-max-retries delay)
-            (message "gptel: API failed with '%s'. Retrying (Attempt %d) in %.1fs..." 
-                     (if (stringp error-data) (string-trim error-data)
-                       (if http-status (format "HTTP %s" http-status) "Transient API Error"))
-                     (1+ retries) delay))
+      (let* ((base-delay 4.0)
+             (factor 2.0)
+             (delay (min 30.0 (* base-delay (expt factor retries))))
+             (error-msg (my/gptel--format-error-message error-data http-status)))
+        (if my/gptel-max-retries
+            (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..."
+                     error-msg (1+ retries) my/gptel-max-retries delay)
+          (message "gptel: API failed with '%s'. Retrying (Attempt %d) in %.1fs..."
+                   error-msg (1+ retries) delay))
           
-          ;; Clean up partial buffer insertions if any.
-           (my/gptel--cleanup-partial-insertion info)
-          
-           ;; Reset FSM state to WAIT to trigger a fresh request
-           (plist-put info :error nil)
-           (plist-put info :status nil)
-           (plist-put info :http-status nil)
-           (plist-put info :retries (1+ retries))
-           
-           ;; Progressive payload trimming before retry.
-             ;; Tool results: keep count decreases with each retry
-             ;;   retry 1 → keep max(0, default-1), retry 2+ → keep 0
-             ;; Reasoning content: stripped on retry 2+ to reclaim space
-             ;; from accumulated chain-of-thought text.
-             ;; Tools array: reduced on retry 2+ to only tools actually
-             ;; used in the conversation, removing ~60-80% of definitions.
-             (let ((trimmed (my/gptel--trim-tool-results-for-retry info))
-                   (new-retries (plist-get info :retries)))
-                (when (> trimmed 0)
-                  (message "gptel: Trimmed %d old tool result(s) to reduce payload (retry %d, keeping %d recent)"
-                           trimmed new-retries
-                           (max 0 (- my/gptel-retry-keep-recent-tool-results new-retries))))
-                (when (>= new-retries 2)
-                 (let ((reasoning-stripped (my/gptel--trim-reasoning-content info)))
-                   (when (> reasoning-stripped 0)
-                     (message "gptel: Stripped reasoning_content from %d assistant message(s)" reasoning-stripped)))
-                  (let ((tools-removed (my/gptel--reduce-tools-for-retry info)))
-                    (when (> tools-removed 0)
-                      (message "gptel: Removed %d unused tool definition(s) from payload" tools-removed)))
-                  (let ((repaired (my/gptel--repair-thinking-tool-call-messages info)))
-                    (when (> repaired 0)
-                      (message "gptel: Restored empty reasoning field on %d tool-call message(s)" repaired)))))
-            
-            ;; Schedule the FSM transition asynchronously (non-blocking exponential backoff)
-            (run-at-time delay nil
-                        (lambda (m f-orig)
-                         (funcall f-orig m 'WAIT))
-                       machine orig-fn)
-          ;; Return nil to abort the current transition to ERRS and let the timer take over
-          nil)
+        ;; Clean up partial buffer insertions if any.
+        (my/gptel--cleanup-partial-insertion info)
+        
+        ;; Reset FSM state to WAIT to trigger a fresh request
+        (plist-put info :error nil)
+        (plist-put info :status nil)
+        (plist-put info :http-status nil)
+        (plist-put info :retries (1+ retries))
+        
+        ;; Progressive payload trimming before retry.
+        ;; Tool results: keep count decreases with each retry
+        ;;   retry 1 → keep max(0, default-1), retry 2+ → keep 0
+        ;; Reasoning content: stripped on retry 2+ to reclaim space
+        ;; from accumulated chain-of-thought text.
+        ;; Tools array: reduced on retry 2+ to only tools actually
+        ;; used in the conversation, removing ~60-80% of definitions.
+        (let ((trimmed (my/gptel--trim-tool-results-for-retry info))
+              (new-retries (plist-get info :retries)))
+          (when (> trimmed 0)
+            (message "gptel: Trimmed %d old tool result(s) to reduce payload (retry %d, keeping %d recent)"
+                     trimmed new-retries
+                     (max 0 (- my/gptel-retry-keep-recent-tool-results new-retries))))
+          (when (>= new-retries 2)
+            (let ((reasoning-stripped (my/gptel--trim-reasoning-content info)))
+              (when (> reasoning-stripped 0)
+                (message "gptel: Stripped reasoning_content from %d assistant message(s)" reasoning-stripped)))
+            (let ((tools-removed (my/gptel--reduce-tools-for-retry info)))
+              (when (> tools-removed 0)
+                (message "gptel: Removed %d unused tool definition(s) from payload" tools-removed)))
+            (let ((repaired (my/gptel--repair-thinking-tool-call-messages info)))
+              (when (> repaired 0)
+                (message "gptel: Restored empty reasoning field on %d tool-call message(s)" repaired)))))
+        
+        ;; Schedule the FSM transition asynchronously (non-blocking exponential backoff)
+        (run-at-time delay nil
+                     (lambda (m f-orig)
+                       (funcall f-orig m 'WAIT))
+                     machine orig-fn)
+        ;; Return nil to abort the current transition to ERRS and let the timer take over
+        nil)
       (funcall orig-fn machine new-state))))
 
 (advice-add 'gptel--fsm-transition :around #'my/gptel-auto-retry)
@@ -447,12 +465,15 @@ tend to reset connections around 250-300KB."
     (MiniMax-M2\.5       . 300000)
     (deepseek-chat      . 200000)   ; 64K tokens
     (deepseek-reasoner  . 200000))
-  "Approximate max JSON byte size per model (context window × ~3.5 bytes/token,
-minus output reservation).  Used as fallback when `my/gptel-payload-byte-limit'
-would be too generous for a smaller-context model.")
+  "Approximate max JSON byte size per model.
+
+Computed as context window × ~3.5 bytes/token, minus output reservation.
+Used as fallback when `my/gptel-payload-byte-limit' would be too generous
+for a smaller-context model.")
 
 (defun my/gptel--estimate-payload-bytes (info)
   "Estimate the JSON byte size of INFO's :data payload.
+
 Uses `json-serialize' for accuracy.  Returns 0 if :data is nil or serialization fails."
   (let ((data (plist-get info :data)))
     (if data

@@ -2110,6 +2110,105 @@ Returns list of synthesis candidates."
       (message "[mementum] Synthesis candidates found: %d" (length candidates))))
   (message "[mementum] Weekly maintenance complete."))
 
+;;; A/B Testing Framework
+
+(defvar gptel-ab-test--variants
+  '((:lite-no-stream
+     :preset "lite-executor"
+     :stream nil
+     :description "lite-executor (4 tools), no streaming")
+    (:full-no-stream
+     :preset "executor"
+     :stream nil
+     :description "executor (27 tools), no streaming")
+    (:full-stream
+     :preset "executor"
+     :stream t
+     :description "executor (27 tools), with streaming"))
+  "A/B test variants for executor configuration.")
+
+(defvar gptel-ab-test--results nil
+  "Results from A/B tests.")
+
+(defun gptel-ab-test-run (prompt &optional callback)
+  "Run A/B test comparing executor variants with PROMPT.
+CALLBACK receives results plist."
+  (interactive "sPrompt: ")
+  (let ((results '())
+        (start-time (float-time)))
+    (dolist (variant gptel-ab-test--variants)
+      (let* ((variant-name (car variant))
+             (preset (plist-get (cdr variant) :preset))
+             (stream (plist-get (cdr variant) :stream))
+             (desc (plist-get (cdr variant) :description))
+             (result-start (float-time)))
+        (message "[A/B] Testing %s: %s" variant-name desc)
+        (condition-case err
+            (let ((output (gptel-ab-test--run-single preset stream prompt)))
+              (push (list :variant variant-name
+                          :success t
+                          :duration (- (float-time) result-start)
+                          :output-len (length output)
+                          :error nil)
+                    results))
+          (error
+           (push (list :variant variant-name
+                       :success nil
+                       :duration (- (float-time) result-start)
+                       :output-len 0
+                       :error (error-message-string err))
+                 results)))))
+    (setq gptel-ab-test--results
+          (list :prompt prompt
+                :total-duration (- (float-time) start-time)
+                :results results))
+    (gptel-ab-test--display-results gptel-ab-test--results)
+    (when callback
+      (funcall callback gptel-ab-test--results))))
+
+(defun gptel-ab-test--run-single (preset stream prompt)
+  "Run single test with PRESET, STREAM setting, and PROMPT.
+Returns output string."
+  (let ((output nil)
+        (done nil))
+    (gptel-with-preset preset
+      (gptel-request prompt
+        :stream stream
+        :callback (lambda (response info)
+                    (setq output response
+                          done t))))
+    (with-timeout (120 (error "Timeout"))
+      (while (not done)
+        (sit-for 0.1)))
+    (or output (error "No response"))))
+
+(defun gptel-ab-test--display-results (results)
+  "Display A/B test RESULTS."
+  (with-output-to-temp-buffer "*A/B Test Results*"
+    (princ "=== A/B Test Results ===\n\n")
+    (princ (format "Prompt: %s\n\n" (plist-get results :prompt)))
+    (princ "| Variant | Success | Duration | Output Len | Error |\n")
+    (princ "|---------|---------|----------|------------|-------|\n")
+    (dolist (r (plist-get results :results))
+      (princ (format "| %s | %s | %.1fs | %d | %s |\n"
+                     (plist-get r :variant)
+                     (if (plist-get r :success) "✓" "✗")
+                     (plist-get r :duration)
+                     (plist-get r :output-len)
+                     (or (plist-get r :error) "-"))))
+    (princ (format "\nTotal duration: %.1fs\n" (plist-get results :total-duration)))
+    (princ "\n## Recommendation\n")
+    (let* ((successful (cl-remove-if-not (lambda (r) (plist-get r :success))
+                                         (plist-get results :results)))
+           (fastest (car (sort successful (lambda (a b)
+                                            (< (plist-get a :duration)
+                                               (plist-get b :duration)))))))
+      (if fastest
+          (princ (format "Winner: %s (%.1fs)\n"
+                         (plist-get fastest :variant)
+                         (plist-get fastest :duration)))
+        (princ "No successful variants.\n")))))
+
 (provide 'gptel-tools-agent)
 
 ;;; gptel-tools-agent.el ends here

@@ -9,8 +9,8 @@
               clojure-ts-mode compile-angel corfu-terminal diff-hl dirvish
               doom-modeline dumb-jump easysession eat eca embark-consult
               enhanced-evil-paredit evil-collection evil-surround
-              evil-visualstar exec-path-from-shell goto-chg helpful kirigami
-              magit marginalia nerd-icons-completion nerd-icons-corfu
+              evil-visualstar exec-path-from-shell goto-chg gptel helpful
+              kirigami magit marginalia nerd-icons-completion nerd-icons-corfu
               nerd-icons-dired orderless org-appear org-bullets org-download
               org-modern org-pomodoro org-ql org-roam org-transclusion ox-gfm
               ox-pandoc ox-reveal tempel treesit-auto treesit-fold undo-fu
