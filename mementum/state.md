@@ -2,50 +2,48 @@
 
 > Last session: 2026-03-24
 
-## Session: TDD Methodology Applied ✓
+## Session: Grader Subagent Fixed ✓
 
-**Key Learning:** Write tests first, then fix. Tests run in 0.5s vs 90s manual testing.
+**Bug:** Grader always fell back to local grading, never used LLM subagent.
 
-### Test Results
-
-| Test | Status | What It Verifies |
-|------|--------|------------------|
-| `grader/function-exists` | ✓ | Function defined |
-| `grader/local-grading-works` | ✓ | Fallback works |
-| `grader/model-matches-executor` | ✓ | Config consistency |
-| `grader/timeout-returns-auto-pass` | ✓ | Timeout reasonable |
-| `grader/timeout-wrapper-falls-back-cleanly` | ✓ | Auto-pass fallback |
-
-### Discovery
-
-Tests revealed grader IS working, but falling back to local grading (4/6 = 66%).
-The subagent call path works, but agents may not be loaded.
-
-### λ tdd
+### Root Cause
 
 ```
-λ fix(bug). test → red → green → commit
-λ verify. emacs --batch -l ert -l test.el --eval "(ert-run-tests-batch-and-exit)"
-λ always. test_first > trial_and_error
+gptel-tools-agent.el → no require gptel-agent → gptel-agent--task undefined
+                                                   ↓
+                                        (fboundp 'gptel-agent--task) → nil
+                                                   ↓
+                                        local grading fallback
 ```
 
-### Files Created
+### Fixes
 
-| File | Purpose |
-|------|---------|
-| `tests/test-grader-subagent.el` | TDD test suite |
-| `mementum/memories/tdd-first-methodology.md` | This learning |
+| File | Change |
+|------|--------|
+| `gptel-tools-agent.el` | Added `(require 'gptel-agent)` at top |
+| `gptel-benchmark-subagent.el` | Parse JSON format from grader |
+| `tests/test-grader-subagent.el` | 8 TDD tests, all pass |
+
+### Verification
+
+```
+:gptel-agent-loaded t
+:gptel-agent--agents-count 13
+:grader-model "qwen3.5-plus" = :executor-model
+```
 
 ### Run Tests
 
 ```bash
-emacs --batch -Q -L . -L lisp -L lisp/modules -L tests \
-  -l ert -l tests/test-grader-subagent.el \
-  --eval "(ert-run-tests-batch-and-exit)"
+./scripts/run-tests.sh grader
 ```
 
 ---
 
-## Previous: Autonomous Research Agent Test ✓
+## λ Summary
 
-Executor works, grader fallback verified. Next: investigate why subagents fall back to local grading.
+```
+λ tdd. test_first > trial_and_error
+λ debug. test → red → trace → fix → green
+λ verify. 8/8 tests pass
+```
