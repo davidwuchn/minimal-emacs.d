@@ -129,15 +129,50 @@ Each experiment goes through:
 | 2. Implement | `code` | Run agent with guided prompt (reads git history + analyzer output) |
 | 3. Validate | `grader` | Check hypothesis clarity, minimal changes. LLM decides if quality sufficient |
 | 4. Benchmark | — | Run verify-nucleus.sh + Eight Keys scoring |
-| 5. Decide | `comparator` | Compare before/after, provide reasoning for keep/discard |
+| 5. Quality | — | Calculate code quality score (docstring coverage) |
+| 6. Decide | `comparator` | Compare before/after, provide reasoning for keep/discard |
+
+### Decision Logic
+
+The decision uses a combined score:
+
+```
+combined = 70% * grader_score + 30% * code_quality_score
+```
+
+This rewards improvements that:
+- Pass grader validation (hypothesis, minimal changes)
+- Improve code quality (docstrings, clarity)
+
+### Code Quality Scoring
+
+```elisp
+(gptel-benchmark--code-quality-score code)
+;; => 0.0-1.0 (docstring coverage)
+```
+
+- 1.0 = all functions have docstrings
+- 0.5 = half of functions have docstrings
+- 0.0 = no functions have docstrings
+
+### LLM Degradation Detection
+
+```elisp
+(gptel-benchmark--detect-llm-degradation response expected-keywords)
+;; => (:degraded-p t :reason "I apologize" :score 0.67)
+```
+
+Detects:
+- Forbidden keywords (apologies, AI self-reference)
+- Off-topic responses (missing expected keywords)
 
 ## TSV Format (Explainable Results)
 
 ```
-experiment_id  target  hypothesis           score_before  score_after  delta   decision   duration  grader_quality  grader_reason           comparator_reason                    analyzer_patterns
-001            retry   add caching          0.72          0.78         +0.06   kept       842       85              "Hypothesis clear"      "KEEP - improvement"                  "caching pattern"
-002            retry   simplify error       0.78          0.75         -0.03   discarded  603       70              "Larger than ideal"     "DISCARD - regression"                "simplification (1/2)"
-003            retry   lazy initialize      0.78          0.81         +0.03   kept       915       90              "Excellent hypothesis"  "KEEP - better performance"           "caching (3/3), lazy-init"
+experiment_id  target  hypothesis  score_before  score_after  code_quality  delta  decision  duration  grader_quality  grader_reason  comparator_reason  analyzer_patterns
+001            retry   add caching  0.72         0.78         0.85          +0.06  kept      842       85              "Hypothesis clear"  "KEEP - improvement"  "caching pattern"
+002            retry   simplify err 0.78         0.75         0.50          -0.03  discarded 603       70              "Larger than ideal"  "DISCARD - regression"  "simplification (1/2)"
+003            retry   lazy init    0.78         0.81         1.00          +0.03  kept      915       90              "Excellent hypothesis"  "KEEP - better performance"  "caching (3/3), lazy-init"
 ```
 
 ## Dynamic Stop Condition
@@ -194,11 +229,33 @@ git cherry-pick <sha>
 | `gptel-auto-experiment-run` | Single experiment with full subagent pipeline |
 | `gptel-auto-experiment-analyze` | Pattern detection from previous experiments |
 | `gptel-auto-experiment-grade` | Validate experiment quality (LLM threshold) |
-| `gptel-auto-experiment-decide` | Compare before/after, decide keep/discard |
+| `gptel-auto-experiment-decide` | Compare before/after, decide keep/discard (70% grader + 30% quality) |
+| `gptel-auto-experiment-should-stop-p` | Check stop condition (no-improvement threshold) |
+| `gptel-auto-experiment--extract-hypothesis` | Parse hypothesis from output |
+| `gptel-auto-experiment--summarize` | Truncate hypothesis to 6 words |
+| `gptel-auto-experiment--code-quality-score` | Calculate docstring coverage |
 | `gptel-auto-experiment-log-tsv` | Log with explainable columns |
 | `gptel-auto-workflow-metabolize` | Synthesize results, update skills |
 | `gptel-auto-workflow-update-target-skill` | Update target skill after experiment |
 | `gptel-auto-workflow-update-mutation-skill` | Update mutation skill after experiment |
+
+### Subagent Functions
+
+| Function | Purpose |
+|----------|---------|
+| `gptel-benchmark-grade` | Grade output against expected/forbidden behaviors |
+| `gptel-benchmark-analyze` | Detect patterns, issues, recommendations |
+| `gptel-benchmark-compare` | A/B comparison with winner/reasoning |
+| `gptel-benchmark-execute` | Apply changes to target |
+| `gptel-benchmark-review` | Review code quality |
+| `gptel-benchmark-explore` | Explore codebase |
+
+### Quality Functions
+
+| Function | Purpose |
+|----------|---------|
+| `gptel-benchmark--code-quality-score` | Score docstring coverage (0.0-1.0) |
+| `gptel-benchmark--detect-llm-degradation` | Detect off-topic/repetition/loops |
 
 ### Mementum Functions
 
@@ -785,6 +842,6 @@ Logs: `var/tmp/cron/*.log`
 
 ---
 
-**Document Version:** 1.2  
-**Last Updated:** 2026-03-23  
-**Changes:** Added Mementum Optimization section
+**Document Version:** 1.3  
+**Last Updated:** 2026-03-24  
+**Changes:** Added code quality scoring, LLM degradation detection, updated decision logic (70% grader + 30% quality), updated TSV format with code_quality column

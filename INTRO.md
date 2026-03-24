@@ -196,6 +196,23 @@ instead of hardcoding provider-specific values.
 
 Phased autonomous agent for optimization experiments with auto-evolution.
 
+### Pipeline
+
+```
+worktree → analyzer → executor → grader → benchmark → code-quality → decide
+```
+
+Decision logic: **70% grader + 30% code quality**
+
+### Features
+
+| Feature | Purpose |
+|---------|---------|
+| **Code Quality** | Docstring coverage scoring (0.0-1.0) |
+| **LLM Degradation** | Detect off-topic, apologies, AI self-reference |
+| **Dynamic Stop** | Stop after N consecutive no-improvements |
+| **TSV Logging** | Explainable results with code_quality column |
+
 ### Usage
 
 ```
