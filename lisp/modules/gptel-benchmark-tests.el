@@ -373,3 +373,56 @@
   (let* ((output "This should work properly. Let me handle this appropriately.")
          (violations (gptel-benchmark-eight-keys-violations output)))
     (should (listp violations))))
+
+;;; New anti-pattern detection tests
+
+(ert-deftest gptel-benchmark-test-feedback-loop-stagnation ()
+  "Test detection of feedback loop stagnation."
+  (let* ((results (list :correction-count 5 :improvement-count 0))
+         (detected (gptel-benchmark-detect-anti-patterns results)))
+    (should (cl-find 'feedback-loop-stagnation detected :key (lambda (x) (plist-get x :pattern))))))
+
+(ert-deftest gptel-benchmark-test-memory-pollution ()
+  "Test detection of memory pollution."
+  (let* ((results (list :avg-phi 0.2))
+         (detected (gptel-benchmark-detect-anti-patterns results)))
+    (should (cl-find 'memory-pollution detected :key (lambda (x) (plist-get x :pattern))))))
+
+(ert-deftest gptel-benchmark-test-capability-regression ()
+  "Test detection of capability regression."
+  (let* ((results (list :previous-capabilities 3 :current-capabilities 2))
+         (detected (gptel-benchmark-detect-anti-patterns results)))
+    (should (cl-find 'capability-regression detected :key (lambda (x) (plist-get x :pattern))))))
+
+;;; Emergence rate tracking tests
+
+(ert-deftest gptel-benchmark-test-emergence-rate-zero ()
+  "Test emergence rate with no activity."
+  (setq gptel-benchmark-evolution-state
+        (list :cycle 0 :capabilities '() :ai-complete-p nil :last-mutation nil
+              :corrections 0 :emergences 0 :emergence-history '()))
+  (should (= 0.0 (gptel-benchmark-evolution-emergence-rate))))
+
+(ert-deftest gptel-benchmark-test-emergence-rate-growing ()
+  "Test emergence rate indicates growth."
+  (setq gptel-benchmark-evolution-state
+        (list :cycle 10 :capabilities '(interface capability) :ai-complete-p nil :last-mutation nil
+              :corrections 2 :emergences 5 :emergence-history '()))
+  (should (> (gptel-benchmark-evolution-emergence-rate) 1.0)))
+
+(ert-deftest gptel-benchmark-test-emergence-rate-maintenance ()
+  "Test emergence rate indicates maintenance mode."
+  (setq gptel-benchmark-evolution-state
+        (list :cycle 10 :capabilities '(interface) :ai-complete-p nil :last-mutation nil
+              :corrections 5 :emergences 2 :emergence-history '()))
+  (should (< (gptel-benchmark-evolution-emergence-rate) 1.0)))
+
+(ert-deftest gptel-benchmark-test-status-report ()
+  "Test evolution status report."
+  (setq gptel-benchmark-evolution-state
+        (list :cycle 5 :capabilities '(interface) :ai-complete-p nil :last-mutation 'self-improve
+              :corrections 2 :emergences 1 :emergence-history '((5 . interface))))
+  (let ((report (gptel-benchmark-evolution-status-report)))
+    (should (= 5 (plist-get report :cycle)))
+    (should (eq 'maintenance (plist-get report :growth-mode)))
+    (should (not (plist-get report :ai-complete)))))

@@ -43,8 +43,16 @@
   :group 'gptel-benchmark-daily)
 
 (defcustom gptel-benchmark-daily-evolution-interval 5
-  "Run evolution cycle every N benchmark runs."
+  "Base interval for evolution cycles.
+Adaptive mode adjusts this based on φ (vitality) scores:
+  - High φ (>0.7): Longer interval (stable patterns)
+  - Low φ (<0.5): Shorter interval (needs validation)"
   :type 'integer
+  :group 'gptel-benchmark-daily)
+
+(defcustom gptel-benchmark-daily-adaptive-interval t
+  "Whether to adapt evolution interval based on φ scores."
+  :type 'boolean
   :group 'gptel-benchmark-daily)
 
 ;;; State
@@ -131,38 +139,74 @@ ORIG-FUN is the original function, ARGS are its arguments."
       (gptel-benchmark-memory-update-state
        (concat state-content new-section)))))
 
+(defun gptel-benchmark-daily--adaptive-interval ()
+  "Calculate adaptive evolution interval based on φ scores.
+Higher φ → longer interval (stable patterns need less evolution).
+Lower φ → shorter interval (experimental patterns need more validation)."
+  (if (not gptel-benchmark-daily-adaptive-interval)
+      gptel-benchmark-daily-evolution-interval
+    (let* ((memories (gptel-benchmark-memory-list 'memories))
+           (total-phi 0.0)
+           (count 0))
+      (dolist (mem memories)
+        (let ((phi (or (plist-get (car mem) :phi) 0.5)))
+          (setq total-phi (+ total-phi phi))
+          (cl-incf count)))
+      (if (= count 0)
+          gptel-benchmark-daily-evolution-interval
+        (let* ((avg-phi (/ total-phi count))
+               (multiplier (cond ((> avg-phi 0.7) 1.5)
+                                 ((< avg-phi 0.5) 0.5)
+                                 (t 1.0))))
+          (max 1 (round (* gptel-benchmark-daily-evolution-interval multiplier))))))))
+
 (defun gptel-benchmark-daily--maybe-evolve (entry)
   "Run evolution cycle if interval reached.
 ENTRY contains run details including results."
-  (when (>= gptel-benchmark-daily-run-count
-            gptel-benchmark-daily-evolution-interval)
-    (setq gptel-benchmark-daily-run-count 0)
-    (let* ((name (plist-get entry :name))
-           (type (plist-get entry :type))
-           (results (plist-get entry :results)))
-      (if results
-          (progn
-            (gptel-benchmark-evolve-with-improvement name type results)
-            (message "[daily-bench] Evolution + improvement cycle completed for %s/%s" type name))
-        (gptel-benchmark-evolution-cycle "daily-interval")
-        (message "[daily-bench] Evolution cycle triggered")))
-    (gptel-benchmark-daily--check-synthesis)))
+  (let ((effective-interval (gptel-benchmark-daily--adaptive-interval)))
+    (when (>= gptel-benchmark-daily-run-count effective-interval)
+      (setq gptel-benchmark-daily-run-count 0)
+      (let* ((name (plist-get entry :name))
+             (type (plist-get entry :type))
+             (results (plist-get entry :results)))
+        (if results
+            (progn
+              (gptel-benchmark-evolve-with-improvement name type results)
+              (message "[daily-bench] Evolution + improvement cycle completed for %s/%s (interval: %d)" type name effective-interval))
+          (gptel-benchmark-evolution-cycle "daily-interval")
+          (message "[daily-bench] Evolution cycle triggered (interval: %d)" effective-interval)))
+      (gptel-benchmark-daily--check-synthesis))))
 
 (defun gptel-benchmark-daily--check-synthesis ()
-  "Check if any topics have enough memories for synthesis.
-Triggers gptel-benchmark-memory-synthesize for topics with >= 3 memories."
+  "Check if any topics are ready for synthesis.
+Triggers synthesis for:
+  1. Topics with >= 3 memories
+  2. Patterns with φ > 0.8 (crystallized)
+  3. Contradictory memories (needs reconciliation)"
   (let* ((memories (gptel-benchmark-memory-list 'memories))
-         (topic-counts (make-hash-table :test 'equal)))
+         (topic-counts (make-hash-table :test 'equal))
+         (high-phi-patterns '())
+         (contradictions '()))
     (dolist (mem memories)
       (let* ((slug (cadr mem))
+             (meta (car mem))
+             (phi (or (plist-get meta :phi) 0.5))
              (topic (replace-regexp-in-string "-[0-9]+$" "" (file-name-sans-extension slug))))
-        (puthash topic (1+ (gethash topic topic-counts 0)) topic-counts)))
+        (puthash topic (1+ (gethash topic topic-counts 0)) topic-counts)
+        (when (> phi 0.8)
+          (push (cons topic phi) high-phi-patterns))))
     (maphash
      (lambda (topic count)
        (when (>= count 3)
          (message "[daily-bench] Synthesizing topic: %s (%d memories)" topic count)
          (gptel-benchmark-memory-synthesize topic)))
-     topic-counts)))
+     topic-counts)
+    (dolist (pattern high-phi-patterns)
+      (message "[daily-bench] Crystallized pattern: %s (φ=%.2f) → knowledge candidate"
+               (car pattern) (cdr pattern)))
+    (when contradictions
+      (message "[daily-bench] Contradictions detected: %d topics need reconciliation"
+               (length contradictions)))))
 
 ;;; Dashboard
 

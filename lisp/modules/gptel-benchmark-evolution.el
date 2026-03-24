@@ -62,8 +62,11 @@
   (list :cycle 0
         :capabilities '()
         :ai-complete-p nil
-        :last-mutation nil)
-  "Current evolution state.")
+        :last-mutation nil
+        :corrections 0
+        :emergences 0
+        :emergence-history '())
+  "Current evolution state with capability tracking.")
 
 ;;; 9 First Principles (Evolution Drivers)
 
@@ -203,12 +206,22 @@ This becomes input for next cycle."
 ;;; Feed Forward
 
 (defun gptel-benchmark-evolution-feed-forward (output)
-  "Feed OUTPUT forward to next cycle.
+  "Feed OUTPUT forward to next cycle with structured metadata.
 Implements: output → input transformation."
-  (gptel-benchmark-memory-update-state
-   (format "Evolution: %s\n\nLast mutation: %s"
-           (format-time-string "%Y-%m-%dT%H:%M:%S")
-           output)))
+  (let* ((status (gptel-benchmark-evolution-status-report))
+         (metadata (format "## Evolution State\n\n- **Cycle**: %d\n- **Principle**: %s\n- **Capabilities**: %d/5\n- **Emergence Rate**: %.2f (%s)\n- **Corrections**: %d | **Emergences**: %d\n"
+                          (plist-get status :cycle)
+                          (plist-get gptel-benchmark-evolution-state :last-mutation)
+                          (length (plist-get status :capabilities))
+                          (plist-get status :emergence-rate)
+                          (plist-get status :growth-mode)
+                          (plist-get status :corrections)
+                          (plist-get status :emergences))))
+    (gptel-benchmark-memory-update-state
+     (format "%s\n\n## Last Mutation\n\n%s\n\n## Timestamp\n\n%s"
+             metadata
+             output
+             (format-time-string "%Y-%m-%dT%H:%M:%S")))))
 
 ;;; Capability Emergence
 
@@ -216,32 +229,73 @@ Implements: output → input transformation."
   "Check if new capabilities have emerged.
 Engine + Query + Graph + Introspection + History + Knowledge + Memory = SYSTEM"
   (let ((cycle (plist-get gptel-benchmark-evolution-state :cycle))
-        (capabilities (plist-get gptel-benchmark-evolution-state :capabilities)))
-    ;; Capabilities emerge after threshold cycles
+        (capabilities (plist-get gptel-benchmark-evolution-state :capabilities))
+        (emergences (plist-get gptel-benchmark-evolution-state :emergences))
+        (emergence-history (plist-get gptel-benchmark-evolution-state :emergence-history)))
     (when (and (>= cycle gptel-benchmark-evolution-cycle-threshold)
                (< (length capabilities) 7))
-      ;; Check for each capability
       (when (and (>= cycle (* 1 gptel-benchmark-evolution-cycle-threshold))
                  (not (memq 'interface capabilities)))
         (push 'interface capabilities)
+        (cl-incf emergences)
+        (push (cons cycle 'interface) emergence-history)
         (message "[evolution] Capability emerged: Interface (Engine + Query)"))
       (when (and (>= cycle (* 2 gptel-benchmark-evolution-cycle-threshold))
                  (not (memq 'capability capabilities)))
         (push 'capability capabilities)
+        (cl-incf emergences)
+        (push (cons cycle 'capability) emergence-history)
         (message "[evolution] Capability emerged: Capability (Engine + Graph)"))
       (when (and (>= cycle (* 3 gptel-benchmark-evolution-cycle-threshold))
                  (not (memq 'self-awareness capabilities)))
         (push 'self-awareness capabilities)
+        (cl-incf emergences)
+        (push (cons cycle 'self-awareness) emergence-history)
         (message "[evolution] Capability emerged: Self-awareness (Engine + Introspection)"))
       (when (and (>= cycle (* 4 gptel-benchmark-evolution-cycle-threshold))
                  (not (memq 'extension capabilities)))
         (push 'extension capabilities)
+        (cl-incf emergences)
+        (push (cons cycle 'extension) emergence-history)
         (message "[evolution] Capability emerged: Extension (Graph + API)"))
       (when (and (>= cycle (* 5 gptel-benchmark-evolution-cycle-threshold))
                  (not (memq 'memory capabilities)))
         (push 'memory capabilities)
+        (cl-incf emergences)
+        (push (cons cycle 'memory) emergence-history)
         (message "[evolution] Capability emerged: Memory (Query + History + Knowledge)")))
-    (setf (plist-get gptel-benchmark-evolution-state :capabilities) capabilities)))
+    (setf (plist-get gptel-benchmark-evolution-state :capabilities) capabilities)
+    (setf (plist-get gptel-benchmark-evolution-state :emergences) emergences)
+    (setf (plist-get gptel-benchmark-evolution-state :emergence-history) emergence-history)))
+
+(defun gptel-benchmark-evolution-emergence-rate ()
+  "Calculate capability emergence rate.
+Returns ratio of emergences to corrections.
+Rate > 1.0: growing (good)
+Rate < 1.0: maintenance mode (stagnating)
+Rate = 0: no growth."
+  (let ((emergences (plist-get gptel-benchmark-evolution-state :emergences))
+        (corrections (plist-get gptel-benchmark-evolution-state :corrections)))
+    (if (= corrections 0)
+        (if (> emergences 0) 1.0 0.0)
+      (/ (float emergences) (float corrections)))))
+
+(defun gptel-benchmark-evolution-track-correction ()
+  "Track that an anti-pattern correction was applied."
+  (cl-incf (plist-get gptel-benchmark-evolution-state :corrections)))
+
+(defun gptel-benchmark-evolution-status-report ()
+  "Return evolution status with emergence rate."
+  (let ((rate (gptel-benchmark-evolution-emergence-rate)))
+    (list :cycle (plist-get gptel-benchmark-evolution-state :cycle)
+          :capabilities (plist-get gptel-benchmark-evolution-state :capabilities)
+          :emergences (plist-get gptel-benchmark-evolution-state :emergences)
+          :corrections (plist-get gptel-benchmark-evolution-state :corrections)
+          :emergence-rate rate
+          :growth-mode (cond ((> rate 1.0) 'growing)
+                             ((= rate 0.0) 'stagnant)
+                             (t 'maintenance))
+          :ai-complete (plist-get gptel-benchmark-evolution-state :ai-complete-p))))
 
 (defun gptel-benchmark-evolution-check-complete ()
   "Check if AI COMPLETE has been reached.
@@ -344,7 +398,36 @@ SYSTEM + Feed Forward = AI COMPLETE"
                                (memq 'edit tools)
                                (not (memq 'read tools)))
                       'no-verification)))
-     :remedy "Apply Fire: add verification step after edits"))
+     :remedy "Apply Fire: add verification step after edits")
+    (feedback-loop-stagnation
+      :element fire
+      :controlled-by water
+      :symptom "No improvement despite repeated corrections - system not learning"
+      :detection (lambda (results)
+                   (let ((corrections (or (plist-get results :correction-count) 0))
+                         (improvements (or (plist-get results :improvement-count) 0)))
+                     (when (and (> corrections 3) (= improvements 0))
+                       'feedback-loop-stagnation)))
+      :remedy "Apply Water: review learning protocol, check pattern storage")
+    (memory-pollution
+      :element earth
+      :controlled-by wood
+      :symptom "Low-quality memories accumulating, φ scores declining"
+      :detection (lambda (results)
+                   (let ((avg-phi (or (plist-get results :avg-phi) 0.5)))
+                     (when (< avg-phi 0.3)
+                       'memory-pollution)))
+      :remedy "Apply Wood: prune low-φ memories, raise quality threshold")
+    (capability-regression
+      :element water
+      :controlled-by earth
+      :symptom "Previously emerged capabilities lost after updates"
+      :detection (lambda (results)
+                   (let ((prev-caps (or (plist-get results :previous-capabilities) 0))
+                         (curr-caps (or (plist-get results :current-capabilities) 0)))
+                     (when (< curr-caps prev-caps)
+                       'capability-regression)))
+      :remedy "Apply Earth: add capability persistence tests, version migrations"))
   "Anti-patterns mapped to 相克 (controlling cycle).
 Each anti-pattern is detected when an element is excessive.
 The controlling element provides the remedy.")
@@ -379,12 +462,16 @@ Returns list of detected anti-patterns with remedies."
 
 (defun gptel-benchmark-evolution-balance (results)
   "Balance evolution by detecting anti-patterns and applying 相克 remedies.
-Returns balance report with detected issues and recommended actions."
+Returns balance report with detected issues and recommended actions.
+Tracks corrections for emergence rate calculation."
   (let* ((anti-patterns (gptel-benchmark-detect-anti-patterns results))
          (remedies (mapcar #'gptel-benchmark-apply-anti-pattern-remedy anti-patterns)))
+    (when anti-patterns
+      (gptel-benchmark-evolution-track-correction))
     (list :anti-patterns anti-patterns
           :remedies remedies
-          :balanced-p (= 0 (length anti-patterns)))))
+          :balanced-p (= 0 (length anti-patterns))
+          :emergence-rate (gptel-benchmark-evolution-emergence-rate))))
 
 ;;; 相生 Pathway (Generating Cycle for Evolution)
 
