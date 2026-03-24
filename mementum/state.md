@@ -4,10 +4,13 @@
 
 ## Session Summary: Autonomous Research Agent Complete
 
-### Commits (30)
+### Commits (33)
 
 | Hash | Description |
 |------|-------------|
+| `77aad9e` | Experiment timeout handling memory |
+| `0e7bf41` | Experiment timeout default tests |
+| `98447af` | Final session summary with 30 commits |
 | `49b0adf` | Comparator integrated into decision |
 | `c99b3ae` | Decision uses comparator subagent when available |
 | `baf136a` | Executor, reviewer, explorer, registry tests |
@@ -76,9 +79,9 @@ gptel-auto-workflow-run
 ### Test Status
 
 ```
-grader/*               40/40 ✓
+grader/*               42/42 ✓
 retry/*                32/32 ✓
-Combined (grader+retry): 72/72 ✓
+Combined (grader+retry): 74/74 ✓
 Full suite: 1056/1136 (test isolation issues remain)
 ```
 
