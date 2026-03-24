@@ -2,43 +2,41 @@
 
 > Last session: 2026-03-24
 
-## Session: DashScope Streaming Fixed ✓
+## Session: Cron Infrastructure for Autonomous Operation ✓
 
-**Problem**: DashScope streaming returned 401 Unauthorized, then `cl-block-nil` errors.
+**What was added:**
 
-### Root Causes Found
+| Component | Description |
+|-----------|-------------|
+| `scripts/install-cron.sh` | Easy cron installation |
+| `cron.d/auto-workflow` | Updated with mementum weekly job |
+| `var/tmp/cron/` | Log directory |
+| `var/tmp/experiments/` | Results directory |
 
-| Issue | Cause | Fix |
-|-------|-------|-----|
-| 401 Unauthorized | `:header nil` override | Use `apply` to delegate all args |
-| Wrong host | Missing `:host` param | Add explicit host |
-| cl-block-nil errors | Old broken custom parser | Remove custom parser, use standard |
-| nil tool names | DashScope sends malformed calls | Merged fix-nil-tool-names |
+### Scheduled Jobs
 
-### Changes Made
+| Schedule | Function | Purpose |
+|----------|----------|---------|
+| Daily 2:00 AM | `gptel-auto-workflow-run` | Overnight optimization experiments |
+| Weekly Sun 4:00 AM | `gptel-mementum-weekly-job` | Synthesis + decay |
+| Weekly Sun 5:00 AM | `gptel-benchmark-instincts-weekly-job` | Evolution batch commit |
 
-| File | Change |
-|------|--------|
-| `lisp/modules/gptel-ext-backends.el` | Simplified to `apply #'gptel-make-openai`, added `:host` |
-| `packages/gptel/` | Merged `fix-nil-tool-names` branch |
+### Install
 
-### Verification
-
-```elisp
-(gptel-backend-host gptel--dashscope) => "coding.dashscope.aliyuncs.com"
-(gptel-backend-header gptel--dashscope) => #[...]  ; has header function
-
-;; Streaming test
-(gptel-request "Say exactly: test ok" :stream t) => "test ok" ✓
+```bash
+./scripts/install-cron.sh --dry-run   # Preview
+./scripts/install-cron.sh             # Install
 ```
 
-### Key Learnings
+### Prerequisites
 
-1. **No custom parser needed** - DashScope uses standard OpenAI SSE format
-2. **DashScope has reasoning_content** - qwen3.5-plus sends thinking blocks
-3. **Emacs caches methods** - Must restart daemon after changing generic methods
-4. **apply for delegation** - `(apply #'gptel-make-openai name args)` preserves defaults
+1. Emacs daemon running: `emacs --daemon`
+2. Targets configured in: `docs/auto-workflow-program.md`
+3. Logs: `tail -f var/tmp/cron/*.log`
 
-### Previous Session
+---
 
-**24 commits** | **Streaming fixed** | **Git submodules migrated**
+## Previous Session: DashScope Streaming Fixed ✓
+
+**Root causes found:** nil header, missing host, broken custom parser
+**Solution:** use `apply` for delegation, explicit host, standard parser
