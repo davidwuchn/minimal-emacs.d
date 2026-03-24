@@ -4,22 +4,26 @@
 
 ## Session Summary: Autonomous Research Agent Complete
 
-### Commits (10)
+### Commits (13)
 
 | Hash | Description |
 |------|-------------|
-| `974d33b` | Experiment workflow uses code quality in decision |
-| `108eba8` | Decision logic improvement documented |
-| `6131631` | Decision logic factors code quality (70% grader + 30% quality) |
+| `ce020a0` | TDD: hypothesis extraction tests |
+| `ad07e85` | Verified 49/49 tests pass |
+| `e4aef98` | surgical-edits-nested-code memory |
+| `b3a90b2` | Autonomous research agent complete |
+| `974d33b` | Experiment workflow uses code quality |
+| `108eba8` | Decision logic documented |
+| `6131631` | Decision logic factors code quality |
 | `70a84a1` | Session summary with test fixes |
 | `1a69411` | Fix test isolation issues |
 | `19e4077` | test-isolation-issue memory |
-| `156f08d` | Fix vc-git-root batch mode compatibility |
+| `156f08d` | Fix vc-git-root batch mode |
 | `117d4b3` | llm-degradation-detection memory |
 | `065a0c0` | LLM degradation detection |
-| `241b706` | TDD: code quality scoring + test coverage |
+| `241b706` | TDD: code quality scoring |
 
-### Full Pipeline Now Working
+### Full Pipeline Working
 
 ```
 gptel-auto-workflow-run
@@ -27,36 +31,33 @@ gptel-auto-workflow-run
   → executor subagent ✓
   → grader subagent ✓
   → benchmark ✓
-  → code-quality score ✓ (NEW)
+  → code-quality score ✓
   → decision ✓ (70% grader + 30% quality)
   → TSV log ✓
 ```
 
-### Key Improvements
+### New Functions
 
-1. **Decision Logic**: Combined score = 70% grader + 30% code quality
-2. **LLM Degradation**: Detects off-topic, apologies, AI self-reference
-3. **Code Quality**: Docstring coverage scoring (0.0-1.0)
-4. **Experiment Log**: Now includes `:code-quality` field
+| Function | Purpose |
+|----------|---------|
+| `gptel-benchmark--code-quality-score` | Docstring coverage (0.0-1.0) |
+| `gptel-benchmark--detect-llm-degradation` | Detect off-topic/repetition |
+| `gptel-auto-experiment--code-quality-score` | Integration with auto-experiment |
 
 ### Test Status
 
 ```
-grader/*               17/17 ✓
+grader/*               19/19 ✓
 retry/*                32/32 ✓
-Combined (grader+retry): 49/49 ✓
+Combined (grader+retry): 51/51 ✓
 Full suite: 1048/1113 (test isolation issues remain)
 ```
 
-### Files Modified
+### Key Patterns Learned
 
-| File | Change |
-|------|--------|
-| `gptel-tools-agent.el` | Decision logic, code quality integration |
-| `gptel-benchmark-subagent.el` | LLM degradation detection, code quality score |
-| `gptel-ext-retry.el` | (no changes, just tests) |
-| `gptel-ext-backends.el` | (no changes) |
-| `gptel-tools-code.el` | vc-git-root fix |
+1. **Surgical edits** - minimal changes preserve structure in nested code
+2. **TDD** - test failures reveal logic gaps
+3. **Decision logic** - 70% grader + 30% quality rewards docstrings
 
 ---
 
@@ -67,4 +68,5 @@ Full suite: 1048/1113 (test isolation issues remain)
 λ improve. decision = 70% grader + 30% quality
 λ detect. forbidden + missing_expected = degradation
 λ learn. surgical edits > large replacements
+λ verify. 51/51 tests pass
 ```
