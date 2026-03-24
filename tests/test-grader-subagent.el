@@ -307,5 +307,25 @@ Result: Tests pass."))
   (should (>= gptel-auto-experiment-no-improvement-threshold 1))
   (should (<= gptel-auto-experiment-no-improvement-threshold 10)))
 
+;;; Test 25: Should Stop Logic
+
+(ert-deftest grader/should-stop-initially-false ()
+  "Should not stop when no-improvement count is 0."
+  (require 'gptel-tools-agent)
+  (let ((gptel-auto-experiment--no-improvement-count 0))
+    (should-not (gptel-auto-experiment-should-stop-p 3))))
+
+(ert-deftest grader/should-stop-at-threshold ()
+  "Should stop when no-improvement count reaches threshold."
+  (require 'gptel-tools-agent)
+  (let ((gptel-auto-experiment--no-improvement-count 3))
+    (should (gptel-auto-experiment-should-stop-p 3))))
+
+(ert-deftest grader/should-stop-exceeds-threshold ()
+  "Should stop when no-improvement count exceeds threshold."
+  (require 'gptel-tools-agent)
+  (let ((gptel-auto-experiment--no-improvement-count 5))
+    (should (gptel-auto-experiment-should-stop-p 3))))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here
