@@ -260,5 +260,24 @@ Returns 1.0 if under max, 0.5 if over."
      (lambda (r) (setq result r)))
     (should (plist-get result :keep))))
 
+;;; Test 19: Hypothesis Extraction
+
+(ert-deftest grader/hypothesis-extraction ()
+  "Should extract hypothesis from agent output."
+  (require 'gptel-tools-agent)
+  (let ((output "HYPOTHESIS: Adding docstrings will improve maintainability.
+Implementation: Added docstrings to main functions.
+Result: Tests pass."))
+    (should (string= (gptel-auto-experiment--extract-hypothesis output)
+                     "Adding docstrings will improve maintainability."))))
+
+(ert-deftest grader/hypothesis-missing ()
+  "Should return default when no hypothesis found."
+  (require 'gptel-tools-agent)
+  (let ((output "Implementation: Added docstrings.
+Result: Tests pass."))
+    (should (string= (gptel-auto-experiment--extract-hypothesis output)
+                     "No hypothesis stated"))))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here
