@@ -50,11 +50,31 @@ gptel-auto-workflow-run
 ### Test Status
 
 ```
-grader/*               29/29 ✓
+grader/*               36/36 ✓
 retry/*                32/32 ✓
-Combined (grader+retry): 61/61 ✓
+Combined (grader+retry): 68/68 ✓
 Full suite: 1048/1119 (test isolation issues remain)
 ```
+
+### Subagent Integration
+
+| Subagent | Function | Tested |
+|----------|----------|--------|
+| grader | `gptel-benchmark-grade` | ✓ |
+| analyzer | `gptel-benchmark-analyze` | ✓ |
+| comparator | `gptel-benchmark-compare` | ✓ |
+| executor | `gptel-benchmark-execute` | (workflow) |
+
+### Workflow Functions
+
+| Function | Purpose | Tested |
+|----------|---------|--------|
+| `gptel-auto-experiment-analyze` | Pattern analysis | ✓ |
+| `gptel-auto-experiment-grade` | Quality grading | ✓ |
+| `gptel-auto-experiment-decide` | Keep/discard decision | ✓ |
+| `gptel-auto-experiment-should-stop-p` | Stop condition | ✓ |
+| `gptel-auto-experiment--extract-hypothesis` | Parse hypothesis | ✓ |
+| `gptel-auto-experiment--summarize` | Truncate text | ✓ |
 
 ### TSV Output Format
 
