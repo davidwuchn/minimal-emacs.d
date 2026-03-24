@@ -26,6 +26,7 @@ lisp/modules/*.elc
 !scripts/
 !scripts/*.sh
 !scripts/*.py
+!scripts/*.clj
 !lisp/init-org.el
 !docs/
 !docs/*.md
