@@ -327,5 +327,25 @@ Result: Tests pass."))
   (let ((gptel-auto-experiment--no-improvement-count 5))
     (should (gptel-auto-experiment-should-stop-p 3))))
 
+;;; Test 28: Summarize Function
+
+(ert-deftest grader/summarize-short-hypothesis ()
+  "Should return full hypothesis if under 6 words."
+  (require 'gptel-tools-agent)
+  (should (string= (gptel-auto-experiment--summarize "Add docstrings to functions")
+                   "Add docstrings to functions")))
+
+(ert-deftest grader/summarize-long-hypothesis ()
+  "Should truncate hypothesis to 6 words."
+  (require 'gptel-tools-agent)
+  (should (string= (gptel-auto-experiment--summarize "Adding docstrings will improve maintainability and readability of code")
+                   "Adding docstrings will improve maintainability and")))
+
+(ert-deftest grader/summarize-exactly-six-words ()
+  "Should return full hypothesis if exactly 6 words."
+  (require 'gptel-tools-agent)
+  (should (string= (gptel-auto-experiment--summarize "Add docstrings to all main functions")
+                   "Add docstrings to all main functions")))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here
