@@ -9,7 +9,7 @@
 # Logs: var/tmp/cron/
 
 SHELL=/bin/bash
-LOGDIR=~/.emacs.d/var/tmp/cron
+LOGDIR=$HOME/.emacs.d/var/tmp/cron
 
 # Ensure log directory exists
 @reboot mkdir -p $LOGDIR
