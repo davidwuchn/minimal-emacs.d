@@ -146,7 +146,7 @@
   []
   (case platform
     :macos
-    (let [result (shell {:out :string} "sh" "-c" "ifconfig | grep -B1 'inet 100\\.' | head -1 | cut -d: -f1")]
+    (let [result (shell {:out :string} "sh" "-c" "ifconfig | grep -B2 'inet 100\\.' | grep -E '^[a-z]' | head -1 | cut -d: -f1")]
       (str/trim (:out result)))
     :linux
     (let [result (shell {:out :string} "sh" "-c" "ip link show | grep -oE 'tailscale[0-9]*' | head -1")]
@@ -154,6 +154,23 @@
         "tailscale0"
         (str/trim (:out result))))
     (throw (ex-info (str "Unsupported platform: " platform) {}))))
+
+(defn cidr-to-macos-short
+  "Convert CIDR to macOS routing table short format.
+   110.240.0.0/12 -> 110.240/12
+   8.136.0.0/13 -> 8.136/13
+   103.143.16.0/22 -> 103.143.16/22"
+  [cidr]
+  (let [[network prefix] (str/split cidr #"/")
+        prefix-num (Integer/parseInt prefix)
+        octets (str/split network #"\.")
+        ;; Keep octets based on prefix length
+        keep-octets (cond
+                      (<= prefix-num 8) 1
+                      (<= prefix-num 16) 2
+                      (<= prefix-num 24) 3
+                      :else 4)]
+    (str (str/join "." (take keep-octets octets)) "/" prefix-num)))
 
 (defn prompt-sudo-password
   "Prompt user for sudo password and return it (hidden input)"
@@ -261,8 +278,9 @@
   [cidr]
   (case platform
     :macos
-    (let [result (shell {:out :string :err :string :continue true}
-                        "sh" "-c" (str "netstat -rn | grep '^" cidr "' | head -1"))]
+    (let [short-cidr (cidr-to-macos-short cidr)
+          result (shell {:out :string :err :string :continue true}
+                        "sh" "-c" (str "netstat -rn | grep '^" short-cidr "' | head -1"))]
       (:out result))
     :linux
     (let [result (shell {:out :string :err :string :continue true}
