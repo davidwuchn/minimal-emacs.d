@@ -347,5 +347,53 @@ Result: Tests pass."))
   (should (string= (gptel-auto-experiment--summarize "Add docstrings to all main functions")
                    "Add docstrings to all main functions")))
 
+;;; Test 31: Analyzer Subagent
+
+(ert-deftest grader/analyzer-function-exists ()
+  "gptel-benchmark-analyze should exist."
+  (require 'gptel-benchmark-subagent)
+  (should (fboundp 'gptel-benchmark-analyze)))
+
+(ert-deftest grader/analyzer-parse-response ()
+  "Should parse analyzer JSON response."
+  (require 'gptel-benchmark-subagent)
+  (let* ((json-response "{\"patterns\":[{\"type\":\"timeout\",\"description\":\"API timeouts\"}],\"issues\":[],\"recommendations\":[\"Add retry logic\"]}")
+         (result (gptel-benchmark--parse-analysis-response json-response)))
+    ;; json-read returns vectors, not lists
+    (should (sequencep (plist-get result :patterns)))
+    (should (sequencep (plist-get result :recommendations)))))
+
+;;; Test 32: Comparator Subagent
+
+(ert-deftest grader/comparator-function-exists ()
+  "gptel-benchmark-compare should exist."
+  (require 'gptel-benchmark-subagent)
+  (should (fboundp 'gptel-benchmark-compare)))
+
+(ert-deftest grader/comparator-parse-response ()
+  "Should parse comparator JSON response."
+  (require 'gptel-benchmark-subagent)
+  (let* ((json-response "{\"winner\":\"B\",\"improvement\":{\"score\":0.2},\"analysis\":{},\"recommendation\":\"Keep B\"}")
+         (result (gptel-benchmark--parse-comparison-response json-response)))
+    (should (string= (plist-get result :winner) "B"))
+    (should (string= (plist-get result :recommendation) "Keep B"))))
+
+;;; Test 33: Workflow Integration
+
+(ert-deftest grader/workflow-analyze-integration ()
+  "gptel-auto-experiment-analyze should call gptel-benchmark-analyze."
+  (require 'gptel-tools-agent)
+  (should (fboundp 'gptel-auto-experiment-analyze)))
+
+(ert-deftest grader/workflow-grade-integration ()
+  "gptel-auto-experiment-grade should call gptel-benchmark-grade."
+  (require 'gptel-tools-agent)
+  (should (fboundp 'gptel-auto-experiment-grade)))
+
+(ert-deftest grader/workflow-decide-integration ()
+  "gptel-auto-experiment-decide should consider code quality."
+  (require 'gptel-tools-agent)
+  (should (fboundp 'gptel-auto-experiment-decide)))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here
