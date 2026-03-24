@@ -669,6 +669,13 @@ Should be >= curl timeout (300s) + retry delays."
   :type 'boolean
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-experiment-lite-mode nil
+  "Use lite-executor (4 tools) instead of executor (27 tools).
+Lite mode is much faster on slow APIs like DashScope because
+the tool definitions payload is much smaller."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
 (defcustom gptel-auto-experiment-mock-mode nil
   "When non-nil, mock subagent responses for testing.
 Useful for testing callback chain without API calls."
@@ -1181,7 +1188,7 @@ HYPOTHESIS: [your hypothesis here]"
                                 (gptel-auto-workflow-delete-worktree)
                                 (message "[auto-exp] Experiment %d COMPLETE" experiment-id)
                                 (funcall callback exp-result))))))))))))
-            "executor"
+            (if gptel-auto-experiment-lite-mode "lite-executor" "executor")
             (format "Experiment %d: optimize %s" experiment-id target)
             prompt
             nil "false" nil))))))))
