@@ -2113,19 +2113,13 @@ Returns list of synthesis candidates."
 ;;; A/B Testing Framework
 
 (defvar gptel-ab-test--variants
-  '((:lite-no-stream
-     :preset "lite-executor"
-     :stream nil
-     :description "lite-executor (4 tools), no streaming")
-    (:full-no-stream
-     :preset "executor"
-     :stream nil
-     :description "executor (27 tools), no streaming")
-    (:full-stream
-     :preset "executor"
-     :stream t
-     :description "executor (27 tools), with streaming"))
-  "A/B test variants for executor configuration.")
+  '((:lite-executor
+     :agent-type "lite-executor"
+     :description "lite-executor (4 tools, no stream, 10 steps)")
+    (:executor
+     :agent-type "executor"
+     :description "executor (27 tools, streaming)"))
+  "A/B test variants for executor comparison.")
 
 (defvar gptel-ab-test--results nil
   "Results from A/B tests.")
@@ -2138,17 +2132,28 @@ CALLBACK receives results plist."
         (start-time (float-time)))
     (dolist (variant gptel-ab-test--variants)
       (let* ((variant-name (car variant))
-             (preset (plist-get (cdr variant) :preset))
-             (stream (plist-get (cdr variant) :stream))
+             (agent-type (plist-get (cdr variant) :agent-type))
              (desc (plist-get (cdr variant) :description))
-             (result-start (float-time)))
+             (result-start (float-time))
+             (output nil)
+             (done nil))
         (message "[A/B] Testing %s: %s" variant-name desc)
         (condition-case err
-            (let ((output (gptel-ab-test--run-single preset stream prompt)))
+            (progn
+              (my/gptel-agent--task-override
+               (lambda (response)
+                 (setq output response
+                       done t))
+               agent-type
+               "A/B test"
+               prompt)
+              (with-timeout (120 (error "Timeout"))
+                (while (not done)
+                  (sit-for 0.1)))
               (push (list :variant variant-name
                           :success t
                           :duration (- (float-time) result-start)
-                          :output-len (length output)
+                          :output-len (length (or output ""))
                           :error nil)
                     results))
           (error
@@ -2165,22 +2170,6 @@ CALLBACK receives results plist."
     (gptel-ab-test--display-results gptel-ab-test--results)
     (when callback
       (funcall callback gptel-ab-test--results))))
-
-(defun gptel-ab-test--run-single (preset stream prompt)
-  "Run single test with PRESET, STREAM setting, and PROMPT.
-Returns output string."
-  (let ((output nil)
-        (done nil))
-    (gptel-with-preset preset
-      (gptel-request prompt
-        :stream stream
-        :callback (lambda (response info)
-                    (setq output response
-                          done t))))
-    (with-timeout (120 (error "Timeout"))
-      (while (not done)
-        (sit-for 0.1)))
-    (or output (error "No response"))))
 
 (defun gptel-ab-test--display-results (results)
   "Display A/B test RESULTS."
