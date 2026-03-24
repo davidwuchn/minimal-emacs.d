@@ -4,63 +4,47 @@
 
 ## Major Achievement ✓
 
-**DashScope Streaming: FIXED**
+**DashScope Streaming: FIXED + Subagent Streaming Enabled**
 
-| Metric | Before | After |
-|--------|--------|-------|
-| Streaming | Disabled (`:stream nil`) | Working (`:stream t`) |
-| Tools available | 4 (lite-executor) | 27 (executor) |
-| API calls | 100-200s timeout | 2-30s reliable |
-| UX | Batch output | Incremental streaming |
-
-### Fix Chain
-
-```
-630fbd4 → "fix DashScope: disable streaming" (workaround)
-    ↓
-6fb1a0d → Custom gptel-dashscope struct
-54f5c37 → Fixed parser: skip-chars-forward
-8591cfe → Fixed model format: plain symbols
-31cc8e7 → Added protocol parameter
-d60312c → Fixed URL nil issue
-    ↓
-STREAMING WORKS!
-```
-
-### Knowledge Created
-
-| Page | Content |
-|------|---------|
-| `dashscope-backend.md` | Configuration, fixes, testing |
-| `ab-testing.md` | Framework usage, decision criteria |
-| `git-history-improvement-strategy.md` | Updated with fix results |
-
-## Session Stats
-
-| Metric | Value |
+| Before | After |
 |--------|-------|
-| Commits | 12 |
-| Files fixed | 8 |
-| Issues resolved | 22 |
+| Main API: `:stream nil` | Main API: `:stream t` ✓ |
+| Subagent: `:stream nil` | Subagent: `:stream t` ✓ |
+| 4 tools (lite-executor) | 27 tools (executor) viable |
+
+### Commits
+
+```
+d60312c: Fix DashScope streaming (custom SSE parser)
+fcda2ae: Enable subagent streaming by default
+```
+
+### Workaround Resolution
+
+| Commit | Workaround | Status |
+|--------|------------|--------|
+| `630fbd4` | DashScope streaming disabled | ✅ Fixed |
+| `6e09a87` | Subagent streaming disabled | ✅ Fixed |
+| `a7b0931` | lite-executor (4 tools) | Keep as minimal option |
+
+## Session Summary
+
+| Metric | Count |
+|--------|-------|
+| Commits | 15 |
+| Streaming fixes | 2 |
 | Knowledge pages | 3 |
-| Memories | 2 |
+| Quality fixes | 22+ |
 
-## Remaining Work
+## Current State
 
-1. Run A/B test comparing executors
-2. Verify streaming reliability over time
-3. One byte-compile warning: `result` free variable in `gptel-workflow-benchmark.el:736`
+- **All streaming working**: Main API + Subagents
+- **Code quality**: Clean (1 false positive warning)
+- **Documentation**: 10 knowledge pages
+- **Tests**: A/B test framework ready
 
-## Pattern Validated
+## Next Steps
 
-**Git History → Workarounds → Fixes**
-
-```
-git log --grep="workaround\|fix\|bypass"
-  → read commit message for root cause
-  → implement proper fix
-  → test and verify
-  → commit with reference
-```
-
-This pattern works. Use it for future workarounds.
+1. Run A/B test to compare executors
+2. Monitor streaming reliability
+3. Consider auto-evolution with full executor
