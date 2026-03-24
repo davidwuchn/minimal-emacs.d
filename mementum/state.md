@@ -50,20 +50,22 @@ gptel-auto-workflow-run
 ### Test Status
 
 ```
-grader/*               36/36 ✓
+grader/*               40/40 ✓
 retry/*                32/32 ✓
-Combined (grader+retry): 68/68 ✓
-Full suite: 1048/1119 (test isolation issues remain)
+Combined (grader+retry): 72/72 ✓
+Full suite: 1048/1136 (test isolation issues remain)
 ```
 
 ### Subagent Integration
 
-| Subagent | Function | Tested |
-|----------|----------|--------|
-| grader | `gptel-benchmark-grade` | ✓ |
-| analyzer | `gptel-benchmark-analyze` | ✓ |
-| comparator | `gptel-benchmark-compare` | ✓ |
-| executor | `gptel-benchmark-execute` | (workflow) |
+| Subagent | Function | Used In | Tested |
+|----------|----------|---------|--------|
+| grader | `gptel-benchmark-grade` | `gptel-auto-experiment-grade` | ✓ |
+| analyzer | `gptel-benchmark-analyze` | `gptel-auto-experiment-analyze` | ✓ |
+| comparator | `gptel-benchmark-compare` | `gptel-auto-experiment-decide` | ✓ |
+| executor | `gptel-benchmark-execute` | (future) | ✓ |
+| reviewer | `gptel-benchmark-review` | (future) | ✓ |
+| explorer | `gptel-benchmark-explore` | (future) | ✓ |
 
 ### Workflow Functions
 
