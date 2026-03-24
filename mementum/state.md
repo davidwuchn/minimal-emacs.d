@@ -2,56 +2,57 @@
 
 > Last session: 2026-03-24
 
-## Streaming Verified Working ✅
-
-**Direct API test results:**
-
-| Test | Duration | Output |
-|------|----------|--------|
-| "Reply with: TEST123" | ~5s | "TEST123" ✓ |
-| "Count 1 to 5" | 6.3s | "1\n2\n3\n4\n5" ✓ |
-
-### Test Code
-
-```elisp
-(let ((gptel-backend gptel--dashscope)
-      (gptel-model 'qwen3.5-plus))
-  (gptel-request "Reply with exactly: TEST123"
-    :stream t
-    :callback (lambda (r info) (message "Result: %S" r))))
-;; => "TEST123"
-```
-
 ## Session Complete ✓
 
-**21 commits** | **Streaming fixed** | **Verified working**
+**24 commits** | **Streaming fixed** | **Git submodules migrated**
 
-### Achievements
+### Major Changes
 
-| Fix | Status | Impact |
-|-----|--------|--------|
-| DashScope streaming | ✅ Fixed & Verified | 27 tools viable |
-| Subagent streaming | ✅ Enabled | Incremental display |
-| Code quality | ✅ 22+ fixes | Cleaner codebase |
-| A/B test framework | ✅ Added | Data-driven decisions |
+| Change | Status |
+|--------|--------|
+| DashScope streaming | ✅ Fixed & verified |
+| Subagent streaming | ✅ Enabled |
+| Fork packages | ✅ Git submodules |
 
-### Commits Summary
+### Git Submodules Migration
 
-| Category | Count |
-|----------|-------|
+Moved fork packages from script-based clones to git submodules:
+
+```
+packages/
+├── gptel/        → davidwuchn/gptel (master)
+├── gptel-agent/  → davidwuchn/gptel-agent (master)
+└── ai-code/      → davidwuchn/ai-code-interface.el (main)
+```
+
+**Benefits:**
+- Exact commits tracked in `.gitmodules`
+- `git clone --recursive` for full setup
+- `git submodule update --remote` for updates
+
+**Commands:**
+```bash
+# Fresh clone
+git clone --recursive <repo>
+
+# Update packages
+./scripts/setup-packages.sh --update
+```
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `.gitignore` | Added `!packages/` whitelist |
+| `.gitmodules` | New: tracks submodule commits |
+| `pre-early-init.el` | Added packages/ to load-path |
+| `scripts/setup-packages.sh` | Rewritten for submodules |
+
+### Session Stats
+
+| Metric | Count |
+|--------|-------|
+| Total commits | 24 |
 | Streaming fixes | 8 |
-| Code quality | 3 |
-| Knowledge/docs | 4 |
-| State updates | 6 |
-
-### Known Limitation
-
-A/B test framework requires interactive Emacs session (not `emacsclient`) due to async callback handling.
-
-### Pattern Validated ✓
-
-**Git History → Workarounds → Fixes**
-
-Successfully resolved:
-1. DashScope streaming (630fbd4 → d60312c)
-2. Subagent streaming (6e09a87 → fcda2ae)
+| Code quality fixes | 22+ |
+| Knowledge pages | 10 |
