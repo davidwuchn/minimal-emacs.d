@@ -159,13 +159,24 @@ SUMMARY: SCORE: X/Y"
           (mapconcat (lambda (b) (format "- %s" b)) forbidden "\n")))
 
 (defun gptel-benchmark--parse-grade-response (response expected forbidden)
-  "Parse LLM grading RESPONSE into plist."
+  "Parse LLM grading RESPONSE into plist.
+Handles both SCORE: X/Y format and JSON format."
   (let ((score 0)
          (total (+ (length expected) (length forbidden)))
          (details (if (stringp response) response (format "%S" response))))
-    (when (string-match "SCORE:\\s-*\\([0-9]+\\)/\\([0-9]+\\)" details)
-      (setq score (string-to-number (match-string 1 details))
-            total (string-to-number (match-string 2 details))))
+    ;; Try SCORE: X/Y format first
+    (if (string-match "SCORE:\\s-*\\([0-9]+\\)/\\([0-9]+\\)" details)
+        (setq score (string-to-number (match-string 1 details))
+              total (string-to-number (match-string 2 details)))
+      ;; Count "passed": true in results
+      (with-temp-buffer
+        (insert details)
+        (goto-char (point-min))
+        (while (re-search-forward "\"passed\"\\s-*:\\s-*true" nil t)
+          (cl-incf score)))
+      ;; Try to get total from summary
+      (when (string-match "\"total\"\\s-*:\\s-*\\([0-9]+\\)" details)
+        (setq total (string-to-number (match-string 1 details)))))
     (list :score score
           :total (if (> total 0) total (max score 1))
           :percentage (if (> total 0) (* 100.0 (/ (float score) total)) 0.0)
