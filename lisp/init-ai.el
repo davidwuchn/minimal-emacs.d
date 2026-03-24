@@ -10,12 +10,12 @@
 
 ;; Add gptel and gptel-agent to load-path (installed via git clone)
 ;; See: scripts/setup-packages.sh for installation instructions
-(let ((elpa-dir (expand-file-name "var/elpa" minimal-emacs-user-directory)))
-  (add-to-list 'load-path (expand-file-name "gptel" elpa-dir))
-  (add-to-list 'load-path (expand-file-name "gptel-agent" elpa-dir))
+(let ((packages-dir (expand-file-name "packages" minimal-emacs-user-directory)))
+  (add-to-list 'load-path (expand-file-name "gptel" packages-dir))
+  (add-to-list 'load-path (expand-file-name "gptel-agent" packages-dir))
   ;; Load autoloads for git-cloned packages
-  (let ((gptel-autoloads (expand-file-name "gptel/gptel-autoloads.el" elpa-dir))
-        (agent-autoloads (expand-file-name "gptel-agent/gptel-agent-autoloads.el" elpa-dir)))
+  (let ((gptel-autoloads (expand-file-name "gptel/gptel-autoloads.el" packages-dir))
+        (agent-autoloads (expand-file-name "gptel-agent/gptel-agent-autoloads.el" packages-dir)))
     (when (file-exists-p gptel-autoloads)
       (load gptel-autoloads nil t))
     (when (file-exists-p agent-autoloads)
