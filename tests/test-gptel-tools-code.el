@@ -17,6 +17,15 @@
 
 (require 'ert)
 (require 'cl-lib)
+(require 'gptel-tools-code)
+
+(defun test--in-git-repo-p ()
+  "Return non-nil if current directory is in a git repo.
+Uses git directly instead of vc-git-root for batch mode compatibility."
+  (and (executable-find "git")
+       (with-temp-buffer
+         (let ((default-directory (or default-directory "/")))
+           (= 0 (call-process "git" nil t nil "rev-parse" "--git-dir"))))))
 
 ;;; Mock Data
 
@@ -280,8 +289,7 @@ Returns list of file:line:context with backend info."
 
 (ert-deftest test-gptel-code-git-grep-in-repo ()
   "Test git grep finds symbols in git repo."
-  (skip-unless (executable-find "git"))
-  (skip-unless (vc-git-root default-directory))
+  (skip-unless (test--in-git-repo-p))
   (let ((result (my/gptel--git-grep-usages "defun" default-directory)))
     (should (listp result))
     (should (> (length result) 0))
@@ -289,16 +297,14 @@ Returns list of file:line:context with backend info."
 
 (ert-deftest test-gptel-code-git-grep-nonexistent ()
   "Test git grep returns nil for non-existent symbol."
-  (skip-unless (executable-find "git"))
-  (skip-unless (vc-git-root default-directory))
+  (skip-unless (test--in-git-repo-p))
   (let* ((random-sym (format "SYMBOL_%d_DOES_NOT_EXIST" (random 100000000)))
          (result (my/gptel--git-grep-usages random-sym default-directory)))
     (should (null result))))
 
 (ert-deftest test-gptel-code-git-grep-hyphenated-symbol ()
   "Test git grep handles hyphenated symbols (Elisp naming)."
-  (skip-unless (executable-find "git"))
-  (skip-unless (vc-git-root default-directory))
+  (skip-unless (test--in-git-repo-p))
   (let ((result (my/gptel--git-grep-usages "my/gptel--git-grep-usages" default-directory)))
     (should (listp result))
     (should (> (length result) 0))))
@@ -306,8 +312,7 @@ Returns list of file:line:context with backend info."
 (ert-deftest test-gptel-code-find-usages-uses-git-grep ()
   "Test Code_Usages fallback chain includes git grep.
 When LSP is unavailable and in a git repo, git grep should be tried first."
-  (skip-unless (executable-find "git"))
-  (skip-unless (vc-git-root default-directory))
+  (skip-unless (test--in-git-repo-p))
   (let ((result (my/gptel--find-usages "my/gptel--git-grep-usages")))
     (should (stringp result))
     (should (string-match-p "via git-grep" result))))
