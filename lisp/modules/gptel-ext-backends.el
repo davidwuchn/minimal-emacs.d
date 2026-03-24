@@ -21,10 +21,10 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
 
 (cl-defmethod gptel-curl--parse-stream ((_backend gptel-dashscope) info)
   "Parse DashScope streaming response with robust error handling.
-INFO is the request info plist."
+INFO is the request info plist.
+Consumes parsed data by advancing point (no save-excursion)."
   (let ((content-strs nil))
-    (save-excursion
-      (cl-block nil
+    (condition-case nil
         (while (not (eobp))
           (skip-chars-forward "\r\n")
           (when (eobp) (cl-return))
@@ -54,7 +54,8 @@ INFO is the request info plist."
                     (push content content-strs)))
               (error nil))
             (forward-line 1))
-           (t (forward-line 1))))))
+           (t (forward-line 1))))
+      (error nil))
     (apply #'concat (nreverse content-strs))))
 
 ;;;###autoload
