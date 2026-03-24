@@ -430,5 +430,17 @@ Result: Tests pass."))
     (should (memq 'reviewer types))
     (should (memq 'explorer types))))
 
+;;; Test 41: Experiment Timeout Handling
+
+(ert-deftest grader/experiment-timeout-default ()
+  "Default experiment time budget should be 600s (10 min)."
+  (require 'gptel-tools-agent)
+  (should (= gptel-auto-experiment-time-budget 600)))
+
+(ert-deftest grader/grade-timeout-default ()
+  "Default grade timeout should be 60s."
+  (require 'gptel-tools-agent)
+  (should (= gptel-auto-experiment-grade-timeout 60)))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here
