@@ -395,5 +395,39 @@ Result: Tests pass."))
   (require 'gptel-tools-agent)
   (should (fboundp 'gptel-auto-experiment-decide)))
 
+;;; Test 37: Executor Subagent
+
+(ert-deftest grader/executor-function-exists ()
+  "gptel-benchmark-execute should exist."
+  (require 'gptel-benchmark-subagent)
+  (should (fboundp 'gptel-benchmark-execute)))
+
+;;; Test 38: Reviewer Subagent
+
+(ert-deftest grader/reviewer-function-exists ()
+  "gptel-benchmark-review should exist."
+  (require 'gptel-benchmark-subagent)
+  (should (fboundp 'gptel-benchmark-review)))
+
+;;; Test 39: Explorer Subagent
+
+(ert-deftest grader/explorer-function-exists ()
+  "gptel-benchmark-explore should exist."
+  (require 'gptel-benchmark-subagent)
+  (should (fboundp 'gptel-benchmark-explore)))
+
+;;; Test 40: Subagent Registry
+
+(ert-deftest grader/subagent-registry-defined ()
+  "Subagent types should be defined."
+  (require 'gptel-benchmark-subagent)
+  (should (boundp 'gptel-benchmark-subagent-types))
+  (let ((types (mapcar #'car gptel-benchmark-subagent-types)))
+    (should (memq 'grader types))
+    (should (memq 'analyzer types))
+    (should (memq 'executor types))
+    (should (memq 'reviewer types))
+    (should (memq 'explorer types))))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here
