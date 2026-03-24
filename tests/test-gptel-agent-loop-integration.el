@@ -7,6 +7,7 @@
 (defvar gptel--fsm-last nil)
 (defvar gptel-agent-request--handlers nil)
 (defvar gptel--preset nil)
+(defvar gptel-request--transitions nil)
 
 (cl-defstruct gptel-fsm info)
 

@@ -60,9 +60,10 @@ Returns plist of frontmatter fields, or nil if invalid."
 
 (defun test-agent--get-agents-dir ()
   "Get the agents directory path."
-  (expand-file-name "assistant/agents/"
-                    (or (bound-and-true-p user-emacs-directory)
-                        default-directory)))
+  (let ((emacs-dir (or (bound-and-true-p user-emacs-directory)
+                       (getenv "USER_EMACS_DIRECTORY")
+                       default-directory)))
+    (expand-file-name "assistant/agents/" emacs-dir)))
 
 (defun test-agent--list-agent-files ()
   "List all agent markdown files."
