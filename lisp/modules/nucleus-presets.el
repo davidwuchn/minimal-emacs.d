@@ -171,12 +171,13 @@ Model is read from YAML frontmatter in code_agent.md and plan_agent.md."
       
       ;; Patch subagent tools in gptel-agent--agents (model from YAML)
       (when (boundp 'gptel-agent--agents)
-        ;; Ensure lite-executor exists (copy from executor with minimal tools)
+        ;; Ensure lite-executor exists (copy from executor with minimal tools + non-streaming)
         (when-let ((executor-cell (assoc "executor" gptel-agent--agents)))
           (unless (assoc "lite-executor" gptel-agent--agents)
             (push (cons "lite-executor" 
-                        (plist-put (copy-tree (cdr executor-cell))
-                                   :system "You are a fast code editor. Make minimal changes. Use Read, Edit, Bash (for tests), Diagnostics. Be concise."))
+                        (thread-first (copy-tree (cdr executor-cell))
+                          (plist-put :system "You are a fast code editor. Make minimal changes. Use Read, Edit, Bash (for tests), Diagnostics. Be concise.")
+                          (plist-put :stream nil)))
                   gptel-agent--agents)))
         (cl-labels
          ((sys->string (sys)
