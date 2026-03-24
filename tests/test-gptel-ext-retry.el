@@ -60,7 +60,7 @@
 (defun test--transient-error-p (error-data http-status)
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error."
   (or (and (stringp error-data)
-           (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
+           (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|exit code 28\\|exit code 6\\|exit code 7\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
       (and (numberp http-status) (memq http-status '(408 429 500 502 503 504)))
       (and (listp error-data)
            (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
@@ -400,6 +400,48 @@
   "Should return 0 for nil data."
   (let ((info '(:data nil)))
     (should (= 0 (test--estimate-payload-bytes info)))))
+
+;;; Tests for exponential backoff
+
+(defun test--retry-delay (retries)
+  "Calculate retry delay for RETRIES using exponential backoff.
+Matches logic in gptel-ext-retry.el: base=4.0, factor=2.0, max=30.0."
+  (min 30.0 (* 4.0 (expt 2.0 retries))))
+
+(ert-deftest retry/backoff/delay-retry-0 ()
+  "First retry should have 4s delay."
+  (should (= 4.0 (test--retry-delay 0))))
+
+(ert-deftest retry/backoff/delay-retry-1 ()
+  "Second retry should have 8s delay."
+  (should (= 8.0 (test--retry-delay 1))))
+
+(ert-deftest retry/backoff/delay-retry-2 ()
+  "Third retry should have 16s delay."
+  (should (= 16.0 (test--retry-delay 2))))
+
+(ert-deftest retry/backoff/delay-retry-3 ()
+  "Fourth retry should cap at 30s."
+  (should (= 30.0 (test--retry-delay 3))))
+
+(ert-deftest retry/backoff/delay-retry-10 ()
+  "High retry counts should cap at 30s."
+  (should (= 30.0 (test--retry-delay 10))))
+
+;;; Tests for curl timeout detection
+
+(ert-deftest retry/curl-timeout/exit-code-28 ()
+  "Curl exit code 28 (timeout) should be detected as transient."
+  (should (test--transient-error-p "curl: (28) Operation timed out" nil))
+  (should (test--transient-error-p "exit code 28" nil)))
+
+(ert-deftest retry/curl-timeout/exit-code-6 ()
+  "Curl exit code 6 (DNS failure) should be detected as transient."
+  (should (test--transient-error-p "curl: (6) Could not resolve host" nil)))
+
+(ert-deftest retry/curl-timeout/exit-code-7 ()
+  "Curl exit code 7 (connection refused) should be detected as transient."
+  (should (test--transient-error-p "curl: (7) Failed to connect" nil)))
 
 (provide 'test-gptel-ext-retry)
 

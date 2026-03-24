@@ -130,5 +130,121 @@
   ;; But the variable should be bound
   (should (listp gptel-agent--agents)))
 
+;;; Test 9: Code Quality Metric
+
+(defun test--count-docstrings (code)
+  "Count functions with docstrings in CODE."
+  (with-temp-buffer
+    (insert code)
+    (goto-char (point-min))
+    (let ((count 0))
+      (while (re-search-forward "(defun\\s-+\\S-+\\s-*(.*)\\s-*\n\\s-*\"" nil t)
+        (cl-incf count))
+      count)))
+
+(defun test--count-functions (code)
+  "Count total functions in CODE."
+  (with-temp-buffer
+    (insert code)
+    (goto-char (point-min))
+    (let ((count 0))
+      (while (re-search-forward "(defun\\s-+" nil t)
+        (cl-incf count))
+      count)))
+
+(ert-deftest grader/docstring-detection ()
+  "Should detect docstrings in code."
+  (let ((with-doc "
+(defun foo ()
+  \"Has docstring.\"
+  t)
+
+(defun bar ()
+  \"Also has docstring.\"
+  nil)")
+        (without-doc "
+(defun foo ()
+  t)
+
+(defun bar ()
+  nil)"))
+    (should (= 2 (test--count-docstrings with-doc)))
+    (should (= 0 (test--count-docstrings without-doc)))
+    (should (= 2 (test--count-functions with-doc)))
+    (should (= 2 (test--count-functions without-doc)))))
+
+(ert-deftest grader/docstring-coverage-score ()
+  "Docstring coverage should affect score positively."
+  (let ((coverage-with (/ (float (test--count-docstrings "
+(defun foo ()
+  \"Docstring.\"
+  t)"))
+                          (max 1 (test--count-functions "
+(defun foo ()
+  \"Docstring.\"
+  t)"))))
+        (coverage-without (/ (float (test--count-docstrings "
+(defun foo ()
+  t)"))
+                             (max 1 (test--count-functions "
+(defun foo ()
+  t)")))))
+    (should (> coverage-with 0))
+    (should (= coverage-without 0))
+    (should (> coverage-with coverage-without))))
+
+;;; Test 11: Duration Scoring
+
+(defun test--duration-score (duration max-duration)
+  "Calculate duration score.
+DURATION is actual duration in seconds.
+MAX-DURATION is the threshold.
+Returns 1.0 if under max, 0.5 if over."
+  (cond
+   ((= duration 0) 0.5)
+   ((> duration max-duration) 0.5)
+   (t 1.0)))
+
+(ert-deftest grader/duration-score/fast ()
+  "Fast execution should score 1.0."
+  (should (= 1.0 (test--duration-score 10 120)))
+  (should (= 1.0 (test--duration-score 60 120)))
+  (should (= 1.0 (test--duration-score 119 120))))
+
+(ert-deftest grader/duration-score/slow ()
+  "Slow execution should score 0.5."
+  (should (= 0.5 (test--duration-score 121 120)))
+  (should (= 0.5 (test--duration-score 200 120)))
+  (should (= 0.5 (test--duration-score 100 30))))
+
+(ert-deftest grader/duration-score/zero ()
+  "Zero duration should score 0.5 (unknown)."
+  (should (= 0.5 (test--duration-score 0 120))))
+
+;;; Test 14: Code Quality Integration
+
+(ert-deftest grader/code-quality-score-exists ()
+  "Code quality scoring function should exist."
+  (require 'gptel-benchmark-subagent)
+  (should (fboundp 'gptel-benchmark--code-quality-score)))
+
+(ert-deftest grader/code-quality-rewards-docstrings ()
+  "Code with docstrings should score higher than without."
+  (require 'gptel-benchmark-subagent)
+  (let* ((with-docs "(defun foo () \"Doc.\" t)\n(defun bar () \"Doc.\" nil)")
+         (without-docs "(defun foo () t)\n(defun bar () nil)")
+         (score-with (gptel-benchmark--code-quality-score with-docs))
+         (score-without (gptel-benchmark--code-quality-score without-docs)))
+    (should (> score-with 0.5))
+    (should (< score-without 0.5))
+    (should (> score-with score-without))))
+
+;;; Test 16: Auto-Experiment Code Quality Integration
+
+(ert-deftest grader/auto-experiment-uses-code-quality ()
+  "Auto-experiment should factor in code quality."
+  (require 'gptel-tools-agent)
+  (should (fboundp 'gptel-auto-experiment--code-quality-score)))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here

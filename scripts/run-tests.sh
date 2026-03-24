@@ -21,6 +21,8 @@ emacs --batch -Q \
   -L "$DIR" \
   -L "$DIR/lisp" \
   -L "$DIR/lisp/modules" \
+  -L "$DIR/packages/gptel" \
+  -L "$DIR/packages/gptel-agent" \
   -L "$DIR/tests" \
   -l ert \
   $(find tests -name "test-*.el" -exec echo "-l {}" \;) \

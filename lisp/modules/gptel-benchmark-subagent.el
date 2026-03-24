@@ -202,6 +202,32 @@ Handles both SCORE: X/Y format and JSON format."
             :details (format "Local grading: %d/%d behaviors satisfied"
                              score total)))))
 
+;;; Code Quality Scoring
+
+(defun gptel-benchmark--code-quality-score (code)
+  "Score CODE quality based on docstring coverage.
+Returns a score from 0.0 to 1.0.
+- 1.0 = all functions have docstrings
+- 0.5 = half of functions have docstrings
+- 0.0 = no functions have docstrings"
+  (let* ((funcs (with-temp-buffer
+                  (insert code)
+                  (goto-char (point-min))
+                  (let ((count 0))
+                    (while (re-search-forward "(defun\\s-+" nil t)
+                      (cl-incf count))
+                    count)))
+         (docstrings (with-temp-buffer
+                       (insert code)
+                       (goto-char (point-min))
+                       (let ((count 0))
+                         ;; Match docstring on same line or next line after args
+                         (while (re-search-forward "(defun\\s-+\\S-+\\s-*(.*)\\s-*\n?\\s-*\"" nil t)
+                           (cl-incf count))
+                         count)))
+         (coverage (if (> funcs 0) (/ (float docstrings) funcs) 1.0)))
+    coverage))
+
 ;;; Analyzer Subagent
 
 (defun gptel-benchmark-analyze (data description callback)

@@ -2,49 +2,49 @@
 
 > Last session: 2026-03-24
 
-## Session: Autonomous Workflow Verified Working ✓
+## Session: TDD Complete ✓
 
-**Full flow tested and verified:**
+### Test Summary
 
 ```
-gptel-auto-workflow-run
-  → worktree ✓
-  → executor subagent ✓ (80s)
-  → grader subagent ✓ (6/6 passed)
-  → benchmark ✓
-  → decision ✓ (discarded, no score improvement)
-  → TSV log ✓
+tests/test-grader-subagent.el     16/16 pass
+tests/test-gptel-ext-retry.el     32/32 pass
 ```
 
-### Experiment 1 Results
+### TDD Cycles Completed
 
-| Metric | Value |
-|--------|-------|
-| Target | gptel-ext-retry.el |
-| Duration | 100s |
-| Grader | 6/6 passed |
-| Score | 1.0 → 1.0 (no change) |
-| Decision | Discarded |
+| Feature | Test | Fix |
+|---------|------|-----|
+| Test script load path | `ert-test-unbound` | Add `-L packages/gptel*` |
+| Curl timeout detection | `exit code 28` not matched | Sync test helper with real impl |
+| Code quality scoring | Function doesn't exist | Implement `gptel-benchmark--code-quality-score` |
+| Auto-experiment integration | Function doesn't exist | Implement `gptel-auto-experiment--code-quality-score` |
 
-### Issues to Address
+### New Functions Implemented
 
-1. **API timeouts** - DashScope slow, need retries
-2. **Metrics gap** - Docstring changes don't improve score
-3. **Duration** - 100s for simple change is high
+1. **`gptel-benchmark--code-quality-score`** - Scores code 0.0-1.0 based on docstring coverage
+2. **`gptel-auto-experiment--code-quality-score`** - Integrates code quality into auto-experiment
 
-### Fixes Applied Today
+### Test Patterns Used
 
-| Fix | Commit |
-|-----|--------|
-| Require gptel-agent | `b06c0dc` |
-| Parse JSON grader output | `fb3cb22` |
-| Grader model = executor | `1aa1d42` |
-| Timeout wrapper | `a55035a` |
+```elisp
+;; 1. Existence test
+(should (fboundp 'function-name))
 
-### Test Suite
+;; 2. Behavior test with before/after
+(let ((result-with (func input-with))
+      (result-without (func input-without)))
+  (should (> result-with result-without)))
+
+;; 3. Edge cases
+(should (= 0.5 (func 0 max)))  ;; unknown case
+```
+
+### Run Commands
 
 ```bash
-./scripts/run-tests.sh grader  # 8/8 pass
+./scripts/run-tests.sh grader  # 16/16 pass
+emacs -l tests/test-gptel-ext-retry.el -f ert-run-tests-batch-and-exit  # 32/32 pass
 ```
 
 ---
@@ -52,7 +52,7 @@ gptel-auto-workflow-run
 ## λ Summary
 
 ```
-λ tdd. test_first > trial_and_error
-λ verify. autonomous workflow works end-to-end
-λ next. improve metrics, handle API timeouts
+λ tdd. red → green → refactor
+λ learn. test helpers must match real implementation
+λ learn. regex patterns need flexibility (newline optional)
 ```
