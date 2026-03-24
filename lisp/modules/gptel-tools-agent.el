@@ -673,8 +673,11 @@ Should be >= curl timeout (300s) + retry delays."
 
 (defcustom gptel-auto-experiment-lite-mode nil
   "Use lite-executor (4 tools) instead of executor (27 tools).
-Lite mode is much faster on slow APIs like DashScope because
-the tool definitions payload is much smaller."
+When nil (default), use full executor with all 27 tools.
+When t, use lite-executor with only 4 tools for faster API calls.
+
+Note: After DashScope streaming fix (commit d60312c), full executor
+is now viable with streaming enabled."
   :type 'boolean
   :group 'gptel-tools-agent)
 
