@@ -426,3 +426,22 @@
     (should (= 5 (plist-get report :cycle)))
     (should (eq 'maintenance (plist-get report :growth-mode)))
     (should (not (plist-get report :ai-complete)))))
+
+;;; Memory pruning tests
+
+(ert-deftest gptel-benchmark-test-read-phi-default ()
+  "Test that missing φ returns default 0.5."
+  (let ((phi (gptel-benchmark-memory-read-phi "nonexistent-memory")))
+    (should (= phi 0.5))))
+
+(ert-deftest gptel-benchmark-test-low-phi-detection ()
+  "Test detection of low-φ memories."
+  (let ((gptel-benchmark-memory-phi-threshold 0.3))
+    (should (< 0.2 gptel-benchmark-memory-phi-threshold))
+    (should (> 0.5 gptel-benchmark-memory-phi-threshold))))
+
+(ert-deftest gptel-benchmark-test-prune-age-filter ()
+  "Test that only old memories are pruned."
+  (let ((gptel-benchmark-memory-prune-age-days 30))
+    (should (>= 30 gptel-benchmark-memory-prune-age-days))
+    (should (< 10 gptel-benchmark-memory-prune-age-days))))

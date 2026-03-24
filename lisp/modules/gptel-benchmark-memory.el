@@ -41,6 +41,18 @@
   :type 'boolean
   :group 'gptel-benchmark-memory)
 
+(defcustom gptel-benchmark-memory-phi-threshold 0.3
+  "Minimum φ (vitality) score for memories.
+Memories below this threshold are candidates for pruning."
+  :type 'float
+  :group 'gptel-benchmark-memory)
+
+(defcustom gptel-benchmark-memory-prune-age-days 30
+  "Minimum age in days before a low-φ memory can be pruned.
+Prevents pruning of new memories that haven't been validated yet."
+  :type 'integer
+  :group 'gptel-benchmark-memory)
+
 ;;; Memory Symbols (aligned with Eight Keys)
 
 (defconst gptel-benchmark-memory-symbols
@@ -155,6 +167,138 @@ Returns t if content should be rejected."
                    (mapconcat #'file-name-nondirectory noise-files ", "))
         (message "[memory] No noise memories found")))
     noise-files))
+
+;;; Memory Pruning (φ-based quality control)
+
+(defun gptel-benchmark-memory-read-phi (slug)
+  "Read φ score from memory SLUG.
+Returns 0.5 if no φ metadata found (default)."
+  (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
+         (mem-file (expand-file-name (format "memories/%s.md" slug) mem-dir)))
+    (if (file-exists-p mem-file)
+        (with-temp-buffer
+          (insert-file-contents mem-file)
+          (goto-char (point-min))
+          (if (re-search-forward "^φ:\\s-*\\([0-9.]+\\)" nil t)
+              (string-to-number (match-string 1))
+            0.5))
+      0.5)))
+
+(defun gptel-benchmark-memory-update-phi (slug phi)
+  "Update φ score for memory SLUG to PHI.
+Adds or updates φ metadata in memory frontmatter."
+  (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
+         (mem-file (expand-file-name (format "memories/%s.md" slug) mem-dir)))
+    (when (file-exists-p mem-file)
+      (let ((content (with-temp-buffer
+                       (insert-file-contents mem-file)
+                       (buffer-string))))
+        (with-temp-file mem-file
+          (if (string-match "^φ:\\s-*[0-9.]+" content)
+              (insert (replace-match (format "φ: %.2f" phi) t t content))
+            (goto-char (point-min))
+            (if (string-match "^---" content)
+                (progn
+                  (forward-line 1)
+                  (insert (format "φ: %.2f\n" phi))
+                  (insert (substring content (point))))
+              (insert (format "φ: %.2f\n\n" phi))
+              (insert content))))))))
+
+(defun gptel-benchmark-memory-low-phi-memories ()
+  "Find all memories with φ below threshold.
+Returns list of (slug phi age-days) for each low-φ memory."
+  (let* ((mem-dir (expand-file-name "memories/" (gptel-benchmark-memory--resolve-dir)))
+         (files (when (file-exists-p mem-dir)
+                  (directory-files mem-dir t "\\.md$")))
+         (low-phi '()))
+    (dolist (file files)
+      (let* ((slug (file-name-nondirectory file))
+             (phi (gptel-benchmark-memory-read-phi (file-name-sans-extension slug)))
+             (age-days (floor (/ (float-time (time-subtract (current-time)
+                                                            (file-attribute-modification-time
+                                                             (file-attributes file))))
+                                 86400))))
+        (when (< phi gptel-benchmark-memory-phi-threshold)
+          (push (list (file-name-sans-extension slug) phi age-days) low-phi))))
+    (nreverse low-phi)))
+
+(defun gptel-benchmark-memory-prune (&optional dry-run)
+  "Prune low-φ memories older than `gptel-benchmark-memory-prune-age-days'.
+If DRY-RUN is non-nil, only report what would be pruned without deleting.
+Returns list of pruned memories."
+  (interactive "P")
+  (let* ((low-phi (gptel-benchmark-memory-low-phi-memories))
+         (pruned '()))
+    (dolist (entry low-phi)
+      (cl-destructuring-bind (slug phi age-days) entry
+        (when (>= age-days gptel-benchmark-memory-prune-age-days)
+          (if dry-run
+              (message "[memory] Would prune: %s (φ=%.2f, age=%dd)" slug phi age-days)
+            (progn
+              (gptel-benchmark-memory-archive slug)
+              (push (list slug phi age-days) pruned)
+              (message "[memory] Pruned: %s (φ=%.2f, age=%dd)" slug phi age-days))))))
+    (when (called-interactively-p 'interactive)
+      (if pruned
+          (message "[memory] Pruned %d low-φ memories" (length pruned))
+        (message "[memory] No memories eligible for pruning")))
+    pruned))
+
+(defun gptel-benchmark-memory-archive (slug)
+  "Archive memory SLUG by moving to archive directory.
+Archived memories are preserved but not active."
+  (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
+         (mem-file (expand-file-name (format "memories/%s.md" slug) mem-dir))
+         (archive-dir (expand-file-name "memories/archive/" mem-dir))
+         (archive-file (expand-file-name (format "%s.md" slug) archive-dir)))
+    (unless (file-exists-p archive-dir)
+      (make-directory archive-dir t))
+    (when (file-exists-p mem-file)
+      (rename-file mem-file archive-file t)
+      (when gptel-benchmark-memory-auto-commit
+        (gptel-benchmark-memory-commit (format "🗄 archive: %s (low φ)" slug))))))
+
+(defun gptel-benchmark-memory-quality-report ()
+  "Generate memory quality report based on φ scores.
+Shows distribution of φ scores and identifies quality issues."
+  (interactive)
+  (let* ((mem-dir (expand-file-name "memories/" (gptel-benchmark-memory--resolve-dir)))
+         (files (when (file-exists-p mem-dir)
+                  (directory-files mem-dir t "\\.md$")))
+         (phi-values '())
+         (buckets '((0.0 . 0.2) (0.2 . 0.4) (0.4 . 0.6) (0.6 . 0.8) (0.8 . 1.0)))
+         (bucket-counts (make-hash-table :test 'equal)))
+    (dolist (file files)
+      (let ((phi (gptel-benchmark-memory-read-phi
+                  (file-name-sans-extension (file-name-nondirectory file)))))
+        (push phi phi-values)))
+    (dolist (phi phi-values)
+      (dolist (bucket buckets)
+        (when (and (>= phi (car bucket)) (< phi (cdr bucket)))
+          (puthash bucket (1+ (gethash bucket bucket-counts 0)) bucket-counts))))
+    (with-output-to-temp-buffer "*Memory Quality Report*"
+      (princ "╔══════════════════════════════════════════════════╗\n")
+      (princ "║           MEMORY QUALITY REPORT                  ║\n")
+      (princ "╚══════════════════════════════════════════════════╝\n\n")
+      (princ (format "Total memories: %d\n\n" (length phi-values)))
+      (princ "┌─────────────────────────────────────────────────┐\n")
+      (princ "│ φ DISTRIBUTION                                  │\n")
+      (princ "├─────────────────────────────────────────────────┤\n")
+      (dolist (bucket buckets)
+        (let* ((count (gethash bucket bucket-counts 0))
+               (bar (make-string (min count 20) ?█))
+               (label (format "%.1f-%.1f" (car bucket) (cdr bucket))))
+          (princ (format "│ %-7s %-20s %3d              │\n" label bar count))))
+      (princ "└─────────────────────────────────────────────────┘\n\n")
+      (let ((low-count (length (gptel-benchmark-memory-low-phi-memories))))
+        (princ (format "Low-φ memories (below %.2f): %d\n"
+                       gptel-benchmark-memory-phi-threshold low-count))
+        (when (> low-count 0)
+          (princ "\nLow-φ memories:\n")
+          (dolist (entry (gptel-benchmark-memory-low-phi-memories))
+            (princ (format "  - %s (φ=%.2f, age=%dd)\n"
+                           (nth 0 entry) (nth 1 entry) (nth 2 entry)))))))))
 
 (defun gptel-benchmark-memory-create-knowledge (topic frontmatter content)
   "Create knowledge page for TOPIC with FRONTMATTER and CONTENT.
