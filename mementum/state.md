@@ -2,31 +2,38 @@
 
 > Last session: 2026-03-24
 
+## Streaming Verified Working ✅
+
+**Direct API test results:**
+
+| Test | Duration | Output |
+|------|----------|--------|
+| "Reply with: TEST123" | ~5s | "TEST123" ✓ |
+| "Count 1 to 5" | 6.3s | "1\n2\n3\n4\n5" ✓ |
+
+### Test Code
+
+```elisp
+(let ((gptel-backend gptel--dashscope)
+      (gptel-model 'qwen3.5-plus))
+  (gptel-request "Reply with exactly: TEST123"
+    :stream t
+    :callback (lambda (r info) (message "Result: %S" r))))
+;; => "TEST123"
+```
+
 ## Session Complete ✓
 
-**20 commits** | **3 workarounds fixed** | **22+ code improvements**
+**21 commits** | **Streaming fixed** | **Verified working**
 
-### Major Achievement: Streaming Fixed
+### Achievements
 
-| Component | Before | After |
-|-----------|--------|-------|
-| DashScope API | `:stream nil` | `:stream t` ✓ |
-| Subagent calls | `:stream nil` | `:stream t` ✓ |
-| Executor tools | 4 (lite) | 27 (full) viable |
-
-### Fix Chain
-
-```
-630fbd4: "disable streaming" (workaround)
-    ↓ documented root cause: SSE format differs
-6fb1a0d: Custom gptel-dashscope struct
-54f5c37: Fixed parser (skip-chars-forward)
-8591cfe: Fixed model format (plain symbols)
-31cc8e7: Added protocol parameter
-d60312c: Fixed URL nil issue
-fcda2ae: Enabled subagent streaming
-    → STREAMING WORKS!
-```
+| Fix | Status | Impact |
+|-----|--------|--------|
+| DashScope streaming | ✅ Fixed & Verified | 27 tools viable |
+| Subagent streaming | ✅ Enabled | Incremental display |
+| Code quality | ✅ 22+ fixes | Cleaner codebase |
+| A/B test framework | ✅ Added | Data-driven decisions |
 
 ### Commits Summary
 
@@ -35,28 +42,16 @@ fcda2ae: Enabled subagent streaming
 | Streaming fixes | 8 |
 | Code quality | 3 |
 | Knowledge/docs | 4 |
-| State updates | 5 |
+| State updates | 6 |
 
-### Knowledge Created
+### Known Limitation
 
-| Page | Purpose |
-|------|---------|
-| dashscope-backend.md | Configuration & fixes |
-| ab-testing.md | Framework usage |
-| git-history-improvement-strategy.md | Updated with results |
+A/B test framework requires interactive Emacs session (not `emacsclient`) due to async callback handling.
 
 ### Pattern Validated ✓
 
 **Git History → Workarounds → Fixes**
 
-This pattern successfully resolved:
+Successfully resolved:
 1. DashScope streaming (630fbd4 → d60312c)
 2. Subagent streaming (6e09a87 → fcda2ae)
-
-Use this pattern for future workarounds.
-
-### Next Session
-
-1. Run A/B test comparing executors
-2. Monitor streaming reliability
-3. Continue auto-evolution with full executor

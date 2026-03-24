@@ -7,8 +7,24 @@ Compare executor variants to make data-driven decisions about tool selection and
 ## Usage
 
 ```elisp
-;; Run in Emacs (not emacsclient - async doesn't work via client)
+;; Run INTERACTIVELY in Emacs (M-x or scratch buffer)
+;; NOT via emacsclient - async callbacks don't work through client
 (gptel-ab-test-run "Your test prompt")
+```
+
+**Important**: A/B test must be run interactively in Emacs. Async callbacks don't work via `emacsclient --eval`.
+
+## Verified: Streaming Works ✅
+
+Direct streaming test (2026-03-24):
+
+```elisp
+(let ((gptel-backend gptel--dashscope)
+      (gptel-model 'qwen3.5-plus))
+  (gptel-request "Reply with exactly: TEST123"
+    :stream t
+    :callback (lambda (r info) (message "Result: %S" r))))
+;; => "TEST123" in ~5 seconds
 ```
 
 ## Variants
@@ -57,13 +73,5 @@ Compare executor variants to make data-driven decisions about tool selection and
   )
 ```
 
-## Integration with Auto-Evolution
-
-After DashScope streaming fix, can now use full executor for experiments:
-
-```elisp
-(setq gptel-auto-experiment-use-lite nil)  ; Use full executor
-```
-
 ---
-*Created: 2026-03-24*
+*Updated: 2026-03-24*
