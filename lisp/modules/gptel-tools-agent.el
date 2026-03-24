@@ -838,7 +838,8 @@ Also kills any stale magit buffers referencing old worktrees."
   (let* ((start (float-time))
          (base-dir (gptel-auto-workflow--base-dir))
          (worktree (or gptel-auto-workflow--worktree-dir base-dir))
-         (default-directory worktree)
+         ;; Don't set default-directory to non-existent dir
+         (default-directory (if (file-exists-p worktree) worktree base-dir))
          (verify-result (call-process "bash" nil nil nil
                                       (expand-file-name "scripts/verify-nucleus.sh"
                                                         base-dir)))
@@ -957,6 +958,11 @@ Minimum score is 0.1."
          (past-learnings (gptel-auto-experiment--recall-learnings target)))
     (format "You are running experiment %d of %d to improve %s.
 
+## IMPORTANT: Work Directory
+All file operations must use FULL PATH:
+- Target file: %s
+- Work directory: %s
+
 ## Current File Analysis
 %s
 
@@ -984,23 +990,26 @@ Focus on: adding docstrings, fixing warnings, simplifying code, or removing dead
 - Immutable files: early-init.el, pre-early-init.el, lisp/eca-security.el
 - Must pass tests: ./scripts/verify-nucleus.sh
 - Maximum 5 tool calls
+- ALL file paths must be FULL paths (see Work Directory above)
 
 ## Instructions
-1. Read the target file first
+1. Read the target file using full path: %s
 2. Identify ONE specific improvement (e.g., add docstring to function X)
-3. Make the change
+3. Make the change using the SAME full path
 4. Run Diagnostics to verify no new errors
 
 Start with:
 HYPOTHESIS: Adding docstring to [function] will improve maintainability."
             experiment-id max-experiments target
+            target-file worktree
             file-analysis
             (or baseline 0.5)
             (or past-learnings "None yet - first run for this file")
             (or patterns "None yet")
             (or suggestions "None")
             git-history
-            (/ gptel-auto-experiment-time-budget 60))))
+            (/ gptel-auto-experiment-time-budget 60)
+            target-file)))
 
 (defun gptel-auto-experiment--analyze-file (file)
   "Analyze FILE for quality issues. Return string summary."
