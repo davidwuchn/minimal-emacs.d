@@ -2,6 +2,40 @@
 
 > Last session: 2026-03-24
 
+## Recent Learning 🔁
+
+**Systematic Code Review Strategy**
+
+Single-file optimization is limited. Better approach:
+
+```
+scan entire repo → categorize issues → prioritize → fix systematically
+```
+
+### Issue Categories (by severity)
+
+| Priority | Category | Detection |
+|----------|----------|-----------|
+| Critical | Duplicate functions | `grep "(defun" | sort | uniq -c` |
+| High | Unused variables | `byte-compile` warnings |
+| Medium | Docstring width >80 | `byte-compile` warnings |
+| Medium | Wrong quote usage | `byte-compile` warnings |
+| Low | Missing declare-function | `byte-compile` warnings |
+
+### Results This Session
+
+| Before | After |
+|--------|-------|
+| ~20 warnings | 1 warning (false positive) |
+| 2 duplicate functions | 0 |
+| 7 unused variables | 0 |
+| 8 wide docstrings | 0 |
+| 4 wrong quotes | 0 |
+
+### Commit
+
+`5ff621d` - Δ fix code quality issues: duplicates, unused vars, docstrings
+
 ## Built ✓
 
 **Auto-Experiment with Real Quality Scoring**
@@ -29,14 +63,6 @@ When experiment improves score > 0.02:
 - Shows file analysis (lines, functions, undocumented count)
 - Shows past successful improvements from git history
 - Clearer objective: ONE specific improvement
-
-### Commits
-
-| Commit | Description |
-|--------|-------------|
-| 375bf68 | ⚡ auto-experiment: real quality scoring + mementum learning |
-| 12eea4e | ⚡ limit lite-executor to 10 steps |
-| d3f9153 | ✓ auto-workflow: fully tested end-to-end |
 
 ### Test Commands
 
