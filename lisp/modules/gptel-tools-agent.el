@@ -1030,14 +1030,17 @@ HYPOTHESIS: Adding docstring to [function] will improve maintainability."
           (forward-line)
           (unless (looking-at-p "\\s-*\"")
             (cl-incf undoc-fns)
-            (push (format "Undocumented: %s" (match-string 1)) issues))))
-      ;; Check for common issues
-      (when (string-match-p "(save-excursion\n *)" content)
-        (push "Has empty save-excursion blocks" issues))
-      (when (> (count-matches "(condition-case" content) 3)
-        (push "Many condition-case blocks" issues))
-      (when (> (count-matches "(interactive)" content) 10)
-        (push "Many interactive commands" issues))
+            (push (format "Undocumented: %s" (match-string 1)) issues)))
+        ;; Check for common issues in the temp buffer
+        (goto-char (point-min))
+        (when (re-search-forward "(save-excursion\n *)" nil t)
+          (push "Has empty save-excursion blocks" issues))
+        (goto-char (point-min))
+        (when (> (count-matches "(condition-case" (point-min) (point-max)) 3)
+          (push "Many condition-case blocks" issues))
+        (goto-char (point-min))
+        (when (> (count-matches "(interactive)" (point-min) (point-max)) 10)
+          (push "Many interactive commands" issues)))
       (format "Lines: %d, Functions: %d, Undocumented: %d\nIssues: %s"
               lines defuns undoc-fns
               (if issues (string-join (nreverse issues) "; ") "None")))))
@@ -1095,6 +1098,7 @@ HYPOTHESIS: Adding docstring to [function] will improve maintainability."
       (gptel-auto-experiment-analyze
        previous-results
        (lambda (analysis)
+         (message "[auto-exp] Step 1 callback called: analysis=%S" analysis)
          (let* ((patterns (when analysis (plist-get analysis :patterns)))
                 (prompt (gptel-auto-experiment-build-prompt
                          target experiment-id max-experiments analysis baseline)))
