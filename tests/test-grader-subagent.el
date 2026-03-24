@@ -513,5 +513,17 @@ Result: Tests pass."))
     (should (string-match-p "π Synthesis" formatted))
     (should (string-match-p "38%" formatted))))
 
+(ert-deftest grader/extract-mutation-templates-returns-list ()
+  "Extract mutation templates should return list of template strings."
+  (require 'gptel-tools-agent)
+  (let* ((target "lisp/modules/gptel-ext-retry.el")
+         (skills (gptel-auto-workflow-recall-skills target))
+         (templates (gptel-auto-workflow--extract-mutation-templates skills)))
+    (should (listp templates))
+    (should (> (length templates) 0))
+    (should (cl-some (lambda (tmpl) (string-match-p "caching" tmpl)) templates))
+    (should (cl-some (lambda (tmpl) (string-match-p "Lazy" tmpl)) templates))
+    (should (cl-some (lambda (tmpl) (string-match-p "Simplify" tmpl)) templates))))
+
 (provide 'test-grader-subagent)
 ;;; test-grader-subagent.el ends here

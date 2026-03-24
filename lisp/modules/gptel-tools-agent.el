@@ -1295,12 +1295,17 @@ Returns list of template strings for hypothesis generation."
          (templates '()))
     (dolist (ms mutation-skills)
       (let ((content (plist-get ms :content)))
-        (when (and content (string-match "## Hypothesis Templates\n+```\n\\(.+?\\)\n```" content))
-          (let ((raw (match-string 1 content)))
-            (dolist (line (split-string raw "\n" t))
-              (when (string-match-p "^\"" line)
-                (push (string-trim line "\"\\s-*" "\"\\s-*") templates))))))
-    (nreverse templates))))
+        (when content
+          (let ((start (string-match "## Hypothesis Templates" content)))
+            (when start
+              (let* ((code-start (string-match "```\n" content start))
+                     (code-end (when code-start (string-match "\n```" content (+ code-start 4)))))
+                (when (and code-start code-end)
+                  (let ((raw (substring content (+ code-start 4) code-end)))
+                    (dolist (line (split-string raw "\n" t))
+                      (when (string-match-p "^\"" line)
+                        (push (string-trim line "\"\\s-*" "\"\\s-*") templates)))))))))))
+    (nreverse templates)))
 
 (defun gptel-auto-workflow--format-weakest-keys (baseline-scores)
   "Format weakest keys for prompt from BASELINE-SCORES.
