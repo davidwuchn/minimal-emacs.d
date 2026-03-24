@@ -2,64 +2,69 @@
 
 > Last session: 2026-03-24
 
-## Fully Tested ✓
+## Built ✓
 
-**Autonomous Research Agent** — End-to-end working
+**Auto-Experiment with Real Quality Scoring**
 
-### Test Results
+### Quality Scoring System
 
-| Test | Experiments | Time | Status |
-|------|-------------|------|--------|
-| Mock mode (3 exp) | 3 | ~15s | ✓ |
-| Real API (1 exp) | 1 | 73s | ✓ |
-| Real API (2 exp) | 2 | ~3min | ✓ |
-
-### Fixes Applied
-
-| Issue | Fix |
-|-------|-----|
-| HTTP parsing errors | Disable streaming on DashScope |
-| Agent runs too long | Limit to 10 steps |
-| Stale magit buffers | Kill on start/delete |
-| Subagent FSM error | Use gptel-with-preset |
-
-### Configuration
-
-```elisp
-;; Recommended settings
-(setq gptel-auto-experiment-lite-mode t)  ; 4 tools
-(setq gptel-auto-experiment-time-budget 180)  ; 3 min
-(setq gptel-auto-experiment-max-per-target 3)
 ```
+Score = 1.0 - (checkdoc_issues × 0.01 + missing_docs × 0.005)
+```
+
+| Metric | Weight | Detection |
+|--------|--------|-----------|
+| Checkdoc issues | -0.01 each | `checkdoc-current-buffer` |
+| Missing docstrings | -0.005 each | Regex `(defun X)` without following `"` |
+
+### Feed-Forward Learning (Mementum)
+
+When experiment improves score > 0.02:
+1. Store to `mementum/memories/auto-exp-{file}-{timestamp}.md`
+2. Commit with symbol: `💡 {slug}: +{delta} quality score`
+3. Recall past learnings for same file on next run
+
+### Prompt Improvements
+
+- Shows file analysis (lines, functions, undocumented count)
+- Shows past successful improvements from git history
+- Clearer objective: ONE specific improvement
 
 ### Commits
 
 | Commit | Description |
 |--------|-------------|
+| 375bf68 | ⚡ auto-experiment: real quality scoring + mementum learning |
 | 12eea4e | ⚡ limit lite-executor to 10 steps |
-| 5f5b90d | ⚡ fix lite-executor: disable streaming |
-| 630fbd4 | ⚡ fix DashScope: disable streaming |
-| a7b0931 | ⚡ add lite-executor: 4 tools |
+| d3f9153 | ✓ auto-workflow: fully tested end-to-end |
+
+### Test Commands
+
+```elisp
+;; Check quality score of a file
+(setq gptel-auto-workflow--current-target "lisp/modules/gptel-ext-retry.el")
+(gptel-auto-experiment--quality-score)
+
+;; Run auto-experiment
+(setq gptel-auto-experiment-lite-mode t)
+(gptel-auto-workflow-run '("lisp/modules/gptel-ext-retry.el"))
+```
 
 ### How It Works
 
-1. Create git worktree
-2. Run lite-executor (max 10 API calls)
-3. Grade output
-4. Run benchmark
-5. Decide keep/discard
-6. Log to TSV
-7. Cleanup worktree
+1. Baseline: Compute quality score (undocumented functions, checkdoc issues)
+2. Experiment: Agent makes ONE targeted improvement
+3. Benchmark: Re-compute quality score
+4. Decide: Keep if score improved
+5. Learn: Store successful patterns to mementum
+6. Repeat: Next experiment sees past learnings
 
-### Entry Points
+### Feed-Forward Cycle
 
-```elisp
-M-x gptel-auto-workflow-run
-(gptel-auto-workflow-run '("lisp/modules/file.el"))
+```
+experiment → improvement → score ↑ → store to mementum
+                                          ↓
+next experiment ← recall from git ← commit
 ```
 
-### Cron
-
-```bash
-0 2 * * * emacsclient -e '(gptel-auto-workflow-run-autonomous)'
-```
+This creates compound learning across sessions.
