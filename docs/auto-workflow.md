@@ -126,15 +126,29 @@ Each experiment goes through:
 | Stage | Subagent | Purpose |
 |-------|----------|---------|
 | 1. Analyze | `analyzer` | Detect patterns from previous experiments, suggest hypotheses |
-| 2. Implement | `code` | Run agent with guided prompt (reads git history + analyzer output) |
+| 2. Implement | `code` (executor) | Run agent with guided prompt (reads git history + analyzer output) |
 | 3. Validate | `grader` | Check hypothesis clarity, minimal changes. LLM decides if quality sufficient |
 | 4. Benchmark | — | Run verify-nucleus.sh + Eight Keys scoring |
-| 5. Quality | — | Calculate code quality score (docstring coverage) |
-| 6. Decide | `comparator` | Compare before/after, provide reasoning for keep/discard |
+| 5. Decide | `comparator` | Compare before/after (includes code quality) |
+
+### Code Quality Integration
+
+Code quality (docstring coverage) is calculated before the decide stage and passed to the comparator:
+
+```elisp
+;; In gptel-auto-experiment-run:
+(let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
+  (gptel-auto-experiment-decide
+   (list :score baseline :code-quality 0.5)
+   (list :score score-after :code-quality code-quality)
+   callback))
+```
 
 ### Decision Logic
 
-The decision uses a combined score:
+**With comparator subagent:** The comparator receives both `:score` and `:code-quality` values and makes a blind A/B decision based on quality, completeness, and correctness.
+
+**Fallback (no subagent):** Uses combined score:
 
 ```
 combined = 70% * grader_score + 30% * code_quality_score
@@ -855,7 +869,7 @@ Logs: `var/tmp/cron/*.log`
 
 ---
 
-**Document Version:** 1.4  
+**Document Version:** 1.5  
 **Last Updated:** 2026-03-24  
 **Release:** v2026.03.24  
-**Changes:** Added Configuration section, clarified internal vs public functions
+**Changes:** Fixed pipeline to 5 stages (code quality integrated into decide), clarified comparator receives code quality, clarified 70/30 is fallback only
