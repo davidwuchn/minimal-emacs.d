@@ -24,16 +24,27 @@ Unlike `gptel-api-key-from-auth-source', this won't prompt during process filter
 INFO is the request info plist."
   (let ((content-strs nil))
     (save-excursion
-      (while (not (eobp))
-        (skip-chars-forward "\r\n")
-        (when (eobp) (cl-return))
-        (cond
-         ((looking-at-p "\\[DONE\\]")
-          (goto-char (point-max)))
-         ((looking-at-p "data:")
-          (forward-char 5)
-          (skip-chars-forward " \t")
-          (unless (looking-at-p "\\[DONE\\]")
+      (cl-block nil
+        (while (not (eobp))
+          (skip-chars-forward "\r\n")
+          (when (eobp) (cl-return))
+          (cond
+           ((looking-at-p "\\[DONE\\]")
+            (goto-char (point-max)))
+           ((looking-at-p "data:")
+            (forward-char 5)
+            (skip-chars-forward " \t")
+            (unless (looking-at-p "\\[DONE\\]")
+              (condition-case nil
+                  (when-let* ((response (gptel--json-read))
+                              (delta (map-nested-elt response '(:choices 0 :delta))))
+                    (when-let* ((content (plist-get delta :content))
+                                ((stringp content))
+                                ((not (string-empty-p content))))
+                      (push content content-strs)))
+                (error nil)))
+            (forward-line 1))
+           ((looking-at-p "{")
             (condition-case nil
                 (when-let* ((response (gptel--json-read))
                             (delta (map-nested-elt response '(:choices 0 :delta))))
@@ -41,19 +52,9 @@ INFO is the request info plist."
                               ((stringp content))
                               ((not (string-empty-p content))))
                     (push content content-strs)))
-              (error nil)))
-          (forward-line 1))
-         ((looking-at-p "{")
-          (condition-case nil
-              (when-let* ((response (gptel--json-read))
-                          (delta (map-nested-elt response '(:choices 0 :delta))))
-                (when-let* ((content (plist-get delta :content))
-                            ((stringp content))
-                            ((not (string-empty-p content))))
-                  (push content content-strs)))
-            (error nil))
-          (forward-line 1))
-         (t (forward-line 1)))))
+              (error nil))
+            (forward-line 1))
+           (t (forward-line 1))))))
     (apply #'concat (nreverse content-strs))))
 
 ;;;###autoload
