@@ -302,6 +302,27 @@
         (println "No China routes configured")
         (println (:out result))))))
 
+(defn resolve-hostname
+  "Resolve hostname to IP address. Works on both macOS and Linux.
+   Returns nil if resolution fails."
+  [hostname]
+  (let [;; Try multiple methods for portability
+        methods [(str "dig +short " hostname " 2>/dev/null | head -1")
+                 (str "host " hostname " 2>/dev/null | head -1 | awk '{print $NF}'")
+                 (str "getent hosts " hostname " 2>/dev/null | awk '{print $1}'")
+                 (str "nslookup " hostname " 2>/dev/null | grep 'Address' | tail -1 | awk '{print $2}'")]]
+    (loop [[method & rest] methods]
+      (if method
+        (let [result (shell {:out :string :err :string :continue true}
+                            "sh" "-c" method)
+              ip (when-not (str/blank? (:out result))
+                   (let [trimmed (str/trim (:out result))]
+                     ;; Validate it looks like an IP
+                     (when (re-matches #"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}" trimmed)
+                       trimmed)))]
+          (if ip ip (recur rest)))
+        nil))))
+
 (defn test-bypass
   "Test if bypass is working by checking route to a China IP"
   []
@@ -326,7 +347,7 @@
                 (println "✓ PASS: Traffic going direct (not through Tailscale)"))))))
       (println "⚠ Warning: " test-ip " not found in any China CIDR range")))
 
-  ;; Show sample routes
+;; Show sample routes
   (let [cidrs (fetch-china-ips)
         sample-cidrs (take 3 cidrs)]
     (when (seq sample-cidrs)
@@ -346,10 +367,8 @@
         cidrs (fetch-china-ips)]
     (doseq [{:keys [name ip url]} ai-services]
       (let [test-ip (if url
-                      (let [resolve-result (shell {:out :string :err :string :continue true}
-                                                  "sh" "-c" (str "nslookup " name " 2>/dev/null | grep 'Address' | tail -1 | awk '{print $2}'"))]
-                        (when-not (str/blank? (:out resolve-result))
-                          (str/trim (:out resolve-result))))
+                      (or (resolve-hostname name)
+                          (do (println (str "⚠ " name ": Could not resolve hostname")) nil))
                       ip)]
         (when test-ip
           (let [matching-cidr (first (filter #(ip-in-cidr? test-ip %) cidrs))]
