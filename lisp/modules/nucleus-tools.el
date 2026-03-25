@@ -66,7 +66,6 @@ When enabled, validates:
                      "Preview"
                      "create_skill"
                      "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-      (:lite-executor . ("Read" "Edit" "Bash" "Diagnostics"))
       (:explorer . ("Glob" "Grep" "Read" "Code_Map" "Code_Inspect"))
       (:reviewer . ("Glob" "Grep" "Read" "Diagnostics"))
       (:analyzer . ("Read" "Glob" "Grep"))
@@ -78,7 +77,6 @@ When enabled, validates:
 :researcher — Codebase + web research (17 tools): Full analysis capability
 :nucleus — Top-level action tools (28 tools): Includes RunAgent for orchestration
 :executor — Subagent execution tools (27 tools): No RunAgent (prevent recursive delegation)
-:lite-executor — Minimal tools (4 tools): Read, Edit, Bash, Diagnostics — FAST for simple edits
 :explorer — Codebase exploration (5 tools): Glob, Grep, Read, Code_Map, Code_Inspect
 :reviewer — Code review (4 tools): Read-only + Diagnostics
 :analyzer — Benchmark analysis (3 tools): Read, Glob, Grep
@@ -89,7 +87,6 @@ When enabled, validates:
 
 Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   executor     → :executor    (27 tools) - code changes & execution (no RunAgent)
-  lite-executor → :lite-executor (4 tools) - minimal fast edits
   researcher   → :researcher  (17 tools) - web + codebase + Eval
   introspector → :readonly    (18 tools) - Emacs introspection + web search
   explorer     → :explorer     (5 tools) - codebase exploration + Code tools
@@ -100,7 +97,6 @@ Tool contracts enforced in `nucleus--override-gptel-agent-presets':
 
 (defconst nucleus-agent-tool-contracts
   '(("executor"     . :executor)
-    ("lite-executor" . :lite-executor)
     ("researcher"   . :researcher)
     ("introspector" . :readonly)
     ("explorer"     . :explorer)
