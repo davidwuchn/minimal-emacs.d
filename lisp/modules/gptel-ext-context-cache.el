@@ -705,10 +705,10 @@ Fallback order:
 1. Cached context window for model-id
 2. Known models table (popular models pre-seeded)
 3. gptel model tables (OpenAI, Gemini, etc.)
-4. OpenRouter API fetch (if using OpenRouter)
-5. my/gptel-default-context-window (128k default)
+4. my/gptel-default-context-window (128k default)
 
-Note: We do NOT use gptel-max-tokens as it's for response length, not context window."
+Note: We do NOT use gptel-max-tokens as it's for response length, not context window.
+Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-window-cache'."
   (let* ((model gptel-model)
          (model-id (my/gptel--model-id-string model))
          (model-id-lower (and (stringp model-id) (downcase model-id)))
@@ -729,15 +729,8 @@ Note: We do NOT use gptel-max-tokens as it's for response length, not context wi
           (when entry
             (setq window (my/gptel--normalize-context-window
                           (plist-get (cdr entry) :context-window)))))))
-    ;; 4) If OpenRouter is in use and no metadata/cached value, fetch it.
-    (when (and (not window)
-               (boundp 'gptel--openrouter)
-               (eq gptel-backend gptel--openrouter)
-               (stringp model-id))
-      (my/gptel--openrouter-fetch-context-window model))
-    ;; 5) Fall back to default (NOT gptel-max-tokens which is response length)
-    (or window
-        my/gptel-default-context-window)))
+    ;; 4) Fall back to default (NOT gptel-max-tokens which is response length)
+    (or window my/gptel-default-context-window)))
 
 ;;; Auto-refresh Timer
 
