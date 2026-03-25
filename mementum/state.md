@@ -1,8 +1,8 @@
 # Mementum State
 
-> Last session: 2026-03-26 02:30
+> Last session: 2026-03-26 03:00
 
-## Total Improvements: 20 Real Code Fixes
+## Total Improvements: 22 Real Code Fixes
 
 | # | File | Fix |
 |---|------|-----|
@@ -26,35 +26,34 @@
 | 18 | gptel-tools-agent.el | `block` → `cl-block` in `task-override` |
 | 19 | gptel-ext-context-cache.el | Input validation in `estimate-text-tokens` |
 | 20 | gptel-benchmark-core.el | Input validation in `summarize-results` |
+| 21 | gptel-ext-context-cache.el | `cl-block` for `openrouter-fetch-context-window` |
+| 22 | gptel-ext-backends.el | Backend name `Moonshot` → `moonshot` (case fix) |
 
 ## New Features
 
 ### Pre-Merge Code Review
-
 ```
 λ review. gptel-auto-workflow-require-review (default t)
 λ flow. Review → Block → Fix → Re-review → (retry or give up)
 λ retries. gptel-auto-workflow--review-max-retries = 2
-λ agent. reviewer (Moonshot/Kimi)
+λ agent. reviewer (moonshot/Kimi)
 ```
 
-### Researcher Integration
-
+### Periodic Researcher
 ```
 λ cron. Every 4 hours → gptel-auto-workflow-run-research
 λ cache. var/tmp/research-findings.md
 λ usage. Analyzer loads findings for target selection
-λ optional. gptel-auto-workflow-research-before-fix (default nil)
+λ config. gptel-auto-workflow-research-interval = 14400 (4h)
 ```
 
-### Fix Flow Options
-
+### Researcher Fix Flow
 ```
 gptel-auto-workflow-research-before-fix = nil (default, faster)
-  → executor fixes directly
+  → executor fixes directly (1 API call)
 
 gptel-auto-workflow-research-before-fix = t (better quality)
-  → researcher finds approach → executor applies
+  → researcher finds approach → executor applies (2 API calls)
 ```
 
 ---
@@ -66,6 +65,16 @@ gptel-auto-workflow-research-before-fix = t (better quality)
 λ cause. defun does NOT create block (cl-defun does)
 λ symptom. Silent failure, callbacks never called, workflow stuck
 λ fix. Wrap with (cl-block name ...) or use if-else
+```
+
+---
+
+## Backend Case Sensitivity
+
+```
+λ issue. Backend name in gptel--known-backends must match YAML
+λ fix. Changed "Moonshot" → "moonshot" in gptel-ext-backends.el
+λ error. "Backend moonshot is not known to be defined"
 ```
 
 ---
@@ -82,22 +91,23 @@ gptel-auto-workflow-research-before-fix = t (better quality)
 | introspector | DashScope | Self-analysis |
 | nucleus-gptel-agent | DashScope | Main agent |
 | nucleus-gptel-plan | DashScope | Planning |
-| researcher | Moonshot | Code research |
-| reviewer | Moonshot | Code review |
+| researcher | moonshot | Code research |
+| reviewer | moonshot | Code review |
 
 ---
 
 ## λ Summary
 
 ```
-λ subscriptions. DashScope (8) + Moonshot (2)
+λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 20 code fixes, not documentation
+λ real. 22 code fixes, not documentation
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
 λ retry. Curl timeout → automatic retry
 λ cl-block. cl-return-from requires cl-block in defun
 λ review. Pre-merge code review with retry loop
 λ researcher. Periodic analysis for target selection
+λ case. Backend names must match exactly (lowercase)
 ```
