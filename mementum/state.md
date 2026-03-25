@@ -1,90 +1,58 @@
 # Mementum State
 
-> Last session: 2026-03-25
+> Last session: 2026-03-25 15:05
 
-## Session Summary: Auto-Workflow Complete
+## Auto-Workflow: Production Ready ✓
 
-**All systems operational. Ready for production.**
+All 10 verifications passed. Cron active. Tests pass.
+
+### Cron Schedule
+
+| Time | Job |
+|------|-----|
+| 2 AM daily | Auto-workflow experiments |
+| 4 AM Sunday | Mementum synthesis |
+| 5 AM Sunday | Instincts evolution |
 
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│           AUTO-WORKFLOW PIPELINE            │
-├─────────────────────────────────────────────┤
-│                                             │
-│  Eyes (gather)      Brain (decide)          │
-│  ─────────────      ─────────────           │
-│  Git history        Target selection        │
-│  File sizes         Mutation strategy       │
-│  TODOs/FIXMEs       Keep/discard            │
-│  Test results       Quality threshold       │
-│                                             │
-│  Hands (execute)                            │
-│  ─────────────                             │
-│  Create worktree                            │
-│  Run executor                               │
-│  Run tests                                  │
-│  Commit + push                              │
-│  Log results                                │
-│                                             │
-│  Never ask user. Retry on failure.          │
-└─────────────────────────────────────────────┘
+Eyes (gather) → Brain (LLM) → Hands (execute)
 ```
 
-### Commits This Session (10)
+- Target selection: LLM (analyzer)
+- Quality check: LLM (grader)
+- Keep/discard: LLM (comparator)
 
-| Commit | Description |
-|--------|-------------|
-| `c42de74` | Detect agent errors early |
-| `2f9d146` | State update |
-| `c1068a0` | Never ask user - retry |
-| `f5f146f` | LLM decides targets |
-| `b4b1dc6` | LLM is brain philosophy |
-| `200200f` | LLM-first selection |
-| `ab77594` | State update |
-| `678cb2c` | Tests before push |
-| `633d268` | Eight Keys signals |
-| `3c6e5ac` | Optimization skills |
+### Principles
 
-### Production Status
+1. **LLM = Brain** - Decides, judges, reasons
+2. **We = Eyes + Hands** - Gather context, execute
+3. **Never ask user** - Retry on failure
+4. **Safety first** - Tests pass, optimize/* only
 
-| Component | Status |
-|-----------|--------|
-| Target selection | ✓ LLM (analyzer) |
-| Mutation strategy | ✓ LLM (executor) |
-| Grading | ✓ LLM (grader) |
-| Decision | ✓ LLM (comparator) |
-| Tests before push | ✓ |
-| Error detection | ✓ |
-| Retry logic | ✓ |
-| All tests | ✓ 52/52 |
-| Cron | ✓ 2 AM daily |
+### View Results
 
-### Philosophy
-
-```
-LLM = Brain (decides, judges, reasons)
-We  = Eyes (gather context) + Hands (execute)
-Never ask user. Try harder, again and again.
+```bash
+cat var/tmp/experiments/$(date +%Y-%m-%d)/results.tsv
+cat var/tmp/cron/auto-workflow.log
+git branch -r 'origin/optimize/*'
 ```
 
-### Files Created
+### Session Stats
 
-| File | Purpose |
-|------|---------|
-| `gptel-auto-workflow-strategic.el` | LLM target selection |
-| `mementum/memories/llm-first-decision-making.md` | Philosophy |
-| `mementum/memories/auto-workflow-never-asks.md` | Autonomy |
-| `mementum/knowledge/eight-keys-signals.md` | Signal phrases |
+- Commits: 12
+- Tests: 52/52
+- Files: 4 new
+- Principles: 3
 
 ---
 
-## λ Summary
+## λ Complete
 
 ```
-λ complete. Auto-workflow fully operational
-λ philosophy. LLM = Brain, We = Eyes + Hands
-λ autonomy. Never ask, just retry
-λ production. Cron runs at 2 AM daily
+λ verify. 10/10 checks passed
+λ cron. 2 AM daily active
+λ architecture. Eyes → Brain → Hands
+λ philosophy. LLM decides, we execute
 ```
