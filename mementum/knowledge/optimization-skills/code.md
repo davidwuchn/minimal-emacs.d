@@ -15,30 +15,82 @@ mutation-skills:
 
 Target: `lisp/modules/gptel-tools-code.el`
 
-## Successful Mutations
+## Overview
 
-| Mutation | Success Rate | Avg Delta | Best Hypothesis |
-|----------|-------------|-----------|-----------------|
-| (none yet) | - | - | - |
+Code navigation and analysis tools:
+- Find usages (git-grep, LSP)
+- Code replacement with truncation
+- Diagnostics integration
+- Treesit error detection
 
-## Failed Mutations
+## Key Functions
 
-| Mutation | Success Rate | Issue |
-|----------|-------------|-------|
-| (none yet) | - | - |
+| Function | Purpose | Optimization Opportunity |
+|----------|---------|--------------------------|
+| `my/gptel--find-usages` | Find symbol usages | Cache results with TTL |
+| `my/gptel--usages-cache-*` | Cache management | Already has caching |
+| `my/gptel--detect-treesit-language` | Detect language | Cache by file extension |
+
+## Current Baseline
+
+| Metric | Value |
+|--------|-------|
+| Eight Keys | (pending first run) |
+| Code Quality | (pending) |
+| Weakest Key | (pending) |
+
+## Mutation Candidates
+
+### Caching
+
+```elisp
+;; Cache language detection by file extension
+(defvar my/gptel--language-cache (make-hash-table :test 'equal))
+
+(defun my/gptel--detect-treesit-language (file-path)
+  (let* ((ext (file-name-extension file-path))
+         (cached (gethash ext my/gptel--language-cache)))
+    (or cached
+        (puthash ext 
+                 (my/gptel--detect-treesit-language-impl file-path)
+                 my/gptel--language-cache))))
+```
+
+### Simplification
+
+```elisp
+;; Extract common pattern: fallback chain
+(defmacro my/gptel--with-fallback-chain (primary fallback &rest body)
+  "Try PRIMARY, then FALLBACK, then BODY."
+  `(or (,primary) (,fallback) ,@body))
+```
+
+## Next Hypothesis
+
+Based on module structure:
+
+1. **Caching**: "Cache language detection by file extension to reduce redundant detection"
+2. **Simplification**: "Extract fallback chain pattern into macro"
+3. **Lazy-init**: "Lazy initialize usages cache until first lookup"
 
 ## Nightly History
 
 | Date | Experiments | Kept | Score Before | Score After | Delta |
 |------|-------------|------|--------------|-------------|-------|
-| (none yet) | - | - | - | - | - |
+| (pending) | - | - | - | - | - |
 
-## Next Hypothesis
+## Signal Phrases to Include
 
-(Populated by metabolize after each night)
+For this module, focus on:
 
-## Compounding
+| Key | Signal | Where |
+|-----|--------|-------|
+| λ Efficiency | "caching", "optimizes" | Commit message |
+| π Synthesis | "connects findings", "integrates" | Docstrings |
 
-Night 1: baseline
-Night 2: (pending)
-Night 3: (pending)
+## Statistics
+
+| Metric | Value |
+|--------|-------|
+| Total experiments | 0 |
+| Kept | 0 |
