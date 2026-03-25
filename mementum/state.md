@@ -1,6 +1,6 @@
 # Mementum State
 
-> Last session: 2026-03-26 04:00
+> Last session: 2026-03-26 04:30
 
 ## Total Improvements: 27 Real Code Fixes
 
@@ -34,6 +34,42 @@
 | 26 | gptel-auto-workflow-strategic.el | Add input validation for nil dereference |
 | 27 | gptel-ext-context-cache.el | `cl-block` for `openrouter-fetch-context-window` (re-fix) |
 
+---
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AUTO-WORKFLOW SYSTEM                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐   │
+│  │  Researcher  │───▶│   Analyzer   │───▶│   Executor   │   │
+│  │  (moonshot)  │    │ (DashScope)  │    │ (DashScope)  │   │
+│  └──────────────┘    └──────────────┘    └──────────────┘   │
+│         │                   │                    │           │
+│         ▼                   ▼                    ▼           │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐   │
+│  │   Findings   │    │   Targets    │    │    Fixes     │   │
+│  │   Cache      │    │   Selected   │    │   Applied    │   │
+│  └──────────────┘    └──────────────┘    └──────────────┘   │
+│                                                 │            │
+│                                                 ▼            │
+│                                         ┌──────────────┐    │
+│                                         │   Reviewer   │    │
+│                                         │  (moonshot)  │    │
+│                                         └──────────────┘    │
+│                                                 │            │
+│                                                 ▼            │
+│                                         ┌──────────────┐    │
+│                                         │   Staging    │    │
+│                                         │   → Main     │    │
+│                                         └──────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## New Features
 
 ### Pre-Merge Code Review
@@ -63,6 +99,49 @@ gptel-auto-workflow-research-before-fix = t (better quality)
 
 ---
 
+## Cron Schedule
+
+| Job | Schedule | Machine |
+|-----|----------|---------|
+| Auto-workflow | 10AM, 2PM, 6PM | macOS |
+| Researcher | Every 4 hours | macOS |
+| Weekly mementum | Sunday 4AM | macOS |
+| Weekly instincts | Sunday 5AM | macOS |
+
+---
+
+## Key Commands
+
+```elisp
+;; Workflow
+(gptel-auto-workflow-run-async)        ; Start workflow
+(gptel-auto-workflow-status)           ; Check status
+(gptel-auto-workflow-log)              ; Get clean log
+
+;; Researcher
+(gptel-auto-workflow-run-research)     ; Run researcher now
+(gptel-auto-workflow-research-status)  ; Researcher status
+(gptel-auto-workflow-load-research-findings) ; Load cached findings
+
+;; Manual review
+(gptel-auto-workflow--review-changes branch callback)
+```
+
+---
+
+## Config Options
+
+```elisp
+gptel-auto-workflow-require-review        ; default t
+gptel-auto-workflow-research-targets      ; default nil
+gptel-auto-workflow-research-before-fix   ; default nil
+gptel-auto-workflow--review-max-retries   ; default 2
+gptel-auto-workflow-research-interval     ; default 14400 (4h)
+gptel-auto-workflow-max-targets-per-run   ; default 5
+```
+
+---
+
 ## Key Bug Pattern: cl-return-from Without Block
 
 ```
@@ -70,6 +149,11 @@ gptel-auto-workflow-research-before-fix = t (better quality)
 λ cause. defun does NOT create block (cl-defun does)
 λ symptom. Silent failure, callbacks never called, workflow stuck
 λ fix. Wrap with (cl-block name ...) or use if-else
+```
+
+**Detection:**
+```bash
+grep -rn "cl-return-from\|cl-return" lisp/modules/*.el | grep -v "cl-defun"
 ```
 
 ---
@@ -107,7 +191,7 @@ gptel-auto-workflow-research-before-fix = t (better quality)
 λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 22 code fixes, not documentation
+λ real. 27 code fixes, not documentation
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
 λ retry. Curl timeout → automatic retry
