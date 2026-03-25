@@ -4,10 +4,11 @@
 
 ## Session Summary: Auto-Workflow Debugging
 
-### Commits (10)
+### Commits (11)
 
 | Hash | Description |
 |------|-------------|
+| `ff20864` | λ Fix Eight Keys scoring: use actual code diff + commit message |
 | `125298f` | λ Fix TSV logging: escape newlines/tabs |
 | `f12accc` | 💡 Update TDD patterns with auto-workflow learnings |
 | `15ea470` | ◈ Document auto-workflow branching rule |
@@ -51,29 +52,21 @@
 - Multiple machines can optimize same target without conflicts
 - Human gate for quality control
 
-### Known Issue: Eight Keys Scoring
+### Eight Keys Scoring (FIXED 2026-03-25)
 
-**Problem**: Eight Keys score rarely improves even when code quality improves.
+**Problem**: Eight Keys score rarely improved even when code quality improved.
 
-**Root Cause**: `gptel-auto-experiment--eight-keys-scores` passes git diff stat to `gptel-benchmark-eight-keys-score`:
+**Root Causes**:
+1. `plist-get` called on wrong structure (key-def instead of cdr key-def)
+2. Inner quotes in signals/anti-patterns lists broke plist structure
+3. Git diff --stat doesn't contain signal patterns
 
-```elisp
-;; Current (WRONG):
-(let* ((output (shell-command-to-string
-                (format "cd %s && git diff HEAD~1 --stat" ...))))
-  (gptel-benchmark-eight-keys-score output))
-```
+**Fixes**:
+1. Fixed `plist-get` to use `(cdr key-def)` for proper plist access
+2. Removed inner quotes from signal/anti-pattern definitions
+3. Changed scoring input from `git diff --stat` to commit message + code diff
 
-The git diff stat output like:
-```
-lisp/modules/gptel-ext-retry.el | 308 +++++++++++++++++++++++++++++++---------
-```
-
-Does NOT contain signal patterns like "builds on discoveries", "explicit assumptions", etc.
-
-**Fix Needed**: Pass actual code diff or commit message instead of stat.
-
-**Workaround**: Grader still validates changes, just score comparison is unreliable.
+**Verified**: phi-vitality now scores 0.80 when patterns present (was always 0.50)
 
 ### Issues Fixed
 
