@@ -84,61 +84,44 @@ Findings stored in var/tmp/research-findings.md for analyzer."
 
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
-Returns plist with git history, file sizes, TODOs.
-
-;; ASSUMPTION: Git is available and project is a git repo
-;; BEHAVIOR: Collects 4 context types: git-history, file-sizes, todos, file-list
-;; RISK: Shell commands may fail silently (stderr redirected)
-;; EDGE CASE: Empty output if lisp/modules/ doesn't exist
-;; SYNTHESIS: Connects git activity, code volume, and technical debt for selection
-;; TEST: Verify all 4 plist keys present in non-empty result"
-  (let* ((proj-root (gptel-auto-workflow--project-root))
-         (modules-dir (and proj-root (expand-file-name "lisp/modules" proj-root))))
-    (if (and modules-dir (file-directory-p modules-dir))
+Scans both lisp/modules/ and packages/ (forked packages)."
+  (let* ((proj-root (gptel-auto-workflow--project-root)))
+    (if proj-root
         (list :git-history (shell-command-to-string
-                            (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
+                            (format "cd %s && git log --oneline -30 -- lisp/modules/ packages/ 2>/dev/null"
                                     proj-root))
               :file-sizes (shell-command-to-string
-                           (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -15"
+                           (format "cd %s && find lisp/modules packages -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
                                    proj-root))
               :todos (shell-command-to-string
-                      (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -20"
+                      (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ packages/ 2>/dev/null | head -30"
                               proj-root))
               :file-list (shell-command-to-string
-                          (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
+                          (format "cd %s && find lisp/modules packages -name '*.el' -type f 2>/dev/null"
                                   proj-root)))
       (list :git-history "" :file-sizes "" :todos "" :file-list ""))))
 
 (defun gptel-auto-workflow--research-patterns (callback)
-  "Research code patterns and issues for better target selection.
+  "Research code patterns.
 CALLBACK receives research findings string.
-Looks for: anti-patterns, architectural issues, code smells."
-  (let ((research-prompt "Research this Emacs Lisp codebase for optimization opportunities.
+Tells LLM how to use git grep for context."
+  (let ((research-prompt "Analyze lisp/modules/ and packages/ for code issues.
 
-FOCUS AREAS:
-1. Anti-patterns: cl-return-from without cl-block, missing error handling
-2. Architectural: high coupling, circular dependencies, missing abstractions  
-3. Code smells: deep nesting, long functions, duplicated logic
-4. Safety: unguarded buffer/overlay operations, missing nil checks
+Use Bash tool to run:
+  git grep -n 'cl-return-from' -- lisp/modules/ packages/ | head -20
+  git grep -n 'ignore-errors' -- lisp/modules/ packages/ | head -20
 
-For each issue found, report:
-- file:line location
-- issue type
-- severity (high/medium/low)
-- suggested fix
-
-Maximum response: 1500 characters. Focus on actionable findings."))
-    (message "[auto-workflow] Researching code patterns...")
+Report actionable issues only. Skip cleanup code, benchmarks, tests.
+Format: file:line | issue | fix
+Max 800 chars."))
+    (message "[auto-workflow] Researching patterns...")
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (gptel-benchmark-call-subagent
-         'researcher
-         "Research code patterns"
-         research-prompt
+         'researcher "Research patterns" research-prompt
          (lambda (result)
            (let ((findings (if (stringp result) result (format "%S" result))))
-             (message "[auto-workflow] Research complete: %d chars"
-                      (length findings))
+             (message "[auto-workflow] Research complete: %d chars" (length findings))
              (funcall callback findings))))
       (funcall callback ""))))
 
@@ -176,10 +159,10 @@ KNOWN ISSUES (TODOs/FIXMEs):
 RESEARCH FINDINGS:
 %s
 
-TASK: Select exactly %d files from lisp/modules/ to optimize.
+TASK: Select exactly %d files from lisp/modules/ or packages/ to optimize.
 
 OUTPUT JSON ONLY:
-{\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
+{\"targets\": [{\"file\": \"lisp/modules/xxx.el\" or \"packages/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
                          (plist-get context :file-list)
                          (plist-get context :git-history)
                          (plist-get context :file-sizes)
@@ -239,7 +222,7 @@ OUTPUT JSON ONLY:
         (insert (if (stringp response) response (format "%S" response)))
         (goto-char (point-min))
         (while (and (< (length targets) max-targets)
-                    (re-search-forward "lisp/modules/[a-zA-Z0-9_-]+\\.el" nil t))
+                    (re-search-forward "\\(lisp/modules\\|packages\\)/[a-zA-Z0-9_-]+\\.el" nil t))
           (let ((file (match-string 0)))
             (let ((abs-path (expand-file-name file proj-root)))
               (when (file-exists-p abs-path)
