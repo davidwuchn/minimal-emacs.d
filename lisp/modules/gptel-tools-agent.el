@@ -971,15 +971,17 @@ HYPOTHESIS: [your hypothesis here]"
   (let* ((base-dir (gptel-auto-workflow--project-root))
          (file (expand-file-name
                 (format "%s/%s/results.tsv" gptel-auto-workflow-worktree-base run-id)
-                base-dir)))
+                base-dir))
+         (agent-output (or (plist-get experiment :agent-output) ""))
+         (truncated-output (truncate-string-to-width agent-output 500 nil nil "...")))
     (make-directory (file-name-directory file) t)
     (unless (file-exists-p file)
       (with-temp-file file
-        (insert "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\n")))
+        (insert "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\n")))
     (with-temp-buffer
       (insert-file-contents file)
       (goto-char (point-max))
-      (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\n"
+      (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n"
                       (or (plist-get experiment :id) "?")
                       (or (plist-get experiment :target) "?")
                       (or (plist-get experiment :hypothesis) "unknown")
@@ -993,7 +995,8 @@ HYPOTHESIS: [your hypothesis here]"
                       (or (plist-get experiment :grader-quality) "?")
                       (or (plist-get experiment :grader-reason) "N/A")
                       (or (plist-get experiment :comparator-reason) "N/A")
-                      (or (plist-get experiment :analyzer-patterns) "N/A")))
+                      (or (plist-get experiment :analyzer-patterns) "N/A")
+                      truncated-output))
       (write-region (point-min) (point-max) file))))
 
 ;;; Dynamic Stop
@@ -1029,11 +1032,13 @@ HYPOTHESIS: [your hypothesis here]"
                                               (list :target target
                                                     :id experiment-id
                                                     :error "timeout"))))))
-           (my/gptel--run-agent-tool
-            (lambda (agent-output)
-              (when timeout-timer (cancel-timer timeout-timer))
-              (unless finished
-                (gptel-auto-experiment-grade
+(my/gptel--run-agent-tool
+             (lambda (agent-output)
+              (message "[auto-exp] Agent output (first 500 chars): %s"
+                       (truncate-string-to-width (or agent-output "nil") 500 nil nil "..."))
+               (when timeout-timer (cancel-timer timeout-timer))
+               (unless finished
+                 (gptel-auto-experiment-grade
                  agent-output
                  (lambda (grade)
                    (let* ((grade-score (plist-get grade :score))
@@ -1043,18 +1048,19 @@ HYPOTHESIS: [your hypothesis here]"
                          (progn
                            (setq finished t)
                            (gptel-auto-workflow-delete-worktree)
-                           (let ((exp-result (list :target target
-                                                   :id experiment-id
-                                                   :hypothesis hypothesis
-                                                   :score-before baseline
-                                                   :score-after 0
-                                                   :kept nil
-                                                   :duration (- (float-time) start-time)
-                                                   :grader-quality grade-score
-                                                   :grader-reason (plist-get grade :details)
-                                                   :comparator-reason "early-discard"
-                                                   :analyzer-patterns (format "%s" patterns))))
-                             (gptel-auto-experiment-log-tsv
+(let ((exp-result (list :target target
+                                                    :id experiment-id
+                                                    :hypothesis hypothesis
+                                                    :score-before baseline
+                                                    :score-after 0
+                                                    :kept nil
+                                                    :duration (- (float-time) start-time)
+                                                    :grader-quality grade-score
+                                                    :grader-reason (plist-get grade :details)
+                                                    :comparator-reason "early-discard"
+                                                    :analyzer-patterns (format "%s" patterns)
+                                                    :agent-output agent-output)))
+                              (gptel-auto-experiment-log-tsv
                               (format-time-string "%Y-%m-%d") exp-result)
                              (funcall callback exp-result)))
                        (let* ((bench (gptel-auto-experiment-benchmark))
@@ -1065,18 +1071,19 @@ HYPOTHESIS: [your hypothesis here]"
                                (setq finished t)
                                (magit-git-success "checkout" "--" ".")
                                (gptel-auto-workflow-delete-worktree)
-                               (let ((exp-result (list :target target
-                                                       :id experiment-id
-                                                       :hypothesis hypothesis
-                                                       :score-before baseline
-                                                       :score-after 0
-                                                       :kept nil
-                                                       :duration (- (float-time) start-time)
-                                                       :grader-quality grade-score
-                                                       :grader-reason (plist-get grade :details)
-                                                       :comparator-reason "tests-failed"
-                                                       :analyzer-patterns (format "%s" patterns))))
-                                 (gptel-auto-experiment-log-tsv
+(let ((exp-result (list :target target
+                                                        :id experiment-id
+                                                        :hypothesis hypothesis
+                                                        :score-before baseline
+                                                        :score-after 0
+                                                        :kept nil
+                                                        :duration (- (float-time) start-time)
+                                                        :grader-quality grade-score
+                                                        :grader-reason (plist-get grade :details)
+                                                        :comparator-reason "tests-failed"
+                                                        :analyzer-patterns (format "%s" patterns)
+                                                        :agent-output agent-output)))
+                                  (gptel-auto-experiment-log-tsv
                                   (format-time-string "%Y-%m-%d") exp-result)
                                  (funcall callback exp-result)))
                            (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
@@ -1087,19 +1094,20 @@ HYPOTHESIS: [your hypothesis here]"
                                 (setq finished t)
                                 (let* ((keep (plist-get decision :keep))
                                        (reasoning (plist-get decision :reasoning))
-                                       (exp-result (list :target target
-                                                         :id experiment-id
-                                                         :hypothesis hypothesis
-                                                         :score-before baseline
-                                                         :score-after score-after
-                                                         :code-quality code-quality
-                                                         :kept keep
-                                                         :duration (- (float-time) start-time)
-                                                         :grader-quality grade-score
-                                                         :grader-reason (plist-get grade :details)
-                                                         :comparator-reason reasoning
-                                                         :analyzer-patterns (format "%s" patterns))))
-                                  (if keep
+(exp-result (list :target target
+                                                          :id experiment-id
+                                                          :hypothesis hypothesis
+                                                          :score-before baseline
+                                                          :score-after score-after
+                                                          :code-quality code-quality
+                                                          :kept keep
+                                                          :duration (- (float-time) start-time)
+                                                          :grader-quality grade-score
+                                                          :grader-reason (plist-get grade :details)
+                                                          :comparator-reason reasoning
+                                                          :analyzer-patterns (format "%s" patterns)
+                                                          :agent-output agent-output)))
+                                   (if keep
                                       (let ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\nExperiment %d/%d. Score: %.2f → %.2f"
                                                          target
                                                          (gptel-auto-experiment--summarize hypothesis)
