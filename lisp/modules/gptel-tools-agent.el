@@ -757,12 +757,18 @@ Multiple machines can optimize same target without conflicts."
           :eight-keys-scores scores)))
 
 (defun gptel-auto-experiment--eight-keys-scores ()
-  "Get full Eight Keys scores alist from current codebase."
+  "Get full Eight Keys scores alist from current codebase.
+Scores based on commit message + code diff (not just stat)."
   (when (fboundp 'gptel-benchmark-eight-keys-score)
-    (let* ((output (shell-command-to-string
-                    (format "cd %s && git diff HEAD~1 --stat 2>/dev/null || echo 'no changes'"
-                            (or gptel-auto-workflow--worktree-dir
-                                (gptel-auto-workflow--project-root))))))
+    (let* ((worktree (or gptel-auto-workflow--worktree-dir
+                         (gptel-auto-workflow--project-root)))
+           (commit-msg (shell-command-to-string
+                        (format "cd %s && git log -1 --format='%%B' 2>/dev/null || echo ''"
+                                worktree)))
+           (code-diff (shell-command-to-string
+                       (format "cd %s && git diff HEAD~1 --unified=2 2>/dev/null | head -200"
+                               worktree)))
+           (output (concat commit-msg "\n\n" code-diff)))
       (gptel-benchmark-eight-keys-score output))))
 
 (defun gptel-auto-experiment--eight-keys-score ()

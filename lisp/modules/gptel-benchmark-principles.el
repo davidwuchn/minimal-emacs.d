@@ -51,65 +51,65 @@
      :symbol "φ"
      :name "Vitality"
      :element water
-     :signals '("builds on discoveries" "adapts to new information" "progressive improvement"
-                "non-repetitive" "evolves approach" "learns from feedback")
-     :anti-patterns '("mechanical rephrasing" "circular logic" "repeated failed approaches"
+     :signals ("builds on discoveries" "adapts to new information" "progressive improvement"
+               "non-repetitive" "evolves approach" "learns from feedback")
+     :anti-patterns ("mechanical rephrasing" "circular logic" "repeated failed approaches"
                       "retrying same way" "static approach" "ignores feedback"))
     (fractal-clarity
      :symbol "fractal"
      :name "Clarity"
      :element metal
-     :signals '("explicit assumptions" "testable definitions" "clear structure"
-                "measurable criteria" "well-defined phases" "explicit success criteria")
-     :anti-patterns '("vague terms" "handle properly" "look good" "ambiguous instructions"
+     :signals ("explicit assumptions" "testable definitions" "clear structure"
+               "measurable criteria" "well-defined phases" "explicit success criteria")
+     :anti-patterns ("vague terms" "handle properly" "look good" "ambiguous instructions"
                       "undefined terms" "implicit assumptions"))
     (epsilon-purpose
      :symbol "ε"
      :name "Purpose"
      :element wood
-     :signals '("clear goals" "measurable outcomes" "actionable function"
-                "specific objectives" "defined deliverables" "purposeful steps")
-     :anti-patterns '("abstract descriptions" "no action" "unclear goals"
+     :signals ("clear goals" "measurable outcomes" "actionable function"
+               "specific objectives" "defined deliverables" "purposeful steps")
+     :anti-patterns ("abstract descriptions" "no action" "unclear goals"
                       "meandering" "no measurable outcome" "purposeless"))
     (tau-wisdom
      :symbol "τ"
      :name "Wisdom"
      :element fire
-     :signals '("planning before execution" "error prevention" "foresight"
-                "plan file created" "risks identified" "proactive measures")
-     :anti-patterns '("premature optimization" "reactive fixes" "no planning"
+     :signals ("planning before execution" "error prevention" "foresight"
+               "plan file created" "risks identified" "proactive measures")
+     :anti-patterns ("premature optimization" "reactive fixes" "no planning"
                       "jump to execution" "ignores risks" "short-sighted"))
     (pi-synthesis
      :symbol "π"
      :name "Synthesis"
      :element earth
-     :signals '("connects findings" "integrates knowledge" "holistic view"
-                "findings integrated" "connections noted" "synthesizes information")
-     :anti-patterns '("fragmented thinking" "isolated facts" "disconnected"
+     :signals ("connects findings" "integrates knowledge" "holistic view"
+               "findings integrated" "connections noted" "synthesizes information")
+     :anti-patterns ("fragmented thinking" "isolated facts" "disconnected"
                       "siloed information" "no integration" "missing connections"))
     (mu-directness
      :symbol "μ"
      :name "Directness"
      :element metal
-     :signals '("direct communication" "no pleasantries" "efficient"
-                "errors logged directly" "clear pass/fail" "concise")
-     :anti-patterns '("polite evasion" "euphemisms" "softening language"
+     :signals ("direct communication" "no pleasantries" "efficient"
+               "errors logged directly" "clear pass/fail" "concise")
+     :anti-patterns ("polite evasion" "euphemisms" "softening language"
                       "vague language" "unnecessary words" "beating around bush"))
     (exists-truth
      :symbol "∃"
      :name "Truth"
      :element water
-     :signals '("actual data" "evidence-based" "acknowledges uncertainty"
-                "actual errors logged" "verification based on evidence" "honest assessment")
-     :anti-patterns '("surface agreement" "wishful thinking" "assumptions over data"
+     :signals ("actual data" "evidence-based" "acknowledges uncertainty"
+               "actual errors logged" "verification based on evidence" "honest assessment")
+     :anti-patterns ("surface agreement" "wishful thinking" "assumptions over data"
                       "should work" "ignores evidence" "false confidence"))
     (forall-vigilance
      :symbol "∀"
      :name "Vigilance"
      :element earth
-     :signals '("proactive error handling" "never repeat failures" "defensive"
-                "3-strike protocol" "failed attempts tracked" "approach mutates")
-     :anti-patterns '("accepting failures" "repeating mistakes" "no error handling"
+     :signals ("proactive error handling" "never repeat failures" "defensive"
+               "3-strike protocol" "failed attempts tracked" "approach mutates")
+     :anti-patterns ("accepting failures" "repeating mistakes" "no error handling"
                       "ignores edge cases" "gives up easily" "static after failure")))
   "Eight Keys definitions.
 See mementum/knowledge/nucleus-patterns.md for documentation.")
@@ -144,9 +144,10 @@ Returns alist: ((key . score) ...) plus overall score."
         (count 0))
     (dolist (key-def gptel-benchmark-eight-keys-definitions)
       (let* ((key (car key-def))
+             (def-plist (cdr key-def))
              (weight (or (alist-get key gptel-benchmark-eight-keys-weights) 1.0))
-             (signals (plist-get key-def :signals))
-             (anti-patterns (plist-get key-def :anti-patterns))
+             (signals (plist-get def-plist :signals))
+             (anti-patterns (plist-get def-plist :anti-patterns))
              (signal-score (gptel-benchmark--score-signals output signals))
              (anti-score (gptel-benchmark--score-anti-patterns output anti-patterns))
              (score (+ (* 0.6 signal-score) (* 0.4 anti-score))))
