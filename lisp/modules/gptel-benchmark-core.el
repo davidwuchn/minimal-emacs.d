@@ -225,15 +225,17 @@ RESULTS should contain :eight-keys-scores in each entry."
 (defun gptel-benchmark-show-eight-keys (name results)
   "Show Eight Keys breakdown for NAME with RESULTS."
   (let ((breakdown (gptel-benchmark-eight-keys-breakdown results)))
-    (with-output-to-temp-buffer (format "*Eight Keys: %s*" name)
-      (princ (format "=== Eight Keys Breakdown: %s ===\n\n" name))
-      (dolist (key-def gptel-benchmark-eight-keys-definitions)
-        (let* ((key (car key-def))
-               (symbol (plist-get key-def :symbol))
-               (name-str (plist-get key-def :name))
-               (score (alist-get key breakdown)))
-          (princ (format "%s %s: %.1f%%\n" symbol name-str (* 100 (or score 0))))))
-      (princ "\n"))))
+    (if (not (boundp 'gptel-benchmark-eight-keys-definitions))
+        (message "[benchmark] Eight Keys definitions not loaded")
+      (with-output-to-temp-buffer (format "*Eight Keys: %s*" name)
+        (princ (format "=== Eight Keys Breakdown: %s ===\n\n" name))
+        (dolist (key-def gptel-benchmark-eight-keys-definitions)
+          (let* ((key (car key-def))
+                 (symbol (plist-get key-def :symbol))
+                 (name-str (plist-get key-def :name))
+                 (score (alist-get key breakdown)))
+            (princ (format "%s %s: %.1f%%\n" symbol name-str (* 100 (or score 0))))))
+        (princ "\n")))))
 
 ;;; Feedback Logging
 
