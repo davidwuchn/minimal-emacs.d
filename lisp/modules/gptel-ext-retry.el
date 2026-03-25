@@ -181,11 +181,11 @@ Returns the number of messages whose reasoning_content was stripped."
           (when (> (length reasoning-indices) keep)
             (let ((to-strip (seq-take reasoning-indices
                                       (- (length reasoning-indices) keep))))
-              (dolist (idx to-strip)
-                (let ((msg (aref messages idx)))
-                  (plist-put msg :reasoning_content "")
-                  (cl-incf stripped))))))))
-      stripped)))
+(dolist (idx to-strip)
+                 (let ((msg (aref messages idx)))
+                   (plist-put msg :reasoning_content "")
+                   (cl-incf stripped)))))))
+       stripped)))
 
 (defun my/gptel--repair-thinking-tool-call-messages (info)
   "Ensure thinking-enabled assistant tool-call messages stay API-valid.

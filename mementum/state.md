@@ -1,8 +1,8 @@
 # Mementum State
 
-> Last session: 2026-03-26 04:30
+> Last session: 2026-03-26 05:00
 
-## Total Improvements: 27 Real Code Fixes
+## Total Improvements: 31 Real Code Fixes
 
 | # | File | Fix |
 |---|------|-----|
@@ -33,6 +33,10 @@
 | 25 | gptel-ext-retry.el | Extract transient error patterns into constants |
 | 26 | gptel-auto-workflow-strategic.el | Add input validation for nil dereference |
 | 27 | gptel-ext-context-cache.el | `cl-block` for `openrouter-fetch-context-window` (re-fix) |
+| 28 | gptel-ext-context-cache.el | Remove async fetch from context-window getter |
+| 29 | gptel-benchmark-core.el | Consolidate duplicate maphash (workflow fix) |
+| 30 | gptel-ext-retry.el | Extract message iteration into helper function |
+| 31 | gptel-auto-workflow-strategic.el | Limit regex fallback targets to max-targets |
 
 ---
 
