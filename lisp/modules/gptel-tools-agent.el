@@ -1177,7 +1177,29 @@ HYPOTHESIS: [your hypothesis here]"
 
 ;;; Main Entry Point
 
-(defun gptel-auto-workflow-run (&optional targets)
+(defvar gptel-auto-workflow--running nil
+  "Flag to track if auto-workflow is currently running.")
+
+(defun gptel-auto-workflow-run-sync (&optional targets)
+  "Run auto-workflow synchronously (blocking).
+This is the version to use for cron jobs.
+
+Uses `accept-process-output' to keep event loop alive while waiting
+for async callbacks to complete."
+  (let ((gptel-auto-workflow--running t)
+        (done-count 0)
+        (total-targets (length (or targets gptel-auto-workflow-targets))))
+    (gptel-auto-workflow-run-async
+     targets
+     (lambda ()
+       (cl-incf done-count)
+       (when (= done-count total-targets)
+         (setq gptel-auto-workflow--running nil))))
+    (while gptel-auto-workflow--running
+      (accept-process-output nil 1.0))
+    (message "[auto-workflow] Sync run complete")))
+
+(defun gptel-auto-workflow-run-async (&optional targets completion-callback)
   "Run ~32 experiments overnight (dynamic stop per target).
 
 Each target runs up to gptel-auto-experiment-max-per-target experiments.
@@ -1191,7 +1213,9 @@ Uses subagents:
 
 Results logged to var/tmp/experiments/{date}/results.tsv
 
-Cron: emacsclient -e '(gptel-auto-workflow-run)'
+COMPLETION-CALLBACK is called when all targets are done (for sync wrapper).
+
+Cron: emacsclient -e '(gptel-auto-workflow-run-sync)'
 Manual: M-x gptel-auto-workflow-run"
   (interactive)
   (unless (require 'magit-worktree nil t)
@@ -1200,17 +1224,28 @@ Manual: M-x gptel-auto-workflow-run"
     (user-error "magit-git is required"))
   (let* ((targets (or targets gptel-auto-workflow-targets))
          (run-id (format-time-string "%Y-%m-%d"))
-         (all-results '()))
+         (all-results '())
+         (completed-targets 0))
     (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
     (dolist (target targets)
       (gptel-auto-experiment-loop
        target
        (lambda (results)
-         (setq all-results (append all-results results)))))
-    (message "[auto-workflow] Complete: %d total experiments"
-             (length all-results))
-    (message "[auto-workflow] Results: %s/%s/results.tsv"
-             gptel-auto-workflow-worktree-base run-id)))
+         (setq all-results (append all-results results))
+         (cl-incf completed-targets)
+         (when (= completed-targets (length targets))
+           (message "[auto-workflow] Complete: %d total experiments"
+                    (length all-results))
+           (message "[auto-workflow] Results: %s/%s/results.tsv"
+                    gptel-auto-workflow-worktree-base run-id)
+           (when completion-callback
+             (funcall completion-callback))))))))
+
+(defun gptel-auto-workflow-run (&optional targets)
+  "Run auto-workflow (interactive wrapper).
+For cron, use `gptel-auto-workflow-run-sync' instead."
+  (interactive)
+  (gptel-auto-workflow-run-async targets))
 
 ;;; Autonomous Research Agent (program.md + skills + mementum)
 

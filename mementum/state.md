@@ -4,38 +4,47 @@
 
 ## Session Summary: Auto-Workflow Debugging
 
-### Commits (4)
+### Commits (5)
 
 | Hash | Description |
 |------|-------------|
+| `0f0fa0b` | λ Remove auto-evolve, keep auto-workflow |
 | `57ca7ce` | λ Add logging for auto-experiment agent output |
 | `b153708` | λ Remove unused lite-executor agent |
 | `2592957` | λ Fix auto-workflow: use executor agent + buffer-local timer state |
 | `0af692a` | λ Fix auto-workflow: use lite-executor instead of code agent |
 
-### Issue Under Investigation
+### Issue: Auto-Workflow Returns Nil
 
-Auto-workflow experiments failing with error messages instead of code changes.
+**Root Cause Found**: `my/gptel--run-agent-tool` returns nil when called with auto-workflow prompt.
 
-**Symptoms**:
-- Experiments return "Error: ..." messages
-- Grader sees no hypothesis stated
-- All experiments discarded early
+**Testing Results** (via `emacs --daemon` + `emacsclient`):
+```elisp
+;; Simple test - WORKS
+(gptel-agent--task callback "executor" "Test" "Say hello")
+;; => "Hello! DONE"
 
-**Debugging Added**:
-- Agent output logged to `*Messages*` (first 500 chars)
-- TSV results now include `agent_output` column
-- Experiment result plists include `:agent-output` key
+;; Auto-workflow style test - RETURNS NIL
+(my/gptel--run-agent-tool callback "executor" "Test" "<long prompt>")
+;; => nil
+```
+
+**Diagnosis**:
+- `gptel-agent--task` works directly
+- `my/gptel--run-agent-tool` wrapper returns nil
+- Likely: timeout callback chain issue or buffer context problem
 
 **Next Steps**:
-1. Run experiment manually to capture agent output
-2. Check if executor agent has correct tools
-3. Verify model `qwen3.5-plus` is working
+1. Debug `my/gptel--run-agent-tool` callback chain
+2. Check if `gptel--fsm-last` buffer context is wrong
+3. Add more logging to `my/gptel--agent-task-with-timeout`
 
 ### Verified Working
 
 ```
 grader/* tests: 52/52 ✓
+executor agent: loaded ✓ (via assistant/agents/executor.md)
+gptel backend: DashScope (coding.dashscope.aliyuncs.com)
 ```
 
 ## Suggested Hypothesis (from skill)
