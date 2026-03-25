@@ -77,14 +77,14 @@ Returns plist with git history, file sizes, TODOs.
                         (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
                                 proj-root))
           :file-sizes (shell-command-to-string
-                        (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -15"
-                                proj-root))
+                       (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -15"
+                               proj-root))
           :todos (shell-command-to-string
                   (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -20"
                           proj-root))
           :file-list (shell-command-to-string
-                       (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
-                               proj-root)))))
+                      (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
+                              proj-root)))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
@@ -116,11 +116,11 @@ TASK: Select exactly %d files from lisp/modules/ to optimize.
 
 OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
-                        (plist-get context :file-list)
-                        (plist-get context :git-history)
-                        (plist-get context :file-sizes)
-                        (plist-get context :todos)
-                        max-targets)))
+                         (plist-get context :file-list)
+                         (plist-get context :git-history)
+                         (plist-get context :file-sizes)
+                         (plist-get context :todos)
+                         max-targets)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (progn
@@ -143,7 +143,7 @@ OUTPUT JSON ONLY:
 ;; TEST: Verify valid files extracted from both JSON and text responses"
   (let ((targets '()))
     ;; Try JSON
-    (condition-case nil
+    (condition-case _
         (with-temp-buffer
           (insert (if (stringp response) response (format "%S" response)))
           (goto-char (point-min))
