@@ -1085,6 +1085,34 @@ Example: HYPOTHESIS: Adding caching to reduce redundant API calls will improve p
   "Check if should stop based on no-improvement count >= THRESHOLD."
   (>= gptel-auto-experiment--no-improvement-count threshold))
 
+;;; Retry Logic (Never Ask User, Just Try Again)
+
+(defcustom gptel-auto-experiment-max-retries 3
+  "Maximum retries for transient failures.
+Auto-workflow never asks user - just retries until success or max retries."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-experiment--with-retry (fn &optional max-retries)
+  "Call FN with retry on failure.
+Never asks user - retries up to MAX-RETRIES times.
+Auto-workflow principle: try harder, again and again, never stop to ask."
+  (let ((attempts 0)
+        (max (or max-retries gptel-auto-experiment-max-retries))
+        result)
+    (while (and (< attempts max) (not result))
+      (cl-incf attempts)
+      (condition-case err
+          (progn
+            (setq result (funcall fn))
+            (when result
+              (message "[auto-experiment] Success on attempt %d/%d" attempts max)))
+        (error
+         (message "[auto-experiment] Attempt %d/%d failed: %s" attempts max err)
+         (when (< attempts max)
+           (sit-for 1)))))  ; Brief pause before retry
+    result))
+
 ;;; Single Experiment
 
 (defun gptel-auto-experiment-run (target experiment-id max-experiments baseline previous-results callback)
