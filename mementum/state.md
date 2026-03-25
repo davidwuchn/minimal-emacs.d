@@ -1,8 +1,8 @@
 # Mementum State
 
-> Last session: 2026-03-25 22:45
+> Last session: 2026-03-25 23:00
 
-## Total Improvements: 8 Real Code Fixes
+## Total Improvements: 12 Real Code Fixes
 
 | # | File | Fix |
 |---|------|-----|
@@ -14,6 +14,30 @@
 | 6 | gptel-ext-retry.el | Pass retry-count as parameter |
 | 7 | gptel-auto-workflow-strategic.el | Fix recursive file discovery |
 | 8 | gptel-ext-fsm-utils.el | Fix FSM context validation |
+| 9 | gptel-ext-context.el | Fix undefined function `estimate-tokens` |
+| 10 | gptel-benchmark-core.el | Add defensive check for undefined variable |
+| 11 | gptel-ext-retry.el | Remove redundant repair call |
+| 12 | gptel-auto-workflow-strategic.el | Add missing `(require 'cl-lib)` |
+
+---
+
+## Lessons Learned
+
+### Curl Timeout (Exit Code 28)
+
+```
+ERROR: "Curl failed with exit code 28"
+CAUSE: API connection timeout (>300s)
+FIX: Increase curl timeout or retry
+```
+
+### Workflow State Can Get Stuck
+
+```
+λ fsm. Long-running executor can leave workflow in "running" state
+λ reset. (setq gptel-auto-workflow--running nil) to unstick
+λ monitor. Check status after each run completes
+```
 
 ---
 
@@ -32,21 +56,13 @@
 | nucleus-gptel-agent | |
 | nucleus-gptel-plan | |
 
-### Workflow Settings
+### Parallel Setup
 
-| Setting | Value |
-|---------|-------|
-| Targets | LLM selects dynamically |
-| Max per run | 5 |
-| Experiments/target | 5 |
-| No-improvement stop | 2 |
-| Frequency | Every 6h |
-
-### Cron
-
-```
-0 */6 * * * (4x/day: 0:00, 6:00, 12:00, 18:00)
-```
+| Machine | Schedule | Runs/Day |
+|---------|----------|----------|
+| macOS | 10AM, 2PM, 6PM | 3 |
+| Pi5 | 11PM, 3AM, 7AM, 11AM, 3PM, 7PM | 6 |
+| **Total** | | **9** |
 
 ---
 
@@ -54,9 +70,10 @@
 
 ```
 λ subscriptions. DashScope (8) + Moonshot (2)
-λ dashscope. More quota = more agents
+λ parallel. macOS (daylight) + Pi5 (24/7)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 8 code fixes, not documentation
+λ real. 12 code fixes, not documentation
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
+λ retry. Curl timeout → automatic retry
 ```
