@@ -16,6 +16,38 @@
 | `2592957` | λ Fix auto-workflow: use executor agent + buffer-local timer state |
 | `0af692a` | λ Fix auto-workflow: use lite-executor instead of code agent |
 
+### Auto-Workflow Branching Rule (CRITICAL)
+
+```
+λ auto-workflow-branching(x).
+    change(x) → branch(optimize/{target}-{hostname}-exp{N})
+    | push(optimize/...) → origin/optimize/...
+    | ¬push(main)
+    | human_review → merge(main)
+```
+
+**Branch Format**: `optimize/{target-name}-{hostname}-exp{N}`
+
+**Example**: `optimize/retry-imacpro.taila8bdd.ts.net-exp1`
+
+**Flow**:
+1. Auto-workflow creates worktree with optimize branch
+2. Executor makes changes in worktree (isolated from main)
+3. If improvement → commit to optimize branch
+4. Push to `origin optimize/...` (NOT main!)
+5. Human reviews and merges to main via PR
+
+**Code Location**: `gptel-tools-agent.el:1134`
+```elisp
+(when gptel-auto-experiment-auto-push
+  (magit-git-success "push" "origin" gptel-auto-workflow--current-branch))
+```
+
+**Why This Matters**:
+- Prevents unreviewed AI changes on main
+- Multiple machines can optimize same target without conflicts
+- Human gate for quality control
+
 ### Issues Fixed
 
 #### 1. Async/Sync Incompatibility (FIXED)
