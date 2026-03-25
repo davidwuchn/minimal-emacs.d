@@ -6,13 +6,14 @@
 
 **30 commits** fixing all major issues. System ready for production use.
 
-### Commits (20)
+### Commits (21)
 
 | Hash | Description |
 |------|-------------|
+| `0424f89` | λ Fix comparator decision: fall back to local when winner is nil |
+| `c7e47e7` | ◈ Final state.md update: 20 commits documented |
 | `1b8f7c1` | ◈ Update scripts: use gptel-auto-workflow-run-sync |
 | `f2d1b53` | ◈ Update auto-workflow.md: sync version, 50/50 weights |
-| `ac9ca19` | ◈ Update state.md: add latest commits |
 | `f1a746e` | λ Balance comparator weights: 50/50 Eight Keys vs code quality |
 | `b9ff770` | λ Fix comparator: use 'comparator' subagent instead of 'analyzer' |
 | `f479f95` | ◈ Update state.md: all auto-workflow issues resolved |
@@ -30,6 +31,30 @@
 | `a3f94d7` | λ Add gptel-auto-workflow-run-sync for cron |
 | `0f0fa0b` | λ Remove auto-evolve, keep auto-workflow |
 | `57ca7ce` | λ Add logging for auto-experiment agent output |
+
+### Comparator Decision Bug (FIXED 2026-03-25)
+
+**Problem**: Experiments discarded even when combined score improved.
+
+**Root Cause**: When comparator subagent returns `nil` for `winner` (parse error, timeout), the code did:
+```elisp
+(keep (string= winner "B"))  ; nil → discarded
+```
+
+**Example**:
+- Score: 0.40 → 0.40
+- Quality: 0.50 → 1.00
+- Combined: 0.45 → 0.70 (improvement!)
+- But `winner=nil` → discarded (BUG)
+
+**Fix**: Fall back to local combined score comparison when `winner` is nil:
+```elisp
+(keep (if winner
+          (string= winner "B")
+        (> combined-after combined-before)))
+```
+
+**Also fixed**: Quality delta was `quality-after - quality-after = 0` instead of `quality-after - quality-before`.
 
 ### Auto-Workflow Branching Rule (CRITICAL)
 
