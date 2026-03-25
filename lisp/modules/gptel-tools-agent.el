@@ -1160,17 +1160,21 @@ Example: HYPOTHESIS: Adding caching to reduce redundant API calls will improve p
 (defun gptel-auto-experiment--extract-hypothesis (output)
   "Extract HYPOTHESIS from agent OUTPUT.
 Tries multiple patterns in order:
-1. HYPOTHESIS: prefix
+1. Explicit HYPOTHESIS: prefix
 2. **HYPOTHESIS** markdown
-3. First sentence describing the change"
+3. Sentence with 'will improve' (predictive statement)
+4. Action verb at start of sentence"
   (cond
    ((string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
     (match-string 1 output))
    ((string-match "\\*\\*HYPOTHESIS\\*\\*:?\\s-*\\([^\n]+\\)" output)
     (match-string 1 output))
-   ((string-match "\\(?:Adding\\|Changing\\|Improving\\|Enhancing\\|Removing\\|Refactoring\\)\\s-+[^.\n]+[.\n]" output)
+   ((string-match "[^.]*\\s-+will improve\\s-+[^.]*\\.?" output)
     (let ((match (match-string 0 output)))
-      (string-trim (replace-regexp-in-string "[.\n]+$" "" match))))
+      (string-trim match)))
+   ((string-match "\\(?:Adding\\|Changing\\|Improving\\|Enhancing\\|Removing\\|Refactoring\\)\\s-+[^.\n]+\\." output)
+    (let ((match (match-string 0 output)))
+      (string-trim match)))
    (t "No hypothesis stated")))
 
 (defun gptel-auto-experiment--summarize (hypothesis)
