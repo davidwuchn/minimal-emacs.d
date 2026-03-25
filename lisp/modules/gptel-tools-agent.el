@@ -1626,68 +1626,22 @@ Tries multiple patterns in order:
 
 (declare-function gptel-auto-workflow-select-targets "gptel-auto-workflow-strategic")
 
-(defun gptel-auto-workflow-run-sync (&optional targets)
-  "Run auto-workflow synchronously (blocking).
-This is the version to use for cron jobs.
-
-If TARGETS is nil and gptel-auto-workflow-strategic-selection is t,
-asks analyzer LLM to select best targets.
-
-Uses `accept-process-output' to keep event loop alive while waiting
-for async callbacks to complete.
-
-At workflow start, syncs staging from main if staging is enabled."
-  ;; Sync staging from main at start
-  (when gptel-auto-workflow-use-staging
-    (gptel-auto-workflow--sync-staging-from-main))
-  (let ((gptel-auto-workflow--running t)
-        (done-count 0)
-        (selected-targets nil))
-    (if targets
-        (progn
-          (setq selected-targets targets)
-          (gptel-auto-workflow--run-with-targets selected-targets
-            (lambda () (setq gptel-auto-workflow--running nil))))
-      ;; Use strategic selection
-      (require 'gptel-auto-workflow-strategic)
-      (gptel-auto-workflow-select-targets
-       (lambda (ts)
-         (setq selected-targets ts)
-         (gptel-auto-workflow--run-with-targets selected-targets
-           (lambda () (setq gptel-auto-workflow--running nil))))))
-    (while gptel-auto-workflow--running
-      (accept-process-output nil 1.0))
-    (message "[auto-workflow] Sync run complete with %d targets" (length selected-targets))))
-
-(defun gptel-auto-workflow--run-with-targets (targets completion-callback)
-  "Run experiments for TARGETS, call COMPLETION-CALLBACK when done."
-  (let ((done-count 0)
-        (total (length targets)))
-    (gptel-auto-workflow-run-async
-     targets
-     (lambda ()
-       (cl-incf done-count)
-       (when (= done-count total)
-         (funcall completion-callback))))))
-
 (defun gptel-auto-workflow-run-async (&optional targets completion-callback)
-  "Run auto-workflow with TARGETS.
+  "Run auto-workflow with TARGETS asynchronously.
+Non-blocking - returns immediately, check status with `gptel-auto-workflow-status'.
 
 Each target runs up to gptel-auto-experiment-max-per-target experiments.
 Stops early if gptel-auto-experiment-no-improvement-threshold consecutive
 experiments show no improvement.
 
-Uses subagents:
-- analyzer: detect patterns, guide hypotheses
-- grader: validate experiment quality (LLM decides threshold)
-- comparator: decide keep/discard with reasoning
-
 Results logged to var/tmp/experiments/{date}/results.tsv
 
-COMPLETION-CALLBACK is called when all targets are done (for sync wrapper).
+COMPLETION-CALLBACK is called with results when all targets are done.
 
-Cron: emacsclient -e '(gptel-auto-workflow-run-sync)'
-Manual: M-x gptel-auto-workflow-run"
+Usage:
+  emacsclient -e '(gptel-auto-workflow-run-async)'
+  emacsclient -e '(gptel-auto-workflow-status)'
+  M-x gptel-auto-workflow-run"
   (interactive)
   (unless (require 'magit-worktree nil t)
     (user-error "magit-worktree is required"))
@@ -1713,8 +1667,9 @@ Manual: M-x gptel-auto-workflow-run"
              (funcall completion-callback))))))))
 
 (defun gptel-auto-workflow-run (&optional targets)
-  "Run auto-workflow (interactive wrapper).
-For cron, use `gptel-auto-workflow-run-sync' instead."
+  "Run auto-workflow asynchronously.
+Non-blocking - returns immediately, check status with `gptel-auto-workflow-status'.
+TARGETS defaults to `gptel-auto-workflow-targets'."
   (interactive)
   (gptel-auto-workflow-run-async targets))
 

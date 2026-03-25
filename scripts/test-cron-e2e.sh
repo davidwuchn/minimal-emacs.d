@@ -177,7 +177,8 @@ check_function() {
 }
 
 if emacsclient --eval 't' >/dev/null 2>&1; then
-    check_function 'gptel-auto-workflow-run-sync' || true
+    check_function 'gptel-auto-workflow-run-async' || true
+    check_function 'gptel-auto-workflow-status' || true
     check_function 'gptel-auto-workflow-run' || true
     check_function 'gptel-mementum-weekly-job' || true
     check_function 'gptel-benchmark-instincts-weekly-job' || true
