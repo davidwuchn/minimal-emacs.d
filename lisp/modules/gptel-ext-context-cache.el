@@ -272,6 +272,19 @@ Pricing is in USD per million tokens (input/output).")
 
 ;;; Helpers
 
+(defun my/gptel--alist-partial-match (alist search-str)
+  "Find first entry in ALIST where key partially matches SEARCH-STR (case-insensitive).
+Returns the cdr (value) of the matching entry, or nil if no match."
+  (when (and (listp alist) (stringp search-str))
+    (let ((search-lower (downcase search-str))
+          (result nil))
+      (dolist (entry alist)
+        (when (and (consp entry)
+                   (stringp (car entry))
+                   (string-match-p (regexp-quote (car entry)) search-lower))
+          (setq result (cdr entry))))
+      result)))
+
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
@@ -550,13 +563,7 @@ Returns plist with :context-window, :pricing-input, :pricing-output, etc."
   (let* ((model-id (if (stringp model-id) model-id (my/gptel--model-id-string model-id)))
          (cached (gethash model-id my/gptel--model-metadata-cache)))
     (or cached
-        ;; Try partial match in known metadata
-        (let ((id-lower (downcase model-id))
-              (result nil))
-          (dolist (entry my/gptel--known-model-metadata)
-            (when (string-match-p (regexp-quote (car entry)) id-lower)
-              (setq result (cdr entry))))
-          result))))
+        (my/gptel--alist-partial-match my/gptel--known-model-metadata model-id))))
 
 (defun my/gptel-show-model-info (model-id)
   "Show detailed info for MODEL-ID."
@@ -711,17 +718,14 @@ Note: We do NOT use gptel-max-tokens as it's for response length, not context wi
 Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-window-cache'."
   (let* ((model gptel-model)
          (model-id (my/gptel--model-id-string model))
-         (model-id-lower (and (stringp model-id) (downcase model-id)))
          (window nil))
     ;; 1) Prefer our cache (for OpenRouter-style model ids).
     (when (and (stringp model-id)
                (gethash model-id my/gptel--context-window-cache))
       (setq window (gethash model-id my/gptel--context-window-cache)))
     ;; 2) Check known models table (case-insensitive partial match)
-    (when (and (not window) model-id-lower)
-      (dolist (entry my/gptel--known-model-context-windows)
-        (when (string-match-p (regexp-quote (car entry)) model-id-lower)
-          (setq window (cdr entry)))))
+    (when (and (not window) (stringp model-id))
+      (setq window (my/gptel--alist-partial-match my/gptel--known-model-context-windows model-id)))
     ;; 3) Check gptel model tables
     (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
       (when (and (boundp var) (not window))
