@@ -1,8 +1,9 @@
 ---
 name: grader
-model: qwen3.5-plus
+model: kimi-k2.5
+backend: moonshot
 max-tokens: 2048
-description: Evaluate skill outputs against defined assertions.
+description: Evaluate skill outputs (Moonshot/Kimi)
 tools:
   - Read
   - Glob

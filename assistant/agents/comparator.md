@@ -1,8 +1,9 @@
 ---
 name: comparator
-model: qwen3.5-plus
+model: kimi-k2.5
+backend: moonshot
 max-tokens: 2048
-description: Perform blind A/B comparison between two skill outputs.
+description: Perform blind A/B comparison (Moonshot/Kimi)
 tools:
   - Read
   - Glob

@@ -1,8 +1,11 @@
 ---
 name: analyzer
-model: qwen3.5-plus
-max-tokens: 4096
-description: Analyze benchmark results to find patterns and insights.
+model: kimi-k2.5
+backend: moonshot
+max-tokens: 8192
+temperature: 0.3
+steps: 50
+description: Analyzer for target selection (Moonshot/Kimi)
 tools:
   - Read
   - Glob

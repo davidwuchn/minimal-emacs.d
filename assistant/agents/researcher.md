@@ -1,9 +1,10 @@
 ---
 name: researcher
-model: qwen3.5-plus
+model: kimi-k2.5
+backend: moonshot
 max-tokens: 16384
 temperature: 0.5
-description: Nucleus research agent for codebase exploration and web research.
+description: Research agent (Moonshot/Kimi)
 tools:
   - Bash
   - Eval

@@ -1,9 +1,10 @@
 ---
 name: reviewer
-model: qwen3.5-plus
+model: kimi-k2.5
+backend: moonshot
 max-tokens: 8192
 temperature: 0.3
-description: Multi-scale Elisp/nucleus code reviewer (best practices, architecture, security). Read-only.
+description: Code reviewer (Moonshot/Kimi)
 tools:
   - Glob
   - Grep
