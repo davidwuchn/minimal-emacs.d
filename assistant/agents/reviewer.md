@@ -1,7 +1,7 @@
 ---
 name: reviewer
 model: kimi-k2.5
-backend: Moonshot
+backend: moonshot
 max-tokens: 8192
 temperature: 0.3
 description: Code reviewer (Moonshot/Kimi)

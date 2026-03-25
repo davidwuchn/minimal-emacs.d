@@ -1,7 +1,7 @@
 ---
 name: researcher
 model: kimi-k2.5
-backend: Moonshot
+backend: moonshot
 max-tokens: 16384
 temperature: 0.5
 description: Research agent (Moonshot/Kimi)

@@ -48,7 +48,7 @@ ARGS are passed to `gptel-make-openai'."
     :models '(qwen3.5-plus qwen3-max-2026-01-23 qwen3-coder-next qwen3-coder-plus kimi-k2.5 glm-5 glm-4.7 MiniMax-M2.5)))
 
 (defvar gptel--moonshot
-  (gptel-make-openai "Moonshot"
+  (gptel-make-openai "moonshot"
     :host "api.kimi.com"
     :endpoint "/coding/v1/chat/completions"
     :key (lambda () (my/gptel-api-key "api.kimi.com"))
