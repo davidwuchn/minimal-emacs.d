@@ -1,6 +1,20 @@
 # Mementum State
 
-> Last session: 2026-03-25 19:30
+> Last session: 2026-03-25 19:45
+
+## Bug Fix: Nested Worktrees
+
+**BUG**: Worktrees were created inside other worktrees (nested), because
+`gptel-auto-workflow--project-root` returned worktree path instead of main repo.
+
+**FIX**: Use `git rev-parse --git-common-dir` to always find main repo root.
+
+```
+Before: /proj/var/tmp/exp/opt-1/var/tmp/exp/opt-2/... (nested)
+After:  /proj/var/tmp/exp/opt-1, /proj/var/tmp/exp/opt-2 (siblings)
+```
+
+---
 
 ## Key Learnings
 
@@ -42,44 +56,8 @@ All logic in elisp.
 | Staging protection | ✓ Never touches main |
 | Daemon mode | ✓ Uses user config |
 | Magit integration | ✓ Reuse packages |
-| Executor | ⚠ Needs API key check |
+| Worktree isolation | ✓ Fixed nested bug |
 | Cron | ✓ 2 AM via emacsclient |
-
----
-
-## Next Steps
-
-1. Verify gptel API keys loaded in daemon
-2. Run `emacsclient -e '(gptel-auto-workflow-run-sync)'`
-3. Check `var/tmp/experiments/YYYY-MM-DD/results.tsv`
-4. Review `git log staging..main`
-5. Human merges staging → main
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    AUTO-WORKFLOW                        │
-├─────────────────────────────────────────────────────────┤
-│  1. SYNC staging from main                              │
-│  2. EXECUTOR creates optimize/* branches                │
-│  3. GRADER validates quality                            │
-│  4. COMPARATOR decides keep/discard                     │
-│  5. IF KEEP: merge to staging, push to origin           │
-│  6. HUMAN: reviews staging, merges to main              │
-└─────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-              ┌─────────────────────┐
-              │   Emacs Daemon      │
-              │   + User Config     │
-              │   + API Keys        │
-              │   + Magit           │
-              │   + Gptel           │
-              └─────────────────────┘
-```
 
 ---
 
@@ -90,4 +68,5 @@ All logic in elisp.
 λ reuse. Use magit, gptel - don't reinvent wheel
 λ elisp. Logic in elisp, shell only for daemon check
 λ safety. Main NEVER touched by auto-workflow
+λ worktree. Always use main repo root, not worktree path
 ```
