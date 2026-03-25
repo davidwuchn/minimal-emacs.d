@@ -1,7 +1,24 @@
 # Auto-Workflow Program
 
-> Human-editable objectives for autonomous overnight optimization.
-> Edit this file to change what the agent works on.
+> LLM decides targets and strategies. We gather context and execute.
+> Philosophy: LLM = Brain, We = Eyes + Hands
+
+## Architecture
+
+```
+Target Selection (LLM decides):
+1. We gather: git history, file sizes, TODOs, test results
+2. LLM decides: which 3 files to optimize tonight
+3. We execute: run experiments on LLM's choices
+
+Decision Points (all LLM):
+- Which targets? → Analyzer
+- What mutations? → Analyzer + Executor
+- Quality OK? → Grader
+- Keep or discard? → Comparator
+```
+
+**Static targets below are fallback only.** Primary: LLM strategic selection.
 
 ## Current Baselines
 
@@ -70,13 +87,19 @@ var/elpa/**
 
 ## Mutation Strategy
 
-Agent-driven: Read git history + optimization skills to generate hypotheses.
+**LLM decides** based on target analysis. We don't prescribe.
 
-Allowed mutation types:
-- [x] caching
-- [x] lazy-init
-- [x] simplification
-- [ ] parallel-processing (experimental)
+The analyzer examines each target and recommends:
+- Which mutation type fits best
+- What hypothesis to test
+- Expected improvement areas
+
+Mutation skills in `mementum/knowledge/mutations/`:
+- `caching.md` - Memoize, cache results
+- `lazy-init.md` - Defer initialization
+- `simplification.md` - Remove redundancy
+
+LLM chooses based on code patterns, not our presets.
 
 ## Priority Focus
 

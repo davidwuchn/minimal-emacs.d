@@ -2,98 +2,105 @@
 
 > Last session: 2026-03-25
 
-## Session Summary: Strategic Target Selection with LLM
+## Session Summary: Auto-Workflow with LLM as Brain
 
-**Key insight: Let LLM make decisions, minimize local logic.**
+**Philosophy: LLM = Brain, We = Eyes + Hands**
 
-### Latest Changes
+### Latest Commits
 
-| Commit | Description |
-|--------|-------------|
-| `678cb2c` | Tests run before push |
-| `ab77594` | State update |
+| Hash | Description |
+|------|-------------|
+| `b4b1dc6` | 💡 LLM is brain, we are eyes and hands |
+| `200200f` | 💡 LLM-first target selection |
+| `678cb2c` | ✓ Tests run before push |
 
-### New Architecture
-
-```
-Target Selection Flow:
-1. Gather context (git history, file sizes, TODOs)
-2. Ask analyzer LLM to decide targets
-3. LLM outputs JSON with priorities and reasons
-4. We execute LLM's decision (no second-guessing)
-```
-
-### Design Principles
-
-1. **LLM decides, we execute** - Don't second-guess with local calculations
-2. **Provide rich context** - Git history, file sizes, TODOs, test data
-3. **Structured output** - JSON format for reliable parsing
-4. **Fallback only if LLM unavailable** - Local scoring is backup, not primary
-
-### What We Stopped Doing
-
-| Before | After |
-|--------|-------|
-| Local scoring formula | LLM analyzes and decides |
-| Weight-based calculation | LLM judgment |
-| Combine local + LLM | Pure LLM decision |
-| Multi-step validation | Single LLM call |
-
-### New Functions
-
-```elisp
-(gptel-auto-workflow--analyze-for-target-selection callback)
-;; Asks LLM to pick 3 targets based on git, size, TODOs
-
-(gptel-auto-workflow-select-targets-with-analyzer callback)
-;; Entry point: LLM decides or fallback
-
-(gptel-auto-workflow--parse-analyzer-targets response)
-;; Parse JSON: {"targets": [{"file": "...", "priority": 1, "reason": "..."}]}
-```
-
-### Analyzer Prompt Structure
+### Architecture
 
 ```
-Context provided:
-- Available files in lisp/modules/
-- Recent git history (30 commits)
-- Files by size (lines)
-- Known issues (TODOs, FIXMEs)
-
-LLM outputs:
-{
-  "targets": [
-    {"file": "lisp/modules/xxx.el", "priority": 1, "reason": "...", "suggested_focus": "..."}
-  ],
-  "strategy": "Overall strategy"
-}
+┌─────────────────────────────────────────────────────────┐
+│                    AUTO-WORKFLOW                         │
+├─────────────────────────────────────────────────────────┤
+│  Eyes (we gather)          Brain (LLM decides)          │
+│  ─────────────────         ──────────────────           │
+│  • Git history             • Which targets to optimize  │
+│  • File sizes              • What mutations to apply    │
+│  • TODOs/FIXMEs            • Keep or discard changes    │
+│  • Test results            • Quality threshold          │
+│                           │
+│  Hands (we execute)                                      │
+│  ─────────────────                                       │
+│  • Run tests                                             │
+│  • Make commits                                          │
+│  • Push to optimize/*                                    │
+│  • Log results                                           │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Safety Net
+### New Module
 
-1. ✓ Tests run before any push
-2. ✓ Nucleus validation before commit
-3. ✓ Grader validates output quality
-4. ✓ Comparator decides keep/discard
-5. ✓ Only optimize/* branches pushed
+`lisp/modules/gptel-auto-workflow-strategic.el`:
+- Gathers context (eyes)
+- Asks analyzer for targets
+- Executes LLM decision (hands)
+- No local scoring formulas
+
+### Safety Pipeline
+
+```
+Executor makes changes
+       ↓
+   Grader validates (LLM)
+       ↓
+   Tests run (hands)
+       ↓
+   Nucleus validates
+       ↓
+   Comparator decides (LLM)
+       ↓
+   Push to optimize/* only
+```
 
 ### Production Status
 
 | Component | Status |
 |-----------|--------|
 | Target selection | ✓ LLM decides |
+| Mutation strategy | ✓ LLM decides |
+| Quality check | ✓ Grader (LLM) |
+| Keep/discard | ✓ Comparator (LLM) |
 | Tests before push | ✓ |
 | All tests | ✓ 52/52 |
 | Cron | ✓ 2 AM daily |
+
+### Key Principle
+
+```
+λ brain(x).
+    decision(x) → llm(context)
+    | execute(llm_result)
+    | ¬second_guess(llm)
+    | ¬local_formula_override(llm)
+    | fallback → only_if_llm_unavailable
+```
+
+### Files Changed This Session
+
+| File | Change |
+|------|--------|
+| `lisp/modules/gptel-auto-workflow-strategic.el` | **NEW** - LLM target selection |
+| `lisp/modules/gptel-tools-agent.el` | Tests before push, strategic entry |
+| `scripts/run-tests.sh` | Exit codes for CI |
+| `mementum/memories/llm-first-decision-making.md` | **NEW** - Philosophy |
+| `mementum/knowledge/eight-keys-signals.md` | Signal phrase guide |
+| `docs/auto-workflow-program.md` | Baselines, learnings |
 
 ---
 
 ## λ Summary
 
 ```
-λ learn. LLM makes better decisions than local formulas
-λ simplify. One LLM call replaces complex scoring
-λ trust. Let analyzer decide, we execute
-λ context. Rich context = better LLM decisions
+λ philosophy. LLM = Brain, We = Eyes + Hands
+λ implement. Strategic selection module created
+λ safety. Tests before push, optimize/* only
+λ learn. Do not replace brain with formulas
 ```
