@@ -887,14 +887,15 @@ Uses comparator subagent if available, falls back to local comparison."
            (score-after (plist-get after :score))
            (quality-before (or (plist-get before :code-quality) 0.5))
            (quality-after (or (plist-get after :code-quality) 0.5))
-           (combined-before (+ (* 0.7 score-before) (* 0.3 quality-before)))
-           (combined-after (+ (* 0.7 score-after) (* 0.3 quality-after)))
+           (combined-before (+ (* 0.5 score-before) (* 0.5 quality-before)))
+           (combined-after (+ (* 0.5 score-after) (* 0.5 quality-after)))
            (keep (> combined-after combined-before)))
       (funcall callback
                (list :keep keep
-                     :reasoning (format "Score: %.2f → %.2f, Quality: %.2f → %.2f"
+                     :reasoning (format "Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
                                         score-before score-after
-                                        quality-before quality-after)
+                                        quality-before quality-after
+                                        combined-before combined-after)
                      :improvement (list :score (- score-after score-before)
                                         :quality (- quality-after quality-before)
                                         :combined (- combined-after combined-before)))))))
