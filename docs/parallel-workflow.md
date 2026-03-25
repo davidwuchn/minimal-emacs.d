@@ -11,9 +11,11 @@ Two machines run auto-workflow simultaneously:
 ```
 ┌─────────────────┐     ┌─────────────────┐
 │     macOS       │     │      Pi5        │
-│  (imacpro)      │     │   (pi5)         │
+│  (daylight)     │     │   (24/7)        │
 ├─────────────────┤     ├─────────────────┤
-│ 1:00, 5:00 AM   │     │ 3:00, 11:00 PM  │
+│ 10AM, 2PM, 6PM  │     │ 11PM,3AM,7AM   │
+│                 │     │ 11AM,3PM,7PM    │
+│ 3 runs/day      │     │ 6 runs/day      │
 │                 │     │                 │
 │ optimize/*-     │     │ optimize/*-     │
 │   imacpro-*     │     │   pi5-*         │
@@ -32,16 +34,21 @@ Two machines run auto-workflow simultaneously:
               └─────────────┘
 ```
 
-## Schedule (Staggered to Avoid Git Conflicts)
+## Schedule (Pi5 Heavy, macOS Daylight)
 
 | Time | Machine | Reason |
 |------|---------|--------|
-| 11:00 PM | Pi5 | Before sleep |
-| 1:00 AM | macOS | Deep night |
+| 11:00 PM | Pi5 | Night |
 | 3:00 AM | Pi5 | Deep night |
-| 5:00 AM | macOS | Early morning |
+| 7:00 AM | Pi5 | Early morning |
+| 10:00 AM | macOS | Daylight |
+| 11:00 AM | Pi5 | Mid-day |
+| 2:00 PM | macOS | Daylight |
+| 3:00 PM | Pi5 | Afternoon |
+| 6:00 PM | macOS | Evening |
+| 7:00 PM | Pi5 | Night |
 
-**8 runs per day total** (4 each machine)
+**Pi5: 6 runs/day | macOS: 3 runs/day | Total: 9 runs/day**
 
 ## Pi5 Setup
 
@@ -77,14 +84,14 @@ emacs --daemon
 
 ### macOS: `cron.d/auto-workflow`
 ```
-# 1:00, 5:00 AM
-0 1,5 * * * emacsclient -a '' -e '...'
+# Daylight hours only: 10:00 AM, 2:00 PM, 6:00 PM
+0 10,14,18 * * * emacsclient -a '' -e '...'
 ```
 
 ### Pi5: `cron.d/auto-workflow-pi5`
 ```
-# 11:00 PM, 3:00 AM
-0 23,3 * * * emacsclient -a '' -e '...'
+# 24/7 heavy usage: 11PM, 3AM, 7AM, 11AM, 3PM, 7PM
+0 23,3,7,11,15,19 * * * emacsclient -a '' -e '...'
 ```
 
 ## Branch Naming
@@ -117,7 +124,8 @@ ssh pi5 'cd ~/.emacs.d && ./scripts/run-auto-workflow.sh status'
 
 ## Benefits
 
-- **2x throughput**: 8 runs/day instead of 4
-- **24/7 coverage**: Runs around the clock
+- **9 runs/day**: 6 (Pi5) + 3 (macOS)
+- **Pi5 24/7**: Headless workhorse, always running
+- **macOS daylight**: Only when you're actively using it
 - **No conflicts**: Hostname in branch names
-- **Efficient**: Pi5 handles overnight work
+- **Efficient**: Maximize both subscriptions

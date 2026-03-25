@@ -22,16 +22,19 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 # Auto-Workflow: Code Optimization Experiments
 # ─────────────────────────────────────────────────────────────
 #
-# PARALLEL SETUP: macOS + Pi5 running simultaneously
+# PARALLEL SETUP: macOS (daylight) + Pi5 (24/7)
 # Uses worktrees for isolation, subagents for analysis/grading
 # IMPORTANT: Runs async - daemon stays responsive
 # Check status: emacsclient -e '(gptel-auto-workflow-status)'
 #
-# This machine (macOS): 1:00 AM, 5:00 AM
-# Other machine (Pi5):  11:00 PM, 3:00 AM
+# This machine (macOS): Daylight hours when user is active
+#   10:00 AM, 2:00 PM, 6:00 PM
 #
-# Total: 8 runs/day across both machines
-0 1,5 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
+# Other machine (Pi5): 24/7, heavy usage
+#   11PM, 3AM, 7AM, 11AM, 3PM, 7PM
+#
+# Total: 9 runs/day across both machines
+0 10,14,18 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
 
 # Alternative schedules (uncomment to use):
 
