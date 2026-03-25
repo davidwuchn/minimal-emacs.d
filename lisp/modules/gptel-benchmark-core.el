@@ -63,11 +63,16 @@ Use `gptel-benchmark--cancelled' to check if cancelled."
 ;;; JSON I/O
 
 (defun gptel-benchmark-read-json (file)
-  "Read and parse JSON from FILE."
-  (with-temp-buffer
-    (insert-file-contents file)
-    (goto-char (point-min))
-    (json-read)))
+  "Read and parse JSON from FILE.
+Returns nil if file does not exist or contains invalid JSON."
+  (condition-case nil
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (json-read))
+    (file-error nil)
+    (json-error nil)
+    (end-of-file nil)))
 
 (defun gptel-benchmark-write-json (data file)
   "Write DATA as JSON to FILE with pretty printing.
@@ -194,7 +199,7 @@ RESULTS should contain :eight-keys-scores in each entry."
   (let ((key-totals (make-vector 8 0.0))
         (key-counts (make-vector 8 0))
         (key-names [phi-vitality fractal-clarity epsilon-purpose tau-wisdom
-                    pi-synthesis mu-directness exists-truth forall-vigilance]))
+                                 pi-synthesis mu-directness exists-truth forall-vigilance]))
     (dolist (r results)
       (let ((eight-keys (if (consp r)
                             (when (fboundp 'gptel-workflow-run-eight-keys-scores)
