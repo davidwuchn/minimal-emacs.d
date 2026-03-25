@@ -684,6 +684,13 @@ Changes are only merged if review passes."
   :type 'boolean
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-research-before-fix nil
+  "When non-nil, use researcher to find fix approach before executor.
+Adds ~30-60s latency per retry but may improve fix quality.
+When nil, executor researches and fixes in one pass (faster)."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
 (defcustom gptel-auto-workflow-use-staging t
   "When non-nil, use staging branch as integration target.
 Staging is NEVER deleted and NEVER auto-merged to main.
@@ -913,7 +920,49 @@ Maximum response: 1000 characters."
   "Try to fix issues found in review for OPTIMIZE-BRANCH.
 REVIEW-OUTPUT contains the blocker/critical issues.
 Calls CALLBACK with (success-p . fix-output).
-Uses researcher to find correct approach, then executor to apply."
+If `gptel-auto-workflow-research-before-fix' is nil, executor handles directly."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root))
+    (message "[auto-workflow] Fixing review issues (retry %d/%d)..."
+             gptel-auto-workflow--review-retry-count gptel-auto-workflow--review-max-retries)
+    (if (not gptel-auto-workflow-research-before-fix)
+        (gptel-auto-workflow--fix-directly review-output callback)
+      (gptel-auto-workflow--research-then-fix review-output callback))))
+
+(defun gptel-auto-workflow--fix-directly (review-output callback)
+  "Let executor fix REVIEW-OUTPUT issues directly (faster)."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (fix-prompt (format "Fix the following issues in the code.
+
+ISSUES FROM REVIEW:
+%s
+
+INSTRUCTIONS:
+1. Read the affected files to understand context
+2. Make minimal fixes to address each issue
+3. Do NOT make unrelated changes
+4. Commit your fix with message 'fix: address review issues'
+
+Focus only on the issues mentioned. Do not refactor or add features."
+                              (truncate-string-to-width review-output 1500 nil nil "..."))))
+    (if (and gptel-auto-experiment-use-subagents
+             (fboundp 'gptel-benchmark-call-subagent))
+        (gptel-benchmark-call-subagent
+         'executor
+         "Fix review issues"
+         fix-prompt
+         (lambda (result)
+           (let* ((response (if (stringp result) result (format "%S" result)))
+                  (success (not (string-match-p "^Error:" response))))
+             (when success
+               (magit-git-success "add" "-A")
+               (magit-git-success "commit" "-m" "fix: address review issues"))
+             (funcall callback (cons success response)))))
+      (funcall callback (cons nil "No executor agent available")))))
+
+(defun gptel-auto-workflow--research-then-fix (review-output callback)
+  "Use researcher to find approach, then executor to fix REVIEW-OUTPUT."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
          (research-prompt (format "Research the best approach to fix these issues:
@@ -929,8 +978,7 @@ TASK:
 
 Do NOT make changes. Only research and report findings."
                                   (truncate-string-to-width review-output 1000 nil nil "..."))))
-    (message "[auto-workflow] Researching fix approach (retry %d/%d)..."
-             gptel-auto-workflow--review-retry-count gptel-auto-workflow--review-max-retries)
+    (message "[auto-workflow] Researching fix approach...")
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (gptel-benchmark-call-subagent
