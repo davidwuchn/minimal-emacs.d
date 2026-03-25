@@ -8,13 +8,33 @@
 #
 # Options:
 #   --dry-run    Show what would be installed without modifying crontab
+#
+# Auto-detects machine and uses appropriate schedule:
+#   - macOS (imacpro): cron.d/auto-workflow (1:00, 5:00 AM)
+#   - Pi5:             cron.d/auto-workflow-pi5 (11:00 PM, 3:00 AM)
 
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CRON_FILE="$DIR/cron.d/auto-workflow"
+
+# Detect machine and select appropriate cron file
+HOSTNAME=$(hostname)
+if echo "$HOSTNAME" | grep -q "imacpro\|macbook\|mac"; then
+    CRON_FILE="$DIR/cron.d/auto-workflow"
+    MACHINE="macOS"
+elif echo "$HOSTNAME" | grep -q "pi5\|raspberrypi"; then
+    CRON_FILE="$DIR/cron.d/auto-workflow-pi5"
+    MACHINE="Pi5"
+else
+    # Default to auto-workflow, warn user
+    CRON_FILE="$DIR/cron.d/auto-workflow"
+    MACHINE="unknown"
+fi
 
 echo "=== Installing Cron Jobs for Autonomous Operation ==="
+echo ""
+echo "Detected machine: $HOSTNAME ($MACHINE)"
+echo "Using cron file: $(basename $CRON_FILE)"
 echo ""
 
 # Check if cron file exists
@@ -58,14 +78,25 @@ else
 fi
 
 echo ""
-echo "=== Scheduled Jobs ==="
+echo "=== Scheduled Jobs ($MACHINE) ==="
 echo ""
-echo "| Schedule         | Function                              | Log File         |"
-echo "|------------------|---------------------------------------|------------------|"
-echo "| Daily 2:00 AM    | gptel-auto-workflow-run-async        | auto-workflow.log|"
-echo "| Weekly Sun 4:00 AM| gptel-mementum-weekly-job            | mementum.log     |"
-echo "| Weekly Sun 5:00 AM| gptel-benchmark-instincts-weekly-job | instincts.log    |"
-echo ""
+if [ "$MACHINE" = "Pi5" ]; then
+    echo "| Schedule         | Function                              | Log File         |"
+    echo "|------------------|---------------------------------------|------------------|"
+    echo "| 11:00 PM, 3:00 AM| gptel-auto-workflow-run-async        | auto-workflow.log|"
+    echo "| Weekly Sun 4:00 AM| gptel-mementum-weekly-job            | mementum.log     |"
+    echo "| Weekly Sun 5:00 AM| gptel-benchmark-instincts-weekly-job | instincts.log    |"
+    echo ""
+    echo "Parallel setup: macOS runs at 1:00, 5:00 AM"
+else
+    echo "| Schedule         | Function                              | Log File         |"
+    echo "|------------------|---------------------------------------|------------------|"
+    echo "| 1:00, 5:00 AM    | gptel-auto-workflow-run-async        | auto-workflow.log|"
+    echo "| Weekly Sun 4:00 AM| gptel-mementum-weekly-job            | mementum.log     |"
+    echo "| Weekly Sun 5:00 AM| gptel-benchmark-instincts-weekly-job | instincts.log    |"
+    echo ""
+    echo "Parallel setup: Pi5 runs at 11:00 PM, 3:00 AM"
+fi
 echo "=== Prerequisites ==="
 echo ""
 echo "1. Emacs daemon must be running:"
