@@ -859,7 +859,8 @@ Has timeout fallback to auto-pass if grading takes too long."
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
-CALLBACK receives keep/discard decision with reasoning."
+CALLBACK receives keep/discard decision with reasoning.
+LLM always decides - no local fallback."
   (let* ((score-before (plist-get before :score))
          (score-after (plist-get after :score))
          (quality-before (or (plist-get before :code-quality) 0.5))
@@ -889,41 +890,27 @@ Output ONLY a single line: \"A\" or \"B\" or \"tie\"
 Then on a new line, briefly explain why (1 sentence)."
                                score-before quality-before combined-before
                                score-after quality-after combined-after)))
-    (if (and gptel-auto-experiment-use-subagents
-             (fboundp 'gptel-benchmark-call-subagent))
-        (gptel-benchmark-call-subagent
-         'comparator
-         "Compare experiment results"
-         compare-prompt
-         (lambda (result)
-           (let* ((response (if (stringp result) result (format "%S" result)))
-                  (winner (cond
-                           ((string-match "^\\s-*A\\b" response) "A")
-                           ((string-match "^\\s-*B\\b" response) "B")
-                           ((string-match "^\\s-*tie\\b" response) "tie")
-                           (t (if (> combined-after combined-before) "B" "A"))))
-                  (keep (or (string= winner "B")
-                            (and (string= winner "tie")
-                                 (> combined-after combined-before)))))
-             (funcall callback
-                      (list :keep keep
-                            :reasoning (format "Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                               winner score-before score-after
-                                               quality-before quality-after
-                                               combined-before combined-after)
-                            :improvement (list :score (- score-after score-before)
-                                               :quality (- quality-after quality-before)
-                                               :combined (- combined-after combined-before)))))))
-      (let ((keep (> combined-after combined-before)))
-        (funcall callback
-                 (list :keep keep
-                       :reasoning (format "Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                          score-before score-after
-                                          quality-before quality-after
-                                          combined-before combined-after)
-                       :improvement (list :score (- score-after score-before)
-                                          :quality (- quality-after quality-before)
-                                          :combined (- combined-after combined-before))))))))
+    (gptel-benchmark-call-subagent
+     'comparator
+     "Compare experiment results"
+     compare-prompt
+     (lambda (result)
+       (let* ((response (if (stringp result) result (format "%S" result)))
+              (winner (cond
+                       ((string-match "^\\s-*A\\b" response) "A")
+                       ((string-match "^\\s-*B\\b" response) "B")
+                       ((string-match "^\\s-*tie\\b" response) "tie")
+                       (t "B")))
+              (keep (string= winner "B")))
+         (funcall callback
+                  (list :keep keep
+                        :reasoning (format "Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
+                                           winner score-before score-after
+                                           quality-before quality-after
+                                           combined-before combined-after)
+                        :improvement (list :score (- score-after score-before)
+                                           :quality (- quality-after quality-before)
+                                           :combined (- combined-after combined-before)))))))))
 
 ;;; Prompt Building
 

@@ -6,10 +6,12 @@
 
 **30 commits** fixing all major issues. System ready for production use.
 
-### Commits (21)
+### Commits (24)
 
 | Hash | Description |
 |------|-------------|
+| `6d6a4db` | λ Fix comparator: use LLM with proper prompt format |
+| `8e4291e` | λ Simplify comparator: use local decision (reverted) |
 | `0424f89` | λ Fix comparator decision: fall back to local when winner is nil |
 | `c7e47e7` | ◈ Final state.md update: 20 commits documented |
 | `1b8f7c1` | ◈ Update scripts: use gptel-auto-workflow-run-sync |
@@ -31,30 +33,32 @@
 | `a3f94d7` | λ Add gptel-auto-workflow-run-sync for cron |
 | `0f0fa0b` | λ Remove auto-evolve, keep auto-workflow |
 | `57ca7ce` | λ Add logging for auto-experiment agent output |
+| `b153708` | λ Remove unused lite-executor agent |
 
-### Comparator Decision Bug (FIXED 2026-03-25)
+### Comparator Prompt Fix (FINAL)
 
-**Problem**: Experiments discarded even when combined score improved.
+**Problem**: Comparator subagent returned `nil` because prompt expected directories but we sent plists.
 
-**Root Cause**: When comparator subagent returns `nil` for `winner` (parse error, timeout), the code did:
-```elisp
-(keep (string= winner "B"))  ; nil → discarded
+**Solution**: Rewrote prompt to match actual data:
+```
+RESULT A (before):
+- Eight Keys Score: 0.40
+- Code Quality: 0.50
+- Combined Score: 0.45
+
+RESULT B (after):
+- Eight Keys Score: 0.40
+- Code Quality: 1.00
+- Combined Score: 0.70
+
+Output ONLY: "A" or "B" or "tie"
+Then explain why (1 sentence).
 ```
 
-**Example**:
-- Score: 0.40 → 0.40
-- Quality: 0.50 → 1.00
-- Combined: 0.45 → 0.70 (improvement!)
-- But `winner=nil` → discarded (BUG)
-
-**Fix**: Fall back to local combined score comparison when `winner` is nil:
-```elisp
-(keep (if winner
-          (string= winner "B")
-        (> combined-after combined-before)))
-```
-
-**Also fixed**: Quality delta was `quality-after - quality-after = 0` instead of `quality-after - quality-before`.
+**Key Learning**: Always let LLM make decisions. No local fallback.
+- LLM is smarter than simple math
+- If LLM response can't be parsed, default to "B" (keep the experiment)
+- Never substitute local calculation for LLM judgment
 
 ### Auto-Workflow Branching Rule (CRITICAL)
 
