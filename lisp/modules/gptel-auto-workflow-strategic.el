@@ -71,9 +71,9 @@ Findings stored in var/tmp/research-findings.md for analyzer."
 ;; EDGE CASE: Returns empty list if directory doesn't exist
 ;; TEST: Verify no -test.el or -disabled.el files in results"
   (let* ((proj-root (gptel-auto-workflow--project-root))
-         (modules-dir (expand-file-name "lisp/modules" proj-root))
+         (modules-dir (and proj-root (expand-file-name "lisp/modules" proj-root)))
          (targets '()))
-    (when (file-directory-p modules-dir)
+    (when (and modules-dir (file-directory-p modules-dir))
       (dolist (file (directory-files-recursively modules-dir "\\.el$"))
         (let ((rel-path (file-relative-name file proj-root)))
           (unless (or (string-match-p "-test\\.el$" file)
@@ -93,19 +93,21 @@ Returns plist with git history, file sizes, TODOs.
 ;; SYNTHESIS: Connects git activity, code volume, and technical debt for selection
 ;; TEST: Verify all 4 plist keys present in non-empty result"
   (let* ((proj-root (gptel-auto-workflow--project-root))
-         (modules-dir (expand-file-name "lisp/modules" proj-root)))
-    (list :git-history (shell-command-to-string
-                        (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
-                                proj-root))
-          :file-sizes (shell-command-to-string
-                       (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -15"
-                               proj-root))
-          :todos (shell-command-to-string
-                  (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -20"
-                          proj-root))
-          :file-list (shell-command-to-string
-                      (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
-                              proj-root)))))
+         (modules-dir (and proj-root (expand-file-name "lisp/modules" proj-root))))
+    (if (and modules-dir (file-directory-p modules-dir))
+        (list :git-history (shell-command-to-string
+                            (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
+                                    proj-root))
+              :file-sizes (shell-command-to-string
+                           (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -15"
+                                   proj-root))
+              :todos (shell-command-to-string
+                      (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -20"
+                              proj-root))
+              :file-list (shell-command-to-string
+                          (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
+                                  proj-root)))
+      (list :git-history "" :file-sizes "" :todos "" :file-list ""))))
 
 (defun gptel-auto-workflow--research-patterns (callback)
   "Research code patterns and issues for better target selection.
@@ -208,24 +210,27 @@ OUTPUT JSON ONLY:
 ;; TEST: Verify valid files extracted from both JSON and text responses"
   (let ((targets '())
         (proj-root (gptel-auto-workflow--project-root)))
-    ;; Try JSON
-    (condition-case _
-        (with-temp-buffer
-          (insert (if (stringp response) response (format "%S" response)))
-          (goto-char (point-min))
-          (when (re-search-forward "{" nil t)
-            (goto-char (match-beginning 0))
-            (let* ((data (json-read))
-                   (list (cdr (assq 'targets data))))
-              (dolist (item list)
-                (let ((file (cdr (assq 'file item))))
-                  (when file
-                    (let ((abs-path (if (file-name-absolute-p file)
-                                        file
-                                      (expand-file-name file proj-root))))
-                      (when (file-exists-p abs-path)
-                        (push (file-relative-name abs-path proj-root) targets)))))))))
-      (error nil))
+    (when proj-root
+      ;; Try JSON
+      (condition-case _
+          (with-temp-buffer
+            (insert (if (stringp response) response (format "%S" response)))
+            (goto-char (point-min))
+            (when (re-search-forward "{" nil t)
+              (goto-char (match-beginning 0))
+              (let* ((data (json-read))
+                     (target-list (cdr (assq 'targets data))))
+                (when (listp target-list)
+                  (dolist (item target-list)
+                    (when (listp item)
+                      (let ((file (cdr (assq 'file item))))
+                        (when (and file (stringp file))
+                          (let ((abs-path (if (file-name-absolute-p file)
+                                              file
+                                            (expand-file-name file proj-root))))
+                            (when (file-exists-p abs-path)
+                              (push (file-relative-name abs-path proj-root) targets)))))))))))
+        (error nil)))
     ;; Fallback: regex
     (when (null targets)
       (with-temp-buffer
@@ -249,16 +254,17 @@ LLM decides if available, otherwise uses static list.
 ;; EDGE CASE: No targets from LLM → fallback to gptel-auto-workflow-targets
 ;; SYNTHESIS: Orchestrates discover, gather-context, ask-analyzer, parse-targets
 ;; TEST: Verify callback receives N targets (N = gptel-auto-workflow-max-targets-per-run)"
-  (if gptel-auto-workflow-strategic-selection
-      (gptel-auto-workflow--ask-analyzer-for-targets
-       (lambda (targets)
-         (if targets
-             (progn
-               (message "[auto-workflow] Analyzer selected: %s" targets)
-               (funcall callback targets))
-           (message "[auto-workflow] Using static targets")
-           (funcall callback gptel-auto-workflow-targets))))
-    (funcall callback gptel-auto-workflow-targets)))
+  (when (functionp callback)
+    (if gptel-auto-workflow-strategic-selection
+        (gptel-auto-workflow--ask-analyzer-for-targets
+         (lambda (targets)
+           (if targets
+               (progn
+                 (message "[auto-workflow] Analyzer selected: %s" targets)
+                 (funcall callback targets))
+             (message "[auto-workflow] Using static targets")
+             (funcall callback gptel-auto-workflow-targets))))
+      (funcall callback gptel-auto-workflow-targets))))
 
 ;;; Periodic Research
 
