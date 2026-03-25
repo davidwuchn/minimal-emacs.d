@@ -1281,30 +1281,41 @@ Overall Eight Keys score: %.2f
 %s
 
 ## Objective
-Improve the Eight Keys score for %s.
+Improve the CODE QUALITY for %s.
 Focus on one improvement at a time.
-Make minimal, targeted changes.
+Make minimal, targeted changes to CODE, not documentation.
 
 ## Constraints
 - Time budget: %d minutes
 - Immutable files: early-init.el, pre-early-init.el, lisp/eca-security.el
 - Must pass tests: ./scripts/verify-nucleus.sh
+- FORBIDDEN: Adding comments, docstrings, or documentation-only changes
+- REQUIRED: Actual code changes (bug fixes, performance, refactoring, error handling)
+
+## Code Improvement Types (PICK ONE)
+1. **Bug Fix**: Fix an actual bug or error handling gap
+2. **Performance**: Reduce complexity, add caching, optimize hot path
+3. **Refactoring**: Extract functions, remove duplication, improve naming
+4. **Safety**: Add validation, prevent edge cases, improve error messages
+5. **Test Coverage**: Add missing tests for existing functionality
 
 ## Instructions
-1. FIRST LINE must be: HYPOTHESIS: [What change and why it will improve the score]
+1. FIRST LINE must be: HYPOTHESIS: [What CODE change and why]
 2. Read the target file using its full path
-3. Implement the change minimally using Edit tool with the full path
-4. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
-5. COMMIT your changes: git add -A && git commit -m \"message with signal phrases\"
+3. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
+4. Implement the CODE change minimally using Edit tool
+5. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
+6. COMMIT your changes: git add -A && git commit -m \"message\"
 
 CRITICAL: Your response MUST start with HYPOTHESIS: on the first line.
-Example: HYPOTHESIS: Adding caching to reduce redundant API calls will improve phi-vitality.
+DO NOT add comments, docstrings, or documentation.
+DO make actual code changes that improve functionality.
 
-Your commit message MUST include signal phrases for Eight Keys scoring:
-- explicit assumptions: (for Clarity)
-- testable: (for Clarity)
-- builds on discovery: (for Vitality)
-- evidence: tests pass (for Truth)"
+Example HYPOTHESES:
+- HYPOTHESIS: Adding validation for nil input in process-item will prevent runtime errors
+- HYPOTHESIS: Extracting duplicate retry logic into a helper will reduce code duplication
+- HYPOTHESIS: Adding a cache for expensive computation will improve performance
+- HYPOTHESIS: Fixing the off-by-one error in the loop will correct the boundary case"
             experiment-id max-experiments target
             worktree-path
             target-full-path
