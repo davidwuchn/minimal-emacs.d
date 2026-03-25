@@ -18,9 +18,9 @@
 
 ```elisp
 ;; Autonomous Research Agent (recommended)
-M-x gptel-auto-workflow-run-autonomous
+M-x gptel-auto-workflow-run-sync
 
-;; Legacy (uses elisp variable)
+;; Async version (for interactive use only)
 M-x gptel-auto-workflow-run
 ```
 
@@ -31,7 +31,7 @@ docs/auto-workflow-program.md     ← Human edits objectives
             │
             ▼
 ┌─────────────────────────────────────────────────────────┐
-│              gptel-auto-workflow-run-autonomous         │
+│              gptel-auto-workflow-run-sync               │
 │                                                         │
 │  1. orient()    → load program.md + skills             │
 │  2. experiments → ~32/night with skill guidance         │
@@ -151,12 +151,14 @@ Code quality (docstring coverage) is calculated before the decide stage and pass
 **Fallback (no subagent):** Uses combined score:
 
 ```
-combined = 70% * grader_score + 30% * code_quality_score
+combined = 50% * grader_score + 50% * code_quality_score
 ```
 
 This rewards improvements that:
-- Pass grader validation (hypothesis, minimal changes)
+- Pass grader validation (change clearly described, minimal changes)
 - Improve code quality (docstrings, clarity)
+
+The weights are balanced 50/50 because Eight Keys scoring may not always reflect code improvements accurately.
 
 ### Code Quality Scoring
 
@@ -215,17 +217,19 @@ This prevents wasting time when:
 ### Cron (Scheduled)
 
 ```bash
-# 2 AM daily
-emacsclient -e '(gptel-auto-workflow-run)'
+# 2 AM daily (use -sync version for cron)
+emacsclient -e '(gptel-auto-workflow-run-sync)'
 ```
+
+**Important:** Use `gptel-auto-workflow-run-sync` (not `-run`) for cron. The sync version blocks until all experiments complete, keeping the event loop alive with `accept-process-output`.
 
 ### Manual
 
 ```elisp
-M-x gptel-auto-workflow-run
+M-x gptel-auto-workflow-run-sync
 
 ;; Or programmatically
-(gptel-auto-workflow-run '("gptel-ext-retry.el"))
+(gptel-auto-workflow-run-sync '("gptel-ext-retry.el"))
 ```
 
 ### Morning Review
@@ -248,14 +252,15 @@ git cherry-pick <sha>
 
 | Function | Purpose |
 |----------|---------|
-| `gptel-auto-workflow-run` | Main entry (~32 experiments/night) |
+| `gptel-auto-workflow-run-sync` | Main entry for cron (~32 experiments/night), blocks until complete |
+| `gptel-auto-workflow-run` | Async entry for interactive use |
 | `gptel-auto-experiment-loop` | Per-target experiment loop with dynamic stop |
 | `gptel-auto-experiment-run` | Single experiment with full subagent pipeline |
 | `gptel-auto-experiment-analyze` | Pattern detection from previous experiments |
 | `gptel-auto-experiment-grade` | Validate experiment quality (LLM threshold) |
-| `gptel-auto-experiment-decide` | Compare before/after, decide keep/discard (70% grader + 30% quality) |
+| `gptel-auto-experiment-decide` | Compare before/after, decide keep/discard (50% grader + 50% quality) |
 | `gptel-auto-experiment-should-stop-p` | Check stop condition (no-improvement threshold) |
-| `gptel-auto-experiment--extract-hypothesis` | Parse hypothesis from output |
+| `gptel-auto-experiment--extract-hypothesis` | Parse hypothesis from output (multiple patterns) |
 | `gptel-auto-experiment--summarize` | Truncate hypothesis to 6 words |
 | `gptel-auto-experiment--code-quality-score` | Calculate docstring coverage |
 | `gptel-auto-experiment-log-tsv` | Log with explainable columns |
@@ -782,7 +787,7 @@ crontab -e
 The default cron job runs nightly at 2 AM:
 
 ```
-0 2 * * * emacsclient -e '(gptel-auto-workflow-run)'
+0 2 * * * emacsclient -e '(gptel-auto-workflow-run-sync)'
 ```
 
 ### Custom Schedules
@@ -791,22 +796,22 @@ Edit `cron.d/auto-workflow` to customize:
 
 ```cron
 # Every night at 2:30 AM
-30 2 * * * emacsclient -e '(gptel-auto-workflow-run)'
+30 2 * * * emacsclient -e '(gptel-auto-workflow-run-sync)'
 
 # Every Sunday at 3 AM (weekly instead of daily)
-0 3 * * 0 emacsclient -e '(gptel-auto-workflow-run)'
+0 3 * * 0 emacsclient -e '(gptel-auto-workflow-run-sync)'
 
 # Every 6 hours
-0 */6 * * * emacsclient -e '(gptel-auto-workflow-run)'
+0 */6 * * * emacsclient -e '(gptel-auto-workflow-run-sync)'
 ```
 
 ### Specific Targets at Different Times
 
 ```cron
 # Run specific targets at staggered times
-0 2 * * * emacsclient -e '(gptel-auto-workflow-run (quote ("gptel-ext-retry.el")))'
-30 2 * * * emacsclient -e '(gptel-auto-workflow-run (quote ("gptel-ext-context.el")))'
-0 3 * * * emacsclient -e '(gptel-auto-workflow-run (quote ("gptel-tools-code.el")))'
+0 2 * * * emacsclient -e '(gptel-auto-workflow-run-sync (quote ("gptel-ext-retry.el")))'
+30 2 * * * emacsclient -e '(gptel-auto-workflow-run-sync (quote ("gptel-ext-context.el")))'
+0 3 * * * emacsclient -e '(gptel-auto-workflow-run-sync (quote ("gptel-tools-code.el")))'
 ```
 
 ### Prerequisites
@@ -819,8 +824,10 @@ Edit `cron.d/auto-workflow` to customize:
 2. **Or start daemon in cron:**
    ```cron
    @reboot emacs --daemon
-   0 2 * * * emacsclient -e '(gptel-auto-workflow-run)'
+   0 2 * * * emacsclient -e '(gptel-auto-workflow-run-sync)'
    ```
+
+**Note:** Always use `gptel-auto-workflow-run-sync` for cron. The `-sync` version uses `accept-process-output` to keep the event loop alive until experiments complete.
 
 ### Logs
 
@@ -851,10 +858,10 @@ Default targets are defined in `gptel-auto-workflow-targets`:
 
 ```elisp
 ;; From Emacs
-M-x gptel-auto-workflow-run
+M-x gptel-auto-workflow-run-sync
 
 ;; From shell
-emacsclient -e '(gptel-auto-workflow-run)'
+emacsclient -e '(gptel-auto-workflow-run-sync)'
 ```
 
 ---
@@ -916,7 +923,7 @@ Install scheduled jobs for autonomous operation:
 
 | Schedule | Function | Purpose |
 |----------|----------|---------|
-| Daily 2:00 AM | `gptel-auto-workflow-run` | Overnight optimization experiments |
+| Daily 2:00 AM | `gptel-auto-workflow-run-sync` | Overnight optimization experiments |
 | Weekly Sun 4:00 AM | `gptel-mementum-weekly-job` | Synthesis + decay |
 | Weekly Sun 5:00 AM | `gptel-benchmark-instincts-weekly-job` | Evolution batch commit |
 
@@ -931,7 +938,7 @@ Logs: `var/tmp/cron/*.log`
 
 ---
 
-**Document Version:** 1.6  
-**Last Updated:** 2026-03-24  
-**Release:** v2026.03.24  
-**Changes:** Added multi-machine workflow section with hostname-based branch naming, auto-push config, Forgejo PR workflow
+**Document Version:** 1.7  
+**Last Updated:** 2026-03-25  
+**Release:** v2026.03.25  
+**Changes:** Updated for sync version (cron compatibility), 50/50 comparator weights, relaxed grader criteria
