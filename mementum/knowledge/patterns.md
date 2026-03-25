@@ -293,3 +293,31 @@ Migrated from LEARNING.md (32 patterns).
 - **Add explicit entries for new models**: Update `my/gptel--known-model-context-windows`.
 - **Partial matching can fail**: Explicit entry avoids ambiguity.
 - **Model metadata matters too**: Pricing, max output, features belong in metadata.
+
+## LLM-First Decision Making
+
+- **LLM = Brain, We = Eyes + Hands**: LLM decides, we gather context and execute.
+- **Never second-guess LLM**: Don't override LLM decisions with local formulas.
+- **Fallback only if LLM unavailable**: Local logic is backup, not primary.
+- **Rich context = better decisions**: Provide git history, file sizes, TODOs, test results.
+
+## Auto-Workflow Branching
+
+- **Only optimize/* branches pushed**: Never push directly to main.
+- **Human reviews before merge**: optimize/* → PR → human review → merge to main.
+- **Worktree isolation**: Each experiment in separate worktree to avoid conflicts.
+- **Tests before any push**: Must pass tests and nucleus validation.
+
+## Auto-Workflow Autonomy
+
+- **Never ask user**: Retry on failure instead of prompting.
+- **Try harder, again and again**: Multiple retry attempts before giving up.
+- **Error detection early**: Check for error messages before processing.
+- **Log everything**: TSV format for explainable results.
+
+## Eight Keys Signal Phrases
+
+- **Signals in commit messages**: Include phrases like "builds on discoveries", "explicit assumptions".
+- **Signals in code comments**: Use ASSUMPTION, BEHAVIOR, TEST, EDGE CASE sections.
+- **Scoring looks for phrases**: Eight Keys scoring searches for specific signal patterns.
+- **Code quality ≠ Eight Keys**: Good code may still have low Eight Keys without signals.
