@@ -4,10 +4,11 @@
 
 ## Session Summary: Auto-Workflow Debugging
 
-### Commits (11)
+### Commits (12)
 
 | Hash | Description |
 |------|-------------|
+| `e486571` | λ Improve hypothesis extraction + prompt emphasis |
 | `ff20864` | λ Fix Eight Keys scoring: use actual code diff + commit message |
 | `125298f` | λ Fix TSV logging: escape newlines/tabs |
 | `f12accc` | 💡 Update TDD patterns with auto-workflow learnings |
@@ -68,29 +69,19 @@
 
 **Verified**: phi-vitality now scores 0.80 when patterns present (was always 0.50)
 
-### Known Issue: Executor Model Doesn't Always Follow Instructions
+### Known Issue: Executor Model Doesn't Always Follow Instructions (MITIGATED)
 
 **Problem**: `qwen3.5-plus` sometimes ignores the instruction to write "HYPOTHESIS:" at start.
 
-**Impact**: Grader can't extract hypothesis → experiment discarded
+**Mitigation Applied**:
+1. Enhanced `gptel-auto-experiment--extract-hypothesis` to try multiple patterns:
+   - `HYPOTHESIS:` prefix
+   - `**HYPOTHESIS**` markdown
+   - First sentence with action verb (Adding/Changing/Improving/etc.)
+2. Stronger prompt emphasis: "FIRST LINE must be HYPOTHESIS:" with example
 
-**Example Output**:
-```
-✓ gptel-ext-retry.el: Enhanced fractal Clarity by adding explicit...
-```
-
-**Expected Output**:
-```
-HYPOTHESIS: Adding explicit sections will improve clarity.
-✓ gptel-ext-retry.el: Enhanced fractal Clarity...
-```
-
-**Workaround**: Grader has fallback, but hypothesis detection fails.
-
-**Possible Solutions**:
-1. Switch to better model for executor (gpt-4o, claude)
-2. Add stronger prompt emphasis
-3. Post-process output to extract hypothesis from summary
+**Status**: If model outputs hypothesis anywhere, it will be extracted.
+Fallback to action verb sentence covers most cases.
 
 ### Issues Fixed
 
