@@ -100,3 +100,41 @@ When ALL work is done, end your text output with one of:
 
 This signals to the main agent that no continuation is needed.
 </completion_signal>
+
+<eight_keys_signals>
+Include signal phrases in commit messages to improve Eight Keys scores.
+
+For each key, use these phrases:
+
+| Key | Include in Commit |
+|-----|-------------------|
+| φ Vitality | "builds on discovery that...", "adapts to..." |
+| Clarity | "explicit assumptions:...", "testable:..." |
+| ε Purpose | "goal:...", "measurable outcome:..." |
+| τ Wisdom | "risk identified:...", "proactive:..." |
+| π Synthesis | "connects X with Y", "integrates..." |
+| ∃ Truth | "evidence: tests pass", "data:..." |
+| ∀ Vigilance | "edge case:...", "validates:..." |
+
+In code, add structured comments:
+```elisp
+;; ASSUMPTION: {what we assume}
+;; BEHAVIOR: {what function does}
+;; EDGE CASE: {how edge is handled}
+;; TEST: {how to verify}
+```
+
+Example commit:
+```
+✓ retry.el: Extract error patterns into constants
+
+HYPOTHESIS: Extracting patterns into named constants will improve
+Clarity by making assumptions explicit and testable.
+
+SIGNALS:
+- explicit assumptions: Error patterns now named
+- testable definitions: Can grep for constants
+
+EVIDENCE: Tests pass, byte-compile clean
+```
+</eight_keys_signals>

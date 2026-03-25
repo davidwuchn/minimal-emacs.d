@@ -80,20 +80,22 @@ Allowed mutation types:
 
 ## Priority Focus
 
-Each experiment targets the weakest Eight Keys based on baseline scores:
+Each experiment targets the weakest Eight Keys. Include signal phrases in commits.
 
-| Key | Signals | Current Avg | Improvement Focus |
-|-----|---------|-------------|-------------------|
-| φ Vitality | builds on discoveries, adapts | 0.50 | Add adaptive behavior based on history |
-| λ Efficiency | removes redundancy, optimizes | - | Simplify code paths |
-| α Alignment | follows conventions, idioms | - | Match project patterns |
-| ρ Robustness | handles errors, edge cases | - | Add guards, validations |
-| σ Specificity | concrete over vague | **0.40** | Extract constants, name patterns |
-| θ Thoroughness | complete coverage | - | Add missing pieces |
-| π Synthesis | connects findings | - | Integrate knowledge |
-| κ Coherence | logical flow | - | Improve structure |
+**See**: `mementum/knowledge/eight-keys-signals.md` for full signal phrase reference.
 
-**Weakest Key**: σ Specificity (0.40) - needs constants, named patterns, explicit assumptions.
+| Key | Weakest Score | Signal Phrases to Include |
+|-----|---------------|---------------------------|
+| Clarity | **0.40** | "explicit assumptions", "testable definitions" |
+| φ Vitality | 0.50 | "builds on discoveries", "adapts to new information" |
+| ε Purpose | - | "clear goals", "measurable outcomes" |
+| τ Wisdom | - | "risks identified", "error prevention" |
+| π Synthesis | - | "connects findings", "integrates knowledge" |
+| μ Directness | - | Direct statements, no hedging |
+| ∃ Truth | - | "evidence-based", "actual data" |
+| ∀ Vigilance | - | "edge cases handled", "input validation" |
+
+**Current Focus**: Clarity (0.40) - add `;; ASSUMPTION:` and `;; BEHAVIOR:` comments.
 
 ## What Works (from experiments)
 
@@ -123,13 +125,35 @@ From `mementum/knowledge/mutations/*.md`:
 "Memoize {function} for {scenario}"
 "Lazy initialize {resource} to defer {cost} until needed"
 "Simplify {logic} by removing {redundancy}"
-"Extract {pattern} into named constant to improve specificity"
 ```
 
-**For retry.el specifically**:
-- "Extract error patterns into named constants to improve σ Specificity"
-- "Add stats tracking to enable φ Vitality (adaptive behavior)"
-- "Cache compiled regex to improve λ Efficiency"
+### Commit Message Template (includes signals)
+
+```
+✓ {file}: {brief description}
+
+HYPOTHESIS: {what} will improve {key} because {why}.
+
+SIGNALS:
+- {signal phrase}: {how applied}
+- {signal phrase}: {how applied}
+
+EVIDENCE: Tests pass, {metrics}
+```
+
+**Example**:
+```
+✓ retry.el: Extract error patterns into constants
+
+HYPOTHESIS: Named constants will improve Clarity by making
+assumptions explicit and definitions testable.
+
+SIGNALS:
+- explicit assumptions: Error patterns now named
+- testable definitions: Can grep for constants
+
+EVIDENCE: Tests pass, byte-compile clean
+```
 
 ## Target-Specific Skills
 
