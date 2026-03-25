@@ -165,7 +165,7 @@ large-result truncation, and result caching."
          ;; Check cache first
          (let ((cached (my/gptel--subagent-cache-get agent-type prompt)))
            (when cached
-             (message "[nucleus] Subagent '%s' cache hit" agent-type)
+             (message "[nucleus] Subagent %s cache hit" agent-type)
              (funcall main-cb cached)
              (cl-return-from my/gptel-agent--task-override)))
          ;; Not cached, run the subagent
@@ -452,7 +452,7 @@ CALLBACK is called with the result or a timeout error."
                 (cancel-timer my/gptel--agent-task-timeout-timer))
               (when (timerp my/gptel--agent-task-progress-timer) 
                 (cancel-timer my/gptel--agent-task-progress-timer))
-              (message "[nucleus] Subagent '%s' completed in %.1fs, result-len=%d"
+(message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
                        agent-type (float-time (time-since start-time))
                        (if (stringp result) (length result) 0))
               (when (buffer-live-p origin-buf)
@@ -460,18 +460,18 @@ CALLBACK is called with the result or a timeout error."
                   (setq-local gptel--fsm-last parent-fsm)))
               (funcall callback result)))))
 
-    (message "[nucleus] Delegating to subagent '%s'%s..."
-             agent-type
-             (if my/gptel-agent-task-timeout
-                 (format " (timeout: %ds)" my/gptel-agent-task-timeout)
-               ""))
+    (message "[nucleus] Delegating to subagent %s%s..."
+              agent-type
+              (if my/gptel-agent-task-timeout
+                  (format " (timeout: %ds)" my/gptel-agent-task-timeout)
+                ""))
 
     (setq my/gptel--agent-task-progress-timer
           (run-at-time my/gptel-subagent-progress-interval
                        my/gptel-subagent-progress-interval
                        (lambda ()
                          (unless my/gptel--agent-task-done
-                           (message "[nucleus] Subagent '%s' still running... (%.1fs elapsed)"
+(message "[nucleus] Subagent %s still running... (%.1fs elapsed)"
                                     agent-type (float-time (time-since start-time)))))))
 
     (when my/gptel-agent-task-timeout
@@ -483,7 +483,7 @@ CALLBACK is called with the result or a timeout error."
                  (setq my/gptel--agent-task-done t)
                  (when (timerp my/gptel--agent-task-progress-timer) 
                    (cancel-timer my/gptel--agent-task-progress-timer))
-                 (message "[nucleus] Subagent '%s' timed out after %ds"
+(message "[nucleus] Subagent %s timed out after %ds"
                           agent-type my/gptel-agent-task-timeout)
                  (when (buffer-live-p origin-buf)
                    (with-current-buffer origin-buf
