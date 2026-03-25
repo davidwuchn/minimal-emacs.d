@@ -4,10 +4,13 @@
 
 ## Session Summary: Auto-Workflow Debugging
 
-### Commits (15)
+### Commits (17)
 
 | Hash | Description |
 |------|-------------|
+| `f1a746e` | λ Balance comparator weights: 50/50 Eight Keys vs code quality |
+| `b9ff770` | λ Fix comparator: use 'comparator' subagent instead of 'analyzer' |
+| `f479f95` | ◈ Update state.md: all auto-workflow issues resolved |
 | `3bb0d5e` | λ Relax grader criteria: 'change clearly described' |
 | `b8940ba` | λ Add checkmark pattern to hypothesis extraction |
 | `f5ac0ed` | λ Add 'will improve' pattern to hypothesis extraction |
@@ -22,7 +25,6 @@
 | `a3f94d7` | λ Add gptel-auto-workflow-run-sync for cron |
 | `0f0fa0b` | λ Remove auto-evolve, keep auto-workflow |
 | `57ca7ce` | λ Add logging for auto-experiment agent output |
-| `b153708` | λ Remove unused lite-executor agent |
 
 ### Auto-Workflow Branching Rule (CRITICAL)
 
