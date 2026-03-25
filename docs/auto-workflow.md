@@ -18,11 +18,63 @@ Never touch main. All changes wait in staging.
 | **Brain** | LLM target selection | ✓ |
 | **Brain** | LLM quality grading | ✓ |
 | **Brain** | LLM keep/discard | ✓ |
+| **Brain** | Pre-merge code review | ✓ |
+| **Brain** | Periodic researcher | ✓ |
 | **Eyes** | Context gathering | ✓ |
+| **Eyes** | Research findings cache | ✓ |
 | **Hands** | Tests before push | ✓ |
 | **Hands** | optimize/* branches | ✓ |
 | **Hands** | Staging verification | ✓ |
 | **Autonomy** | Retry on failure | ✓ |
+| **Autonomy** | Review retry loop | ✓ |
+
+## New Features (2026-03-26)
+
+### Pre-Merge Code Review
+
+Before merging to staging, reviewer agent checks for:
+- Blockers: runtime errors, state corruption, security holes
+- Critical issues: proven correctness bugs
+- Security: eval of untrusted input, shell injection
+
+```
+Flow: Executor commits → Reviewer checks → (BLOCKED? → Fix → Retry) → Merge
+```
+
+**Config:**
+```elisp
+gptel-auto-workflow-require-review        ; default t
+gptel-auto-workflow--review-max-retries   ; default 2
+```
+
+### Periodic Researcher
+
+Researcher runs every 4 hours via cron, finds:
+- Anti-patterns (cl-return-from without cl-block)
+- Architectural issues (high coupling, circular deps)
+- Code smells (deep nesting, long functions)
+- Safety issues (unguarded operations, missing nil checks)
+
+```
+Cache: var/tmp/research-findings.md
+Usage: Analyzer loads findings for target selection
+```
+
+**Config:**
+```elisp
+gptel-auto-workflow-research-interval     ; default 14400 (4h)
+gptel-auto-workflow-research-targets      ; default nil
+gptel-auto-workflow-research-before-fix   ; default nil
+```
+
+### Cron Schedule
+
+| Job | Schedule | Machine |
+|-----|----------|---------|
+| Auto-workflow | 10AM, 2PM, 6PM | macOS |
+| Researcher | Every 4 hours | macOS |
+| Weekly mementum | Sunday 4AM | macOS |
+| Weekly instincts | Sunday 5AM | macOS |
 
 ## Entry Points
 

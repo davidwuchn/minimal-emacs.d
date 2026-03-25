@@ -32,6 +32,16 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 0 23,3,7,11,15,19 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
+# Periodic Researcher: Code pattern analysis
+# ─────────────────────────────────────────────────────────────
+#
+# Researcher runs every 4 hours, finds anti-patterns and issues
+# Findings cached in var/tmp/research-findings.md for analyzer
+# This is separate from auto-workflow (can run independently)
+
+0 */4 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $LOGDIR/researcher.log 2>&1
+
+# ─────────────────────────────────────────────────────────────
 # Weekly Mementum: Synthesis + Decay
 # ─────────────────────────────────────────────────────────────
 
