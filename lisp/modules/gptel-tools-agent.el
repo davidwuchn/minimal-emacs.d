@@ -868,21 +868,29 @@ Uses comparator subagent if available, falls back to local comparison."
        "Experiment comparison"
        (lambda (result)
          (let* ((winner (plist-get result :winner))
-                (keep (string= winner "B"))
                 (analysis (plist-get result :analysis))
                 (rec (plist-get result :recommendation))
                 (score-before (plist-get before :score))
                 (score-after (plist-get after :score))
                 (quality-before (or (plist-get before :code-quality) 0.5))
-                (quality-after (or (plist-get after :code-quality) 0.5)))
+                (quality-after (or (plist-get after :code-quality) 0.5))
+                (combined-before (+ (* 0.5 score-before) (* 0.5 quality-before)))
+                (combined-after (+ (* 0.5 score-after) (* 0.5 quality-after)))
+                (keep (if winner
+                          (string= winner "B")
+                        (> combined-after combined-before)))
+                (reasoning (or rec
+                               (format "Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
+                                       score-before score-after
+                                       quality-before quality-after
+                                       combined-before combined-after))))
            (funcall callback
                     (list :keep keep
-                          :reasoning (or rec (format "Score: %.2f → %.2f, Quality: %.2f → %.2f"
-                                                     score-before score-after
-                                                     quality-before quality-after))
+                          :reasoning reasoning
                           :analysis analysis
                           :improvement (list :score (- score-after score-before)
-                                             :quality (- quality-after quality-after)))))))
+                                             :quality (- quality-after quality-before)
+                                             :combined (- combined-after combined-before)))))))
     (let* ((score-before (plist-get before :score))
            (score-after (plist-get after :score))
            (quality-before (or (plist-get before :code-quality) 0.5))
