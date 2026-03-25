@@ -1163,7 +1163,8 @@ Tries multiple patterns in order:
 1. Explicit HYPOTHESIS: prefix
 2. **HYPOTHESIS** markdown
 3. Sentence with 'will improve' (predictive statement)
-4. Action verb at start of sentence"
+4. Action verb at start of sentence
+5. Summary after ✓ checkmark (fallback)"
   (cond
    ((string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
     (match-string 1 output))
@@ -1174,6 +1175,9 @@ Tries multiple patterns in order:
       (string-trim match)))
    ((string-match "\\(?:Adding\\|Changing\\|Improving\\|Enhancing\\|Removing\\|Refactoring\\)\\s-+[^.\n]+\\." output)
     (let ((match (match-string 0 output)))
+      (string-trim match)))
+   ((string-match "✓\\s-+[^:]+:\\s-+\\([^\n|]+\\)" output)
+    (let ((match (match-string 1 output)))
       (string-trim match)))
    (t "No hypothesis stated")))
 
