@@ -1,6 +1,21 @@
 # Mementum State
 
-> Last session: 2026-03-25 17:57
+> Last session: 2026-03-25 18:15
+
+## Bug Fix: Executor Must Commit
+
+**Root cause**: Eight Keys score_after was 0.00 because executor didn't commit changes.
+
+Eight Keys scoring reads `git log -1` and `git diff HEAD~1` which fail without commits.
+
+**Fix**: Added step 5 to experiment prompt:
+```
+5. COMMIT your changes: git add -A && git commit -m "message with signal phrases"
+```
+
+Also added signal phrase requirements to prompt.
+
+---
 
 ## Staging Branch Protection Implemented
 
