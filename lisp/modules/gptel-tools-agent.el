@@ -1624,6 +1624,19 @@ Tries multiple patterns in order:
 (defvar gptel-auto-workflow--running nil
   "Flag to track if auto-workflow is currently running.")
 
+(defvar gptel-auto-workflow--stats nil
+  "Current run statistics: (:kept :total :phase).")
+
+(defun gptel-auto-workflow-status ()
+  "Return current workflow status as plist.
+Returns (:running :kept :total :phase :results)."
+  (list :running gptel-auto-workflow--running
+        :kept (or (plist-get gptel-auto-workflow--stats :kept) 0)
+        :total (or (plist-get gptel-auto-workflow--stats :total) 0)
+        :phase (or (plist-get gptel-auto-workflow--stats :phase) "idle")
+        :results (format "var/tmp/experiments/%s/results.tsv"
+                        (format-time-string "%Y-%m-%d"))))
+
 (declare-function gptel-auto-workflow-select-targets "gptel-auto-workflow-strategic")
 
 (defun gptel-auto-workflow-run-async (&optional targets completion-callback)
@@ -1643,6 +1656,8 @@ Usage:
   emacsclient -e '(gptel-auto-workflow-status)'
   M-x gptel-auto-workflow-run"
   (interactive)
+  (when gptel-auto-workflow--running
+    (error "[auto-workflow] Already running. Check status first."))
   (unless (require 'magit-worktree nil t)
     (user-error "magit-worktree is required"))
   (unless (require 'magit-git nil t)
@@ -1650,7 +1665,10 @@ Usage:
   (let* ((targets (or targets gptel-auto-workflow-targets))
          (run-id (format-time-string "%Y-%m-%d"))
          (all-results '())
-         (completed-targets 0))
+         (completed-targets 0)
+         (kept-count 0))
+    (setq gptel-auto-workflow--running t
+          gptel-auto-workflow--stats (list :phase "running" :total (length targets) :kept 0))
     (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
     (dolist (target targets)
       (gptel-auto-experiment-loop
@@ -1658,13 +1676,15 @@ Usage:
        (lambda (results)
          (setq all-results (append all-results results))
          (cl-incf completed-targets)
+         (setq kept-count (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
+         (plist-put gptel-auto-workflow--stats :kept kept-count)
          (when (= completed-targets (length targets))
-           (message "[auto-workflow] Complete: %d total experiments"
-                    (length all-results))
-           (message "[auto-workflow] Results: %s/%s/results.tsv"
-                    gptel-auto-workflow-worktree-base run-id)
+           (setq gptel-auto-workflow--running nil)
+           (plist-put gptel-auto-workflow--stats :phase "complete")
+           (message "[auto-workflow] Complete: %d experiments, %d kept"
+                    (length all-results) kept-count)
            (when completion-callback
-             (funcall completion-callback))))))))
+             (funcall completion-callback all-results))))))))
 
 (defun gptel-auto-workflow-run (&optional targets)
   "Run auto-workflow asynchronously.
