@@ -640,13 +640,11 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
             (when (> bytes limit)
               (let ((n (my/gptel--trim-reasoning-content info)))
                 (cl-incf trimmed-total n)
-                (setq repaired (my/gptel--repair-thinking-tool-call-messages info))
-                (cl-incf trimmed-total repaired)
                 (setq bytes (my/gptel--estimate-payload-bytes info))
                 (setq pass 2)
-                (when (or (> n 0) (> repaired 0))
-                  (message "gptel: Pass 2: stripped reasoning from %d message(s), repaired %d tool-call message(s), now %dKB"
-                           n repaired (/ bytes 1024)))))
+                (when (> n 0)
+                  (message "gptel: Pass 2: stripped reasoning from %d message(s), now %dKB"
+                           n (/ bytes 1024)))))
             ;; Pass 3: reduce tools array (if still over)
             (when (> bytes limit)
               (let ((n (my/gptel--reduce-tools-for-retry info)))
