@@ -2,6 +2,30 @@
 
 > Last session: 2026-03-25 18:15
 
+## Session Summary
+
+### Fixes Applied
+
+1. **Executor must commit** - Added step 5 to prompt for git commit
+2. **Batch-mode cron** - No emacs daemon required
+
+### Files Changed
+
+- `lisp/modules/gptel-tools-agent.el` - Added commit instructions to prompt
+- `cron.d/auto-workflow` - Switched from emacsclient to batch emacs
+- `scripts/run-auto-workflow.sh` - New helper script with --dry-run
+
+### Verification
+
+```
+✓ ./scripts/run-auto-workflow.sh --dry-run
+✓ Tests pass (1075/1161)
+✓ Nucleus validation passes
+✓ Cron updated
+```
+
+---
+
 ## Bug Fix: Executor Must Commit
 
 **Root cause**: Eight Keys score_after was 0.00 because executor didn't commit changes.
