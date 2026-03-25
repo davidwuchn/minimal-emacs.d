@@ -77,14 +77,14 @@ Returns plist with git history, file sizes, TODOs.
                         (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
                                 proj-root))
           :file-sizes (shell-command-to-string
-                        (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -15"
-                                proj-root))
+                       (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -15"
+                               proj-root))
           :todos (shell-command-to-string
                   (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -20"
                           proj-root))
           :file-list (shell-command-to-string
-                       (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
-                               proj-root)))))
+                      (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
+                              proj-root)))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
@@ -116,11 +116,11 @@ TASK: Select exactly %d files from lisp/modules/ to optimize.
 
 OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
-                        (plist-get context :file-list)
-                        (plist-get context :git-history)
-                        (plist-get context :file-sizes)
-                        (plist-get context :todos)
-                        max-targets)))
+                         (plist-get context :file-list)
+                         (plist-get context :git-history)
+                         (plist-get context :file-sizes)
+                         (plist-get context :todos)
+                         max-targets)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (progn
@@ -141,9 +141,10 @@ OUTPUT JSON ONLY:
 ;; EDGE CASE: Malformed JSON → regex fallback; No matches → empty list
 ;; SYNTHESIS: Bridges LLM output format with internal file list representation
 ;; TEST: Verify valid files extracted from both JSON and text responses"
-  (let ((targets '()))
+  (let ((targets '())
+        (proj-root (gptel-auto-workflow--project-root)))
     ;; Try JSON
-    (condition-case nil
+    (condition-case _
         (with-temp-buffer
           (insert (if (stringp response) response (format "%S" response)))
           (goto-char (point-min))
@@ -153,8 +154,12 @@ OUTPUT JSON ONLY:
                    (list (cdr (assq 'targets data))))
               (dolist (item list)
                 (let ((file (cdr (assq 'file item))))
-                  (when (and file (file-exists-p file))
-                    (push file targets)))))))
+                  (when file
+                    (let ((abs-path (if (file-name-absolute-p file)
+                                        file
+                                      (expand-file-name file proj-root))))
+                      (when (file-exists-p abs-path)
+                        (push (file-relative-name abs-path proj-root) targets)))))))))
       (error nil))
     ;; Fallback: regex
     (when (null targets)
@@ -163,7 +168,9 @@ OUTPUT JSON ONLY:
         (goto-char (point-min))
         (while (re-search-forward "lisp/modules/[a-zA-Z0-9_-]+\\.el" nil t)
           (let ((file (match-string 0)))
-            (cl-pushnew file targets :test #'equal)))))
+            (let ((abs-path (expand-file-name file proj-root)))
+              (when (file-exists-p abs-path)
+                (cl-pushnew file targets :test #'equal)))))))
     (nreverse targets)))
 
 (defun gptel-auto-workflow-select-targets (callback)

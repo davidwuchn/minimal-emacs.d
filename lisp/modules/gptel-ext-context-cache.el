@@ -228,7 +228,7 @@ Sources:
      :pricing-input 0.55 :pricing-output 2.19
      :max-output 8192
      :description "DeepSeek R1 - reasoning model")
-;; MiniMax
+    ;; MiniMax
     ("MiniMax-M2.5"
      :context-window 196608
      :pricing-input 0.27 :pricing-output 0.95
@@ -302,6 +302,8 @@ Uses language-aware heuristics:
 - Mixed (default): ~3.5 chars/token
 
 For buffers with current buffer, analyzes content type."
+  (unless (and (numberp chars) (> chars 0))
+    (cl-return-from my/gptel--estimate-text-tokens 0))
   (let ((ratio 3.5))
     (when (and (buffer-live-p (current-buffer))
                (buffer-file-name))
@@ -590,20 +592,20 @@ Description: %s"
      :features (streaming tools reasoning)
      :notes "Use --http1.1 for curl, some models support reasoning tokens")
 
-(dashscope
-      :description "Alibaba DashScope - Qwen, GLM models"
-      :rate-limit "60 req/min (free tier), higher for paid"
-      :pricing-model "Per-model, tiered by context length"
-      :features (streaming tools reasoning)
-      :notes "Qwen3.5-Plus has 1M context. Reasoning models need streaming or fast response."
-      :context-windows
-      ((qwen3-coder-next . 131072)
-       (qwen3-coder-plus . 1000000)
-       (qwen3.5-plus . 1000000)
-       (qwen3.5-flash . 1000000)
-       (qwen3-max-2026-01-23 . 262144)
-       (glm-5 . 131072)
-       (glm-4.7 . 131072)))
+    (dashscope
+     :description "Alibaba DashScope - Qwen, GLM models"
+     :rate-limit "60 req/min (free tier), higher for paid"
+     :pricing-model "Per-model, tiered by context length"
+     :features (streaming tools reasoning)
+     :notes "Qwen3.5-Plus has 1M context. Reasoning models need streaming or fast response."
+     :context-windows
+     ((qwen3-coder-next . 131072)
+      (qwen3-coder-plus . 1000000)
+      (qwen3.5-plus . 1000000)
+      (qwen3.5-flash . 1000000)
+      (qwen3-max-2026-01-23 . 262144)
+      (glm-5 . 131072)
+      (glm-4.7 . 131072)))
 
     (deepseek
      :description "DeepSeek - V3 and R1 models"
