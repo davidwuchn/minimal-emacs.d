@@ -4,10 +4,11 @@
 
 ## Session Summary: Auto-Workflow Debugging
 
-### Commits (6)
+### Commits (7)
 
 | Hash | Description |
 |------|-------------|
+| `d5f5700` | λ Fix auto-workflow: add working directory and target path to prompt |
 | `a3f94d7` | λ Add gptel-auto-workflow-run-sync for cron |
 | `0f0fa0b` | λ Remove auto-evolve, keep auto-workflow |
 | `57ca7ce` | λ Add logging for auto-experiment agent output |
@@ -15,42 +16,40 @@
 | `2592957` | λ Fix auto-workflow: use executor agent + buffer-local timer state |
 | `0af692a` | λ Fix auto-workflow: use lite-executor instead of code agent |
 
-### Issue: Auto-Workflow Returns Nil
+### Issues Fixed
 
-**Root Cause Found**: Async callback chain + `emacsclient -e` incompatibility.
+#### 1. Async/Sync Incompatibility (FIXED)
 
-**The Problem**:
-1. `gptel-auto-workflow-run` uses async callbacks
-2. When called via `emacsclient -e`, it returns immediately
-3. Callbacks never fire because event loop exits
+**Problem**: `gptel-auto-workflow-run` returns immediately when called via `emacsclient -e`
 
-**Solution Implemented**:
-- Added `gptel-auto-workflow-run-sync` for cron
-- Uses `accept-process-output` to keep event loop alive
-- Waits for all targets to complete
+**Solution**: Added `gptel-auto-workflow-run-sync` using `accept-process-output` to keep event loop alive
 
-**Testing Results** (via `emacs --daemon` + `emacsclient`):
+#### 2. Executor Returns Nil/Error (FIXED)
+
+**Root Cause**: Prompt didn't specify working directory or full target path
+
+**Solution**: 
+- Added "Working Directory" section to prompt
+- Added "Target File (full path)" section to prompt
+- Fixed `gptel-auto-workflow--project-root` to always return expanded path
+
+**Verified**: Executor now successfully finds and edits target files
+
+### How to Test Auto-Workflow
+
 ```elisp
-;; Direct gptel-agent--task - WORKS
-(gptel-agent--task callback "executor" "Test" "Say hello")
-;; => "Hello! DONE"
+;; Start daemon
+emacs --daemon
 
-;; With accept-process-output - WORKS
-(my/gptel--agent-task-with-timeout callback "executor" ...)
-(while running (accept-process-output nil 1.0))
+;; Test single experiment (interactive)
+emacsclient -e "
+(let ((gptel-auto-workflow-targets '(\"lisp/modules/gptel-ext-retry.el\"))
+      (gptel-auto-experiment-max-per-target 1))
+  (gptel-auto-workflow-run-sync))"
 
-;; sync version - WORKS but executor still returns errors
-(gptel-auto-workflow-run-sync)
-;; => Writes to TSV, but grader sees "Error: ..." messages
+;; Check results
+cat var/tmp/experiments/$(date +%Y-%m-%d)/results.tsv
 ```
-
-**Remaining Issue**:
-Executor still returns error messages instead of making code changes.
-This is a separate issue from the async/sync problem.
-
-**Files Changed**:
-- `gptel-tools-agent.el`: Added `gptel-auto-workflow-run-sync`
-- `cron.d/auto-workflow`: Uses `-sync` version
 
 ### Verified Working
 
