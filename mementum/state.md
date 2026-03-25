@@ -1,58 +1,78 @@
 # Mementum State
 
-> Last session: 2026-03-25 15:05
+> Last session: 2026-03-25 15:14
 
-## Auto-Workflow: Production Ready ✓
+## Session Complete: Auto-Workflow Production + Real Improvement Merged
 
-All 10 verifications passed. Cron active. Tests pass.
+### Merged Improvement
 
-### Cron Schedule
+| Branch | Target | Change | Eight Keys |
+|--------|--------|--------|------------|
+| optimize/fsm-utils-* | gptel-ext-fsm-utils.el | +119 lines, ID tracking | 0.40 → 0.46 |
 
-| Time | Job |
-|------|-----|
-| 2 AM daily | Auto-workflow experiments |
-| 4 AM Sunday | Mementum synthesis |
-| 5 AM Sunday | Instincts evolution |
+**Features merged:**
+- FSM ID registry
+- Context-aware FSM selection
+- Nesting detection
+- Fixes TODO about nested subagent scenarios
+
+### Commits: 18
+
+| # | Type | Description |
+|---|------|-------------|
+| 18 | merge | FSM ID tracking |
+| 17 | docs | LLM-first architecture |
+| 16 | state | Production verified |
+| 15 | state | Production ready |
+| 14 | fix | Detect agent errors |
+| 13 | state | Autonomy documented |
+| 12 | principle | Never ask user |
+| 11 | docs | LLM decides targets |
+| 10 | principle | LLM is brain |
+| 9 | feature | LLM-first selection |
+| 8 | state | Tests before push |
+| 7 | safety | Tests before push |
+| 6 | knowledge | Eight Keys signals |
+| 5 | skills | Optimization skills |
+| 4 | knowledge | Eight Keys guide |
+| 3 | skills | Skills with learnings |
+| 2 | docs | Program with baselines |
+| 1 | state | State cleaned |
 
 ### Architecture
 
 ```
-Eyes (gather) → Brain (LLM) → Hands (execute)
+LLM = Brain (decides, judges, reasons)
+We  = Eyes (gather context) + Hands (execute)
+Never ask user. Try harder, again and again.
 ```
 
-- Target selection: LLM (analyzer)
-- Quality check: LLM (grader)
-- Keep/discard: LLM (comparator)
+### Production Status
 
-### Principles
+| Component | Status |
+|-----------|--------|
+| Target selection | ✓ LLM (analyzer) |
+| Grading | ✓ LLM (grader) |
+| Decision | ✓ LLM (comparator) |
+| Tests before push | ✓ |
+| Retry logic | ✓ |
+| Error detection | ✓ |
+| Tests | ✓ 52/52 |
+| Cron | ✓ 2 AM daily |
+| Real improvement | ✓ Merged to main |
 
-1. **LLM = Brain** - Decides, judges, reasons
-2. **We = Eyes + Hands** - Gather context, execute
-3. **Never ask user** - Retry on failure
-4. **Safety first** - Tests pass, optimize/* only
+### Clean Up
 
-### View Results
-
-```bash
-cat var/tmp/experiments/$(date +%Y-%m-%d)/results.tsv
-cat var/tmp/cron/auto-workflow.log
-git branch -r 'origin/optimize/*'
-```
-
-### Session Stats
-
-- Commits: 12
-- Tests: 52/52
-- Files: 4 new
-- Principles: 3
+- ✓ Deleted optimize/fsm-utils-imacpro-exp1 (merged)
+- ✓ Deleted optimize/retry-* (outdated)
 
 ---
 
-## λ Complete
+## λ Summary
 
 ```
-λ verify. 10/10 checks passed
-λ cron. 2 AM daily active
-λ architecture. Eyes → Brain → Hands
-λ philosophy. LLM decides, we execute
+λ merge. FSM ID tracking improvement merged
+λ clean. Old optimize branches deleted
+λ verify. 52/52 tests pass
+λ complete. Production ready
 ```
