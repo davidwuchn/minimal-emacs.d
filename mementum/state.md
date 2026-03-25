@@ -1,52 +1,67 @@
 # Mementum State
 
-> Last session: 2026-03-25 22:15
+> Last session: 2026-03-25 22:30
 
-## Key Learning: Never Hard Code, Always Ask LLM
-
-```
-λ dynamic. LLM selects targets each run - no hard-coded lists
-λ adaptive. LLM analyzes git history, TODOs, file sizes
-λ smart. LLM picks best targets based on current state
-λ fallback. Empty static list = pure LLM selection
-```
-
-### Before vs After
-
-| Aspect | Before | After |
-|--------|--------|-------|
-| Targets | Hard-coded 8 files | LLM selects dynamically |
-| Selection | Static list | Analyzes git + TODOs + size |
-| Adaptation | Never changes | Different each run |
-| Fallback | N/A | Empty list = pure LLM |
-
-### How It Works
+## Key Learning: Distribute Across Both Subscriptions
 
 ```
-1. gptel-auto-workflow-run-async called with no targets
-2. Calls gptel-auto-workflow-select-targets
-3. LLM analyzes: git history, TODOs, file sizes
-4. LLM returns N best targets (N = gptel-auto-workflow-max-targets-per-run)
-5. Workflow runs on selected targets
+λ balance. Use both DashScope and Moonshot subscriptions
+λ analysis. Moonshot (kimi-k2.5) for analysis/evaluation
+λ execution. DashScope (qwen3.5-plus) for coding/execution
+λ maximize. Every workflow run uses both subscriptions
+```
+
+### Agent Distribution
+
+| Moonshot (kimi-k2.5) | DashScope (qwen3.5-plus) |
+|---------------------|-------------------------|
+| analyzer | executor |
+| comparator | nucleus-gptel-agent |
+| grader | explorer |
+| introspector | nucleus-gptel-plan |
+| researcher | |
+| reviewer | |
+
+**6 agents on Moonshot, 4 on DashScope**
+
+### Why This Distribution?
+
+```
+Moonshot (kimi-k2.5):
+- Good reasoning for analysis
+- Handles comparison/evaluation well
+- Research and review tasks
+
+DashScope (qwen3.5-plus):
+- Optimized for code generation
+- Fast execution
+- Heavy coding tasks
+```
+
+### Monthly Subscription Math
+
+```
+Before: Only DashScope (qwen3.5-plus)
+After: Both DashScope + Moonshot
+
+Per workflow run:
+- Analyzer (Moonshot): ~2000 tokens
+- Executor (DashScope): ~10000 tokens  
+- Grader (Moonshot): ~1000 tokens
+- Comparator (Moonshot): ~1000 tokens
+
+Total: ~7000 Moonshot + ~10000 DashScope per run
+4 runs/day = 28000 Moonshot + 40000 DashScope
 ```
 
 ---
 
-## Monthly Subscription Optimization
-
-| Setting | Value | Reason |
-|---------|-------|--------|
-| Targets | LLM selects | No hard-coding |
-| Max per run | 5 | Diminishing returns after 3-4 |
-| No-improvement stop | 2 | Fail fast, try different file |
-| Frequency | Every 6h | 4×/day |
-| Experiments/target | 5 | Focus on diverse targets |
-
-### Math
+## Dynamic Target Selection
 
 ```
-LLM selects 5 targets × 5 experiments × 4 runs = 100 experiments/day
-Different targets each run = more diverse improvements
+λ dynamic. Never hard-code targets - LLM selects each run
+λ adaptive. LLM analyzes git, TODOs, sizes for best picks
+λ smart. Different targets each run = diverse improvements
 ```
 
 ---
@@ -65,9 +80,10 @@ Different targets each run = more diverse improvements
 ## λ Summary
 
 ```
-λ dynamic. Never hard-code targets - LLM selects each run
-λ adaptive. LLM analyzes git, TODOs, sizes for best picks
+λ subscriptions. Use BOTH DashScope and Moonshot
+λ moonshot. Analysis, evaluation, review (kimi-k2.5)
+λ dashscope. Execution, coding, planning (qwen3.5-plus)
+λ dynamic. LLM selects targets, never hard-code
 λ async. Daemon never blocks - check status anytime
-λ daemon. Use emacs --daemon + emacsclient, NOT batch mode
 λ safety. Main NEVER touched by auto-workflow
 ```
