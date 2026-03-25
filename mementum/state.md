@@ -2,52 +2,35 @@
 
 > Last session: 2026-03-25
 
-## Session Summary: Auto-Workflow Fully Operational
+## Session Summary: Auto-Workflow Tests Pass
 
-**25+ commits** fixing all major issues. System tested and working.
+**52/52 tests pass** after fixing comparator local fallback.
 
-### Final Test Results
+### Latest Fix
 
-```
-Experiment 1:
-- Hypothesis: ✓ Extracted correctly
-- Grader: 6/6 passed (100%)
-- Comparator: "tie" (LLM decided correctly)
-- Decision: discarded (tie = no improvement)
-```
+| Commit | Description |
+|--------|-------------|
+| `70d4e37` | ✓ gptel-tools-agent: add local fallback for comparator when subagents disabled |
 
-Comparator now works:
-- LLM receives proper prompt with scores
-- Returns "A", "B", or "tie"
-- "tie" means no improvement → discard (correct behavior)
+Test `grader/decision-factors-code-quality` now passes - when `gptel-auto-experiment-use-subagents` is nil, comparator uses local combined score comparison.
 
-### Commits (24)
+### What's Done
 
-| Hash | Description |
-|------|-------------|
-| `6d6a4db` | λ Fix comparator: use LLM with proper prompt format |
-| `8e4291e` | λ Simplify comparator: use local decision (reverted) |
-| `0424f89` | λ Fix comparator decision: fall back to local when winner is nil |
-| `c7e47e7` | ◈ Final state.md update: 20 commits documented |
-| `1b8f7c1` | ◈ Update scripts: use gptel-auto-workflow-run-sync |
-| `f2d1b53` | ◈ Update auto-workflow.md: sync version, 50/50 weights |
-| `f1a746e` | λ Balance comparator weights: 50/50 Eight Keys vs code quality |
-| `b9ff770` | λ Fix comparator: use 'comparator' subagent instead of 'analyzer' |
-| `f479f95` | ◈ Update state.md: all auto-workflow issues resolved |
-| `3bb0d5e` | λ Relax grader criteria: 'change clearly described' |
-| `b8940ba` | λ Add checkmark pattern to hypothesis extraction |
-| `f5ac0ed` | λ Add 'will improve' pattern to hypothesis extraction |
-| `16d8d2a` | ◈ Update state.md: hypothesis extraction improved |
-| `e486571` | λ Improve hypothesis extraction + prompt emphasis |
-| `ad122fc` | ◈ Update state.md: Eight Keys scoring fixed |
-| `ff20864` | λ Fix Eight Keys scoring: use actual code diff + commit message |
-| `125298f` | λ Fix TSV logging: escape newlines/tabs |
-| `f12accc` | 💡 Update TDD patterns with auto-workflow learnings |
-| `15ea470` | ◈ Document auto-workflow branching rule |
-| `d5f5700` | λ Fix auto-workflow: add working directory and target path to prompt |
-| `a3f94d7` | λ Add gptel-auto-workflow-run-sync for cron |
-| `0f0fa0b` | λ Remove auto-evolve, keep auto-workflow |
-| `57ca7ce` | λ Add logging for auto-experiment agent output |
+| Component | Status |
+|-----------|--------|
+| Sync wrapper | ✓ `gptel-auto-workflow-run-sync` |
+| Executor | ✓ Finds files, makes changes |
+| Grader | ✓ 6/6 pass rate |
+| Comparator | ✓ LLM decides with proper prompt |
+| Eight Keys scoring | ✓ Fixed plist-get + code diff input |
+| Hypothesis extraction | ✓ Multiple patterns |
+| Branching | ✓ optimize/* only |
+| All tests | ✓ 52/52 pass |
+
+### What's Left
+
+1. **End-to-end verification**: Run auto-workflow and confirm it pushes to `optimize/*` branch when improvement found
+2. **Install cron**: `crontab cron.d/auto-workflow` to enable scheduled runs
 | `b153708` | λ Remove unused lite-executor agent |
 
 ### Comparator Prompt Fix (FINAL)
