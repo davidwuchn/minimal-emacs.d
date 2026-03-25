@@ -302,20 +302,20 @@ Uses language-aware heuristics:
 - Mixed (default): ~3.5 chars/token
 
 For buffers with current buffer, analyzes content type."
-  (unless (and (numberp chars) (> chars 0))
-    (cl-return-from my/gptel--estimate-text-tokens 0))
-  (let ((ratio 3.5))
-    (when (and (buffer-live-p (current-buffer))
-               (buffer-file-name))
-      (let ((ext (file-name-extension (buffer-file-name))))
-        (cond
-         ((member ext '("el" "clj" "cljs" "py" "js" "ts" "rs" "go" "java" "c" "cpp" "h"))
-          (setq ratio 3.0))
-         ((member ext '("md" "txt" "org" "rst" "adoc"))
-          (setq ratio 4.0))
-         ((member ext '("json" "yaml" "yml" "toml" "ini"))
-          (setq ratio 2.5)))))
-    (/ (float chars) ratio)))
+  (if (not (and (numberp chars) (> chars 0)))
+      0
+    (let ((ratio 3.5))
+      (when (and (buffer-live-p (current-buffer))
+                 (buffer-file-name))
+        (let ((ext (file-name-extension (buffer-file-name))))
+          (cond
+           ((member ext '("el" "clj" "cljs" "py" "js" "ts" "rs" "go" "java" "c" "cpp" "h"))
+            (setq ratio 3.0))
+           ((member ext '("md" "txt" "org" "rst" "adoc"))
+            (setq ratio 4.0))
+           ((member ext '("json" "yaml" "yml" "toml" "ini"))
+            (setq ratio 2.5)))))
+      (/ (float chars) ratio))))
 
 (defun my/gptel--estimate-tokens (chars)
   "Estimate total token count: text (CHARS) + images in context.
@@ -391,19 +391,20 @@ Image tokens are counted from `gptel-context' if available."
   "Fetch context window for MODEL from OpenRouter and cache it.
 
 Runs asynchronously; returns nil immediately."
-  (let* ((model-id (my/gptel--model-id-string model))
-         (url "https://openrouter.ai/api/v1/models"))
-    (when (and (not my/gptel--openrouter-context-window-fetch-inflight)
-               (stringp model-id)
-               (executable-find "curl"))
-      (setq my/gptel--openrouter-context-window-fetch-inflight t)
-      (let* ((key (ignore-errors (gptel-api-key-from-auth-source "api.openrouter.com" "api")))
-             (buf (generate-new-buffer " *gptel-openrouter-models*")))
-        (unless (and (stringp key) (not (string-empty-p key)))
-          (setq my/gptel--openrouter-context-window-fetch-inflight nil)
-          (when (buffer-live-p buf) (kill-buffer buf))
-          (message "OpenRouter context-window: no API key found in auth-source")
-          (cl-return-from my/gptel--openrouter-fetch-context-window nil))
+  (cl-block my/gptel--openrouter-fetch-context-window
+    (let* ((model-id (my/gptel--model-id-string model))
+           (url "https://openrouter.ai/api/v1/models"))
+      (when (and (not my/gptel--openrouter-context-window-fetch-inflight)
+                 (stringp model-id)
+                 (executable-find "curl"))
+        (setq my/gptel--openrouter-context-window-fetch-inflight t)
+        (let* ((key (ignore-errors (gptel-api-key-from-auth-source "api.openrouter.com" "api")))
+               (buf (generate-new-buffer " *gptel-openrouter-models*")))
+          (unless (and (stringp key) (not (string-empty-p key)))
+            (setq my/gptel--openrouter-context-window-fetch-inflight nil)
+            (when (buffer-live-p buf) (kill-buffer buf))
+            (message "OpenRouter context-window: no API key found in auth-source")
+            (cl-return-from my/gptel--openrouter-fetch-context-window nil))
         (let* ((cmd (list "curl"
                           "--silent" "--show-error" "--fail"
                           "--connect-timeout" (number-to-string my/gptel-openrouter-models-connect-timeout)
@@ -448,7 +449,7 @@ Runs asynchronously; returns nil immediately."
                                 (message "OpenRouter context-window: parse failed (%s)" (error-message-string err))))))
                        (when (buffer-live-p buf) (kill-buffer buf))))))))
           (process-put proc 'my/gptel-managed t)
-          nil)))))
+          nil)))))))
 
 (defun my/gptel--auto-refresh-context-window-cache-maybe ()
   "Refresh context window cache if stale (non-blocking)."
