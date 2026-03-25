@@ -135,6 +135,9 @@ Returns the number of messages truncated, or 0 if nothing was done."
           (setq tool-indices (nreverse tool-indices))
           (when (> (length tool-indices) keep)
             (let ((to-truncate (seq-take tool-indices (- (length tool-indices) keep))))
+              ;; Single pass: calculate bytes-saved AND truncate
+              ;; ASSUMPTION: Truncation decision based on total potential savings
+              ;; EDGE CASE: Must check min-bytes threshold before modifying messages
               (dolist (idx to-truncate)
                 (let* ((msg (aref messages idx))
                        (content (plist-get msg :content)))
@@ -142,7 +145,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
                              (> (length content) (length replacement)))
                     (cl-incf bytes-saved (- (length content) (length replacement))))))
               (when (or (= my/gptel-trim-min-bytes 0)
-                         (>= bytes-saved my/gptel-trim-min-bytes))
+                        (>= bytes-saved my/gptel-trim-min-bytes))
                 (dolist (idx to-truncate)
                   (let* ((msg (aref messages idx))
                          (content (plist-get msg :content)))
@@ -448,64 +451,64 @@ TEST: Verify with network failure simulation — should retry 3 times with
          ;; gptel-request--handlers (programmatic), or
          ;; gptel-agent-request--handlers (agent mode).
          (handlers (gptel-fsm-handlers machine))
-          (subagent-p (not (or (eq handlers gptel-send--handlers)
-                               (eq handlers gptel-request--handlers)
-                               (and (boundp 'gptel-agent-request--handlers)
-                                    (eq handlers gptel-agent-request--handlers))))))
+         (subagent-p (not (or (eq handlers gptel-send--handlers)
+                              (eq handlers gptel-request--handlers)
+                              (and (boundp 'gptel-agent-request--handlers)
+                                   (eq handlers gptel-agent-request--handlers))))))
     (if (and (eq new-state 'ERRS)
              (not subagent-p)
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
              (my/gptel--transient-error-p error-data http-status))
-      (let* ((base-delay 4.0)
-             (factor 2.0)
-             (delay (min 30.0 (* base-delay (expt factor retries))))
-             (error-msg (my/gptel--format-error-message error-data http-status)))
-        (if my/gptel-max-retries
-            (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..."
-                     error-msg (1+ retries) my/gptel-max-retries delay)
-          (message "gptel: API failed with '%s'. Retrying (Attempt %d) in %.1fs..."
-                   error-msg (1+ retries) delay))
+        (let* ((base-delay 4.0)
+               (factor 2.0)
+               (delay (min 30.0 (* base-delay (expt factor retries))))
+               (error-msg (my/gptel--format-error-message error-data http-status)))
+          (if my/gptel-max-retries
+              (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..."
+                       error-msg (1+ retries) my/gptel-max-retries delay)
+            (message "gptel: API failed with '%s'. Retrying (Attempt %d) in %.1fs..."
+                     error-msg (1+ retries) delay))
           
-        ;; Clean up partial buffer insertions if any.
-        (my/gptel--cleanup-partial-insertion info)
-        
-        ;; Reset FSM state to WAIT to trigger a fresh request
-        (plist-put info :error nil)
-        (plist-put info :status nil)
-        (plist-put info :http-status nil)
-        (plist-put info :retries (1+ retries))
-        
-        ;; Progressive payload trimming before retry.
-        ;; Tool results: keep count decreases with each retry
-        ;;   retry 1 → keep max(0, default-1), retry 2+ → keep 0
-        ;; Reasoning content: stripped on retry 2+ to reclaim space
-        ;; from accumulated chain-of-thought text.
-        ;; Tools array: reduced on retry 2+ to only tools actually
-        ;; used in the conversation, removing ~60-80% of definitions.
-        (let ((trimmed (my/gptel--trim-tool-results-for-retry info))
-              (new-retries (plist-get info :retries)))
-          (when (> trimmed 0)
-            (message "gptel: Trimmed %d old tool result(s) to reduce payload (retry %d, keeping %d recent)"
-                     trimmed new-retries
-                     (max 0 (- my/gptel-retry-keep-recent-tool-results new-retries))))
-          (when (>= new-retries 2)
-            (let ((reasoning-stripped (my/gptel--trim-reasoning-content info)))
-              (when (> reasoning-stripped 0)
-                (message "gptel: Stripped reasoning_content from %d assistant message(s)" reasoning-stripped)))
-            (let ((tools-removed (my/gptel--reduce-tools-for-retry info)))
-              (when (> tools-removed 0)
-                (message "gptel: Removed %d unused tool definition(s) from payload" tools-removed)))
-            (let ((repaired (my/gptel--repair-thinking-tool-call-messages info)))
-              (when (> repaired 0)
-                (message "gptel: Restored empty reasoning field on %d tool-call message(s)" repaired)))))
-        
-        ;; Schedule the FSM transition asynchronously (non-blocking exponential backoff)
-        (run-at-time delay nil
-                     (lambda (m f-orig)
-                       (funcall f-orig m 'WAIT))
-                     machine orig-fn)
-        ;; Return nil to abort the current transition to ERRS and let the timer take over
-        nil)
+          ;; Clean up partial buffer insertions if any.
+          (my/gptel--cleanup-partial-insertion info)
+          
+          ;; Reset FSM state to WAIT to trigger a fresh request
+          (plist-put info :error nil)
+          (plist-put info :status nil)
+          (plist-put info :http-status nil)
+          (plist-put info :retries (1+ retries))
+          
+          ;; Progressive payload trimming before retry.
+          ;; Tool results: keep count decreases with each retry
+          ;;   retry 1 → keep max(0, default-1), retry 2+ → keep 0
+          ;; Reasoning content: stripped on retry 2+ to reclaim space
+          ;; from accumulated chain-of-thought text.
+          ;; Tools array: reduced on retry 2+ to only tools actually
+          ;; used in the conversation, removing ~60-80% of definitions.
+          (let ((trimmed (my/gptel--trim-tool-results-for-retry info))
+                (new-retries (plist-get info :retries)))
+            (when (> trimmed 0)
+              (message "gptel: Trimmed %d old tool result(s) to reduce payload (retry %d, keeping %d recent)"
+                       trimmed new-retries
+                       (max 0 (- my/gptel-retry-keep-recent-tool-results new-retries))))
+            (when (>= new-retries 2)
+              (let ((reasoning-stripped (my/gptel--trim-reasoning-content info)))
+                (when (> reasoning-stripped 0)
+                  (message "gptel: Stripped reasoning_content from %d assistant message(s)" reasoning-stripped)))
+              (let ((tools-removed (my/gptel--reduce-tools-for-retry info)))
+                (when (> tools-removed 0)
+                  (message "gptel: Removed %d unused tool definition(s) from payload" tools-removed)))
+              (let ((repaired (my/gptel--repair-thinking-tool-call-messages info)))
+                (when (> repaired 0)
+                  (message "gptel: Restored empty reasoning field on %d tool-call message(s)" repaired)))))
+          
+          ;; Schedule the FSM transition asynchronously (non-blocking exponential backoff)
+          (run-at-time delay nil
+                       (lambda (m f-orig)
+                         (funcall f-orig m 'WAIT))
+                       machine orig-fn)
+          ;; Return nil to abort the current transition to ERRS and let the timer take over
+          nil)
       (funcall orig-fn machine new-state))))
 
 (advice-add 'gptel--fsm-transition :around #'my/gptel-auto-retry)
