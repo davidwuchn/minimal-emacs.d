@@ -2,12 +2,17 @@
 
 > Last session: 2026-03-25
 
-## Session Summary: Auto-Workflow Debugging
+## Session Summary: Auto-Workflow Fully Operational
 
-### Commits (17)
+**30 commits** fixing all major issues. System ready for production use.
+
+### Commits (20)
 
 | Hash | Description |
 |------|-------------|
+| `1b8f7c1` | ◈ Update scripts: use gptel-auto-workflow-run-sync |
+| `f2d1b53` | ◈ Update auto-workflow.md: sync version, 50/50 weights |
+| `ac9ca19` | ◈ Update state.md: add latest commits |
 | `f1a746e` | λ Balance comparator weights: 50/50 Eight Keys vs code quality |
 | `b9ff770` | λ Fix comparator: use 'comparator' subagent instead of 'analyzer' |
 | `f479f95` | ◈ Update state.md: all auto-workflow issues resolved |
@@ -133,6 +138,25 @@ grader/* tests: 52/52 ✓
 executor agent: loaded ✓ (via assistant/agents/executor.md)
 gptel backend: DashScope (coding.dashscope.aliyuncs.com)
 ```
+
+### Next Steps
+
+1. **Install cron** (when ready):
+   ```bash
+   crontab cron.d/auto-workflow
+   ```
+
+2. **Review experiment results** each morning:
+   ```bash
+   cat var/tmp/experiments/$(date +%Y-%m-%d)/results.tsv
+   ```
+
+3. **Merge successful experiments**:
+   ```bash
+   git fetch origin
+   git branch -r 'origin/optimize/*'
+   git merge --squash origin/optimize/retry-<hostname>-expN
+   ```
 
 ## Suggested Hypothesis (from skill)
 (Populated by metabolize after each night)
