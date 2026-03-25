@@ -978,6 +978,12 @@ HYPOTHESIS: [your hypothesis here]"
 
 ;;; TSV Logging (Explainable)
 
+(defun gptel-auto-experiment--tsv-escape (str)
+  "Escape STR for TSV format (replace newlines/tabs with spaces)."
+  (when str
+    (let ((s (if (stringp str) str (format "%s" str))))
+      (replace-regexp-in-string "[\t\n\r]+" " | " s))))
+
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
   "Append EXPERIMENT to results.tsv for RUN-ID."
   (let* ((base-dir (gptel-auto-workflow--project-root))
@@ -985,7 +991,8 @@ HYPOTHESIS: [your hypothesis here]"
                 (format "%s/%s/results.tsv" gptel-auto-workflow-worktree-base run-id)
                 base-dir))
          (agent-output (or (plist-get experiment :agent-output) ""))
-         (truncated-output (truncate-string-to-width agent-output 500 nil nil "...")))
+         (truncated-output (gptel-auto-experiment--tsv-escape
+                            (truncate-string-to-width agent-output 500 nil nil "..."))))
     (make-directory (file-name-directory file) t)
     (unless (file-exists-p file)
       (with-temp-file file
@@ -996,7 +1003,7 @@ HYPOTHESIS: [your hypothesis here]"
       (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n"
                       (or (plist-get experiment :id) "?")
                       (or (plist-get experiment :target) "?")
-                      (or (plist-get experiment :hypothesis) "unknown")
+                      (gptel-auto-experiment--tsv-escape (or (plist-get experiment :hypothesis) "unknown"))
                       (or (plist-get experiment :score-before) 0)
                       (or (plist-get experiment :score-after) 0)
                       (or (plist-get experiment :code-quality) 0.5)
@@ -1005,9 +1012,9 @@ HYPOTHESIS: [your hypothesis here]"
                       (if (plist-get experiment :kept) "kept" "discarded")
                       (or (plist-get experiment :duration) 0)
                       (or (plist-get experiment :grader-quality) "?")
-                      (or (plist-get experiment :grader-reason) "N/A")
-                      (or (plist-get experiment :comparator-reason) "N/A")
-                      (or (plist-get experiment :analyzer-patterns) "N/A")
+                      (gptel-auto-experiment--tsv-escape (or (plist-get experiment :grader-reason) "N/A"))
+                      (gptel-auto-experiment--tsv-escape (or (plist-get experiment :comparator-reason) "N/A"))
+                      (gptel-auto-experiment--tsv-escape (or (plist-get experiment :analyzer-patterns) "N/A"))
                       truncated-output))
       (write-region (point-min) (point-max) file))))
 
