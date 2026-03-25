@@ -1,17 +1,17 @@
 # Mementum State
 
-> Last session: 2026-03-25 21:30
+> Last session: 2026-03-25 22:00
 
-## Real Code Fixes Generated ✓
+## Real Code Fixes Merged ✓
 
-**2 real bug fixes by auto-workflow:**
+**4 real bug fixes by auto-workflow:**
 
 | Target | Fix | Type |
 |--------|-----|------|
 | gptel-auto-workflow-strategic.el | Added `(require 'json)` | Missing dependency |
 | gptel-ext-fsm-utils.el | Fixed `%d` → `%s` for float-time | Type bug |
-
-**3rd experiment**: Timed out (agent branch - no changes)
+| gptel-ext-retry.el | Refactor trim-tool-results-for-retry | Code quality |
+| gptel-tools-code.el | Fix resource leak in byte-compile | Resource leak |
 
 ---
 
@@ -23,7 +23,7 @@
 
 ```bash
 # Start workflow (returns immediately)
-emacsclient -e '(gptel-auto-workflow-run)'
+emacsclient -e '(gptel-auto-workflow-run-async)'
 
 # Check status anytime (daemon always responds)
 emacsclient -e '(gptel-auto-workflow-status)'
@@ -33,39 +33,13 @@ emacsclient -e '(gptel-auto-workflow-status)'
 emacsclient -e '(with-current-buffer "*Messages*" ...)'
 ```
 
-### How It Works
-
-1. `gptel-auto-workflow-run` starts async, returns immediately
-2. Workflow runs in background via timers/processes
-3. Daemon event loop stays responsive
-4. `gptel-auto-workflow-status` checks state anytime
-
-### Anti-Pattern: Blocking Sync
+### Anti-Pattern Removed
 
 ```elisp
-;; BAD: Blocks daemon, can't respond to emacsclient
+;; REMOVED: Blocks daemon, can't respond to emacsclient
 (while running
   (accept-process-output nil 1.0))
-
-;; GOOD: Async with status checking
-(defun run-workflow ()
-  (setq running t)
-  (run-async ...))
-
-(defun status ()
-  (list :running running ...))
 ```
-
----
-
-## Real Code Changes Required
-
-**PROBLEM**: Executor generated only documentation because prompt focused on Eight Keys score.
-
-**FIX**: Updated prompt to:
-- FORBID: comments, docstrings, documentation-only
-- REQUIRE: actual code changes
-- LIST: 5 improvement types (bug fix, performance, refactoring, safety, tests)
 
 ---
 
@@ -77,10 +51,10 @@ emacsclient -e '(with-current-buffer "*Messages*" ...)'
 
 ```bash
 # Start
-emacsclient -e '(gptel-auto-workflow-run)'
+./scripts/run-auto-workflow.sh
 
 # Check progress
-emacsclient -e '(gptel-auto-workflow-status)'
+./scripts/run-auto-workflow.sh status
 
 # Debug via Messages
 emacsclient -e '(with-current-buffer "*Messages*" ...)'
@@ -89,15 +63,6 @@ emacsclient -e '(with-current-buffer "*Messages*" ...)'
 ### Use Emacs Daemon + Emacsclient
 
 **Do NOT use batch mode.** Batch mode lacks user config (API keys, gptel setup).
-
-```bash
-# Correct: daemon + emacsclient
-emacs --daemon
-emacsclient -e '(gptel-auto-workflow-run)'
-
-# Wrong: batch mode
-emacs --batch -Q --eval "..."  # No API keys!
-```
 
 ### Reuse Emacs Packages
 
