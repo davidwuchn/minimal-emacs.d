@@ -21,7 +21,12 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 # Run optimization experiments nightly at 2 AM
 # Uses worktrees for isolation, subagents for analysis/grading
 # Use -sync version for cron (blocking, waits for completion)
-0 2 * * * emacsclient -e '(gptel-auto-workflow-run-sync)' >> $LOGDIR/auto-workflow.log 2>&1
+
+# Option 1: emacsclient (requires emacs --daemon running)
+# 0 2 * * * emacsclient -e '(gptel-auto-workflow-run-sync)' >> $LOGDIR/auto-workflow.log 2>&1
+
+# Option 2: batch mode (no daemon required)
+0 2 * * * emacs --batch -Q -L $HOME/.emacs.d -L $HOME/.emacs.d/lisp -L $HOME/.emacs.d/lisp/modules -L $HOME/.emacs.d/packages/gptel -L $HOME/.emacs.d/packages/gptel-agent -L $HOME/.emacs.d/packages/magit/lisp --eval "(require 'gptel-tools-agent)" --eval "(gptel-auto-workflow-run-sync)" >> $LOGDIR/auto-workflow.log 2>&1
 
 # Alternative schedules (uncomment to use):
 
