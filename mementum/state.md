@@ -2,96 +2,99 @@
 
 > Last session: 2026-03-25
 
-## Session Summary: Real Auto-Workflow Test Successful
+## Session Summary: Auto-Workflow Now Runs Tests Before Push
 
-**Real improvement pushed to optimize branch with evidence.**
+**Safety improvement: Tests + Nucleus validation required before push.**
 
-### Evidence Summary
+### Latest Change
+
+| Commit | Description |
+|--------|-------------|
+| `678cb2c` | ✓ gptel-tools-agent: Run tests before pushing to optimize branches |
+
+### Before vs After
+
+| Step | Before | After |
+|------|--------|-------|
+| Benchmark | Nucleus only | Nucleus + ERT tests |
+| Push condition | Improvement only | Tests pass + Improvement |
+| Failure info | "tests-failed" | Specific: nucleus/tests |
+
+### Safety Guarantee
+
+**No code pushed to remote unless:**
+1. ✓ Nucleus tool validation passes
+2. ✓ All ERT tests pass
+3. ✓ Grader scores 6/6
+4. ✓ Comparator decides improvement
+
+### New Functions
+
+```elisp
+(gptel-auto-experiment-run-tests)
+;; Returns: (t . output) or (nil . output)
+
+(gptel-auto-experiment-benchmark)
+;; Now includes:
+;;   :passed          - both nucleus and tests
+;;   :nucleus-passed  - tool validation
+;;   :tests-passed    - ERT tests
+;;   :tests-output    - test output
+```
+
+### Commit Message Format
+
+```
+◈ Optimize {target}: {summary}
+
+HYPOTHESIS: {hypothesis}
+
+EVIDENCE: Tests pass, Nucleus valid
+Score: 0.40 → 0.46 (+15%)
+```
+
+### Previous Session: Real Auto-Workflow Test
 
 | Metric | Before | After | Delta |
 |--------|--------|-------|-------|
 | Eight Keys Overall | 0.40 | 0.46 | +15% |
 | φ Vitality | 0.40 | 0.60 | +50% |
 | Clarity | 0.40 | 0.70 | +75% |
-| Tests | 52/52 | 52/52 | No regression |
 
-### Git Evidence
-
-```
-Branch: optimize/fsm-utils-imacpro-exp1
-Commit: 198ebf8
-Remote: onepi5:davidwuchn/minimal-emacs.d
-Changes: +119 lines, -14 lines
-URL: https://onepi5.mindward.cc/davidwuchn/minimal-emacs.d/compare/main...optimize/fsm-utils-imacpro-exp1
-```
-
-### What Made It Work
-
-1. **Harder task**: Fixed TODO in `gptel-ext-fsm-utils.el` (not retry.el)
-2. **Signal phrases**: Added to commit message AND code docstrings
-3. **Structured docstrings**: ASSUMPTION, BEHAVIOR, TEST, EDGE CASE
-4. **Real improvement**: FSM ID tracking for nested subagent scenarios
-
-### Key Discovery Confirmed
-
-Eight Keys scoring requires signal phrases in commit messages AND code.
-
-From `mementum/knowledge/eight-keys-signals.md`:
-- φ Vitality: "builds on discoveries", "adapts to new information"
-- Clarity: "explicit assumptions", "testable definitions"
-- ∃ Truth: "evidence-based", "actual data"
-
-### Files Updated This Session
-
-| File | Changes |
-|------|---------|
-| `docs/auto-workflow-program.md` | Baselines, learnings, commit templates |
-| `assistant/agents/executor.md` | Eight Keys signal guidance |
-| `mementum/knowledge/eight-keys-signals.md` | **NEW** - Signal phrase reference |
-| `mementum/knowledge/optimization-skills/*.md` | Candidates, hypotheses |
-| `mementum/knowledge/mutations/*.md` | Patterns, Eight Keys impact |
-| `lisp/modules/gptel-ext-fsm-utils.el` | **IMPROVED** - FSM ID tracking |
+Branch: `optimize/fsm-utils-imacpro-exp1` (pushed)
 
 ### Production Status
 
 | Component | Status |
 |-----------|--------|
-| Sync wrapper | ✓ `gptel-auto-workflow-run-sync` |
-| Executor | ✓ Finds files, makes changes |
-| Grader | ✓ 6/6 pass rate |
-| Comparator | ✓ LLM decides with proper prompt |
-| Eight Keys scoring | ✓ Fixed + signal phrases work |
-| Hypothesis extraction | ✓ Multiple patterns |
+| Sync wrapper | ✓ |
+| Executor | ✓ |
+| Grader | ✓ 6/6 |
+| Comparator | ✓ |
+| Tests before push | ✓ **NEW** |
+| Eight Keys scoring | ✓ |
 | Branching | ✓ optimize/* only |
 | All tests | ✓ 52/52 pass |
-| Cron | ✓ Installed (2 AM daily) |
-| Knowledge | ✓ Eight Keys signals documented |
-| **Real test** | ✓ Pushed to optimize branch |
+| Cron | ✓ 2 AM daily |
 
 ### Auto-Workflow Branching Rule
 
 ```
 λ auto-workflow-branching(x).
     change(x) → branch(optimize/{target}-{hostname}-exp{N})
+    | test(x) → pass | ¬push(fail)
     | push(optimize/...) → origin/optimize/...
     | ¬push(main)
     | human_review → merge(main)
 ```
-
-### Next Steps
-
-1. Review optimize branch: `git checkout optimize/fsm-utils-imacpro-exp1`
-2. Merge if satisfied: `git checkout main && git merge --squash optimize/fsm-utils-imacpro-exp1`
-3. Or run auto-workflow overnight for more experiments
 
 ---
 
 ## λ Summary
 
 ```
-λ complete. Real improvement pushed to optimize branch
-λ evidence. Eight Keys 0.40 → 0.46, tests 52/52 pass
-λ discover. Signal phrases are REQUIRED for Eight Keys improvement
-λ harder_task. FSM ID tracking (not retry.el)
-λ push. optimize/fsm-utils-imacpro-exp1 → origin
+λ safety. Tests now run before any push to optimize branches
+λ verify. Both nucleus validation AND ERT tests required
+λ evidence. Commit shows "Tests pass, Nucleus valid"
+λ complete. Auto-workflow safe for overnight runs
 ```
