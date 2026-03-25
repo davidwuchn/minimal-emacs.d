@@ -18,20 +18,20 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 # Auto-Workflow: Overnight optimization experiments
 # ─────────────────────────────────────────────────────────────
 
-# Run evolution experiments nightly at 2 AM
-# Simpler flow: create branch, improve, verify, commit, push
-0 2 * * * emacsclient -e '(gptel-auto-evolve-run)' >> $LOGDIR/auto-evolve.log 2>&1
+# Run optimization experiments nightly at 2 AM
+# Uses worktrees for isolation, subagents for analysis/grading
+0 2 * * * emacsclient -e '(gptel-auto-workflow-run)' >> $LOGDIR/auto-workflow.log 2>&1
 
 # Alternative schedules (uncomment to use):
 
 # Every night at 2:30 AM (different time)
-# 30 2 * * * emacsclient -e '(gptel-auto-evolve-run)' >> $LOGDIR/auto-evolve.log 2>&1
+# 30 2 * * * emacsclient -e '(gptel-auto-workflow-run)' >> $LOGDIR/auto-workflow.log 2>&1
 
 # Every Sunday at 3 AM (weekly instead of daily)
-# 0 3 * * 0 emacsclient -e '(gptel-auto-evolve-run)' >> $LOGDIR/auto-evolve.log 2>&1
+# 0 3 * * 0 emacsclient -e '(gptel-auto-workflow-run)' >> $LOGDIR/auto-workflow.log 2>&1
 
 # Every 6 hours
-# 0 */6 * * * emacsclient -e '(gptel-auto-evolve-run)' >> $LOGDIR/auto-evolve.log 2>&1
+# 0 */6 * * * emacsclient -e '(gptel-auto-workflow-run)' >> $LOGDIR/auto-workflow.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
 # Weekly Mementum: Synthesis + Decay

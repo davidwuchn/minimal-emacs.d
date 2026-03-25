@@ -1,23 +1,42 @@
 # Mementum State
 
-> Last session: 2026-03-24
+> Last session: 2026-03-25
 
-## Session Summary: Prompt Enhancement Complete
+## Session Summary: Auto-Workflow Debugging
 
-### Commits (5)
+### Commits (4)
 
 | Hash | Description |
 |------|-------------|
-| `8014387` | λ Prompt uses skills + weakest Eight Keys for focused hypotheses |
-| `32b8aa1` | Δ Update ai-code submodule |
-| `3120ee5` | λ Add tests for Eight Keys weakest functions |
-| `f8f79db` | λ Fix mutation template extraction (non-greedy regex issue) |
-| `1a08b33` | λ Fix program.md parsing (targets now load correctly) |
+| `57ca7ce` | λ Add logging for auto-experiment agent output |
+| `b153708` | λ Remove unused lite-executor agent |
+| `2592957` | λ Fix auto-workflow: use executor agent + buffer-local timer state |
+| `0af692a` | λ Fix auto-workflow: use lite-executor instead of code agent |
+
+### Issue Under Investigation
+
+Auto-workflow experiments failing with error messages instead of code changes.
+
+**Symptoms**:
+- Experiments return "Error: ..." messages
+- Grader sees no hypothesis stated
+- All experiments discarded early
+
+**Debugging Added**:
+- Agent output logged to `*Messages*` (first 500 chars)
+- TSV results now include `agent_output` column
+- Experiment result plists include `:agent-output` key
+
+**Next Steps**:
+1. Run experiment manually to capture agent output
+2. Check if executor agent has correct tools
+3. Verify model `qwen3.5-plus` is working
 
 ### Verified Working
 
 ```
-[autonomous] Loaded program: 3 targets
+grader/* tests: 52/52 ✓
+```
 
 ## Suggested Hypothesis (from skill)
 (Populated by metabolize after each night)
