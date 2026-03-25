@@ -26,6 +26,7 @@
 
 ;;; Code:
 
+(require 'json)
 (require 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-strategic-selection t
