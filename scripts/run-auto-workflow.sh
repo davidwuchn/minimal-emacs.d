@@ -8,6 +8,8 @@
 #   ./scripts/run-auto-workflow.sh --dry-run # Just print what would run
 #
 # Logs: var/tmp/experiments/YYYY-MM-DD/results.tsv
+#
+# NOTE: Requires running Emacs server or will start daemon automatically.
 
 set -e
 
@@ -34,16 +36,15 @@ echo "=== Running Auto-Workflow ==="
 echo "Started: $(date)"
 echo ""
 
-emacs --batch -Q \
-    -L "$DIR" \
-    -L "$DIR/lisp" \
-    -L "$DIR/lisp/modules" \
-    -L "$DIR/packages/gptel" \
-    -L "$DIR/packages/gptel-agent" \
-    -L "$DIR/packages/magit/lisp" \
-    --eval "(require 'gptel-tools-agent)" \
-    --eval "(gptel-auto-workflow-run-sync)" \
-    2>&1 | tee "$LOGDIR/auto-workflow.log"
+# Check if Emacs server is running
+if ! emacsclient -e t >/dev/null 2>&1; then
+    echo "Starting Emacs daemon..."
+    emacs --daemon
+    sleep 3
+fi
+
+# Run via emacsclient (uses user's gptel config)
+emacsclient -e '(gptel-auto-workflow-run-sync)' 2>&1 | tee "$LOGDIR/auto-workflow.log"
 
 echo ""
 echo "Completed: $(date)"

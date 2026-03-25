@@ -786,7 +786,9 @@ Multiple machines can optimize same target without conflicts."
 (defun gptel-auto-workflow--assert-main-untouched ()
   "Assert that current branch is NOT main.
 Call this before any git operation that might modify branches."
-  (let ((current (magit-get-current-branch)))
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (current (string-trim (shell-command-to-string "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'unknown'"))))
     (when (string= current "main")
       (error "[SAFETY] Auto-workflow attempted to operate on main branch!"))))
 
@@ -794,9 +796,11 @@ Call this before any git operation that might modify branches."
   "Check if staging branch exists locally or remotely."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
-         (branch gptel-auto-workflow-staging-branch))
-    (or (member branch (magit-list-local-branch-names))
-        (member (concat "origin/" branch) (magit-list-remote-branch-names)))))
+         (branch gptel-auto-workflow-staging-branch)
+         (local-branches (shell-command-to-string "git branch --list 2>/dev/null"))
+         (remote-branches (shell-command-to-string "git branch -r --list 2>/dev/null")))
+    (or (string-match-p (format "^\\*? *%s$" branch) local-branches)
+        (string-match-p (format "origin/%s" branch) remote-branches))))
 
 (defun gptel-auto-workflow--sync-staging-from-main ()
   "Sync staging branch from main at workflow start.
