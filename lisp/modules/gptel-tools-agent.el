@@ -1112,7 +1112,7 @@ HYPOTHESIS: [your hypothesis here]"
                                    (format-time-string "%Y-%m-%d") exp-result)
                                   (gptel-auto-workflow-delete-worktree)
                                   (funcall callback exp-result)))))))))))))
-            "code"
+            "lite-executor"
             (format "Experiment %d: optimize %s" experiment-id target)
             prompt
             nil "false" nil)))))))
