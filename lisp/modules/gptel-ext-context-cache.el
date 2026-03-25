@@ -276,14 +276,14 @@ Pricing is in USD per million tokens (input/output).")
   "Find first entry in ALIST where key partially matches SEARCH-STR (case-insensitive).
 Returns the cdr (value) of the matching entry, or nil if no match."
   (when (and (listp alist) (stringp search-str))
-    (let ((search-lower (downcase search-str))
-          (result nil))
-      (dolist (entry alist)
-        (when (and (consp entry)
-                   (stringp (car entry))
-                   (string-match-p (regexp-quote (car entry)) search-lower))
-          (setq result (cdr entry))))
-      result)))
+    (let ((search-lower (downcase search-str)))
+      (catch 'found
+        (dolist (entry alist)
+          (when (and (consp entry)
+                     (stringp (car entry))
+                     (string-match-p (downcase (car entry)) search-lower))
+            (throw 'found (cdr entry))))
+        nil))))
 
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
