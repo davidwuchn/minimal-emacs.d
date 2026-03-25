@@ -38,9 +38,17 @@ Monthly subscription: LLM selection finds best targets each run."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-max-targets-per-run 5
-  "Maximum targets to process in one auto-workflow run.
-Monthly subscription: 5 targets per run for more experiments."
+  "Maximum targets to optimize per workflow run.
+Monthly subscription: 5 is optimal (diminishing returns after 3-4)."
   :type 'integer
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-research-targets nil
+  "When non-nil, researcher finds patterns/issues before target selection.
+Adds ~30-60s latency but may improve target quality.
+Researcher looks for: anti-patterns, architectural issues, code smells.
+Default nil for speed (analyzer has enough context from git/history)."
+  :type 'boolean
   :group 'gptel-tools-agent)
 
 (defun gptel-auto-workflow--discover-targets ()
@@ -86,16 +94,53 @@ Returns plist with git history, file sizes, TODOs.
                       (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
                               proj-root)))))
 
+(defun gptel-auto-workflow--research-patterns (callback)
+  "Research code patterns and issues for better target selection.
+CALLBACK receives research findings string.
+Looks for: anti-patterns, architectural issues, code smells."
+  (let ((research-prompt "Research this Emacs Lisp codebase for optimization opportunities.
+
+FOCUS AREAS:
+1. Anti-patterns: cl-return-from without cl-block, missing error handling
+2. Architectural: high coupling, circular dependencies, missing abstractions  
+3. Code smells: deep nesting, long functions, duplicated logic
+4. Safety: unguarded buffer/overlay operations, missing nil checks
+
+For each issue found, report:
+- file:line location
+- issue type
+- severity (high/medium/low)
+- suggested fix
+
+Maximum response: 1500 characters. Focus on actionable findings."))
+    (message "[auto-workflow] Researching code patterns...")
+    (if (and gptel-auto-experiment-use-subagents
+             (fboundp 'gptel-benchmark-call-subagent))
+        (gptel-benchmark-call-subagent
+         'researcher
+         "Research code patterns"
+         research-prompt
+         (lambda (result)
+           (let ((findings (if (stringp result) result (format "%S" result))))
+             (message "[auto-workflow] Research complete: %d chars"
+                      (length findings))
+             (funcall callback findings))))
+      (funcall callback ""))))
+
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
 CALLBACK receives list of target files.
+When gptel-auto-workflow-research-targets is non-nil, researcher
+finds patterns first for better selection."
+  (if gptel-auto-workflow-research-targets
+      (gptel-auto-workflow--research-patterns
+       (lambda (research-findings)
+         (gptel-auto-workflow--ask-analyzer-with-findings research-findings callback)))
+    (gptel-auto-workflow--ask-analyzer-with-findings "" callback)))
 
-;; ASSUMPTION: gptel-benchmark-call-subagent is available when subagents enabled
-;; BEHAVIOR: Builds context prompt, calls analyzer, parses JSON response
-;; RISK: LLM may timeout or return malformed JSON
-;; EDGE CASE: Subagents disabled → callback receives nil, triggers fallback
-;; SYNTHESIS: Integrates gather-context output with LLM reasoning for selection
-;; TEST: Verify callback receives non-nil list when LLM succeeds"
+(defun gptel-auto-workflow--ask-analyzer-with-findings (research-findings callback)
+  "Ask analyzer with optional RESEARCH-FINDINGS for target selection.
+CALLBACK receives list of target files."
   (let* ((context (gptel-auto-workflow--gather-context))
          (max-targets gptel-auto-workflow-max-targets-per-run)
          (prompt (format "Select optimization targets for this Emacs Lisp project.
@@ -112,6 +157,9 @@ FILES BY SIZE:
 KNOWN ISSUES (TODOs/FIXMEs):
 %s
 
+RESEARCH FINDINGS:
+%s
+
 TASK: Select exactly %d files from lisp/modules/ to optimize.
 
 OUTPUT JSON ONLY:
@@ -120,6 +168,9 @@ OUTPUT JSON ONLY:
                          (plist-get context :git-history)
                          (plist-get context :file-sizes)
                          (plist-get context :todos)
+                         (if (string-empty-p research-findings)
+                             "Not available (research disabled)"
+                           (truncate-string-to-width research-findings 1000 nil nil "..."))
                          max-targets)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
