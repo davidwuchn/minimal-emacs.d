@@ -357,7 +357,14 @@ ORIGIN-BUF is the parent chat buffer to read history from.  Defaults to
 `current-buffer' if not provided, but callers should always pass it
 explicitly to avoid capturing the wrong buffer.
 
-FILES are validated against project root for security."
+FILES are validated against project root for security.
+
+;; ASSUMPTION: Files must be within project root to prevent path traversal
+;; BEHAVIOR: Builds XML-escaped context with files, git diff, and conversation history
+;; EDGE CASE: Handles unreadable files, symlinks, and missing git repo gracefully
+;; TEST: Verify files outside project are rejected with error message
+;; GOAL: Provide secure, complete context for subagent decision-making
+;; MEASURABLE: Context size limited to prevent token overflow (history capped at 8000 chars)"
   (let ((context ""))
     (when (and files (sequencep files))
       (let ((file-context ""))
