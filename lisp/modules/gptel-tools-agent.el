@@ -734,13 +734,15 @@ Multiple machines can optimize same target without conflicts."
 ;;; Benchmark & Evaluation
 
 (defun gptel-auto-workflow--project-root ()
-  "Return the project root directory (git root or ~/.emacs.d)."
-  (or (when (fboundp 'project-root)
-        (when-let ((proj (project-current)))
-          (project-root proj)))
-      (when (boundp 'minimal-emacs-user-directory)
-        (expand-file-name minimal-emacs-user-directory))
-      (expand-file-name "~/.emacs.d/")))
+  "Return the project root directory (git root or ~/.emacs.d).
+Always returns absolute path."
+  (expand-file-name
+   (or (when (fboundp 'project-root)
+         (when-let ((proj (project-current)))
+           (project-root proj)))
+       (when (boundp 'minimal-emacs-user-directory)
+         minimal-emacs-user-directory)
+       "~/.emacs.d/")))
 
 (defun gptel-auto-experiment-benchmark ()
   "Run nucleus verification + Eight Keys scoring."
@@ -1686,7 +1688,9 @@ Manual: M-x gptel-auto-workflow-run-autonomous"
   (let* ((program (gptel-auto-workflow-orient))
          (targets (plist-get program :targets))
          (run-id (format-time-string "%Y-%m-%d"))
-         (all-results '()))
+         (all-results '())
+         (completed-targets 0)
+         (total-targets (length targets)))
     (if (null targets)
         (message "[autonomous] No targets in %s" gptel-auto-workflow-program-file)
       (message "[autonomous] Starting %s with %d targets" run-id (length targets))
@@ -1694,9 +1698,11 @@ Manual: M-x gptel-auto-workflow-run-autonomous"
         (gptel-auto-experiment-loop
          target
          (lambda (results)
-           (setq all-results (append all-results results)))))
-      (gptel-auto-workflow-metabolize run-id all-results)
-      (message "[autonomous] Complete: %d experiments" (length all-results)))))
+           (setq all-results (append all-results results))
+           (cl-incf completed-targets)
+           (when (= completed-targets total-targets)
+             (gptel-auto-workflow-metabolize run-id all-results)
+             (message "[autonomous] Complete: %d experiments" (length all-results)))))))))
 
 ;;; Mementum Optimization
 
