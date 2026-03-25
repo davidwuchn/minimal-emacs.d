@@ -212,6 +212,54 @@ Decision logic: **70% grader + 30% code quality**
 | **LLM Degradation** | Detect off-topic, apologies, AI self-reference |
 | **Dynamic Stop** | Stop after N consecutive no-improvements |
 | **TSV Logging** | Explainable results with code_quality column |
+| **Pre-Merge Review** | Reviewer checks for blockers before staging merge |
+| **Periodic Researcher** | Every 4h, finds anti-patterns for target selection |
+| **Review Retry Loop** | Executor fixes issues, max 2 retries |
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AUTO-WORKFLOW SYSTEM                      │
+├─────────────────────────────────────────────────────────────┤
+│  Researcher (moonshot) ──→ Analyzer (DashScope) ──→ Executor│
+│        ↓                        ↓                    ↓      │
+│  Findings Cache          Target Selection        Code Fixes │
+│                                                      ↓      │
+│                                               Reviewer       │
+│                                              (moonshot)      │
+│                                                   ↓          │
+│                                              Staging         │
+│                                                ↓             │
+│                                              Main            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Agent Distribution
+
+| Agent | Backend | Purpose |
+|-------|---------|---------|
+| analyzer | DashScope | Target selection |
+| comparator | DashScope | Before/after comparison |
+| executor | DashScope | Code changes |
+| explorer | DashScope | Code exploration |
+| grader | DashScope | Quality scoring |
+| introspector | DashScope | Self-analysis |
+| nucleus-gptel-agent | DashScope | Main agent |
+| nucleus-gptel-plan | DashScope | Planning |
+| researcher | moonshot | Code research, anti-pattern detection |
+| reviewer | moonshot | Pre-merge code review |
+
+### Cron Schedule
+
+| Job | Schedule | Machine |
+|-----|----------|---------|
+| Auto-workflow | 10AM, 2PM, 6PM | macOS |
+| Researcher | Every 4 hours | macOS + Pi5 |
+| Weekly mementum | Sunday 4AM | macOS + Pi5 |
+| Weekly instincts | Sunday 5AM | macOS + Pi5 |
+
+Install: `./scripts/install-cron.sh`
 
 ### Usage
 
@@ -231,14 +279,28 @@ RunAgent("code", "optimize gptel-ext-retry.el following docs/auto-workflow.md")
 RunAgent("code", "optimize gptel-ext-context.el following docs/auto-workflow.md")
 ```
 
-### Scheduled Runs (Cron)
+### Key Commands
 
-```bash
-# Install cron job for nightly runs at 2 AM
-crontab cron.d/auto-workflow
+```elisp
+;; Workflow
+(gptel-auto-workflow-run-async)        ; Start workflow
+(gptel-auto-workflow-status)           ; Check status
+(gptel-auto-workflow-log)              ; Get clean log
 
-# Manual trigger
-emacsclient -e '(gptel-auto-workflow-run)'
+;; Researcher
+(gptel-auto-workflow-run-research)     ; Run researcher now
+(gptel-auto-workflow-research-status)  ; Researcher status
+```
+
+### Config Options
+
+```elisp
+gptel-auto-workflow-require-review        ; default t
+gptel-auto-workflow-research-targets      ; default nil
+gptel-auto-workflow-research-before-fix   ; default nil
+gptel-auto-workflow--review-max-retries   ; default 2
+gptel-auto-workflow-research-interval     ; default 14400 (4h)
+gptel-auto-workflow-max-targets-per-run   ; default 5
 ```
 
 ### Phases
@@ -258,6 +320,8 @@ emacsclient -e '(gptel-auto-workflow-run)'
 - Test gate: `./scripts/verify-nucleus.sh` must pass
 - Benchmark validation required
 - Token/time budget enforcement
+- **Main NEVER touched** - all changes wait in staging
+- Pre-merge review catches blockers/critical issues
 
 See [docs/auto-workflow.md](docs/auto-workflow.md) for full specification.
 
