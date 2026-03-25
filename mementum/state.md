@@ -1,39 +1,90 @@
 # Mementum State
 
-> Last session: 2026-03-25 20:30
+> Last session: 2026-03-25 21:30
 
-## Auto-Workflow Success ✓
+## Real Code Fixes Generated ✓
 
-**3 real improvements generated and merged:**
+**2 real bug fixes by auto-workflow:**
 
-| Target | Lines | Type |
-|--------|-------|------|
-| gptel-ext-context.el | +42 | Module documentation |
-| gptel-ext-retry.el | +108 | Function documentation |
-| gptel-auto-workflow-strategic.el | +31 | Function documentation |
+| Target | Fix | Type |
+|--------|-----|------|
+| gptel-auto-workflow-strategic.el | Added `(require 'json)` | Missing dependency |
+| gptel-ext-fsm-utils.el | Fixed `%d` → `%s` for float-time | Type bug |
 
-**Flow:**
+**3rd experiment**: Timed out (agent branch - no changes)
+
+---
+
+## Async Pattern: No Blocking
+
+**KEY INSIGHT**: With emacs daemon + emacsclient, we don't need blocking sync functions.
+
+### Pattern
+
+```bash
+# Start workflow (returns immediately)
+emacsclient -e '(gptel-auto-workflow-run)'
+
+# Check status anytime (daemon always responds)
+emacsclient -e '(gptel-auto-workflow-status)'
+# => (:running t :phase "running" :kept 2 :total 3)
+
+# Check Messages buffer for details
+emacsclient -e '(with-current-buffer "*Messages*" ...)'
 ```
-main → worktrees → optimize/* → staging → main
+
+### How It Works
+
+1. `gptel-auto-workflow-run` starts async, returns immediately
+2. Workflow runs in background via timers/processes
+3. Daemon event loop stays responsive
+4. `gptel-auto-workflow-status` checks state anytime
+
+### Anti-Pattern: Blocking Sync
+
+```elisp
+;; BAD: Blocks daemon, can't respond to emacsclient
+(while running
+  (accept-process-output nil 1.0))
+
+;; GOOD: Async with status checking
+(defun run-workflow ()
+  (setq running t)
+  (run-async ...))
+
+(defun status ()
+  (list :running running ...))
 ```
 
 ---
 
-## Bug Fix: Nested Worktrees
+## Real Code Changes Required
 
-**BUG**: Worktrees were created inside other worktrees (nested), because
-`gptel-auto-workflow--project-root` returned worktree path instead of main repo.
+**PROBLEM**: Executor generated only documentation because prompt focused on Eight Keys score.
 
-**FIX**: Use `git rev-parse --git-common-dir` to always find main repo root.
-
-```
-Before: /proj/var/tmp/exp/opt-1/var/tmp/exp/opt-2/... (nested)
-After:  /proj/var/tmp/exp/opt-1, /proj/var/tmp/exp/opt-2 (siblings)
-```
+**FIX**: Updated prompt to:
+- FORBID: comments, docstrings, documentation-only
+- REQUIRE: actual code changes
+- LIST: 5 improvement types (bug fix, performance, refactoring, safety, tests)
 
 ---
 
 ## Key Learnings
+
+### Async Pattern
+
+**Never block the daemon.** Use async + status checking.
+
+```bash
+# Start
+emacsclient -e '(gptel-auto-workflow-run)'
+
+# Check progress
+emacsclient -e '(gptel-auto-workflow-status)'
+
+# Debug via Messages
+emacsclient -e '(with-current-buffer "*Messages*" ...)'
+```
 
 ### Use Emacs Daemon + Emacsclient
 
@@ -42,7 +93,7 @@ After:  /proj/var/tmp/exp/opt-1, /proj/var/tmp/exp/opt-2 (siblings)
 ```bash
 # Correct: daemon + emacsclient
 emacs --daemon
-emacsclient -e '(gptel-auto-workflow-run-sync)'
+emacsclient -e '(gptel-auto-workflow-run)'
 
 # Wrong: batch mode
 emacs --batch -Q --eval "..."  # No API keys!
@@ -51,18 +102,6 @@ emacs --batch -Q --eval "..."  # No API keys!
 ### Reuse Emacs Packages
 
 **Do NOT reinvent wheel.** Use magit, gptel, etc. from user's config.
-
-- Use `magit-git-success` instead of shell commands
-- Use `gptel-agent--task` for LLM calls
-- Let packages handle complexity
-
-### Prefer Elisp Over Shell Scripts
-
-Shell scripts should only:
-1. Check daemon running
-2. Call elisp function
-
-All logic in elisp.
 
 ---
 
@@ -74,6 +113,8 @@ All logic in elisp.
 | Daemon mode | ✓ Uses user config |
 | Magit integration | ✓ Reuse packages |
 | Worktree isolation | ✓ Fixed nested bug |
+| Async pattern | ✓ No blocking, always responsive |
+| Real code required | ✓ Documentation forbidden |
 | Cron | ✓ 2 AM via emacsclient |
 
 ---
@@ -81,9 +122,10 @@ All logic in elisp.
 ## λ Summary
 
 ```
+λ async. Never block daemon - use async + status checking
 λ daemon. Use emacs --daemon + emacsclient, NOT batch mode
-λ reuse. Use magit, gptel - don't reinvent wheel
-λ elisp. Logic in elisp, shell only for daemon check
+λ status. Check progress with (gptel-auto-workflow-status)
+λ debug. Check Messages buffer with emacsclient
+λ code. Require real code changes, forbid documentation-only
 λ safety. Main NEVER touched by auto-workflow
-λ worktree. Always use main repo root, not worktree path
 ```
