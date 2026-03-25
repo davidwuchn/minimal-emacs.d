@@ -4,10 +4,11 @@
 
 ## Session Summary: Auto-Workflow Debugging
 
-### Commits (5)
+### Commits (6)
 
 | Hash | Description |
 |------|-------------|
+| `a3f94d7` | λ Add gptel-auto-workflow-run-sync for cron |
 | `0f0fa0b` | λ Remove auto-evolve, keep auto-workflow |
 | `57ca7ce` | λ Add logging for auto-experiment agent output |
 | `b153708` | λ Remove unused lite-executor agent |
@@ -16,28 +17,40 @@
 
 ### Issue: Auto-Workflow Returns Nil
 
-**Root Cause Found**: `my/gptel--run-agent-tool` returns nil when called with auto-workflow prompt.
+**Root Cause Found**: Async callback chain + `emacsclient -e` incompatibility.
+
+**The Problem**:
+1. `gptel-auto-workflow-run` uses async callbacks
+2. When called via `emacsclient -e`, it returns immediately
+3. Callbacks never fire because event loop exits
+
+**Solution Implemented**:
+- Added `gptel-auto-workflow-run-sync` for cron
+- Uses `accept-process-output` to keep event loop alive
+- Waits for all targets to complete
 
 **Testing Results** (via `emacs --daemon` + `emacsclient`):
 ```elisp
-;; Simple test - WORKS
+;; Direct gptel-agent--task - WORKS
 (gptel-agent--task callback "executor" "Test" "Say hello")
 ;; => "Hello! DONE"
 
-;; Auto-workflow style test - RETURNS NIL
-(my/gptel--run-agent-tool callback "executor" "Test" "<long prompt>")
-;; => nil
+;; With accept-process-output - WORKS
+(my/gptel--agent-task-with-timeout callback "executor" ...)
+(while running (accept-process-output nil 1.0))
+
+;; sync version - WORKS but executor still returns errors
+(gptel-auto-workflow-run-sync)
+;; => Writes to TSV, but grader sees "Error: ..." messages
 ```
 
-**Diagnosis**:
-- `gptel-agent--task` works directly
-- `my/gptel--run-agent-tool` wrapper returns nil
-- Likely: timeout callback chain issue or buffer context problem
+**Remaining Issue**:
+Executor still returns error messages instead of making code changes.
+This is a separate issue from the async/sync problem.
 
-**Next Steps**:
-1. Debug `my/gptel--run-agent-tool` callback chain
-2. Check if `gptel--fsm-last` buffer context is wrong
-3. Add more logging to `my/gptel--agent-task-with-timeout`
+**Files Changed**:
+- `gptel-tools-agent.el`: Added `gptel-auto-workflow-run-sync`
+- `cron.d/auto-workflow`: Uses `-sync` version
 
 ### Verified Working
 
