@@ -1129,39 +1129,39 @@ Scores based on commit message + code diff (not just stat)."
   "Grade experiment OUTPUT. LLM decides quality threshold.
 Has timeout fallback to auto-pass if grading takes too long.
 If OUTPUT is an error message, fails immediately."
-  ;; Check for error message first
-  (when (gptel-auto-experiment--agent-error-p output)
-    (funcall callback (list :score 0 :passed nil :details "Agent error"))
-    (cl-return-from gptel-auto-experiment-grade))
-  (setq gptel-auto-experiment--grade-done nil)
-  (setq gptel-auto-experiment--grade-timer
-        (run-with-timer gptel-auto-experiment-grade-timeout nil
-                        (lambda ()
-                          (unless gptel-auto-experiment--grade-done
-                            (setq gptel-auto-experiment--grade-done t)
-                            (message "[auto-exp] Grading timeout after %ds, auto-passing"
-                                     gptel-auto-experiment-grade-timeout)
-                            (funcall callback (list :score 100 :passed t :details "timeout"))))))
-  (if (and gptel-auto-experiment-use-subagents
-           (fboundp 'gptel-benchmark-grade))
-      (gptel-benchmark-grade
-       output
-       '("change clearly described"
-         "change is minimal"
-         "tests mentioned")
-       '("large refactor"
-         "changed security files"
-         "no description")
-       (lambda (result)
-         (unless gptel-auto-experiment--grade-done
-           (setq gptel-auto-experiment--grade-done t)
-           (when gptel-auto-experiment--grade-timer
-             (cancel-timer gptel-auto-experiment--grade-timer))
-           (funcall callback result))))
-    (setq gptel-auto-experiment--grade-done t)
-    (when gptel-auto-experiment--grade-timer
-      (cancel-timer gptel-auto-experiment--grade-timer))
-    (funcall callback (list :score 100 :passed t))))
+  (cl-block gptel-auto-experiment-grade
+    (when (gptel-auto-experiment--agent-error-p output)
+      (funcall callback (list :score 0 :passed nil :details "Agent error"))
+      (cl-return-from gptel-auto-experiment-grade))
+    (setq gptel-auto-experiment--grade-done nil)
+    (setq gptel-auto-experiment--grade-timer
+          (run-with-timer gptel-auto-experiment-grade-timeout nil
+                          (lambda ()
+                            (unless gptel-auto-experiment--grade-done
+                              (setq gptel-auto-experiment--grade-done t)
+                              (message "[auto-exp] Grading timeout after %ds, auto-passing"
+                                       gptel-auto-experiment-grade-timeout)
+                              (funcall callback (list :score 100 :passed t :details "timeout"))))))
+    (if (and gptel-auto-experiment-use-subagents
+             (fboundp 'gptel-benchmark-grade))
+        (gptel-benchmark-grade
+         output
+         '("change clearly described"
+           "change is minimal"
+           "tests mentioned")
+         '("large refactor"
+           "changed security files"
+           "no description")
+         (lambda (result)
+           (unless gptel-auto-experiment--grade-done
+             (setq gptel-auto-experiment--grade-done t)
+             (when gptel-auto-experiment--grade-timer
+               (cancel-timer gptel-auto-experiment--grade-timer))
+             (funcall callback result))))
+      (setq gptel-auto-experiment--grade-done t)
+      (when gptel-auto-experiment--grade-timer
+        (cancel-timer gptel-auto-experiment--grade-timer))
+      (funcall callback (list :score 100 :passed t)))))
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.

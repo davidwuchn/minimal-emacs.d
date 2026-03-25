@@ -125,20 +125,21 @@ In interactive mode, uses project.el or falls back to git root."
   "Create a new memory with SLUG, SYMBOL, and CONTENT.
 Memory files are <200 words and contain one insight.
 Returns nil and logs warning if content appears to be noise."
-  (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
-         (symbol-str (alist-get symbol gptel-benchmark-memory-symbols "💡"))
-         (mem-file (expand-file-name (format "memories/%s.md" slug) mem-dir))
-         (full-content (format "%s %s\n\n%s" symbol-str slug content)))
-    (when (> (length (split-string content)) 200)
-      (error "Memory content exceeds 200 words"))
-    (when (gptel-benchmark-memory--noise-p content)
-      (message "[memory] Skipping noise memory: %s" slug)
-      (cl-return-from gptel-benchmark-memory-create nil))
-    (with-temp-file mem-file
-      (insert full-content))
-    (when gptel-benchmark-memory-auto-commit
-      (gptel-benchmark-memory-commit (format "%s %s" symbol-str slug)))
-    mem-file))
+  (cl-block gptel-benchmark-memory-create
+    (let* ((mem-dir (gptel-benchmark-memory--resolve-dir))
+           (symbol-str (alist-get symbol gptel-benchmark-memory-symbols "💡"))
+           (mem-file (expand-file-name (format "memories/%s.md" slug) mem-dir))
+           (full-content (format "%s %s\n\n%s" symbol-str slug content)))
+      (when (> (length (split-string content)) 200)
+        (error "Memory content exceeds 200 words"))
+      (when (gptel-benchmark-memory--noise-p content)
+        (message "[memory] Skipping noise memory: %s" slug)
+        (cl-return-from gptel-benchmark-memory-create nil))
+      (with-temp-file mem-file
+        (insert full-content))
+      (when gptel-benchmark-memory-auto-commit
+        (gptel-benchmark-memory-commit (format "%s %s" symbol-str slug)))
+      mem-file)))
 
 (defun gptel-benchmark-memory--noise-p (content)
   "Check if CONTENT is noise (null results, no insight).
