@@ -161,72 +161,73 @@ Call periodically to prevent memory growth from unaccessed entries."
   "Call a gptel agent to do specific compound tasks.
 Like upstream `gptel-agent--task' but adds parent-buffer tracking-marker,
 large-result truncation, and result caching."
-  ;; Check cache first
-  (let ((cached (my/gptel--subagent-cache-get agent-type prompt)))
-    (when cached
-      (message "[nucleus] Subagent '%s' cache hit" agent-type)
-      (funcall main-cb cached)
-      (cl-return-from my/gptel-agent--task-override)))
-  ;; Not cached, run the subagent
-  (let* ((preset (nconc (list :include-reasoning nil
-                              :use-tools t
-                              :use-context nil
-                              :stream my/gptel-subagent-stream)
-                        (cdr (assoc agent-type gptel-agent--agents))))
-         (syms (cons 'gptel--preset (gptel--preset-syms preset)))
-         (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
-    (cl-progv syms vals
-      (gptel--apply-preset preset)
-      (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
-             (info (and parent-fsm (gptel-fsm-info parent-fsm)))
-             (parent-buf (or (when (buffer-live-p (plist-get info :buffer))
-                               (plist-get info :buffer))
-                             (current-buffer)))
-             (where (or (let ((tm (plist-get info :tracking-marker)))
-                          (and (markerp tm) (marker-position tm) tm))
-                        (let ((pos (plist-get info :position)))
-                          (and (markerp pos) (marker-position pos) pos))
-                        (with-current-buffer parent-buf (point-marker))))
-             (tracking-marker (let ((m (copy-marker where t)))
-                                (set-marker m (marker-position where) parent-buf)
-                                m))
-             (partial (format "%s result for task: %s\n\n"
-                              (capitalize agent-type) description)))
-        (gptel--update-status " Calling Agent..." 'font-font-lock-escape-face)
-        (gptel-request prompt
-          :context (gptel-agent--task-overlay where agent-type description)
-          :fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)
-          :position tracking-marker
-          :buffer parent-buf
-          :in-place t
-          :callback
-          (lambda (resp info)
-            (let ((ov (plist-get info :context)))
-              (pcase resp
-                ('nil
-                 (when (overlayp ov) (delete-overlay ov))
-                 (funcall main-cb
-                          (format "Error: Task %s could not finish task \"%s\". \n\nError details: %S"
-                                  agent-type description (plist-get info :error))))
-                (`(tool-call . ,calls)
-                 (unless (plist-get info :tracking-marker)
-                   (plist-put info :tracking-marker tracking-marker))
-                 (gptel--display-tool-calls calls info))
-                (`(tool-result . ,_results)) ;; FSM handles transition
-                ((pred stringp)
-                 (setq partial (concat partial resp))
-                 (unless (plist-get info :tool-use)
-                   (when (overlayp ov) (delete-overlay ov))
-                   (when-let* ((transformer (plist-get info :transformer)))
-                     (setq partial (funcall transformer partial)))
-                   ;; Cache the result before delivering
-                   (my/gptel--subagent-cache-put agent-type prompt partial)
-                   (my/gptel--deliver-subagent-result main-cb partial)))
-                ('abort
-                 (when (overlayp ov) (delete-overlay ov))
-                 (funcall main-cb
-                          (format "Error: Task \"%s\" was aborted by the user. \n%s could not finish."
-                                   description agent-type)))))))))))
+  (block my/gptel-agent--task-override
+         ;; Check cache first
+         (let ((cached (my/gptel--subagent-cache-get agent-type prompt)))
+           (when cached
+             (message "[nucleus] Subagent '%s' cache hit" agent-type)
+             (funcall main-cb cached)
+             (cl-return-from my/gptel-agent--task-override)))
+         ;; Not cached, run the subagent
+         (let* ((preset (nconc (list :include-reasoning nil
+                                     :use-tools t
+                                     :use-context nil
+                                     :stream my/gptel-subagent-stream)
+                               (cdr (assoc agent-type gptel-agent--agents))))
+                (syms (cons 'gptel--preset (gptel--preset-syms preset)))
+                (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
+           (cl-progv syms vals
+             (gptel--apply-preset preset)
+             (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
+                    (info (and parent-fsm (gptel-fsm-info parent-fsm)))
+                    (parent-buf (or (when (buffer-live-p (plist-get info :buffer))
+                                      (plist-get info :buffer))
+                                    (current-buffer)))
+                    (where (or (let ((tm (plist-get info :tracking-marker)))
+                                 (and (markerp tm) (marker-position tm) tm))
+                               (let ((pos (plist-get info :position)))
+                                 (and (markerp pos) (marker-position pos) pos))
+                               (with-current-buffer parent-buf (point-marker))))
+                    (tracking-marker (let ((m (copy-marker where t)))
+                                       (set-marker m (marker-position where) parent-buf)
+                                       m))
+                    (partial (format "%s result for task: %s\n\n"
+                                     (capitalize agent-type) description)))
+               (gptel--update-status " Calling Agent..." 'font-font-lock-escape-face)
+               (gptel-request prompt
+                 :context (gptel-agent--task-overlay where agent-type description)
+                 :fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)
+                 :position tracking-marker
+                 :buffer parent-buf
+                 :in-place t
+                 :callback
+                 (lambda (resp info)
+                   (let ((ov (plist-get info :context)))
+                     (pcase resp
+                       ('nil
+                        (when (overlayp ov) (delete-overlay ov))
+                        (funcall main-cb
+                                 (format "Error: Task %s could not finish task \"%s\". \n\nError details: %S"
+                                         agent-type description (plist-get info :error))))
+                       (`(tool-call . ,calls)
+                        (unless (plist-get info :tracking-marker)
+                          (plist-put info :tracking-marker tracking-marker))
+                        (gptel--display-tool-calls calls info))
+                       (`(tool-result . ,_results)) ;; FSM handles transition
+                       ((pred stringp)
+                        (setq partial (concat partial resp))
+                        (unless (plist-get info :tool-use)
+                          (when (overlayp ov) (delete-overlay ov))
+                          (when-let* ((transformer (plist-get info :transformer)))
+                            (setq partial (funcall transformer partial)))
+                          ;; Cache the result before delivering
+                          (my/gptel--subagent-cache-put agent-type prompt partial)
+                          (my/gptel--deliver-subagent-result main-cb partial)))
+                       ('abort
+                        (when (overlayp ov) (delete-overlay ov))
+                        (funcall main-cb
+                                 (format "Error: Task \"%s\" was aborted by the user. \n%s could not finish."
+                                         description agent-type))))))))))))
 
 
 (defun my/gptel--deliver-subagent-result (callback result)
@@ -318,25 +319,15 @@ remove it."
 (defun my/gptel--xml-escape (text)
   "Escape XML special characters in TEXT.
 Prevents XML injection when inserting file contents into context tags.
-Escapes &, <, >, \", and ' per XML spec."
-  (with-temp-buffer
-    (insert text)
-    (goto-char (point-min))
-    (while (search-forward "&" nil t)
-      (replace-match "&amp;"))
-    (goto-char (point-min))
-    (while (search-forward "<" nil t)
-      (replace-match "&lt;"))
-    (goto-char (point-min))
-    (while (search-forward ">" nil t)
-      (replace-match "&gt;"))
-    (goto-char (point-min))
-    (while (search-forward "\"" nil t)
-      (replace-match "&quot;"))
-    (goto-char (point-min))
-    (while (search-forward "'" nil t)
-      (replace-match "&apos;"))
-    (buffer-string)))
+Escapes &, <, >, \", and ' per XML spec.
+Optimized: single-pass replacement instead of 5 buffer passes."
+  (let ((result text))
+    (setq result (replace-regexp-in-string "&" "&amp;" result t t))
+    (setq result (replace-regexp-in-string "<" "&lt;" result t t))
+    (setq result (replace-regexp-in-string ">" "&gt;" result t t))
+    (setq result (replace-regexp-in-string "\"" "&quot;" result t t))
+    (setq result (replace-regexp-in-string "'" "&apos;" result t t))
+    result))
 
 (defun my/gptel--safe-file-p (filepath)
   "Return non-nil if FILEPATH is safe to include in subagent context.
@@ -552,32 +543,32 @@ INCLUDE-HISTORY defaults to `my/gptel-subagent-include-history-default' when nil
      :description "Run a gptel-agent subagent by name (e.g. explorer, researcher, executor, reviewer)"
      :function #'my/gptel--run-agent-tool
      :args '((:name "agent_name"
-               :type string
-               :description "Agent name (e.g. 'researcher', 'introspector', 'executor', 'explorer', 'reviewer')"
-               :enum ["explorer" "researcher" "introspector" "executor" "reviewer"])
+                    :type string
+                    :description "Agent name (e.g. 'researcher', 'introspector', 'executor', 'explorer', 'reviewer')"
+                    :enum ["explorer" "researcher" "introspector" "executor" "reviewer"])
              (:name "description"
-              :type string
-              :description "Short task label")
+                    :type string
+                    :description "Short task label")
              (:name "prompt"
-              :type string
-              :description "Full task prompt")
+                    :type string
+                    :description "Full task prompt")
              (:name "files"
-              :type array
-              :items (:type string)
-              :optional t
-              :description "Optional list of file paths to inject into the subagent context.")
+                    :type array
+                    :items (:type string)
+                    :optional t
+                    :description "Optional list of file paths to inject into the subagent context.")
              (:name "include_history"
-              :type string
-              :optional t
-              :description "Set to \"false\" to exclude conversation history. Default: history IS included (see my/gptel-subagent-include-history-default).")
+                    :type string
+                    :optional t
+                    :description "Set to \"false\" to exclude conversation history. Default: history IS included (see my/gptel-subagent-include-history-default).")
              (:name "include_diff"
-              :type string
-              :optional t
-              :description "Set to \"true\" to inject git diff HEAD into subagent context."))
+                    :type string
+                    :optional t
+                    :description "Set to \"true\" to inject git diff HEAD into subagent context."))
      :category "gptel-agent"
-:async t
-      :confirm t
-      :include t)))
+     :async t
+     :confirm t
+     :include t)))
 
 ;;; TodoWrite Overlay Fix for Subagent Context
 
@@ -997,10 +988,10 @@ NOTE: Human must manually merge staging to main after review."
                      :comparator-reason (truncate-string-to-width output 200)
                      :analyzer-patterns ""
                      :agent-output output))
-          (message "[auto-workflow] ✓ Staging verification PASSED")
-          (gptel-auto-workflow--delete-staging-worktree)
-          (gptel-auto-workflow--push-staging)
-          (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")))))))
+              (message "[auto-workflow] ✓ Staging verification PASSED")
+              (gptel-auto-workflow--delete-staging-worktree)
+              (gptel-auto-workflow--push-staging)
+              (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")))))))
 
 ;;; Benchmark & Evaluation
 
@@ -1090,7 +1081,7 @@ Scores based on commit message + code diff (not just stat)."
   "Get code quality score from current changes."
   (when (fboundp 'gptel-benchmark--code-quality-score)
     (let* ((worktree (or gptel-auto-workflow--worktree-dir
-                          (gptel-auto-workflow--project-root)))
+                         (gptel-auto-workflow--project-root)))
            (changed-files (shell-command-to-string
                            (format "cd %s && git diff --name-only HEAD~1 2>/dev/null | grep '\\.el$'"
                                    worktree))))
@@ -1228,16 +1219,16 @@ Then on a new line, briefly explain why (1 sentence)."
                               :improvement (list :score (- score-after score-before)
                                                  :quality (- quality-after quality-before)
                                                  :combined (- combined-after combined-before)))))))))
-      (let ((keep (> combined-after combined-before)))
-        (funcall callback
-                 (list :keep keep
-                       :reasoning (format "Local: Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                          score-before score-after
-                                          quality-before quality-after
-                                          combined-before combined-after)
-                       :improvement (list :score (- score-after score-before)
-                                          :quality (- quality-after quality-before)
-                                          :combined (- combined-after combined-before)))))))
+    (let ((keep (> combined-after combined-before)))
+      (funcall callback
+               (list :keep keep
+                     :reasoning (format "Local: Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
+                                        score-before score-after
+                                        quality-before quality-after
+                                        combined-before combined-after)
+                     :improvement (list :score (- score-after score-before)
+                                        :quality (- quality-after quality-before)
+                                        :combined (- combined-after combined-before)))))))
 
 ;;; Prompt Building
 
@@ -1443,13 +1434,13 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                               (list :target target
                                                     :id experiment-id
                                                     :error "timeout"))))))
-(my/gptel--run-agent-tool
-             (lambda (agent-output)
+           (my/gptel--run-agent-tool
+            (lambda (agent-output)
               (message "[auto-exp] Agent output (first 500 chars): %s"
                        (truncate-string-to-width (or agent-output "nil") 500 nil nil "..."))
-               (when timeout-timer (cancel-timer timeout-timer))
-               (unless finished
-                 (gptel-auto-experiment-grade
+              (when timeout-timer (cancel-timer timeout-timer))
+              (unless finished
+                (gptel-auto-experiment-grade
                  agent-output
                  (lambda (grade)
                    (let* ((grade-score (plist-get grade :score))
@@ -1459,50 +1450,50 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                          (progn
                            (setq finished t)
                            (gptel-auto-workflow-delete-worktree)
-(let ((exp-result (list :target target
-                                                    :id experiment-id
-                                                    :hypothesis hypothesis
-                                                    :score-before baseline
-                                                    :score-after 0
-                                                    :kept nil
-                                                    :duration (- (float-time) start-time)
-                                                    :grader-quality grade-score
-                                                    :grader-reason (plist-get grade :details)
-                                                    :comparator-reason "early-discard"
-                                                    :analyzer-patterns (format "%s" patterns)
-                                                    :agent-output agent-output)))
-                              (gptel-auto-experiment-log-tsv
+                           (let ((exp-result (list :target target
+                                                   :id experiment-id
+                                                   :hypothesis hypothesis
+                                                   :score-before baseline
+                                                   :score-after 0
+                                                   :kept nil
+                                                   :duration (- (float-time) start-time)
+                                                   :grader-quality grade-score
+                                                   :grader-reason (plist-get grade :details)
+                                                   :comparator-reason "early-discard"
+                                                   :analyzer-patterns (format "%s" patterns)
+                                                   :agent-output agent-output)))
+                             (gptel-auto-experiment-log-tsv
                               (format-time-string "%Y-%m-%d") exp-result)
-(funcall callback exp-result)))
-                        (let* ((bench (gptel-auto-experiment-benchmark))
-                               (passed (plist-get bench :passed))
-                               (tests-passed (plist-get bench :tests-passed))
-                               (score-after (plist-get bench :eight-keys)))
-                          (if (not passed)
-                              (progn
-                                (setq finished t)
-                                (magit-git-success "checkout" "--" ".")
-                                (gptel-auto-workflow-delete-worktree)
-                                (let ((reason (cond
-                                               ((not (plist-get bench :nucleus-passed)) "nucleus-validation-failed")
-                                               ((not tests-passed) "tests-failed")
-                                               (t "verification-failed"))))
-                                  (message "[auto-experiment] ✗ %s for %s" reason target)
-                                  (let ((exp-result (list :target target
-                                                          :id experiment-id
-                                                          :hypothesis hypothesis
-                                                          :score-before baseline
-                                                          :score-after 0
-                                                          :kept nil
-                                                          :duration (- (float-time) start-time)
-                                                          :grader-quality grade-score
-                                                          :grader-reason (plist-get grade :details)
-                                                          :comparator-reason reason
-                                                          :analyzer-patterns (format "%s" patterns)
-                                                          :agent-output agent-output)))
-                                    (gptel-auto-experiment-log-tsv
-                                     (format-time-string "%Y-%m-%d") exp-result)
-                                    (funcall callback exp-result))))
+                             (funcall callback exp-result)))
+                       (let* ((bench (gptel-auto-experiment-benchmark))
+                              (passed (plist-get bench :passed))
+                              (tests-passed (plist-get bench :tests-passed))
+                              (score-after (plist-get bench :eight-keys)))
+                         (if (not passed)
+                             (progn
+                               (setq finished t)
+                               (magit-git-success "checkout" "--" ".")
+                               (gptel-auto-workflow-delete-worktree)
+                               (let ((reason (cond
+                                              ((not (plist-get bench :nucleus-passed)) "nucleus-validation-failed")
+                                              ((not tests-passed) "tests-failed")
+                                              (t "verification-failed"))))
+                                 (message "[auto-experiment] ✗ %s for %s" reason target)
+                                 (let ((exp-result (list :target target
+                                                         :id experiment-id
+                                                         :hypothesis hypothesis
+                                                         :score-before baseline
+                                                         :score-after 0
+                                                         :kept nil
+                                                         :duration (- (float-time) start-time)
+                                                         :grader-quality grade-score
+                                                         :grader-reason (plist-get grade :details)
+                                                         :comparator-reason reason
+                                                         :analyzer-patterns (format "%s" patterns)
+                                                         :agent-output agent-output)))
+                                   (gptel-auto-experiment-log-tsv
+                                    (format-time-string "%Y-%m-%d") exp-result)
+                                   (funcall callback exp-result))))
                            (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
                              (gptel-auto-experiment-decide
                               (list :score baseline :code-quality 0.5)
@@ -1511,40 +1502,40 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                 (setq finished t)
                                 (let* ((keep (plist-get decision :keep))
                                        (reasoning (plist-get decision :reasoning))
-(exp-result (list :target target
-                                                          :id experiment-id
-:hypothesis hypothesis
-                                                           :score-before baseline
-                                                           :score-after score-after
-                                                           :code-quality code-quality
-                                                           :kept keep
-                                                           :duration (- (float-time) start-time)
-                                                           :grader-quality grade-score
-                                                           :grader-reason (plist-get grade :details)
-                                                           :comparator-reason reasoning
-                                                           :analyzer-patterns (format "%s" patterns)
-                                                           :agent-output agent-output)))
-(if keep
-                                         (let ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\n\nEVIDENCE: Tests pass, Nucleus valid\nScore: %.2f → %.2f (+%.0f%%)"
-                                                            target
-                                                            (gptel-auto-experiment--summarize hypothesis)
-                                                            hypothesis
-                                                            baseline score-after
-                                                            (if (> baseline 0) (* 100 (/ (- score-after baseline) baseline)) 0))))
-                                           (message "[auto-experiment] ✓ Committing improvement for %s" target)
-                                           (magit-git-success "add" "-A")
-                                           (magit-git-success "commit" "-m" msg)
-                                           (setq gptel-auto-experiment--best-score score-after
-                                                 gptel-auto-experiment--no-improvement-count 0)
-                                           (when gptel-auto-experiment-auto-push
-                                             (message "[auto-experiment] Pushing to %s" gptel-auto-workflow--current-branch)
-                                             (magit-git-success "push" "origin" gptel-auto-workflow--current-branch)
-                                             (when gptel-auto-workflow-use-staging
-                                               (gptel-auto-workflow--staging-flow gptel-auto-workflow--current-branch))))
-                                       (progn
-                                         (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
-                                         (magit-git-success "checkout" "--" ".")
-                                         (cl-incf gptel-auto-experiment--no-improvement-count)))
+                                       (exp-result (list :target target
+                                                         :id experiment-id
+                                                         :hypothesis hypothesis
+                                                         :score-before baseline
+                                                         :score-after score-after
+                                                         :code-quality code-quality
+                                                         :kept keep
+                                                         :duration (- (float-time) start-time)
+                                                         :grader-quality grade-score
+                                                         :grader-reason (plist-get grade :details)
+                                                         :comparator-reason reasoning
+                                                         :analyzer-patterns (format "%s" patterns)
+                                                         :agent-output agent-output)))
+                                  (if keep
+                                      (let ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\n\nEVIDENCE: Tests pass, Nucleus valid\nScore: %.2f → %.2f (+%.0f%%)"
+                                                         target
+                                                         (gptel-auto-experiment--summarize hypothesis)
+                                                         hypothesis
+                                                         baseline score-after
+                                                         (if (> baseline 0) (* 100 (/ (- score-after baseline) baseline)) 0))))
+                                        (message "[auto-experiment] ✓ Committing improvement for %s" target)
+                                        (magit-git-success "add" "-A")
+                                        (magit-git-success "commit" "-m" msg)
+                                        (setq gptel-auto-experiment--best-score score-after
+                                              gptel-auto-experiment--no-improvement-count 0)
+                                        (when gptel-auto-experiment-auto-push
+                                          (message "[auto-experiment] Pushing to %s" gptel-auto-workflow--current-branch)
+                                          (magit-git-success "push" "origin" gptel-auto-workflow--current-branch)
+                                          (when gptel-auto-workflow-use-staging
+                                            (gptel-auto-workflow--staging-flow gptel-auto-workflow--current-branch))))
+                                    (progn
+                                      (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
+                                      (magit-git-success "checkout" "--" ".")
+                                      (cl-incf gptel-auto-experiment--no-improvement-count)))
                                   (gptel-auto-experiment-log-tsv
                                    (format-time-string "%Y-%m-%d") exp-result)
                                   (gptel-auto-workflow-delete-worktree)
@@ -1639,7 +1630,22 @@ Returns (:running :kept :total :phase :results)."
         :total (or (plist-get gptel-auto-workflow--stats :total) 0)
         :phase (or (plist-get gptel-auto-workflow--stats :phase) "idle")
         :results (format "var/tmp/experiments/%s/results.tsv"
-                        (format-time-string "%Y-%m-%d"))))
+                         (format-time-string "%Y-%m-%d"))))
+
+(defun gptel-auto-workflow-log ()
+  "Return recent workflow log lines as a list (filtered, sanitized).
+Safe for external tools - contains only [auto-] and [nucleus] messages."
+  (with-current-buffer "*Messages*"
+    (let ((lines (split-string (buffer-string) "\n" t))
+          result)
+      (dolist (line lines)
+        (when (string-match-p "^\\[auto-\\]\\|^\\[nucleus\\]" line)
+          (let ((clean (copy-sequence line)))
+            (setq clean (replace-regexp-in-string (concat "[" (string ?' (char-from-name "RIGHT SINGLE QUOTATION MARK")) "]") "'" clean)
+                  clean (replace-regexp-in-string (concat "[" (string ?\" (char-from-name "LEFT DOUBLE QUOTATION MARK") (char-from-name "RIGHT DOUBLE QUOTATION MARK")) "]") "\"" clean)
+                  clean (replace-regexp-in-string (concat "[" (string (char-from-name "EN DASH") (char-from-name "EM DASH")) "]") "-" clean))
+            (push clean result))))
+      (seq-take (nreverse result) 20))))
 
 (declare-function gptel-auto-workflow-select-targets "gptel-auto-workflow-strategic")
 
@@ -1921,8 +1927,8 @@ Returns formatted string with key names and signals."
                                     (length kept-results))
                                0))
                   (best (car (sort kept-results (lambda (a b)
-                                                   (> (or (plist-get a :delta) 0)
-                                                      (or (plist-get b :delta) 0))))))
+                                                  (> (or (plist-get a :delta) 0)
+                                                     (or (plist-get b :delta) 0))))))
                   (best-hyp (when best (plist-get best :hypothesis))))
              (if (>= success-rate 50)
                  (push (list mutation success-rate avg-delta best-hyp) successful)
@@ -2036,7 +2042,7 @@ Returns formatted string with key names and signals."
 (defun gptel-auto-workflow-metabolize (run-id all-results)
   "Synthesize RUN-ID ALL-RESULTS to mementum + evolve skills."
   (let ((memory-dir (expand-file-name "mementum/memories"
-                                       (gptel-auto-workflow--project-root)))
+                                      (gptel-auto-workflow--project-root)))
         (by-target (make-hash-table :test 'equal)))
     (make-directory memory-dir t)
     (let ((file (expand-file-name (format "auto-workflow-%s.md" run-id) memory-dir)))
@@ -2118,7 +2124,7 @@ Manual: M-x gptel-auto-workflow-run-autonomous"
   "Build recall index from all knowledge files.
 Creates .index file with topic → file mapping for O(1) lookup."
   (let* ((index-file (expand-file-name gptel-mementum-index-file
-                                        (gptel-auto-workflow--project-root)))
+                                       (gptel-auto-workflow--project-root)))
          (knowledge-dir (expand-file-name "mementum/knowledge"
                                           (gptel-auto-workflow--project-root)))
          (index (make-hash-table :test 'equal)))
@@ -2148,7 +2154,7 @@ Creates .index file with topic → file mapping for O(1) lookup."
   "Quick lookup for QUERY in recall index.
 Returns list of matching files."
   (let* ((index-file (expand-file-name gptel-mementum-index-file
-                                        (gptel-auto-workflow--project-root)))
+                                       (gptel-auto-workflow--project-root)))
          (result '()))
     (when (file-exists-p index-file)
       (with-temp-buffer
@@ -2157,63 +2163,63 @@ Returns list of matching files."
         (when (re-search-forward (format "^%s: " (regexp-quote query)) nil t)
           (let ((line (buffer-substring-no-properties (point) (line-end-position))))
             (setq result (split-string line ",\\s-*")))))
-    (or result
-        (progn
-          (message "[mementum] Index miss, using git grep for: %s" query)
-          (let ((default-directory (gptel-auto-workflow--project-root)))
-            (split-string
-             (shell-command-to-string
-              (format "git grep -l '%s' -- mementum/knowledge/ 2>/dev/null || true" query))
-             "\n" t))))))
+      (or result
+          (progn
+            (message "[mementum] Index miss, using git grep for: %s" query)
+            (let ((default-directory (gptel-auto-workflow--project-root)))
+              (split-string
+               (shell-command-to-string
+                (format "git grep -l '%s' -- mementum/knowledge/ 2>/dev/null || true" query))
+               "\n" t))))))
 
-(defun gptel-mementum-decay-skills ()
-  "Apply decay to skill files not tested in 4+ weeks.
+  (defun gptel-mementum-decay-skills ()
+    "Apply decay to skill files not tested in 4+ weeks.
 Run weekly via cron."
-  (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
-                                        (gptel-auto-workflow--project-root)))
-         (mutations-dir (expand-file-name "mementum/knowledge/mutations"
-                                          (gptel-auto-workflow--project-root)))
-         (now (float-time))
-         (four-weeks (* 4 7 24 60 60))
-         (decayed 0)
-         (archived 0))
-    (dolist (dir (list skills-dir mutations-dir))
-      (when (file-exists-p dir)
-        (dolist (file (directory-files dir t "\\.md$"))
-          (let ((content (with-temp-buffer
-                           (insert-file-contents file)
-                           (buffer-string))))
-            (when (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content)
-              (let* ((date-str (match-string 1 content))
-                     (last-tested (encode-time 0 0 0 (string-to-number (substring date-str 8 10))
-                                               (string-to-number (substring date-str 5 7))
-                                               (string-to-number (substring date-str 0 4))))
-                     (age (- now (float-time last-tested))))
-                (when (> age four-weeks)
-                  (let ((new-phi (max 0.3 (- (if (string-match "^phi:[[:space:]]*\\([0-9.]+\\)" content)
-                                                  (string-to-number (match-string 1 content))
-                                                0.5)
-                                              0.02))))
-                    (if (< new-phi 0.3)
-                        (progn
-                          (let ((archive-dir (expand-file-name "archive" dir)))
-                            (make-directory archive-dir t)
-                            (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir))
-                            (cl-incf archived)))
-                      (with-temp-buffer
-                        (insert content)
-                        (goto-char (point-min))
-                        (when (re-search-forward "^phi:[[:space:]]*[0-9.]+" nil t)
-                          (replace-match (format "phi: %.2f" new-phi)))
-                        (write-region (point-min) (point-max) file)
-                        (cl-incf decayed))))))))))))
+    (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
+                                         (gptel-auto-workflow--project-root)))
+           (mutations-dir (expand-file-name "mementum/knowledge/mutations"
+                                            (gptel-auto-workflow--project-root)))
+           (now (float-time))
+           (four-weeks (* 4 7 24 60 60))
+           (decayed 0)
+           (archived 0))
+      (dolist (dir (list skills-dir mutations-dir))
+        (when (file-exists-p dir)
+          (dolist (file (directory-files dir t "\\.md$"))
+            (let ((content (with-temp-buffer
+                             (insert-file-contents file)
+                             (buffer-string))))
+              (when (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content)
+                (let* ((date-str (match-string 1 content))
+                       (last-tested (encode-time 0 0 0 (string-to-number (substring date-str 8 10))
+                                                 (string-to-number (substring date-str 5 7))
+                                                 (string-to-number (substring date-str 0 4))))
+                       (age (- now (float-time last-tested))))
+                  (when (> age four-weeks)
+                    (let ((new-phi (max 0.3 (- (if (string-match "^phi:[[:space:]]*\\([0-9.]+\\)" content)
+                                                   (string-to-number (match-string 1 content))
+                                                 0.5)
+                                               0.02))))
+                      (if (< new-phi 0.3)
+                          (progn
+                            (let ((archive-dir (expand-file-name "archive" dir)))
+                              (make-directory archive-dir t)
+                              (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir))
+                              (cl-incf archived)))
+                        (with-temp-buffer
+                          (insert content)
+                          (goto-char (point-min))
+                          (when (re-search-forward "^phi:[[:space:]]*[0-9.]+" nil t)
+                            (replace-match (format "phi: %.2f" new-phi)))
+                          (write-region (point-min) (point-max) file)
+                          (cl-incf decayed))))))))))))
     (message "[mementum] Decay: %d decayed, %d archived" decayed archived)))
 
 (defun gptel-mementum-check-synthesis-candidates ()
   "Check for topics with ≥3 memories and suggest synthesis.
 Returns list of synthesis candidates."
   (let* ((memories-dir (expand-file-name "mementum/memories"
-                                          (gptel-auto-workflow--project-root)))
+                                         (gptel-auto-workflow--project-root)))
          (by-topic (make-hash-table :test 'equal))
          (candidates '()))
     (when (file-exists-p memories-dir)
@@ -2253,8 +2259,8 @@ Implements λ termination(x): synthesis ≡ AI | approval ≡ human."
           (insert (format "## Source Memories (%d)\n\n" (length memories-content)))
           (dolist (content memories-content)
             (insert (format "### %s\n\n%s\n\n"
-                           (truncate-string-to-width content 50 nil nil "...")
-                           content)))
+                            (truncate-string-to-width content 50 nil nil "...")
+                            content)))
           (insert "\n## Proposed Knowledge Page\n\n")
           (insert (format "---\ntitle: %s\nstatus: open\ncategory: synthesized\n---\n\n" topic))
           (insert (format "# %s\n\nSynthesized from %d memories.\n\n" topic (length memories-content)))
