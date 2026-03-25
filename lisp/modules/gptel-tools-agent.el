@@ -646,8 +646,16 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 ;;; Configuration
 
 (defcustom gptel-auto-workflow-targets
-  '("gptel-ext-retry.el" "gptel-ext-context.el" "gptel-tools-code.el")
-  "Target files for scheduled auto-workflow runs."
+  '("gptel-ext-retry.el"
+    "gptel-ext-context.el"
+    "gptel-tools-code.el"
+    "gptel-ext-fsm-utils.el"
+    "gptel-agent-loop.el"
+    "gptel-tools-agent.el"
+    "nucleus-presets.el"
+    "nucleus-tools.el")
+  "Target files for scheduled auto-workflow runs.
+Monthly subscription optimization: 8 targets to maximize value."
   :type '(repeat string)
   :group 'gptel-tools-agent)
 
@@ -661,13 +669,15 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-max-per-target 10
-  "Maximum experiments per target."
+(defcustom gptel-auto-experiment-max-per-target 5
+  "Maximum experiments per target.
+Monthly subscription: 5 is optimal (diminishing returns after 3-4)."
   :type 'integer
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-no-improvement-threshold 3
-  "Stop after N consecutive no-improvements."
+(defcustom gptel-auto-experiment-no-improvement-threshold 2
+  "Stop after N consecutive no-improvements.
+Monthly subscription: 2 for fail-fast, try more different files."
   :type 'integer
   :group 'gptel-tools-agent)
 

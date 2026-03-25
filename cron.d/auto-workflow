@@ -18,22 +18,28 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 # Auto-Workflow: Overnight optimization experiments
 # ─────────────────────────────────────────────────────────────
 
-# Run optimization experiments nightly at 2 AM
+# ─────────────────────────────────────────────────────────────
+# Auto-Workflow: Code Optimization Experiments
+# ─────────────────────────────────────────────────────────────
+#
+# MONTHLY SUBSCRIPTION: Run every 6 hours to maximize value
 # Uses worktrees for isolation, subagents for analysis/grading
 # IMPORTANT: Runs async - daemon stays responsive
 # Check status: emacsclient -e '(gptel-auto-workflow-status)'
-0 2 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
+#
+# Schedule: Every 6 hours (0:00, 6:00, 12:00, 18:00)
+0 */6 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
 
 # Alternative schedules (uncomment to use):
 
-# Every night at 2:30 AM (different time)
-# 30 2 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
+# Daily at 2 AM (less frequent)
+# 0 2 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
 
-# Every Sunday at 3 AM (weekly instead of daily)
-# 0 3 * * 0 emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
+# Every 12 hours (moderate)
+# 0 */12 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
 
-# Every 6 hours
-# 0 */6 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
+# Every 4 hours (aggressive - 6x per day)
+# 0 */4 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
 # Weekly Mementum: Synthesis + Decay
