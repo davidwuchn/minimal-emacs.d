@@ -453,7 +453,7 @@ Analyze and output JSON:
                                 (format "%S" a)
                                 (format "%S" b))))
     (gptel-benchmark-call-subagent
-     'analyzer
+     'comparator
      (format "Compare: %s" (or description "A vs B"))
      compare-prompt
      (lambda (result)
