@@ -22,7 +22,7 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 # Uses worktrees for isolation, subagents for analysis/grading
 # Use -sync version for cron (blocking, waits for completion)
 # IMPORTANT: Uses emacsclient with daemon (has API keys, magit, gptel config)
-0 2 * * * emacsclient -a '' -e '(gptel-auto-workflow-run-sync)' >> $LOGDIR/auto-workflow.log 2>&1
+0 2 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-sync))' >> $LOGDIR/auto-workflow.log 2>&1
 
 # Alternative schedules (uncomment to use):
 

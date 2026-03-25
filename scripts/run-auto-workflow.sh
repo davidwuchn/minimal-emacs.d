@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 echo "=== Auto-Workflow ===" 
 echo "Started: $(date)"
 
-emacsclient -a '' -e '(gptel-auto-workflow-run-sync)' 2>&1
+emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-sync))' 2>&1
 
 echo ""
 echo "Completed: $(date)"
