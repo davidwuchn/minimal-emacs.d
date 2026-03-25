@@ -708,10 +708,13 @@ This branch is NEVER deleted and NEVER auto-merged to main."
 
 ;;; State
 
-(defvar gptel-auto-workflow--worktree-dir nil)
-(defvar gptel-auto-workflow--current-branch nil)
 (defvar gptel-auto-workflow--staging-worktree-dir nil)
+(defvar gptel-auto-workflow--current-branch nil)
 (defvar gptel-auto-experiment--results nil)
+(defvar gptel-auto-workflow--review-retry-count 0
+  "Retry count for current review cycle.")
+(defvar gptel-auto-workflow--review-max-retries 2
+  "Maximum retries when review is blocked. 0 = no retry.")
 (defvar gptel-auto-experiment--best-score nil)
 (defvar gptel-auto-experiment--no-improvement-count 0)
 
@@ -906,6 +909,42 @@ Maximum response: 1000 characters."
                (funcall callback (cons approved response)))))
         (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
 
+(defun gptel-auto-workflow--fix-review-issues (optimize-branch review-output callback)
+  "Try to fix issues found in review for OPTIMIZE-BRANCH.
+REVIEW-OUTPUT contains the blocker/critical issues.
+Calls CALLBACK with (success-p . fix-output)."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (fix-prompt (format "Fix the following issues in the code.
+
+ISSUES FROM REVIEW:
+%s
+
+INSTRUCTIONS:
+1. Read the affected files
+2. Make minimal fixes to address each issue
+3. Do NOT make unrelated changes
+4. Commit your fix with message 'fix: address review issues'
+
+Focus only on the issues mentioned. Do not refactor or add features."
+                              (truncate-string-to-width review-output 1500 nil nil "..."))))
+    (message "[auto-workflow] Attempting to fix review issues (retry %d/%d)..."
+             gptel-auto-workflow--review-retry-count gptel-auto-workflow--review-max-retries)
+    (if (and gptel-auto-experiment-use-subagents
+             (fboundp 'gptel-benchmark-call-subagent))
+        (gptel-benchmark-call-subagent
+         'executor
+         "Fix review issues"
+         fix-prompt
+         (lambda (result)
+           (let* ((response (if (stringp result) result (format "%S" result)))
+                  (success (not (string-match-p "^Error:" response))))
+             (when success
+               (magit-git-success "add" "-A")
+               (magit-git-success "commit" "-m" "fix: address review issues"))
+             (funcall callback (cons success response)))))
+      (funcall callback (cons nil "No executor agent available")))))
+
 (defun gptel-auto-workflow--merge-to-staging (optimize-branch)
   "Merge OPTIMIZE-BRANCH to staging.
 Auto-resolves conflicts by preferring incoming changes (theirs).
@@ -982,7 +1021,7 @@ EDGE CASE: Returns nil if worktree doesn't exist."
 
 Flow:
 1. Review changes (if gptel-auto-workflow-require-review)
-2. If review blocked: log failure, return
+2. If review blocked: try to fix (up to N retries)
 3. Merge OPTIMIZE-BRANCH to staging
 4. Create staging worktree (never touches project root)
 5. Run tests on staging
@@ -997,6 +1036,7 @@ SAFETY: Asserts main branch is not current before any operation.
 
 NOTE: Human must manually merge staging to main after review."
   (gptel-auto-workflow--assert-main-untouched)
+  (setq gptel-auto-workflow--review-retry-count 0)
   (message "[auto-workflow] Starting staging flow for %s" optimize-branch)
   (gptel-auto-workflow--review-changes
    optimize-branch
@@ -1009,22 +1049,54 @@ REVIEW-RESULT is (approved-p . review-output)."
   (let ((approved (car review-result))
         (review-output (cdr review-result)))
     (if (not approved)
-        (progn
-          (message "[auto-workflow] ✗ Review BLOCKED: %s" review-output)
-          (gptel-auto-experiment-log-tsv
-           (format-time-string "%Y-%m-%d")
-           (list :target "staging-review"
-                 :id 0
-                 :hypothesis "Staging review"
-                 :score-before 0
-                 :score-after 0
-                 :kept nil
-                 :duration 0
-                 :grader-quality 0
-                 :grader-reason "review-blocked"
-                 :comparator-reason (truncate-string-to-width review-output 200)
-                 :analyzer-patterns ""
-                 :agent-output review-output)))
+        (if (< gptel-auto-workflow--review-retry-count gptel-auto-workflow--review-max-retries)
+            (progn
+              (cl-incf gptel-auto-workflow--review-retry-count)
+              (message "[auto-workflow] Review blocked, attempting fix...")
+              (gptel-auto-workflow--fix-review-issues
+               optimize-branch
+               review-output
+               (lambda (fix-result)
+                 (let ((fix-success (car fix-result))
+                       (fix-output (cdr fix-result)))
+                   (if fix-success
+                       (progn
+                         (message "[auto-workflow] Fix applied, re-reviewing...")
+                         (gptel-auto-workflow--review-changes
+                          optimize-branch
+                          (lambda (re-review-result)
+                            (gptel-auto-workflow--staging-flow-after-review optimize-branch re-review-result))))
+                     (message "[auto-workflow] Fix failed: %s" fix-output)
+                     (gptel-auto-experiment-log-tsv
+                      (format-time-string "%Y-%m-%d")
+                      (list :target "staging-review"
+                            :id 0
+                            :hypothesis "Staging review fix"
+                            :score-before 0
+                            :score-after 0
+                            :kept nil
+                            :duration 0
+                            :grader-quality 0
+                            :grader-reason "fix-failed"
+                            :comparator-reason (truncate-string-to-width fix-output 200)
+                            :analyzer-patterns ""
+                            :agent-output review-output)))))))
+          (progn
+            (message "[auto-workflow] ✗ Review BLOCKED (max retries): %s" review-output)
+            (gptel-auto-experiment-log-tsv
+             (format-time-string "%Y-%m-%d")
+             (list :target "staging-review"
+                   :id 0
+                   :hypothesis "Staging review"
+                   :score-before 0
+                   :score-after 0
+                   :kept nil
+                   :duration 0
+                   :grader-quality 0
+                   :grader-reason "review-blocked-max-retries"
+                   :comparator-reason (truncate-string-to-width review-output 200)
+                   :analyzer-patterns ""
+                   :agent-output review-output))))
       (let* ((proj-root (gptel-auto-workflow--project-root))
              (default-directory proj-root)
              (merge-success (gptel-auto-workflow--merge-to-staging optimize-branch)))
