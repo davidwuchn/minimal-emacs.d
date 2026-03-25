@@ -354,19 +354,25 @@ MSG is the original error message, FILE-PATH is the file being operated on."
   (let ((byte-compile-error-on-warn nil)
         (byte-compile-warnings '(not obsolete free-vars unresolved))
         (warnings nil)
-        (output-buffer (get-buffer-create " *elisp-byte-compile*")))
-    (with-current-buffer output-buffer
-      (erase-buffer))
-    (byte-compile-file file-path output-buffer)
-    (with-current-buffer output-buffer
-      (goto-char (point-min))
-      (while (not (eobp))
-        (let ((line (buffer-substring-no-properties
-                     (line-beginning-position) (line-end-position))))
-          (when (and (not (string-empty-p (string-trim line)))
-                     (string-match-p "[Ww]arning\\|[Ee]rror" line))
-            (push line warnings)))
-        (forward-line 1)))
+        (output-buffer (get-buffer-create " *elisp-byte-compile*"))
+        (elc-file (concat file-path "c")))
+    (unwind-protect
+        (progn
+          (with-current-buffer output-buffer
+            (erase-buffer))
+          (byte-compile-file file-path output-buffer)
+          (with-current-buffer output-buffer
+            (goto-char (point-min))
+            (while (not (eobp))
+              (let ((line (buffer-substring-no-properties
+                           (line-beginning-position) (line-end-position))))
+                (when (and (not (string-empty-p (string-trim line)))
+                           (string-match-p "[Ww]arning\\|[Ee]rror" line))
+                  (push line warnings)))
+              (forward-line 1))))
+      (kill-buffer output-buffer)
+      (when (file-exists-p elc-file)
+        (delete-file elc-file)))
     (if warnings
         (mapconcat #'identity (nreverse warnings) "\n")
       "✓ No byte-compile warnings")))
@@ -463,7 +469,7 @@ When FILE_PATH is nil, searches the entire project workspace."
                    (concat msg "\n\nACTION: Install ripgrep:\n  macOS:  brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Check:  rg --version"))
                   ((string-match-p "timeout" msg)
                    (format "Error: Code_Inspect timed out after 10 seconds for '%s'\n\nACTION:\n  1. Provide explicit file_path to skip workspace search\n  2. Large project - search may take time\n  3. Try Code_Map on specific files first" node_name))
-                   (t (format "Error executing Code_Inspect: %s\n\nACTION: Check symbol name and file path, then try again." msg))))))))
+                  (t (format "Error executing Code_Inspect: %s\n\nACTION: Check symbol name and file path, then try again." msg))))))))
 
 (defun gptel-tools-code--replace-node (file_path node_name new_code)
   "Surgically replace NODE_NAME in FILE_PATH with NEW_CODE.
@@ -505,7 +511,7 @@ Syncs buffer with disk, validates parser, guards against truncation."
                  (cond
                   ((string-match-p "syntax error\\|has-error" msg)
                    (format "Error: New code has syntax errors (unbalanced parentheses/brackets)\n\nACTION:\n  1. Check that all opening brackets have closing brackets\n  2. Verify indentation is correct\n  3. Test code in a REPL before replacing\n\nOriginal error: %s" msg))
-                   (t (format "Error executing Code_Replace on %s: %s\n\nACTION: Check function name and new code syntax, then try again." file_path msg))))))))
+                  (t (format "Error executing Code_Replace on %s: %s\n\nACTION: Check function name and new code syntax, then try again." file_path msg))))))))
 
 (defun gptel-tools-code--format-diagnostic (d)
   "Format a single flymake diagnostic D as a string with file, line, type, and context."
