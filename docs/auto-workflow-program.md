@@ -3,6 +3,18 @@
 > Human-editable objectives for autonomous overnight optimization.
 > Edit this file to change what the agent works on.
 
+## Current Baselines
+
+From latest experiment runs (`var/tmp/experiments/2026-03-25/results.tsv`):
+
+| Target | Eight Keys | Code Quality | Weakest Key | Status |
+|--------|------------|--------------|-------------|--------|
+| `gptel-ext-retry.el` | 0.40 | 0.50 → 1.00 | σ Specificity | Needs work |
+| `gptel-ext-context.el` | (pending) | (pending) | - | New target |
+| `gptel-tools-code.el` | (pending) | (pending) | - | New target |
+
+**Note**: Code quality improved (0.50 → 1.00) from extracting error patterns into named constants, but Eight Keys score unchanged. Need mutations that affect signal patterns.
+
 ## Targets
 
 Files to optimize (one per line, relative to project root):
@@ -18,8 +30,12 @@ lisp/modules/gptel-tools-code.el
 | Criterion | Threshold | Weight |
 |-----------|-----------|--------|
 | Eight Keys overall | >= 5% improvement | 50% |
-| Tests pass | 100% | 30% |
-| No immutable file changes | 100% | 20% |
+| Code quality | >= 10% improvement | 30% |
+| Tests pass | 100% | 20% |
+
+**Combined Score** = 0.5 × Eight Keys + 0.5 × Code Quality
+
+Decision: Keep if combined improves, discard if tie/decline.
 
 ## Constraints
 
@@ -66,44 +82,141 @@ Allowed mutation types:
 
 Each experiment targets the weakest Eight Keys based on baseline scores:
 
-| Key | Signals | Improvement Focus |
-|-----|---------|-------------------|
-| φ Vitality | builds on discoveries, adapts | Keep experiments alive |
-| λ Efficiency | removes redundancy, optimizes | Simplify code paths |
-| α Alignment | follows conventions, idioms | Match project patterns |
-| ρ Robustness | handles errors, edge cases | Add guards, validations |
-| σ Specificity | concrete over vague | Use precise language |
-| θ Thoroughness | complete coverage | Add missing pieces |
-| π Synthesis | connects findings | Integrate knowledge |
-| κ Coherence | logical flow | Improve structure |
+| Key | Signals | Current Avg | Improvement Focus |
+|-----|---------|-------------|-------------------|
+| φ Vitality | builds on discoveries, adapts | 0.50 | Add adaptive behavior based on history |
+| λ Efficiency | removes redundancy, optimizes | - | Simplify code paths |
+| α Alignment | follows conventions, idioms | - | Match project patterns |
+| ρ Robustness | handles errors, edge cases | - | Add guards, validations |
+| σ Specificity | concrete over vague | **0.40** | Extract constants, name patterns |
+| θ Thoroughness | complete coverage | - | Add missing pieces |
+| π Synthesis | connects findings | - | Integrate knowledge |
+| κ Coherence | logical flow | - | Improve structure |
 
-The prompt includes:
-1. **Weakest Keys**: Top 2 lowest-scoring keys with focus signals
-2. **Suggested Hypothesis**: From optimization skill (if available)
-3. **Hypothesis Templates**: From linked mutation skills
+**Weakest Key**: σ Specificity (0.40) - needs constants, named patterns, explicit assumptions.
 
-## Target-Specific Patterns
+## What Works (from experiments)
 
-Each target has an optimization skill in `mementum/knowledge/optimization-skills/{name}.md`:
+### Successful Patterns
 
-```yaml
----
-phi: 0.50
-mutation-skills:
-  - mementum/knowledge/mutations/caching.md
-  - mementum/knowledge/mutations/lazy-init.md
----
+| Pattern | Example | Effect |
+|---------|---------|--------|
+| Extract constants | `my/gptel--transient-error-patterns` | Code quality +0.50 |
+| Add docstrings | PRECONDITIONS, BEHAVIOR sections | Grader 6/6 pass |
+| Named patterns | `my/gptel--rate-limit-patterns` | Testability |
+
+### Failed Patterns
+
+| Pattern | Issue | Lesson |
+|---------|-------|--------|
+| No hypothesis stated | Grader 2/6 fail | Always state hypothesis first |
+| Generic docstrings | No Eight Keys improvement | Need signal patterns in code |
+| Error output | Executor failed to find file | Specify full paths |
+
+### Hypothesis Templates
+
+From `mementum/knowledge/mutations/*.md`:
+
+```
+"Add caching to {component} to reduce redundant {operation}"
+"Cache {result} to avoid recomputing {input}"
+"Memoize {function} for {scenario}"
+"Lazy initialize {resource} to defer {cost} until needed"
+"Simplify {logic} by removing {redundancy}"
+"Extract {pattern} into named constant to improve specificity"
 ```
 
-Mutation skills provide hypothesis templates:
-- `"Add caching to {component} to reduce redundant {operation}"`
-- `"Memoize {function} for {scenario}"`
+**For retry.el specifically**:
+- "Extract error patterns into named constants to improve σ Specificity"
+- "Add stats tracking to enable φ Vitality (adaptive behavior)"
+- "Cache compiled regex to improve λ Efficiency"
 
-These are injected into experiment prompts for guided hypothesis generation.
+## Target-Specific Skills
+
+Each target has an optimization skill in `mementum/knowledge/optimization-skills/`:
+
+| Target | Skill File | φ Baseline | Mutation Skills |
+|--------|------------|------------|-----------------|
+| `gptel-ext-retry.el` | `retry.md` | 0.50 | caching, lazy-init, simplification |
+| `gptel-ext-context.el` | `context.md` | 0.50 | caching, lazy-init, simplification |
+| `gptel-tools-code.el` | `code.md` | 0.50 | caching, lazy-init, simplification |
+
+Mutation skills provide hypothesis templates. These are injected into experiment prompts.
 
 ## Morning Review
 
-1. Review `var/tmp/experiments/{date}/results.tsv`
-2. Check optimization skills for compounded learnings
-3. Merge successful branches: `git merge optimize/{target}-exp{N}`
-4. Edit this file to adjust objectives for next night
+### 1. Check Results
+
+```bash
+cat var/tmp/experiments/$(date +%Y-%m-%d)/results.tsv | column -t -s $'\t'
+```
+
+Look for:
+- `decision: kept` - experiments that improved combined score
+- `code_quality: 1.00` - good docstring coverage
+- `delta: +0.XX` - Eight Keys improvement
+
+### 2. Review Kept Experiments
+
+```bash
+git branch -r 'origin/optimize/*'
+git log origin/optimize/retry-$(hostname)-expN --oneline
+```
+
+### 3. Merge or Discard
+
+```bash
+# If satisfied, merge
+git checkout main
+git merge --squash origin/optimize/retry-$(hostname)-expN
+git commit -m "✓ {description}"
+
+# If not, delete
+git push origin --delete optimize/retry-$(hostname)-expN
+```
+
+### 4. Update Skills
+
+After merge, update `mementum/knowledge/optimization-skills/{target}.md`:
+
+```markdown
+## Successful Mutations
+
+| Mutation | Success Rate | Avg Delta | Best Hypothesis |
+|----------|-------------|-----------|-----------------|
+| simplification | 1/1 | +0.10 | Extract constants |
+```
+
+### 5. Adjust Program
+
+- Add new targets
+- Remove targets that plateaued
+- Adjust mutation weights based on success rates
+
+## Next Night's Hypothesis
+
+(Populated by metabolize after each night)
+
+Current suggestions:
+1. **retry.el**: Add adaptive retry ordering based on historical success (φ Vitality)
+2. **context.el**: Lazy-load context templates (λ Efficiency)
+3. **code.el**: Cache parsed code structures (caching)
+
+---
+
+## Reference: Experiment Pipeline
+
+```
+gptel-auto-workflow-run-sync
+  → worktree (optimize/{target}-{hostname}-exp{N})
+  → analyzer (detect patterns)
+  → executor (make changes)
+  → grader (6/6 quality check)
+  → benchmark (Eight Keys score)
+  → code-quality (docstring coverage)
+  → comparator (LLM decides keep/discard)
+  → TSV log
+  → push to optimize/* (NOT main)
+```
+
+**Safety**: All changes go to `optimize/*` branches. Human reviews before merging to main.
