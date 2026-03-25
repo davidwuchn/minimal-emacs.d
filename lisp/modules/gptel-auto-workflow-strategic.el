@@ -3,6 +3,26 @@
 ;;; Commentary:
 ;; LLM-first target selection for auto-workflow.
 ;; Let the analyzer decide which files to optimize.
+;;
+;; PURPOSE (ε):
+;;   Goal: Automate intelligent selection of optimization targets
+;;   Measurable outcome: Select 3 highest-impact files per run
+;;   Success metric: Files selected have TODOs/FIXMEs or recent activity
+;;
+;; WISDOM (τ):
+;;   Planning: Gather git history, file sizes, and known issues before selection
+;;   Error prevention: Fallback to static targets if LLM unavailable
+;;   Foresight: Exclude test files and disabled modules from selection
+;;
+;; ASSUMPTIONS:
+;;   - Project root contains lisp/modules/ directory
+;;   - Git is available for history analysis
+;;   - LLM subagent (analyzer) may or may not be available
+;;
+;; EDGE CASES:
+;;   - No LLM available → fallback to static target list
+;;   - JSON parse fails → regex fallback for file extraction
+;;   - Empty target list → use gptel-auto-workflow-targets
 
 ;;; Code:
 
@@ -20,7 +40,11 @@ When nil, use static targets from gptel-auto-workflow-targets."
   :group 'gptel-tools-agent)
 
 (defun gptel-auto-workflow--discover-targets ()
-  "Discover all Elisp files in lisp/modules/ as potential targets."
+  "Discover all Elisp files in lisp/modules/ as potential targets.
+;; ASSUMPTION: lisp/modules/ exists under project root
+;; BEHAVIOR: Recursively find .el files, exclude tests and disabled
+;; EDGE CASE: Returns empty list if directory doesn't exist
+;; TEST: Verify no -test.el or -disabled.el files in results"
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (modules-dir (expand-file-name "lisp/modules" proj-root))
          (targets '()))
