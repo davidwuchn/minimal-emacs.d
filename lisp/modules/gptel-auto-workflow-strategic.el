@@ -287,17 +287,25 @@ Findings available to analyzer during target selection."
 
 (defun gptel-auto-workflow-load-research-findings ()
   "Load cached research findings from file.
-Returns empty string if no cache or cache stale."
+Returns empty string if no cache exists."
   (if (not (string-empty-p gptel-auto-workflow--last-research-findings))
-      gptel-auto-workflow--last-research-findings
+      (progn
+        (message "[research] Using in-memory findings (%d chars)"
+                 (length gptel-auto-workflow--last-research-findings))
+        gptel-auto-workflow--last-research-findings)
     (let ((file (gptel-auto-workflow--research-file)))
       (if (file-exists-p file)
           (with-temp-buffer
             (insert-file-contents file)
             (goto-char (point-min))
             (forward-line 3)
-            (buffer-substring (point) (point-max)))
-        ""))))
+            (let ((findings (buffer-substring (point) (point-max))))
+              (message "[research] Loaded cached findings from %s (%d chars)"
+                       file (length findings))
+              findings))
+        (progn
+          (message "[research] No cached findings found at %s" file)
+          "")))))
 
 (defun gptel-auto-workflow-start-periodic-research ()
   "Start periodic researcher runs.
