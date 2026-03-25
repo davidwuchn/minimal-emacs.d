@@ -1,72 +1,92 @@
 # Auto-Workflow
 
-> Autonomous Research Agent with continuity + compounding.
+> Autonomous Research Agent with LLM brain and human eyes/hands.
+
+## Philosophy
+
+```
+LLM = Brain (decides, judges, reasons)
+We  = Eyes (gather context) + Hands (execute)
+Never ask user. Try harder, again and again.
+```
 
 ## Implementation Status
 
 | Layer | Component | Status |
 |-------|-----------|--------|
-| **Objectives** | program.md (human-editable) | ✓ |
-| **Continuity** | mementum memories | ✓ |
-| **Compounding** | optimization skills | ✓ |
-| **Mutations** | mutation skills | ✓ |
-| **Engine** | ~32 experiments/night | ✓ |
-| **Validation** | analyzer/grader/comparator | ✓ |
-| **Maintenance** | mementum weekly optimization | ✓ |
+| **Brain** | LLM target selection | ✓ |
+| **Brain** | LLM quality grading | ✓ |
+| **Brain** | LLM keep/discard | ✓ |
+| **Eyes** | Context gathering | ✓ |
+| **Hands** | Tests before push | ✓ |
+| **Hands** | optimize/* branches | ✓ |
+| **Autonomy** | Retry on failure | ✓ |
 
 ## Entry Points
 
 ```elisp
-;; Autonomous Research Agent (recommended)
-M-x gptel-auto-workflow-run-sync
+;; Cron: 2 AM daily (recommended)
+crontab cron.d/auto-workflow
 
-;; Async version (for interactive use only)
-M-x gptel-auto-workflow-run
+;; Manual run
+M-x gptel-auto-workflow-run-sync
 ```
 
 ## Architecture
 
 ```
-docs/auto-workflow-program.md     ← Human edits objectives
-            │
-            ▼
 ┌─────────────────────────────────────────────────────────┐
-│              gptel-auto-workflow-run-sync               │
-│                                                         │
-│  1. orient()    → load program.md + skills             │
-│  2. experiments → ~32/night with skill guidance         │
-│  3. metabolize() → synthesize to mementum              │
+│                    AUTO-WORKFLOW                         │
+├─────────────────────────────────────────────────────────┤
+│  Eyes (we gather)          Brain (LLM decides)          │
+│  ─────────────────         ──────────────────           │
+│  • Git history             • Target selection           │
+│  • File sizes              • Mutation strategy          │
+│  • TODOs/FIXMEs            • Keep or discard            │
+│  • Test results            • Quality threshold          │
+│                           │
+│  Hands (we execute)                                      │
+│  ─────────────────                                       │
+│  • Create worktree                                       │
+│  • Run executor                                          │
+│  • Run tests                                             │
+│  • Commit to optimize/*                                  │
+│  • Push to remote                                        │
 └─────────────────────────────────────────────────────────┘
-            │
-            ▼
-┌─────────────────────────────────────────────────────────┐
-│                    mementum/                            │
-│                                                         │
-│  memories/auto-workflow-{date}.md    (continuity)       │
-│  knowledge/optimization-skills/      (compounding)      │
-│  knowledge/mutations/               (reusable patterns) │
-└─────────────────────────────────────────────────────────┘
+```
+
+## Target Selection
+
+**LLM decides**, we don't second-guess.
+
+```elisp
+(gptel-auto-workflow-select-targets callback)
+;; 1. Gather context: git history, file sizes, TODOs
+;; 2. Ask analyzer LLM: "Select 3 files to optimize"
+;; 3. Execute LLM's decision
+```
+
+## Safety Pipeline
+
+```
+Executor makes changes
+       ↓
+   Grader validates (LLM)
+       ↓
+   Tests run
+       ↓
+   Nucleus validation
+       ↓
+   Comparator decides (LLM)
+       ↓
+   Push to optimize/* only
 ```
 
 ## program.md
 
-Human-editable objectives at `docs/auto-workflow-program.md`:
+Human-editable objectives at `docs/auto-workflow-program.md`.
 
-```markdown
-## Targets
-lisp/modules/gptel-ext-retry.el
-lisp/modules/gptel-ext-context.el
-
-## Constraints
-### Immutable Files
-early-init.el
-lisp/eca-security.el
-
-## Mutation Strategy
-- [x] caching
-- [x] lazy-initialization
-- [x] simplification
-```
+**Note**: LLM decides targets. Static targets are fallback only.
 
 ## Skills
 
@@ -74,130 +94,47 @@ lisp/eca-security.el
 
 `mementum/knowledge/optimization-skills/{target}.md`
 
-Track successful/failed mutations per target:
-
-```yaml
----
-title: Optimization Skill: retry
-phi: 0.85
-runs: 3
----
-
-## Successful Mutations
-| Mutation | Success Rate | Avg Delta |
-|----------|-------------|-----------|
-| caching  | 3/3         | +0.06     |
-
-## Nightly History
-| Date       | Kept | Score Δ |
-|------------|------|---------|
-| 2026-03-22 | 3    | +0.12   |
-```
+Track successful/failed mutations per target.
 
 ### Mutation Skills
 
 `mementum/knowledge/mutations/{type}.md`
 
-Reusable hypothesis templates:
+Reusable hypothesis templates.
 
-```yaml
----
-title: Mutation Skill: caching
-phi: 0.75
----
-
-## Hypothesis Templates
-"Add caching to {component} to reduce redundant {operation}"
-
-## When to Apply
-- Repeated lookups detected
-- Same computation called multiple times
-
-## Success History
-| Target | Date | Delta |
-|--------|------|-------|
-| retry  | 2026-03-22 | +0.06 |
-```
-
-## Subagent Pipeline
-
-Each experiment goes through:
-
-| Stage | Subagent | Purpose |
-|-------|----------|---------|
-| 1. Analyze | `analyzer` | Detect patterns from previous experiments, suggest hypotheses |
-| 2. Implement | `code` (executor) | Run agent with guided prompt (reads git history + analyzer output) |
-| 3. Validate | `grader` | Check hypothesis clarity, minimal changes. LLM decides if quality sufficient |
-| 4. Benchmark | — | Run verify-nucleus.sh + Eight Keys scoring |
-| 5. Decide | `comparator` | Compare before/after (includes code quality) |
-
-### Code Quality Integration
-
-Code quality (docstring coverage) is calculated before the decide stage and passed to the comparator:
-
-```elisp
-;; In gptel-auto-experiment-run:
-(let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
-  (gptel-auto-experiment-decide
-   (list :score baseline :code-quality 0.5)
-   (list :score score-after :code-quality code-quality)
-   callback))
-```
-
-### Decision Logic
-
-**With comparator subagent:** The comparator receives both `:score` and `:code-quality` values and makes a blind A/B decision based on quality, completeness, and correctness.
-
-**Fallback (no subagent):** Uses combined score:
+## Pipeline
 
 ```
-combined = 50% * grader_score + 50% * code_quality_score
+1. Analyze (LLM)   → Detect patterns, suggest hypotheses
+2. Implement       → Executor makes changes in worktree
+3. Grade (LLM)     → Validate quality (6/6 pass)
+4. Test            → Run tests + nucleus validation
+5. Decide (LLM)    → Compare before/after, keep/discard
+6. Push            → Only to optimize/* branches
 ```
 
-This rewards improvements that:
-- Pass grader validation (change clearly described, minimal changes)
-- Improve code quality (docstrings, clarity)
+### Decision
 
-The weights are balanced 50/50 because Eight Keys scoring may not always reflect code improvements accurately.
+**LLM decides** based on:
+- Eight Keys score
+- Code quality (docstring coverage)
+- Combined improvement
 
-### Code Quality Scoring
+**Local fallback** only if LLM unavailable.
 
-```elisp
-(gptel-benchmark--code-quality-score code)
-;; => 0.0-1.0 (docstring coverage)
-```
-
-- 1.0 = all functions have docstrings
-- 0.5 = half of functions have docstrings
-- 0.0 = no functions have docstrings
-
-### LLM Degradation Detection
-
-```elisp
-(gptel-benchmark--detect-llm-degradation response expected-keywords)
-;; => (:degraded-p t :reason "I apologize" :score 0.67)
-```
-
-Detects:
-- Forbidden keywords (apologies, AI self-reference)
-- Off-topic responses (missing expected keywords)
-
-## TSV Format (Explainable Results)
+## TSV Format
 
 ```
-experiment_id  target  hypothesis  score_before  score_after  code_quality  delta  decision  duration  grader_quality  grader_reason  comparator_reason  analyzer_patterns
-001            retry   add caching  0.72         0.78         0.85          +0.06  kept      842       85              "Hypothesis clear"  "KEEP - improvement"  "caching pattern"
-002            retry   simplify err 0.78         0.75         0.50          -0.03  discarded 603       70              "Larger than ideal"  "DISCARD - regression"  "simplification (1/2)"
-003            retry   lazy init    0.78         0.81         1.00          +0.03  kept      915       90              "Excellent hypothesis"  "KEEP - better performance"  "caching (3/3), lazy-init"
+experiment_id  target  hypothesis  score_before  score_after  decision
+001            retry   add caching  0.72         0.78         kept
+002            retry   simplify     0.78         0.75         discarded
 ```
 
-## Dynamic Stop Condition
+## Stop Condition
 
-The experiment loop stops when:
-- Max experiments reached (`gptel-auto-experiment-max-per-target`), OR
-- `gptel-auto-experiment-no-improvement-threshold` consecutive experiments show no improvement
-
-This prevents wasting time when:
+Stops when:
+- Max experiments reached (default: 10 per target)
+- 3 consecutive experiments with no improvement
 - The optimization space is exhausted
 - The analyzer detects pattern exhaustion
 - Scores plateau
