@@ -59,7 +59,14 @@ When nil, use static targets from gptel-auto-workflow-targets."
 
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
-Returns plist with git history, file sizes, TODOs."
+Returns plist with git history, file sizes, TODOs.
+
+;; ASSUMPTION: Git is available and project is a git repo
+;; BEHAVIOR: Collects 4 context types: git-history, file-sizes, todos, file-list
+;; RISK: Shell commands may fail silently (stderr redirected)
+;; EDGE CASE: Empty output if lisp/modules/ doesn't exist
+;; SYNTHESIS: Connects git activity, code volume, and technical debt for selection
+;; TEST: Verify all 4 plist keys present in non-empty result"
   (let* ((proj-root (gptel-auto-workflow--project-root)))
     (list :git-history (shell-command-to-string
                         (format "cd %s && git log --oneline -30 -- lisp/modules/*.el 2>/dev/null"
@@ -76,7 +83,14 @@ Returns plist with git history, file sizes, TODOs."
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
-CALLBACK receives list of target files."
+CALLBACK receives list of target files.
+
+;; ASSUMPTION: gptel-benchmark-call-subagent is available when subagents enabled
+;; BEHAVIOR: Builds context prompt, calls analyzer, parses JSON response
+;; RISK: LLM may timeout or return malformed JSON
+;; EDGE CASE: Subagents disabled → callback receives nil, triggers fallback
+;; SYNTHESIS: Integrates gather-context output with LLM reasoning for selection
+;; TEST: Verify callback receives non-nil list when LLM succeeds"
   (let* ((context (gptel-auto-workflow--gather-context))
          (prompt (format "Select optimization targets for this Emacs Lisp project.
 
@@ -113,7 +127,13 @@ OUTPUT JSON ONLY:
       (funcall callback nil))))
 
 (defun gptel-auto-workflow--parse-targets (response)
-  "Parse LLM RESPONSE to extract target file list."
+  "Parse LLM RESPONSE to extract target file list.
+
+;; ASSUMPTION: Response is string or stringifiable object
+;; BEHAVIOR: Try JSON parse first, fallback to regex extraction
+;; EDGE CASE: Malformed JSON → regex fallback; No matches → empty list
+;; SYNTHESIS: Bridges LLM output format with internal file list representation
+;; TEST: Verify valid files extracted from both JSON and text responses"
   (let ((targets '()))
     ;; Try JSON
     (condition-case nil
@@ -142,7 +162,14 @@ OUTPUT JSON ONLY:
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
 CALLBACK receives list of target files.
-LLM decides if available, otherwise uses static list."
+LLM decides if available, otherwise uses static list.
+
+;; ASSUMPTION: gptel-auto-workflow-targets is defined as fallback
+;; BEHAVIOR: Strategic selection enabled → ask LLM; disabled → static list
+;; RISK: LLM failure gracefully degrades to static targets
+;; EDGE CASE: No targets from LLM → fallback to gptel-auto-workflow-targets
+;; SYNTHESIS: Orchestrates discover, gather-context, ask-analyzer, parse-targets
+;; TEST: Verify callback receives 3 targets in both LLM and fallback paths"
   (if gptel-auto-workflow-strategic-selection
       (gptel-auto-workflow--ask-analyzer-for-targets
        (lambda (targets)
