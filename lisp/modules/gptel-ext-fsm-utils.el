@@ -173,6 +173,7 @@ BEHAVIOR: Returns nil when context-id doesn't match FSM's ID.
 EDGE CASE: Nil object returns nil.
 EDGE CASE: Non-FSM object returns nil.
 EDGE CASE: Context-id mismatch returns nil (prevents wrong FSM selection).
+EDGE CASE: Unregistered FSM with context-id returns nil (must be registered).
 TEST: (my/gptel--coerce-fsm fsm) => fsm (no context)
 TEST: (my/gptel--coerce-fsm fsm \"fsm-1-123\") => fsm if IDs match
 TEST: (my/gptel--coerce-fsm fsm \"fsm-2-456\") => nil if IDs differ
@@ -188,10 +189,12 @@ forcing caller to handle the case explicitly.
 Returns FSM struct or nil if not found."
   (cond
    ((my/gptel--fsm-p object)
-    (let ((id (when context-id (gethash object my/gptel--fsm-registry))))
-      (if (and context-id id (not (equal id context-id)))
-          nil
-        object)))
+    (if (null context-id)
+        object
+      (let ((id (gethash object my/gptel--fsm-registry)))
+        (if (and id (equal id context-id))
+            object
+          nil))))
    ((consp object)
     (or (my/gptel--coerce-fsm (car object) context-id)
         (my/gptel--coerce-fsm (cdr object) context-id)))
