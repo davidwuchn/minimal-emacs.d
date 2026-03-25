@@ -1,6 +1,6 @@
 # Mementum State
 
-> Last session: 2026-03-26 00:30
+> Last session: 2026-03-26 01:00
 
 ## Total Improvements: 18 Real Code Fixes
 
@@ -25,6 +25,24 @@
 | 17 | gptel-benchmark-memory.el | Add `cl-block` for `memory-create` |
 | 18 | gptel-tools-agent.el | `block` → `cl-block` in `task-override` |
 
+## New Features
+
+### Pre-Merge Code Review
+
+```
+λ review. gptel-auto-workflow-require-review (default t)
+λ flow. Review → Block → Fix → Re-review → (retry or give up)
+λ retries. gptel-auto-workflow--review-max-retries = 2
+λ agent. reviewer (Moonshot/Kimi)
+```
+
+### Review Retry Loop
+
+```
+Review BLOCKED → executor fixes → re-review → (approved or retry)
+Max 2 retries before giving up.
+```
+
 ---
 
 ## Key Bug Pattern: cl-return-from Without Block
@@ -45,59 +63,6 @@
 
 ---
 
-## Lessons Learned
-
-### Curl Timeout (Exit Code 28)
-
-```
-ERROR: "Curl failed with exit code 28"
-CAUSE: API connection timeout (>300s)
-FIX: Increase curl timeout to 600s
-```
-
-### Workflow State Can Get Stuck
-
-```
-λ fsm. Long-running executor can leave workflow in "running" state
-λ reset. (setq gptel-auto-workflow--running nil) to unstick
-λ monitor. Check status after each run completes
-```
-
-### cl-return-from Anti-Pattern
-
-```
-λ rule. defun + cl-return-from = BUG
-λ detect. grep -rn "cl-return" | grep -v "cl-defun"
-λ fix. Add cl-block wrapper or use if-else
-```
-
----
-
-## Final Configuration
-
-### Agent Distribution (DashScope has more quota)
-
-| DashScope (8 agents) | Moonshot (2 agents) |
-|----------------------|---------------------|
-| analyzer | researcher |
-| comparator | reviewer |
-| executor | |
-| explorer | |
-| grader | |
-| introspector | |
-| nucleus-gptel-agent | |
-| nucleus-gptel-plan | |
-
-### Parallel Setup
-
-| Machine | Schedule | Runs/Day |
-|---------|----------|----------|
-| macOS | 10AM, 2PM, 6PM | 3 |
-| Pi5 | 11PM, 3AM, 7AM, 11AM, 3PM, 7PM | 6 |
-| **Total** | | **9** |
-
----
-
 ## λ Summary
 
 ```
@@ -109,4 +74,5 @@ FIX: Increase curl timeout to 600s
 λ safety. Main NEVER touched by auto-workflow
 λ retry. Curl timeout → automatic retry
 λ cl-block. cl-return-from requires cl-block in defun
+λ review. Pre-merge code review with retry loop
 ```
