@@ -1,10 +1,9 @@
-# Auto-Workflow: Scheduled optimization experiments
+# Auto-Workflow: Pi5 (Headless Debian)
+#
+# PARALLEL SETUP: This machine + macOS running simultaneously
 #
 # Install:
-#   ./scripts/install-cron.sh
-#
-# Or manually:
-#   crontab cron.d/auto-workflow
+#   crontab cron.d/auto-workflow-pi5
 #
 # Logs: var/tmp/cron/
 
@@ -15,10 +14,6 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 @reboot mkdir -p $LOGDIR
 
 # ─────────────────────────────────────────────────────────────
-# Auto-Workflow: Overnight optimization experiments
-# ─────────────────────────────────────────────────────────────
-
-# ─────────────────────────────────────────────────────────────
 # Auto-Workflow: Code Optimization Experiments
 # ─────────────────────────────────────────────────────────────
 #
@@ -27,22 +22,11 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 # IMPORTANT: Runs async - daemon stays responsive
 # Check status: emacsclient -e '(gptel-auto-workflow-status)'
 #
-# This machine (macOS): 1:00 AM, 5:00 AM
-# Other machine (Pi5):  11:00 PM, 3:00 AM
+# This machine (Pi5):   11:00 PM, 3:00 AM
+# Other machine (macOS): 1:00 AM, 5:00 AM
 #
 # Total: 8 runs/day across both machines
-0 1,5 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
-
-# Alternative schedules (uncomment to use):
-
-# Every 6 hours (includes business hours - not recommended)
-# 0 */6 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
-
-# Night only (1 AM, 3 AM, 5 AM)
-# 0 1,3,5 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
-
-# Daily at 2 AM (conservative)
-# 0 2 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
+0 23,3 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
 # Weekly Mementum: Synthesis + Decay
