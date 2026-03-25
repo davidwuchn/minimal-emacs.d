@@ -744,16 +744,44 @@ Always returns absolute path."
          minimal-emacs-user-directory)
        "~/.emacs.d/")))
 
+(defun gptel-auto-experiment-run-tests ()
+  "Run ERT tests and return (passed . output).
+Tests run in worktree if set, otherwise project root.
+Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory (or gptel-auto-workflow--worktree-dir proj-root))
+         (test-script (expand-file-name "scripts/run-tests.sh" proj-root))
+         (output-buffer (generate-new-buffer "*test-output*"))
+         result)
+    (if (not (file-executable-p test-script))
+        (progn
+          (message "[auto-experiment] Test script not found or not executable: %s" test-script)
+          (cons t "No test script - skipping"))
+      (message "[auto-experiment] Running tests...")
+      (let ((exit-code (call-process test-script nil output-buffer nil)))
+        (with-current-buffer output-buffer
+          (setq result (cons (zerop exit-code) (buffer-string))))
+        (kill-buffer output-buffer)
+        (when (car result)
+          (message "[auto-experiment] ✓ Tests passed"))
+        result))))
+
 (defun gptel-auto-experiment-benchmark ()
-  "Run nucleus verification + Eight Keys scoring."
+  "Run nucleus verification + tests + Eight Keys scoring.
+Returns plist with :passed, :tests-passed, :eight-keys, etc."
   (let* ((start (float-time))
          (proj-root (gptel-auto-workflow--project-root))
          (default-directory (or gptel-auto-workflow--worktree-dir proj-root))
          (verify-result (call-process "/bin/bash" nil nil nil
                                       (expand-file-name "scripts/verify-nucleus.sh" proj-root)))
-         (scores (when (zerop verify-result)
+         (tests-result (when (zerop verify-result)
+                         (gptel-auto-experiment-run-tests)))
+         (scores (when (and (zerop verify-result) (car tests-result))
                    (gptel-auto-experiment--eight-keys-scores))))
-    (list :passed (zerop verify-result)
+    (list :passed (and (zerop verify-result) (car tests-result))
+          :nucleus-passed (zerop verify-result)
+          :tests-passed (car tests-result)
+          :tests-output (cdr tests-result)
           :time (- (float-time) start)
           :eight-keys (when scores (alist-get 'overall scores))
           :eight-keys-scores scores)))
@@ -1114,30 +1142,36 @@ Example: HYPOTHESIS: Adding caching to reduce redundant API calls will improve p
                                                     :agent-output agent-output)))
                               (gptel-auto-experiment-log-tsv
                               (format-time-string "%Y-%m-%d") exp-result)
-                             (funcall callback exp-result)))
-                       (let* ((bench (gptel-auto-experiment-benchmark))
-                              (passed (plist-get bench :passed))
-                              (score-after (plist-get bench :eight-keys)))
-                         (if (not passed)
-                             (progn
-                               (setq finished t)
-                               (magit-git-success "checkout" "--" ".")
-                               (gptel-auto-workflow-delete-worktree)
-(let ((exp-result (list :target target
-                                                        :id experiment-id
-                                                        :hypothesis hypothesis
-                                                        :score-before baseline
-                                                        :score-after 0
-                                                        :kept nil
-                                                        :duration (- (float-time) start-time)
-                                                        :grader-quality grade-score
-                                                        :grader-reason (plist-get grade :details)
-                                                        :comparator-reason "tests-failed"
-                                                        :analyzer-patterns (format "%s" patterns)
-                                                        :agent-output agent-output)))
-                                  (gptel-auto-experiment-log-tsv
-                                  (format-time-string "%Y-%m-%d") exp-result)
-                                 (funcall callback exp-result)))
+(funcall callback exp-result)))
+                        (let* ((bench (gptel-auto-experiment-benchmark))
+                               (passed (plist-get bench :passed))
+                               (tests-passed (plist-get bench :tests-passed))
+                               (score-after (plist-get bench :eight-keys)))
+                          (if (not passed)
+                              (progn
+                                (setq finished t)
+                                (magit-git-success "checkout" "--" ".")
+                                (gptel-auto-workflow-delete-worktree)
+                                (let ((reason (cond
+                                               ((not (plist-get bench :nucleus-passed)) "nucleus-validation-failed")
+                                               ((not tests-passed) "tests-failed")
+                                               (t "verification-failed"))))
+                                  (message "[auto-experiment] ✗ %s for %s" reason target)
+                                  (let ((exp-result (list :target target
+                                                          :id experiment-id
+                                                          :hypothesis hypothesis
+                                                          :score-before baseline
+                                                          :score-after 0
+                                                          :kept nil
+                                                          :duration (- (float-time) start-time)
+                                                          :grader-quality grade-score
+                                                          :grader-reason (plist-get grade :details)
+                                                          :comparator-reason reason
+                                                          :analyzer-patterns (format "%s" patterns)
+                                                          :agent-output agent-output)))
+                                    (gptel-auto-experiment-log-tsv
+                                     (format-time-string "%Y-%m-%d") exp-result)
+                                    (funcall callback exp-result))))
                            (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
                              (gptel-auto-experiment-decide
                               (list :score baseline :code-quality 0.5)
@@ -1148,33 +1182,36 @@ Example: HYPOTHESIS: Adding caching to reduce redundant API calls will improve p
                                        (reasoning (plist-get decision :reasoning))
 (exp-result (list :target target
                                                           :id experiment-id
-                                                          :hypothesis hypothesis
-                                                          :score-before baseline
-                                                          :score-after score-after
-                                                          :code-quality code-quality
-                                                          :kept keep
-                                                          :duration (- (float-time) start-time)
-                                                          :grader-quality grade-score
-                                                          :grader-reason (plist-get grade :details)
-                                                          :comparator-reason reasoning
-                                                          :analyzer-patterns (format "%s" patterns)
-                                                          :agent-output agent-output)))
-                                   (if keep
-                                      (let ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\nExperiment %d/%d. Score: %.2f → %.2f"
-                                                         target
-                                                         (gptel-auto-experiment--summarize hypothesis)
-                                                         hypothesis
-                                                         experiment-id max-experiments
-                                                         baseline score-after)))
-                                        (magit-git-success "add" "-A")
-                                        (magit-git-success "commit" "-m" msg)
-                                        (setq gptel-auto-experiment--best-score score-after
-                                              gptel-auto-experiment--no-improvement-count 0)
-                                        (when gptel-auto-experiment-auto-push
-                                          (magit-git-success "push" "origin" gptel-auto-workflow--current-branch)))
-                                    (progn
-                                      (magit-git-success "checkout" "--" ".")
-                                      (cl-incf gptel-auto-experiment--no-improvement-count)))
+:hypothesis hypothesis
+                                                           :score-before baseline
+                                                           :score-after score-after
+                                                           :code-quality code-quality
+                                                           :kept keep
+                                                           :duration (- (float-time) start-time)
+                                                           :grader-quality grade-score
+                                                           :grader-reason (plist-get grade :details)
+                                                           :comparator-reason reasoning
+                                                           :analyzer-patterns (format "%s" patterns)
+                                                           :agent-output agent-output)))
+                                    (if keep
+                                        (let ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\n\nEVIDENCE: Tests pass, Nucleus valid\nScore: %.2f → %.2f (+%.0f%%)"
+                                                           target
+                                                           (gptel-auto-experiment--summarize hypothesis)
+                                                           hypothesis
+                                                           baseline score-after
+                                                           (if (> baseline 0) (* 100 (/ (- score-after baseline) baseline)) 0))))
+                                          (message "[auto-experiment] ✓ Committing improvement for %s" target)
+                                          (magit-git-success "add" "-A")
+                                          (magit-git-success "commit" "-m" msg)
+                                          (setq gptel-auto-experiment--best-score score-after
+                                                gptel-auto-experiment--no-improvement-count 0)
+                                          (when gptel-auto-experiment-auto-push
+                                            (message "[auto-experiment] Pushing to %s" gptel-auto-workflow--current-branch)
+                                            (magit-git-success "push" "origin" gptel-auto-workflow--current-branch)))
+                                      (progn
+                                        (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
+                                        (magit-git-success "checkout" "--" ".")
+                                        (cl-incf gptel-auto-experiment--no-improvement-count)))
                                   (gptel-auto-experiment-log-tsv
                                    (format-time-string "%Y-%m-%d") exp-result)
                                   (gptel-auto-workflow-delete-worktree)
