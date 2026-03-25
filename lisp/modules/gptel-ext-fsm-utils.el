@@ -68,7 +68,7 @@ FORMAT: fsm-N-TIMESTAMP where:
 
 BUILDS ON DISCOVERY: Dual-component ID (counter + timestamp) ensures
 uniqueness even with rapid FSM creation in nested agent scenarios."
-  (format "fsm-%d-%d" (cl-incf my/gptel--fsm-id-counter) (float-time)))
+  (format "fsm-%d-%s" (cl-incf my/gptel--fsm-id-counter) (float-time)))
 
 (defun my/gptel--fsm-register (fsm)
   "Register FSM in the registry and return its ID.
@@ -347,7 +347,7 @@ Returns t on success, signals error on failure."
     ;; Check unique IDs
     (let ((id-count (hash-table-count id-to-fsm))
           (unique-ids (hash-table-count (make-hash-table :test 'equal
-                                                          :data (hash-table-data id-to-fsm)))))
+                                                         :data (hash-table-data id-to-fsm)))))
       (unless (= id-count unique-ids)
         (error "FSM registry invariant violated: duplicate IDs detected")))
     ;; Check ID format
