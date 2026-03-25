@@ -4,6 +4,24 @@ A fork of [jamescherti/minimal-emacs.d](https://github.com/jamescherti/minimal-e
 extended with a full AI agent system built on
 [gptel](https://github.com/karthink/gptel).
 
+## Project Status
+
+| Metric | Value |
+|--------|-------|
+| **Code fixes** | 31 real fixes merged |
+| **New features** | Pre-merge review, periodic researcher, retry loop |
+| **Agents** | 10 (8 DashScope, 2 moonshot) |
+| **Cron jobs** | 4 scheduled jobs |
+
+### Latest Features (2026-03-26)
+
+| Feature | Purpose |
+|---------|---------|
+| **Pre-Merge Review** | Reviewer checks for blockers before staging merge |
+| **Periodic Researcher** | Every 4h, finds anti-patterns for target selection |
+| **Review Retry Loop** | Executor fixes issues, max 2 retries |
+| **Backend case fix** | `Moonshot` → `moonshot` for subagent compatibility |
+
 ## Quick Start
 
 ```bash
@@ -327,283 +345,37 @@ See [docs/auto-workflow.md](docs/auto-workflow.md) for full specification.
 
 ## ECA + ai-code Integration
 
-[ECA](https://github.com/editor-code-assistant/eca-emacs) (Editor Code Assistant)
-integrates with [ai-code](https://github.com/tninja/ai-code) via a thin extension
-layer that delegates to upstream packages where possible.
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        ai-code (frontend)                        │
-│   ai-code-select-backend → 'eca                                  │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────────────┐
-│                   ai-code-eca.el (upstream)                      │
-│   :start, :switch, :send, :resume                                │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────────────┐
-│                ai-code-eca-bridge.el (extensions)                │
-│   Session mgmt, context commands, keybindings, health verify     │
-│   15 autoloaded commands, ~370 lines                             │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────────────┐
-│                     eca-ext.el (support)                         │
-│   Programmatic context API, session multiplexing                 │
-│   ~290 lines                                                     │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────────────┐
-│                    ECA (upstream package)                        │
-│   eca-chat-add-workspace-root, eca--session-for-worktree,       │
-│   automatic worktree detection                                   │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### What's in upstream vs extensions
-
-| Feature | Source | Location |
-|---------|--------|----------|
-| Core backend (start/switch/send/resume) | upstream | `ai-code-eca.el` |
-| Add workspace folder | upstream | `eca-chat-add-workspace-root` |
-| Worktree detection | upstream | `eca--session-for-worktree` |
-| Session list/switch | bridge | `ai-code-eca-list-sessions`, `ai-code-eca-switch-session` |
-| Context commands | bridge | `ai-code-eca-add-file-context`, etc. |
-| Workspace management | bridge | `ai-code-eca-list-workspace-folders`, `ai-code-eca-remove-workspace-folder`, `ai-code-eca-sync-project-workspaces` |
-| Keybindings | bridge | `ai-code-eca-keymap`, `C-c e` prefix |
-| Health verification | bridge | `ai-code-eca-verify-health` |
-| Context sync | bridge | `ai-code-eca-sync-context` |
-| Programmatic context API | eca-ext | `eca-chat-add-file-context`, etc. |
-| Workspace provenance | eca-ext | `eca-workspace-folder-for-file`, `eca-workspace-provenance` |
+[ECA](https://github.com/editor-code-assistant/eca-emacs) is configured as a backend for [ai-code](https://github.com/tninja/ai-code).
 
 ### Setup
 
-In `init-ai.el`:
+```bash
+# Create symlinks
+./scripts/setup-eca-links.sh
+
+# Or manually:
+mkdir -p ~/.config ~/bin
+ln -sfn ~/.emacs.d/eca ~/.config/eca
+ln -sfn ~/.emacs.d/eca/eca-secure ~/bin/eca
+```
+
+### Configuration
+
+| File | Purpose |
+|------|---------|
+| `eca/config.json` | Provider configuration |
+| `eca/eca-secure` | Secure wrapper script |
+| `eca/prompts/` | Custom prompts |
+| `eca/.behaviors/` | Behavior configurations |
+
+### Usage
 
 ```elisp
-(with-eval-after-load 'ai-code
-  (with-eval-after-load 'eca
-    (require 'ai-code-eca-bridge)))
+M-x ai-code-menu          ; Main menu (C-c a)
+M-x ai-code-set-backend   ; Switch to 'eca
 ```
 
-### ai-code-menu Integration
-
-**Primary UX**: All ECA commands accessible via `M-x ai-code-menu` (typically `C-c a`).
-
-When ECA is selected as the backend, press **E** to open the ECA submenu:
-
-```
-AI Code Menu (C-c a)
-│
-│ ...existing menu items...
-│ N   Toggle notifications
-│
-└─E   ECA commands ─────────────────────┐
-                                        │
-                    ┌───────────────────┘
-                    │
-                    ▼
-              ECA Commands
-              ┌─ Workspace ─────────────────────
-              │ m   Multi-Project Mode
-              │ a   Add workspace folder
-              │ A   Add to ALL sessions
-              │ l   List workspace folders
-              │ r   Remove workspace folder
-              │ s   Sync project roots
-              │ d   Session dashboard
-              │ t   Toggle auto-switch
-              ├─ Context ───────────────────────
-              │ f   Add file context
-              │ c   Add cursor context
-              │ M   Add repo map
-              │ y   Add clipboard
-              │ S   Start context sync
-              │ X   Stop context sync
-              ├─ Shared Context ────────────────
-              │ F   Share file
-              │ R   Share repo map
-              │ p   Apply shared context
-              │ C   Clear shared context
-              └─ Sessions ──────────────────────
-                ?   Which session?
-                L   List sessions
-                w   Switch session
-                v   Verify health
-                u   Upgrade ECA
-```
-
-**No prefix key memorization needed** - all commands discoverable in menu.
-
-### Multi-Project Mode
-
-Quick toggle for multi-project workflows:
-
-```
-M-x ai-code-eca-multi-project-mode
-```
-
-Enables all auto-detection features at once:
-- `eca-auto-switch-session` → `'prompt`
-- `eca-auto-sync-workspace` → `t`
-- `eca-auto-add-workspace-folder` → `t`
-- `ai-code-eca-mode-line-indicator` → `t`
-
-Available in menu: `wm` (ECA Workspace → Multi-Project Mode)
-
-### Auto-Detection
-
-Configure automatic behaviors:
-
-```elisp
-;; Auto-add project to workspace on file open (default: t)
-(setq eca-auto-add-workspace-folder t)
-
-;; Auto-switch session when project changes (default: 'prompt)
-;; 'prompt = ask before switching (recommended)
-;; t = switch automatically
-;; nil = disabled
-(setq eca-auto-switch-session 'prompt)
-
-;; Auto-create session for new projects (default: nil)
-(setq eca-auto-create-session t)
-
-;; Auto-sync workspace on project switch (default: t)
-(setq eca-auto-sync-workspace t)
-```
-
-These settings enable "just work" multi-project workflows:
-- Open a file → project auto-added to workspace
-- Switch to another project → prompted to switch session
-- Open file in new project → session created automatically
-
-### Visual Indicators
-
-**Mode-line**: When `ai-code-eca-mode-line-indicator` is enabled (default), the mode-line shows:
-```
-ECA:1[2]  ; Session 1 with 2 workspace folders
-```
-
-**Which session?**: `M-x ai-code-eca-which-session` or `C-c e ?` shows:
-```
-ECA Session 1 (ready) for /path/to/project | Workspace: /project, /shared-lib
-```
-
-### Keybindings (Alternative)
-
-Direct keybindings available under `C-c e` prefix for power users:
-
-| Key | Command |
-|-----|---------|
-| `C-c e d` | Session dashboard |
-| `C-c e s` | Switch session |
-| `C-c e a` | Add workspace folder |
-| `C-c e w` | List workspace folders |
-| `C-c e f` | Add file context |
-| `C-c e v` | Verify health |
-
-In `eca-chat-mode`:
-
-| Key | Command |
-|-----|---------|
-| `C-c C-f` | Add file context |
-| `C-c C-c` | Add cursor context |
-| `C-c C-m` | Add repo map |
-| `C-c C-y` | Add clipboard |
-| `C-c C-a` | Add workspace folder |
-| `C-c C-w` | List workspace folders |
-
-### Multi-Project Workspace
-
-ECA supports multiple projects in a single session. Use these workflows:
-
-```elisp
-;; Add another project to current session
-M-x ai-code-eca-add-workspace-folder RET /path/to/project RET
-
-;; List all workspace folders
-M-x ai-code-eca-list-workspace-folders
-
-;; Sync current project roots to workspace
-M-x ai-code-eca-sync-project-workspaces
-
-;; Remove a workspace folder
-M-x ai-code-eca-remove-workspace-folder RET /path/to/project RET
-```
-
-Context added from files includes workspace provenance:
-
-```elisp
-;; File context now includes :workspace property
-(:type "file" :path "/project/src/file.el"
- :workspace (:workspace "/project" :relative-path "src/file.el" :folder-name "project"))
-```
-
-This enables the AI to understand which project each file belongs to when working
-across multiple repositories.
-
-### Auto Workspace Detection
-
-When `eca-auto-add-workspace-folder` is enabled (default `t`), opening a file
-outside the current session's workspace automatically adds its project root:
-
-```elisp
-;; Configure auto-detection behavior
-(setq eca-auto-add-workspace-folder t)       ; Auto-add (default)
-(setq eca-auto-add-workspace-folder 'prompt) ; Ask before adding
-(setq eca-auto-add-workspace-folder nil)     ; Disable
-```
-
-This ensures your ECA session always has the right context when working across
-multiple projects.
-
-### Auto Session Switching
-
-Enable automatic session switching based on project:
-
-```elisp
-;; Auto-switch to session matching current project
-(setq eca-auto-switch-session t)       ; Auto-switch (disabled by default)
-(setq eca-auto-switch-session 'prompt) ; Ask before switching
-(setq eca-auto-switch-session nil)     ; Disabled
-```
-
-When enabled, switching to a buffer in a different project automatically
-switches to the ECA session that owns that project.
-
-### Cross-Session Context Sharing
-
-Share common files/repo-maps across all sessions:
-
-```elisp
-;; Share a file (e.g., shared library docs)
-M-x ai-code-eca-share-file RET /path/to/shared/docs.md RET
-
-;; Share a repo map (e.g., shared library)
-M-x ai-code-eca-share-repo-map RET /path/to/shared-lib RET
-
-;; Apply all shared context to current session
-M-x ai-code-eca-apply-shared-context RET
-```
-
-Keybindings: `C-c e F` (share file), `C-c e M` (share repo map), `C-c e p` (apply).
-
-### Session Dashboard
-
-Visual session management with `M-x ai-code-eca-dashboard` or `C-c e d`:
-
-| Key | Action |
-|-----|--------|
-| `RET` | Switch to session |
-| `d` | Delete session |
-| `w` | List workspace folders |
-| `g` | Refresh |
-| `q` | Quit |
-
-Shows session ID, status, workspace folders, and chat count in a table.
+See `eca/README.md` and `eca/AGENTS.md` for details.
 
 ---
 
