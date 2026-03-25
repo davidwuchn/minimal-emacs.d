@@ -955,13 +955,13 @@ Make minimal, targeted changes.
 - Must pass tests: ./scripts/verify-nucleus.sh
 
 ## Instructions
-1. First, write your HYPOTHESIS: What change might improve the score? Why?
+1. FIRST LINE must be: HYPOTHESIS: [What change and why it will improve the score]
 2. Read the target file using its full path
 3. Implement the change minimally using Edit tool with the full path
 4. Run tests to verify
 
-Format your hypothesis at the start as:
-HYPOTHESIS: [your hypothesis here]"
+CRITICAL: Your response MUST start with HYPOTHESIS: on the first line.
+Example: HYPOTHESIS: Adding caching to reduce redundant API calls will improve phi-vitality."
             experiment-id max-experiments target
             worktree-path
             target-full-path
@@ -1158,10 +1158,20 @@ HYPOTHESIS: [your hypothesis here]"
             nil "false" nil)))))))
 
 (defun gptel-auto-experiment--extract-hypothesis (output)
-  "Extract HYPOTHESIS from agent OUTPUT."
-  (if (string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
-      (match-string 1 output)
-    "No hypothesis stated"))
+  "Extract HYPOTHESIS from agent OUTPUT.
+Tries multiple patterns in order:
+1. HYPOTHESIS: prefix
+2. **HYPOTHESIS** markdown
+3. First sentence describing the change"
+  (cond
+   ((string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
+    (match-string 1 output))
+   ((string-match "\\*\\*HYPOTHESIS\\*\\*:?\\s-*\\([^\n]+\\)" output)
+    (match-string 1 output))
+   ((string-match "\\(?:Adding\\|Changing\\|Improving\\|Enhancing\\|Removing\\|Refactoring\\)\\s-+[^.\n]+[.\n]" output)
+    (let ((match (match-string 0 output)))
+      (string-trim (replace-regexp-in-string "[.\n]+$" "" match))))
+   (t "No hypothesis stated")))
 
 (defun gptel-auto-experiment--summarize (hypothesis)
   "Create short summary of HYPOTHESIS."
