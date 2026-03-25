@@ -1287,27 +1287,49 @@ Tries multiple patterns in order:
 (defvar gptel-auto-workflow--running nil
   "Flag to track if auto-workflow is currently running.")
 
+(declare-function gptel-auto-workflow-select-targets "gptel-auto-workflow-strategic")
+
 (defun gptel-auto-workflow-run-sync (&optional targets)
   "Run auto-workflow synchronously (blocking).
 This is the version to use for cron jobs.
+
+If TARGETS is nil and gptel-auto-workflow-strategic-selection is t,
+asks analyzer LLM to select best targets.
 
 Uses `accept-process-output' to keep event loop alive while waiting
 for async callbacks to complete."
   (let ((gptel-auto-workflow--running t)
         (done-count 0)
-        (total-targets (length (or targets gptel-auto-workflow-targets))))
+        (selected-targets nil))
+    (if targets
+        (progn
+          (setq selected-targets targets)
+          (gptel-auto-workflow--run-with-targets selected-targets
+            (lambda () (setq gptel-auto-workflow--running nil))))
+      ;; Use strategic selection
+      (require 'gptel-auto-workflow-strategic)
+      (gptel-auto-workflow-select-targets
+       (lambda (ts)
+         (setq selected-targets ts)
+         (gptel-auto-workflow--run-with-targets selected-targets
+           (lambda () (setq gptel-auto-workflow--running nil))))))
+    (while gptel-auto-workflow--running
+      (accept-process-output nil 1.0))
+    (message "[auto-workflow] Sync run complete with %d targets" (length selected-targets))))
+
+(defun gptel-auto-workflow--run-with-targets (targets completion-callback)
+  "Run experiments for TARGETS, call COMPLETION-CALLBACK when done."
+  (let ((done-count 0)
+        (total (length targets)))
     (gptel-auto-workflow-run-async
      targets
      (lambda ()
        (cl-incf done-count)
-       (when (= done-count total-targets)
-         (setq gptel-auto-workflow--running nil))))
-    (while gptel-auto-workflow--running
-      (accept-process-output nil 1.0))
-    (message "[auto-workflow] Sync run complete")))
+       (when (= done-count total)
+         (funcall completion-callback))))))
 
 (defun gptel-auto-workflow-run-async (&optional targets completion-callback)
-  "Run ~32 experiments overnight (dynamic stop per target).
+  "Run auto-workflow with TARGETS.
 
 Each target runs up to gptel-auto-experiment-max-per-target experiments.
 Stops early if gptel-auto-experiment-no-improvement-threshold consecutive

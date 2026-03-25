@@ -2,99 +2,98 @@
 
 > Last session: 2026-03-25
 
-## Session Summary: Auto-Workflow Now Runs Tests Before Push
+## Session Summary: Strategic Target Selection with LLM
 
-**Safety improvement: Tests + Nucleus validation required before push.**
+**Key insight: Let LLM make decisions, minimize local logic.**
 
-### Latest Change
+### Latest Changes
 
 | Commit | Description |
 |--------|-------------|
-| `678cb2c` | ✓ gptel-tools-agent: Run tests before pushing to optimize branches |
+| `678cb2c` | Tests run before push |
+| `ab77594` | State update |
 
-### Before vs After
+### New Architecture
 
-| Step | Before | After |
-|------|--------|-------|
-| Benchmark | Nucleus only | Nucleus + ERT tests |
-| Push condition | Improvement only | Tests pass + Improvement |
-| Failure info | "tests-failed" | Specific: nucleus/tests |
+```
+Target Selection Flow:
+1. Gather context (git history, file sizes, TODOs)
+2. Ask analyzer LLM to decide targets
+3. LLM outputs JSON with priorities and reasons
+4. We execute LLM's decision (no second-guessing)
+```
 
-### Safety Guarantee
+### Design Principles
 
-**No code pushed to remote unless:**
-1. ✓ Nucleus tool validation passes
-2. ✓ All ERT tests pass
-3. ✓ Grader scores 6/6
-4. ✓ Comparator decides improvement
+1. **LLM decides, we execute** - Don't second-guess with local calculations
+2. **Provide rich context** - Git history, file sizes, TODOs, test data
+3. **Structured output** - JSON format for reliable parsing
+4. **Fallback only if LLM unavailable** - Local scoring is backup, not primary
+
+### What We Stopped Doing
+
+| Before | After |
+|--------|-------|
+| Local scoring formula | LLM analyzes and decides |
+| Weight-based calculation | LLM judgment |
+| Combine local + LLM | Pure LLM decision |
+| Multi-step validation | Single LLM call |
 
 ### New Functions
 
 ```elisp
-(gptel-auto-experiment-run-tests)
-;; Returns: (t . output) or (nil . output)
+(gptel-auto-workflow--analyze-for-target-selection callback)
+;; Asks LLM to pick 3 targets based on git, size, TODOs
 
-(gptel-auto-experiment-benchmark)
-;; Now includes:
-;;   :passed          - both nucleus and tests
-;;   :nucleus-passed  - tool validation
-;;   :tests-passed    - ERT tests
-;;   :tests-output    - test output
+(gptel-auto-workflow-select-targets-with-analyzer callback)
+;; Entry point: LLM decides or fallback
+
+(gptel-auto-workflow--parse-analyzer-targets response)
+;; Parse JSON: {"targets": [{"file": "...", "priority": 1, "reason": "..."}]}
 ```
 
-### Commit Message Format
+### Analyzer Prompt Structure
 
 ```
-◈ Optimize {target}: {summary}
+Context provided:
+- Available files in lisp/modules/
+- Recent git history (30 commits)
+- Files by size (lines)
+- Known issues (TODOs, FIXMEs)
 
-HYPOTHESIS: {hypothesis}
-
-EVIDENCE: Tests pass, Nucleus valid
-Score: 0.40 → 0.46 (+15%)
+LLM outputs:
+{
+  "targets": [
+    {"file": "lisp/modules/xxx.el", "priority": 1, "reason": "...", "suggested_focus": "..."}
+  ],
+  "strategy": "Overall strategy"
+}
 ```
 
-### Previous Session: Real Auto-Workflow Test
+### Safety Net
 
-| Metric | Before | After | Delta |
-|--------|--------|-------|-------|
-| Eight Keys Overall | 0.40 | 0.46 | +15% |
-| φ Vitality | 0.40 | 0.60 | +50% |
-| Clarity | 0.40 | 0.70 | +75% |
-
-Branch: `optimize/fsm-utils-imacpro-exp1` (pushed)
+1. ✓ Tests run before any push
+2. ✓ Nucleus validation before commit
+3. ✓ Grader validates output quality
+4. ✓ Comparator decides keep/discard
+5. ✓ Only optimize/* branches pushed
 
 ### Production Status
 
 | Component | Status |
 |-----------|--------|
-| Sync wrapper | ✓ |
-| Executor | ✓ |
-| Grader | ✓ 6/6 |
-| Comparator | ✓ |
-| Tests before push | ✓ **NEW** |
-| Eight Keys scoring | ✓ |
-| Branching | ✓ optimize/* only |
-| All tests | ✓ 52/52 pass |
+| Target selection | ✓ LLM decides |
+| Tests before push | ✓ |
+| All tests | ✓ 52/52 |
 | Cron | ✓ 2 AM daily |
-
-### Auto-Workflow Branching Rule
-
-```
-λ auto-workflow-branching(x).
-    change(x) → branch(optimize/{target}-{hostname}-exp{N})
-    | test(x) → pass | ¬push(fail)
-    | push(optimize/...) → origin/optimize/...
-    | ¬push(main)
-    | human_review → merge(main)
-```
 
 ---
 
 ## λ Summary
 
 ```
-λ safety. Tests now run before any push to optimize branches
-λ verify. Both nucleus validation AND ERT tests required
-λ evidence. Commit shows "Tests pass, Nucleus valid"
-λ complete. Auto-workflow safe for overnight runs
+λ learn. LLM makes better decisions than local formulas
+λ simplify. One LLM call replaces complex scoring
+λ trust. Let analyzer decide, we execute
+λ context. Rich context = better LLM decisions
 ```
