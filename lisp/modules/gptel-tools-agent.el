@@ -764,6 +764,32 @@ Multiple machines can optimize same target without conflicts."
 
 ;;; Staging Branch Protection
 
+;; ═══════════════════════════════════════════════════════════════════════════
+;; CRITICAL INVARIANT: Auto-workflow NEVER touches main branch.
+;;
+;; What we DO:
+;;   - Read from main (to create worktrees, sync staging)
+;;   - Write to optimize/* (experiment branches)
+;;   - Write to staging (integration branch)
+;;
+;; What we NEVER do:
+;;   - checkout main
+;;   - merge to main
+;;   - push to main
+;;   - reset main
+;;
+;; Human responsibility:
+;;   - Review staging
+;;   - Merge staging → main manually
+;; ═══════════════════════════════════════════════════════════════════════════
+
+(defun gptel-auto-workflow--assert-main-untouched ()
+  "Assert that current branch is NOT main.
+Call this before any git operation that might modify branches."
+  (let ((current (magit-get-current-branch)))
+    (when (string= current "main")
+      (error "[SAFETY] Auto-workflow attempted to operate on main branch!"))))
+
 (defun gptel-auto-workflow--staging-branch-exists-p ()
   "Check if staging branch exists locally or remotely."
   (let* ((proj-root (gptel-auto-workflow--project-root))
@@ -777,7 +803,9 @@ Multiple machines can optimize same target without conflicts."
 ASSUMPTION: Staging branch exists or will be created.
 BEHAVIOR: Hard resets staging to match main.
 EDGE CASE: Creates staging from main if it doesn't exist.
-TEST: Verify staging matches main after sync."
+TEST: Verify staging matches main after sync.
+SAFETY: Never touches main branch."
+  (gptel-auto-workflow--assert-main-untouched)
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
          (staging gptel-auto-workflow-staging-branch))
@@ -920,8 +948,10 @@ ASSUMPTION: OPTIMIZE-BRANCH has been pushed to origin.
 BEHAVIOR: Never modifies project root - all verification in worktree.
 EDGE CASE: Handles merge conflicts with auto-resolution (theirs).
 TEST: Verify main is never touched by auto-workflow.
+SAFETY: Asserts main branch is not current before any operation.
 
 NOTE: Human must manually merge staging to main after review."
+  (gptel-auto-workflow--assert-main-untouched)
   (message "[auto-workflow] Starting staging flow for %s" optimize-branch)
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)

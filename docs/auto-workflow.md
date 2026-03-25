@@ -8,6 +8,7 @@
 LLM = Brain (decides, judges, reasons)
 We  = Eyes (gather context) + Hands (execute)
 Never ask user. Try harder, again and again.
+Never touch main. All changes wait in staging.
 ```
 
 ## Implementation Status
@@ -20,6 +21,7 @@ Never ask user. Try harder, again and again.
 | **Eyes** | Context gathering | ✓ |
 | **Hands** | Tests before push | ✓ |
 | **Hands** | optimize/* branches | ✓ |
+| **Hands** | Staging verification | ✓ |
 | **Autonomy** | Retry on failure | ✓ |
 
 ## Entry Points
@@ -38,21 +40,85 @@ M-x gptel-auto-workflow-run-sync
 ┌─────────────────────────────────────────────────────────┐
 │                    AUTO-WORKFLOW                         │
 ├─────────────────────────────────────────────────────────┤
-│  Eyes (we gather)          Brain (LLM decides)          │
-│  ─────────────────         ──────────────────           │
-│  • Git history             • Target selection           │
-│  • File sizes              • Mutation strategy          │
-│  • TODOs/FIXMEs            • Keep or discard            │
-│  • Test results            • Quality threshold          │
-│                           │
-│  Hands (we execute)                                      │
-│  ─────────────────                                       │
-│  • Create worktree                                       │
-│  • Run executor                                          │
-│  • Run tests                                             │
-│  • Commit to optimize/*                                  │
-│  • Push to remote                                        │
+│                                                          │
+│  1. SYNC staging from main                               │
+│     └─→ staging = main (never touches project root)      │
+│                                                          │
+│  2. EYES gather context                                  │
+│     └─→ Git history, file sizes, TODOs                  │
+│                                                          │
+│  3. BRAIN decides targets (LLM)                          │
+│     └─→ Which files to optimize                          │
+│                                                          │
+│  4. HANDS execute in worktree                            │
+│     └─→ Create optimize/* branch                         │
+│     └─→ Executor makes changes                           │
+│     └─→ Run tests + nucleus validation                   │
+│                                                          │
+│  5. BRAIN validates (LLM)                                │
+│     └─→ Grader (6/6 pass)                                │
+│     └─→ Comparator (keep/discard)                        │
+│                                                          │
+│  6. MERGE to staging                                     │
+│     └─→ Auto-resolve conflicts (--theirs)                │
+│     └─→ Verify staging in isolated worktree               │
+│                                                          │
+│  7. PUSH staging to origin                               │
+│     └─→ Human reviews                                    │
+│     └─→ Human merges to main                             │
+│                                                          │
 └─────────────────────────────────────────────────────────┘
+
+IMPORTANT: Auto-workflow NEVER touches main branch.
+All merges wait in staging for human review.
+```
+
+## Staging Branch Protection
+
+### Why Staging?
+
+| Problem | Solution |
+|---------|----------|
+| Main could break | Tests run on staging first |
+| Bad merge affects main | Staging isolation |
+| Human must verify | Human merges staging → main |
+| Integration issues | Full tests on merged result |
+
+### Flow
+
+```
+main ─────────────────────────────────────────────► main
+  │                                                  ▲
+  │ 1. sync                                          │ 6. human merge
+  ▼                                                  │
+staging ◄──── 2. merge ──── optimize/* ◄── executor ◄─┘
+  │
+  │ 3. verify (tests + nucleus)
+  │
+  │ 4. push to origin
+  │
+  └─► Human reviews and merges to main
+```
+
+### Human Workflow
+
+```bash
+# Morning: check what's in staging
+git log staging..main --oneline
+
+# Verify staging
+git checkout staging
+./scripts/run-tests.sh
+
+# If good: merge to main
+git checkout main
+git merge staging
+git push origin main
+
+# If bad: reset staging
+git checkout staging
+git reset --hard main
+git push --force origin staging
 ```
 
 ## Target Selection
@@ -106,12 +172,27 @@ Reusable hypothesis templates.
 
 ```
 1. Analyze (LLM)   → Detect patterns, suggest hypotheses
-2. Implement       → Executor makes changes in worktree
+2. Implement       → Executor makes changes in optimize/* worktree
 3. Grade (LLM)     → Validate quality (6/6 pass)
 4. Test            → Run tests + nucleus validation
 5. Decide (LLM)    → Compare before/after, keep/discard
-6. Push            → Only to optimize/* branches
+6. Commit          → Commit to optimize/* branch
+7. Merge           → optimize/* → staging (auto-resolve conflicts)
+8. Verify          → Test staging in isolated worktree
+9. Push            → staging to origin (NEVER main)
+10. Human review   → Human merges staging → main
 ```
+
+### Staging Verification
+
+After executor commits to optimize/*:
+
+1. **Merge to staging** - Auto-resolve conflicts with `--theirs`
+2. **Create staging worktree** - Isolated from project root
+3. **Run tests** - `scripts/run-tests.sh`
+4. **Run nucleus** - `scripts/verify-nucleus.sh`
+5. **Push staging** - To origin for human review
+6. **Human merges** - staging → main manually
 
 ### Decision
 
