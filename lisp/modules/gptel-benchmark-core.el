@@ -290,15 +290,15 @@ RESULTS should contain :eight-keys-scores in each entry."
                (push (format "Address %s issues in %d test(s)" issue-type count)
                      recommendations))
              issues)
-    (list :patterns nil
-          :issues (let ((result '()))
-                    (maphash (lambda (k v) (push (cons k v) result)) issues)
-                    result)
-          :recommendations (delete-dups recommendations)
-          :total-tests total
-          :low-scores low-scores
-          :high-scores high-scores
-          :analysis-timestamp (format-time-string "%Y-%m-%dT%H:%M:%S"))))
+    (let ((issues-alist (let ((result '()))
+                          (maphash (lambda (k v) (push (cons k v) result)) issues)
+                          result)))
+      (list :issues issues-alist
+            :recommendations (delete-dups recommendations)
+            :total-tests total
+            :low-scores low-scores
+            :high-scores high-scores
+            :analysis-timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")))))
 
 ;;; φ-Based Evolution (inspired by continuous-learning)
 
