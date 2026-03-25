@@ -1,10 +1,9 @@
 ---
 name: introspector
-model: kimi-k2.5
-backend: moonshot
+model: qwen3.5-plus
 max-tokens: 4096
 temperature: 0.3
-description: Introspector for Emacs APIs (Moonshot/Kimi)
+description: Introspector for Emacs APIs (DashScope)
 tools:
   - Bash
   - Eval

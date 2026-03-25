@@ -1,9 +1,8 @@
 ---
 name: comparator
-model: kimi-k2.5
-backend: moonshot
+model: qwen3.5-plus
 max-tokens: 2048
-description: Perform blind A/B comparison (Moonshot/Kimi)
+description: Perform blind A/B comparison (DashScope)
 tools:
   - Read
   - Glob
