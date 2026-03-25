@@ -1,108 +1,93 @@
 # Mementum State
 
-> Last session: 2026-03-25 18:15
+> Last session: 2026-03-25 19:30
 
-## Session Summary
+## Key Learnings
 
-### Fixes Applied
+### Use Emacs Daemon + Emacsclient
 
-1. **Executor must commit** - Added step 5 to prompt for git commit
-2. **Batch-mode cron** - No emacs daemon required
-
-### Files Changed
-
-- `lisp/modules/gptel-tools-agent.el` - Added commit instructions to prompt
-- `cron.d/auto-workflow` - Switched from emacsclient to batch emacs
-- `scripts/run-auto-workflow.sh` - New helper script with --dry-run
-
-### Verification
-
-```
-✓ ./scripts/run-auto-workflow.sh --dry-run
-✓ Tests pass (1075/1161)
-✓ Nucleus validation passes
-✓ Cron updated
-```
-
----
-
-## Bug Fix: Executor Must Commit
-
-**Root cause**: Eight Keys score_after was 0.00 because executor didn't commit changes.
-
-Eight Keys scoring reads `git log -1` and `git diff HEAD~1` which fail without commits.
-
-**Fix**: Added step 5 to experiment prompt:
-```
-5. COMMIT your changes: git add -A && git commit -m "message with signal phrases"
-```
-
-Also added signal phrase requirements to prompt.
-
----
-
-## Staging Branch Protection Implemented
-
-**Auto-workflow NEVER touches main.** All merges wait in staging for human review.
-
-### Architecture
-
-```
-1. SYNC staging from main (start)
-2. EXECUTOR creates optimize/*
-3. MERGE optimize/* → staging
-4. VERIFY staging (isolated worktree)
-5. IF PASS: push staging (human reviews)
-6. IF FAIL: log to TSV (human debugs)
-```
-
-### Safety Guarantees
-
-| Guarantee | How |
-|-----------|-----|
-| Main never broken | Auto-workflow never touches main |
-| Tests verified | Run on staging before push |
-| Human in control | Must manually merge staging → main |
-
-### Human Workflow
+**Do NOT use batch mode.** Batch mode lacks user config (API keys, gptel setup).
 
 ```bash
-# Morning: check staging
-git log staging..main
+# Correct: daemon + emacsclient
+emacs --daemon
+emacsclient -e '(gptel-auto-workflow-run-sync)'
 
-# If good: merge to main
-git checkout main && git merge staging && git push
-
-# If bad: reset staging
-git checkout staging && git reset --hard main
+# Wrong: batch mode
+emacs --batch -Q --eval "..."  # No API keys!
 ```
 
-### New Functions
+### Reuse Emacs Packages
 
-- `gptel-auto-workflow--sync-staging-from-main`
-- `gptel-auto-workflow--staging-flow`
-- `gptel-auto-workflow--merge-to-staging`
-- `gptel-auto-workflow--verify-staging`
-- `gptel-auto-workflow--push-staging`
+**Do NOT reinvent wheel.** Use magit, gptel, etc. from user's config.
 
-### Production Status
+- Use `magit-git-success` instead of shell commands
+- Use `gptel-agent--task` for LLM calls
+- Let packages handle complexity
+
+### Prefer Elisp Over Shell Scripts
+
+Shell scripts should only:
+1. Check daemon running
+2. Call elisp function
+
+All logic in elisp.
+
+---
+
+## Auto-Workflow Status
 
 | Component | Status |
 |-----------|--------|
-| Staging protection | ✓ |
-| Target selection | ✓ LLM |
-| Executor | ✓ |
-| Grader | ✓ 6/6 |
-| Tests | ✓ 52/52 |
-| Cron | ✓ 2 AM |
+| Staging protection | ✓ Never touches main |
+| Daemon mode | ✓ Uses user config |
+| Magit integration | ✓ Reuse packages |
+| Executor | ⚠ Needs API key check |
+| Cron | ✓ 2 AM via emacsclient |
+
+---
+
+## Next Steps
+
+1. Verify gptel API keys loaded in daemon
+2. Run `emacsclient -e '(gptel-auto-workflow-run-sync)'`
+3. Check `var/tmp/experiments/YYYY-MM-DD/results.tsv`
+4. Review `git log staging..main`
+5. Human merges staging → main
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    AUTO-WORKFLOW                        │
+├─────────────────────────────────────────────────────────┤
+│  1. SYNC staging from main                              │
+│  2. EXECUTOR creates optimize/* branches                │
+│  3. GRADER validates quality                            │
+│  4. COMPARATOR decides keep/discard                     │
+│  5. IF KEEP: merge to staging, push to origin           │
+│  6. HUMAN: reviews staging, merges to main              │
+└─────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+              ┌─────────────────────┐
+              │   Emacs Daemon      │
+              │   + User Config     │
+              │   + API Keys        │
+              │   + Magit           │
+              │   + Gptel           │
+              └─────────────────────┘
+```
 
 ---
 
 ## λ Summary
 
 ```
+λ daemon. Use emacs --daemon + emacsclient, NOT batch mode
+λ reuse. Use magit, gptel - don't reinvent wheel
+λ elisp. Logic in elisp, shell only for daemon check
 λ safety. Main NEVER touched by auto-workflow
-λ staging. All merges wait for human review
-λ verify. Tests run on staging before push
-λ control. Human merges staging to main
 ```
