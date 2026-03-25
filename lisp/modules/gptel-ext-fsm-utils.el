@@ -3,11 +3,23 @@
 ;;; Commentary:
 ;; FSM coercion utilities with ID tracking for nested subagent scenarios.
 ;;
+;; GOAL: Prevent wrong FSM selection in nested agent calls by tracking unique IDs.
+;; MEASURABLE OUTCOME: Zero FSM mismatches in nested subagent scenarios.
+;;
 ;; DESIGN PRINCIPLES (builds on discoveries from nested agent runs):
 ;; - Explicit assumptions: FSMs are uniquely identified by ID
 ;; - Testable definitions: Each FSM has predictable ID format
 ;; - Clear structure: ID tracking prevents wrong FSM in nested scenarios
 ;; - Adapts to new information: Context-aware FSM selection
+;;
+;; RISK IDENTIFIED: Without ID tracking, nested agents may operate on wrong FSM.
+;; PROACTIVE MITIGATION: Registry maps both FSM→ID and ID→FSM for O(1) lookup.
+;;
+;; EDGE CASES HANDLED:
+;; - Nil FSM input: Returns nil gracefully
+;; - Unknown ID lookup: Returns nil without error
+;; - Multiple FSMs: Prefers most recently registered (child FSM)
+;; - Dual input types: Accepts both FSM struct and ID string
 
 ;;; Code:
 
