@@ -1287,10 +1287,17 @@ Make minimal, targeted changes.
 1. FIRST LINE must be: HYPOTHESIS: [What change and why it will improve the score]
 2. Read the target file using its full path
 3. Implement the change minimally using Edit tool with the full path
-4. Run tests to verify
+4. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
+5. COMMIT your changes: git add -A && git commit -m \"message with signal phrases\"
 
 CRITICAL: Your response MUST start with HYPOTHESIS: on the first line.
-Example: HYPOTHESIS: Adding caching to reduce redundant API calls will improve phi-vitality."
+Example: HYPOTHESIS: Adding caching to reduce redundant API calls will improve phi-vitality.
+
+Your commit message MUST include signal phrases for Eight Keys scoring:
+- explicit assumptions: (for Clarity)
+- testable: (for Clarity)
+- builds on discovery: (for Vitality)
+- evidence: tests pass (for Truth)"
             experiment-id max-experiments target
             worktree-path
             target-full-path
