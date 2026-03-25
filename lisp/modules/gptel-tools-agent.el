@@ -840,12 +840,12 @@ Has timeout fallback to auto-pass if grading takes too long."
            (fboundp 'gptel-benchmark-grade))
       (gptel-benchmark-grade
        output
-       '("hypothesis clearly stated"
+       '("change clearly described"
          "change is minimal"
          "tests mentioned")
        '("large refactor"
          "changed security files"
-         "no hypothesis")
+         "no description")
        (lambda (result)
          (unless gptel-auto-experiment--grade-done
            (setq gptel-auto-experiment--grade-done t)
