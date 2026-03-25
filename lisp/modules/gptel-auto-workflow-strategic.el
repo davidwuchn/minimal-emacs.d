@@ -38,10 +38,31 @@ Monthly subscription: LLM selection finds best targets each run."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-max-targets-per-run 5
-  "Maximum targets to process in one auto-workflow run.
-Monthly subscription: 5 targets per run for more experiments."
+  "Maximum targets to optimize per workflow run.
+Monthly subscription: 5 is optimal (diminishing returns after 3-4)."
   :type 'integer
   :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-research-targets nil
+  "When non-nil, researcher finds patterns/issues before target selection.
+Adds ~30-60s latency but may improve target quality.
+Researcher looks for: anti-patterns, architectural issues, code smells.
+Default nil for speed (analyzer has enough context from git/history)."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-research-interval (* 4 3600)
+  "Interval in seconds between periodic researcher runs.
+Default 4 hours. Set to 0 to disable periodic research.
+Findings stored in var/tmp/research-findings.md for analyzer."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defvar gptel-auto-workflow--research-timer nil
+  "Timer for periodic researcher runs.")
+
+(defvar gptel-auto-workflow--last-research-findings ""
+  "Cached research findings from last researcher run.")
 
 (defun gptel-auto-workflow--discover-targets ()
   "Discover all Elisp files in lisp/modules/ as potential targets.
@@ -86,16 +107,54 @@ Returns plist with git history, file sizes, TODOs.
                       (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
                               proj-root)))))
 
+(defun gptel-auto-workflow--research-patterns (callback)
+  "Research code patterns and issues for better target selection.
+CALLBACK receives research findings string.
+Looks for: anti-patterns, architectural issues, code smells."
+  (let ((research-prompt "Research this Emacs Lisp codebase for optimization opportunities.
+
+FOCUS AREAS:
+1. Anti-patterns: cl-return-from without cl-block, missing error handling
+2. Architectural: high coupling, circular dependencies, missing abstractions  
+3. Code smells: deep nesting, long functions, duplicated logic
+4. Safety: unguarded buffer/overlay operations, missing nil checks
+
+For each issue found, report:
+- file:line location
+- issue type
+- severity (high/medium/low)
+- suggested fix
+
+Maximum response: 1500 characters. Focus on actionable findings."))
+    (message "[auto-workflow] Researching code patterns...")
+    (if (and gptel-auto-experiment-use-subagents
+             (fboundp 'gptel-benchmark-call-subagent))
+        (gptel-benchmark-call-subagent
+         'researcher
+         "Research code patterns"
+         research-prompt
+         (lambda (result)
+           (let ((findings (if (stringp result) result (format "%S" result))))
+             (message "[auto-workflow] Research complete: %d chars"
+                      (length findings))
+             (funcall callback findings))))
+      (funcall callback ""))))
+
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
   "Ask analyzer LLM to select optimization targets.
 CALLBACK receives list of target files.
+When gptel-auto-workflow-research-targets is non-nil, researcher
+finds patterns first for better selection."
+  (if gptel-auto-workflow-research-targets
+      (gptel-auto-workflow--research-patterns
+       (lambda (research-findings)
+         (gptel-auto-workflow--ask-analyzer-with-findings research-findings callback)))
+    (gptel-auto-workflow--ask-analyzer-with-findings
+     (gptel-auto-workflow-load-research-findings) callback)))
 
-;; ASSUMPTION: gptel-benchmark-call-subagent is available when subagents enabled
-;; BEHAVIOR: Builds context prompt, calls analyzer, parses JSON response
-;; RISK: LLM may timeout or return malformed JSON
-;; EDGE CASE: Subagents disabled → callback receives nil, triggers fallback
-;; SYNTHESIS: Integrates gather-context output with LLM reasoning for selection
-;; TEST: Verify callback receives non-nil list when LLM succeeds"
+(defun gptel-auto-workflow--ask-analyzer-with-findings (research-findings callback)
+  "Ask analyzer with optional RESEARCH-FINDINGS for target selection.
+CALLBACK receives list of target files."
   (let* ((context (gptel-auto-workflow--gather-context))
          (max-targets gptel-auto-workflow-max-targets-per-run)
          (prompt (format "Select optimization targets for this Emacs Lisp project.
@@ -112,6 +171,9 @@ FILES BY SIZE:
 KNOWN ISSUES (TODOs/FIXMEs):
 %s
 
+RESEARCH FINDINGS:
+%s
+
 TASK: Select exactly %d files from lisp/modules/ to optimize.
 
 OUTPUT JSON ONLY:
@@ -120,6 +182,9 @@ OUTPUT JSON ONLY:
                          (plist-get context :git-history)
                          (plist-get context :file-sizes)
                          (plist-get context :todos)
+                         (if (string-empty-p research-findings)
+                             "Not available (research disabled)"
+                           (truncate-string-to-width research-findings 1000 nil nil "..."))
                          max-targets)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
@@ -194,6 +259,86 @@ LLM decides if available, otherwise uses static list.
            (message "[auto-workflow] Using static targets")
            (funcall callback gptel-auto-workflow-targets))))
     (funcall callback gptel-auto-workflow-targets)))
+
+;;; Periodic Research
+
+(defun gptel-auto-workflow--research-file ()
+  "Return path to research findings cache file."
+  (expand-file-name "var/tmp/research-findings.md"
+                    (gptel-auto-workflow--project-root)))
+
+(defun gptel-auto-workflow-run-research ()
+  "Run researcher and store findings to cache.
+Call periodically to keep findings fresh.
+Findings available to analyzer during target selection."
+  (interactive)
+  (message "[research] Starting periodic research...")
+  (gptel-auto-workflow--research-patterns
+   (lambda (findings)
+     (setq gptel-auto-workflow--last-research-findings findings)
+     (let ((file (gptel-auto-workflow--research-file)))
+       (make-directory (file-name-directory file) t)
+       (with-temp-file file
+         (insert (format "# Research Findings\n\n> Updated: %s\n\n%s"
+                         (format-time-string "%Y-%m-%d %H:%M")
+                         findings)))
+       (message "[research] Findings cached to %s (%d chars)"
+                file (length findings))))))
+
+(defun gptel-auto-workflow-load-research-findings ()
+  "Load cached research findings from file.
+Returns empty string if no cache exists."
+  (if (not (string-empty-p gptel-auto-workflow--last-research-findings))
+      (progn
+        (message "[research] Using in-memory findings (%d chars)"
+                 (length gptel-auto-workflow--last-research-findings))
+        gptel-auto-workflow--last-research-findings)
+    (let ((file (gptel-auto-workflow--research-file)))
+      (if (file-exists-p file)
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (forward-line 3)
+            (let ((findings (buffer-substring (point) (point-max))))
+              (message "[research] Loaded cached findings from %s (%d chars)"
+                       file (length findings))
+              findings))
+        (progn
+          (message "[research] No cached findings found at %s" file)
+          "")))))
+
+(defun gptel-auto-workflow-start-periodic-research ()
+  "Start periodic researcher runs.
+Findings cached for analyzer to use during target selection.
+Set `gptel-auto-workflow-research-interval' to control frequency."
+  (interactive)
+  (when (and gptel-auto-workflow-research-interval
+             (> gptel-auto-workflow-research-interval 0))
+    (gptel-auto-workflow-stop-periodic-research)
+    (setq gptel-auto-workflow--research-timer
+          (run-with-timer gptel-auto-workflow-research-interval
+                          gptel-auto-workflow-research-interval
+                          #'gptel-auto-workflow-run-research))
+    (message "[research] Periodic research started (interval: %ds)"
+             gptel-auto-workflow-research-interval)
+    (gptel-auto-workflow-run-research)))
+
+(defun gptel-auto-workflow-stop-periodic-research ()
+  "Stop periodic researcher runs."
+  (interactive)
+  (when gptel-auto-workflow--research-timer
+    (cancel-timer gptel-auto-workflow--research-timer)
+    (setq gptel-auto-workflow--research-timer nil)
+    (message "[research] Periodic research stopped")))
+
+(defun gptel-auto-workflow-research-status ()
+  "Show researcher status."
+  (interactive)
+  (list :running (timerp gptel-auto-workflow--research-timer)
+        :interval gptel-auto-workflow-research-interval
+        :findings-cached (not (string-empty-p gptel-auto-workflow--last-research-findings))
+        :findings-length (length gptel-auto-workflow--last-research-findings)
+        :cache-file (gptel-auto-workflow--research-file)))
 
 (provide 'gptel-auto-workflow-strategic)
 

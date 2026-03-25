@@ -684,6 +684,13 @@ Changes are only merged if review passes."
   :type 'boolean
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-research-before-fix nil
+  "When non-nil, use researcher to find fix approach before executor.
+Adds ~30-60s latency per retry but may improve fix quality.
+When nil, executor researches and fixes in one pass (faster)."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
 (defcustom gptel-auto-workflow-use-staging t
   "When non-nil, use staging branch as integration target.
 Staging is NEVER deleted and NEVER auto-merged to main.
@@ -912,7 +919,18 @@ Maximum response: 1000 characters."
 (defun gptel-auto-workflow--fix-review-issues (optimize-branch review-output callback)
   "Try to fix issues found in review for OPTIMIZE-BRANCH.
 REVIEW-OUTPUT contains the blocker/critical issues.
-Calls CALLBACK with (success-p . fix-output)."
+Calls CALLBACK with (success-p . fix-output).
+If `gptel-auto-workflow-research-before-fix' is nil, executor handles directly."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root))
+    (message "[auto-workflow] Fixing review issues (retry %d/%d)..."
+             gptel-auto-workflow--review-retry-count gptel-auto-workflow--review-max-retries)
+    (if (not gptel-auto-workflow-research-before-fix)
+        (gptel-auto-workflow--fix-directly review-output callback)
+      (gptel-auto-workflow--research-then-fix review-output callback))))
+
+(defun gptel-auto-workflow--fix-directly (review-output callback)
+  "Let executor fix REVIEW-OUTPUT issues directly (faster)."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
          (fix-prompt (format "Fix the following issues in the code.
@@ -921,15 +939,13 @@ ISSUES FROM REVIEW:
 %s
 
 INSTRUCTIONS:
-1. Read the affected files
+1. Read the affected files to understand context
 2. Make minimal fixes to address each issue
 3. Do NOT make unrelated changes
 4. Commit your fix with message 'fix: address review issues'
 
 Focus only on the issues mentioned. Do not refactor or add features."
                               (truncate-string-to-width review-output 1500 nil nil "..."))))
-    (message "[auto-workflow] Attempting to fix review issues (retry %d/%d)..."
-             gptel-auto-workflow--review-retry-count gptel-auto-workflow--review-max-retries)
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (gptel-benchmark-call-subagent
@@ -944,6 +960,59 @@ Focus only on the issues mentioned. Do not refactor or add features."
                (magit-git-success "commit" "-m" "fix: address review issues"))
              (funcall callback (cons success response)))))
       (funcall callback (cons nil "No executor agent available")))))
+
+(defun gptel-auto-workflow--research-then-fix (review-output callback)
+  "Use researcher to find approach, then executor to fix REVIEW-OUTPUT."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (research-prompt (format "Research the best approach to fix these issues:
+
+ISSUES FROM REVIEW:
+%s
+
+TASK:
+1. Find relevant code patterns in the codebase
+2. Check for similar fixes already implemented
+3. Identify the minimal, correct fix approach
+4. Return a concise fix plan (file:line, change description)
+
+Do NOT make changes. Only research and report findings."
+                                  (truncate-string-to-width review-output 1000 nil nil "..."))))
+    (message "[auto-workflow] Researching fix approach...")
+    (if (and gptel-auto-experiment-use-subagents
+             (fboundp 'gptel-benchmark-call-subagent))
+        (gptel-benchmark-call-subagent
+         'researcher
+         "Research fix approach"
+         research-prompt
+         (lambda (research-result)
+           (let* ((research-response (if (stringp research-result) research-result (format "%S" research-result)))
+                  (fix-prompt (format "Apply fixes based on this research:
+
+RESEARCH FINDINGS:
+%s
+
+ORIGINAL ISSUES:
+%s
+
+INSTRUCTIONS:
+1. Apply the minimal fixes identified in research
+2. Do NOT make unrelated changes
+3. Commit with message 'fix: address review issues'"
+                                          (truncate-string-to-width research-response 1000 nil nil "...")
+                                          (truncate-string-to-width review-output 500 nil nil "..."))))
+             (gptel-benchmark-call-subagent
+              'executor
+              "Apply researched fixes"
+              fix-prompt
+              (lambda (result)
+                (let* ((response (if (stringp result) result (format "%S" result)))
+                       (success (not (string-match-p "^Error:" response))))
+                  (when success
+                    (magit-git-success "add" "-A")
+                    (magit-git-success "commit" "-m" "fix: address review issues"))
+                  (funcall callback (cons success response))))))))
+      (funcall callback (cons nil "No subagent available")))))
 
 (defun gptel-auto-workflow--merge-to-staging (optimize-branch)
   "Merge OPTIMIZE-BRANCH to staging.
