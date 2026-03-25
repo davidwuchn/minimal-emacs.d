@@ -677,6 +677,13 @@ When non-nil, branches are pushed to origin for PR review on Forgejo."
   :type 'boolean
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-require-review t
+  "When non-nil, require LLM code review before merging to staging.
+Reviewer checks for blockers, critical bugs, and security issues.
+Changes are only merged if review passes."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
 (defcustom gptel-auto-workflow-use-staging t
   "When non-nil, use staging branch as integration target.
 Staging is NEVER deleted and NEVER auto-merged to main.
@@ -856,6 +863,49 @@ NOTE: Staging BRANCH is never deleted, only the worktree."
          (message "[auto-workflow] Failed to delete staging worktree: %s" err)))))
   (setq gptel-auto-workflow--staging-worktree-dir nil))
 
+(defun gptel-auto-workflow--review-changes (optimize-branch callback)
+  "Review changes in OPTIMIZE-BRANCH before merging to staging.
+Calls CALLBACK with (approved-p . review-output).
+Reviewer checks for Blocker/Critical issues."
+  (if (not gptel-auto-workflow-require-review)
+      (funcall callback (cons t "Review disabled by config"))
+    (let* ((proj-root (gptel-auto-workflow--project-root))
+           (default-directory proj-root)
+           (diff-cmd (format "git diff %s...%s --stat && git diff %s...%s"
+                            gptel-auto-workflow-staging-branch optimize-branch
+                            gptel-auto-workflow-staging-branch optimize-branch))
+           (diff-output (shell-command-to-string diff-cmd))
+           (review-prompt (format "Review the following changes for blockers, critical bugs, and security issues.
+
+CHANGES (diff):
+%s
+
+REVIEW CRITERIA:
+- Blocker: Runtime error, state corruption, data loss, security hole
+- Critical: Proven correctness bug in current code
+- Security: eval of untrusted input, shell injection, nil without guard
+
+OUTPUT: If NO blockers or critical issues, start with 'APPROVED'.
+If blockers/critical found, start with 'BLOCKED: [reason]'.
+
+Maximum response: 1000 characters."
+                                 (truncate-string-to-width diff-output 3000 nil nil "..."))))
+      (message "[auto-workflow] Reviewing changes in %s..." optimize-branch)
+      (if (and gptel-auto-experiment-use-subagents
+               (fboundp 'gptel-benchmark-call-subagent))
+          (gptel-benchmark-call-subagent
+           'reviewer
+           "Review changes before merge"
+           review-prompt
+           (lambda (result)
+             (let* ((response (if (stringp result) result (format "%S" result)))
+                    (approved (string-match-p "^APPROVED" response)))
+               (message "[auto-workflow] Review %s: %s"
+                        (if approved "PASSED" "BLOCKED")
+                        (truncate-string-to-width response 100 nil nil "..."))
+               (funcall callback (cons approved response)))))
+        (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
+
 (defun gptel-auto-workflow--merge-to-staging (optimize-branch)
   "Merge OPTIMIZE-BRANCH to staging.
 Auto-resolves conflicts by preferring incoming changes (theirs).
@@ -931,11 +981,13 @@ EDGE CASE: Returns nil if worktree doesn't exist."
   "Run staging verification flow for OPTIMIZE-BRANCH.
 
 Flow:
-1. Merge OPTIMIZE-BRANCH to staging
-2. Create staging worktree (never touches project root)
-3. Run tests on staging
-4. If pass: push staging to origin (human reviews later)
-5. If fail: log failure to TSV, staging left for debug
+1. Review changes (if gptel-auto-workflow-require-review)
+2. If review blocked: log failure, return
+3. Merge OPTIMIZE-BRANCH to staging
+4. Create staging worktree (never touches project root)
+5. Run tests on staging
+6. If pass: push staging to origin (human reviews later)
+7. If fail: log failure to TSV, staging left for debug
 
 ASSUMPTION: OPTIMIZE-BRANCH has been pushed to origin.
 BEHAVIOR: Never modifies project root - all verification in worktree.
@@ -946,52 +998,79 @@ SAFETY: Asserts main branch is not current before any operation.
 NOTE: Human must manually merge staging to main after review."
   (gptel-auto-workflow--assert-main-untouched)
   (message "[auto-workflow] Starting staging flow for %s" optimize-branch)
-  (let* ((proj-root (gptel-auto-workflow--project-root))
-         (default-directory proj-root)
-         (merge-success (gptel-auto-workflow--merge-to-staging optimize-branch)))
-    (if (not merge-success)
+  (gptel-auto-workflow--review-changes
+   optimize-branch
+   (lambda (review-result)
+     (gptel-auto-workflow--staging-flow-after-review optimize-branch review-result))))
+
+(defun gptel-auto-workflow--staging-flow-after-review (optimize-branch review-result)
+  "Continue staging flow after review for OPTIMIZE-BRANCH.
+REVIEW-RESULT is (approved-p . review-output)."
+  (let ((approved (car review-result))
+        (review-output (cdr review-result)))
+    (if (not approved)
         (progn
-          (message "[auto-workflow] ✗ Merge to staging failed, aborting")
+          (message "[auto-workflow] ✗ Review BLOCKED: %s" review-output)
           (gptel-auto-experiment-log-tsv
            (format-time-string "%Y-%m-%d")
-           (list :target "staging-merge"
+           (list :target "staging-review"
                  :id 0
-                 :hypothesis "Staging merge"
+                 :hypothesis "Staging review"
                  :score-before 0
                  :score-after 0
                  :kept nil
                  :duration 0
                  :grader-quality 0
-                 :grader-reason "staging-merge-failed"
-                 :comparator-reason (format "Failed to merge %s to staging" optimize-branch)
+                 :grader-reason "review-blocked"
+                 :comparator-reason (truncate-string-to-width review-output 200)
                  :analyzer-patterns ""
-                 :agent-output "")))
-      (let* ((worktree (gptel-auto-workflow--create-staging-worktree))
-             (verification (when worktree (gptel-auto-workflow--verify-staging)))
-             (tests-passed (car verification))
-             (output (cdr verification)))
-        (if (not tests-passed)
+                 :agent-output review-output)))
+      (let* ((proj-root (gptel-auto-workflow--project-root))
+             (default-directory proj-root)
+             (merge-success (gptel-auto-workflow--merge-to-staging optimize-branch)))
+        (if (not merge-success)
             (progn
-              (message "[auto-workflow] ✗ Staging verification FAILED")
-              (gptel-auto-workflow--delete-staging-worktree)
+              (message "[auto-workflow] ✗ Merge to staging failed, aborting")
               (gptel-auto-experiment-log-tsv
                (format-time-string "%Y-%m-%d")
-               (list :target "staging-verification"
+               (list :target "staging-merge"
                      :id 0
-                     :hypothesis "Staging verification"
+                     :hypothesis "Staging merge"
                      :score-before 0
                      :score-after 0
                      :kept nil
                      :duration 0
                      :grader-quality 0
-                     :grader-reason "staging-verification-failed"
-                     :comparator-reason (truncate-string-to-width output 200)
+                     :grader-reason "staging-merge-failed"
+                     :comparator-reason (format "Failed to merge %s to staging" optimize-branch)
                      :analyzer-patterns ""
-                     :agent-output output))
+                     :agent-output "")))
+          (let* ((worktree (gptel-auto-workflow--create-staging-worktree))
+                 (verification (when worktree (gptel-auto-workflow--verify-staging)))
+                 (tests-passed (car verification))
+                 (output (cdr verification)))
+            (if (not tests-passed)
+                (progn
+                  (message "[auto-workflow] ✗ Staging verification FAILED")
+                  (gptel-auto-workflow--delete-staging-worktree)
+                  (gptel-auto-experiment-log-tsv
+                   (format-time-string "%Y-%m-%d")
+                   (list :target "staging-verification"
+                         :id 0
+                         :hypothesis "Staging verification"
+                         :score-before 0
+                         :score-after 0
+                         :kept nil
+                         :duration 0
+                         :grader-quality 0
+                         :grader-reason "staging-verification-failed"
+                         :comparator-reason (truncate-string-to-width output 200)
+                         :analyzer-patterns ""
+                         :agent-output output)))
               (message "[auto-workflow] ✓ Staging verification PASSED")
               (gptel-auto-workflow--delete-staging-worktree)
               (gptel-auto-workflow--push-staging)
-              (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")))))))
+              (message "[auto-workflow] ✓ Staging pushed. Human must merge to main."))))))))
 
 ;;; Benchmark & Evaluation
 
