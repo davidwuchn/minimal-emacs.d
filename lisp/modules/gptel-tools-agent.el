@@ -734,13 +734,13 @@ Multiple machines can optimize same target without conflicts."
 ;;; Benchmark & Evaluation
 
 (defun gptel-auto-workflow--project-root ()
-  "Return the project root directory."
+  "Return the project root directory (git root or ~/.emacs.d)."
   (or (when (fboundp 'project-root)
         (when-let ((proj (project-current)))
           (project-root proj)))
       (when (boundp 'minimal-emacs-user-directory)
-        minimal-emacs-user-directory)
-      default-directory))
+        (expand-file-name minimal-emacs-user-directory))
+      (expand-file-name "~/.emacs.d/")))
 
 (defun gptel-auto-experiment-benchmark ()
   "Run nucleus verification + Eight Keys scoring."
@@ -908,8 +908,17 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
          (scores (gptel-auto-experiment--eight-keys-scores))
          (weakest-keys (when scores (gptel-auto-workflow--format-weakest-keys scores)))
          (mutation-templates (when skills (gptel-auto-workflow--extract-mutation-templates skills)))
-         (suggested-hypothesis (when skills (gptel-auto-workflow-skill-suggest-hypothesis skills))))
+         (suggested-hypothesis (when skills (gptel-auto-workflow-skill-suggest-hypothesis skills)))
+         (worktree-path (or gptel-auto-workflow--worktree-dir
+                            (gptel-auto-workflow--project-root)))
+         (target-full-path (expand-file-name target worktree-path)))
     (format "You are running experiment %d of %d to optimize %s.
+
+## Working Directory
+%s
+
+## Target File (full path)
+%s
 
 ## Previous Experiment Analysis
 %s
@@ -941,12 +950,15 @@ Make minimal, targeted changes.
 
 ## Instructions
 1. First, write your HYPOTHESIS: What change might improve the score? Why?
-2. Implement the change minimally
-3. Run tests to verify
+2. Read the target file using its full path
+3. Implement the change minimally using Edit tool with the full path
+4. Run tests to verify
 
 Format your hypothesis at the start as:
 HYPOTHESIS: [your hypothesis here]"
             experiment-id max-experiments target
+            worktree-path
+            target-full-path
             (or patterns "No previous experiments")
             (or suggestions "None")
             git-history

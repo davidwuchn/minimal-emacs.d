@@ -137,9 +137,9 @@
 (ert-deftest test-nucleus-toolset-counts ()
   "Test expected tool counts per toolset."
   (let ((counts '((:readonly . 18)
-                   (:researcher . 19)
-                   (:nucleus . 30)
-                   (:executor . 29)
+                   (:researcher . 17)
+                   (:nucleus . 28)
+                   (:executor . 27)
                    (:explorer . 5)
                    (:reviewer . 4))))
     (dolist (entry counts)
