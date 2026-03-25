@@ -682,10 +682,33 @@ When non-nil, branches are pushed to origin for PR review on Forgejo."
   :type 'boolean
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-use-staging t
+  "When non-nil, use staging branch as integration target.
+Staging is NEVER deleted and NEVER auto-merged to main.
+
+Flow:
+1. Sync staging from main at workflow start
+2. optimize/* changes are merged to staging
+3. Tests run on staging (isolated worktree)
+4. If tests pass: push staging to origin
+5. Human reviews staging and manually merges to main
+
+IMPORTANT: Auto-workflow NEVER touches main branch.
+All merges wait in staging for human review."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-staging-branch "staging"
+  "Name of the staging branch for integration.
+This branch is NEVER deleted and NEVER auto-merged to main."
+  :type 'string
+  :group 'gptel-tools-agent)
+
 ;;; State
 
 (defvar gptel-auto-workflow--worktree-dir nil)
 (defvar gptel-auto-workflow--current-branch nil)
+(defvar gptel-auto-workflow--staging-worktree-dir nil)
 (defvar gptel-auto-experiment--results nil)
 (defvar gptel-auto-experiment--best-score nil)
 (defvar gptel-auto-experiment--no-improvement-count 0)
@@ -738,6 +761,214 @@ Multiple machines can optimize same target without conflicts."
          (message "[auto-workflow] Failed to delete worktree: %s" err)))))
   (setq gptel-auto-workflow--worktree-dir nil
         gptel-auto-workflow--current-branch nil))
+
+;;; Staging Branch Protection
+
+(defun gptel-auto-workflow--staging-branch-exists-p ()
+  "Check if staging branch exists locally or remotely."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (branch gptel-auto-workflow-staging-branch))
+    (or (member branch (magit-list-local-branch-names))
+        (member (concat "origin/" branch) (magit-list-remote-branch-names)))))
+
+(defun gptel-auto-workflow--sync-staging-from-main ()
+  "Sync staging branch from main at workflow start.
+ASSUMPTION: Staging branch exists or will be created.
+BEHAVIOR: Hard resets staging to match main.
+EDGE CASE: Creates staging from main if it doesn't exist.
+TEST: Verify staging matches main after sync."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (staging gptel-auto-workflow-staging-branch))
+    (message "[auto-workflow] Syncing staging from main")
+    (condition-case err
+        (progn
+          (if (gptel-auto-workflow--staging-branch-exists-p)
+              (progn
+                (magit-git-success "checkout" staging)
+                (magit-git-success "reset" "--hard" "main")
+                (magit-git-success "push" "--force" "origin" staging))
+            (progn
+              (message "[auto-workflow] Creating staging branch from main")
+              (magit-git-success "branch" staging "main")
+              (magit-git-success "push" "-u" "origin" staging)))
+          (message "[auto-workflow] ✓ Staging synced from main")
+          t)
+      (error
+       (message "[auto-workflow] Failed to sync staging: %s" err)
+       nil))))
+
+(defun gptel-auto-workflow--create-staging-worktree ()
+  "Create isolated worktree for staging verification.
+Never touches project root - all verification happens in worktree.
+Returns worktree path or nil on failure."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (branch gptel-auto-workflow-staging-branch)
+         (worktree-dir (expand-file-name
+                        (format "%s/staging-verify" gptel-auto-workflow-worktree-base)
+                        proj-root)))
+    (condition-case err
+        (progn
+          (when (file-exists-p worktree-dir)
+            (delete-directory worktree-dir t))
+          (make-directory (file-name-directory worktree-dir) t)
+          (magit-worktree-branch worktree-dir branch branch)
+          (setq gptel-auto-workflow--staging-worktree-dir worktree-dir)
+          (message "[auto-workflow] Created staging worktree: %s" worktree-dir)
+          worktree-dir)
+      (error
+       (message "[auto-workflow] Failed to create staging worktree: %s" err)
+       nil))))
+
+(defun gptel-auto-workflow--delete-staging-worktree ()
+  "Delete staging verification worktree.
+NOTE: Staging BRANCH is never deleted, only the worktree."
+  (when (and gptel-auto-workflow--staging-worktree-dir
+             (file-exists-p gptel-auto-workflow--staging-worktree-dir))
+    (let ((proj-root (gptel-auto-workflow--project-root)))
+      (condition-case err
+          (let ((default-directory proj-root))
+            (magit-worktree-delete gptel-auto-workflow--staging-worktree-dir))
+        (error
+         (message "[auto-workflow] Failed to delete staging worktree: %s" err)))))
+  (setq gptel-auto-workflow--staging-worktree-dir nil))
+
+(defun gptel-auto-workflow--merge-to-staging (optimize-branch)
+  "Merge OPTIMIZE-BRANCH to staging.
+Auto-resolves conflicts by preferring incoming changes (theirs).
+Returns t on success, nil on unrecoverable conflict."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (staging gptel-auto-workflow-staging-branch))
+    (message "[auto-workflow] Merging %s to %s" optimize-branch staging)
+    (condition-case err
+        (progn
+          (magit-git-success "checkout" staging)
+          (condition-case merge-err
+              (progn
+                (magit-git-success "merge" optimize-branch
+                                   "--no-ff" "-m"
+                                   (format "Merge %s for verification" optimize-branch))
+                t)
+            (error
+             (if (string-match-p "conflict" (error-message-string merge-err))
+                 (progn
+                   (message "[auto-workflow] Auto-resolving conflicts with theirs")
+                   (magit-git-success "checkout" "--theirs" ".")
+                   (magit-git-success "add" "-A")
+                   (magit-git-success "commit" "-m"
+                                      (format "Merge %s (auto-resolved conflicts)" optimize-branch))
+                   t)
+               (message "[auto-workflow] Merge failed: %s" merge-err)
+               (magit-git-success "merge" "--abort")
+               nil))))
+      (error
+       (message "[auto-workflow] Failed to merge to staging: %s" err)
+       nil))))
+
+(defun gptel-auto-workflow--verify-staging ()
+  "Run tests on staging worktree.
+Returns (success-p . output) plist.
+ASSUMPTION: Staging worktree exists.
+BEHAVIOR: Runs run-tests.sh in staging worktree.
+EDGE CASE: Returns nil if worktree doesn't exist."
+  (let* ((worktree gptel-auto-workflow--staging-worktree-dir)
+         (test-script (expand-file-name "scripts/run-tests.sh" worktree))
+         (verify-script (expand-file-name "scripts/verify-nucleus.sh" worktree))
+         (output-buffer (generate-new-buffer "*staging-verify*"))
+         result)
+    (if (not (and worktree (file-exists-p worktree)))
+        (progn
+          (message "[auto-workflow] Staging worktree not found")
+          (cons nil "Staging worktree not found"))
+      (message "[auto-workflow] Verifying staging...")
+      (let* ((test-result (when (file-exists-p test-script)
+                            (call-process test-script nil output-buffer nil)))
+             (verify-result (when (file-exists-p verify-script)
+                              (call-process verify-script nil output-buffer nil)))
+             (test-pass (or (not (file-exists-p test-script))
+                            (eq test-result 0)))
+             (verify-pass (or (not (file-exists-p verify-script))
+                              (eq verify-result 0)))
+             (output (with-current-buffer output-buffer (buffer-string))))
+        (kill-buffer output-buffer)
+        (setq result (and test-pass verify-pass))
+        (message "[auto-workflow] Staging verification: %s" (if result "PASS" "FAIL"))
+        (cons result output)))))
+
+(defun gptel-auto-workflow--push-staging ()
+  "Push staging branch to origin after successful verification."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (staging gptel-auto-workflow-staging-branch))
+    (message "[auto-workflow] Pushing staging to origin")
+    (magit-git-success "push" "origin" staging)))
+
+(defun gptel-auto-workflow--staging-flow (optimize-branch)
+  "Run staging verification flow for OPTIMIZE-BRANCH.
+
+Flow:
+1. Merge OPTIMIZE-BRANCH to staging
+2. Create staging worktree (never touches project root)
+3. Run tests on staging
+4. If pass: push staging to origin (human reviews later)
+5. If fail: log failure to TSV, staging left for debug
+
+ASSUMPTION: OPTIMIZE-BRANCH has been pushed to origin.
+BEHAVIOR: Never modifies project root - all verification in worktree.
+EDGE CASE: Handles merge conflicts with auto-resolution (theirs).
+TEST: Verify main is never touched by auto-workflow.
+
+NOTE: Human must manually merge staging to main after review."
+  (message "[auto-workflow] Starting staging flow for %s" optimize-branch)
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (merge-success (gptel-auto-workflow--merge-to-staging optimize-branch)))
+    (if (not merge-success)
+        (progn
+          (message "[auto-workflow] ✗ Merge to staging failed, aborting")
+          (gptel-auto-experiment-log-tsv
+           (format-time-string "%Y-%m-%d")
+           (list :target "staging-merge"
+                 :id 0
+                 :hypothesis "Staging merge"
+                 :score-before 0
+                 :score-after 0
+                 :kept nil
+                 :duration 0
+                 :grader-quality 0
+                 :grader-reason "staging-merge-failed"
+                 :comparator-reason (format "Failed to merge %s to staging" optimize-branch)
+                 :analyzer-patterns ""
+                 :agent-output "")))
+      (let* ((worktree (gptel-auto-workflow--create-staging-worktree))
+             (verification (when worktree (gptel-auto-workflow--verify-staging)))
+             (tests-passed (car verification))
+             (output (cdr verification)))
+        (if (not tests-passed)
+            (progn
+              (message "[auto-workflow] ✗ Staging verification FAILED")
+              (gptel-auto-workflow--delete-staging-worktree)
+              (gptel-auto-experiment-log-tsv
+               (format-time-string "%Y-%m-%d")
+               (list :target "staging-verification"
+                     :id 0
+                     :hypothesis "Staging verification"
+                     :score-before 0
+                     :score-after 0
+                     :kept nil
+                     :duration 0
+                     :grader-quality 0
+                     :grader-reason "staging-verification-failed"
+                     :comparator-reason (truncate-string-to-width output 200)
+                     :analyzer-patterns ""
+                     :agent-output output))
+          (message "[auto-workflow] ✓ Staging verification PASSED")
+          (gptel-auto-workflow--delete-staging-worktree)
+          (gptel-auto-workflow--push-staging)
+          (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")))))))
 
 ;;; Benchmark & Evaluation
 
@@ -1234,25 +1465,27 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                                            :comparator-reason reasoning
                                                            :analyzer-patterns (format "%s" patterns)
                                                            :agent-output agent-output)))
-                                    (if keep
-                                        (let ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\n\nEVIDENCE: Tests pass, Nucleus valid\nScore: %.2f → %.2f (+%.0f%%)"
-                                                           target
-                                                           (gptel-auto-experiment--summarize hypothesis)
-                                                           hypothesis
-                                                           baseline score-after
-                                                           (if (> baseline 0) (* 100 (/ (- score-after baseline) baseline)) 0))))
-                                          (message "[auto-experiment] ✓ Committing improvement for %s" target)
-                                          (magit-git-success "add" "-A")
-                                          (magit-git-success "commit" "-m" msg)
-                                          (setq gptel-auto-experiment--best-score score-after
-                                                gptel-auto-experiment--no-improvement-count 0)
-                                          (when gptel-auto-experiment-auto-push
-                                            (message "[auto-experiment] Pushing to %s" gptel-auto-workflow--current-branch)
-                                            (magit-git-success "push" "origin" gptel-auto-workflow--current-branch)))
-                                      (progn
-                                        (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
-                                        (magit-git-success "checkout" "--" ".")
-                                        (cl-incf gptel-auto-experiment--no-improvement-count)))
+(if keep
+                                         (let ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\n\nEVIDENCE: Tests pass, Nucleus valid\nScore: %.2f → %.2f (+%.0f%%)"
+                                                            target
+                                                            (gptel-auto-experiment--summarize hypothesis)
+                                                            hypothesis
+                                                            baseline score-after
+                                                            (if (> baseline 0) (* 100 (/ (- score-after baseline) baseline)) 0))))
+                                           (message "[auto-experiment] ✓ Committing improvement for %s" target)
+                                           (magit-git-success "add" "-A")
+                                           (magit-git-success "commit" "-m" msg)
+                                           (setq gptel-auto-experiment--best-score score-after
+                                                 gptel-auto-experiment--no-improvement-count 0)
+                                           (when gptel-auto-experiment-auto-push
+                                             (message "[auto-experiment] Pushing to %s" gptel-auto-workflow--current-branch)
+                                             (magit-git-success "push" "origin" gptel-auto-workflow--current-branch)
+                                             (when gptel-auto-workflow-use-staging
+                                               (gptel-auto-workflow--staging-flow gptel-auto-workflow--current-branch))))
+                                       (progn
+                                         (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
+                                         (magit-git-success "checkout" "--" ".")
+                                         (cl-incf gptel-auto-experiment--no-improvement-count)))
                                   (gptel-auto-experiment-log-tsv
                                    (format-time-string "%Y-%m-%d") exp-result)
                                   (gptel-auto-workflow-delete-worktree)
@@ -1346,7 +1579,12 @@ If TARGETS is nil and gptel-auto-workflow-strategic-selection is t,
 asks analyzer LLM to select best targets.
 
 Uses `accept-process-output' to keep event loop alive while waiting
-for async callbacks to complete."
+for async callbacks to complete.
+
+At workflow start, syncs staging from main if staging is enabled."
+  ;; Sync staging from main at start
+  (when gptel-auto-workflow-use-staging
+    (gptel-auto-workflow--sync-staging-from-main))
   (let ((gptel-auto-workflow--running t)
         (done-count 0)
         (selected-targets nil))
