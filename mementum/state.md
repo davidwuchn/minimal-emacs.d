@@ -1,63 +1,69 @@
 # Mementum State
 
-> Last session: 2026-03-25 17:35
+> Last session: 2026-03-25 17:57
 
-## AUTO-WORKFLOW PROVEN: 3 REAL IMPROVEMENTS MERGED
+## Staging Branch Protection Implemented
 
-### Improvements by Auto-Workflow
+**Auto-workflow NEVER touches main.** All merges wait in staging for human review.
 
-| # | Target | Change | Branch |
-|---|--------|--------|--------|
-| 1 | gptel-tools-agent.el | +8 lines doc | optimize/agent-* |
-| 2 | gptel-auto-workflow-strategic.el | +25 lines doc | optimize/strategic-* |
-| 3 | gptel-ext-fsm-utils.el | +12 lines doc | optimize/utils-* |
-
-### What Auto-Workflow Did
-
-1. **Selected targets** via LLM (analyzer)
-2. **Made improvements** via executor
-3. **Validated** via grader (6/6 pass)
-4. **Committed** to optimize/* branches
-5. **Passed tests** (52/52)
-6. **Merged to main** after human review
-
-### Signal Phrases Used
-
-| Key | Phrase |
-|-----|--------|
-| Clarity | "explicit assumptions", "testable definitions" |
-| ε Purpose | "goal", "measurable outcome" |
-| τ Wisdom | "risk identified", "proactive mitigation" |
-| ∀ Vigilance | "edge cases handled" |
-
-### Value Demonstrated
+### Architecture
 
 ```
-✓ Autonomous execution
-✓ Structured output (HYPOTHESIS, SIGNALS, EVIDENCE)
-✓ Safety (tests pass, nucleus valid)
-✓ Branch isolation (optimize/* only)
-✓ Human review gate
-✓ Real improvements merged
+1. SYNC staging from main (start)
+2. EXECUTOR creates optimize/*
+3. MERGE optimize/* → staging
+4. VERIFY staging (isolated worktree)
+5. IF PASS: push staging (human reviews)
+6. IF FAIL: log to TSV (human debugs)
 ```
+
+### Safety Guarantees
+
+| Guarantee | How |
+|-----------|-----|
+| Main never broken | Auto-workflow never touches main |
+| Tests verified | Run on staging before push |
+| Human in control | Must manually merge staging → main |
+
+### Human Workflow
+
+```bash
+# Morning: check staging
+git log staging..main
+
+# If good: merge to main
+git checkout main && git merge staging && git push
+
+# If bad: reset staging
+git checkout staging && git reset --hard main
+```
+
+### New Functions
+
+- `gptel-auto-workflow--sync-staging-from-main`
+- `gptel-auto-workflow--staging-flow`
+- `gptel-auto-workflow--merge-to-staging`
+- `gptel-auto-workflow--verify-staging`
+- `gptel-auto-workflow--push-staging`
 
 ### Production Status
 
 | Component | Status |
 |-----------|--------|
+| Staging protection | ✓ |
 | Target selection | ✓ LLM |
-| Executor | ✓ Working |
-| Grader | ✓ 6/6 pass |
+| Executor | ✓ |
+| Grader | ✓ 6/6 |
 | Tests | ✓ 52/52 |
-| Cron | ✓ 2 AM daily |
+| Cron | ✓ 2 AM |
 
 ---
 
 ## λ Summary
 
 ```
-λ prove. Auto-workflow made 3 real improvements
-λ merge. All 3 merged to main
-λ value. 45 lines of documentation added
-λ signals. Eight Keys patterns used correctly
+λ safety. Main NEVER touched by auto-workflow
+λ staging. All merges wait for human review
+λ verify. Tests run on staging before push
+λ control. Human merges staging to main
 ```
