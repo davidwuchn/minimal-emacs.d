@@ -209,7 +209,8 @@ OUTPUT JSON ONLY:
 ;; SYNTHESIS: Bridges LLM output format with internal file list representation
 ;; TEST: Verify valid files extracted from both JSON and text responses"
   (let ((targets '())
-        (proj-root (gptel-auto-workflow--project-root)))
+        (proj-root (gptel-auto-workflow--project-root))
+        (max-targets gptel-auto-workflow-max-targets-per-run))
     (when proj-root
       ;; Try JSON
       (condition-case _
@@ -222,7 +223,8 @@ OUTPUT JSON ONLY:
                      (target-list (cdr (assq 'targets data))))
                 (when (listp target-list)
                   (dolist (item target-list)
-                    (when (listp item)
+                    (when (and (< (length targets) max-targets)
+                               (listp item))
                       (let ((file (cdr (assq 'file item))))
                         (when (and file (stringp file))
                           (let ((abs-path (if (file-name-absolute-p file)
@@ -236,7 +238,8 @@ OUTPUT JSON ONLY:
       (with-temp-buffer
         (insert (if (stringp response) response (format "%S" response)))
         (goto-char (point-min))
-        (while (re-search-forward "lisp/modules/[a-zA-Z0-9_-]+\\.el" nil t)
+        (while (and (< (length targets) max-targets)
+                    (re-search-forward "lisp/modules/[a-zA-Z0-9_-]+\\.el" nil t))
           (let ((file (match-string 0)))
             (let ((abs-path (expand-file-name file proj-root)))
               (when (file-exists-p abs-path)
