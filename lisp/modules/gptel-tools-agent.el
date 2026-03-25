@@ -504,34 +504,35 @@ CALLBACK is called with the result or a timeout error."
 AGENT-NAME must exist in `gptel-agent--agents`.
 
 INCLUDE-HISTORY defaults to `my/gptel-subagent-include-history-default' when nil."
-  (unless (require 'gptel-agent nil t)
-    (funcall callback "Error: gptel-agent is not available")
-    (cl-return-from my/gptel--run-agent-tool))
-  (unless (and (boundp 'gptel-agent--agents) gptel-agent--agents)
-    (ignore-errors (gptel-agent-update)))
-  (unless (and (stringp agent-name) (not (string-empty-p (string-trim agent-name))))
-    (funcall callback "Error: agent-name is empty")
-    (cl-return-from my/gptel--run-agent-tool))
-  (unless (assoc agent-name gptel-agent--agents)
-    (funcall callback
-             (format "Error: unknown agent %S. Known agents: %s"
-                     agent-name
-                     (string-join (sort (mapcar #'car gptel-agent--agents) #'string<) ", ")))
-    (cl-return-from my/gptel--run-agent-tool))
-  ;; Hard gate: executor is forbidden in Plan mode (read-only preset).
-  (when (and (equal agent-name "executor")
-             (boundp 'gptel--preset)
-             (eq gptel--preset 'gptel-plan))
-    (funcall callback
-             "Error: executor is not available in Plan mode. Switch to Agent mode first.")
-    (cl-return-from my/gptel--run-agent-tool))
-  (unless (fboundp 'gptel-agent--task)
-    (funcall callback "Error: gptel-agent task runner not available")
-    (cl-return-from my/gptel--run-agent-tool))
-  ;; Apply default for include-history when not specified
-  (let ((include-history (or include-history
-                             (when my/gptel-subagent-include-history-default "true"))))
-    (my/gptel--agent-task-with-timeout callback agent-name description prompt files include-history include-diff)))
+  (cl-block my/gptel--run-agent-tool
+    (unless (require 'gptel-agent nil t)
+      (funcall callback "Error: gptel-agent is not available")
+      (cl-return-from my/gptel--run-agent-tool))
+    (unless (and (boundp 'gptel-agent--agents) gptel-agent--agents)
+      (ignore-errors (gptel-agent-update)))
+    (unless (and (stringp agent-name) (not (string-empty-p (string-trim agent-name))))
+      (funcall callback "Error: agent-name is empty")
+      (cl-return-from my/gptel--run-agent-tool))
+    (unless (assoc agent-name gptel-agent--agents)
+      (funcall callback
+               (format "Error: unknown agent %S. Known agents: %s"
+                       agent-name
+                       (string-join (sort (mapcar #'car gptel-agent--agents) #'string<) ", ")))
+      (cl-return-from my/gptel--run-agent-tool))
+    ;; Hard gate: executor is forbidden in Plan mode (read-only preset).
+    (when (and (equal agent-name "executor")
+               (boundp 'gptel--preset)
+               (eq gptel--preset 'gptel-plan))
+      (funcall callback
+               "Error: executor is not available in Plan mode. Switch to Agent mode first.")
+      (cl-return-from my/gptel--run-agent-tool))
+    (unless (fboundp 'gptel-agent--task)
+      (funcall callback "Error: gptel-agent task runner not available")
+      (cl-return-from my/gptel--run-agent-tool))
+    ;; Apply default for include-history when not specified
+    (let ((include-history (or include-history
+                               (when my/gptel-subagent-include-history-default "true"))))
+      (my/gptel--agent-task-with-timeout callback agent-name description prompt files include-history include-diff))))
 
 ;;; Tool Registration
 
