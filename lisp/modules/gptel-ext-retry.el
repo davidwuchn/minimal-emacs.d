@@ -95,20 +95,19 @@ for byte-level operations (~3.5 bytes/token)."
   :type 'integer
   :group 'gptel)
 
-(defun my/gptel--trim-tool-results-for-retry (info)
+(defun my/gptel--trim-tool-results-for-retry (info &optional retry-count)
   "Trim old tool-result content in INFO's :data :messages to reduce payload.
 
 Progressive trimming: on each successive retry, fewer tool results are kept
 intact.  The keep count is computed as:
 
-  max(0, `my/gptel-retry-keep-recent-tool-results' - retries)
+  max(0, `my/gptel-retry-keep-recent-tool-results' - retry-count)
 
-where retries is the CURRENT retry count from INFO's :retries (already
-incremented before this function is called).
+where RETRY-COUNT is the current retry count (defaults to INFO's :retries).
 
-Retry 1 (retries=1): keep max(0, 2-1) = 1 recent result
-Retry 2 (retries=2): keep max(0, 2-2) = 0 results (truncate ALL)
-Retry 3+:            keep 0 (truncate ALL)
+RETRY-COUNT 1 (retry 1): keep max(0, 2-1) = 1 recent result
+RETRY-COUNT 2 (retry 2): keep max(0, 2-2) = 0 results (truncate ALL)
+RETRY-COUNT 3+:          keep 0 (truncate ALL)
 
 This preserves the tool_call_id pairing required by OpenAI-compatible APIs
 while progressively reducing payload size on successive retries.
@@ -121,7 +120,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
       0
     (let* ((data (plist-get info :data))
            (messages (and data (plist-get data :messages)))
-           (retries (or (plist-get info :retries) 1))
+           (retries (or retry-count (plist-get info :retries) 1))
            (keep (max 0 (- my/gptel-retry-keep-recent-tool-results retries)))
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0)
@@ -630,8 +629,7 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
                      (/ bytes 1024) (/ limit 1024))
             ;; Pass 1: trim tool results (keep 2 recent)
             (let ((my/gptel-retry-keep-recent-tool-results 2))
-              (plist-put info :retries 1)
-              (let ((n (my/gptel--trim-tool-results-for-retry info)))
+              (let ((n (my/gptel--trim-tool-results-for-retry info 1)))
                 (cl-incf trimmed-total n)
                 (setq bytes (my/gptel--estimate-payload-bytes info))
                 (setq pass 1)
@@ -670,15 +668,13 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
                            n (/ bytes 1024)))))
             ;; Pass 5: aggressive tool result trim (keep 0)
             (when (> bytes limit)
-              (let ((my/gptel-retry-keep-recent-tool-results 2))
-                (plist-put info :retries 3)
-                (let ((n (my/gptel--trim-tool-results-for-retry info)))
-                  (cl-incf trimmed-total n)
-                  (setq bytes (my/gptel--estimate-payload-bytes info))
-                  (setq pass 5)
-                  (when (> n 0)
-                    (message "gptel: Pass 5: truncated %d remaining tool results, now %dKB"
-                             n (/ bytes 1024))))))
+              (let ((n (my/gptel--trim-tool-results-for-retry info 3)))
+                (cl-incf trimmed-total n)
+                (setq bytes (my/gptel--estimate-payload-bytes info))
+                (setq pass 5)
+                (when (> n 0)
+                  (message "gptel: Pass 5: truncated %d remaining tool results, now %dKB"
+                           n (/ bytes 1024)))))
             ;; Pass 6: truncate old user/assistant messages
             (when (> bytes limit)
               (let ((n (my/gptel--truncate-old-messages info)))
@@ -697,7 +693,6 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
                 (when (> n 0)
                   (message "gptel: Pass 7: stripped %d image(s) from messages, now %dKB"
                            n (/ bytes 1024)))))
-            (plist-put info :retries 0)
             (if (> bytes limit)
                 (message "gptel: WARNING: Payload still %dKB after %d passes of compaction (limit %dKB)"
                          (/ bytes 1024) pass (/ limit 1024))
