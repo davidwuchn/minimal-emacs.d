@@ -912,38 +912,59 @@ Maximum response: 1000 characters."
 (defun gptel-auto-workflow--fix-review-issues (optimize-branch review-output callback)
   "Try to fix issues found in review for OPTIMIZE-BRANCH.
 REVIEW-OUTPUT contains the blocker/critical issues.
-Calls CALLBACK with (success-p . fix-output)."
+Calls CALLBACK with (success-p . fix-output).
+Uses researcher to find correct approach, then executor to apply."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
-         (fix-prompt (format "Fix the following issues in the code.
+         (research-prompt (format "Research the best approach to fix these issues:
 
 ISSUES FROM REVIEW:
 %s
 
-INSTRUCTIONS:
-1. Read the affected files
-2. Make minimal fixes to address each issue
-3. Do NOT make unrelated changes
-4. Commit your fix with message 'fix: address review issues'
+TASK:
+1. Find relevant code patterns in the codebase
+2. Check for similar fixes already implemented
+3. Identify the minimal, correct fix approach
+4. Return a concise fix plan (file:line, change description)
 
-Focus only on the issues mentioned. Do not refactor or add features."
-                              (truncate-string-to-width review-output 1500 nil nil "..."))))
-    (message "[auto-workflow] Attempting to fix review issues (retry %d/%d)..."
+Do NOT make changes. Only research and report findings."
+                                  (truncate-string-to-width review-output 1000 nil nil "..."))))
+    (message "[auto-workflow] Researching fix approach (retry %d/%d)..."
              gptel-auto-workflow--review-retry-count gptel-auto-workflow--review-max-retries)
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (gptel-benchmark-call-subagent
-         'executor
-         "Fix review issues"
-         fix-prompt
-         (lambda (result)
-           (let* ((response (if (stringp result) result (format "%S" result)))
-                  (success (not (string-match-p "^Error:" response))))
-             (when success
-               (magit-git-success "add" "-A")
-               (magit-git-success "commit" "-m" "fix: address review issues"))
-             (funcall callback (cons success response)))))
-      (funcall callback (cons nil "No executor agent available")))))
+         'researcher
+         "Research fix approach"
+         research-prompt
+         (lambda (research-result)
+           (let* ((research-response (if (stringp research-result) research-result (format "%S" research-result)))
+                  (fix-prompt (format "Apply fixes based on this research:
+
+RESEARCH FINDINGS:
+%s
+
+ORIGINAL ISSUES:
+%s
+
+INSTRUCTIONS:
+1. Apply the minimal fixes identified in research
+2. Do NOT make unrelated changes
+3. Commit with message 'fix: address review issues'"
+                                          (truncate-string-to-width research-response 1000 nil nil "...")
+                                          (truncate-string-to-width review-output 500 nil nil "..."))))
+             (gptel-benchmark-call-subagent
+              'executor
+              "Apply researched fixes"
+              fix-prompt
+              (lambda (result)
+                (let* ((response (if (stringp result) result (format "%S" result)))
+                       (success (not (string-match-p "^Error:" response))))
+                  (when success
+                    (magit-git-success "add" "-A")
+                    (magit-git-success "commit" "-m" "fix: address review issues"))
+                  (funcall callback (cons success response))))))))
+      (funcall callback (cons nil "No subagent available")))))
 
 (defun gptel-auto-workflow--merge-to-staging (optimize-branch)
   "Merge OPTIMIZE-BRANCH to staging.
