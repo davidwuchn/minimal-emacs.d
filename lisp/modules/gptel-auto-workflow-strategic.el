@@ -144,7 +144,7 @@ OUTPUT JSON ONLY:
   (let ((targets '())
         (proj-root (gptel-auto-workflow--project-root)))
     ;; Try JSON
-    (condition-case nil
+    (condition-case _
         (with-temp-buffer
           (insert (if (stringp response) response (format "%S" response)))
           (goto-char (point-min))
