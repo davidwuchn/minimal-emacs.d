@@ -1007,15 +1007,24 @@ NOTE: Human must manually merge staging to main after review."
 ;;; Benchmark & Evaluation
 
 (defun gptel-auto-workflow--project-root ()
-  "Return the project root directory (git root or ~/.emacs.d).
+  "Return the MAIN project root directory (never a worktree subdirectory).
+When running inside a worktree, returns the main worktree's root.
 Always returns absolute path."
-  (expand-file-name
-   (or (when (fboundp 'project-root)
-         (when-let ((proj (project-current)))
-           (project-root proj)))
-       (when (boundp 'minimal-emacs-user-directory)
-         minimal-emacs-user-directory)
-       "~/.emacs.d/")))
+  (let ((git-root (string-trim
+                   (shell-command-to-string
+                    "git rev-parse --show-toplevel 2>/dev/null || echo ''"))))
+    (if (string-empty-p git-root)
+        (expand-file-name
+         (or (when (boundp 'minimal-emacs-user-directory)
+               minimal-emacs-user-directory)
+             "~/.emacs.d/"))
+      (let ((git-common-dir (string-trim
+                             (shell-command-to-string
+                              "git rev-parse --git-common-dir 2>/dev/null || echo ''"))))
+        (if (and (not (string-empty-p git-common-dir))
+                 (string-match-p "/\\.git$" git-common-dir))
+            (directory-file-name (file-name-directory git-common-dir))
+          git-root)))))
 
 (defun gptel-auto-experiment-run-tests ()
   "Run ERT tests and return (passed . output).
