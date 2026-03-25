@@ -2,73 +2,89 @@
 
 > Last session: 2026-03-25
 
-## Session Summary: Auto-Workflow is Fully Autonomous
+## Session Summary: Auto-Workflow Complete
 
-**Principle: Never ask user, just try harder, again and again.**
-
-### Key Principles Learned
-
-| Principle | Meaning |
-|-----------|---------|
-| LLM = Brain | LLM decides, we execute |
-| We = Eyes + Hands | Gather context, execute decisions |
-| Never ask user | Retry on failure, don't stop for input |
-
-### Latest Commits
-
-| Hash | Description |
-|------|-------------|
-| `c1068a0` | 💡 Auto-workflow never asks user - just retry |
-| `f5f146f` | ◈ Update docs: LLM decides targets |
-| `b4b1dc6` | 💡 LLM is brain, we are eyes and hands |
+**All systems operational. Ready for production.**
 
 ### Architecture
 
 ```
-AUTO-WORKFLOW (Fully Autonomous)
-─────────────────────────────────
-
-Eyes (gather)          Brain (decide)           Hands (execute)
-─────────────          ─────────────           ───────────────
-Git history     →      Target selection    →    Run experiments
-File sizes             Mutation type            Make changes
-TODOs                  Keep/discard             Run tests
-Test results           Quality check            Commit/push
-
-NEVER ASK USER
-──────────────
-fail → retry → retry → max_retries → log and continue
+┌─────────────────────────────────────────────┐
+│           AUTO-WORKFLOW PIPELINE            │
+├─────────────────────────────────────────────┤
+│                                             │
+│  Eyes (gather)      Brain (decide)          │
+│  ─────────────      ─────────────           │
+│  Git history        Target selection        │
+│  File sizes         Mutation strategy       │
+│  TODOs/FIXMEs       Keep/discard            │
+│  Test results       Quality threshold       │
+│                                             │
+│  Hands (execute)                            │
+│  ─────────────                             │
+│  Create worktree                            │
+│  Run executor                               │
+│  Run tests                                  │
+│  Commit + push                              │
+│  Log results                                │
+│                                             │
+│  Never ask user. Retry on failure.          │
+└─────────────────────────────────────────────┘
 ```
+
+### Commits This Session (10)
+
+| Commit | Description |
+|--------|-------------|
+| `c42de74` | Detect agent errors early |
+| `2f9d146` | State update |
+| `c1068a0` | Never ask user - retry |
+| `f5f146f` | LLM decides targets |
+| `b4b1dc6` | LLM is brain philosophy |
+| `200200f` | LLM-first selection |
+| `ab77594` | State update |
+| `678cb2c` | Tests before push |
+| `633d268` | Eight Keys signals |
+| `3c6e5ac` | Optimization skills |
 
 ### Production Status
 
 | Component | Status |
 |-----------|--------|
-| Target selection | ✓ LLM decides |
-| Mutation strategy | ✓ LLM decides |
-| Quality check | ✓ Grader (LLM) |
-| Keep/discard | ✓ Comparator (LLM) |
+| Target selection | ✓ LLM (analyzer) |
+| Mutation strategy | ✓ LLM (executor) |
+| Grading | ✓ LLM (grader) |
+| Decision | ✓ LLM (comparator) |
 | Tests before push | ✓ |
-| Retry on failure | ✓ Never asks |
+| Error detection | ✓ |
+| Retry logic | ✓ |
 | All tests | ✓ 52/52 |
 | Cron | ✓ 2 AM daily |
 
-### Files Created This Session
+### Philosophy
+
+```
+LLM = Brain (decides, judges, reasons)
+We  = Eyes (gather context) + Hands (execute)
+Never ask user. Try harder, again and again.
+```
+
+### Files Created
 
 | File | Purpose |
 |------|---------|
-| `lisp/modules/gptel-auto-workflow-strategic.el` | LLM target selection |
+| `gptel-auto-workflow-strategic.el` | LLM target selection |
 | `mementum/memories/llm-first-decision-making.md` | Philosophy |
-| `mementum/memories/auto-workflow-never-asks.md` | Autonomy principle |
-| `mementum/knowledge/eight-keys-signals.md` | Signal phrase guide |
+| `mementum/memories/auto-workflow-never-asks.md` | Autonomy |
+| `mementum/knowledge/eight-keys-signals.md` | Signal phrases |
 
 ---
 
 ## λ Summary
 
 ```
-λ principle. LLM = Brain, We = Eyes + Hands
-λ autonomy. Never ask user, just retry
-λ resilience. Try harder, again and again
-λ complete. Auto-workflow ready for 2 AM runs
+λ complete. Auto-workflow fully operational
+λ philosophy. LLM = Brain, We = Eyes + Hands
+λ autonomy. Never ask, just retry
+λ production. Cron runs at 2 AM daily
 ```
