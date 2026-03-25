@@ -634,6 +634,7 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 (declare-function gptel-benchmark-grade "gptel-benchmark-subagent")
 (declare-function gptel-benchmark-compare "gptel-benchmark-subagent")
 (declare-function gptel-benchmark-eight-keys-score "gptel-benchmark-principles")
+(declare-function gptel-auto-experiment--agent-error-p "gptel-tools-agent")
 
 ;;; Configuration
 
@@ -856,7 +857,12 @@ Scores based on commit message + code diff (not just stat)."
 
 (defun gptel-auto-experiment-grade (output callback)
   "Grade experiment OUTPUT. LLM decides quality threshold.
-Has timeout fallback to auto-pass if grading takes too long."
+Has timeout fallback to auto-pass if grading takes too long.
+If OUTPUT is an error message, fails immediately."
+  ;; Check for error message first
+  (when (gptel-auto-experiment--agent-error-p output)
+    (funcall callback (list :score 0 :passed nil :details "Agent error"))
+    (cl-return-from gptel-auto-experiment-grade))
   (setq gptel-auto-experiment--grade-done nil)
   (setq gptel-auto-experiment--grade-timer
         (run-with-timer gptel-auto-experiment-grade-timeout nil
@@ -1252,12 +1258,16 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
 (defun gptel-auto-experiment--extract-hypothesis (output)
   "Extract HYPOTHESIS from agent OUTPUT.
 Tries multiple patterns in order:
-1. Explicit HYPOTHESIS: prefix
-2. **HYPOTHESIS** markdown
-3. Sentence with 'will improve' (predictive statement)
-4. Action verb at start of sentence
-5. Summary after ✓ checkmark (fallback)"
+1. Check for error message (returns 'Agent error')
+2. Explicit HYPOTHESIS: prefix
+3. **HYPOTHESIS** markdown
+4. Sentence with 'will improve' (predictive statement)
+5. Action verb at start of sentence
+6. Summary after ✓ checkmark (fallback)"
   (cond
+   ;; Check for error message first
+   ((and (stringp output) (string-match-p "^Error:" output))
+    "Agent error")
    ((string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
     (match-string 1 output))
    ((string-match "\\*\\*HYPOTHESIS\\*\\*:?\\s-*\\([^\n]+\\)" output)
@@ -1272,6 +1282,10 @@ Tries multiple patterns in order:
     (let ((match (match-string 1 output)))
       (string-trim match)))
    (t "No hypothesis stated")))
+
+(defun gptel-auto-experiment--agent-error-p (output)
+  "Check if OUTPUT is an error message from agent tool."
+  (and (stringp output) (string-match-p "^Error:" output)))
 
 (defun gptel-auto-experiment--summarize (hypothesis)
   "Create short summary of HYPOTHESIS."
