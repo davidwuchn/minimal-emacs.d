@@ -303,7 +303,7 @@ Returns non-nil if compaction was initiated."
   (let ((system (my/gptel--directive-text 'compact))
         (buf (current-buffer))
         (chars-before (buffer-size))
-        (tokens-before (my/gptel--estimate-tokens (buffer-size)))
+        (tokens-before (my/gptel--estimate-text-tokens (buffer-size)))
         (window (my/gptel--context-window))
         (use-preview (or force-preview my/gptel-auto-compact-preview))
         (request-id (format "%s-%d" (buffer-name) (float-time))))
@@ -340,7 +340,7 @@ Returns non-nil if compaction was initiated."
                    (let* ((inhibit-read-only t)
                           (point-before (point))
                           (chars-after (length response))
-                          (tokens-after (my/gptel--estimate-tokens chars-after))
+                          (tokens-after (my/gptel--estimate-text-tokens chars-after))
                           (backup (buffer-string)))
                      (if use-preview
                          (progn
