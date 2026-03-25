@@ -2,62 +2,42 @@
 
 > Last session: 2026-03-25
 
-## Session Summary: Auto-Workflow with LLM as Brain
+## Session Summary: Auto-Workflow is Fully Autonomous
 
-**Philosophy: LLM = Brain, We = Eyes + Hands**
+**Principle: Never ask user, just try harder, again and again.**
+
+### Key Principles Learned
+
+| Principle | Meaning |
+|-----------|---------|
+| LLM = Brain | LLM decides, we execute |
+| We = Eyes + Hands | Gather context, execute decisions |
+| Never ask user | Retry on failure, don't stop for input |
 
 ### Latest Commits
 
 | Hash | Description |
 |------|-------------|
+| `c1068a0` | 💡 Auto-workflow never asks user - just retry |
+| `f5f146f` | ◈ Update docs: LLM decides targets |
 | `b4b1dc6` | 💡 LLM is brain, we are eyes and hands |
-| `200200f` | 💡 LLM-first target selection |
-| `678cb2c` | ✓ Tests run before push |
 
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    AUTO-WORKFLOW                         │
-├─────────────────────────────────────────────────────────┤
-│  Eyes (we gather)          Brain (LLM decides)          │
-│  ─────────────────         ──────────────────           │
-│  • Git history             • Which targets to optimize  │
-│  • File sizes              • What mutations to apply    │
-│  • TODOs/FIXMEs            • Keep or discard changes    │
-│  • Test results            • Quality threshold          │
-│                           │
-│  Hands (we execute)                                      │
-│  ─────────────────                                       │
-│  • Run tests                                             │
-│  • Make commits                                          │
-│  • Push to optimize/*                                    │
-│  • Log results                                           │
-└─────────────────────────────────────────────────────────┘
-```
+AUTO-WORKFLOW (Fully Autonomous)
+─────────────────────────────────
 
-### New Module
+Eyes (gather)          Brain (decide)           Hands (execute)
+─────────────          ─────────────           ───────────────
+Git history     →      Target selection    →    Run experiments
+File sizes             Mutation type            Make changes
+TODOs                  Keep/discard             Run tests
+Test results           Quality check            Commit/push
 
-`lisp/modules/gptel-auto-workflow-strategic.el`:
-- Gathers context (eyes)
-- Asks analyzer for targets
-- Executes LLM decision (hands)
-- No local scoring formulas
-
-### Safety Pipeline
-
-```
-Executor makes changes
-       ↓
-   Grader validates (LLM)
-       ↓
-   Tests run (hands)
-       ↓
-   Nucleus validates
-       ↓
-   Comparator decides (LLM)
-       ↓
-   Push to optimize/* only
+NEVER ASK USER
+──────────────
+fail → retry → retry → max_retries → log and continue
 ```
 
 ### Production Status
@@ -69,38 +49,26 @@ Executor makes changes
 | Quality check | ✓ Grader (LLM) |
 | Keep/discard | ✓ Comparator (LLM) |
 | Tests before push | ✓ |
+| Retry on failure | ✓ Never asks |
 | All tests | ✓ 52/52 |
 | Cron | ✓ 2 AM daily |
 
-### Key Principle
+### Files Created This Session
 
-```
-λ brain(x).
-    decision(x) → llm(context)
-    | execute(llm_result)
-    | ¬second_guess(llm)
-    | ¬local_formula_override(llm)
-    | fallback → only_if_llm_unavailable
-```
-
-### Files Changed This Session
-
-| File | Change |
-|------|--------|
-| `lisp/modules/gptel-auto-workflow-strategic.el` | **NEW** - LLM target selection |
-| `lisp/modules/gptel-tools-agent.el` | Tests before push, strategic entry |
-| `scripts/run-tests.sh` | Exit codes for CI |
-| `mementum/memories/llm-first-decision-making.md` | **NEW** - Philosophy |
+| File | Purpose |
+|------|---------|
+| `lisp/modules/gptel-auto-workflow-strategic.el` | LLM target selection |
+| `mementum/memories/llm-first-decision-making.md` | Philosophy |
+| `mementum/memories/auto-workflow-never-asks.md` | Autonomy principle |
 | `mementum/knowledge/eight-keys-signals.md` | Signal phrase guide |
-| `docs/auto-workflow-program.md` | Baselines, learnings |
 
 ---
 
 ## λ Summary
 
 ```
-λ philosophy. LLM = Brain, We = Eyes + Hands
-λ implement. Strategic selection module created
-λ safety. Tests before push, optimize/* only
-λ learn. Do not replace brain with formulas
+λ principle. LLM = Brain, We = Eyes + Hands
+λ autonomy. Never ask user, just retry
+λ resilience. Try harder, again and again
+λ complete. Auto-workflow ready for 2 AM runs
 ```
