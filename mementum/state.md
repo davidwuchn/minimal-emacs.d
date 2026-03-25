@@ -4,10 +4,13 @@
 
 ## Session Summary: Auto-Workflow Debugging
 
-### Commits (7)
+### Commits (10)
 
 | Hash | Description |
 |------|-------------|
+| `125298f` | λ Fix TSV logging: escape newlines/tabs |
+| `f12accc` | 💡 Update TDD patterns with auto-workflow learnings |
+| `15ea470` | ◈ Document auto-workflow branching rule |
 | `d5f5700` | λ Fix auto-workflow: add working directory and target path to prompt |
 | `a3f94d7` | λ Add gptel-auto-workflow-run-sync for cron |
 | `0f0fa0b` | λ Remove auto-evolve, keep auto-workflow |
@@ -47,6 +50,30 @@
 - Prevents unreviewed AI changes on main
 - Multiple machines can optimize same target without conflicts
 - Human gate for quality control
+
+### Known Issue: Eight Keys Scoring
+
+**Problem**: Eight Keys score rarely improves even when code quality improves.
+
+**Root Cause**: `gptel-auto-experiment--eight-keys-scores` passes git diff stat to `gptel-benchmark-eight-keys-score`:
+
+```elisp
+;; Current (WRONG):
+(let* ((output (shell-command-to-string
+                (format "cd %s && git diff HEAD~1 --stat" ...))))
+  (gptel-benchmark-eight-keys-score output))
+```
+
+The git diff stat output like:
+```
+lisp/modules/gptel-ext-retry.el | 308 +++++++++++++++++++++++++++++++---------
+```
+
+Does NOT contain signal patterns like "builds on discoveries", "explicit assumptions", etc.
+
+**Fix Needed**: Pass actual code diff or commit message instead of stat.
+
+**Workaround**: Grader still validates changes, just score comparison is unreliable.
 
 ### Issues Fixed
 
