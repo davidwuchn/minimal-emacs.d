@@ -68,6 +68,30 @@
 
 **Verified**: phi-vitality now scores 0.80 when patterns present (was always 0.50)
 
+### Known Issue: Executor Model Doesn't Always Follow Instructions
+
+**Problem**: `qwen3.5-plus` sometimes ignores the instruction to write "HYPOTHESIS:" at start.
+
+**Impact**: Grader can't extract hypothesis → experiment discarded
+
+**Example Output**:
+```
+✓ gptel-ext-retry.el: Enhanced fractal Clarity by adding explicit...
+```
+
+**Expected Output**:
+```
+HYPOTHESIS: Adding explicit sections will improve clarity.
+✓ gptel-ext-retry.el: Enhanced fractal Clarity...
+```
+
+**Workaround**: Grader has fallback, but hypothesis detection fails.
+
+**Possible Solutions**:
+1. Switch to better model for executor (gpt-4o, claude)
+2. Add stronger prompt emphasis
+3. Post-process output to extract hypothesis from summary
+
 ### Issues Fixed
 
 #### 1. Async/Sync Incompatibility (FIXED)
