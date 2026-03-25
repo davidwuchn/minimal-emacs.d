@@ -859,54 +859,24 @@ Has timeout fallback to auto-pass if grading takes too long."
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER. CALLBACK receives keep/discard decision with reasoning.
-Factors in both grader score and code quality score.
-Uses comparator subagent if available, falls back to local comparison."
-  (if (and gptel-auto-experiment-use-subagents
-           (fboundp 'gptel-benchmark-compare))
-      (gptel-benchmark-compare
-       before after
-       "Experiment comparison"
-       (lambda (result)
-         (let* ((winner (plist-get result :winner))
-                (analysis (plist-get result :analysis))
-                (rec (plist-get result :recommendation))
-                (score-before (plist-get before :score))
-                (score-after (plist-get after :score))
-                (quality-before (or (plist-get before :code-quality) 0.5))
-                (quality-after (or (plist-get after :code-quality) 0.5))
-                (combined-before (+ (* 0.5 score-before) (* 0.5 quality-before)))
-                (combined-after (+ (* 0.5 score-after) (* 0.5 quality-after)))
-                (keep (if winner
-                          (string= winner "B")
-                        (> combined-after combined-before)))
-                (reasoning (or rec
-                               (format "Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                       score-before score-after
-                                       quality-before quality-after
-                                       combined-before combined-after))))
-           (funcall callback
-                    (list :keep keep
-                          :reasoning reasoning
-                          :analysis analysis
-                          :improvement (list :score (- score-after score-before)
-                                             :quality (- quality-after quality-before)
-                                             :combined (- combined-after combined-before)))))))
-    (let* ((score-before (plist-get before :score))
-           (score-after (plist-get after :score))
-           (quality-before (or (plist-get before :code-quality) 0.5))
-           (quality-after (or (plist-get after :code-quality) 0.5))
-           (combined-before (+ (* 0.5 score-before) (* 0.5 quality-before)))
-           (combined-after (+ (* 0.5 score-after) (* 0.5 quality-after)))
-           (keep (> combined-after combined-before)))
-      (funcall callback
-               (list :keep keep
-                     :reasoning (format "Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                        score-before score-after
-                                        quality-before quality-after
-                                        combined-before combined-after)
-                     :improvement (list :score (- score-after score-before)
-                                        :quality (- quality-after quality-before)
-                                        :combined (- combined-after combined-before)))))))
+Uses local comparison based on combined score (50% Eight Keys + 50% code quality).
+Subagent not needed for simple score comparison."
+  (let* ((score-before (plist-get before :score))
+         (score-after (plist-get after :score))
+         (quality-before (or (plist-get before :code-quality) 0.5))
+         (quality-after (or (plist-get after :code-quality) 0.5))
+         (combined-before (+ (* 0.5 score-before) (* 0.5 quality-before)))
+         (combined-after (+ (* 0.5 score-after) (* 0.5 quality-after)))
+         (keep (> combined-after combined-before)))
+    (funcall callback
+             (list :keep keep
+                   :reasoning (format "Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
+                                      score-before score-after
+                                      quality-before quality-after
+                                      combined-before combined-after)
+                   :improvement (list :score (- score-after score-before)
+                                      :quality (- quality-after quality-before)
+                                      :combined (- combined-after combined-before))))))
 
 ;;; Prompt Building
 
