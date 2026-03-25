@@ -691,31 +691,38 @@ Multiple machines can optimize same target without conflicts."
 
 (defun gptel-auto-workflow-create-worktree (target &optional experiment-id)
   "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch."
-  (let* ((branch (gptel-auto-workflow--branch-name target experiment-id))
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (branch (gptel-auto-workflow--branch-name target experiment-id))
          (worktree-dir (expand-file-name
-                        (format "%s/%s" gptel-auto-workflow-worktree-base branch))))
+                        (format "%s/%s" gptel-auto-workflow-worktree-base branch)
+                        proj-root)))
     (condition-case err
         (progn
           (make-directory (file-name-directory worktree-dir) t)
-          (magit-worktree-branch worktree-dir branch "main")
+          (let ((default-directory proj-root))
+            (magit-worktree-branch worktree-dir branch "main"))
           (message "[auto-workflow] Created: %s" branch)
           (setq gptel-auto-workflow--worktree-dir worktree-dir
                 gptel-auto-workflow--current-branch branch)
           worktree-dir)
       (error
        (message "[auto-workflow] Failed to create worktree: %s" err)
+       (setq gptel-auto-workflow--worktree-dir nil
+             gptel-auto-workflow--current-branch nil)
        nil))))
 
 (defun gptel-auto-workflow-delete-worktree ()
   "Delete current worktree if exists."
   (when (and gptel-auto-workflow--worktree-dir
              (file-exists-p gptel-auto-workflow--worktree-dir))
-    (condition-case err
-        (magit-worktree-delete gptel-auto-workflow--worktree-dir)
-      (error
-       (message "[auto-workflow] Failed to delete worktree: %s" err)))
-    (setq gptel-auto-workflow--worktree-dir nil
-          gptel-auto-workflow--current-branch nil)))
+    (let ((proj-root (gptel-auto-workflow--project-root)))
+      (condition-case err
+          (let ((default-directory proj-root))
+            (magit-worktree-delete gptel-auto-workflow--worktree-dir))
+        (error
+         (message "[auto-workflow] Failed to delete worktree: %s" err)))))
+  (setq gptel-auto-workflow--worktree-dir nil
+        gptel-auto-workflow--current-branch nil))
 
 ;;; Benchmark & Evaluation
 
@@ -985,18 +992,15 @@ HYPOTHESIS: [your hypothesis here]"
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
          (start-time (float-time))
          (timeout-timer nil)
-         (finished nil)
-         (result nil))
+         (finished nil))
     (if (not worktree)
         (funcall callback (list :target target :error "Failed to create worktree"))
-      ;; Step 1: Analyze previous results
       (gptel-auto-experiment-analyze
        previous-results
        (lambda (analysis)
          (let* ((patterns (when analysis (plist-get analysis :patterns)))
                 (prompt (gptel-auto-experiment-build-prompt
                          target experiment-id max-experiments analysis baseline)))
-           ;; Step 2: Run code agent with timeout
            (setq timeout-timer
                  (run-with-timer gptel-auto-experiment-time-budget nil
                                  (lambda ()
@@ -1011,7 +1015,6 @@ HYPOTHESIS: [your hypothesis here]"
             (lambda (agent-output)
               (when timeout-timer (cancel-timer timeout-timer))
               (unless finished
-                ;; Step 3: Grade output (LLM decides threshold)
                 (gptel-auto-experiment-grade
                  agent-output
                  (lambda (grade)
@@ -1019,7 +1022,6 @@ HYPOTHESIS: [your hypothesis here]"
                           (grade-passed (plist-get grade :passed))
                           (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
                      (if (not grade-passed)
-                         ;; Early discard
                          (progn
                            (setq finished t)
                            (gptel-auto-workflow-delete-worktree)
@@ -1037,12 +1039,10 @@ HYPOTHESIS: [your hypothesis here]"
                              (gptel-auto-experiment-log-tsv
                               (format-time-string "%Y-%m-%d") exp-result)
                              (funcall callback exp-result)))
-                       ;; Step 4: Run benchmark
                        (let* ((bench (gptel-auto-experiment-benchmark))
                               (passed (plist-get bench :passed))
                               (score-after (plist-get bench :eight-keys)))
                          (if (not passed)
-                             ;; Tests failed
                              (progn
                                (setq finished t)
                                (magit-git-success "checkout" "--" ".")
@@ -1061,14 +1061,13 @@ HYPOTHESIS: [your hypothesis here]"
                                  (gptel-auto-experiment-log-tsv
                                   (format-time-string "%Y-%m-%d") exp-result)
                                  (funcall callback exp-result)))
-;; Step 5: Compare (decide keep/discard)
-                            (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
-                              (gptel-auto-experiment-decide
-                               (list :score baseline :code-quality 0.5)
-                               (list :score score-after :code-quality code-quality :output agent-output)
-                               (lambda (decision)
-                              (setq finished t)
-(let* ((keep (plist-get decision :keep))
+                           (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
+                             (gptel-auto-experiment-decide
+                              (list :score baseline :code-quality 0.5)
+                              (list :score score-after :code-quality code-quality :output agent-output)
+                              (lambda (decision)
+                                (setq finished t)
+                                (let* ((keep (plist-get decision :keep))
                                        (reasoning (plist-get decision :reasoning))
                                        (exp-result (list :target target
                                                          :id experiment-id
@@ -1082,28 +1081,26 @@ HYPOTHESIS: [your hypothesis here]"
                                                          :grader-reason (plist-get grade :details)
                                                          :comparator-reason reasoning
                                                          :analyzer-patterns (format "%s" patterns))))
-                                (if keep
-                                    ;; Commit
-                                    (let ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\nExperiment %d/%d. Score: %.2f → %.2f"
-                                                       target
-                                                       (gptel-auto-experiment--summarize hypothesis)
-                                                       hypothesis
-                                                       experiment-id max-experiments
-                                                       baseline score-after)))
-(magit-git-success "add" "-A")
-                                       (magit-git-success "commit" "-m" msg)
-                                       (setq gptel-auto-experiment--best-score score-after
-                                             gptel-auto-experiment--no-improvement-count 0)
-                                       (when gptel-auto-experiment-auto-push
-                                         (magit-git-success "push" "origin" gptel-auto-workflow--current-branch)))
-                                  ;; Discard
-                                  (progn
-                                    (magit-git-success "checkout" "--" ".")
-                                    (cl-incf gptel-auto-experiment--no-improvement-count)))
-(gptel-auto-experiment-log-tsv
-                                  (format-time-string "%Y-%m-%d") exp-result)
-                                 (gptel-auto-workflow-delete-worktree)
-                                 (funcall callback exp-result)))))))))))))
+                                  (if keep
+                                      (let ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\nExperiment %d/%d. Score: %.2f → %.2f"
+                                                         target
+                                                         (gptel-auto-experiment--summarize hypothesis)
+                                                         hypothesis
+                                                         experiment-id max-experiments
+                                                         baseline score-after)))
+                                        (magit-git-success "add" "-A")
+                                        (magit-git-success "commit" "-m" msg)
+                                        (setq gptel-auto-experiment--best-score score-after
+                                              gptel-auto-experiment--no-improvement-count 0)
+                                        (when gptel-auto-experiment-auto-push
+                                          (magit-git-success "push" "origin" gptel-auto-workflow--current-branch)))
+                                    (progn
+                                      (magit-git-success "checkout" "--" ".")
+                                      (cl-incf gptel-auto-experiment--no-improvement-count)))
+                                  (gptel-auto-experiment-log-tsv
+                                   (format-time-string "%Y-%m-%d") exp-result)
+                                  (gptel-auto-workflow-delete-worktree)
+                                  (funcall callback exp-result)))))))))))))
             "code"
             (format "Experiment %d: optimize %s" experiment-id target)
             prompt
@@ -1126,13 +1123,16 @@ HYPOTHESIS: [your hypothesis here]"
   "Run experiments for TARGET until stop condition. Call CALLBACK with results."
   (setq gptel-auto-experiment--results nil
         gptel-auto-experiment--best-score nil
-        gptel-auto-experiment--no-improvement-count 0)
+        gptel-auto-experiment--no-improvement-count 0
+        gptel-auto-workflow--worktree-dir nil
+        gptel-auto-workflow--current-branch nil)
   (let ((baseline (gptel-auto-experiment-benchmark))
         (max-exp gptel-auto-experiment-max-per-target)
         (threshold gptel-auto-experiment-no-improvement-threshold))
     (setq gptel-auto-experiment--best-score (or (plist-get baseline :eight-keys) 0.0))
     (message "[auto-experiment] Baseline for %s: %.2f" target gptel-auto-experiment--best-score)
     (cl-labels ((run-next (exp-id)
+                  (gptel-auto-workflow-delete-worktree)
                   (if (or (> exp-id max-exp)
                           (gptel-auto-experiment-should-stop-p threshold))
                       (progn
