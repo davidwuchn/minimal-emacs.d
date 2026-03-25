@@ -31,12 +31,14 @@
 
 (defcustom gptel-auto-workflow-strategic-selection t
   "When non-nil, use LLM-based target selection.
-When nil, use static targets from gptel-auto-workflow-targets."
+When nil, use static targets from gptel-auto-workflow-targets.
+Monthly subscription: LLM selection finds best targets each run."
   :type 'boolean
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-workflow-max-targets-per-run 3
-  "Maximum targets to process in one auto-workflow run."
+(defcustom gptel-auto-workflow-max-targets-per-run 5
+  "Maximum targets to process in one auto-workflow run.
+Monthly subscription: 5 targets per run for more experiments."
   :type 'integer
   :group 'gptel-tools-agent)
 
@@ -93,6 +95,7 @@ CALLBACK receives list of target files.
 ;; SYNTHESIS: Integrates gather-context output with LLM reasoning for selection
 ;; TEST: Verify callback receives non-nil list when LLM succeeds"
   (let* ((context (gptel-auto-workflow--gather-context))
+         (max-targets gptel-auto-workflow-max-targets-per-run)
          (prompt (format "Select optimization targets for this Emacs Lisp project.
 
 FILES AVAILABLE:
@@ -107,14 +110,15 @@ FILES BY SIZE:
 KNOWN ISSUES (TODOs/FIXMEs):
 %s
 
-TASK: Select exactly 3 files from lisp/modules/ to optimize tonight.
+TASK: Select exactly %d files from lisp/modules/ to optimize.
 
 OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
                         (plist-get context :file-list)
                         (plist-get context :git-history)
                         (plist-get context :file-sizes)
-                        (plist-get context :todos))))
+                        (plist-get context :todos)
+                        max-targets)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (progn
@@ -170,7 +174,7 @@ LLM decides if available, otherwise uses static list.
 ;; RISK: LLM failure gracefully degrades to static targets
 ;; EDGE CASE: No targets from LLM → fallback to gptel-auto-workflow-targets
 ;; SYNTHESIS: Orchestrates discover, gather-context, ask-analyzer, parse-targets
-;; TEST: Verify callback receives 3 targets in both LLM and fallback paths"
+;; TEST: Verify callback receives N targets (N = gptel-auto-workflow-max-targets-per-run)"
   (if gptel-auto-workflow-strategic-selection
       (gptel-auto-workflow--ask-analyzer-for-targets
        (lambda (targets)

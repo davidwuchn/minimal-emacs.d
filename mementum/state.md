@@ -1,96 +1,73 @@
 # Mementum State
 
-> Last session: 2026-03-25 22:00
+> Last session: 2026-03-25 22:15
 
-## Real Code Fixes Merged ✓
+## Key Learning: Never Hard Code, Always Ask LLM
 
-**4 real bug fixes by auto-workflow:**
-
-| Target | Fix | Type |
-|--------|-----|------|
-| gptel-auto-workflow-strategic.el | Added `(require 'json)` | Missing dependency |
-| gptel-ext-fsm-utils.el | Fixed `%d` → `%s` for float-time | Type bug |
-| gptel-ext-retry.el | Refactor trim-tool-results-for-retry | Code quality |
-| gptel-tools-code.el | Fix resource leak in byte-compile | Resource leak |
-
----
-
-## Async Pattern: No Blocking
-
-**KEY INSIGHT**: With emacs daemon + emacsclient, we don't need blocking sync functions.
-
-### Pattern
-
-```bash
-# Start workflow (returns immediately)
-emacsclient -e '(gptel-auto-workflow-run-async)'
-
-# Check status anytime (daemon always responds)
-emacsclient -e '(gptel-auto-workflow-status)'
-# => (:running t :phase "running" :kept 2 :total 3)
-
-# Check Messages buffer for details
-emacsclient -e '(with-current-buffer "*Messages*" ...)'
+```
+λ dynamic. LLM selects targets each run - no hard-coded lists
+λ adaptive. LLM analyzes git history, TODOs, file sizes
+λ smart. LLM picks best targets based on current state
+λ fallback. Empty static list = pure LLM selection
 ```
 
-### Anti-Pattern Removed
+### Before vs After
 
-```elisp
-;; REMOVED: Blocks daemon, can't respond to emacsclient
-(while running
-  (accept-process-output nil 1.0))
+| Aspect | Before | After |
+|--------|--------|-------|
+| Targets | Hard-coded 8 files | LLM selects dynamically |
+| Selection | Static list | Analyzes git + TODOs + size |
+| Adaptation | Never changes | Different each run |
+| Fallback | N/A | Empty list = pure LLM |
+
+### How It Works
+
+```
+1. gptel-auto-workflow-run-async called with no targets
+2. Calls gptel-auto-workflow-select-targets
+3. LLM analyzes: git history, TODOs, file sizes
+4. LLM returns N best targets (N = gptel-auto-workflow-max-targets-per-run)
+5. Workflow runs on selected targets
 ```
 
 ---
 
-## Key Learnings
+## Monthly Subscription Optimization
 
-### Async Pattern
+| Setting | Value | Reason |
+|---------|-------|--------|
+| Targets | LLM selects | No hard-coding |
+| Max per run | 5 | Diminishing returns after 3-4 |
+| No-improvement stop | 2 | Fail fast, try different file |
+| Frequency | Every 6h | 4×/day |
+| Experiments/target | 5 | Focus on diverse targets |
 
-**Never block the daemon.** Use async + status checking.
+### Math
 
-```bash
-# Start
-./scripts/run-auto-workflow.sh
-
-# Check progress
-./scripts/run-auto-workflow.sh status
-
-# Debug via Messages
-emacsclient -e '(with-current-buffer "*Messages*" ...)'
 ```
-
-### Use Emacs Daemon + Emacsclient
-
-**Do NOT use batch mode.** Batch mode lacks user config (API keys, gptel setup).
-
-### Reuse Emacs Packages
-
-**Do NOT reinvent wheel.** Use magit, gptel, etc. from user's config.
+LLM selects 5 targets × 5 experiments × 4 runs = 100 experiments/day
+Different targets each run = more diverse improvements
+```
 
 ---
 
-## Auto-Workflow Status
+## Previous Fixes Merged (4 total)
 
-| Component | Status |
-|-----------|--------|
-| Staging protection | ✓ Never touches main |
-| Daemon mode | ✓ Uses user config |
-| Magit integration | ✓ Reuse packages |
-| Worktree isolation | ✓ Fixed nested bug |
-| Async pattern | ✓ No blocking, always responsive |
-| Real code required | ✓ Documentation forbidden |
-| Cron | ✓ 2 AM via emacsclient |
+| File | Fix |
+|------|-----|
+| gptel-auto-workflow-strategic.el | Added `(require 'json)` |
+| gptel-ext-fsm-utils.el | Fixed `%d` → `%s` for float-time |
+| gptel-ext-retry.el | Refactor trim-tool-results-for-retry |
+| gptel-tools-code.el | Fix resource leak in byte-compile |
 
 ---
 
 ## λ Summary
 
 ```
-λ async. Never block daemon - use async + status checking
+λ dynamic. Never hard-code targets - LLM selects each run
+λ adaptive. LLM analyzes git, TODOs, sizes for best picks
+λ async. Daemon never blocks - check status anytime
 λ daemon. Use emacs --daemon + emacsclient, NOT batch mode
-λ status. Check progress with (gptel-auto-workflow-status)
-λ debug. Check Messages buffer with emacsclient
-λ code. Require real code changes, forbid documentation-only
 λ safety. Main NEVER touched by auto-workflow
 ```

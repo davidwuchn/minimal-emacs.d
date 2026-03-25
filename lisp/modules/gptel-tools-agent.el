@@ -646,16 +646,10 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 ;;; Configuration
 
 (defcustom gptel-auto-workflow-targets
-  '("gptel-ext-retry.el"
-    "gptel-ext-context.el"
-    "gptel-tools-code.el"
-    "gptel-ext-fsm-utils.el"
-    "gptel-agent-loop.el"
-    "gptel-tools-agent.el"
-    "nucleus-presets.el"
-    "nucleus-tools.el")
-  "Target files for scheduled auto-workflow runs.
-Monthly subscription optimization: 8 targets to maximize value."
+  '()
+  "Static fallback targets when LLM selection disabled or fails.
+Empty by default - LLM selects targets dynamically.
+Monthly subscription: LLM selection finds best targets each run."
   :type '(repeat string)
   :group 'gptel-tools-agent)
 
@@ -1650,8 +1644,11 @@ Returns (:running :kept :total :phase :results)."
 (declare-function gptel-auto-workflow-select-targets "gptel-auto-workflow-strategic")
 
 (defun gptel-auto-workflow-run-async (&optional targets completion-callback)
-  "Run auto-workflow with TARGETS asynchronously.
+  "Run auto-workflow asynchronously.
 Non-blocking - returns immediately, check status with `gptel-auto-workflow-status'.
+
+TARGETS: When nil, LLM selects best targets dynamically.
+         When non-nil, use provided targets directly.
 
 Each target runs up to gptel-auto-experiment-max-per-target experiments.
 Stops early if gptel-auto-experiment-no-improvement-threshold consecutive
@@ -1672,13 +1669,23 @@ Usage:
     (user-error "magit-worktree is required"))
   (unless (require 'magit-git nil t)
     (user-error "magit-git is required"))
-  (let* ((targets (or targets gptel-auto-workflow-targets))
-         (run-id (format-time-string "%Y-%m-%d"))
+  (setq gptel-auto-workflow--running t
+        gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0))
+  (if targets
+      (gptel-auto-workflow--run-with-targets targets completion-callback)
+    (require 'gptel-auto-workflow-strategic)
+    (gptel-auto-workflow-select-targets
+     (lambda (selected-targets)
+       (gptel-auto-workflow--run-with-targets selected-targets completion-callback)))))
+
+(defun gptel-auto-workflow--run-with-targets (targets completion-callback)
+  "Run experiments for TARGETS asynchronously."
+  (let* ((run-id (format-time-string "%Y-%m-%d"))
          (all-results '())
          (completed-targets 0)
          (kept-count 0))
-    (setq gptel-auto-workflow--running t
-          gptel-auto-workflow--stats (list :phase "running" :total (length targets) :kept 0))
+    (plist-put gptel-auto-workflow--stats :phase "running")
+    (plist-put gptel-auto-workflow--stats :total (length targets))
     (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
     (dolist (target targets)
       (gptel-auto-experiment-loop
