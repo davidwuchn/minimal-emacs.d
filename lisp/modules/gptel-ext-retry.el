@@ -126,12 +126,10 @@ Returns the number of messages truncated, or 0 if nothing was done."
            (truncated 0)
            (bytes-saved 0))
       (when (and messages (> (length messages) 0))
-        (let ((tool-indices '()))
-          (dotimes (i (length messages))
-            (let ((msg (aref messages i)))
-              (when (equal (plist-get msg :role) "tool")
-                (push i tool-indices))))
-          (setq tool-indices (nreverse tool-indices))
+        (let ((tool-indices
+               (my/gptel--collect-message-indices
+                messages
+                (lambda (msg) (equal (plist-get msg :role) "tool")))))
           (when (> (length tool-indices) keep)
             (let ((to-truncate (seq-take tool-indices (- (length tool-indices) keep))))
               ;; Single pass: calculate bytes-saved AND truncate
@@ -173,21 +171,20 @@ Returns the number of messages whose reasoning_content was stripped."
            (keep my/gptel-reasoning-keep-turns)
            (stripped 0))
       (when (and messages (> (length messages) 0))
-        (let ((reasoning-indices '()))
-          (dotimes (i (length messages))
-            (let ((msg (aref messages i)))
-              (when (and (equal (plist-get msg :role) "assistant")
-                         (plist-get msg :reasoning_content)
-                         (not (equal "" (plist-get msg :reasoning_content))))
-                (push i reasoning-indices))))
-          (setq reasoning-indices (nreverse reasoning-indices))
+        (let ((reasoning-indices
+               (my/gptel--collect-message-indices
+                messages
+                (lambda (msg)
+                  (and (equal (plist-get msg :role) "assistant")
+                       (plist-get msg :reasoning_content)
+                       (not (equal "" (plist-get msg :reasoning_content))))))))
           (when (> (length reasoning-indices) keep)
             (let ((to-strip (seq-take reasoning-indices
                                       (- (length reasoning-indices) keep))))
               (dolist (idx to-strip)
                 (let ((msg (aref messages idx)))
                   (plist-put msg :reasoning_content "")
-                  (cl-incf stripped)))))))
+                  (cl-incf stripped))))))))
       stripped)))
 
 (defun my/gptel--repair-thinking-tool-call-messages (info)
@@ -308,6 +305,18 @@ Returns the number of messages truncated, or 0 if nothing was done."
                 (plist-put msg :content truncation-text)
                 (cl-incf truncated))))))
       truncated)))
+
+(defun my/gptel--collect-message-indices (messages predicate)
+  "Collect indices of messages in MESSAGES vector matching PREDICATE.
+PREDICATE is a function that takes a message plist and returns non-nil if it matches.
+Returns a list of indices in ascending order."
+  (let ((indices '()))
+    (when (and messages (> (length messages) 0))
+      (dotimes (i (length messages))
+        (let ((msg (aref messages i)))
+          (when (funcall predicate msg)
+            (push i indices))))
+      (nreverse indices))))
 
 (defun my/gptel--strip-images-from-messages (info)
   "Strip image content from all messages in INFO to reduce payload.
