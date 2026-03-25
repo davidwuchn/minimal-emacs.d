@@ -9,6 +9,48 @@
 ;; Auto-delegation: when context exceeds backend-specific limits,
 ;; automatically delegates to a subagent with clean context.
 
+;;; Commentary:
+
+;; OVERVIEW:
+;; This module provides automatic context management for gptel buffers.
+;; It monitors token usage and triggers compaction or delegation when
+;; thresholds are exceeded to prevent context window overflow.
+
+;; ASSUMPTIONS:
+;; 1. gptel-mode is active in the buffer before compaction checks run
+;; 2. The 'compact directive exists in gptel-directives for LLM summarization
+;; 3. Token estimation is approximate (chars / 4) and may vary by model
+;; 4. Backend-specific thresholds account for undocumented server limits
+;; 5. Image tokens are counted separately from text tokens
+
+;; GOALS:
+;; 1. Prevent context window overflow errors during long conversations
+;; 2. Maintain conversation quality through intelligent summarization
+;; 3. Minimize user interruption with automatic background compaction
+;; 4. Support multiple backends with different token limits
+;; 5. Provide fallback delegation when compaction is insufficient
+
+;; RISK MITIGATION:
+;; 1. Race conditions prevented with request-id tracking
+;; 2. Max attempts limit prevents runaway compaction loops
+;; 3. Minimum interval between compactions avoids thrashing
+;; 4. Preview mode preserves original content for safety
+;; 5. User confirmation option for destructive operations
+
+;; EDGE CASES:
+;; 1. Buffer too small: skipped if < my/gptel-auto-compact-min-chars
+;; 2. Compaction in progress: skipped to prevent concurrent runs
+;; 3. Max attempts reached: auto-compact disabled for buffer session
+;; 4. No 'compact directive: operation skipped with warning message
+;; 5. Stale callback: ignored if request-id mismatch (race condition)
+;; 6. Nested worktrees: handled by parent context management
+;; 7. Image-heavy buffers: token count includes image tokens
+
+;; TEST:
+;; - M-x my/gptel-context-window-show: displays current token usage
+;; - M-x my/gptel-manual-compact: manually trigger compaction
+;; - Monitor *Messages* for [compact] and [auto-delegate] logs
+
 ;;; Code:
 
 (require 'gptel)

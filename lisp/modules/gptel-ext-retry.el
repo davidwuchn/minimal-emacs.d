@@ -8,6 +8,34 @@
 ;;   Layer 1 — Pre-send (retries=0): my/gptel--compact-payload
 ;;   Layer 2 — Retry (retries=1): trim tool results
 ;;   Layer 3 — Retry (retries=2+): truncate ALL + strip reasoning + reduce tools
+;;
+;; ASSUMPTION: Transient errors (408, 429, 500-504, network failures) are
+;;   safe to retry with exponential backoff. Non-transient errors (auth,
+;;   invalid params) should fail immediately.
+;;
+;; BEHAVIOR: Implements progressive payload reduction on each retry:
+;;   - Retry 1: Keep N-1 recent tool results (N = my/gptel-retry-keep-recent-tool-results)
+;;   - Retry 2+: Strip reasoning_content, reduce tools to only used ones
+;;   - Retry 3+: Truncate ALL tool results, strip images
+;;
+;; EDGE CASE: Subagent FSMs have custom handlers and should NOT be retried
+;;   here — parent timeout handles their failures. Detected by checking
+;;   if handlers match main request handlers.
+;;
+;; EDGE CASE: Thinking-enabled models (Moonshot) require reasoning_content
+;;   field to exist on ALL assistant tool-call messages, even if empty.
+;;   my/gptel--repair-thinking-tool-call-messages ensures this invariant.
+;;
+;; EDGE CASE: Payload compaction only runs on first attempt (retries=0).
+;;   Subsequent retries use my/gptel-auto-retry's trimming logic.
+;;
+;; TEST: Verify retry behavior with (ert-deftest test-gptel-retry ...)
+;;   in tests/test-gptel-ext-retry.el. Test transient error detection,
+;;   exponential backoff timing, and payload reduction effectiveness.
+;;
+;; WISDOM: my/gptel-trim-min-bytes (default 5000) prevents tiny trims that
+;;   break prompt cache consistency without meaningful payload reduction.
+;;   Based on Anthropic's guidance: context edits should clear ≥5000 tokens.
 
 ;;; Code:
 
@@ -309,7 +337,24 @@ Returns the number of image parts removed, or 0 if nothing was done."
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error.
 Matches network failures, overload responses, rate limits, and common
 curl error codes that are safe to retry with backoff.
-Also retries model-side bugs like malformed tool arguments."
+Also retries model-side bugs like malformed tool arguments.
+
+ASSUMPTION: HTTP status codes 408, 429, 500-504 are transient and safe to retry.
+ASSUMPTION: Error messages containing 'Malformed JSON', 'timeout', 'Overloaded',
+  'Too Many Requests' indicate temporary failures, not permanent errors.
+ASSUMPTION: HTTP 400 with 'InvalidParameter' or 'function.arguments' errors
+  are model-side bugs (not user errors) and should be retried.
+
+BEHAVIOR: Checks both string error messages and numeric HTTP status codes.
+  Returns t if ANY match is found (OR logic for maximum coverage).
+
+EDGE CASE: error-data can be string, plist, or nil. Handles all three.
+EDGE CASE: http-status can be string, number, or t (curl success). Converts
+  strings to numbers, ignores t.
+
+TEST: (my/gptel--transient-error-p \"Malformed JSON\" 500) => t
+TEST: (my/gptel--transient-error-p \"Invalid API key\" 401) => nil
+TEST: (my/gptel--transient-error-p nil 429) => t"
   (let ((status (cond
                  ((stringp http-status) (string-to-number http-status))
                  ((numberp http-status) http-status)
@@ -362,7 +407,35 @@ Skips retries for subagent FSMs (they have their own timeout handler).
 
 ORIG-FN is the original `gptel--fsm-transition' function.
 MACHINE is the gptel FSM instance.
-NEW-STATE is the target state (defaults to next state in MACHINE)."
+NEW-STATE is the target state (defaults to next state in MACHINE).
+
+ASSUMPTION: FSM in ERRS state with transient error should retry, not fail.
+ASSUMPTION: Exponential backoff (4s, 8s, 16s, 30s cap) prevents API overload.
+ASSUMPTION: my/gptel-max-retries=3 prevents doom-loops from context overflow.
+
+BEHAVIOR: On transient error:
+  1. Clean up partial buffer insertions (prevent corruption)
+  2. Reset FSM state to WAIT (triggers fresh request)
+  3. Increment retry counter
+  4. Apply progressive payload trimming (tool results, reasoning, tools)
+  5. Schedule async retry with exponential backoff delay
+  6. Return nil to abort ERRS transition (timer takes over)
+
+BEHAVIOR: On non-transient error or max retries exceeded:
+  - Call original function to proceed to ERRS state (fail normally)
+
+EDGE CASE: Subagent FSMs detected by handler mismatch — never retry them.
+EDGE CASE: my/gptel-max-retries=nil means retry indefinitely (capped at 30s delay).
+EDGE CASE: Partial insertion cleanup requires both :position and :tracking-marker
+  to be live markers in the same buffer, with start <= tracking.
+
+WISDOM: Progressive trimming adapts to severity:
+  - Retry 1: Light trim (keep recent tool results)
+  - Retry 2+: Aggressive (strip reasoning, reduce tools, truncate all)
+  This balances payload reduction with context preservation.
+
+TEST: Verify with network failure simulation — should retry 3 times with
+  increasing delays, then fail. Check message buffer for retry logs."
   (unless new-state (setq new-state (gptel--fsm-next machine)))
   (let* ((info (gptel-fsm-info machine))
          (error-data (plist-get info :error))
@@ -508,7 +581,36 @@ Applies trimming progressively until under limit or nothing left to trim:
   4. Trim context images (oldest first)
   5. Aggressive tool result trim (keep 0)
   6. Truncate old user/assistant messages
-  7. Strip images from multimodal messages (last resort)"
+  7. Strip images from multimodal messages (last resort)
+
+ASSUMPTION: Payload estimation via json-serialize is accurate enough for
+  compaction decisions. Estimation errors are logged but don't block.
+ASSUMPTION: Model-specific context limits (my/gptel-model-context-bytes)
+  are more precise than global limit for known models.
+ASSUMPTION: Progressive passes (1-7) are ordered by least-to-most destructive.
+
+BEHAVIOR: Estimates payload size, compares to effective byte limit
+  (min of global and model-specific). If over limit, applies 7 passes
+  of increasingly aggressive trimming until under limit or exhausted.
+
+BEHAVIOR: Repairs thinking-enabled model messages BEFORE compaction to
+  ensure all tool-call messages have reasoning_content field (required
+  by Moonshot API even if empty).
+
+EDGE CASE: my/gptel-payload-byte-limit=nil disables pre-send compaction.
+EDGE CASE: Estimation errors (json-serialize fails) return 0 bytes,
+  skipping compaction (safe fallback).
+EDGE CASE: Pass 4 (context images) requires my/gptel--trim-context-images
+  from gptel-ext-context-images — gracefully skips if unavailable.
+
+WISDOM: 7-pass progressive approach minimizes context loss:
+  - Pass 1-3: Remove redundant data (old results, unused tools)
+  - Pass 4-5: Remove expensive media (images, all tool results)
+  - Pass 6-7: Nuclear option (truncate conversation, strip all images)
+  Each pass re-estimates size, stopping early if under limit.
+
+TEST: Create payload >200KB, verify compaction runs and reduces size.
+  Check message log for pass-by-pass progress reports."
   (when my/gptel-payload-byte-limit
     (let* ((info (gptel-fsm-info fsm))
            (retries (or (plist-get info :retries) 0)))
