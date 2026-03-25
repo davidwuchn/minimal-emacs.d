@@ -26,6 +26,7 @@
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'json)
 (require 'gptel-tools-agent)
 
