@@ -1641,6 +1641,21 @@ Returns (:running :kept :total :phase :results)."
         :results (format "var/tmp/experiments/%s/results.tsv"
                         (format-time-string "%Y-%m-%d"))))
 
+(defun gptel-auto-workflow-log ()
+  "Return recent workflow log lines as a list (filtered, sanitized).
+Safe for external tools - contains only [auto-] and [nucleus] messages."
+  (with-current-buffer "*Messages*"
+    (let ((lines (split-string (buffer-string) "\n" t))
+          result)
+      (dolist (line lines)
+        (when (string-match-p "^\\[auto-\\]\\|^\\[nucleus\\]" line)
+          (let ((clean (copy-sequence line)))
+            (setq clean (replace-regexp-in-string (concat "[" (string ?' (char-from-name "RIGHT SINGLE QUOTATION MARK")) "]") "'" clean)
+                  clean (replace-regexp-in-string (concat "[" (string ?\" (char-from-name "LEFT DOUBLE QUOTATION MARK") (char-from-name "RIGHT DOUBLE QUOTATION MARK")) "]") "\"" clean)
+                  clean (replace-regexp-in-string (concat "[" (string (char-from-name "EN DASH") (char-from-name "EM DASH")) "]") "-" clean))
+            (push clean result))))
+      (seq-take (nreverse result) 20))))
+
 (declare-function gptel-auto-workflow-select-targets "gptel-auto-workflow-strategic")
 
 (defun gptel-auto-workflow-run-async (&optional targets completion-callback)
