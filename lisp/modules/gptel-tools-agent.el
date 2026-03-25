@@ -858,25 +858,72 @@ Has timeout fallback to auto-pass if grading takes too long."
     (funcall callback (list :score 100 :passed t))))
 
 (defun gptel-auto-experiment-decide (before after callback)
-  "Compare BEFORE vs AFTER. CALLBACK receives keep/discard decision with reasoning.
-Uses local comparison based on combined score (50% Eight Keys + 50% code quality).
-Subagent not needed for simple score comparison."
+  "Compare BEFORE vs AFTER using LLM comparator.
+CALLBACK receives keep/discard decision with reasoning."
   (let* ((score-before (plist-get before :score))
          (score-after (plist-get after :score))
          (quality-before (or (plist-get before :code-quality) 0.5))
          (quality-after (or (plist-get after :code-quality) 0.5))
          (combined-before (+ (* 0.5 score-before) (* 0.5 quality-before)))
          (combined-after (+ (* 0.5 score-after) (* 0.5 quality-after)))
-         (keep (> combined-after combined-before)))
-    (funcall callback
-             (list :keep keep
-                   :reasoning (format "Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                      score-before score-after
-                                      quality-before quality-after
-                                      combined-before combined-after)
-                   :improvement (list :score (- score-after score-before)
-                                      :quality (- quality-after quality-before)
-                                      :combined (- combined-after combined-before))))))
+         (compare-prompt (format "Compare these two experiment results and decide which is better.
+
+RESULT A (before):
+- Eight Keys Score: %.2f
+- Code Quality: %.2f
+- Combined Score: %.2f
+
+RESULT B (after):
+- Eight Keys Score: %.2f
+- Code Quality: %.2f
+- Combined Score: %.2f
+
+DECISION CRITERIA:
+- Combined score = 50%% Eight Keys + 50%% Code Quality
+- B should win if combined score improved
+- A should win if combined score decreased
+- Tie if equal
+
+Output ONLY a single line: \"A\" or \"B\" or \"tie\"
+
+Then on a new line, briefly explain why (1 sentence)."
+                               score-before quality-before combined-before
+                               score-after quality-after combined-after)))
+    (if (and gptel-auto-experiment-use-subagents
+             (fboundp 'gptel-benchmark-call-subagent))
+        (gptel-benchmark-call-subagent
+         'comparator
+         "Compare experiment results"
+         compare-prompt
+         (lambda (result)
+           (let* ((response (if (stringp result) result (format "%S" result)))
+                  (winner (cond
+                           ((string-match "^\\s-*A\\b" response) "A")
+                           ((string-match "^\\s-*B\\b" response) "B")
+                           ((string-match "^\\s-*tie\\b" response) "tie")
+                           (t (if (> combined-after combined-before) "B" "A"))))
+                  (keep (or (string= winner "B")
+                            (and (string= winner "tie")
+                                 (> combined-after combined-before)))))
+             (funcall callback
+                      (list :keep keep
+                            :reasoning (format "Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
+                                               winner score-before score-after
+                                               quality-before quality-after
+                                               combined-before combined-after)
+                            :improvement (list :score (- score-after score-before)
+                                               :quality (- quality-after quality-before)
+                                               :combined (- combined-after combined-before)))))))
+      (let ((keep (> combined-after combined-before)))
+        (funcall callback
+                 (list :keep keep
+                       :reasoning (format "Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
+                                          score-before score-after
+                                          quality-before quality-after
+                                          combined-before combined-after)
+                       :improvement (list :score (- score-after score-before)
+                                          :quality (- quality-after quality-before)
+                                          :combined (- combined-after combined-before))))))))
 
 ;;; Prompt Building
 
