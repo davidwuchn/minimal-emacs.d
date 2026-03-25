@@ -70,18 +70,19 @@ Returns plist with git history, file sizes, TODOs.
 ;; EDGE CASE: Empty output if lisp/modules/ doesn't exist
 ;; SYNTHESIS: Connects git activity, code volume, and technical debt for selection
 ;; TEST: Verify all 4 plist keys present in non-empty result"
-  (let* ((proj-root (gptel-auto-workflow--project-root)))
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (modules-dir (expand-file-name "lisp/modules" proj-root)))
     (list :git-history (shell-command-to-string
-                        (format "cd %s && git log --oneline -30 -- lisp/modules/*.el 2>/dev/null"
+                        (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
                                 proj-root))
           :file-sizes (shell-command-to-string
-                        (format "cd %s && wc -l lisp/modules/*.el 2>/dev/null | sort -rn | head -15"
+                        (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -15"
                                 proj-root))
           :todos (shell-command-to-string
-                  (format "cd %s && grep -n 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/*.el 2>/dev/null | head -20"
+                  (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -20"
                           proj-root))
           :file-list (shell-command-to-string
-                       (format "cd %s && ls lisp/modules/*.el 2>/dev/null"
+                       (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
                                proj-root)))))
 
 (defun gptel-auto-workflow--ask-analyzer-for-targets (callback)
