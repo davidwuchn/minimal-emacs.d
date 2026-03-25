@@ -302,20 +302,20 @@ Uses language-aware heuristics:
 - Mixed (default): ~3.5 chars/token
 
 For buffers with current buffer, analyzes content type."
-  (unless (and (numberp chars) (> chars 0))
-    (cl-return-from my/gptel--estimate-text-tokens 0))
-  (let ((ratio 3.5))
-    (when (and (buffer-live-p (current-buffer))
-               (buffer-file-name))
-      (let ((ext (file-name-extension (buffer-file-name))))
-        (cond
-         ((member ext '("el" "clj" "cljs" "py" "js" "ts" "rs" "go" "java" "c" "cpp" "h"))
-          (setq ratio 3.0))
-         ((member ext '("md" "txt" "org" "rst" "adoc"))
-          (setq ratio 4.0))
-         ((member ext '("json" "yaml" "yml" "toml" "ini"))
-          (setq ratio 2.5)))))
-    (/ (float chars) ratio)))
+  (if (not (and (numberp chars) (> chars 0)))
+      0
+    (let ((ratio 3.5))
+      (when (and (buffer-live-p (current-buffer))
+                 (buffer-file-name))
+        (let ((ext (file-name-extension (buffer-file-name))))
+          (cond
+           ((member ext '("el" "clj" "cljs" "py" "js" "ts" "rs" "go" "java" "c" "cpp" "h"))
+            (setq ratio 3.0))
+           ((member ext '("md" "txt" "org" "rst" "adoc"))
+            (setq ratio 4.0))
+           ((member ext '("json" "yaml" "yml" "toml" "ini"))
+            (setq ratio 2.5)))))
+      (/ (float chars) ratio))))
 
 (defun my/gptel--estimate-tokens (chars)
   "Estimate total token count: text (CHARS) + images in context.

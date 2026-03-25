@@ -161,7 +161,7 @@ Call periodically to prevent memory growth from unaccessed entries."
   "Call a gptel agent to do specific compound tasks.
 Like upstream `gptel-agent--task' but adds parent-buffer tracking-marker,
 large-result truncation, and result caching."
-  (block my/gptel-agent--task-override
+  (cl-block my/gptel-agent--task-override
          ;; Check cache first
          (let ((cached (my/gptel--subagent-cache-get agent-type prompt)))
            (when cached
