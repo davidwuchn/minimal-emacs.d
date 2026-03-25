@@ -4,7 +4,22 @@
 
 ## Session Summary: Auto-Workflow Fully Operational
 
-**30 commits** fixing all major issues. System ready for production use.
+**25+ commits** fixing all major issues. System tested and working.
+
+### Final Test Results
+
+```
+Experiment 1:
+- Hypothesis: ✓ Extracted correctly
+- Grader: 6/6 passed (100%)
+- Comparator: "tie" (LLM decided correctly)
+- Decision: discarded (tie = no improvement)
+```
+
+Comparator now works:
+- LLM receives proper prompt with scores
+- Returns "A", "B", or "tie"
+- "tie" means no improvement → discard (correct behavior)
 
 ### Commits (24)
 
