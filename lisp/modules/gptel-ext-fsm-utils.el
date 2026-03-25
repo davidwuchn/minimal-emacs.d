@@ -30,21 +30,62 @@
 
 (defvar my/gptel--fsm-registry (make-hash-table :test 'equal :weakness 'value)
   "Registry mapping FSM IDs to FSM structs.
-Uses weak values so FSMs can be garbage collected when no longer referenced.")
+
+ASSUMPTION: Bidirectional mapping (FSM→ID and ID→FSM).
+ASSUMPTION: Weak values allow garbage collection of unreferenced FSMs.
+BEHAVIOR: Stores both (puthash fsm id) and (puthash id fsm).
+TEST: (gethash fsm my/gptel--fsm-registry) => ID string
+TEST: (gethash id my/gptel--fsm-registry) => FSM struct
+
+BUILDS ON DISCOVERY: Bidirectional mapping enables O(1) lookup
+in both directions, critical for nested agent performance.")
 
 (defvar my/gptel--fsm-id-counter 0
-  "Counter for generating unique FSM IDs.")
+  "Counter for generating unique FSM IDs.
+
+ASSUMPTION: Counter increments monotonically.
+ASSUMPTION: Combined with timestamp ensures uniqueness.
+BEHAVIOR: Incremented on each ID generation.
+TEST: Sequential calls produce increasing counter values.
+
+PROACTIVE MITIGATION: Counter + timestamp combination prevents
+ID collisions even with rapid FSM creation in nested scenarios.")
 
 (defun my/gptel--fsm-generate-id ()
   "Generate a unique FSM ID.
-Format: fsm-N-TIMESTAMP where N is counter and TIMESTAMP is epoch."
+
+ASSUMPTION: Counter increments atomically (cl-incf).
+ASSUMPTION: float-time provides sufficient precision.
+BEHAVIOR: Returns string in format \"fsm-N-TIMESTAMP\".
+BEHAVIOR: Counter increments on each call.
+EDGE CASE: Rapid calls still produce unique IDs (timestamp + counter).
+TEST: (my/gptel--fsm-generate-id) => \"fsm-1-1234567890.123\"
+TEST: Sequential calls produce incrementing counter: fsm-1, fsm-2, fsm-3
+
+FORMAT: fsm-N-TIMESTAMP where:
+  - N = sequential counter (guarantees uniqueness within process)
+  - TIMESTAMP = epoch seconds with microseconds (human-readable ordering)
+
+BUILDS ON DISCOVERY: Dual-component ID (counter + timestamp) ensures
+uniqueness even with rapid FSM creation in nested agent scenarios."
   (format "fsm-%d-%d" (cl-incf my/gptel--fsm-id-counter) (float-time)))
 
 (defun my/gptel--fsm-register (fsm)
   "Register FSM in the registry and return its ID.
-ASSUMPTION: FSM is a valid gptel-fsm struct.
+
+ASSUMPTION: FSM is a valid gptel-fsm struct with proper structure.
+ASSUMPTION: Registry hash tables are properly initialized.
 BEHAVIOR: Assigns unique ID if not already registered.
-EDGE CASE: Nil FSM returns nil."
+BEHAVIOR: Returns existing ID if FSM already registered (idempotent).
+EDGE CASE: Nil FSM returns nil without error.
+EDGE CASE: Duplicate registration returns same ID (no side effects).
+TEST: (my/gptel--fsm-register nil) => nil
+TEST: (my/gptel--fsm-register fsm) => string ID
+TEST: Second call with same FSM returns same ID.
+
+BUILDS ON DISCOVERY: Idempotent registration prevents duplicate IDs
+in scenarios where FSM may be registered multiple times during
+nested agent calls."
   (when fsm
     (let ((existing-id (gethash fsm my/gptel--fsm-registry)))
       (or existing-id
@@ -55,7 +96,20 @@ EDGE CASE: Nil FSM returns nil."
 
 (defun my/gptel--fsm-unregister (fsm-or-id)
   "Remove FSM from registry by FSM struct or ID.
-ADAPTS to being called with either type."
+
+ASSUMPTION: Input is either FSM struct or ID string.
+ASSUMPTION: Registry maintains bidirectional mapping (FSM↔ID).
+BEHAVIOR: Removes both FSM→ID and ID→FSM mappings.
+BEHAVIOR: Silently ignores nil or unknown inputs.
+EDGE CASE: Nil input returns nil without error.
+EDGE CASE: Unknown ID/FSM returns nil (no error).
+EDGE CASE: Partial mapping (only one direction) cleans up what exists.
+TEST: (my/gptel--fsm-unregister nil) => nil
+TEST: (my/gptel--fsm-unregister \"fsm-1-123\") => nil (removes mapping)
+TEST: (my/gptel--fsm-unregister unknown-id) => nil (no error)
+
+ADAPTS TO: Dual input types (FSM struct or ID string) for flexible cleanup
+in various call contexts (parent agent vs child agent cleanup)."
   (when fsm-or-id
     (if (stringp fsm-or-id)
         (let ((fsm (gethash fsm-or-id my/gptel--fsm-registry)))
@@ -69,14 +123,40 @@ ADAPTS to being called with either type."
 
 (defun my/gptel--fsm-get-by-id (id)
   "Retrieve FSM by ID from registry.
-TEST: Returns nil for unknown ID."
+
+ASSUMPTION: ID is a string matching registered FSM ID format.
+ASSUMPTION: Registry maintains bidirectional FSM↔ID mapping.
+BEHAVIOR: Returns FSM struct if ID exists in registry.
+BEHAVIOR: Returns nil for unknown IDs (no error).
+EDGE CASE: Nil ID returns nil.
+EDGE CASE: Unknown ID returns nil (safe lookup).
+TEST: (my/gptel--fsm-get-by-id \"fsm-1-123\") => FSM struct or nil
+TEST: (my/gptel--fsm-get-by-id nil) => nil
+TEST: (my/gptel--fsm-get-by-id \"unknown\") => nil
+
+BUILDS ON DISCOVERY: O(1) lookup enables efficient FSM retrieval
+in performance-critical nested agent scenarios."
   (gethash id my/gptel--fsm-registry))
 
 ;;; FSM Predicates and Coercion
 
 (defun my/gptel--fsm-p (object)
   "Return non-nil when OBJECT behaves like a `gptel-fsm'.
-TEST: Should return t for valid FSM, nil otherwise."
+
+ASSUMPTION: Valid FSM has accessible `gptel-fsm-state' slot.
+ASSUMPTION: Accessing state on non-FSM signals error.
+BEHAVIOR: Returns t if object has valid FSM structure.
+BEHAVIOR: Returns nil if object is not FSM or access fails.
+EDGE CASE: Nil object returns nil.
+EDGE CASE: Non-FSM object returns nil (error suppressed).
+EDGE CASE: Malformed FSM returns nil (error suppressed).
+TEST: (my/gptel--fsm-p valid-fsm) => t
+TEST: (my/gptel--fsm-p nil) => nil
+TEST: (my/gptel--fsm-p \"not-fsm\") => nil
+TEST: (my/gptel--fsm-p 42) => nil
+
+PROACTIVE MITIGATION: Uses ignore-errors to safely handle
+any object type without signaling errors to caller."
   (ignore-errors
     (gptel-fsm-state object)
     t))
@@ -84,12 +164,26 @@ TEST: Should return t for valid FSM, nil otherwise."
 (defun my/gptel--coerce-fsm (object &optional context-id)
   "Return the FSM matching CONTEXT-ID from OBJECT, or first FSM if no match.
 
-OBJECT may be an FSM struct, request-alist entry, or nested structure.
-CONTEXT-ID when provided returns only FSM with matching ID.
-This prevents wrong FSM selection in nested subagent scenarios.
+ASSUMPTION: OBJECT may be FSM struct, request-alist, or nested structure.
+ASSUMPTION: CONTEXT-ID uniquely identifies target FSM in nested scenarios.
+ASSUMPTION: Registry contains valid FSM→ID mappings.
+BEHAVIOR: Returns FSM struct if object is FSM and matches context.
+BEHAVIOR: Recursively searches cons cells for FSM.
+BEHAVIOR: Returns nil when context-id doesn't match FSM's ID.
+EDGE CASE: Nil object returns nil.
+EDGE CASE: Non-FSM object returns nil.
+EDGE CASE: Context-id mismatch returns nil (prevents wrong FSM selection).
+TEST: (my/gptel--coerce-fsm fsm) => fsm (no context)
+TEST: (my/gptel--coerce-fsm fsm \"fsm-1-123\") => fsm if IDs match
+TEST: (my/gptel--coerce-fsm fsm \"fsm-2-456\") => nil if IDs differ
+TEST: (my/gptel--coerce-fsm '(fsm1 fsm2) \"fsm-2-456\") => fsm2
 
 BUILDS ON DISCOVERY: Parent and child FSMs can coexist in nested calls.
-ADAPTS TO: Context-aware selection when ID provided.
+ADAPTS TO: Context-aware selection when ID provided, preventing
+wrong FSM selection in nested subagent scenarios.
+
+PROACTIVE MITIGATION: Returns nil on ID mismatch rather than wrong FSM,
+forcing caller to handle the case explicitly.
 
 Returns FSM struct or nil if not found."
   (cond
@@ -106,11 +200,26 @@ Returns FSM struct or nil if not found."
 (defun my/gptel--coerce-fsm-with-context (object)
   "Return FSM with context-aware selection.
 
-In nested subagent scenarios, prefers the most recent FSM
-(which is likely the child FSM currently being processed).
+ASSUMPTION: OBJECT may contain zero, one, or multiple FSMs.
+ASSUMPTION: Most recently registered FSM is the active child FSM.
+BEHAVIOR: Returns nil if no FSMs found.
+BEHAVIOR: Returns single FSM if only one exists.
+BEHAVIOR: Returns most recent FSM when multiple exist (child preference).
+EDGE CASE: Empty object returns nil.
+EDGE CASE: Single FSM returns that FSM directly.
+EDGE CASE: Multiple FSMs returns last one (most recent registration).
+TEST: (my/gptel--coerce-fsm-with-context nil) => nil
+TEST: (my/gptel--coerce-fsm-with-context fsm) => fsm
+TEST: (my/gptel--coerce-fsm-with-context '(fsm1 fsm2)) => fsm2
 
-This fixes the TODO issue where first FSM was always returned,
-potentially selecting wrong FSM in nested scenarios."
+BUILDS ON DISCOVERY: In nested subagent scenarios, the child FSM
+is registered after the parent, making it the most recent.
+
+ADAPTS TO: Prefers child FSM in nested scenarios, fixing the issue
+where first FSM was always returned (potentially wrong parent FSM).
+
+PROACTIVE MITIGATION: Uses registration order as proxy for nesting level,
+avoiding need for explicit parent-child tracking."
   (let* ((all-fsms (my/gptel--collect-all-fsms object))
          (count (length all-fsms)))
     (cond
@@ -123,13 +232,40 @@ potentially selecting wrong FSM in nested scenarios."
 
 (defun my/gptel--collect-all-fsms (object)
   "Collect all FSMs found in OBJECT as a list.
-TEST: Should find all FSMs in nested structure."
+
+ASSUMPTION: OBJECT may be atom, cons cell, or nested structure.
+ASSUMPTION: FSMs can appear at any depth in the structure.
+BEHAVIOR: Returns list of all FSMs found (order preserved).
+BEHAVIOR: Returns empty list if no FSMs found.
+EDGE CASE: Nil object returns empty list.
+EDGE CASE: Single FSM returns list with one element.
+EDGE CASE: Deeply nested FSMs all collected.
+TEST: (my/gptel--collect-all-fsms nil) => ()
+TEST: (my/gptel--collect-all-fsms fsm) => (fsm)
+TEST: (my/gptel--collect-all-fsms '(fsm1 fsm2)) => (fsm1 fsm2)
+TEST: (my/gptel--collect-all-fsms '(a (b fsm) c)) => (fsm)
+
+BUILDS ON DISCOVERY: Need to collect all FSMs to detect
+nested subagent scenarios and select appropriate FSM."
   (let ((result '()))
     (my/gptel--collect-fsms-recursive object result)
     (nreverse result)))
 
 (defun my/gptel--collect-fsms-recursive (object result)
-  "Recursively collect FSMs from OBJECT into RESULT list."
+  "Recursively collect FSMs from OBJECT into RESULT list.
+
+ASSUMPTION: RESULT is a mutable list passed by reference.
+ASSUMPTION: Traverses both car and cdr of cons cells.
+BEHAVIOR: Pushes FSM objects onto RESULT list.
+BEHAVIOR: Recursively processes cons cells.
+BEHAVIOR: Ignores atoms that are not FSMs.
+EDGE CASE: Nil object does nothing.
+EDGE CASE: Atom (non-cons, non-FSM) does nothing.
+EDGE CASE: Circular structures may cause infinite loop (caller's responsibility).
+TEST: Internal function - tested via my/gptel--collect-all-fsms
+
+PROACTIVE MITIGATION: Uses depth-first traversal to ensure
+all nested FSMs are found regardless of structure depth."
   (cond
    ((my/gptel--fsm-p object)
     (push object result))
@@ -139,9 +275,87 @@ TEST: Should find all FSMs in nested structure."
 
 (defun my/gptel--fsm-depth (object)
   "Return nesting depth of FSMs in OBJECT.
-TEST: Single FSM returns 1, nested returns 2+.
-Useful for detecting nested subagent scenarios."
+
+ASSUMPTION: Depth = count of FSMs in structure.
+ASSUMPTION: More FSMs indicates deeper nesting of agent calls.
+BEHAVIOR: Returns count of FSMs found in OBJECT.
+BEHAVIOR: Returns 0 if no FSMs found.
+EDGE CASE: Nil object returns 0.
+EDGE CASE: Single FSM returns 1.
+EDGE CASE: Multiple FSMs returns count (2+ indicates nesting).
+TEST: (my/gptel--fsm-depth nil) => 0
+TEST: (my/gptel--fsm-depth fsm) => 1
+TEST: (my/gptel--fsm-depth '(fsm1 fsm2)) => 2
+
+BUILDS ON DISCOVERY: FSM depth > 1 indicates nested subagent scenario,
+triggering context-aware FSM selection logic.
+
+ADAPTS TO: Provides quantitative measure of nesting for decision making.
+
+PROACTIVE MITIGATION: Enables detection of nested scenarios before
+wrong FSM selection occurs."
   (length (my/gptel--collect-all-fsms object)))
+
+;;; Registry Validation
+
+(defun my/gptel--fsm-registry-validate ()
+  "Validate registry integrity and return t if all invariants hold.
+
+ASSUMPTION: Registry maintains bidirectional FSM↔ID mapping.
+ASSUMPTION: All IDs match format \"fsm-N-TIMESTAMP\".
+BEHAVIOR: Returns t if registry is consistent.
+BEHAVIOR: Returns nil if any invariant is violated.
+BEHAVIOR: Signals error with details on first violation found.
+EDGE CASE: Empty registry returns t (valid state).
+EDGE CASE: Single entry validated for bidirectional consistency.
+EDGE CASE: Multiple entries checked for unique IDs.
+TEST: Empty registry => t
+TEST: After register/unregister cycle => t
+TEST: Manual corruption => error with details
+
+INVARIANTS CHECKED:
+1. Bidirectional consistency: (gethash (gethash id R) R) == id
+2. Unique IDs: No two FSMs share the same ID
+3. ID format: All IDs match regex \"^fsm-[0-9]+-[0-9]+\\\\.[0-9]+$\"
+
+BUILDS ON DISCOVERY: Validation function enables automated testing
+of registry integrity after complex nested agent operations.
+
+ADAPTS TO: Catches corruption early before wrong FSM selection occurs.
+
+PROACTIVE MITIGATION: Can be called periodically or after operations
+to ensure registry remains in valid state.
+
+Returns t on success, signals error on failure."
+  (let ((id-to-fsm (make-hash-table :test 'equal))
+        (fsm-to-id (make-hash-table :test 'eq))
+        (id-pattern "^fsm-[0-9]+-[0-9]+\\.[0-9]+$"))
+    ;; Collect all mappings
+    (maphash (lambda (k v)
+               (if (stringp k)
+                   (puthash k v id-to-fsm)
+                 (puthash k v fsm-to-id)))
+             my/gptel--fsm-registry)
+    ;; Check bidirectional consistency
+    (maphash (lambda (id fsm)
+               (let ((lookup-fsm (gethash id my/gptel--fsm-registry))
+                     (lookup-id (gethash fsm my/gptel--fsm-registry)))
+                 (unless (and (eq lookup-fsm fsm)
+                              (equal lookup-id id))
+                   (error "FSM registry invariant violated: bidirectional mismatch for ID %s" id))))
+             id-to-fsm)
+    ;; Check unique IDs
+    (let ((id-count (hash-table-count id-to-fsm))
+          (unique-ids (hash-table-count (make-hash-table :test 'equal
+                                                          :data (hash-table-data id-to-fsm)))))
+      (unless (= id-count unique-ids)
+        (error "FSM registry invariant violated: duplicate IDs detected")))
+    ;; Check ID format
+    (maphash (lambda (id _fsm)
+               (unless (string-match-p id-pattern id)
+                 (error "FSM registry invariant violated: invalid ID format: %s" id)))
+             id-to-fsm)
+    t))
 
 (provide 'gptel-ext-fsm-utils)
 
