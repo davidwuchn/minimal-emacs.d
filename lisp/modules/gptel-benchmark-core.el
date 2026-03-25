@@ -168,16 +168,20 @@ Creates a history entry with timestamp and summary."
 
 (defun gptel-benchmark-summarize-results (results)
   "Create summary of RESULTS.
-RESULTS is a list of (run . scores) cons cells."
-  (let ((total (length results))
+RESULTS is a list of (run . scores) cons cells or plists with :scores."
+  (let ((total 0)
         (avg-overall 0.0)
         (avg-efficiency 0.0)
         (avg-completion 0.0)
         (avg-constraints 0.0)
         (passed 0))
     (dolist (r results)
-      (let ((scores (if (consp r) (cdr r) (plist-get r :scores))))
-        (when scores
+      (let ((scores (cond
+                     ((and (consp r) (listp (cdr r))) (cdr r))
+                     ((listp r) (plist-get r :scores))
+                     (t nil))))
+        (when (and scores (listp scores))
+          (cl-incf total)
           (cl-incf avg-overall (or (plist-get scores :overall-score) 0))
           (cl-incf avg-efficiency (or (plist-get scores :efficiency-score) 0))
           (cl-incf avg-completion (or (plist-get scores :completion-score) 0))
