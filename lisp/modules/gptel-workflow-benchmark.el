@@ -150,13 +150,13 @@ Returns list of test plists."
   (when (and gptel-workflow--current-run calls)
     (dolist (call (if (listp calls) calls (list calls)))
       (let* ((tool-name (if (consp call)
-                             (if (symbolp (car call)) (car call)
-                               (alist-get 'name call))
-                           call))
-              (args (if (consp call)
-                        (if (symbolp (car call)) (cdr call)
-                          (alist-get 'arguments call))
-                      nil)))
+                            (if (symbolp (car call)) (car call)
+                              (alist-get 'name call))
+                          call))
+             (args (if (consp call)
+                       (if (symbolp (car call)) (cdr call)
+                         (alist-get 'arguments call))
+                     nil)))
         (gptel-workflow--collect-tool-call tool-name args)))))
 
 ;;; Memory Integration
@@ -232,9 +232,9 @@ Indicators: plan file mentioned, Updates in output, or edit tools used."
             :entered t
             :timestamp (float-time)
             :indicators (delq nil
-                             (list (when (string-match-p "[Pp]lan" output) "plan-mentioned")
-                                   (when (string-match-p "[Uu]pdates" output) "updates-mentioned")
-                                   (when (memq 'edit tools) "edit-used")))))))
+                              (list (when (string-match-p "[Pp]lan" output) "plan-mentioned")
+                                    (when (string-match-p "[Uu]pdates" output) "updates-mentioned")
+                                    (when (memq 'edit tools) "edit-used")))))))
 
 (defun gptel-workflow--detect-p3 (tool-calls)
   "Detect P3 phase from TOOL-CALLS.
@@ -450,15 +450,18 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
         (cl-incf total-score score)
         (cl-incf count)))
     (when p1-forbidden
-      (let* ((p1-tools (delq nil
-                            (mapcar (lambda (tc)
-                                      (when (plist-get (gptel-workflow-run-phase-trace run)
-                                                       :phase)
-                                        (let ((tool (plist-get tc :tool)))
-                                          (if (symbolp tool)
-                                              (symbol-name tool)
-                                            tool))))
-                                    tool-calls)))
+      (let* ((p1-active-p (cl-find 'P1 (gptel-workflow-run-phase-trace run)
+                                   :key (lambda (p) (plist-get p :phase))
+                                   :test #'eq))
+             (p1-tools (if p1-active-p
+                           (delq nil
+                                 (mapcar (lambda (tc)
+                                           (let ((tool (plist-get tc :tool)))
+                                             (if (symbolp tool)
+                                                 (symbol-name tool)
+                                               tool)))
+                                         tool-calls))
+                         nil))
              (violations (cl-intersection p1-forbidden p1-tools :test #'string=))
              (score (if violations 0.0 1.0)))
         (cl-incf total-score score)
@@ -493,16 +496,16 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
                         :run-id (format-time-string "%Y%m%d-%H%M%S")
                         :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")
                         :metrics (list :duration_seconds
-                                      (if (and (gptel-workflow-run-start-time run)
-                                               (gptel-workflow-run-end-time run))
-                                          (- (gptel-workflow-run-end-time run)
-                                             (gptel-workflow-run-start-time run))
-                                        0)
-                                      :step_count (gptel-workflow-run-step-count run)
-                                      :continuation_count (gptel-workflow-run-continuation-count run)
-                                      :completed (gptel-workflow-run-completed-p run)
-                                      :phases (vconcat (gptel-workflow-run-phase-trace run))
-:tool_calls (vconcat (mapcar (lambda (tc)
+                                       (if (and (gptel-workflow-run-start-time run)
+                                                (gptel-workflow-run-end-time run))
+                                           (- (gptel-workflow-run-end-time run)
+                                              (gptel-workflow-run-start-time run))
+                                         0)
+                                       :step_count (gptel-workflow-run-step-count run)
+                                       :continuation_count (gptel-workflow-run-continuation-count run)
+                                       :completed (gptel-workflow-run-completed-p run)
+                                       :phases (vconcat (gptel-workflow-run-phase-trace run))
+                                       :tool_calls (vconcat (mapcar (lambda (tc)
                                                                       (list :tool (plist-get tc :tool)
                                                                             :timestamp (plist-get tc :timestamp)))
                                                                     (reverse (gptel-workflow--tool-calls-list run)))))
@@ -536,22 +539,22 @@ TEST-ID is the test case ID."
                        (completing-read "Test ID: " test-ids)
                      (read-string "Test ID: "))))
      (list workflow test-id)))
-(let* ((tests (gptel-workflow-load-tests workflow-name))
-          (test (cl-find test-id tests :key (lambda (tc) (plist-get tc :id)) :test #'equal))
-          (agent-type (gptel-workflow--agent-type workflow-name)))
-     (if (not test)
-         (message "Test %s not found for workflow %s" test-id workflow-name)
-       (message "[workflow-bench] Running: %s/%s..." workflow-name test-id)
-       (gptel-workflow-run-test
-        test
-        (lambda (run)
-          (let* ((success-criteria (plist-get test :success-criteria))
-                 (scores (gptel-workflow-score run success-criteria)))
-            (gptel-workflow-save-results run scores)
-            (push run gptel-workflow--runs)
-            (message "[workflow-bench] Complete: %s - Overall: %.0f%%"
-                     test-id (* (plist-get scores :overall-score) 100))))
-        agent-type))))
+  (let* ((tests (gptel-workflow-load-tests workflow-name))
+         (test (cl-find test-id tests :key (lambda (tc) (plist-get tc :id)) :test #'equal))
+         (agent-type (gptel-workflow--agent-type workflow-name)))
+    (if (not test)
+        (message "Test %s not found for workflow %s" test-id workflow-name)
+      (message "[workflow-bench] Running: %s/%s..." workflow-name test-id)
+      (gptel-workflow-run-test
+       test
+       (lambda (run)
+         (let* ((success-criteria (plist-get test :success-criteria))
+                (scores (gptel-workflow-score run success-criteria)))
+           (gptel-workflow-save-results run scores)
+           (push run gptel-workflow--runs)
+           (message "[workflow-bench] Complete: %s - Overall: %.0f%%"
+                    test-id (* (plist-get scores :overall-score) 100))))
+       agent-type))))
 
 (defun gptel-workflow-benchmark-run-all (workflow-name)
   "Run all benchmark tests for WORKFLOW-NAME."
@@ -703,36 +706,36 @@ TEST-ID is the test case ID."
                            timestamp avg-overall avg-efficiency avg-completion))))
         (princ "\n"))))
 
-(defun gptel-workflow-benchmark-trend-analysis (workflow-name)
-  "Analyze trend for WORKFLOW-NAME and return evolution-relevant data.
+  (defun gptel-workflow-benchmark-trend-analysis (workflow-name)
+    "Analyze trend for WORKFLOW-NAME and return evolution-relevant data.
 Returns plist with :direction, :velocity, :recommendation."
-  (let* ((history (gptel-workflow-benchmark-load-history workflow-name))
-         (result (list :workflow workflow-name
-                       :data-points (length history)
-                       :direction 'stable
-                       :velocity 0.0
-                       :recommendation nil)))
-    (when (and history (>= (length history) 2))
-      (let* ((recent (seq-take history 5))
-             (scores (mapcar (lambda (e)
-                               (let ((s (plist-get e :summary)))
-                                 (or (plist-get s :avg-overall) 0)))
-                             (if (listp recent) recent (append recent nil))))
-             (first-half (seq-subseq scores 0 (floor (/ (length scores) 2))))
-             (second-half (seq-subseq scores (floor (/ (length scores) 2)))))
-        (when (and first-half second-half)
-          (let* ((avg-first (/ (apply #'+ first-half) (length first-half)))
-                 (avg-second (/ (apply #'+ second-half) (length second-half)))
-                 (velocity (- avg-second avg-first)))
-            (setq result (plist-put result :velocity velocity))
-            (setq result (plist-put result :direction
-                                    (cond ((> velocity 0.05) 'improving)
-                                          ((< velocity -0.05) 'declining)
-                                          (t 'stable))))
-            (setq result (plist-put result :recommendation
-                                    (cond ((> velocity 0.05) "Continue current approach")
-                                          ((< velocity -0.05) "Investigate and apply fixes")
-                                          (t "Consider optimization")))))))))
+    (let* ((history (gptel-workflow-benchmark-load-history workflow-name))
+           (result (list :workflow workflow-name
+                         :data-points (length history)
+                         :direction 'stable
+                         :velocity 0.0
+                         :recommendation nil)))
+      (when (and history (>= (length history) 2))
+        (let* ((recent (seq-take history 5))
+               (scores (mapcar (lambda (e)
+                                 (let ((s (plist-get e :summary)))
+                                   (or (plist-get s :avg-overall) 0)))
+                               (if (listp recent) recent (append recent nil))))
+               (first-half (seq-subseq scores 0 (floor (/ (length scores) 2))))
+               (second-half (seq-subseq scores (floor (/ (length scores) 2)))))
+          (when (and first-half second-half)
+            (let* ((avg-first (/ (apply #'+ first-half) (length first-half)))
+                   (avg-second (/ (apply #'+ second-half) (length second-half)))
+                   (velocity (- avg-second avg-first)))
+              (setq result (plist-put result :velocity velocity))
+              (setq result (plist-put result :direction
+                                      (cond ((> velocity 0.05) 'improving)
+                                            ((< velocity -0.05) 'declining)
+                                            (t 'stable))))
+              (setq result (plist-put result :recommendation
+                                      (cond ((> velocity 0.05) "Continue current approach")
+                                            ((< velocity -0.05) "Investigate and apply fixes")
+                                            (t "Consider optimization")))))))))
     result))
 
 ;;; Eight Keys Breakdown
@@ -764,7 +767,7 @@ Returns plist with :direction, :velocity, :recommendation."
   (let ((key-totals (make-vector 8 0.0))
         (key-counts (make-vector 8 0))
         (key-names [phi-vitality fractal-clarity epsilon-purpose tau-wisdom
-                    pi-synthesis mu-directness exists-truth forall-vigilance]))
+                                 pi-synthesis mu-directness exists-truth forall-vigilance]))
     (dolist (r results)
       (let* ((eight-keys (plist-get r :eight-keys-scores)))
         (when eight-keys
