@@ -204,40 +204,66 @@ If RESPONSE is already a string, return it.
 Otherwise, convert using princ representation."
   (if (stringp response) response (format "%S" response)))
 
+(defun gptel-auto-workflow--filter-valid-targets (candidates proj-root max-targets)
+  "Filter CANDIDATES to valid target files.
+Returns list of validated relative paths, up to MAX-TARGETS."
+  (let ((targets '()))
+    (dolist (file candidates)
+      (when (< (length targets) max-targets)
+        (setq targets (gptel-auto-workflow--validate-and-add-target
+                       file proj-root targets max-targets))))
+    (reverse targets)))
+
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list."
-  (let ((targets '())
-        (proj-root (gptel-auto-workflow--project-root))
+  (let ((proj-root (gptel-auto-workflow--project-root))
         (max-targets gptel-auto-workflow-max-targets-per-run)
         (normalized-response (gptel-auto-workflow--normalize-response response)))
-    (when proj-root
-      (condition-case err
-          (with-temp-buffer
-            (insert normalized-response)
-            (goto-char (point-min))
-            (when (re-search-forward "{" nil t)
-              (goto-char (match-beginning 0))
-              (let* ((data (json-read))
-                     (target-list (plist-get data :targets)))
-                (when (listp target-list)
-                  (dolist (item target-list)
-                    (when (and (< (length targets) max-targets)
-                               (listp item))
-                      (let ((file (plist-get item :file)))
-                        (setq targets (gptel-auto-workflow--validate-and-add-target
-                                       file proj-root targets max-targets)))))))))
-        (json-error nil)
-        (error nil)))
-    (when (null targets)
+    (if (not proj-root)
+        nil
+      (let ((targets (gptel-auto-workflow--parse-json-targets
+                      normalized-response proj-root max-targets)))
+        (if targets
+            targets
+          (gptel-auto-workflow--parse-regex-targets
+           normalized-response proj-root max-targets))))))
+
+(defun gptel-auto-workflow--parse-json-targets (response proj-root max-targets)
+  "Parse JSON from RESPONSE to extract targets.
+Returns nil if parsing fails or no targets found."
+  (condition-case err
       (with-temp-buffer
-        (insert normalized-response)
+        (insert response)
         (goto-char (point-min))
-        (while (and (< (length targets) max-targets)
-                    (re-search-forward "\\(lisp/modules\\|packages\\)/[a-zA-Z0-9_/.-]+\\.el" nil t))
-          (let ((file (match-string 0)))
-            (setq targets (gptel-auto-workflow--validate-and-add-target
-                           file proj-root targets max-targets))))))
-    (reverse targets)))
+        (when (re-search-forward "{" nil t)
+          (goto-char (match-beginning 0))
+          (let* ((data (json-read))
+                 (target-list (plist-get data :targets)))
+            (when (listp target-list)
+              (let ((candidates
+                     (cl-remove-if
+                      (lambda (item)
+                        (or (not (listp item))
+                            (not (plist-get item :file))))
+                      target-list)))
+                (when candidates
+                  (gptel-auto-workflow--filter-valid-targets
+                   (mapcar (lambda (item) (plist-get item :file)) candidates)
+                   proj-root max-targets)))))))
+    (json-error nil)
+    (error nil)))
+
+(defun gptel-auto-workflow--parse-regex-targets (response proj-root max-targets)
+  "Parse RESPONSE using regex fallback to extract targets.
+Returns list of validated file paths."
+  (with-temp-buffer
+    (insert response)
+    (goto-char (point-min))
+    (let ((candidates '()))
+      (while (re-search-forward "\\(lisp/modules\\|packages\\)/[a-zA-Z0-9_/.-]+\\.el" nil t)
+        (push (match-string 0) candidates))
+      (gptel-auto-workflow--filter-valid-targets
+       (nreverse candidates) proj-root max-targets))))
 
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
