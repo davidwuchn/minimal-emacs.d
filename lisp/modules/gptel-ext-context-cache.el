@@ -276,20 +276,21 @@ Pricing is in USD per million tokens (input/output).")
   "Look up KEY in HASH-TABLE, falling back to ALIST partial match.
 Returns the value from hash table if found, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found."
-  (or (and (stringp key) (gethash key hash-table))
+  (or (and (hash-table-p hash-table) (stringp key) (gethash key hash-table))
       (and (listp alist) (stringp key)
            (my/gptel--alist-partial-match alist key))))
 
 (defun my/gptel--alist-partial-match (alist search-str)
   "Find first entry in ALIST where key partially matches SEARCH-STR (case-insensitive).
-Returns the cdr (value) of the matching entry, or nil if no match."
+Returns the cdr (value) of the matching entry, or nil if no match.
+Matches if the alist key is a prefix of SEARCH-STR."
   (when (and (listp alist) (stringp search-str))
     (let ((search-lower (downcase search-str)))
       (catch 'found
         (dolist (entry alist)
           (when (and (consp entry)
                      (stringp (car entry))
-                     (string-prefix-p search-lower (downcase (car entry))))
+                     (string-prefix-p (downcase (car entry)) search-lower))
             (throw 'found (cdr entry))))
         nil))))
 
@@ -482,14 +483,14 @@ Runs asynchronously; returns nil immediately."
                       (>= age-days (max 1 my/gptel-context-window-auto-refresh-interval-days))))
            (model-id (my/gptel--model-id-string gptel-model)))
       (when stale
-        (setq my/gptel--context-window-cache-last-refresh (float-time (current-time)))
         ;; Seed from built-in tables (Gemini + Copilot) without network.
         (my/gptel--seed-cache-from-gptel-model-tables)
         ;; Fetch OpenRouter in the background when applicable.
         (when (and (boundp 'gptel--openrouter)
                    (eq gptel-backend gptel--openrouter))
           (my/gptel--openrouter-fetch-context-window gptel-model))
-        ;; Persist cache with updated refresh timestamp.
+        ;; Persist cache with updated refresh timestamp only after successful operations.
+        (setq my/gptel--context-window-cache-last-refresh (float-time (current-time)))
         (my/gptel--cache-put-context-window model-id
                                             (or (gethash model-id
                                                          my/gptel--context-window-cache)
