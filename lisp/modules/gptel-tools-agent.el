@@ -882,9 +882,12 @@ Reviewer checks for Blocker/Critical issues."
       (funcall callback (cons t "Review disabled by config"))
     (let* ((proj-root (gptel-auto-workflow--project-root))
            (default-directory proj-root)
+           ;; SECURITY: Use shell-quote-argument to prevent shell injection
+           (staging-quoted (shell-quote-argument gptel-auto-workflow-staging-branch))
+           (optimize-quoted (shell-quote-argument optimize-branch))
            (diff-cmd (format "git diff %s...%s --stat && git diff %s...%s"
-                            gptel-auto-workflow-staging-branch optimize-branch
-                            gptel-auto-workflow-staging-branch optimize-branch))
+                            staging-quoted optimize-quoted
+                            staging-quoted optimize-quoted))
            (diff-output (shell-command-to-string diff-cmd))
            (review-prompt (format "Review the following changes for blockers, critical bugs, and security issues.
 
@@ -1284,12 +1287,14 @@ Scores based on commit message + code diff (not just stat)."
   (when (fboundp 'gptel-benchmark-eight-keys-score)
     (let* ((worktree (or gptel-auto-workflow--worktree-dir
                          (gptel-auto-workflow--project-root)))
+           ;; SECURITY: Use shell-quote-argument to prevent shell injection
+           (worktree-quoted (shell-quote-argument worktree))
            (commit-msg (shell-command-to-string
                         (format "cd %s && git log -1 --format='%%B' 2>/dev/null || echo ''"
-                                worktree)))
+                                worktree-quoted)))
            (code-diff (shell-command-to-string
                        (format "cd %s && git diff HEAD~1 --unified=2 2>/dev/null | head -200"
-                               worktree)))
+                               worktree-quoted)))
            (output (concat commit-msg "\n\n" code-diff)))
       (gptel-benchmark-eight-keys-score output))))
 
@@ -1303,9 +1308,11 @@ Scores based on commit message + code diff (not just stat)."
   (when (fboundp 'gptel-benchmark--code-quality-score)
     (let* ((worktree (or gptel-auto-workflow--worktree-dir
                          (gptel-auto-workflow--project-root)))
+           ;; SECURITY: Use shell-quote-argument to prevent shell injection
+           (worktree-quoted (shell-quote-argument worktree))
            (changed-files (shell-command-to-string
                            (format "cd %s && git diff --name-only HEAD~1 2>/dev/null | grep '\\.el$'"
-                                   worktree))))
+                                   worktree-quoted))))
       (when (string-match-p "\\.el$" changed-files)
         (let ((total-score 0.0)
               (file-count 0))
@@ -1456,10 +1463,13 @@ Then on a new line, briefly explain why (1 sentence)."
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline)
   "Build prompt for experiment EXPERIMENT-ID on TARGET.
 Uses loaded skills and Eight Keys breakdown for focused improvements."
-  (let* ((git-history (shell-command-to-string
+  (let* ((worktree-path (or gptel-auto-workflow--worktree-dir
+                            (gptel-auto-workflow--project-root)))
+         ;; SECURITY: Use shell-quote-argument to prevent shell injection
+         (worktree-quoted (shell-quote-argument worktree-path))
+         (git-history (shell-command-to-string
                        (format "cd %s && git log --oneline -20 2>/dev/null || echo 'no history'"
-                               (or gptel-auto-workflow--worktree-dir
-                                   (gptel-auto-workflow--project-root)))))
+                               worktree-quoted)))
          (patterns (when analysis (plist-get analysis :patterns)))
          (suggestions (when analysis (plist-get analysis :recommendations)))
          (skills (cdr (assoc target gptel-auto-workflow--skills)))
@@ -1467,8 +1477,6 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
          (weakest-keys (when scores (gptel-auto-workflow--format-weakest-keys scores)))
          (mutation-templates (when skills (gptel-auto-workflow--extract-mutation-templates skills)))
          (suggested-hypothesis (when skills (gptel-auto-workflow-skill-suggest-hypothesis skills)))
-         (worktree-path (or gptel-auto-workflow--worktree-dir
-                            (gptel-auto-workflow--project-root)))
          (target-full-path (expand-file-name target worktree-path)))
     (format "You are running experiment %d of %d to optimize %s.
 
@@ -2393,21 +2401,23 @@ Returns list of matching files."
           (progn
             (message "[mementum] Index miss, using git grep for: %s" query)
             (let ((default-directory (gptel-auto-workflow--project-root)))
+              ;; SECURITY: Use shell-quote-argument to prevent shell injection
               (split-string
                (shell-command-to-string
-                (format "git grep -l '%s' -- mementum/knowledge/ 2>/dev/null || true" query))
+                (format "git grep -l %s -- mementum/knowledge/ 2>/dev/null || true"
+                        (shell-quote-argument query)))
                "\n" t))))))
 
-  (defun gptel-mementum-decay-skills ()
-    "Apply decay to skill files not tested in 4+ weeks.
+(defun gptel-mementum-decay-skills ()
+  "Apply decay to skill files not tested in 4+ weeks.
 Run weekly via cron."
-    (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
-                                         (gptel-auto-workflow--project-root)))
-           (mutations-dir (expand-file-name "mementum/knowledge/mutations"
-                                            (gptel-auto-workflow--project-root)))
-           (now (float-time))
-           (four-weeks (* 4 7 24 60 60))
-           (decayed 0)
+  (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
+                                       (gptel-auto-workflow--project-root)))
+         (mutations-dir (expand-file-name "mementum/knowledge/mutations"
+                                          (gptel-auto-workflow--project-root)))
+         (now (float-time))
+         (four-weeks (* 4 7 24 60 60))
+         (decayed 0)
            (archived 0))
       (dolist (dir (list skills-dir mutations-dir))
         (when (file-exists-p dir)
@@ -2506,8 +2516,11 @@ Implements λ termination(x): synthesis ≡ AI | approval ≡ human."
               (insert frontmatter)
               (insert content))
             (message "[mementum] Created knowledge page: %s" know-file)
+            ;; SECURITY: Use shell-quote-argument to prevent shell injection
             (shell-command-to-string
-             (format "git add %s && git commit -m \"💡 synthesis: %s\"" know-file topic))
+             (format "git add %s && git commit -m %s"
+                     (shell-quote-argument know-file)
+                     (shell-quote-argument (format "💡 synthesis: %s" topic))))
             (setq synthesized t)))))
     synthesized))
 
