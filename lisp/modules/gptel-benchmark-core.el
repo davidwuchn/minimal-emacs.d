@@ -210,10 +210,9 @@ RESULTS should contain :eight-keys-scores in each entry."
         (key-names [phi-vitality fractal-clarity epsilon-purpose tau-wisdom
                                  pi-synthesis mu-directness exists-truth forall-vigilance]))
     (dolist (r results)
-      (let ((eight-keys (if (consp r)
-                            (when (fboundp 'gptel-workflow-run-eight-keys-scores)
-                              (gptel-workflow-run-eight-keys-scores (car r)))
-                          (plist-get r :eight-keys-scores))))
+      (let* ((scores (gptel-benchmark--extract-scores r))
+             (eight-keys (when (and scores (listp scores))
+                           (plist-get scores :eight-keys-scores))))
         (when eight-keys
           (cl-loop for key across key-names
                    for i from 0
