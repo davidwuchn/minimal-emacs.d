@@ -65,11 +65,7 @@ Findings stored in var/tmp/research-findings.md for analyzer."
   "Cached research findings from last researcher run.")
 
 (defun gptel-auto-workflow--discover-targets ()
-  "Discover all Elisp files in lisp/modules/ as potential targets.
-;; ASSUMPTION: lisp/modules/ exists under project root
-;; BEHAVIOR: Recursively find .el files, exclude tests and disabled
-;; EDGE CASE: Returns empty list if directory doesn't exist
-;; TEST: Verify no -test.el or -disabled.el files in results"
+  "Discover all Elisp files in lisp/modules/ as potential targets."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (modules-dir (and proj-root (expand-file-name "lisp/modules" proj-root)))
          (targets '()))
@@ -184,18 +180,11 @@ OUTPUT JSON ONLY:
       (funcall callback nil))))
 
 (defun gptel-auto-workflow--parse-targets (response)
-  "Parse LLM RESPONSE to extract target file list.
-
-;; ASSUMPTION: Response is string or stringifiable object
-;; BEHAVIOR: Try JSON parse first, fallback to regex extraction
-;; EDGE CASE: Malformed JSON → regex fallback; No matches → empty list
-;; SYNTHESIS: Bridges LLM output format with internal file list representation
-;; TEST: Verify valid files extracted from both JSON and text responses"
+  "Parse LLM RESPONSE to extract target file list."
   (let ((targets '())
         (proj-root (gptel-auto-workflow--project-root))
         (max-targets gptel-auto-workflow-max-targets-per-run))
     (when proj-root
-      ;; Try JSON
       (condition-case _
           (with-temp-buffer
             (insert (if (stringp response) response (format "%S" response)))
@@ -203,19 +192,19 @@ OUTPUT JSON ONLY:
             (when (re-search-forward "{" nil t)
               (goto-char (match-beginning 0))
               (let* ((data (json-read))
-                     (target-list (cdr (assoc "targets" data))))
+                     (target-list (plist-get data :targets)))
                 (when (listp target-list)
                   (dolist (item target-list)
                     (when (and (< (length targets) max-targets)
                                (listp item))
-                      (let ((file (cdr (assoc "file" item))))
+                      (let ((file (plist-get item :file)))
                         (when (and file (stringp file))
                           (let ((abs-path (if (file-name-absolute-p file)
                                               file
                                             (expand-file-name file proj-root))))
                             (when (file-exists-p abs-path)
                               (push (file-relative-name abs-path proj-root) targets)))))))))))
-        (error nil)))
+        (error nil))))
     ;; Fallback: regex - matches files in subdirectories too
     (when (null targets)
       (with-temp-buffer
@@ -232,14 +221,7 @@ OUTPUT JSON ONLY:
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
 CALLBACK receives list of target files.
-LLM decides if available, otherwise uses static list.
-
-;; ASSUMPTION: gptel-auto-workflow-targets is defined as fallback
-;; BEHAVIOR: Strategic selection enabled → ask LLM; disabled → static list
-;; RISK: LLM failure gracefully degrades to static targets
-;; EDGE CASE: No targets from LLM → fallback to gptel-auto-workflow-targets
-;; SYNTHESIS: Orchestrates discover, gather-context, ask-analyzer, parse-targets
-;; TEST: Verify callback receives N targets (N = gptel-auto-workflow-max-targets-per-run)"
+LLM decides if available, otherwise uses static list."
   (when (functionp callback)
     (if gptel-auto-workflow-strategic-selection
         (gptel-auto-workflow--ask-analyzer-for-targets
