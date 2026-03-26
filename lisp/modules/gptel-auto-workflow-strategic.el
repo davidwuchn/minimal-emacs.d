@@ -81,20 +81,21 @@ Findings stored in var/tmp/research-findings.md for analyzer."
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
 Scans both lisp/modules/ and packages/ (forked packages)."
-  (let* ((proj-root (gptel-auto-workflow--project-root)))
-    (if proj-root
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (safe-root (and proj-root (shell-quote-argument proj-root))))
+    (if safe-root
         (list :git-history (shell-command-to-string
                             (format "cd %s && git log --oneline -30 -- lisp/modules/ packages/ 2>/dev/null"
-                                    proj-root))
+                                    safe-root))
               :file-sizes (shell-command-to-string
                            (format "cd %s && find lisp/modules packages -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
-                                   proj-root))
+                                   safe-root))
               :todos (shell-command-to-string
                       (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ packages/ 2>/dev/null | head -30"
-                              proj-root))
+                              safe-root))
               :file-list (shell-command-to-string
                           (format "cd %s && find lisp/modules packages -name '*.el' -type f 2>/dev/null"
-                                  proj-root)))
+                                  safe-root)))
       (list :git-history "" :file-sizes "" :todos "" :file-list ""))))
 
 (defun gptel-auto-workflow--research-patterns (callback)
