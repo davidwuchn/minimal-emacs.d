@@ -20,6 +20,18 @@ Running on Debian Linux (Pi5 aarch64), not macOS.
 - `scripts/verify-integration.sh` - fallback to `$HOME/.emacs.d/scripts`
 - `AGENTS.md` - nucleus reference uses `$HOME/workspace/nucleus/AGENTS.md`
 
+## Systemd Service Management
+
+On Debian, Emacs daemon runs via systemd user service:
+
+```bash
+systemctl --user status emacs   # Check status
+systemctl --user restart emacs  # Restart daemon (NOT pkill)
+journalctl --user -u emacs      # View logs
+```
+
+**Never use `pkill -f "emacs --daemon"`** - it leaves stale socket files.
+
 ## Detection
 
 ```bash
