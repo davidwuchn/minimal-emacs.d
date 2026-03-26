@@ -1,8 +1,8 @@
 # Mementum State
 
-> Last session: 2026-03-26 10:45
+> Last session: 2026-03-26 11:30
 
-## Total Improvements: 39 Real Code Fixes
+## Total Improvements: 45+ Real Code Fixes
 
 | # | File | Fix |
 |---|------|-----|
@@ -54,7 +54,8 @@
 λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7 Linux)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 39 code fixes, not documentation
+λ real. 45+ code fixes, not documentation
+λ reviewer. Switched to DashScope (faster, more reliable)
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
 λ retry. Curl timeout → automatic retry
