@@ -117,6 +117,13 @@ Uses `my/gptel-usages-cache-ttl' for freshness check."
   (and (fboundp 'eglot-current-server)
        (eglot-current-server)))
 
+
+(defun gptel-tools-code--filter-usage-line (line)
+  "Filter out binary/cache files from usage LINE.
+Returns LINE if it should be included, nil if it should be filtered.
+Filters: .pyc, .elc, __pycache__"
+  (unless (string-match-p "\\.pyc$\\|\\.elc$\\|__pycache__" line)
+    line))
 (defun my/gptel--git-grep-usages (symbol-name root)
   "Find usages of SYMBOL-NAME using git grep in ROOT.
 Returns list of matching lines or nil if not in git repo or no matches.
@@ -140,7 +147,7 @@ Honors `my/gptel-search-timeout' for large repos."
                   (let ((line (buffer-substring-no-properties
                                (line-beginning-position)
                                (line-end-position))))
-                    (unless (string-match-p "\\.pyc$\\|\\.elc$\\|__pycache__" line)
+                    (when (gptel-tools-code--filter-usage-line line)
                       (push line usages)))
                   (forward-line 1))
                 (nreverse usages)))))))))
@@ -230,7 +237,7 @@ Reports which backend was used."
                         (let ((line (buffer-substring-no-properties
                                      (line-beginning-position)
                                      (line-end-position))))
-                          (unless (string-match-p "\\.pyc$\\|\\.elc$\\|__pycache__" line)
+                          (when (gptel-tools-code--filter-usage-line line)
                             (push line usages)))
                         (forward-line 1)))))))))))
     (let ((result (if usages
