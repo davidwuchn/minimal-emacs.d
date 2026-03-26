@@ -1,68 +1,35 @@
 # Mementum State
 
-> Last session: 2026-03-26 12:30
+> Last session: 2026-03-26 13:00
 
-## Total Improvements: 57+ Real Code Fixes
+## Total Improvements: 60+ Real Code Fixes
+
+152+ commits with fixes since March 25, 2026.
+
+### Recent Fixes (Last 20)
 
 | # | File | Fix |
 |---|------|-----|
-| 1 | gptel-auto-workflow-strategic.el | Added `(require 'json)` |
-| 2 | gptel-ext-fsm-utils.el | Fixed `%d` → `%s` for float-time |
-| 3 | gptel-ext-retry.el | Refactor trim-tool-results-for-retry |
-| 4 | gptel-tools-code.el | Fix resource leak in byte-compile |
-| 5 | gptel-benchmark-core.el | Add error handling to read-json |
-| 6 | gptel-ext-retry.el | Pass retry-count as parameter |
-| 7 | gptel-auto-workflow-strategic.el | Fix recursive file discovery |
-| 8 | gptel-ext-fsm-utils.el | Fix FSM context validation |
-| 9 | gptel-ext-context.el | Fix undefined function `estimate-tokens` |
-| 10 | gptel-benchmark-core.el | Add defensive check for undefined variable |
-| 11 | gptel-ext-retry.el | Remove redundant repair call |
-| 12 | gptel-auto-workflow-strategic.el | Add missing `(require 'cl-lib)` |
-| 13 | gptel-ext-backends.el | Curl timeout 300s → 600s |
-| 14 | gptel-ext-context.el | Fix `cl-return` outside loop |
-| 15 | gptel-tools-agent.el | Add `cl-block` for `gptel-auto-experiment-grade` |
-| 16 | gptel-benchmark-instincts.el | Add `cl-block` for `commit-batch` |
-| 17 | gptel-benchmark-memory.el | Add `cl-block` for `memory-create` |
-| 18 | gptel-tools-agent.el | `block` → `cl-block` in `task-override` |
-| 19 | gptel-ext-context-cache.el | Input validation in `estimate-text-tokens` |
-| 20 | gptel-benchmark-core.el | Input validation in `summarize-results` |
-| 21 | gptel-ext-context-cache.el | `cl-block` for `openrouter-fetch-context-window` |
-| 22 | gptel-ext-backends.el | Backend name `Moonshot` → `moonshot` (case fix) |
-| 23 | gptel-tools-agent.el | `cl-block` for `my/gptel--run-agent-tool` |
-| 24 | gptel-benchmark-core.el | Consolidate duplicate maphash in analyze-patterns |
-| 25 | gptel-ext-retry.el | Extract transient error patterns into constants |
-| 26 | gptel-auto-workflow-strategic.el | Add input validation for nil dereference |
-| 27 | gptel-ext-context-cache.el | `cl-block` for `openrouter-fetch-context-window` (re-fix) |
-| 28 | gptel-ext-context-cache.el | Remove async fetch from context-window getter |
-| 29 | gptel-benchmark-core.el | Consolidate duplicate maphash (workflow fix) |
-| 30 | gptel-ext-retry.el | Extract message iteration into helper function |
-| 31 | gptel-auto-workflow-strategic.el | Limit regex fallback targets to max-targets |
-| 32 | scripts/*.sh | Use $HOME instead of hardcoded /Users/davidwu |
-| 33 | gptel-ext-context-cache.el | Escape regex in `alist-partial-match` |
-| 34 | gptel-ext-context-cache.el | Cache model-id to avoid redundant calls |
-| 35 | gptel-ext-context-cache.el | Optimize `get-model-metadata` avoid redundant calls |
-| 36 | gptel-tools-code.el | Fix byte-compile output capture race with sit-for |
-| 37 | gptel-tools-agent.el | Prevent double-callback in `experiment-decide` |
-| 38 | gptel-benchmark-core.el | Fix plist/alist detection in `to-json-format` |
-| 39 | gptel-benchmark-core.el | Extract score extraction into helper function |
-| 40 | gptel-agent-loop.el | Extract abort check into helper function |
-| 41 | gptel-agent-loop.el | Extract overlay cleanup into helper |
-| 42 | gptel-agent-loop.el | Add fboundp safety check |
-| 43 | gptel-ext-context.el | Optimize token calculation |
-| 44 | gptel-ext-context-cache.el | Extract cache-or-alist-lookup helper |
-| 45 | gptel-ext-context.el | Refactor auto-compact-needed-p |
-| 46 | gptel-ext-context.el | Fix preview/replace branch logic |
-| 47 | gptel-benchmark-core.el | Fix destructive nreverse in trend |
-| 48 | gptel-benchmark-core.el | Fix nreverse in two functions |
-| 49 | gptel-ext-retry.el | Handle list content in strip-images |
-| 50 | gptel-auto-workflow-strategic.el | Fix regex fallback for subdirs |
-| 51 | gptel-auto-workflow-strategic.el | Fix JSON parsing bug |
-| 52 | gptel-tools-code.el | Extract tree-sitter validation helper |
-| 53 | gptel-benchmark-core.el | Fix inconsistent indentation |
-| 54 | gptel-ext-context-cache.el | Use full metadata cache |
-| 55 | gptel-ext-context-cache.el | Fix metadata cache inconsistency |
+| 60 | gptel-ext-context-cache.el | Replace regex with string-prefix-p |
+| 59 | gptel-auto-workflow-strategic.el | Extract validation logic into helper |
+| 58 | gptel-auto-workflow-strategic.el | Validate-and-add-target returns nil |
+| 57 | gptel-auto-workflow-strategic.el | Remove extra closing paren |
 | 56 | gptel-benchmark-core.el | Fix destructive nreverse |
-| 57 | gptel-benchmark-core.el | Fix plist/alist detection |
+| 55 | gptel-ext-context-cache.el | Fix metadata cache inconsistency |
+| 54 | gptel-ext-context-cache.el | Use full metadata cache |
+| 53 | gptel-benchmark-core.el | Fix inconsistent indentation |
+| 52 | gptel-tools-code.el | Extract tree-sitter validation helper |
+| 51 | gptel-auto-workflow-strategic.el | Fix JSON parsing bug |
+| 50 | gptel-auto-workflow-strategic.el | Fix regex fallback for subdirs |
+| 49 | gptel-ext-retry.el | Handle list content in strip-images |
+| 48 | gptel-benchmark-core.el | Fix nreverse in two functions |
+| 47 | gptel-benchmark-core.el | Fix destructive nreverse in trend |
+| 46 | gptel-ext-context.el | Fix preview/replace branch logic |
+| 45 | gptel-ext-context.el | Refactor auto-compact-needed-p |
+| 44 | gptel-ext-context-cache.el | Extract cache-or-alist-lookup helper |
+| 43 | gptel-ext-context.el | Optimize token calculation |
+| 42 | gptel-agent-loop.el | Add fboundp safety check |
+| 41 | gptel-agent-loop.el | Extract overlay cleanup into helper |
 
 ---
 
@@ -72,7 +39,7 @@
 λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7 Linux)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 45+ code fixes, not documentation
+λ real. 60+ code fixes, 152+ commits since Mar 25
 λ reviewer. Switched to DashScope (faster, more reliable)
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
@@ -83,6 +50,5 @@
 λ case. Backend names must match exactly (lowercase)
 λ paths. Use $HOME, not hardcoded directories
 λ daemon. systemctl --user restart emacs (NOT pkill)
+λ string-prefix. Replace regex with string-prefix-p for partial match
 ```
-### Run: skill/test-skill @ 11:39:24
-- Result: completed
