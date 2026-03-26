@@ -183,6 +183,25 @@ OUTPUT JSON ONLY:
              (funcall callback (gptel-auto-workflow--parse-targets result)))))
       (funcall callback nil))))
 
+(defun gptel-auto-workflow--validate-and-add-target (file proj-root targets max-targets)
+  "Validate FILE and add to TARGETS if it exists.
+Returns updated targets list.
+;; ASSUMPTION: proj-root is a valid directory path
+;; BEHAVIOR: Converts relative paths to absolute, checks existence, adds as relative
+;; EDGE CASE: Returns targets unchanged if file doesn't exist or max reached
+;; TEST: Verify file is added only if it exists and is within proj-root"
+  (if (or (not (stringp file))
+          (>= (length targets) max-targets))
+      targets
+    (let ((abs-path (if (file-name-absolute-p file)
+                        file
+                      (expand-file-name file proj-root))))
+      (if (file-exists-p abs-path)
+          (let ((rel-path (file-relative-name abs-path proj-root)))
+            (unless (member rel-path targets)
+              (cons rel-path targets)))
+        targets))))
+
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list.
 
@@ -209,12 +228,8 @@ OUTPUT JSON ONLY:
                     (when (and (< (length targets) max-targets)
                                (listp item))
                       (let ((file (cdr (assoc "file" item))))
-                        (when (and file (stringp file))
-                          (let ((abs-path (if (file-name-absolute-p file)
-                                              file
-                                            (expand-file-name file proj-root))))
-                            (when (file-exists-p abs-path)
-                              (push (file-relative-name abs-path proj-root) targets)))))))))))
+                        (setq targets (gptel-auto-workflow--validate-and-add-target
+                                       file proj-root targets max-targets)))))))))
         (error nil)))
     ;; Fallback: regex
     (when (null targets)
@@ -224,10 +239,10 @@ OUTPUT JSON ONLY:
         (while (and (< (length targets) max-targets)
                     (re-search-forward "\\(lisp/modules\\|packages\\)/[a-zA-Z0-9_-]+\\.el" nil t))
           (let ((file (match-string 0)))
-            (let ((abs-path (expand-file-name file proj-root)))
-              (when (file-exists-p abs-path)
-                (cl-pushnew file targets :test #'equal)))))))
-    (nreverse targets)))
+            (setq targets (gptel-auto-workflow--validate-and-add-target
+                           file proj-root targets max-targets)))))
+      (setq targets (nreverse targets)))
+    targets))
 
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
