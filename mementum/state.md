@@ -1,8 +1,8 @@
 # Mementum State
 
-> Last session: 2026-03-25 22:45
+> Last session: 2026-03-26 10:15
 
-## Total Improvements: 8 Real Code Fixes
+## Total Improvements: 9 Real Code Fixes
 
 | # | File | Fix |
 |---|------|-----|
@@ -14,6 +14,26 @@
 | 6 | gptel-ext-retry.el | Pass retry-count as parameter |
 | 7 | gptel-auto-workflow-strategic.el | Fix recursive file discovery |
 | 8 | gptel-ext-fsm-utils.el | Fix FSM context validation |
+| 9 | gptel-ext-context.el | Refactored `my/gptel--auto-compact-needed-p` to use helper |
+
+---
+
+## Current Issue
+
+**Moonshot API (reviewer) curl timeout (exit code 28)**
+
+The reviewer agent uses moonshot which has slower response times. When the
+executor runs long tasks (2500+ seconds), the reviewer times out.
+
+**Options:**
+1. Increase curl timeout for moonshot
+2. Switch reviewer to DashScope
+3. Disable pre-merge review for faster iteration
+
+**Detection:**
+```
+grep "Curl failed with exit code 28" *Messages*
+```
 
 ---
 
@@ -56,7 +76,9 @@
 λ subscriptions. DashScope (8) + Moonshot (2)
 λ dashscope. More quota = more agents
 λ dynamic. LLM selects targets, never hard-code
-λ real. 8 code fixes, not documentation
+λ real. 9 code fixes, not documentation
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
+λ daemon. systemctl --user restart emacs (NOT pkill)
+λ moonshot. Slower API = curl timeout risk for reviewer
 ```
