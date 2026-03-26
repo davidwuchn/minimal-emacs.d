@@ -506,6 +506,15 @@ When FILE_PATH is nil, searches the entire project workspace."
 (defun gptel-tools-code--replace-node (file_path node_name new_code)
   "Surgically replace NODE_NAME in FILE_PATH with NEW_CODE.
 Syncs buffer with disk, validates parser, guards against truncation."
+  (cond
+   ((not file_path)
+    (error "gptel-tools-code--replace-node: file_path is nil"))
+   ((not node_name)
+    (error "gptel-tools-code--replace-node: node_name is nil"))
+   ((not new_code)
+    (error "gptel-tools-code--replace-node: new_code is nil"))
+   ((string-empty-p new_code)
+    (error "gptel-tools-code--replace-node: new_code is empty")))
   (condition-case err
       (with-timeout (5 (format "Error: Code_Replace timed out on %s" file_path))
         (with-current-buffer (find-file-noselect file_path)
