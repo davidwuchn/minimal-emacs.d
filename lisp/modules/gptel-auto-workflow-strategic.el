@@ -76,7 +76,7 @@ Findings stored in var/tmp/research-findings.md for analyzer."
                       (string-match-p "-disabled\\.el$" file)
                       (string-match-p "/test/" file))
             (push rel-path targets)))))
-    (nreverse targets)))
+    (reverse targets)))
 
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
@@ -216,12 +216,13 @@ Returns updated targets list.
                      (target-list (plist-get data :targets)))
                 (when (listp target-list)
                   (dolist (item target-list)
-                    (let ((file (plist-get item :file)))
-                      (when (stringp file)
-                        (setq targets
-                              (gptel-auto-workflow--validate-and-add-target
-                               file proj-root targets max-targets)))))))))
+                    (when (and (< (length targets) max-targets)
+                               (listp item))
+                      (let ((file (plist-get item :file)))
+                        (setq targets (gptel-auto-workflow--validate-and-add-target
+                                       file proj-root targets max-targets)))))))))
         (error nil)))
+    ;; Fallback: regex - matches files in subdirectories too
     (when (null targets)
       (with-temp-buffer
         (insert (if (stringp response) response (format "%S" response)))
@@ -229,9 +230,8 @@ Returns updated targets list.
         (while (and (< (length targets) max-targets)
                     (re-search-forward "\\(lisp/modules\\|packages\\)/[a-zA-Z0-9_/.-]+\\.el" nil t))
           (let ((file (match-string 0)))
-            (setq targets
-                  (gptel-auto-workflow--validate-and-add-target
-                   file proj-root targets max-targets))))))
+            (setq targets (gptel-auto-workflow--validate-and-add-target
+                           file proj-root targets max-targets))))))
     (reverse targets)))
 
 (defun gptel-auto-workflow-select-targets (callback)
