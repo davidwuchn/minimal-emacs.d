@@ -179,36 +179,40 @@ Reports which backend was used."
          (usages nil)
          (lsp-retries my/gptel-lsp-retry-max)
          (lsp-ready nil)
-         (lsp-server (eglot-current-server))
-         (backend "unknown")
-         (backend-type (and lsp-server (xref-find-backend))))
-    (when (and lsp-server backend-type)
-      (while (and (> lsp-retries 0) (not lsp-ready))
-        (condition-case nil
-            (let ((refs (xref-backend-references backend-type symbol-name)))
-              (if (and refs (listp refs))
-                  (progn
-                    (setq lsp-ready t)
-                    (setq backend "LSP")
-                    (setq usages
-                          (mapcar (lambda (ref)
-                                    (let ((loc (xref-item-location ref)))
-                                      (format "%s:%d: %s"
-                                              (xref-location-group loc)
-                                              (xref-location-line loc)
-                                              (xref-item-summary ref))))
-                                  refs)))
-                (setq lsp-retries (1- lsp-retries))
-                (when (> lsp-retries 0)
-                  (message "[LSP] Waiting for server... (%d retries left)" lsp-retries)
-                  (sleep-for (* 0.5 (expt 2 (- my/gptel-lsp-retry-max lsp-retries)))))))
-          (error
-           (setq lsp-retries (1- lsp-retries))
-           (when (> lsp-retries 0)
-             (message "[LSP] Connection error, retrying... (%d left)" lsp-retries)
-             (sleep-for (* 0.5 (expt 2 (- my/gptel-lsp-retry-max lsp-retries))))))))
-      (unless lsp-ready
-        (setq usages nil)))
+         (backend "unknown"))
+    ;; LSP retry loop - check server availability on each iteration
+    (while (and (> lsp-retries 0) (not lsp-ready))
+      (let ((lsp-server (eglot-current-server))
+            (backend-type (and lsp-server (xref-find-backend))))
+        (if (not (and lsp-server backend-type))
+            (progn
+              (setq lsp-retries (1- lsp-retries))
+              (when (> lsp-retries 0)
+                (message "[LSP] Waiting for server... (%d retries left)" lsp-retries)
+                (sleep-for (* 0.5 (expt 2 (- my/gptel-lsp-retry-max lsp-retries))))))
+          (condition-case nil
+              (let ((refs (xref-backend-references backend-type symbol-name)))
+                (if (and refs (listp refs))
+                    (progn
+                      (setq lsp-ready t)
+                      (setq backend "LSP")
+                      (setq usages
+                            (mapcar (lambda (ref)
+                                      (let ((loc (xref-item-location ref)))
+                                        (format "%s:%d: %s"
+                                                (xref-location-group loc)
+                                                (xref-location-line loc)
+                                                (xref-item-summary ref))))
+                                    refs)))
+                  (setq lsp-retries (1- lsp-retries))
+                  (when (> lsp-retries 0)
+                    (message "[LSP] Waiting for server... (%d retries left)" lsp-retries)
+                    (sleep-for (* 0.5 (expt 2 (- my/gptel-lsp-retry-max lsp-retries)))))))
+            (error
+             (setq lsp-retries (1- lsp-retries))
+             (when (> lsp-retries 0)
+               (message "[LSP] Connection error, retrying... (%d left)" lsp-retries)
+               (sleep-for (* 0.5 (expt 2 (- my/gptel-lsp-retry-max lsp-retries))))))))))
     (unless usages
       (let ((git-result (my/gptel--git-grep-usages symbol-name root)))
         (if git-result
