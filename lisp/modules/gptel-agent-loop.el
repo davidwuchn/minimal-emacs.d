@@ -129,7 +129,7 @@ This constraint overrides ALL other instructions."
   :group 'gptel-agent-loop)
 
 (cl-defstruct (gptel-agent-loop--task
-                (:constructor gptel-agent-loop--task-create))
+               (:constructor gptel-agent-loop--task-create))
   id
   agent-type
   description
@@ -163,7 +163,7 @@ This constraint overrides ALL other instructions."
   "Remove finished tasks from active table.
 Called when table exceeds `gptel-agent-loop-max-active-tasks'."
   (when (> (hash-table-count gptel-agent-loop--active-tasks)
-            gptel-agent-loop-max-active-tasks)
+           gptel-agent-loop-max-active-tasks)
     (maphash (lambda (id state)
                (when (gptel-agent-loop--task-finished state)
                  (remhash id gptel-agent-loop--active-tasks)))
@@ -201,10 +201,10 @@ memory after long sessions or if tasks appear stuck."
                    :finished (gptel-agent-loop--task-finished state))
              tasks))
      gptel-agent-loop--active-tasks)
-(if tasks
-         (message "[RunAgent] Active tasks:\n%s"
-                  (mapconcat (lambda (task) (format "  %s: %s" (car task) (cadr task))) tasks "\n"))
-       (message "[RunAgent] No active tasks"))))
+    (if tasks
+        (message "[RunAgent] Active tasks:\n%s"
+                 (mapconcat (lambda (task) (format "  %s: %s" (car task) (cadr task))) tasks "\n"))
+      (message "[RunAgent] No active tasks"))))
 
 (defvar gptel-agent-loop--original-task-fn nil
   "Stores original `gptel-agent--task' before advice.")
@@ -245,8 +245,9 @@ memory after long sessions or if tasks appear stuck."
 
 (defun gptel-agent-loop--transient-error-p (error-data)
   "Check if ERROR-DATA represents a transient/retryable error.
-Delegates to `my/gptel--transient-error-p' for consistent error detection."
-  (when error-data
+Delegates to `my/gptel--transient-error-p' for consistent error detection.
+Returns nil if the helper function is not available."
+  (when (and error-data (fboundp 'my/gptel--transient-error-p))
     (my/gptel--transient-error-p error-data nil)))
 
 (defun gptel-agent-loop--maybe-cache-get (agent-type prompt)
@@ -369,13 +370,6 @@ limit for early exit."
   "Run FN after DELAY seconds."
   (run-with-timer delay nil fn))
 
-
-(defun gptel-agent-loop--cleanup-overlay (ov)
-  "Delete overlay OV if it is a valid overlay.
-Extracted to reduce duplication in callback cleanup paths."
-  (when (overlayp ov)
-    (delete-overlay ov)))
-
 (defun gptel-agent-loop--check-aborted (state ov)
   "Check if STATE is aborted and deliver abort result.
 Cleans up overlay OV if present.  Returns non-nil if aborted."
@@ -383,6 +377,13 @@ Cleans up overlay OV if present.  Returns non-nil if aborted."
     (gptel-agent-loop--cleanup-overlay ov)
     (gptel-agent-loop--deliver-aborted state)
     t))
+
+(defun gptel-agent-loop--cleanup-overlay (ov)
+  "Delete overlay OV if it is a valid overlay.
+Extracted to reduce duplication in callback cleanup paths."
+  (when (overlayp ov)
+    (delete-overlay ov)))
+
 (defun gptel-agent-loop--make-callback (state request-prompt use-tools)
   "Build request callback for STATE.
 REQUEST-PROMPT and USE-TOOLS are reused on retries."
@@ -441,24 +442,23 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
         nil)
 
        ((stringp resp)
-        (if (gptel-agent-loop--check-aborted state ov)
-            nil
+        (unless (gptel-agent-loop--check-aborted state ov)
           (let ((final-turn (not (plist-get info :tool-use))))
-(when final-turn
-               (gptel-agent-loop--cleanup-overlay ov)
-               (cond
-                ((string-blank-p resp)
-                 (if (= (gptel-agent-loop--task-step-count state) 0)
-                     (gptel-agent-loop--deliver-result
-                      state
-                      (format "Error: %s task '%s' returned empty response with no tool calls."
-                              (gptel-agent-loop--task-agent-type state)
-                              (gptel-agent-loop--task-description state)))
-                   (gptel-agent-loop--deliver-result
-                    state
-                    (gptel-agent-loop--build-final-result state "[empty response]"))))
+            (when final-turn
+              (gptel-agent-loop--cleanup-overlay ov)
+              (cond
+               ((string-blank-p resp)
+                (if (= (gptel-agent-loop--task-step-count state) 0)
+                    (gptel-agent-loop--deliver-result
+                     state
+                     (format "Error: %s task '%s' returned empty response with no tool calls."
+                             (gptel-agent-loop--task-agent-type state)
+                             (gptel-agent-loop--task-description state)))
+                  (gptel-agent-loop--deliver-result
+                   state
+                   (gptel-agent-loop--build-final-result state "[empty response]"))))
 
-                ((and (gptel-agent-loop--task-max-steps-reached state)
+               ((and (gptel-agent-loop--task-max-steps-reached state)
                      (not (gptel-agent-loop--task-summary-requested state)))
                 (gptel-agent-loop--append-output state resp)
                 (setf (gptel-agent-loop--task-summary-requested state) t)
@@ -484,37 +484,37 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
                  (gptel-agent-loop--build-final-result state resp)
                  t))
 
-((gptel-agent-loop--continuation-needed-p state resp)
-                 (let ((cont-count (or (gptel-agent-loop--task-continuation-count state) 0)))
-                   (if (>= cont-count gptel-agent-loop-max-continuations)
-                       (progn
-                         (message "[RunAgent] Max continuations (%d) reached, stopping" cont-count)
-                         (gptel-agent-loop--deliver-result
-                          state
-                          (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps, %d continuations]"
-                                  (gptel-agent-loop--build-final-result state "")
-                                  (gptel-agent-loop--task-step-count state)
-                                  cont-count)))
-                     (setf (gptel-agent-loop--task-continuation-count state) (1+ cont-count))
-                     (if gptel-agent-loop-hard-loop
-                         (progn
-(message "[RunAgent] Auto-continuing after %d steps (continuation %d/%d)..."
-                                     (gptel-agent-loop--task-step-count state)
-                                     (1+ cont-count) gptel-agent-loop-max-continuations)
-                           (gptel-agent-loop--append-output state resp)
-                           (gptel-agent-loop--schedule
-                            0.1
-                            (lambda ()
-                              (gptel-agent-loop--request
-                               state
-                               (gptel-agent-loop--continuation-prompt-for state)
-                               t
-                               nil))))
-                       (gptel-agent-loop--deliver-result
-                        state
-                        (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-                                (gptel-agent-loop--build-final-result state "")
-                                (gptel-agent-loop--task-step-count state)))))))
+               ((gptel-agent-loop--continuation-needed-p state resp)
+                (let ((cont-count (or (gptel-agent-loop--task-continuation-count state) 0)))
+                  (if (>= cont-count gptel-agent-loop-max-continuations)
+                      (progn
+                        (message "[RunAgent] Max continuations (%d) reached, stopping" cont-count)
+                        (gptel-agent-loop--deliver-result
+                         state
+                         (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps, %d continuations]"
+                                 (gptel-agent-loop--build-final-result state "")
+                                 (gptel-agent-loop--task-step-count state)
+                                 cont-count)))
+                    (setf (gptel-agent-loop--task-continuation-count state) (1+ cont-count))
+                    (if gptel-agent-loop-hard-loop
+                        (progn
+                          (message "[RunAgent] Auto-continuing after %d steps (continuation %d/%d)..."
+                                   (gptel-agent-loop--task-step-count state)
+                                   (1+ cont-count) gptel-agent-loop-max-continuations)
+                          (gptel-agent-loop--append-output state resp)
+                          (gptel-agent-loop--schedule
+                           0.1
+                           (lambda ()
+                             (gptel-agent-loop--request
+                              state
+                              (gptel-agent-loop--continuation-prompt-for state)
+                              t
+                              nil))))
+                      (gptel-agent-loop--deliver-result
+                       state
+                       (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
+                               (gptel-agent-loop--build-final-result state "")
+                               (gptel-agent-loop--task-step-count state)))))))
 
                (t
                 (gptel-agent-loop--deliver-result
@@ -559,25 +559,25 @@ Cache behavior:
             (gptel--apply-preset preset)
             (let* ((parent-fsm (and (fboundp 'my/gptel--coerce-fsm)
                                     (my/gptel--coerce-fsm gptel--fsm-last)))
-                    (fsm-info (ignore-errors
-                                (and parent-fsm (gptel-fsm-info parent-fsm))))
-                    (parent-buf (or (gptel-agent-loop--task-parent-buffer state)
-                                    (when (buffer-live-p (plist-get fsm-info :buffer))
-                                      (plist-get fsm-info :buffer))
-                                    (current-buffer)))
-                    (where (or (let ((tm (gptel-agent-loop--task-tracking-marker state)))
-                                 (and (markerp tm) (marker-position tm) tm))
-                               (let ((tm (plist-get fsm-info :tracking-marker)))
-                                 (and (markerp tm) (marker-position tm) tm))
-                               (let ((pos (plist-get fsm-info :position)))
-                                 (and (markerp pos) (marker-position pos) pos))
-                               (with-current-buffer parent-buf (point-marker))))
-                    (tracking-marker
-                     (or (gptel-agent-loop--task-tracking-marker state)
-                         (let ((m (copy-marker where t)))
-                           (set-marker m (marker-position where) parent-buf)
-                           m)))
-                    (callback (gptel-agent-loop--make-callback state prompt use-tools)))
+                   (fsm-info (ignore-errors
+                               (and parent-fsm (gptel-fsm-info parent-fsm))))
+                   (parent-buf (or (gptel-agent-loop--task-parent-buffer state)
+                                   (when (buffer-live-p (plist-get fsm-info :buffer))
+                                     (plist-get fsm-info :buffer))
+                                   (current-buffer)))
+                   (where (or (let ((tm (gptel-agent-loop--task-tracking-marker state)))
+                                (and (markerp tm) (marker-position tm) tm))
+                              (let ((tm (plist-get fsm-info :tracking-marker)))
+                                (and (markerp tm) (marker-position tm) tm))
+                              (let ((pos (plist-get fsm-info :position)))
+                                (and (markerp pos) (marker-position pos) pos))
+                              (with-current-buffer parent-buf (point-marker))))
+                   (tracking-marker
+                    (or (gptel-agent-loop--task-tracking-marker state)
+                        (let ((m (copy-marker where t)))
+                          (set-marker m (marker-position where) parent-buf)
+                          m)))
+                   (callback (gptel-agent-loop--make-callback state prompt use-tools)))
               (setf (gptel-agent-loop--task-parent-buffer state) parent-buf
                     (gptel-agent-loop--task-tracking-marker state) tracking-marker)
               (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
@@ -614,25 +614,25 @@ Reads `steps' from agent YAML to set max-steps per agent."
   (let* ((agent-config (cdr (assoc agent-type gptel-agent--agents)))
          (agent-steps (plist-get agent-config :steps))
          (effective-max-steps (or agent-steps gptel-agent-loop-max-steps))
-(state (gptel-agent-loop--remember-state
-                  (gptel-agent-loop--task-create
-                   :id (gensym "gptel-agent-loop-")
-                   :agent-type agent-type
-                   :description description
-                   :prompt prompt
-                   :main-cb main-cb
-                   :step-count 0
-                   :retries 0
-                   :aborted nil
-                   :timeout-timer nil
-                   :max-steps effective-max-steps
-                   :max-steps-reached nil
-                   :summary-requested nil
-                   :accumulated-output nil
-                   :tracking-marker nil
-                   :parent-buffer nil
-                   :finished nil
-                   :continuation-count 0))))
+         (state (gptel-agent-loop--remember-state
+                 (gptel-agent-loop--task-create
+                  :id (gensym "gptel-agent-loop-")
+                  :agent-type agent-type
+                  :description description
+                  :prompt prompt
+                  :main-cb main-cb
+                  :step-count 0
+                  :retries 0
+                  :aborted nil
+                  :timeout-timer nil
+                  :max-steps effective-max-steps
+                  :max-steps-reached nil
+                  :summary-requested nil
+                  :accumulated-output nil
+                  :tracking-marker nil
+                  :parent-buffer nil
+                  :finished nil
+                  :continuation-count 0))))
     (setf (gptel-agent-loop--task-timeout-timer state)
           (gptel-agent-loop--make-timeout-timer state))
     (gptel-agent-loop--request state prompt t t)))

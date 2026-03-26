@@ -181,11 +181,11 @@ Returns the number of messages whose reasoning_content was stripped."
           (when (> (length reasoning-indices) keep)
             (let ((to-strip (seq-take reasoning-indices
                                       (- (length reasoning-indices) keep))))
-(dolist (idx to-strip)
-                 (let ((msg (aref messages idx)))
-                   (plist-put msg :reasoning_content "")
-                   (cl-incf stripped)))))))
-       stripped)))
+              (dolist (idx to-strip)
+                (let ((msg (aref messages idx)))
+                  (plist-put msg :reasoning_content "")
+                  (cl-incf stripped)))))))
+      stripped)))
 
 (defun my/gptel--repair-thinking-tool-call-messages (info)
   "Ensure thinking-enabled assistant tool-call messages stay API-valid.
@@ -323,6 +323,13 @@ Returns a list of indices in ascending order."
 Removes :image_url parts from multimodal message content arrays.
 Base64 images can easily exceed 1MB each.
 
+ASSUMPTION: Content can be string (text-only), vector, or list of parts.
+  JSON deserialization may produce either vectors or lists for arrays.
+BEHAVIOR: Converts list content to vector for uniform processing,
+  filters out image_url parts, preserves text parts.
+EDGE CASE: Empty content or non-sequence content is skipped safely.
+EDGE CASE: Content that becomes empty after filtering is preserved as empty vector.
+
 Returns the number of image parts removed, or 0 if nothing was done."
   (let* ((data (plist-get info :data))
          (messages (and data (plist-get data :messages)))
@@ -331,16 +338,18 @@ Returns the number of image parts removed, or 0 if nothing was done."
       (dotimes (i (length messages))
         (let* ((msg (aref messages i))
                (content (plist-get msg :content)))
-          ;; Content can be a string (text-only) or a vector/list of parts
-          (when (and content (vectorp content) (> (length content) 0))
-            (let ((filtered-parts
-                   (cl-remove-if
-                    (lambda (part)
-                      (and (listp part)
-                           (equal (plist-get part :type) "image_url")
-                           (cl-incf removed)))
-                    (append content nil))))
-              (when (< (length filtered-parts) (length content))
+          ;; Content can be string (text-only) or sequence (vector/list) of parts
+          (when (and content (sequencep content) (not (stringp content)) (> (length content) 0))
+            ;; Normalize to list for processing (handles both vectors and lists)
+            (let* ((content-list (if (vectorp content) (append content nil) content))
+                   (filtered-parts
+                    (cl-remove-if
+                     (lambda (part)
+                       (and (listp part)
+                            (equal (plist-get part :type) "image_url")
+                            (cl-incf removed)))
+                     content-list)))
+              (when (< (length filtered-parts) (length content-list))
                 (plist-put msg :content (vconcat filtered-parts))))))))
     removed))
 

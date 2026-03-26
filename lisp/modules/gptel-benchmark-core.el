@@ -104,7 +104,7 @@ Handles plists by converting to alists."
           (setq key (intern (substring (symbol-name key) 1))))
         (push (cons key (gptel-benchmark--to-json-format val)) alist)
         (setq plist (cddr plist))))
-    (nreverse alist)))
+    (reverse alist)))
 
 (defun gptel-benchmark--get-field (obj field)
   "Get FIELD from OBJ, handling both plist and alist formats.
@@ -153,7 +153,7 @@ Creates a history entry with timestamp and summary."
         (princ (format "=== Benchmark Trend: %s ===\n\n" name))
         (princ "Timestamp                 Avg Score    Total Tests\n")
         (princ "--------------------------------------------------\n")
-        (dolist (entry (nreverse history))
+        (dolist (entry (reverse history))
           (let* ((summary (plist-get entry :summary))
                  (timestamp (or (plist-get entry :timestamp) "unknown"))
                  (avg-score (plist-get summary :avg-overall))
@@ -232,7 +232,7 @@ RESULTS should contain :eight-keys-scores in each entry."
                for count = (aref key-counts i)
                for avg = (if (> count 0) (/ total count) 0.0)
                do (push (cons key avg) breakdown))
-      (nreverse breakdown))))
+      (reverse breakdown))))
 
 (defun gptel-benchmark-show-eight-keys (name results)
   "Show Eight Keys breakdown for NAME with RESULTS."
@@ -269,7 +269,7 @@ RESULTS should contain :eight-keys-scores in each entry."
 
 ;;; Pattern Analysis
 
-(defun gptel-benchmark-analyze-patterns (results &rest _)
+(defun gptel-benchmark-analyze-patterns (results)
   "Analyze RESULTS for patterns, issues, and generate recommendations."
   (let ((issues (make-hash-table :test 'equal))
         (recommendations '())
