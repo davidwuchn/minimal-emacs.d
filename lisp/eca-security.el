@@ -21,7 +21,10 @@
 
 (defun eca-security--get-temp-dir ()
   "Return the secure temp directory path, creating if needed."
-  (let ((dir (expand-file-name eca-security--temp-dir-name user-emacs-directory)))
+  (let ((dir (expand-file-name eca-security--temp-dir-name
+                               (or (and (boundp 'minimal-emacs-user-directory)
+                                        minimal-emacs-user-directory)
+                                   (file-name-directory (directory-file-name user-emacs-directory))))))
     (eca-security--ensure-secure-directory dir)
     dir))
 
