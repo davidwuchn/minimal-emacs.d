@@ -724,21 +724,23 @@ Fallback order:
 
 Note: We do NOT use gptel-max-tokens as it's for response length, not context window.
 Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-window-cache'."
-  (let* ((model gptel-model)
-         (model-id (my/gptel--model-id-string model))
+  (let* ((model-id (my/gptel--model-id-string gptel-model))
          (window (and (stringp model-id)
                       (my/gptel--cache-or-alist-lookup my/gptel--context-window-cache
                                                        my/gptel--known-model-context-windows
                                                        model-id))))
-    ;; Check gptel model tables
-    (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
-      (when (and (boundp var) (not window))
-        (let ((entry (assq model (symbol-value var))))
-          (when entry
-            (setq window (my/gptel--normalize-context-window
-                          (plist-get (cdr entry) :context-window)))))))
-    ;; Fall back to default (NOT gptel-max-tokens which is response length)
-    (or window my/gptel-default-context-window)))
+    (if window
+        window
+      (catch 'found
+        (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
+          (when (boundp var)
+            (let ((entry (assq gptel-model (symbol-value var))))
+              (when entry
+                (let ((cw (my/gptel--normalize-context-window
+                           (plist-get (cdr entry) :context-window))))
+                  (when (and (integerp cw) (> cw 0))
+                    (throw 'found cw)))))))
+        my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
 
