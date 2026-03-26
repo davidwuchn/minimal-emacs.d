@@ -174,6 +174,11 @@ LSP provides semantic references (most accurate).
 Git grep searches tracked files only (fast, respects .gitignore).
 Ripgrep searches all files including nested repos and untracked files.
 Reports which backend was used."
+  (cond
+   ((not symbol-name)
+    (error "my/gptel--find-usages: symbol-name is nil"))
+   ((string-empty-p symbol-name)
+    (error "my/gptel--find-usages: symbol-name is empty")))
   (let* ((proj (project-current))
          (root (if proj (project-root proj) default-directory))
          (usages nil)
