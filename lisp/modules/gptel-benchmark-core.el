@@ -166,18 +166,27 @@ Creates a history entry with timestamp and summary."
 
 ;;; Result Summarization
 
+(defun gptel-benchmark--extract-scores (r)
+  "Extract scores plist from result entry R.
+Handles both (run . scores) cons cells and plists with :scores key."
+  (cond
+   ((and (consp r) (listp (cdr r))) (cdr r))
+   ((listp r) (plist-get r :scores))
+   (t nil)))
+
 (defun gptel-benchmark-summarize-results (results)
   "Create summary of RESULTS.
-RESULTS is a list of (run . scores) cons cells."
-  (let ((total (length results))
+RESULTS is a list of (run . scores) cons cells or plists with :scores."
+  (let ((total 0)
         (avg-overall 0.0)
         (avg-efficiency 0.0)
         (avg-completion 0.0)
         (avg-constraints 0.0)
         (passed 0))
     (dolist (r results)
-      (let ((scores (if (consp r) (cdr r) (plist-get r :scores))))
-        (when scores
+      (let ((scores (gptel-benchmark--extract-scores r)))
+        (when (and scores (listp scores))
+          (cl-incf total)
           (cl-incf avg-overall (or (plist-get scores :overall-score) 0))
           (cl-incf avg-efficiency (or (plist-get scores :efficiency-score) 0))
           (cl-incf avg-completion (or (plist-get scores :completion-score) 0))
@@ -201,10 +210,9 @@ RESULTS should contain :eight-keys-scores in each entry."
         (key-names [phi-vitality fractal-clarity epsilon-purpose tau-wisdom
                                  pi-synthesis mu-directness exists-truth forall-vigilance]))
     (dolist (r results)
-      (let ((eight-keys (if (consp r)
-                            (when (fboundp 'gptel-workflow-run-eight-keys-scores)
-                              (gptel-workflow-run-eight-keys-scores (car r)))
-                          (plist-get r :eight-keys-scores))))
+      (let* ((scores (gptel-benchmark--extract-scores r))
+             (eight-keys (when (and scores (listp scores))
+                           (plist-get scores :eight-keys-scores))))
         (when eight-keys
           (cl-loop for key across key-names
                    for i from 0
@@ -267,7 +275,7 @@ RESULTS should contain :eight-keys-scores in each entry."
         (score-types '(:completion-score :efficiency-score :constraint-score :tool-score))
         (threshold 0.7))
     (dolist (r results)
-      (let ((scores (if (consp r) (cdr r) (plist-get r :scores))))
+      (let ((scores (gptel-benchmark--extract-scores r)))
         (when scores
           (let ((overall (or (plist-get scores :overall-score) 0)))
             (cond
@@ -282,19 +290,18 @@ RESULTS should contain :eight-keys-scores in each entry."
       (push (format "Review %d tests with low scores (< 70%%)" low-scores) recommendations))
     (when (= high-scores total)
       (push "All tests passing - consider increasing difficulty" recommendations))
-    (maphash (lambda (issue-type count)
-               (push (format "Address %s issues in %d test(s)" issue-type count)
-                     recommendations))
-             issues)
-    (list :patterns nil
-          :issues (let ((result '()))
-                    (maphash (lambda (k v) (push (cons k v) result)) issues)
-                    result)
-          :recommendations (delete-dups recommendations)
-          :total-tests total
-          :low-scores low-scores
-          :high-scores high-scores
-          :analysis-timestamp (format-time-string "%Y-%m-%dT%H:%M:%S"))))
+    (let ((issues-alist '()))
+      (maphash (lambda (issue-type count)
+                 (push (cons issue-type count) issues-alist)
+                 (push (format "Address %s issues in %d test(s)" issue-type count)
+                       recommendations))
+               issues)
+      (list :issues issues-alist
+            :recommendations (delete-dups recommendations)
+            :total-tests total
+            :low-scores low-scores
+            :high-scores high-scores
+            :analysis-timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")))))
 
 ;;; φ-Based Evolution (inspired by continuous-learning)
 

@@ -300,12 +300,13 @@ ev=5"
 (defun gptel-benchmark-instincts-commit-batch ()
   "Commit accumulated Eight Keys deltas to protocol files.
 Returns number of files updated."
-  (when (= (hash-table-count gptel-benchmark-instincts--accumulator) 0)
-    (message "[instincts] No accumulated deltas to commit")
-    (cl-return-from gptel-benchmark-instincts-commit-batch 0))
+  (cl-block gptel-benchmark-instincts-commit-batch
+    (when (= (hash-table-count gptel-benchmark-instincts--accumulator) 0)
+      (message "[instincts] No accumulated deltas to commit")
+      (cl-return-from gptel-benchmark-instincts-commit-batch 0))
 
-  (let ((updates-by-file (make-hash-table :test 'equal))
-        (files-updated 0))
+    (let ((updates-by-file (make-hash-table :test 'equal))
+          (files-updated 0))
     (maphash
      (lambda (key entry)
        (let ((file (car key))
@@ -322,7 +323,7 @@ Returns number of files updated."
     (clrhash gptel-benchmark-instincts--accumulator)
 
     (message "[instincts] Batch commit complete: %d files updated" files-updated)
-    files-updated))
+    files-updated)))
 
 (defun gptel-benchmark-instincts--apply-updates-to-file (file updates)
   "Apply UPDATES to FILE.

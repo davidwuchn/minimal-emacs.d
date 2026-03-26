@@ -354,23 +354,22 @@ MSG is the original error message, FILE-PATH is the file being operated on."
   (let ((byte-compile-error-on-warn nil)
         (byte-compile-warnings '(not obsolete free-vars unresolved))
         (warnings nil)
-        (output-buffer (get-buffer-create " *elisp-byte-compile*"))
         (elc-file (concat file-path "c")))
     (unwind-protect
         (progn
-          (with-current-buffer output-buffer
-            (erase-buffer))
-          (byte-compile-file file-path output-buffer)
-          (with-current-buffer output-buffer
-            (goto-char (point-min))
-            (while (not (eobp))
-              (let ((line (buffer-substring-no-properties
-                           (line-beginning-position) (line-end-position))))
-                (when (and (not (string-empty-p (string-trim line)))
-                           (string-match-p "[Ww]arning\\|[Ee]rror" line))
-                  (push line warnings)))
-              (forward-line 1))))
-      (kill-buffer output-buffer)
+          (byte-compile-file file-path)
+          (let ((compile-log-buffer (get-buffer "*Compile-Log*")))
+            (when compile-log-buffer
+              (with-current-buffer compile-log-buffer
+                (save-excursion
+                  (goto-char (point-min))
+                  (while (not (eobp))
+                    (let ((line (buffer-substring-no-properties
+                                 (line-beginning-position) (line-end-position))))
+                      (when (and (not (string-empty-p (string-trim line)))
+                                 (string-match-p "[Ww]arning\\|[Ee]rror" line))
+                        (push line warnings)))
+                    (forward-line 1)))))))
       (when (file-exists-p elc-file)
         (delete-file elc-file)))
     (if warnings

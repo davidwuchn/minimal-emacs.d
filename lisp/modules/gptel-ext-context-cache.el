@@ -228,7 +228,7 @@ Sources:
      :pricing-input 0.55 :pricing-output 2.19
      :max-output 8192
      :description "DeepSeek R1 - reasoning model")
-;; MiniMax
+    ;; MiniMax
     ("MiniMax-M2.5"
      :context-window 196608
      :pricing-input 0.27 :pricing-output 0.95
@@ -272,6 +272,19 @@ Pricing is in USD per million tokens (input/output).")
 
 ;;; Helpers
 
+(defun my/gptel--alist-partial-match (alist search-str)
+  "Find first entry in ALIST where key partially matches SEARCH-STR (case-insensitive).
+Returns the cdr (value) of the matching entry, or nil if no match."
+  (when (and (listp alist) (stringp search-str))
+    (let ((search-lower (downcase search-str)))
+      (catch 'found
+        (dolist (entry alist)
+          (when (and (consp entry)
+                     (stringp (car entry))
+                     (string-match-p (downcase (car entry)) search-lower))
+            (throw 'found (cdr entry))))
+        nil))))
+
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
@@ -302,18 +315,20 @@ Uses language-aware heuristics:
 - Mixed (default): ~3.5 chars/token
 
 For buffers with current buffer, analyzes content type."
-  (let ((ratio 3.5))
-    (when (and (buffer-live-p (current-buffer))
-               (buffer-file-name))
-      (let ((ext (file-name-extension (buffer-file-name))))
-        (cond
-         ((member ext '("el" "clj" "cljs" "py" "js" "ts" "rs" "go" "java" "c" "cpp" "h"))
-          (setq ratio 3.0))
-         ((member ext '("md" "txt" "org" "rst" "adoc"))
-          (setq ratio 4.0))
-         ((member ext '("json" "yaml" "yml" "toml" "ini"))
-          (setq ratio 2.5)))))
-    (/ (float chars) ratio)))
+  (if (not (and (numberp chars) (> chars 0)))
+      0
+    (let ((ratio 3.5))
+      (when (and (buffer-live-p (current-buffer))
+                 (buffer-file-name))
+        (let ((ext (file-name-extension (buffer-file-name))))
+          (cond
+           ((member ext '("el" "clj" "cljs" "py" "js" "ts" "rs" "go" "java" "c" "cpp" "h"))
+            (setq ratio 3.0))
+           ((member ext '("md" "txt" "org" "rst" "adoc"))
+            (setq ratio 4.0))
+           ((member ext '("json" "yaml" "yml" "toml" "ini"))
+            (setq ratio 2.5)))))
+      (/ (float chars) ratio))))
 
 (defun my/gptel--estimate-tokens (chars)
   "Estimate total token count: text (CHARS) + images in context.
@@ -389,64 +404,65 @@ Image tokens are counted from `gptel-context' if available."
   "Fetch context window for MODEL from OpenRouter and cache it.
 
 Runs asynchronously; returns nil immediately."
-  (let* ((model-id (my/gptel--model-id-string model))
-         (url "https://openrouter.ai/api/v1/models"))
-    (when (and (not my/gptel--openrouter-context-window-fetch-inflight)
-               (stringp model-id)
-               (executable-find "curl"))
-      (setq my/gptel--openrouter-context-window-fetch-inflight t)
-      (let* ((key (ignore-errors (gptel-api-key-from-auth-source "api.openrouter.com" "api")))
-             (buf (generate-new-buffer " *gptel-openrouter-models*")))
-        (unless (and (stringp key) (not (string-empty-p key)))
-          (setq my/gptel--openrouter-context-window-fetch-inflight nil)
-          (when (buffer-live-p buf) (kill-buffer buf))
-          (message "OpenRouter context-window: no API key found in auth-source")
-          (cl-return-from my/gptel--openrouter-fetch-context-window nil))
-        (let* ((cmd (list "curl"
-                          "--silent" "--show-error" "--fail"
-                          "--connect-timeout" (number-to-string my/gptel-openrouter-models-connect-timeout)
-                          "--max-time" (number-to-string my/gptel-openrouter-models-max-time)
-                          "--http1.1"
-                          "-H" (concat "Authorization: Bearer " key)
-                          "-H" "Accept: application/json"
-                          url))
-               (proc
-                (make-process
-                 :name "gptel-openrouter-models"
-                 :buffer buf
-                 :command cmd
-                 :noquery t
-                 :connection-type 'pipe
-                 :sentinel
-                 (lambda (p _event)
-                   (when (memq (process-status p) '(exit signal))
-                     (setq my/gptel--openrouter-context-window-fetch-inflight nil)
-                     (unwind-protect
-                         (if (not (= (process-exit-status p) 0))
-                             (message "OpenRouter context-window: fetch failed (exit %d)" (process-exit-status p))
-                           (with-current-buffer buf
-                             (goto-char (point-min))
-                             (condition-case err
-                                 (let* ((json-object-type 'alist)
-                                        (json-array-type 'list)
-                                        (json-key-type 'symbol)
-                                        (obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
-                                        (data (alist-get 'data obj))
-                                        (entry (seq-find (lambda (e)
-                                                           (let ((id (alist-get 'id e)))
-                                                             (and (stringp id) (string= id model-id))))
-                                                         data))
-                                        (cw (and entry (alist-get 'context_length entry))))
-                                   (if (and (integerp cw) (> cw 0))
-                                       (progn
-                                         (my/gptel--cache-put-context-window model-id cw)
-                                         (message "OpenRouter context-window cached: %s -> %d" model-id cw))
-                                     (message "OpenRouter context-window: model not found or missing context_length: %s" model-id)))
-                               (error
-                                (message "OpenRouter context-window: parse failed (%s)" (error-message-string err))))))
-                       (when (buffer-live-p buf) (kill-buffer buf))))))))
-          (process-put proc 'my/gptel-managed t)
-          nil)))))
+  (cl-block my/gptel--openrouter-fetch-context-window
+    (let* ((model-id (my/gptel--model-id-string model))
+           (url "https://openrouter.ai/api/v1/models"))
+      (when (and (not my/gptel--openrouter-context-window-fetch-inflight)
+                 (stringp model-id)
+                 (executable-find "curl"))
+        (setq my/gptel--openrouter-context-window-fetch-inflight t)
+        (let* ((key (ignore-errors (gptel-api-key-from-auth-source "api.openrouter.com" "api")))
+               (buf (generate-new-buffer " *gptel-openrouter-models*")))
+          (unless (and (stringp key) (not (string-empty-p key)))
+            (setq my/gptel--openrouter-context-window-fetch-inflight nil)
+            (when (buffer-live-p buf) (kill-buffer buf))
+            (message "OpenRouter context-window: no API key found in auth-source")
+            (cl-return-from my/gptel--openrouter-fetch-context-window nil))
+          (let* ((cmd (list "curl"
+                            "--silent" "--show-error" "--fail"
+                            "--connect-timeout" (number-to-string my/gptel-openrouter-models-connect-timeout)
+                            "--max-time" (number-to-string my/gptel-openrouter-models-max-time)
+                            "--http1.1"
+                            "-H" (concat "Authorization: Bearer " key)
+                            "-H" "Accept: application/json"
+                            url))
+                 (proc
+                  (make-process
+                   :name "gptel-openrouter-models"
+                   :buffer buf
+                   :command cmd
+                   :noquery t
+                   :connection-type 'pipe
+                   :sentinel
+                   (lambda (p _event)
+                     (when (memq (process-status p) '(exit signal))
+                       (setq my/gptel--openrouter-context-window-fetch-inflight nil)
+                       (unwind-protect
+                           (if (not (= (process-exit-status p) 0))
+                               (message "OpenRouter context-window: fetch failed (exit %d)" (process-exit-status p))
+                             (with-current-buffer buf
+                               (goto-char (point-min))
+                               (condition-case err
+                                   (let* ((json-object-type 'alist)
+                                          (json-array-type 'list)
+                                          (json-key-type 'symbol)
+                                          (obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
+                                          (data (alist-get 'data obj))
+                                          (entry (seq-find (lambda (e)
+                                                             (let ((id (alist-get 'id e)))
+                                                               (and (stringp id) (string= id model-id))))
+                                                           data))
+                                          (cw (and entry (alist-get 'context_length entry))))
+                                     (if (and (integerp cw) (> cw 0))
+                                         (progn
+                                           (my/gptel--cache-put-context-window model-id cw)
+                                           (message "OpenRouter context-window cached: %s -> %d" model-id cw))
+                                       (message "OpenRouter context-window: model not found or missing context_length: %s" model-id)))
+                                 (error
+                                  (message "OpenRouter context-window: parse failed (%s)" (error-message-string err))))))
+                         (when (buffer-live-p buf) (kill-buffer buf))))))))
+            (process-put proc 'my/gptel-managed t)
+            nil))))))
 
 (defun my/gptel--auto-refresh-context-window-cache-maybe ()
   "Refresh context window cache if stale (non-blocking)."
@@ -547,13 +563,7 @@ Returns plist with :context-window, :pricing-input, :pricing-output, etc."
   (let* ((model-id (if (stringp model-id) model-id (my/gptel--model-id-string model-id)))
          (cached (gethash model-id my/gptel--model-metadata-cache)))
     (or cached
-        ;; Try partial match in known metadata
-        (let ((id-lower (downcase model-id))
-              (result nil))
-          (dolist (entry my/gptel--known-model-metadata)
-            (when (string-match-p (regexp-quote (car entry)) id-lower)
-              (setq result (cdr entry))))
-          result))))
+        (my/gptel--alist-partial-match my/gptel--known-model-metadata model-id))))
 
 (defun my/gptel-show-model-info (model-id)
   "Show detailed info for MODEL-ID."
@@ -590,20 +600,20 @@ Description: %s"
      :features (streaming tools reasoning)
      :notes "Use --http1.1 for curl, some models support reasoning tokens")
 
-(dashscope
-      :description "Alibaba DashScope - Qwen, GLM models"
-      :rate-limit "60 req/min (free tier), higher for paid"
-      :pricing-model "Per-model, tiered by context length"
-      :features (streaming tools reasoning)
-      :notes "Qwen3.5-Plus has 1M context. Reasoning models need streaming or fast response."
-      :context-windows
-      ((qwen3-coder-next . 131072)
-       (qwen3-coder-plus . 1000000)
-       (qwen3.5-plus . 1000000)
-       (qwen3.5-flash . 1000000)
-       (qwen3-max-2026-01-23 . 262144)
-       (glm-5 . 131072)
-       (glm-4.7 . 131072)))
+    (dashscope
+     :description "Alibaba DashScope - Qwen, GLM models"
+     :rate-limit "60 req/min (free tier), higher for paid"
+     :pricing-model "Per-model, tiered by context length"
+     :features (streaming tools reasoning)
+     :notes "Qwen3.5-Plus has 1M context. Reasoning models need streaming or fast response."
+     :context-windows
+     ((qwen3-coder-next . 131072)
+      (qwen3-coder-plus . 1000000)
+      (qwen3.5-plus . 1000000)
+      (qwen3.5-flash . 1000000)
+      (qwen3-max-2026-01-23 . 262144)
+      (glm-5 . 131072)
+      (glm-4.7 . 131072)))
 
     (deepseek
      :description "DeepSeek - V3 and R1 models"
@@ -702,23 +712,21 @@ Fallback order:
 1. Cached context window for model-id
 2. Known models table (popular models pre-seeded)
 3. gptel model tables (OpenAI, Gemini, etc.)
-4. OpenRouter API fetch (if using OpenRouter)
-5. my/gptel-default-context-window (128k default)
+4. my/gptel-default-context-window (128k default)
 
-Note: We do NOT use gptel-max-tokens as it's for response length, not context window."
+Note: We do NOT use gptel-max-tokens as it's for response length, not context window.
+Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-window-cache'."
   (let* ((model gptel-model)
          (model-id (my/gptel--model-id-string model))
-         (model-id-lower (and (stringp model-id) (downcase model-id)))
-         (window nil))
+         (window nil)
+         (cached (and (stringp model-id)
+                      (gethash model-id my/gptel--context-window-cache))))
     ;; 1) Prefer our cache (for OpenRouter-style model ids).
-    (when (and (stringp model-id)
-               (gethash model-id my/gptel--context-window-cache))
-      (setq window (gethash model-id my/gptel--context-window-cache)))
+    (when cached
+      (setq window cached))
     ;; 2) Check known models table (case-insensitive partial match)
-    (when (and (not window) model-id-lower)
-      (dolist (entry my/gptel--known-model-context-windows)
-        (when (string-match-p (regexp-quote (car entry)) model-id-lower)
-          (setq window (cdr entry)))))
+    (when (and (not window) (stringp model-id))
+      (setq window (my/gptel--alist-partial-match my/gptel--known-model-context-windows model-id)))
     ;; 3) Check gptel model tables
     (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
       (when (and (boundp var) (not window))
@@ -726,15 +734,8 @@ Note: We do NOT use gptel-max-tokens as it's for response length, not context wi
           (when entry
             (setq window (my/gptel--normalize-context-window
                           (plist-get (cdr entry) :context-window)))))))
-    ;; 4) If OpenRouter is in use and no metadata/cached value, fetch it.
-    (when (and (not window)
-               (boundp 'gptel--openrouter)
-               (eq gptel-backend gptel--openrouter)
-               (stringp model-id))
-      (my/gptel--openrouter-fetch-context-window model))
-    ;; 5) Fall back to default (NOT gptel-max-tokens which is response length)
-    (or window
-        my/gptel-default-context-window)))
+    ;; 4) Fall back to default (NOT gptel-max-tokens which is response length)
+    (or window my/gptel-default-context-window)))
 
 ;;; Auto-refresh Timer
 

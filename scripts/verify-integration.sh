@@ -26,7 +26,7 @@ if [[ -z "$SCRIPT_DIR" || ! -d "$SCRIPT_DIR" ]]; then
     if [[ -n "$GIT_ROOT" ]]; then
         SCRIPT_DIR="$GIT_ROOT/scripts"
     else
-        SCRIPT_DIR="/Users/davidwu/.emacs.d/scripts"
+        SCRIPT_DIR="$HOME/.emacs.d/scripts"
     fi
 fi
 

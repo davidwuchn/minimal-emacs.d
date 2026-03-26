@@ -126,12 +126,10 @@ Returns the number of messages truncated, or 0 if nothing was done."
            (truncated 0)
            (bytes-saved 0))
       (when (and messages (> (length messages) 0))
-        (let ((tool-indices '()))
-          (dotimes (i (length messages))
-            (let ((msg (aref messages i)))
-              (when (equal (plist-get msg :role) "tool")
-                (push i tool-indices))))
-          (setq tool-indices (nreverse tool-indices))
+        (let ((tool-indices
+               (my/gptel--collect-message-indices
+                messages
+                (lambda (msg) (equal (plist-get msg :role) "tool")))))
           (when (> (length tool-indices) keep)
             (let ((to-truncate (seq-take tool-indices (- (length tool-indices) keep))))
               ;; Single pass: calculate bytes-saved AND truncate
@@ -173,22 +171,21 @@ Returns the number of messages whose reasoning_content was stripped."
            (keep my/gptel-reasoning-keep-turns)
            (stripped 0))
       (when (and messages (> (length messages) 0))
-        (let ((reasoning-indices '()))
-          (dotimes (i (length messages))
-            (let ((msg (aref messages i)))
-              (when (and (equal (plist-get msg :role) "assistant")
-                         (plist-get msg :reasoning_content)
-                         (not (equal "" (plist-get msg :reasoning_content))))
-                (push i reasoning-indices))))
-          (setq reasoning-indices (nreverse reasoning-indices))
+        (let ((reasoning-indices
+               (my/gptel--collect-message-indices
+                messages
+                (lambda (msg)
+                  (and (equal (plist-get msg :role) "assistant")
+                       (plist-get msg :reasoning_content)
+                       (not (equal "" (plist-get msg :reasoning_content))))))))
           (when (> (length reasoning-indices) keep)
             (let ((to-strip (seq-take reasoning-indices
                                       (- (length reasoning-indices) keep))))
-              (dolist (idx to-strip)
-                (let ((msg (aref messages idx)))
-                  (plist-put msg :reasoning_content "")
-                  (cl-incf stripped)))))))
-      stripped)))
+(dolist (idx to-strip)
+                 (let ((msg (aref messages idx)))
+                   (plist-put msg :reasoning_content "")
+                   (cl-incf stripped)))))))
+       stripped)))
 
 (defun my/gptel--repair-thinking-tool-call-messages (info)
   "Ensure thinking-enabled assistant tool-call messages stay API-valid.
@@ -309,6 +306,18 @@ Returns the number of messages truncated, or 0 if nothing was done."
                 (cl-incf truncated))))))
       truncated)))
 
+(defun my/gptel--collect-message-indices (messages predicate)
+  "Collect indices of messages in MESSAGES vector matching PREDICATE.
+PREDICATE is a function that takes a message plist and returns non-nil if it matches.
+Returns a list of indices in ascending order."
+  (let ((indices '()))
+    (when (and messages (> (length messages) 0))
+      (dotimes (i (length messages))
+        (let ((msg (aref messages i)))
+          (when (funcall predicate msg)
+            (push i indices))))
+      (nreverse indices))))
+
 (defun my/gptel--strip-images-from-messages (info)
   "Strip image content from all messages in INFO to reduce payload.
 Removes :image_url parts from multimodal message content arrays.
@@ -334,6 +343,33 @@ Returns the number of image parts removed, or 0 if nothing was done."
               (when (< (length filtered-parts) (length content))
                 (plist-put msg :content (vconcat filtered-parts))))))))
     removed))
+
+;; --- Constants for Transient Error Detection ---
+;; Extracted patterns for testability and maintainability.
+;; ASSUMPTION: These patterns classify errors as transient (retryable) vs permanent.
+;; TEST: Each constant can be tested independently with string-match-p.
+
+(defconst my/gptel--transient-error-string-patterns
+  "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|exit code 28\\|exit code 6\\|exit code 7\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests\\|InvalidParameter\\|function\\.arguments"
+  "Regex pattern for transient error messages in string form.
+Matches network failures, curl errors, gateway errors, and model-side bugs.")
+
+(defconst my/gptel--transient-http-statuses
+  '(408 429 500 502 503 504)
+  "HTTP status codes indicating transient errors safe to retry.
+408: Request Timeout
+429: Too Many Requests (rate limit)
+500-504: Server errors (Internal, Bad Gateway, Unavailable, Gateway Timeout)")
+
+(defconst my/gptel--transient-http-400-patterns
+  "InvalidParameter\\|function\\.arguments\\|must be in JSON"
+  "Regex pattern for HTTP 400 errors that are model-side bugs (retryable).
+These indicate malformed tool arguments generated by the model, not user errors.")
+
+(defconst my/gptel--transient-error-message-patterns
+  "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
+  "Regex pattern for transient errors in plist :message field.
+Matched case-insensitively against error message text.")
 
 (defun my/gptel--transient-error-p (error-data http-status)
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error.
@@ -363,16 +399,16 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
                  (t nil)))
         (error-msg (when (listp error-data) (plist-get error-data :message))))
     (or (and (stringp error-data)
-             (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|exit code 28\\|exit code 6\\|exit code 7\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests\\|InvalidParameter\\|function\\.arguments" error-data))
-        (and (numberp status) (memql status '(408 429 500 502 503 504)))
+             (string-match-p my/gptel--transient-error-string-patterns error-data))
+        (and (numberp status) (memql status my/gptel--transient-http-statuses))
         (and (numberp status)
              (= status 400)
              (listp error-data)
              (stringp error-msg)
-             (string-match-p "InvalidParameter\\|function\\.arguments\\|must be in JSON" error-msg))
+             (string-match-p my/gptel--transient-http-400-patterns error-msg))
         (and (listp error-data)
              (stringp error-msg)
-             (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
+             (string-match-p my/gptel--transient-error-message-patterns
                              (downcase error-msg))))))
 
 (defun my/gptel--cleanup-partial-insertion (info)
