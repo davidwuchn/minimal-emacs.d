@@ -179,7 +179,7 @@ Reports which backend was used."
          (usages nil)
          (lsp-retries my/gptel-lsp-retry-max)
          (lsp-ready nil)
-         (lsp-server (and (my/gptel--lsp-active-p) (eglot-current-server)))
+         (lsp-server (eglot-current-server))
          (backend "unknown"))
     (when lsp-server
       (while (and (> lsp-retries 0) (not lsp-ready))
