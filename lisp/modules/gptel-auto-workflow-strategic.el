@@ -181,11 +181,7 @@ OUTPUT JSON ONLY:
 
 (defun gptel-auto-workflow--validate-and-add-target (file proj-root targets max-targets)
   "Validate FILE and add to TARGETS if it exists.
-Returns updated targets list.
-;; ASSUMPTION: proj-root is a valid directory path
-;; BEHAVIOR: Converts relative paths to absolute, checks existence, adds as relative
-;; EDGE CASE: Returns targets unchanged if file doesn't exist or max reached
-;; TEST: Verify file is added only if it exists and is within proj-root"
+Returns updated targets list."
   (cond
    ((not (stringp file)) targets)
    ((>= (length targets) max-targets) targets)
@@ -193,7 +189,8 @@ Returns updated targets list.
     (let ((abs-path (if (file-name-absolute-p file)
                         file
                       (expand-file-name file proj-root))))
-      (if (file-exists-p abs-path)
+      (if (and (file-exists-p abs-path)
+               (string-prefix-p proj-root abs-path))
           (let ((rel-path (file-relative-name abs-path proj-root)))
             (if (member rel-path targets)
                 targets
