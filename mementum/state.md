@@ -1,8 +1,8 @@
 # Mementum State
 
-> Last session: 2026-03-26 10:30
+> Last session: 2026-03-26 10:45
 
-## Total Improvements: 32 Real Code Fixes + 1 Portability Fix
+## Total Improvements: 39 Real Code Fixes
 
 | # | File | Fix |
 |---|------|-----|
@@ -38,155 +38,13 @@
 | 30 | gptel-ext-retry.el | Extract message iteration into helper function |
 | 31 | gptel-auto-workflow-strategic.el | Limit regex fallback targets to max-targets |
 | 32 | scripts/*.sh | Use $HOME instead of hardcoded /Users/davidwu |
-
----
-
-## System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    AUTO-WORKFLOW SYSTEM                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐   │
-│  │  Researcher  │───▶│   Analyzer   │───▶│   Executor   │   │
-│  │  (moonshot)  │    │ (DashScope)  │    │ (DashScope)  │   │
-│  └──────────────┘    └──────────────┘    └──────────────┘   │
-│         │                   │                    │           │
-│         ▼                   ▼                    ▼           │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐   │
-│  │   Findings   │    │   Targets    │    │    Fixes     │   │
-│  │   Cache      │    │   Selected   │    │   Applied    │   │
-│  └──────────────┘    └──────────────┘    └──────────────┘   │
-│                                                 │            │
-│                                                 ▼            │
-│                                         ┌──────────────┐    │
-│                                         │   Reviewer   │    │
-│                                         │  (moonshot)  │    │
-│                                         └──────────────┘    │
-│                                                 │            │
-│                                                 ▼            │
-│                                         ┌──────────────┐    │
-│                                         │   Staging    │    │
-│                                         │   → Main     │    │
-│                                         └──────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## New Features
-
-### Pre-Merge Code Review
-```
-λ review. gptel-auto-workflow-require-review (default t)
-λ flow. Review → Block → Fix → Re-review → (retry or give up)
-λ retries. gptel-auto-workflow--review-max-retries = 2
-λ agent. reviewer (moonshot/Kimi)
-```
-
-### Periodic Researcher
-```
-λ cron. Every 4 hours → gptel-auto-workflow-run-research
-λ cache. var/tmp/research-findings.md
-λ usage. Analyzer loads findings for target selection
-λ config. gptel-auto-workflow-research-interval = 14400 (4h)
-```
-
-### Researcher Fix Flow
-```
-gptel-auto-workflow-research-before-fix = nil (default, faster)
-  → executor fixes directly (1 API call)
-
-gptel-auto-workflow-research-before-fix = t (better quality)
-  → researcher finds approach → executor applies (2 API calls)
-```
-
----
-
-## Cron Schedule
-
-| Job | Schedule | Machine |
-|-----|----------|---------|
-| Auto-workflow | 10PM, 2AM, 6AM | Pi5 |
-| Researcher | Every 4 hours | Pi5 |
-| Weekly mementum | Sunday 4AM | Pi5 |
-| Weekly instincts | Sunday 5AM | Pi5 |
-
----
-
-## Key Commands
-
-```elisp
-;; Workflow
-(gptel-auto-workflow-run-async)        ; Start workflow
-(gptel-auto-workflow-status)           ; Check status
-(gptel-auto-workflow-log)              ; Get clean log
-
-;; Researcher
-(gptel-auto-workflow-run-research)     ; Run researcher now
-(gptel-auto-workflow-research-status)  ; Researcher status
-(gptel-auto-workflow-load-research-findings) ; Load cached findings
-
-;; Manual review
-(gptel-auto-workflow--review-changes branch callback)
-```
-
----
-
-## Config Options
-
-```elisp
-gptel-auto-workflow-require-review        ; default t
-gptel-auto-workflow-research-targets      ; default nil
-gptel-auto-workflow-research-before-fix   ; default nil
-gptel-auto-workflow--review-max-retries   ; default 2
-gptel-auto-workflow-research-interval     ; default 14400 (4h)
-gptel-auto-workflow-max-targets-per-run   ; default 5
-```
-
----
-
-## Key Bug Pattern: cl-return-from Without Block
-
-```
-λ bug. cl-return-from requires named block
-λ cause. defun does NOT create block (cl-defun does)
-λ symptom. Silent failure, callbacks never called, workflow stuck
-λ fix. Wrap with (cl-block name ...) or use if-else
-```
-
-**Detection:**
-```bash
-grep -rn "cl-return-from\|cl-return" lisp/modules/*.el | grep -v "cl-defun"
-```
-
----
-
-## Backend Case Sensitivity
-
-```
-λ issue. Backend name in gptel--known-backends must match YAML
-λ fix. Changed "Moonshot" → "moonshot" in gptel-ext-backends.el
-λ error. "Backend moonshot is not known to be defined"
-```
-
----
-
-## Agent Usage
-
-| Agent | Backend | Purpose |
-|-------|---------|---------|
-| analyzer | DashScope | Target selection |
-| comparator | DashScope | Before/after comparison |
-| executor | DashScope | Code changes |
-| explorer | DashScope | Code exploration |
-| grader | DashScope | Quality scoring |
-| introspector | DashScope | Self-analysis |
-| nucleus-gptel-agent | DashScope | Main agent |
-| nucleus-gptel-plan | DashScope | Planning |
-| researcher | moonshot | Code research |
-| reviewer | moonshot | Code review |
+| 33 | gptel-ext-context-cache.el | Escape regex in `alist-partial-match` |
+| 34 | gptel-ext-context-cache.el | Cache model-id to avoid redundant calls |
+| 35 | gptel-ext-context-cache.el | Optimize `get-model-metadata` avoid redundant calls |
+| 36 | gptel-tools-code.el | Fix byte-compile output capture race with sit-for |
+| 37 | gptel-tools-agent.el | Prevent double-callback in `experiment-decide` |
+| 38 | gptel-benchmark-core.el | Fix plist/alist detection in `to-json-format` |
+| 39 | gptel-benchmark-core.el | Extract score extraction into helper function |
 
 ---
 
@@ -196,7 +54,7 @@ grep -rn "cl-return-from\|cl-return" lisp/modules/*.el | grep -v "cl-defun"
 λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7 Linux)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 32 code fixes, not documentation
+λ real. 39 code fixes, not documentation
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
 λ retry. Curl timeout → automatic retry
