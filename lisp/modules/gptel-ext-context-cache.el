@@ -276,7 +276,7 @@ Pricing is in USD per million tokens (input/output).")
   "Look up KEY in HASH-TABLE, falling back to ALIST partial match.
 Returns the value from hash table if found, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found."
-  (or (and (hash-table-p hash-table) (gethash key hash-table))
+  (or (and (stringp key) (gethash key hash-table))
       (and (listp alist) (stringp key)
            (my/gptel--alist-partial-match alist key))))
 
