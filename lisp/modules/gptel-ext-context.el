@@ -339,19 +339,19 @@ Returns non-nil if compaction was initiated."
                               (progn
                                 (goto-char (point-max))
                                 (insert "\n\n")
-                                (insert (propertize "═══════════════════════════════════════════════════════════════\n"
+(insert (propertize "═══════════════════════════════════════════════════════════════\n"
                                                     'face '(:foreground "yellow" :weight bold)))
-                                (insert (propertize response 'face '(:foreground "cyan")))
-                                (let ((chars-after (buffer-size))
-                                      (tokens-after (my/gptel--estimate-text-tokens (buffer-size))))
-                                  (insert (propertize (format "\nCOMPACTED: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction)\n"
-                                                              chars-before chars-after
-                                                              (round tokens-before) (round tokens-after)
-                                                              (* 100 (- 1 (/ (float chars-after) chars-before))))
-                                                      'face '(:foreground "green" :weight bold)))
-                                  (insert (propertize "═══════════════════════════════════════════════════════════════\n"
-                                                      'face '(:foreground "yellow" :weight bold)))
-                                  (message "[compact] Preview appended (original kept)")))
+                                 (insert (propertize response 'face '(:foreground "cyan")))
+                                 (let ((chars-after (buffer-size))
+                                       (tokens-after (my/gptel--estimate-text-tokens (buffer-size))))
+                                   (insert (propertize (format "\nCOMPACTED: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction)\n"
+                                                               chars-before chars-after
+                                                               (round tokens-before) (round tokens-after)
+                                                               (* 100 (- 1 (/ (float chars-after) chars-before))))
+                                                       'face '(:foreground "green" :weight bold)))
+                                   (insert (propertize "═══════════════════════════════════════════════════════════════\n"
+                                                       'face '(:foreground "yellow" :weight bold)))
+                                   (message "[compact] Preview appended (original kept)"))))
                             (progn
                               (kill-new backup)
                               (erase-buffer)
