@@ -717,12 +717,13 @@ Fallback order:
 Note: We do NOT use gptel-max-tokens as it's for response length, not context window.
 Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-window-cache'."
   (let* ((model gptel-model)
-         (model-id (my/gptel--model-id-string model)))
+         (model-id (my/gptel--model-id-string model))
+         (cached))
     (catch 'found
       ;; 1) Prefer our cache (for OpenRouter-style model ids).
       (when (and (stringp model-id)
-                 (gethash model-id my/gptel--context-window-cache))
-        (throw 'found (gethash model-id my/gptel--context-window-cache)))
+                 (setq cached (gethash model-id my/gptel--context-window-cache)))
+        (throw 'found cached))
       ;; 2) Check known models table (case-insensitive partial match)
       (when (stringp model-id)
         (let ((window (my/gptel--alist-partial-match my/gptel--known-model-context-windows model-id)))
