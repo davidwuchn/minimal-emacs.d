@@ -1914,6 +1914,27 @@ Returns (:running :kept :total :phase :results)."
         :results (format "var/tmp/experiments/%s/results.tsv"
                          (format-time-string "%Y-%m-%d"))))
 
+(defun gptel-auto-workflow--sanitize-unicode (str)
+  "Sanitize Unicode characters in STR for safe display.
+Replaces curly quotes, dashes, and other problematic characters
+with their ASCII equivalents."
+  (let ((clean str))
+    (dolist (pair '(("RIGHT SINGLE QUOTATION MARK" . "'")
+                     ("LEFT SINGLE QUOTATION MARK" . "'")
+                     ("RIGHT DOUBLE QUOTATION MARK" . "\"")
+                     ("LEFT DOUBLE QUOTATION MARK" . "\"")
+                     ("EN DASH" . "-")
+                     ("EM DASH" . "-")
+                     ("HORIZONTAL ELLIPSIS" . "...")
+                     ("NON-BREAKING SPACE" . " ")
+                     ("ZERO WIDTH SPACE" . "")
+                     ("ZERO WIDTH NON-JOINER" . "")
+                     ("ZERO WIDTH JOINER" . "")))
+      (let ((char (char-from-name (car pair))))
+        (when char
+          (setq clean (replace-regexp-in-string (string char) (cdr pair) clean)))))
+    clean))
+
 (defun gptel-auto-workflow-log ()
   "Return recent workflow log lines as a list (filtered, sanitized).
 Safe for external tools - contains only [auto-] and [nucleus] messages."
@@ -1922,11 +1943,7 @@ Safe for external tools - contains only [auto-] and [nucleus] messages."
           result)
       (dolist (line lines)
         (when (string-match-p "^\\[auto-\\]\\|^\\[nucleus\\]" line)
-          (let ((clean (copy-sequence line)))
-            (setq clean (replace-regexp-in-string (concat "[" (string ?' (char-from-name "RIGHT SINGLE QUOTATION MARK")) "]") "'" clean)
-                  clean (replace-regexp-in-string (concat "[" (string ?\" (char-from-name "LEFT DOUBLE QUOTATION MARK") (char-from-name "RIGHT DOUBLE QUOTATION MARK")) "]") "\"" clean)
-                  clean (replace-regexp-in-string (concat "[" (string (char-from-name "EN DASH") (char-from-name "EM DASH")) "]") "-" clean))
-            (push clean result))))
+          (push (gptel-auto-workflow--sanitize-unicode line) result)))
       (seq-take (nreverse result) 20))))
 
 (declare-function gptel-auto-workflow-select-targets "gptel-auto-workflow-strategic")
