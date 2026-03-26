@@ -886,13 +886,22 @@ Reviewer checks for Blocker/Critical issues."
       (funcall callback (cons t "Review disabled by config"))
     (let* ((proj-root (gptel-auto-workflow--project-root))
            (default-directory proj-root)
-;; SECURITY: Use shell-quote-argument to prevent shell injection
-            (staging-quoted (shell-quote-argument gptel-auto-workflow-staging-branch))
-            (optimize-quoted (shell-quote-argument optimize-branch))
-            (diff-cmd (format "git diff %s...%s --stat && git diff %s...%s"
-                             staging-quoted optimize-quoted
+           ;; SECURITY: Use shell-quote-argument to prevent shell injection
+           (staging-quoted (shell-quote-argument gptel-auto-workflow-staging-branch))
+           (optimize-quoted (shell-quote-argument optimize-branch))
+           ;; FIX: Simplified diff command to capture actual changes, not just stats
+           ;; Added 2>&1 to capture stderr for error diagnosis
+           (diff-cmd (format "git diff %s...%s 2>&1"
                              staging-quoted optimize-quoted))
            (diff-output (shell-command-to-string diff-cmd))
+           ;; ASSUMPTION: Empty diff means no changes or error - handle both cases
+           ;; BEHAVIOR: Check if diff output is empty or contains error message
+           (diff-content (cond
+                          ((string-empty-p diff-output)
+                           "No changes detected between branches.")
+                          ((string-match-p "^fatal:" diff-output)
+                           (format "Error generating diff: %s" diff-output))
+                          (t diff-output)))
            (review-prompt (format "Review the following changes for blockers, critical bugs, and security issues.
 
 CHANGES (diff):
@@ -907,7 +916,7 @@ OUTPUT: If NO blockers or critical issues, start with 'APPROVED'.
 If blockers/critical found, start with 'BLOCKED: [reason]'.
 
 Maximum response: 1000 characters."
-                                  (truncate-string-to-width diff-output 3000 nil nil "..."))))
+                                  (truncate-string-to-width diff-content 3000 nil nil "..."))))
       (message "[auto-workflow] Reviewing changes in %s..." optimize-branch)
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-call-subagent))
@@ -2412,16 +2421,16 @@ Returns list of matching files."
                         (shell-quote-argument query)))
                "\n" t))))))
 
-(defun gptel-mementum-decay-skills ()
-  "Apply decay to skill files not tested in 4+ weeks.
+  (defun gptel-mementum-decay-skills ()
+    "Apply decay to skill files not tested in 4+ weeks.
 Run weekly via cron."
-  (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
-                                       (gptel-auto-workflow--project-root)))
-         (mutations-dir (expand-file-name "mementum/knowledge/mutations"
-                                          (gptel-auto-workflow--project-root)))
-         (now (float-time))
-         (four-weeks (* 4 7 24 60 60))
-         (decayed 0)
+    (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
+                                         (gptel-auto-workflow--project-root)))
+           (mutations-dir (expand-file-name "mementum/knowledge/mutations"
+                                            (gptel-auto-workflow--project-root)))
+           (now (float-time))
+           (four-weeks (* 4 7 24 60 60))
+           (decayed 0)
            (archived 0))
       (dolist (dir (list skills-dir mutations-dir))
         (when (file-exists-p dir)
