@@ -1,10 +1,10 @@
 ---
 name: reviewer
-model: kimi-k2.5
-backend: moonshot
+model: qwen3.5-plus
+backend: DashScope
 max-tokens: 8192
 temperature: 0.3
-description: Code reviewer (Moonshot/Kimi)
+description: Code reviewer (DashScope)
 tools:
   - Glob
   - Grep
