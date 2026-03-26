@@ -1,15 +1,20 @@
 # Mementum State
 
-> Last session: 2026-03-26 20:30
+> Last session: 2026-03-26 22:00
 
-## Total Improvements: 75+ Real Code Fixes
+## Total Improvements: 80+ Real Code Fixes
 
-270 commits since March 25, 2026.
+260 commits since March 25, 2026.
 
-### Recent Fixes (Last 20)
+### Recent Fixes (Last 25)
 
 | # | File | Fix |
 |---|------|-----|
+| 80 | gptel-tools-code.el | Symbol-name validation in find-usages |
+| 79 | gptel-ext-context-cache.el | Eliminate redundant model-id computation |
+| 78 | gptel-tools-agent.el | Unicode sanitization in log |
+| 77 | gptel-tools-code.el | Fix LSP retry logic |
+| 76 | gptel-tools-agent.el | Use setf for plist modification |
 | 75 | gptel-ext-core.el | Extract char validation helper |
 | 74 | gptel-ext-context-cache.el | Error handling for make-process |
 | 73 | gptel-tools-agent.el | Code validation before benchmark |
@@ -61,7 +66,7 @@ The reviewer uses `qwen3.5-plus` on DashScope with 600s timeout.
 λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7 Linux)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 75+ code fixes, 270 commits since Mar 25
+λ real. 80+ code fixes, 260 commits since Mar 25
 λ reviewer. qwen3-coder-next on DashScope (no thinking mode)
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
