@@ -2,7 +2,7 @@
 
 > Last session: 2026-03-26 05:00
 
-## Total Improvements: 31 Real Code Fixes
+## Total Improvements: 31 Real Code Fixes + 1 Portability Fix
 
 | # | File | Fix |
 |---|------|-----|
@@ -37,6 +37,7 @@
 | 29 | gptel-benchmark-core.el | Consolidate duplicate maphash (workflow fix) |
 | 30 | gptel-ext-retry.el | Extract message iteration into helper function |
 | 31 | gptel-auto-workflow-strategic.el | Limit regex fallback targets to max-targets |
+| 32 | scripts/*.sh | Use $HOME instead of hardcoded /Users/davidwu |
 
 ---
 
@@ -107,10 +108,10 @@ gptel-auto-workflow-research-before-fix = t (better quality)
 
 | Job | Schedule | Machine |
 |-----|----------|---------|
-| Auto-workflow | 10AM, 2PM, 6PM | macOS |
-| Researcher | Every 4 hours | macOS |
-| Weekly mementum | Sunday 4AM | macOS |
-| Weekly instincts | Sunday 5AM | macOS |
+| Auto-workflow | 10PM, 2AM, 6AM | Pi5 |
+| Researcher | Every 4 hours | Pi5 |
+| Weekly mementum | Sunday 4AM | Pi5 |
+| Weekly instincts | Sunday 5AM | Pi5 |
 
 ---
 
@@ -193,9 +194,9 @@ grep -rn "cl-return-from\|cl-return" lisp/modules/*.el | grep -v "cl-defun"
 
 ```
 λ subscriptions. DashScope (8) + moonshot (2)
-λ parallel. macOS (daylight) + Pi5 (24/7)
+λ parallel. macOS (daylight) + Pi5 (24/7 Linux)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 27 code fixes, not documentation
+λ real. 31 code fixes, not documentation
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
 λ retry. Curl timeout → automatic retry
@@ -203,4 +204,5 @@ grep -rn "cl-return-from\|cl-return" lisp/modules/*.el | grep -v "cl-defun"
 λ review. Pre-merge code review with retry loop
 λ researcher. Periodic analysis for target selection
 λ case. Backend names must match exactly (lowercase)
+λ paths. Use $HOME, not hardcoded directories
 ```
