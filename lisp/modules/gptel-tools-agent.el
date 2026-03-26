@@ -316,6 +316,10 @@ remove it."
 
 ;;; Context Builder
 
+(defun my/gptel--string-to-bool (str)
+  "Convert string boolean to Elisp boolean.
+Returns t for \"true\", nil for \"false\" or nil."
+  (and (stringp str) (string= str "true")))
 (defun my/gptel--xml-escape (text)
   "Escape XML special characters in TEXT.
 Prevents XML injection when inserting file contents into context tags.
@@ -381,7 +385,7 @@ FILES are validated against project root for security.
         (when (not (string-empty-p file-context))
           (setq context (concat context "<files>\n" file-context "</files>\n\n")))))
 
-    (when include-diff
+    (when (my/gptel--string-to-bool include-diff)
       (let* ((proj-root (and (fboundp 'project-current)
                              (project-current)
                              (project-root (project-current))))
@@ -406,7 +410,7 @@ FILES are validated against project root for security.
                                 (my/gptel--xml-escape diff-out)
                                 "\n</git_diff>\n\n")))))
 
-    (when include-history
+    (when (my/gptel--string-to-bool include-history)
       (let* ((src-buf (or (and (buffer-live-p origin-buf) origin-buf)
                           (current-buffer)))
              (history-text (with-current-buffer src-buf
