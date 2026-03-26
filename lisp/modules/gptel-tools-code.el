@@ -354,23 +354,23 @@ MSG is the original error message, FILE-PATH is the file being operated on."
   (let ((byte-compile-error-on-warn nil)
         (byte-compile-warnings '(not obsolete free-vars unresolved))
         (warnings nil)
-        (elc-file (concat file-path "c")))
+        (elc-file (concat file-path "c"))
+        (compile-log-buffer nil))
     (unwind-protect
         (progn
-          (with-output-to-temp-buffer "*Compile-Log*"
-            (byte-compile-file file-path))
-          (let ((compile-log-buffer (get-buffer "*Compile-Log*")))
-            (when compile-log-buffer
-              (with-current-buffer compile-log-buffer
-                (save-excursion
-                  (goto-char (point-min))
-                  (while (not (eobp))
-                    (let ((line (buffer-substring-no-properties
-                                 (line-beginning-position) (line-end-position))))
-                      (when (and (not (string-empty-p (string-trim line)))
-                                 (string-match-p "[Ww]arning\\|[Ee]rror\\|Compiling\\|Done" line))
-                        (push line warnings)))
-                    (forward-line 1)))))))
+          (byte-compile-file file-path)
+          (setq compile-log-buffer (get-buffer "*Compile-Log*"))
+          (when compile-log-buffer
+            (with-current-buffer compile-log-buffer
+              (save-excursion
+                (goto-char (point-min))
+                (while (not (eobp))
+                  (let ((line (buffer-substring-no-properties
+                               (line-beginning-position) (line-end-position))))
+                    (when (and (not (string-empty-p (string-trim line)))
+                               (string-match-p "[Ww]arning\\|[Ee]rror\\|Compiling\\|Done" line))
+                      (push line warnings)))
+                  (forward-line 1))))))
       (when (file-exists-p elc-file)
         (delete-file elc-file)))
     (if warnings
