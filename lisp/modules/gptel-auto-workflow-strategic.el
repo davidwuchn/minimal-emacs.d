@@ -175,9 +175,9 @@ OUTPUT JSON ONLY:
            'analyzer
            "Select targets"
            prompt
-(lambda (result)
-              (funcall callback (gptel-auto-workflow--parse-targets result)))))
-       (funcall callback nil))))
+           (lambda (result)
+             (funcall callback (gptel-auto-workflow--parse-targets result)))))
+      (funcall callback nil))))
 
 (defun gptel-auto-workflow--validate-and-add-target (file proj-root targets max-targets)
   "Validate FILE and add to TARGETS if it exists.
@@ -217,9 +217,7 @@ Returns updated targets list.
                 (when (listp target-list)
                   (dolist (item target-list)
                     (let ((file (plist-get item :file)))
-                      (when (and (< (length targets) max-targets)
-                                 file
-                                 (stringp file))
+                      (when (stringp file)
                         (setq targets
                               (gptel-auto-workflow--validate-and-add-target
                                file proj-root targets max-targets)))))))))
