@@ -1368,7 +1368,7 @@ Scores based on commit message + code diff (not just stat)."
 
 (defun gptel-auto-experiment-grade (output callback)
   "Grade experiment OUTPUT. LLM decides quality threshold.
-Has timeout fallback to auto-pass if grading takes too long.
+Timeout fails the grade (conservative).
 If OUTPUT is an error message, fails immediately."
   (cl-block gptel-auto-experiment-grade
     (when (gptel-auto-experiment--agent-error-p output)
@@ -1380,19 +1380,22 @@ If OUTPUT is an error message, fails immediately."
                           (lambda ()
                             (unless gptel-auto-experiment--grade-done
                               (setq gptel-auto-experiment--grade-done t)
-                              (message "[auto-exp] Grading timeout after %ds, auto-passing"
+                              (message "[auto-exp] Grading timeout after %ds, failing"
                                        gptel-auto-experiment-grade-timeout)
-                              (funcall callback (list :score 100 :passed t :details "timeout"))))))
+                              (funcall callback (list :score 0 :passed nil :details "timeout"))))))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-grade))
         (gptel-benchmark-grade
          output
          '("change clearly described"
-           "change is minimal"
-           "tests mentioned")
-         '("large refactor"
-           "changed security files"
-           "no description")
+           "change is minimal and focused"
+           "fixes real bug, improves performance, or addresses TODO/FIXME"
+           "tests pass after change")
+         '("large refactor unrelated to fix"
+           "changed security files without review"
+           "no description or unclear purpose"
+           "style-only change without functional impact"
+           "replaces working code with equivalent code")
          (lambda (result)
            (unless gptel-auto-experiment--grade-done
              (setq gptel-auto-experiment--grade-done t)
