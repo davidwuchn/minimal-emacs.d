@@ -325,7 +325,7 @@ Base64 images can easily exceed 1MB each.
 
 ASSUMPTION: Content can be string (text-only), vector, or list of parts.
   JSON deserialization may produce either vectors or lists for arrays.
-BEHAVIOR: Converts list content to vector for uniform processing,
+BEHAVIOR: Works directly with sequence type (vector or list),
   filters out image_url parts, preserves text parts.
 EDGE CASE: Empty content or non-sequence content is skipped safely.
 EDGE CASE: Content that becomes empty after filtering is preserved as empty vector.
@@ -338,19 +338,25 @@ Returns the number of image parts removed, or 0 if nothing was done."
       (dotimes (i (length messages))
         (let* ((msg (aref messages i))
                (content (plist-get msg :content)))
-          ;; Content can be string (text-only) or sequence (vector/list) of parts
           (when (and content (sequencep content) (not (stringp content)) (> (length content) 0))
-            ;; Normalize to list for processing (handles both vectors and lists)
-            (let* ((content-list (if (vectorp content) (append content nil) content))
-                   (filtered-parts
-                    (cl-remove-if
-                     (lambda (part)
-                       (and (listp part)
-                            (equal (plist-get part :type) "image_url")
-                            (cl-incf removed)))
-                     content-list)))
-              (when (< (length filtered-parts) (length content-list))
-                (plist-put msg :content (vconcat filtered-parts))))))))
+            (let* ((original-length (length content))
+                   (filtered
+                    (if (vectorp content)
+                        (vconcat
+                         (cl-remove-if
+                          (lambda (part)
+                            (and (listp part)
+                                 (equal (plist-get part :type) "image_url")
+                                 (cl-incf removed)))
+                          content))
+                      (cl-remove-if
+                       (lambda (part)
+                         (and (listp part)
+                              (equal (plist-get part :type) "image_url")
+                              (cl-incf removed)))
+                       content))))
+              (when (< (length filtered) original-length)
+                (plist-put msg :content filtered)))))))
     removed))
 
 ;; --- Constants for Transient Error Detection ---
