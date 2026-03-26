@@ -117,7 +117,7 @@ Max 800 chars."))
         (gptel-benchmark-call-subagent
          'researcher "Research patterns" research-prompt
          (lambda (result)
-           (let ((findings (if (stringp result) result (format "%S" result))))
+           (let ((findings (gptel-auto-workflow--normalize-response result)))
              (message "[auto-workflow] Research complete: %d chars" (length findings))
              (funcall callback findings))))
       (funcall callback ""))))
@@ -198,15 +198,22 @@ Returns updated targets list."
               (cons rel-path targets)))
         targets)))))
 
+(defun gptel-auto-workflow--normalize-response (response)
+  "Normalize RESPONSE to a string.
+If RESPONSE is already a string, return it.
+Otherwise, convert using princ representation."
+  (if (stringp response) response (format "%S" response)))
+
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list."
   (let ((targets '())
         (proj-root (gptel-auto-workflow--project-root))
-        (max-targets gptel-auto-workflow-max-targets-per-run))
+        (max-targets gptel-auto-workflow-max-targets-per-run)
+        (normalized-response (gptel-auto-workflow--normalize-response response)))
     (when proj-root
-      (condition-case _
+      (condition-case err
           (with-temp-buffer
-            (insert (if (stringp response) response (format "%S" response)))
+            (insert normalized-response)
             (goto-char (point-min))
             (when (re-search-forward "{" nil t)
               (goto-char (match-beginning 0))
@@ -219,11 +226,11 @@ Returns updated targets list."
                       (let ((file (plist-get item :file)))
                         (setq targets (gptel-auto-workflow--validate-and-add-target
                                        file proj-root targets max-targets)))))))))
+        (json-error nil)
         (error nil)))
-    ;; Fallback: regex - matches files in subdirectories too
     (when (null targets)
       (with-temp-buffer
-        (insert (if (stringp response) response (format "%S" response)))
+        (insert normalized-response)
         (goto-char (point-min))
         (while (and (< (length targets) max-targets)
                     (re-search-forward "\\(lisp/modules\\|packages\\)/[a-zA-Z0-9_/.-]+\\.el" nil t))
