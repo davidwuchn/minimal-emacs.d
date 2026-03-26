@@ -153,7 +153,7 @@ Creates a history entry with timestamp and summary."
         (princ (format "=== Benchmark Trend: %s ===\n\n" name))
         (princ "Timestamp                 Avg Score    Total Tests\n")
         (princ "--------------------------------------------------\n")
-        (dolist (entry (nreverse history))
+        (dolist (entry (reverse history))
           (let* ((summary (plist-get entry :summary))
                  (timestamp (or (plist-get entry :timestamp) "unknown"))
                  (avg-score (plist-get summary :avg-overall))
@@ -269,7 +269,7 @@ RESULTS should contain :eight-keys-scores in each entry."
 
 ;;; Pattern Analysis
 
-(defun gptel-benchmark-analyze-patterns (results &rest _)
+(defun gptel-benchmark-analyze-patterns (results)
   "Analyze RESULTS for patterns, issues, and generate recommendations."
   (let ((issues (make-hash-table :test 'equal))
         (recommendations '())
