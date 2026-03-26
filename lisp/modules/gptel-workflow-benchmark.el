@@ -200,7 +200,7 @@ Returns list of phase entries."
       (when p1-entry (push p1-entry phases))
       (when p2-entry (push p2-entry phases))
       (when p3-entry (push p3-entry phases)))
-    (nreverse phases)))
+    (reverse phases)))
 
 (defun gptel-workflow--detect-p1 (tool-calls)
   "Detect P1 phase from TOOL-CALLS.
@@ -693,7 +693,7 @@ TEST-ID is the test case ID."
         (princ (format "=== Benchmark Trend: %s ===\n\n" workflow-name))
         (princ "Timestamp                 Avg Overall  Avg Efficiency  Avg Completion\n")
         (princ "------------------------------------------------------------------------\n")
-        (dolist (entry (nreverse history))
+        (dolist (entry (reverse history))
           (let* ((summary (plist-get entry :summary))
                  (timestamp (or (plist-get entry :timestamp) "unknown"))
                  (avg-overall (* 100 (or (plist-get summary :avg-overall) 0)))
@@ -782,7 +782,7 @@ Returns plist with :direction, :velocity, :recommendation."
                for count = (aref key-counts i)
                for avg = (if (> count 0) (/ total count) 0.0)
                do (push (cons key avg) breakdown))
-      (nreverse breakdown))))
+      (reverse breakdown))))
 
 ;;; Auto-Feedback and Self-Improvement
 

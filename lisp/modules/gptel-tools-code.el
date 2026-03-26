@@ -150,7 +150,7 @@ Honors `my/gptel-search-timeout' for large repos."
                     (when (gptel-tools-code--filter-usage-line line)
                       (push line usages)))
                   (forward-line 1))
-                (nreverse usages)))))))))
+                (reverse usages)))))))))
 
 (defun gptel-tools-code--ensure-treesit-ready (file-path fallback-action)
   "Ensure tree-sitter parser is ready for FILE-PATH.
@@ -245,7 +245,7 @@ Reports which backend was used."
                               (length usages)
                               symbol-name
                               backend
-                              (string-join (nreverse usages) "\n"))
+                              (string-join (reverse usages) "\n"))
                     (format "No usages found for '%s' in %s" symbol-name root))))
       (if (> (length result) my/gptel-find-usages-max-chars)
           (let ((cache-file (my/gptel--usages-cache-write symbol-name root usages backend)))
@@ -368,7 +368,7 @@ MSG is the original error message, FILE-PATH is the file being operated on."
                          issues))))))
         (error nil))
       (if issues
-          (mapconcat #'identity (nreverse issues) "\n")
+          (mapconcat #'identity (reverse issues) "\n")
         "✓ No checkdoc issues"))))
 
 (defun gptel-tools-code--elisp-byte-compile (file-path)
@@ -400,7 +400,7 @@ MSG is the original error message, FILE-PATH is the file being operated on."
       (when (file-exists-p elc-file)
         (delete-file elc-file)))
     (if warnings
-        (mapconcat #'identity (nreverse warnings) "\n")
+        (mapconcat #'identity (reverse warnings) "\n")
       "✓ No byte-compile warnings")))
 
 (defun gptel-tools-code--elisp-package-lint (file-path)
@@ -435,7 +435,7 @@ CHECKS is a list of symbols: \\='checkdoc, \\='byte-compile, \\='package-lint."
     (if results
         (mapconcat
          (lambda (pair) (format "=== %s ===\n%s" (car pair) (cdr pair)))
-         (nreverse results) "\n\n")
+         (reverse results) "\n\n")
       "No checks specified")))
 
 (defun gptel-tools-code--no-parser-message (file-path lang action-fallback)
