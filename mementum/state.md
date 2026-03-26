@@ -1,6 +1,6 @@
 # Mementum State
 
-> Last session: 2026-03-26 05:00
+> Last session: 2026-03-26 09:00
 
 ## Total Improvements: 31 Real Code Fixes + 1 Portability Fix
 
@@ -205,4 +205,5 @@ grep -rn "cl-return-from\|cl-return" lisp/modules/*.el | grep -v "cl-defun"
 λ researcher. Periodic analysis for target selection
 λ case. Backend names must match exactly (lowercase)
 λ paths. Use $HOME, not hardcoded directories
+λ daemon. systemctl --user restart emacs (NOT pkill)
 ```
