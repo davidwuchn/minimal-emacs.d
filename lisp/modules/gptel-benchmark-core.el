@@ -166,6 +166,14 @@ Creates a history entry with timestamp and summary."
 
 ;;; Result Summarization
 
+(defun gptel-benchmark--extract-scores (r)
+  "Extract scores plist from result entry R.
+Handles both (run . scores) cons cells and plists with :scores key."
+  (cond
+   ((and (consp r) (listp (cdr r))) (cdr r))
+   ((listp r) (plist-get r :scores))
+   (t nil)))
+
 (defun gptel-benchmark-summarize-results (results)
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores."
@@ -176,10 +184,7 @@ RESULTS is a list of (run . scores) cons cells or plists with :scores."
         (avg-constraints 0.0)
         (passed 0))
     (dolist (r results)
-      (let ((scores (cond
-                     ((and (consp r) (listp (cdr r))) (cdr r))
-                     ((listp r) (plist-get r :scores))
-                     (t nil))))
+      (let ((scores (gptel-benchmark--extract-scores r)))
         (when (and scores (listp scores))
           (cl-incf total)
           (cl-incf avg-overall (or (plist-get scores :overall-score) 0))
@@ -271,7 +276,7 @@ RESULTS should contain :eight-keys-scores in each entry."
         (score-types '(:completion-score :efficiency-score :constraint-score :tool-score))
         (threshold 0.7))
     (dolist (r results)
-      (let ((scores (if (consp r) (cdr r) (plist-get r :scores))))
+      (let ((scores (gptel-benchmark--extract-scores r)))
         (when scores
           (let ((overall (or (plist-get scores :overall-score) 0)))
             (cond
