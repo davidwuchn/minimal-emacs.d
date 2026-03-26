@@ -216,13 +216,13 @@ OUTPUT JSON ONLY:
                             (when (file-exists-p abs-path)
                               (push (file-relative-name abs-path proj-root) targets)))))))))))
         (error nil)))
-    ;; Fallback: regex
+    ;; Fallback: regex - matches files in subdirectories too
     (when (null targets)
       (with-temp-buffer
         (insert (if (stringp response) response (format "%S" response)))
         (goto-char (point-min))
         (while (and (< (length targets) max-targets)
-                    (re-search-forward "\\(lisp/modules\\|packages\\)/[a-zA-Z0-9_-]+\\.el" nil t))
+                    (re-search-forward "\\(lisp/modules\\|packages\\)/[a-zA-Z0-9_/.-]+\\.el" nil t))
           (let ((file (match-string 0)))
             (let ((abs-path (expand-file-name file proj-root)))
               (when (file-exists-p abs-path)
