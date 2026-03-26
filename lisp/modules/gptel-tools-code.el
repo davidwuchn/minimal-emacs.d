@@ -180,13 +180,12 @@ Reports which backend was used."
          (lsp-retries my/gptel-lsp-retry-max)
          (lsp-ready nil)
          (lsp-server (eglot-current-server))
-         (backend "unknown"))
-    (when lsp-server
+         (backend "unknown")
+         (backend-type (and lsp-server (xref-find-backend))))
+    (when (and lsp-server backend-type)
       (while (and (> lsp-retries 0) (not lsp-ready))
         (condition-case nil
-            (let* ((backend-type (xref-find-backend))
-                   (refs (and backend-type
-                              (xref-backend-references backend-type symbol-name))))
+            (let ((refs (xref-backend-references backend-type symbol-name)))
               (if (and refs (listp refs))
                   (progn
                     (setq lsp-ready t)
