@@ -355,15 +355,19 @@ MSG is the original error message, FILE-PATH is the file being operated on."
         (byte-compile-warnings '(not obsolete free-vars unresolved))
         (warnings nil)
         (elc-file (concat file-path "c"))
-        (compile-log-buffer nil))
+        (compile-log-buffer nil)
+        (original-log (get-buffer "*Compile-Log*")))
     (unwind-protect
         (progn
           (byte-compile-file file-path)
+          (sit-for 0.5)
           (setq compile-log-buffer (get-buffer "*Compile-Log*"))
           (when compile-log-buffer
             (with-current-buffer compile-log-buffer
               (save-excursion
-                (goto-char (point-min))
+                (goto-char (if original-log
+                               (with-current-buffer original-log (point-max))
+                             (point-min)))
                 (while (not (eobp))
                   (let ((line (buffer-substring-no-properties
                                (line-beginning-position) (line-end-position))))
