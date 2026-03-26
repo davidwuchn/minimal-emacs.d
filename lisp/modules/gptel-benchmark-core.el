@@ -176,17 +176,21 @@ RESULTS is a list of (run . scores) cons cells or plists with :scores."
         (avg-constraints 0.0)
         (passed 0))
     (dolist (r results)
-      (let ((scores (cond
-                     ((and (consp r) (listp (cdr r))) (cdr r))
-                     ((listp r) (plist-get r :scores))
-                     (t nil))))
-        (when (and scores (listp scores))
+      (let* ((scores (cond
+                      ((and (consp r) (listp (cdr r))) (cdr r))
+                      ((listp r) (plist-get r :scores))
+                      (t nil)))
+             (overall (and scores (plist-get scores :overall-score)))
+             (efficiency (and scores (plist-get scores :efficiency-score)))
+             (completion (and scores (plist-get scores :completion-score)))
+             (constraints (and scores (plist-get scores :constraint-score))))
+        (when scores
           (cl-incf total)
-          (cl-incf avg-overall (or (plist-get scores :overall-score) 0))
-          (cl-incf avg-efficiency (or (plist-get scores :efficiency-score) 0))
-          (cl-incf avg-completion (or (plist-get scores :completion-score) 0))
-          (cl-incf avg-constraints (or (plist-get scores :constraint-score) 0))
-          (when (>= (or (plist-get scores :overall-score) 0) 0.7)
+          (cl-incf avg-overall (or overall 0))
+          (cl-incf avg-efficiency (or efficiency 0))
+          (cl-incf avg-completion (or completion 0))
+          (cl-incf avg-constraints (or constraints 0))
+          (when (>= (or overall 0) 0.7)
             (cl-incf passed)))))
     (list :total-tests total
           :passed-tests passed
