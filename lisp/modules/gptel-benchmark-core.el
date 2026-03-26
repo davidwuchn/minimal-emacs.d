@@ -174,6 +174,13 @@ Handles both (run . scores) cons cells and plists with :scores key."
    ((listp r) (plist-get r :scores))
    (t nil)))
 
+(defun gptel-benchmark--get-score (r field)
+  "Extract FIELD from scores in result entry R.
+Returns nil if R has no scores or FIELD is not present.
+FIELD should be a keyword like :overall-score."
+  (let ((scores (gptel-benchmark--extract-scores r)))
+    (and scores (plist-get scores field))))
+
 (defun gptel-benchmark-summarize-results (results)
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores."
@@ -184,19 +191,17 @@ RESULTS is a list of (run . scores) cons cells or plists with :scores."
         (avg-constraints 0.0)
         (passed 0))
     (dolist (r results)
-      (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall (and scores (plist-get scores :overall-score)))
-             (efficiency (and scores (plist-get scores :efficiency-score)))
-             (completion (and scores (plist-get scores :completion-score)))
-             (constraints (and scores (plist-get scores :constraint-score))))
-        (when scores
-          (cl-incf total)
-          (cl-incf avg-overall (or overall 0))
-          (cl-incf avg-efficiency (or efficiency 0))
-          (cl-incf avg-completion (or completion 0))
-          (cl-incf avg-constraints (or constraints 0))
-          (when (>= (or overall 0) 0.7)
-            (cl-incf passed)))))
+      (let ((overall (gptel-benchmark--get-score r :overall-score))
+            (efficiency (gptel-benchmark--get-score r :efficiency-score))
+            (completion (gptel-benchmark--get-score r :completion-score))
+            (constraints (gptel-benchmark--get-score r :constraint-score)))
+        (cl-incf total)
+        (cl-incf avg-overall (or overall 0))
+        (cl-incf avg-efficiency (or efficiency 0))
+        (cl-incf avg-completion (or completion 0))
+        (cl-incf avg-constraints (or constraints 0))
+        (when (>= (or overall 0) 0.7)
+          (cl-incf passed))))
     (list :total-tests total
           :passed-tests passed
           :avg-overall (if (> total 0) (/ avg-overall total) 0.0)
@@ -212,11 +217,9 @@ RESULTS should contain :eight-keys-scores in each entry."
   (let ((key-totals (make-vector 8 0.0))
         (key-counts (make-vector 8 0))
         (key-names [phi-vitality fractal-clarity epsilon-purpose tau-wisdom
-                    pi-synthesis mu-directness exists-truth forall-vigilance]))
+                                 pi-synthesis mu-directness exists-truth forall-vigilance]))
     (dolist (r results)
-      (let* ((scores (gptel-benchmark--extract-scores r))
-             (eight-keys (when (and scores (listp scores))
-                           (plist-get scores :eight-keys-scores))))
+      (let ((eight-keys (gptel-benchmark--get-score r :eight-keys-scores)))
         (when eight-keys
           (cl-loop for key across key-names
                    for i from 0
@@ -279,17 +282,15 @@ RESULTS should contain :eight-keys-scores in each entry."
         (score-types '(:completion-score :efficiency-score :constraint-score :tool-score))
         (threshold 0.7))
     (dolist (r results)
-      (let ((scores (gptel-benchmark--extract-scores r)))
-        (when scores
-          (let ((overall (or (plist-get scores :overall-score) 0)))
-            (cond
-             ((< overall threshold) (cl-incf low-scores))
-             ((>= overall 0.9) (cl-incf high-scores))))
-          (dolist (score-type score-types)
-            (let ((score (plist-get scores score-type)))
-              (when (and score (< score threshold))
-                (let ((issue-type (replace-regexp-in-string "-score$" "" (symbol-name score-type))))
-                  (puthash issue-type (1+ (gethash issue-type issues 0)) issues))))))))
+      (let ((overall (or (gptel-benchmark--get-score r :overall-score) 0)))
+        (cond
+         ((< overall threshold) (cl-incf low-scores))
+         ((>= overall 0.9) (cl-incf high-scores))))
+      (dolist (score-type score-types)
+        (let ((score (gptel-benchmark--get-score r score-type)))
+          (when (and score (< score threshold))
+            (let ((issue-type (replace-regexp-in-string "-score$" "" (symbol-name score-type))))
+              (puthash issue-type (1+ (gethash issue-type issues 0)) issues))))))
     (when (> low-scores 0)
       (push (format "Review %d tests with low scores (< 70%%)" low-scores) recommendations))
     (when (= high-scores total)
