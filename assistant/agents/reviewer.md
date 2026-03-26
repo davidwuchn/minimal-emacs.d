@@ -1,6 +1,6 @@
 ---
 name: reviewer
-model: qwen3.5-plus
+model: qwen3-coder-next
 backend: DashScope
 max-tokens: 8192
 temperature: 0.3
