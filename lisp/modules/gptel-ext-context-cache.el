@@ -717,25 +717,26 @@ Fallback order:
 Note: We do NOT use gptel-max-tokens as it's for response length, not context window.
 Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-window-cache'."
   (let* ((model gptel-model)
-         (model-id (my/gptel--model-id-string model))
-         (window nil)
-         (cached (and (stringp model-id)
-                      (gethash model-id my/gptel--context-window-cache))))
-    ;; 1) Prefer our cache (for OpenRouter-style model ids).
-    (when cached
-      (setq window cached))
-    ;; 2) Check known models table (case-insensitive partial match)
-    (when (and (not window) (stringp model-id))
-      (setq window (my/gptel--alist-partial-match my/gptel--known-model-context-windows model-id)))
-    ;; 3) Check gptel model tables
-    (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
-      (when (and (boundp var) (not window))
-        (let ((entry (assq model (symbol-value var))))
-          (when entry
-            (setq window (my/gptel--normalize-context-window
-                          (plist-get (cdr entry) :context-window)))))))
-    ;; 4) Fall back to default (NOT gptel-max-tokens which is response length)
-    (or window my/gptel-default-context-window)))
+         (model-id (my/gptel--model-id-string model)))
+    (catch 'found
+      ;; 1) Prefer our cache (for OpenRouter-style model ids).
+      (when (and (stringp model-id)
+                 (gethash model-id my/gptel--context-window-cache))
+        (throw 'found (gethash model-id my/gptel--context-window-cache)))
+      ;; 2) Check known models table (case-insensitive partial match)
+      (when (stringp model-id)
+        (let ((window (my/gptel--alist-partial-match my/gptel--known-model-context-windows model-id)))
+          (when window (throw 'found window))))
+      ;; 3) Check gptel model tables
+      (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
+        (when (boundp var)
+          (let ((entry (assq model (symbol-value var))))
+            (when entry
+              (let ((window (my/gptel--normalize-context-window
+                             (plist-get (cdr entry) :context-window))))
+                (when window (throw 'found window)))))))
+      ;; 4) Fall back to default (NOT gptel-max-tokens which is response length)
+      my/gptel-default-context-window)))
 
 ;;; Auto-refresh Timer
 
