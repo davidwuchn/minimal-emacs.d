@@ -252,14 +252,10 @@ Uses backend-specific thresholds (lower for DashScope)."
          (threshold-fraction (my/gptel--effective-threshold))
          (threshold (* window threshold-fraction))
          (chars (buffer-size))
-         (text-tokens (my/gptel--estimate-text-tokens chars))
-         (image-tokens (or (and (fboundp 'my/gptel--count-context-image-tokens)
-                                (my/gptel--count-context-image-tokens))
-                           0))
+         (tokens (my/gptel--current-tokens))
          (image-count (or (and (fboundp 'my/gptel--context-image-count)
                                (my/gptel--context-image-count))
                           0))
-         (tokens (+ text-tokens image-tokens))
          (delegate-status (if (my/gptel--delegate-threshold-exceeded-p)
                               "EXCEEDED (would auto-delegate)"
                             "OK")))
@@ -268,13 +264,13 @@ Backend: %s (effective threshold: %.0f%%)
 Model: %s
 Model ID: %s
 Cached: %s
-Current: %d chars, ~%d tokens (text:%d + images:%d [%d]) (%.0f%% of window)
+Current: %d chars, ~%d tokens (%.0f%% of window)
 Auto-delegate: %s"
              window threshold (* 100 threshold-fraction)
              backend-type (* 100 threshold-fraction)
              model model-id
              (if cached (format "yes (%d)" cached) "no")
-             chars (round tokens) (round text-tokens) (round image-tokens) image-count
+             chars (round tokens)
              (* 100 (/ (float tokens) window))
              delegate-status)))
 
