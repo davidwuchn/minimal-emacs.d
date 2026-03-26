@@ -467,12 +467,12 @@ Runs asynchronously; returns nil immediately."
 (defun my/gptel--auto-refresh-context-window-cache-maybe ()
   "Refresh context window cache if stale (non-blocking)."
   (when my/gptel-context-window-auto-refresh-enabled
-    (let* ((last my/gptel--context-window-cache-last-refresh)
+    (let* ((model-id (my/gptel--model-id-string gptel-model))
+           (last my/gptel--context-window-cache-last-refresh)
            (age-days (and (numberp last)
                           (/ (- (float-time (current-time)) last) 86400.0)))
            (stale (or (not (numberp age-days))
-                      (>= age-days (max 1 my/gptel-context-window-auto-refresh-interval-days))))
-           (model-id (my/gptel--model-id-string gptel-model)))
+                      (>= age-days (max 1 my/gptel-context-window-auto-refresh-interval-days)))))
       (when stale
         (setq my/gptel--context-window-cache-last-refresh (float-time (current-time)))
         ;; Seed from built-in tables (Gemini + Copilot) without network.
