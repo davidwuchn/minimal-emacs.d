@@ -145,6 +145,21 @@ Honors `my/gptel-search-timeout' for large repos."
                   (forward-line 1))
                 (nreverse usages)))))))))
 
+(defun gptel-tools-code--ensure-treesit-ready (file-path fallback-action)
+  "Ensure tree-sitter parser is ready for FILE-PATH.
+Returns nil if ready, or an error message string if not.
+FALLBACK-ACTION is a string suggesting alternative tool to use."
+  (condition-case err
+      (progn
+        (treesit-agent--ensure-parser file-path)
+        (if (treesit-parser-list)
+            nil
+          (gptel-tools-code--no-parser-message
+           file-path (my/gptel--detect-treesit-language file-path) fallback-action)))
+    (error (let* ((msg (error-message-string err))
+                  (friendly (my/gptel--treesit-error-message msg file-path)))
+             (or friendly
+                 (format "Error: tree-sitter not ready for %s: %s" file-path msg))))))
 (defun my/gptel--find-usages (symbol-name)
   "Find all usages of SYMBOL-NAME in the current project.
 Fallback chain: LSP → git grep → ripgrep.
@@ -429,14 +444,13 @@ Returns a formatted string with the file map, or an error message."
   (condition-case err
       (with-timeout (5 (format "Error: Code_Map timed out after 5 seconds on %s" file_path))
         (with-current-buffer (find-file-noselect file_path)
-          (treesit-agent--ensure-parser file_path)
-          (if (not (treesit-parser-list))
-              (gptel-tools-code--no-parser-message
-               file_path (my/gptel--detect-treesit-language file_path) "Read/Grep for this file")
-            (let ((map (treesit-agent-get-file-map)))
-              (if map
-                  (format "File map for %s:\n%s" file_path (string-join map "\n"))
-                (format "Could not generate file map for %s.\n\nACTION: Check if tree-sitter is enabled for this file type.\n  - Run: M-x treesit-install-language-grammar RET <language> RET\n  - Verify: M-x eval-expression RET (treesit-language-available-p '<lang>) RET" file_path))))))
+          (let ((parser-error (gptel-tools-code--ensure-treesit-ready file_path "Read/Grep for this file")))
+            (if parser-error
+                parser-error
+              (let ((map (treesit-agent-get-file-map)))
+                (if map
+                    (format "File map for %s:\n%s" file_path (string-join map "\n"))
+                  (format "Could not generate file map for %s.\n\nACTION: Check if tree-sitter is enabled for this file type.\n  - Run: M-x treesit-install-language-grammar RET <language> RET\n  - Verify: M-x eval-expression RET (treesit-language-available-p '<lang>) RET" file_path)))))))
     (error (let* ((msg (error-message-string err))
                   (friendly (my/gptel--treesit-error-message msg file_path)))
              (or friendly
@@ -449,14 +463,13 @@ When FILE_PATH is nil, searches the entire project workspace."
       (with-timeout (10 (format "Error: Code_Inspect timed out for '%s'" node_name))
         (if file_path
             (with-current-buffer (find-file-noselect file_path)
-              (treesit-agent--ensure-parser file_path)
-              (if (not (treesit-parser-list))
-                  (gptel-tools-code--no-parser-message
-                   file_path (my/gptel--detect-treesit-language file_path) "Read tool for this file")
-                (let ((text (treesit-agent-extract-node node_name)))
-                  (if text
-                      (format "Code block '%s' from %s:\n\n%s" node_name file_path text)
-                    (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols in the file\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))
+              (let ((parser-error (gptel-tools-code--ensure-treesit-ready file_path "Read tool for this file")))
+                (if parser-error
+                    parser-error
+                  (let ((text (treesit-agent-extract-node node_name)))
+                    (if text
+                        (format "Code block '%s' from %s:\n\n%s" node_name file_path text)
+                      (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols in the file\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name))))))
           ;; Search workspace if no file provided
           (let ((result (treesit-agent-find-workspace node_name)))
             (cond
@@ -487,28 +500,27 @@ Syncs buffer with disk, validates parser, guards against truncation."
                      (file-exists-p (buffer-file-name))
                      (not (verify-visited-file-modtime)))
             (revert-buffer t t t))
-          (treesit-agent--ensure-parser file_path)
-          (if (not (treesit-parser-list))
-              (gptel-tools-code--no-parser-message
-               file_path (my/gptel--detect-treesit-language file_path)
-               "Edit tool (manual paren balancing required)")
-            (let ((old-code (treesit-agent-extract-node node_name)))
-              (if (and old-code
-                       (> my/gptel-code-replace-truncation-ratio 0)
-                       (> (length old-code) my/gptel-code-replace-min-old-chars)
-                       (< (length new_code) (* my/gptel-code-replace-truncation-ratio (length old-code))))
-                  (format "Error: Replacement rejected — new code (%d chars) is suspiciously shorter than original (%d chars).\nThis usually means the function body was truncated.\n\nACTION: Provide the COMPLETE replacement including the full function body."
-                          (length new_code) (length old-code))
-                (if (treesit-agent-replace-node node_name new_code)
-                    (progn
-                      (when (and (buffer-file-name)
-                                 (file-exists-p (buffer-file-name))
-                                 (not (verify-visited-file-modtime)))
-                        (error "File changed externally after revert. Re-run Code_Replace."))
-                      (cl-letf (((symbol-function 'ask-user-about-supersession-threat) #'ignore))
-                        (save-buffer))
-                      (format "Successfully replaced '%s' in %s" node_name file_path))
-                  (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name)))))))
+          (let ((parser-error (gptel-tools-code--ensure-treesit-ready file_path
+                                                                      "Edit tool (manual paren balancing required)")))
+            (if parser-error
+                parser-error
+              (let ((old-code (treesit-agent-extract-node node_name)))
+                (if (and old-code
+                         (> my/gptel-code-replace-truncation-ratio 0)
+                         (> (length old-code) my/gptel-code-replace-min-old-chars)
+                         (< (length new_code) (* my/gptel-code-replace-truncation-ratio (length old-code))))
+                    (format "Error: Replacement rejected — new code (%d chars) is suspiciously shorter than original (%d chars).\nThis usually means the function body was truncated.\n\nACTION: Provide the COMPLETE replacement including the full function body."
+                            (length new_code) (length old-code))
+                  (if (treesit-agent-replace-node node_name new_code)
+                      (progn
+                        (when (and (buffer-file-name)
+                                   (file-exists-p (buffer-file-name))
+                                   (not (verify-visited-file-modtime)))
+                          (error "File changed externally after revert. Re-run Code_Replace."))
+                        (cl-letf (((symbol-function 'ask-user-about-supersession-threat) #'ignore))
+                          (save-buffer))
+                        (format "Successfully replaced '%s' in %s" node_name file_path))
+                    (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name file_path node_name))))))))
     (error (let* ((msg (error-message-string err))
                   (friendly (my/gptel--treesit-error-message msg file_path)))
              (or friendly
