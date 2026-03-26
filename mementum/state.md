@@ -1,33 +1,35 @@
 # Mementum State
 
-> Last session: 2026-03-26 17:30
+> Last session: 2026-03-26 20:30
 
-## Total Improvements: 70+ Real Code Fixes
+## Total Improvements: 75+ Real Code Fixes
 
-258 commits since March 25, 2026.
+270 commits since March 25, 2026.
 
-### Recent Fixes (Last 30)
+### Recent Fixes (Last 20)
 
 | # | File | Fix |
 |---|------|-----|
-| 70 | assistant/agents/reviewer.md | Switch to qwen3-coder-next (no thinking issues) |
-| 69 | gptel-tools-agent.el | Strengthen grading criteria |
-| 70 | gptel-tools-agent.el | Fix timeout auto-pass |
-| 68 | gptel-tools-code.el | Replace nreverse with reverse |
-| 67 | gptel-auto-workflow-strategic.el | Path containment validation |
-| 66 | gptel-ext-context.el | Eliminate duplicate token counting |
-| 65 | eca-security.el | Fix temp directory path |
-| 64 | gptel-ext-context-cache.el | Replace regex with string-prefix-p |
-| 63 | gptel-auto-workflow-strategic.el | Extract validation logic into helper |
-| 62 | gptel-auto-workflow-strategic.el | Validate-and-add-target returns nil |
-| 61 | gptel-auto-workflow-strategic.el | Remove extra closing paren |
-| 60 | gptel-benchmark-core.el | Fix destructive nreverse |
-| 59 | gptel-ext-context-cache.el | Fix metadata cache inconsistency |
-| 58 | gptel-ext-context-cache.el | Use full metadata cache |
-| 57 | gptel-benchmark-core.el | Fix inconsistent indentation |
-| 56 | gptel-tools-code.el | Extract tree-sitter validation helper |
-| 55 | gptel-auto-workflow-strategic.el | Fix JSON parsing bug |
-| 54 | gptel-auto-workflow-strategic.el | Fix regex fallback for subdirs |
+| 75 | gptel-ext-core.el | Extract char validation helper |
+| 74 | gptel-ext-context-cache.el | Error handling for make-process |
+| 73 | gptel-tools-agent.el | Code validation before benchmark |
+| 72 | gptel-ext-context-cache.el | Revert broken cache change |
+| 71 | gptel-tools-agent.el | Strengthen grading criteria |
+| 70 | assistant/agents/reviewer.md | Switch to qwen3-coder-next |
+| 69 | gptel-tools-code.el | Replace nreverse with reverse |
+| 68 | gptel-auto-workflow-strategic.el | Path containment validation |
+| 67 | gptel-ext-context.el | Eliminate duplicate token counting |
+| 66 | eca-security.el | Fix temp directory path |
+| 65 | gptel-ext-context-cache.el | Replace regex with string-prefix-p |
+| 64 | gptel-auto-workflow-strategic.el | Extract validation logic into helper |
+| 63 | gptel-auto-workflow-strategic.el | Validate-and-add-target returns nil |
+| 62 | gptel-auto-workflow-strategic.el | Remove extra closing paren |
+| 61 | gptel-benchmark-core.el | Fix destructive nreverse |
+| 60 | gptel-ext-context-cache.el | Fix metadata cache inconsistency |
+| 59 | gptel-ext-context-cache.el | Use full metadata cache |
+| 58 | gptel-benchmark-core.el | Fix inconsistent indentation |
+| 57 | gptel-tools-code.el | Extract tree-sitter validation helper |
+| 56 | gptel-auto-workflow-strategic.el | Fix JSON parsing bug |
 | 53 | gptel-ext-retry.el | Handle list content in strip-images |
 | 52 | gptel-benchmark-core.el | Fix nreverse in two functions |
 | 51 | gptel-benchmark-core.el | Fix destructive nreverse in trend |
@@ -59,7 +61,7 @@ The reviewer uses `qwen3.5-plus` on DashScope with 600s timeout.
 λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7 Linux)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 70+ code fixes, 258 commits since Mar 25
+λ real. 75+ code fixes, 270 commits since Mar 25
 λ reviewer. qwen3-coder-next on DashScope (no thinking mode)
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
