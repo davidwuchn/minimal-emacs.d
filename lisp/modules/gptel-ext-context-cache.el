@@ -713,26 +713,31 @@ Use `my/gptel-show-provider-contract' to query.")
   "Return model context window if available, else fall back to defaults.
 
 Fallback order:
-1. Cached context window for model-id
-2. Known models table (popular models pre-seeded)
-3. gptel model tables (OpenAI, Gemini, etc.)
-4. my/gptel-default-context-window (128k default)
+1. Full metadata cache (:context-window from my/gptel--model-metadata-cache)
+2. Context-window-only cache (my/gptel--context-window-cache)
+3. Known models table (popular models pre-seeded)
+4. gptel model tables (OpenAI, Gemini, etc.)
+5. my/gptel-default-context-window (128k default)
 
 Note: We do NOT use gptel-max-tokens as it's for response length, not context window.
 Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-window-cache'."
   (let* ((model gptel-model)
          (model-id (my/gptel--model-id-string model))
+         (meta (my/gptel-get-model-metadata model-id))
          (cached))
     (catch 'found
-      ;; 1) Prefer our cache (for OpenRouter-style model ids).
+      ;; 1) Prefer full metadata cache (includes :context-window)
+      (when (and meta (plist-get meta :context-window))
+        (throw 'found (plist-get meta :context-window)))
+      ;; 2) Check context-window-only cache
       (when (and (stringp model-id)
                  (setq cached (gethash model-id my/gptel--context-window-cache)))
         (throw 'found cached))
-      ;; 2) Check known models table (case-insensitive partial match)
+      ;; 3) Check known models table (case-insensitive partial match)
       (when (stringp model-id)
         (let ((window (my/gptel--alist-partial-match my/gptel--known-model-context-windows model-id)))
           (when window (throw 'found window))))
-      ;; 3) Check gptel model tables
+      ;; 4) Check gptel model tables
       (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
         (when (boundp var)
           (let ((entry (assq model (symbol-value var))))
@@ -740,7 +745,7 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
               (let ((window (my/gptel--normalize-context-window
                              (plist-get (cdr entry) :context-window))))
                 (when window (throw 'found window)))))))
-      ;; 4) Fall back to default (NOT gptel-max-tokens which is response length)
+      ;; 5) Fall back to default (NOT gptel-max-tokens which is response length)
       my/gptel-default-context-window)))
 
 ;;; Auto-refresh Timer
