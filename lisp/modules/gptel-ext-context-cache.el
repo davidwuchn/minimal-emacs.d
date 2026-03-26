@@ -343,46 +343,62 @@ Image tokens are counted from `gptel-context' if available."
 
 ;;; Cache Persistence
 
-(defun my/gptel--cache-put-context-window (model-id window)
-  "Persist WINDOW for MODEL-ID in the cache."
-  (when (and (stringp model-id) (integerp window) (> window 0))
-    (puthash model-id window my/gptel--context-window-cache)
-    (make-directory (file-name-directory my/gptel-context-window-cache-file) t)
-    (condition-case err
-        (with-temp-file my/gptel-context-window-cache-file
-          (insert ";; Auto-generated; model context windows cache\n")
-          (insert (format ";; Updated: %s\n\n" (format-time-string "%Y-%m-%d %H:%M:%S")))
-          (insert "(setq my/gptel--context-window-cache-data\n      '")
-          (let (alist)
-            (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--context-window-cache)
-            (prin1 (sort alist (lambda (a b) (string< (car a) (car b)))) (current-buffer)))
-          (insert ")\n")
-          (insert (format "(setq my/gptel--context-window-cache-last-refresh %S)\n"
-                          (float-time (current-time)))))
-      (error
-       (message "gptel context-window cache: failed to write %s (%s)"
-                my/gptel-context-window-cache-file
-                (error-message-string err))))))
+(defun my/gptel--cache-put (&optional model-id)
+  "Persist both context-window and model-metadata caches to disk.
 
-(defun my/gptel--cache-load-context-windows ()
-  "Load cached context windows from `my/gptel-context-window-cache-file'."
+When MODEL-ID is provided, also update the refresh timestamp."
+  (make-directory (file-name-directory my/gptel-context-window-cache-file) t)
+  (condition-case err
+      (with-temp-file my/gptel-context-window-cache-file
+        (insert ";; Auto-generated; model metadata cache\n")
+        (insert (format ";; Updated: %s\n\n" (format-time-string "%Y-%m-%d %H:%M:%S")))
+        ;; Save context-window cache
+        (insert "(setq my/gptel--context-window-cache-data\n      '")
+        (let (alist)
+          (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--context-window-cache)
+          (prin1 (sort alist (lambda (a b) (string< (car a) (car b)))) (current-buffer)))
+        (insert ")\n")
+        ;; Save model-metadata cache
+        (insert "(setq my/gptel--model-metadata-cache-data\n      '")
+        (setq alist nil)
+        (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--model-metadata-cache)
+        (prin1 (sort alist (lambda (a b) (string< (car a) (car b)))) (current-buffer))
+        (insert ")\n")
+        (when model-id
+          (insert (format "(setq my/gptel--context-window-cache-last-refresh %S)\n"
+                          (float-time (current-time))))))
+    (error
+     (message "gptel context-window cache: failed to write %s (%s)"
+              my/gptel-context-window-cache-file
+              (error-message-string err)))))
+
+(defun my/gptel--cache-load ()
+  "Load cached context windows and model metadata from cache file."
   (when (file-readable-p my/gptel-context-window-cache-file)
     (condition-case err
         (progn
-          (setq my/gptel--context-window-cache-data nil)
+          (setq my/gptel--context-window-cache-data nil
+                my/gptel--model-metadata-cache-data nil)
           (load my/gptel-context-window-cache-file nil t)
+          ;; Load context-window cache
           (when (listp my/gptel--context-window-cache-data)
             (dolist (kv my/gptel--context-window-cache-data)
               (when (and (consp kv) (stringp (car kv)) (integerp (cdr kv)))
                 (puthash (car kv) (cdr kv) my/gptel--context-window-cache))))
-          (setq my/gptel--context-window-cache-data nil))
+          ;; Load model-metadata cache
+          (when (listp my/gptel--model-metadata-cache-data)
+            (dolist (kv my/gptel--model-metadata-cache-data)
+              (when (and (consp kv) (stringp (car kv)) (listp (cdr kv)))
+                (puthash (car kv) (cdr kv) my/gptel--model-metadata-cache))))
+          (setq my/gptel--context-window-cache-data nil
+                my/gptel--model-metadata-cache-data nil))
       (error
        (message "gptel context-window cache: failed to load %s (%s)"
                 my/gptel-context-window-cache-file
                 (error-message-string err))))))
 
 ;; Load cache at require time
-(my/gptel--cache-load-context-windows)
+(my/gptel--cache-load)
 
 ;;; Seeding and Refresh
 
@@ -455,7 +471,9 @@ Runs asynchronously; returns nil immediately."
                                           (cw (and entry (alist-get 'context_length entry))))
                                      (if (and (integerp cw) (> cw 0))
                                          (progn
-                                           (my/gptel--cache-put-context-window model-id cw)
+                                           (puthash model-id cw my/gptel--context-window-cache)
+                                           (puthash model-id (list :context-window cw) my/gptel--model-metadata-cache)
+                                           (my/gptel--cache-put model-id)
                                            (message "OpenRouter context-window cached: %s -> %d" model-id cw))
                                        (message "OpenRouter context-window: model not found or missing context_length: %s" model-id)))
                                  (error
@@ -482,10 +500,7 @@ Runs asynchronously; returns nil immediately."
                    (eq gptel-backend gptel--openrouter))
           (my/gptel--openrouter-fetch-context-window gptel-model))
         ;; Persist cache with updated refresh timestamp.
-        (my/gptel--cache-put-context-window model-id
-                                            (or (gethash model-id
-                                                         my/gptel--context-window-cache)
-                                                my/gptel-default-context-window))))))
+        (my/gptel--cache-put model-id)))))
 
 (defun my/gptel-refresh-context-window-cache ()
   "Refresh (fetch) the current model's context window into the cache."
@@ -551,6 +566,7 @@ Run asynchronously. Use for bulk cache warming."
                                                              :pricing-output (and (numberp output-price) (* output-price 1000000)))
                                                     my/gptel--model-metadata-cache)
                                            (cl-incf count))))
+                                     (my/gptel--cache-put)
                                      (message "OpenRouter: cached %d models" count))
                                  (error
                                   (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
