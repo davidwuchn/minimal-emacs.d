@@ -373,9 +373,15 @@ limit for early exit."
   "Check if STATE is aborted and deliver abort result.
 Cleans up overlay OV if present.  Returns non-nil if aborted."
   (when (gptel-agent-loop--task-aborted state)
-    (when (overlayp ov) (delete-overlay ov))
+    (gptel-agent-loop--cleanup-overlay ov)
     (gptel-agent-loop--deliver-aborted state)
     t))
+
+(defun gptel-agent-loop--cleanup-overlay (ov)
+  "Delete overlay OV if it is a valid overlay.
+Extracted to reduce duplication in callback cleanup paths."
+  (when (overlayp ov)
+    (delete-overlay ov)))
 
 (defun gptel-agent-loop--make-callback (state request-prompt use-tools)
   "Build request callback for STATE.
@@ -385,8 +391,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
           (error-data (plist-get info :error)))
       (cond
        ((gptel-agent-loop--task-finished state)
-        (when (overlayp ov)
-          (delete-overlay ov)))
+        (gptel-agent-loop--cleanup-overlay ov))
 
        ((eq resp nil)
         (cond
@@ -406,7 +411,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
            (lambda ()
              (gptel-agent-loop--request state request-prompt use-tools nil))))
          (t
-          (when (overlayp ov) (delete-overlay ov))
+          (gptel-agent-loop--cleanup-overlay ov)
           (gptel-agent-loop--deliver-result
            state
            (format "Error: %s task '%s' failed after %d retries.\nDetails: %S"
@@ -439,7 +444,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
         (unless (gptel-agent-loop--check-aborted state ov)
           (let ((final-turn (not (plist-get info :tool-use))))
             (when final-turn
-              (when (overlayp ov) (delete-overlay ov))
+              (gptel-agent-loop--cleanup-overlay ov)
               (cond
                ((string-blank-p resp)
                 (if (= (gptel-agent-loop--task-step-count state) 0)
@@ -517,7 +522,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
                  t)))))))
 
        ((eq resp 'abort)
-        (when (overlayp ov) (delete-overlay ov))
+        (gptel-agent-loop--cleanup-overlay ov)
         (setf (gptel-agent-loop--task-aborted state) t)
         (gptel-agent-loop--deliver-aborted state))))))
 
