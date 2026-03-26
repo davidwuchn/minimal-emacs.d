@@ -6,7 +6,7 @@ echo "         E2E: MEMENTUM INTEGRATION TEST"
 echo "═══════════════════════════════════════════════════════════════"
 
 # Find script directory
-GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "/Users/davidwu/.emacs.d")"
+GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/.emacs.d")"
 ROOT_DIR="$GIT_ROOT"
 SCRIPT_DIR="$ROOT_DIR/scripts"
 

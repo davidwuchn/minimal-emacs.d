@@ -573,7 +573,7 @@ When something feels wrong, trace it through the elements.
 - **Lambda Calculus**: Church, 1936
 - **Agent Zero**: Context compression patterns
 - **Mementum**: Git-based memory protocol — https://github.com/michaelwhitford/mementum
-- **nucleus**: `/Users/davidwu/workspace/nucleus/AGENTS.md`
+- **nucleus**: `$HOME/workspace/nucleus/AGENTS.md`
 
 ---
 
