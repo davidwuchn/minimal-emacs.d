@@ -117,6 +117,12 @@ Uses `my/gptel-usages-cache-ttl' for freshness check."
   (and (fboundp 'eglot-current-server)
        (eglot-current-server)))
 
+(defun my/gptel--lsp-backoff-delay (retries-left max-retries)
+  "Calculate exponential backoff delay for LSP retries.
+RETRIES-LEFT is remaining retries, MAX-RETRIES is the initial max.
+Returns delay in seconds: 0.5s, 1s, 2s, 4s, 8s for 5 retries."
+  (* 0.5 (expt 2 (- max-retries retries-left))))
+
 
 (defun gptel-tools-code--filter-usage-line (line)
   "Filter out binary/cache files from usage LINE.
@@ -194,7 +200,7 @@ Reports which backend was used."
               (setq lsp-retries (1- lsp-retries))
               (when (> lsp-retries 0)
                 (message "[LSP] Waiting for server... (%d retries left)" lsp-retries)
-                (sleep-for (* 0.5 (expt 2 (- my/gptel-lsp-retry-max lsp-retries))))))
+                (sleep-for (my/gptel--lsp-backoff-delay lsp-retries my/gptel-lsp-retry-max))))
           (condition-case nil
               (let ((refs (xref-backend-references backend-type symbol-name)))
                 (if (and refs (listp refs))
@@ -212,12 +218,12 @@ Reports which backend was used."
                   (setq lsp-retries (1- lsp-retries))
                   (when (> lsp-retries 0)
                     (message "[LSP] Waiting for server... (%d retries left)" lsp-retries)
-                    (sleep-for (* 0.5 (expt 2 (- my/gptel-lsp-retry-max lsp-retries)))))))
+                    (sleep-for (my/gptel--lsp-backoff-delay lsp-retries my/gptel-lsp-retry-max)))))
             (error
              (setq lsp-retries (1- lsp-retries))
              (when (> lsp-retries 0)
                (message "[LSP] Connection error, retrying... (%d left)" lsp-retries)
-               (sleep-for (* 0.5 (expt 2 (- my/gptel-lsp-retry-max lsp-retries))))))))))
+               (sleep-for (my/gptel--lsp-backoff-delay lsp-retries my/gptel-lsp-retry-max))))))))
     (unless usages
       (let ((git-result (my/gptel--git-grep-usages symbol-name root)))
         (if git-result
