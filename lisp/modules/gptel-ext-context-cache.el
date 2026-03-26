@@ -479,7 +479,8 @@ Runs asynchronously; returns nil immediately."
            (age-days (and (numberp last)
                           (/ (- (float-time (current-time)) last) 86400.0)))
            (stale (or (not (numberp age-days))
-                      (>= age-days (max 1 my/gptel-context-window-auto-refresh-interval-days)))))
+                      (>= age-days (max 1 my/gptel-context-window-auto-refresh-interval-days))))
+           (model-id (my/gptel--model-id-string gptel-model)))
       (when stale
         (setq my/gptel--context-window-cache-last-refresh (float-time (current-time)))
         ;; Seed from built-in tables (Gemini + Copilot) without network.
@@ -489,8 +490,8 @@ Runs asynchronously; returns nil immediately."
                    (eq gptel-backend gptel--openrouter))
           (my/gptel--openrouter-fetch-context-window gptel-model))
         ;; Persist cache with updated refresh timestamp.
-        (my/gptel--cache-put-context-window (my/gptel--model-id-string gptel-model)
-                                            (or (gethash (my/gptel--model-id-string gptel-model)
+        (my/gptel--cache-put-context-window model-id
+                                            (or (gethash model-id
                                                          my/gptel--context-window-cache)
                                                 my/gptel-default-context-window))))))
 
