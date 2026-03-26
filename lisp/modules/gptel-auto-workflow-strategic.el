@@ -225,7 +225,7 @@ Returns updated targets list.
                                             (expand-file-name file proj-root))))
                             (when (file-exists-p abs-path)
                               (push (file-relative-name abs-path proj-root) targets)))))))))))
-        (error nil))))
+        (error nil)))
     ;; Fallback: regex - matches files in subdirectories too
     (when (null targets)
       (with-temp-buffer
