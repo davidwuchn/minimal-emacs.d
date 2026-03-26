@@ -1275,24 +1275,34 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
         result))))
 
 (defun gptel-auto-experiment-benchmark ()
-  "Run nucleus verification + tests + Eight Keys scoring.
+  "Run syntax validation + nucleus verification + tests + Eight Keys scoring.
 Returns plist with :passed, :tests-passed, :eight-keys, etc."
   (let* ((start (float-time))
          (proj-root (gptel-auto-workflow--project-root))
          (default-directory (or gptel-auto-workflow--worktree-dir proj-root))
-         (verify-result (call-process "/bin/bash" nil nil nil
-                                      (expand-file-name "scripts/verify-nucleus.sh" proj-root)))
-         (tests-result (when (zerop verify-result)
-                         (gptel-auto-experiment-run-tests)))
-         (scores (when (and (zerop verify-result) (car tests-result))
-                   (gptel-auto-experiment--eight-keys-scores))))
-    (list :passed (and (zerop verify-result) (car tests-result))
-          :nucleus-passed (zerop verify-result)
-          :tests-passed (car tests-result)
-          :tests-output (cdr tests-result)
-          :time (- (float-time) start)
-          :eight-keys (when scores (alist-get 'overall scores))
-          :eight-keys-scores scores)))
+         (target-file (when gptel-auto-workflow--current-target
+                        (expand-file-name gptel-auto-workflow--current-target default-directory)))
+         (validation-error (when target-file
+                             (gptel-auto-experiment--validate-code target-file))))
+    (if validation-error
+        (progn
+          (message "[auto-exp] ✗ Validation failed: %s" validation-error)
+          (list :passed nil
+                :validation-error validation-error
+                :time (- (float-time) start)))
+      (let* ((verify-result (call-process "/bin/bash" nil nil nil
+                                          (expand-file-name "scripts/verify-nucleus.sh" proj-root)))
+             (tests-result (when (zerop verify-result)
+                             (gptel-auto-experiment-run-tests)))
+             (scores (when (and (zerop verify-result) (car tests-result))
+                       (gptel-auto-experiment--eight-keys-scores))))
+        (list :passed (and (zerop verify-result) (car tests-result))
+              :nucleus-passed (zerop verify-result)
+              :tests-passed (car tests-result)
+              :tests-output (cdr tests-result)
+              :time (- (float-time) start)
+              :eight-keys (when scores (alist-get 'overall scores))
+              :eight-keys-scores scores)))))
 
 (defun gptel-auto-experiment--eight-keys-scores ()
   "Get full Eight Keys scores alist from current codebase.
@@ -1365,6 +1375,24 @@ Scores based on commit message + code diff (not just stat)."
 
 (defvar gptel-auto-experiment-grade-timeout 60
   "Timeout in seconds for grading subagent.")
+
+(defun gptel-auto-experiment--validate-code (file)
+  "Validate code in FILE for syntax and dangerous patterns.
+Returns nil if valid, or error message string if invalid."
+  (when (and (stringp file) (file-exists-p file) (string-suffix-p ".el" file))
+    (let ((content (with-temp-buffer
+                     (insert-file-contents file)
+                     (buffer-string))))
+      (condition-case err
+          (with-temp-buffer
+            (insert content)
+            (goto-char (point-min))
+            (while (< (point) (point-max))
+              (read (current-buffer))))
+        (error (format "Syntax error in %s: %s" file err)))
+      (when (and (string-match-p "cl-return-from" content)
+                 (not (string-match-p "cl-block" content)))
+        (format "Dangerous pattern in %s: cl-return-from without cl-block" file)))))
 
 (defun gptel-auto-experiment-grade (output callback)
   "Grade experiment OUTPUT. LLM decides quality threshold.
@@ -1657,6 +1685,7 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
 (defun gptel-auto-experiment-run (target experiment-id max-experiments baseline previous-results callback)
   "Run single experiment. Call CALLBACK with result plist."
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
+  (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
          (start-time (float-time))
          (timeout-timer nil)
@@ -1871,6 +1900,9 @@ Tries multiple patterns in order:
 
 (defvar gptel-auto-workflow--stats nil
   "Current run statistics: (:kept :total :phase).")
+
+(defvar gptel-auto-workflow--current-target nil
+  "Current target file being processed by auto-workflow.")
 
 (defun gptel-auto-workflow-status ()
   "Return current workflow status as plist.
