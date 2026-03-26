@@ -245,6 +245,18 @@ registered in nucleus-config."
 
 ;; Last-resort nil guard before JSON encoding: catches any nil :content that
 ;; slipped through earlier guards, preventing 400 Bad Request from APIs.
+(defun my/gptel--char-problematic-p (c)
+  "Return non-nil if character C is problematic for JSON serialization.
+Checks for control characters, private-use chars, and non-characters."
+  (or
+   (and (>= c 0) (<= c 8))
+   (= c 11) (= c 12)
+   (and (>= c 14) (<= c 31))
+   (and (>= c #xfdd0) (<= c #xfdef))
+   (and (>= c #xfff0) (<= c #xffff))
+   (and (>= c #xf0000) (<= c #xffffd))
+   (and (>= c #x100000) (<= c #x10fffd))))
+
 (defun my/gptel--sanitize-string-for-json (string)
   "Sanitize STRING for JSON serialization.
 Removes control characters, private-use chars, and non-characters that break json-serialize.
@@ -253,14 +265,7 @@ Also removes supplementary private-use area chars (U+F0000-U+FFFFD, U+100000-U+1
     (let ((chars (string-to-list string))
           (result-chars nil))
       (dolist (c chars)
-        (unless (or
-                 (and (>= c 0) (<= c 8))
-                 (= c 11) (= c 12)
-                 (and (>= c 14) (<= c 31))
-                 (and (>= c #xfdd0) (<= c #xfdef))
-                 (and (>= c #xfff0) (<= c #xffff))
-                 (and (>= c #xf0000) (<= c #xffffd))
-                 (and (>= c #x100000) (<= c #x10fffd)))
+        (unless (my/gptel--char-problematic-p c)
           (push c result-chars)))
       (apply #'string (nreverse result-chars)))))
 
