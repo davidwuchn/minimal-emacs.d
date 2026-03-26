@@ -175,9 +175,30 @@ OUTPUT JSON ONLY:
            'analyzer
            "Select targets"
            prompt
-           (lambda (result)
-             (funcall callback (gptel-auto-workflow--parse-targets result)))))
-      (funcall callback nil))))
+(lambda (result)
+              (funcall callback (gptel-auto-workflow--parse-targets result)))))
+       (funcall callback nil))))
+
+(defun gptel-auto-workflow--validate-and-add-target (file proj-root targets max-targets)
+  "Validate FILE and add to TARGETS if it exists.
+Returns updated targets list.
+;; ASSUMPTION: proj-root is a valid directory path
+;; BEHAVIOR: Converts relative paths to absolute, checks existence, adds as relative
+;; EDGE CASE: Returns targets unchanged if file doesn't exist or max reached
+;; TEST: Verify file is added only if it exists and is within proj-root"
+  (cond
+   ((not (stringp file)) targets)
+   ((>= (length targets) max-targets) targets)
+   (t
+    (let ((abs-path (if (file-name-absolute-p file)
+                        file
+                      (expand-file-name file proj-root))))
+      (if (file-exists-p abs-path)
+          (let ((rel-path (file-relative-name abs-path proj-root)))
+            (if (member rel-path targets)
+                targets
+              (cons rel-path targets)))
+        targets)))))
 
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list."
