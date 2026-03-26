@@ -357,7 +357,8 @@ MSG is the original error message, FILE-PATH is the file being operated on."
         (elc-file (concat file-path "c")))
     (unwind-protect
         (progn
-          (byte-compile-file file-path)
+          (with-output-to-temp-buffer "*Compile-Log*"
+            (byte-compile-file file-path))
           (let ((compile-log-buffer (get-buffer "*Compile-Log*")))
             (when compile-log-buffer
               (with-current-buffer compile-log-buffer
@@ -367,7 +368,7 @@ MSG is the original error message, FILE-PATH is the file being operated on."
                     (let ((line (buffer-substring-no-properties
                                  (line-beginning-position) (line-end-position))))
                       (when (and (not (string-empty-p (string-trim line)))
-                                 (string-match-p "[Ww]arning\\|[Ee]rror" line))
+                                 (string-match-p "[Ww]arning\\|[Ee]rror\\|Compiling\\|Done" line))
                         (push line warnings)))
                     (forward-line 1)))))))
       (when (file-exists-p elc-file)
