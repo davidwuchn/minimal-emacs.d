@@ -289,7 +289,7 @@ Returns the cdr (value) of the matching entry, or nil if no match."
         (dolist (entry alist)
           (when (and (consp entry)
                      (stringp (car entry))
-                     (string-match-p (downcase (car entry)) search-lower))
+                     (string-prefix-p (downcase (car entry)) search-lower))
             (throw 'found (cdr entry))))
         nil))))
 
