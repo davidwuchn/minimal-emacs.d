@@ -245,8 +245,9 @@ memory after long sessions or if tasks appear stuck."
 
 (defun gptel-agent-loop--transient-error-p (error-data)
   "Check if ERROR-DATA represents a transient/retryable error.
-Delegates to `my/gptel--transient-error-p' for consistent error detection."
-  (when error-data
+Delegates to `my/gptel--transient-error-p' for consistent error detection.
+Returns nil if the helper function is not available."
+  (when (and error-data (fboundp 'my/gptel--transient-error-p))
     (my/gptel--transient-error-p error-data nil)))
 
 (defun gptel-agent-loop--maybe-cache-get (agent-type prompt)
