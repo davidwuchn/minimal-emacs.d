@@ -1,8 +1,8 @@
 # Mementum State
 
-> Last session: 2026-03-26 11:30
+> Last session: 2026-03-26 12:30
 
-## Total Improvements: 45+ Real Code Fixes
+## Total Improvements: 57+ Real Code Fixes
 
 | # | File | Fix |
 |---|------|-----|
@@ -45,6 +45,24 @@
 | 37 | gptel-tools-agent.el | Prevent double-callback in `experiment-decide` |
 | 38 | gptel-benchmark-core.el | Fix plist/alist detection in `to-json-format` |
 | 39 | gptel-benchmark-core.el | Extract score extraction into helper function |
+| 40 | gptel-agent-loop.el | Extract abort check into helper function |
+| 41 | gptel-agent-loop.el | Extract overlay cleanup into helper |
+| 42 | gptel-agent-loop.el | Add fboundp safety check |
+| 43 | gptel-ext-context.el | Optimize token calculation |
+| 44 | gptel-ext-context-cache.el | Extract cache-or-alist-lookup helper |
+| 45 | gptel-ext-context.el | Refactor auto-compact-needed-p |
+| 46 | gptel-ext-context.el | Fix preview/replace branch logic |
+| 47 | gptel-benchmark-core.el | Fix destructive nreverse in trend |
+| 48 | gptel-benchmark-core.el | Fix nreverse in two functions |
+| 49 | gptel-ext-retry.el | Handle list content in strip-images |
+| 50 | gptel-auto-workflow-strategic.el | Fix regex fallback for subdirs |
+| 51 | gptel-auto-workflow-strategic.el | Fix JSON parsing bug |
+| 52 | gptel-tools-code.el | Extract tree-sitter validation helper |
+| 53 | gptel-benchmark-core.el | Fix inconsistent indentation |
+| 54 | gptel-ext-context-cache.el | Use full metadata cache |
+| 55 | gptel-ext-context-cache.el | Fix metadata cache inconsistency |
+| 56 | gptel-benchmark-core.el | Fix destructive nreverse |
+| 57 | gptel-benchmark-core.el | Fix plist/alist detection |
 
 ---
 
