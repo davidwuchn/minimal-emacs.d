@@ -236,23 +236,28 @@ large-result truncation, and result caching."
       (let* ((temp-file (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt"))
              (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
                                 (substring result 0 my/gptel-subagent-result-limit)
-                                temp-file)))
+                                temp-file))
+             (buf (current-buffer))
+             (buf-has-local (and (buffer-live-p buf)
+                                 (local-variable-p 'my/gptel--subagent-temp-files buf))))
         (with-temp-file temp-file
           (insert result))
-        ;; Always push to global list for reliable cleanup.
-        ;; Also push to buffer-local if available (for session tracking).
         (push temp-file my/gptel--global-temp-files)
-        (when (buffer-live-p (current-buffer))
-          (push temp-file my/gptel--subagent-temp-files))
+        (when buf-has-local
+          (with-current-buffer buf
+            (push temp-file my/gptel--subagent-temp-files)))
         (when (> my/gptel-subagent-temp-file-ttl 0)
           (run-at-time my/gptel-subagent-temp-file-ttl nil
-                       (lambda (f)
+                       (lambda (f b has-local)
                          (when (file-exists-p f)
                            (delete-file f))
-                         ;; Only modify global list - buffer-local may be inaccessible.
                          (setq my/gptel--global-temp-files
-                               (delete f my/gptel--global-temp-files)))
-                       temp-file))
+                               (delete f my/gptel--global-temp-files))
+                         (when (and has-local (buffer-live-p b))
+                           (with-current-buffer b
+                             (setq my/gptel--subagent-temp-files
+                                   (delete f my/gptel--subagent-temp-files)))))
+                       temp-file buf buf-has-local))
         (funcall callback trunc-msg))
     (funcall callback result)))
 
