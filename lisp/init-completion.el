@@ -48,8 +48,7 @@
 
 (use-package embark-consult
   :ensure t
-  :hook
-  (embark-collect-mode . consult-preview-at-point-mode))
+  :after (embark consult))
 
 (use-package consult
   :ensure t
@@ -59,11 +58,10 @@
          ("M-y" . consult-yank-pop)
          ("M-g g" . consult-goto-line)
          ("M-g i" . consult-imenu)
-         ("M-s d" . consult-find)
-         ("M-s r" . consult-ripgrep)
-         ("M-s l" . consult-line))
-  :hook (completion-list-mode . consult-preview-at-point-mode)
-  :init
+("M-s d" . consult-find)
+          ("M-s r" . consult-ripgrep)
+          ("M-s l" . consult-line))
+   :init
   (setq xref-show-xrefs-function #'consult-xref
         xref-show-definitions-function #'consult-xref)
   :config
