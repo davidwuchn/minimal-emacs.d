@@ -100,7 +100,7 @@
   :ensure t
   :hook (after-init . vim-tab-bar-mode)
   :config
-  (setq vim-tab-bar-show-tabs 2)  ; Always show tab bar
+  (setq vim-tab-bar-show-tabs nil)  ; Never show tab bar (keep functionality)
   (setq vim-tab-bar-width 15))    ; Tab width
 
 ;; Surround text with pairs (cs"', ds', ysW, etc.)
