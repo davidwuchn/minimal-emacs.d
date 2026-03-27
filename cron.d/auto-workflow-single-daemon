@@ -13,10 +13,9 @@
 #   3. Verify: emacsclient -e 't'
 
 SHELL=/bin/bash
-LOGDIR=$HOME/.emacs.d/var/tmp/cron
 
 # Ensure log directory exists
-@reboot mkdir -p $LOGDIR
+@reboot mkdir -p $HOME/.emacs.d/var/tmp/cron
 
 # ─────────────────────────────────────────────────────────────
 # Auto-Workflow: Code Optimization Experiments
@@ -29,7 +28,7 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 # Check status: emacsclient -e '(gptel-auto-workflow-status)'
 # View logs: tail -f ~/.emacs.d/var/tmp/cron/auto-workflow.log
 
-0 */4 * * * emacsclient -e '(gptel-auto-workflow-cron-safe)' >> $LOGDIR/auto-workflow.log 2>&1
+0 */4 * * * emacsclient -e '(gptel-auto-workflow-cron-safe)' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
 # Periodic Researcher: Code pattern analysis
@@ -38,18 +37,18 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 # Researcher runs every 6 hours, finds anti-patterns and issues
 # Findings cached in var/tmp/research-findings.md for analyzer
 
-0 */6 * * * emacsclient -e '(progn (setq default-directory "~/.emacs.d/") (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $LOGDIR/researcher.log 2>&1
+0 */6 * * * emacsclient -e '(progn (setq default-directory "~/.emacs.d/") (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
 # Weekly Mementum: Synthesis + Decay
 # ─────────────────────────────────────────────────────────────
 
 # Run weekly synthesis every Sunday at 4 AM
-0 4 * * 0 emacsclient -e '(progn (setq default-directory "~/.emacs.d/") (gptel-mementum-weekly-job))' >> $LOGDIR/mementum.log 2>&1
+0 4 * * 0 emacsclient -e '(progn (setq default-directory "~/.emacs.d/") (gptel-mementum-weekly-job))' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
 # Weekly Instincts: Evolution batch commit
 # ─────────────────────────────────────────────────────────────
 
 # Run weekly instincts evolution every Sunday at 5 AM
-0 5 * * 0 emacsclient -e '(progn (setq default-directory "~/.emacs.d/") (gptel-benchmark-instincts-weekly-job))' >> $LOGDIR/instincts.log 2>&1
+0 5 * * 0 emacsclient -e '(progn (setq default-directory "~/.emacs.d/") (gptel-benchmark-instincts-weekly-job))' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
