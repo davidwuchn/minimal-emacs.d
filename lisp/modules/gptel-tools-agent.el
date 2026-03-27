@@ -2087,11 +2087,47 @@ Safe to call from cron - handles all edge cases."
        (message "[auto-workflow] Cron error: %s" err)
        nil))))
 
+(defun gptel-auto-workflow--cleanup-old-worktrees ()
+  "Remove old optimize worktrees and their branches.
+Keeps the last 3 most recent, removes older ones."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (worktree-base (expand-file-name
+                         gptel-auto-workflow-worktree-base proj-root))
+         (optimize-dir (expand-file-name "optimize" worktree-base))
+         (kept 3)
+         (removed 0))
+    (when (file-exists-p optimize-dir)
+      (let* ((dirs (directory-files optimize-dir t "onepi5-exp"))
+             (sorted (sort dirs (lambda (a b)
+                                   (time-less-p
+                                    (nth 5 (file-attributes b))
+                                    (nth 5 (file-attributes a))))))
+             (to-remove (nthcdr kept sorted)))
+        (dolist (dir to-remove)
+          (when (file-exists-p dir)
+            (let ((dirname (file-name-nondirectory dir)))
+              (condition-case err
+                  (progn
+                    (delete-directory dir t)
+                    (shell-command
+                     (format "cd %s && git worktree remove --force var/tmp/experiments/optimize/%s 2>/dev/null; git branch -D optimize/%s 2>/dev/null || true"
+                             (shell-quote-argument proj-root)
+                             dirname
+                             dirname)
+                     nil nil)
+                    (cl-incf removed))
+                (error
+                 (message "[auto-workflow] Failed to cleanup %s: %s" dir err))))))))
+    (when (> removed 0)
+      (message "[auto-workflow] Cleaned %d old worktrees" removed))
+    removed))
+
 (defun gptel-auto-workflow--cleanup-stale-state ()
   "Clean up stale timers, buffers, and state from aborted runs."
   (let ((proj-root (gptel-auto-workflow--project-root))
         (cleaned 0))
     (when proj-root
+      (gptel-auto-workflow--cleanup-old-worktrees)
       (dolist (timer (copy-sequence timer-list))
         (when (timerp timer)
           (let* ((fn-rep (prin1-to-string (timer--function timer))))
