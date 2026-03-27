@@ -103,6 +103,22 @@
 ;; Ensure Unicode symbols render (busy indicators, icons)
 (set-fontset-font t 'unicode "DejaVuSansM Nerd Font" nil 'prepend)
 
+;; Custom separator for header (replace default "➤" with "|")
+(defvar my/agent-shell-header-separator " | "
+  "Separator between header elements.")
+
+(defun my/agent-shell--header-text-separator (orig-fn state &rest args)
+  "Advice to customize header separator."
+  (let ((result (apply orig-fn state args)))
+    (when (stringp result)
+      (replace-regexp-in-string " ➤ " my/agent-shell-header-separator result))))
+
+(with-eval-after-load 'agent-shell
+  (advice-add 'agent-shell--make-header :around #'my/agent-shell--header-text-separator)
+  ;; Keybindings for session mode switching
+  (define-key agent-shell-mode-map (kbd "C-c m") #'agent-shell-set-session-mode)
+  (define-key agent-shell-mode-map (kbd "C-c M") #'agent-shell-cycle-session-mode))
+
 (use-package agent-shell
   :ensure t
   :defer t
