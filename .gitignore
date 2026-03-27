@@ -27,6 +27,8 @@ lisp/modules/*.elc
 !scripts/*.sh
 !scripts/*.py
 !scripts/*.clj
+!scripts/git-hooks/
+!scripts/git-hooks/*
 !lisp/init-org.el
 !docs/
 !docs/*.md

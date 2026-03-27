@@ -1,0 +1,80 @@
+#!/bin/bash
+#
+# Pre-push hook: Verify submodule commits exist on remote before pushing.
+# Prevents broken submodule references when auto-workflow updates submodules.
+#
+
+set -e
+
+# Get the remote being pushed to
+remote="$1"
+url="$2"
+
+# Only check for origin remote
+if [[ "$remote" != "origin" ]]; then
+    exit 0
+fi
+
+# Get the branch being pushed (from stdin)
+while read local_ref local_sha remote_ref remote_sha; do
+    branch=$(echo "$remote_ref" | sed 's|refs/heads/||')
+    
+    # Check each submodule
+    git config --file .gitmodules --get-regexp path | while read key path; do
+        submodule_path=$(echo "$path")
+        
+        # Get the commit that would be pushed for this submodule
+        if [[ -z "$remote_sha" || "$remote_sha" == "0000000000000000000000000000000000000000" ]]; then
+            # New branch, compare against main
+            base_sha=$(git rev-parse origin/main 2>/dev/null || echo "")
+        else
+            base_sha="$remote_sha"
+        fi
+        
+        if [[ -n "$base_sha" ]]; then
+            # Check if submodule is being updated
+            old_commit=$(git ls-tree "$base_sha" "$submodule_path" 2>/dev/null | awk '{print $3}')
+            new_commit=$(git ls-tree "$local_sha" "$submodule_path" 2>/dev/null | awk '{print $3}')
+            
+            if [[ -n "$new_commit" && "$old_commit" != "$new_commit" ]]; then
+                # Submodule is being updated, verify commit exists on remote
+                submodule_url=$(git config --file .gitmodules --get "submodule.$submodule_path.url")
+                
+                if [[ -n "$submodule_url" ]]; then
+                    # Try to fetch and verify the commit
+                    cd "$submodule_path" 2>/dev/null || continue
+                    
+                    # Fetch from submodule remote
+                    git fetch origin 2>/dev/null || true
+                    
+                    # Check if commit exists on origin
+                    if ! git rev-parse --verify "origin/main" >/dev/null 2>&1; then
+                        # Try origin/master
+                        if ! git rev-parse --verify "origin/master" >/dev/null 2>&1; then
+                            echo "ERROR: Cannot verify submodule $submodule_path - no origin/main or origin/master"
+                            cd - > /dev/null
+                            exit 1
+                        fi
+                    fi
+                    
+                    # Check if the new commit is reachable from origin
+                    if ! git merge-base --is-ancestor "$new_commit" "origin/main" 2>/dev/null; then
+                        if ! git merge-base --is-ancestor "$new_commit" "origin/master" 2>/dev/null; then
+                            echo ""
+                            echo "ERROR: Submodule $submodule_path commit $new_commit does not exist on remote!"
+                            echo "       Run: cd $submodule_path && git push origin main"
+                            echo "       Then retry the push."
+                            echo ""
+                            cd - > /dev/null
+                            exit 1
+                        fi
+                    fi
+                    
+                    cd - > /dev/null
+                fi
+            fi
+        fi
+    done
+done
+
+exit 0
