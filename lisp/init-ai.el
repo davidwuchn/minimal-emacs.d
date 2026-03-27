@@ -121,7 +121,9 @@
   (advice-add 'agent-shell--make-header :around #'my/agent-shell--header-text-separator)
   ;; Keybindings for session mode switching
   (define-key agent-shell-mode-map (kbd "C-c m") #'agent-shell-set-session-mode)
-  (define-key agent-shell-mode-map (kbd "C-c M") #'agent-shell-cycle-session-mode))
+  (define-key agent-shell-mode-map (kbd "C-c M") #'agent-shell-cycle-session-mode)
+  ;; Keybinding for preset selection
+  (define-key agent-shell-mode-map (kbd "C-c P") #'ai-code-behaviors-preset))
 
 (use-package agent-shell
   :ensure t
