@@ -254,7 +254,7 @@ Current suggestions:
 ## Reference: Experiment Pipeline
 
 ```
-gptel-auto-workflow-run-sync
+gptel-auto-workflow-run-async
   → worktree (optimize/{target}-{hostname}-exp{N})
   → analyzer (detect patterns)
   → executor (make changes)

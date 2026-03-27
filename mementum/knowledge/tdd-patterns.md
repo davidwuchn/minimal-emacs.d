@@ -124,7 +124,7 @@ emacs --batch -l tests/test-foo.el --eval "(ert-run-tests-batch-and-exit \"patte
 emacs --batch -l file.el
 
 # Test auto-workflow (creates optimize branch)
-emacsclient -e "(gptel-auto-workflow-run-sync)"
+emacsclient -e "(gptel-auto-workflow-run-async)"
 ```
 
 ### Symbol

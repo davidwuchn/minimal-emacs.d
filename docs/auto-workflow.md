@@ -950,10 +950,10 @@ Default targets are defined in `gptel-auto-workflow-targets`:
 
 ```elisp
 ;; From Emacs
-M-x gptel-auto-workflow-run-sync
+M-x gptel-auto-workflow-run
 
-;; From shell
-emacsclient -e '(gptel-auto-workflow-run-sync)'
+;; From shell (async - recommended)
+emacsclient -e '(gptel-auto-workflow-run-async)'
 ```
 
 ---
@@ -1015,7 +1015,7 @@ Install scheduled jobs for autonomous operation:
 
 | Schedule | Function | Purpose |
 |----------|----------|---------|
-| Daily 2:00 AM | `gptel-auto-workflow-run-sync` | Overnight optimization experiments |
+| Daily 2:00 AM | `gptel-auto-workflow-run-async--guarded` | Overnight optimization experiments |
 | Weekly Sun 4:00 AM | `gptel-mementum-weekly-job` | Synthesis + decay |
 | Weekly Sun 5:00 AM | `gptel-benchmark-instincts-weekly-job` | Evolution batch commit |
 

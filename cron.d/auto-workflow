@@ -9,6 +9,7 @@
 # Logs: var/tmp/cron/
 
 SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin
 
 # Ensure log directory exists
 @reboot mkdir -p $HOME/.emacs.d/var/tmp/cron
