@@ -74,3 +74,21 @@
 - **Worktrees**: 5 active (cache, change, code, sanitize, strategic)
 - **Next scheduled**: 15:00 (in progress)
 - **Cron**: 4 jobs installed, executing on schedule
+
+---
+
+## ai-code-behaviors + agent-shell Integration
+
+**Completed**: 2026-03-27
+
+| Feature | Status |
+|---------|--------|
+| Decorator handles alist prompt format | ✅ |
+| `@preset` → behavior injection | ✅ |
+| `#hashtag` completion | ✅ |
+| Hash table for `C-c P` inspection | ✅ |
+| Mode-line indicator | ✅ |
+
+**Key files**:
+- `packages/ai-code/ai-code-behaviors.el:3290` - `ai-code-agent-shell-request-decorator`
+- `lisp/init-ai.el:99-135` - agent-shell configuration
