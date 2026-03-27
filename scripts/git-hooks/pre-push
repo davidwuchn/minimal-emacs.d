@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# Pre-push hook: Verify submodule commits exist on remote before pushing.
-# Prevents broken submodule references when auto-workflow updates submodules.
+# Pre-push hook: Auto-push submodule updates before pushing parent.
+# Ensures submodule commits exist on remote before parent push.
 #
 
 set -e
@@ -37,34 +37,53 @@ while read local_ref local_sha remote_ref remote_sha; do
             new_commit=$(git ls-tree "$local_sha" "$submodule_path" 2>/dev/null | awk '{print $3}')
             
             if [[ -n "$new_commit" && "$old_commit" != "$new_commit" ]]; then
-                # Submodule is being updated, verify commit exists on remote
+                # Submodule is being updated
                 submodule_url=$(git config --file .gitmodules --get "submodule.$submodule_path.url")
                 
                 if [[ -n "$submodule_url" ]]; then
-                    # Try to fetch and verify the commit
                     cd "$submodule_path" 2>/dev/null || continue
                     
                     # Fetch from submodule remote
                     git fetch origin 2>/dev/null || true
                     
-                    # Check if commit exists on origin
+                    # Determine default branch
+                    default_branch="main"
                     if ! git rev-parse --verify "origin/main" >/dev/null 2>&1; then
-                        # Try origin/master
-                        if ! git rev-parse --verify "origin/master" >/dev/null 2>&1; then
-                            echo "ERROR: Cannot verify submodule $submodule_path - no origin/main or origin/master"
-                            cd - > /dev/null
-                            exit 1
+                        if git rev-parse --verify "origin/master" >/dev/null 2>&1; then
+                            default_branch="master"
                         fi
                     fi
                     
-                    # Check if the new commit is reachable from origin
-                    if ! git merge-base --is-ancestor "$new_commit" "origin/main" 2>/dev/null; then
-                        if ! git merge-base --is-ancestor "$new_commit" "origin/master" 2>/dev/null; then
+                    # Check if the new commit exists on remote
+                    if ! git merge-base --is-ancestor "$new_commit" "origin/$default_branch" 2>/dev/null; then
+                        # Commit doesn't exist on remote - need to push
+                        echo ""
+                        echo "Submodule $submodule_path has new commits not on remote."
+                        echo "Auto-pushing submodule to origin/$default_branch..."
+                        
+                        # Check if we have uncommitted changes in submodule
+                        if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+                            echo "  Stashing uncommitted changes..."
+                            git stash push -m "auto-stash by pre-push hook" 2>/dev/null || true
+                        fi
+                        
+                        # Push the submodule
+                        if git push origin "$default_branch" 2>&1; then
+                            echo "  ✓ Submodule pushed successfully"
+                        else
                             echo ""
-                            echo "ERROR: Submodule $submodule_path commit $new_commit does not exist on remote!"
-                            echo "       Run: cd $submodule_path && git push origin main"
-                            echo "       Then retry the push."
+                            echo "ERROR: Failed to push submodule $submodule_path"
+                            echo "       Please push manually: cd $submodule_path && git push origin $default_branch"
                             echo ""
+                            cd - > /dev/null
+                            exit 1
+                        fi
+                        
+                        # Verify push succeeded
+                        git fetch origin 2>/dev/null || true
+                        if ! git merge-base --is-ancestor "$new_commit" "origin/$default_branch" 2>/dev/null; then
+                            echo ""
+                            echo "ERROR: Submodule push verification failed"
                             cd - > /dev/null
                             exit 1
                         fi
