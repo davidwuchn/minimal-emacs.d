@@ -33,7 +33,7 @@ For each assertion in the eval:
 
 ## Output Format
 
-Write to `grading.json`:
+Write to `var/tmp/experiments/grading.json` (relative to project root):
 
 ```json
 {
