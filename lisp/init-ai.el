@@ -125,7 +125,12 @@
   ;; Keybinding for preset selection
   (define-key agent-shell-mode-map (kbd "C-c p") #'ai-code-behaviors-preset)
   ;; Keybinding to show injected context
-  (define-key agent-shell-mode-map (kbd "C-c P") #'ai-code-behaviors-show-last-prompt))
+  (define-key agent-shell-mode-map (kbd "C-c P") #'ai-code-behaviors-show-last-prompt)
+  ;; Fix corfu-auto-prefix for @ and # triggers
+  ;; agent-shell triggers completion on @ but corfu needs 2 chars by default
+  (add-hook 'agent-shell-mode-hook
+            (lambda ()
+              (setq-local corfu-auto-prefix 0))))
 
 (use-package agent-shell
   :ensure t
