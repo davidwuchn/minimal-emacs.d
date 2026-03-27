@@ -126,6 +126,8 @@
   (define-key agent-shell-mode-map (kbd "C-c p") #'ai-code-behaviors-preset)
   ;; Keybinding to show injected context
   (define-key agent-shell-mode-map (kbd "C-c P") #'ai-code-behaviors-show-last-prompt)
+  ;; Keybinding to toggle mode-line
+  (define-key agent-shell-mode-map (kbd "C-c L") #'ai-code-behaviors-mode-line-enable)
   ;; Fix corfu-auto-prefix for @ and # triggers
   ;; agent-shell triggers completion on @ but corfu needs 2 chars by default
   (add-hook 'agent-shell-mode-hook
