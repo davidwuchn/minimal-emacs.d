@@ -33,6 +33,7 @@ journalctl -u cron --since "today" | grep -E "davidwu|CMD"
 
 Shows cron commands with unexpanded variables.
 
-## File
+## Files
 
-`cron.d/auto-workflow-pi5`
+- `cron.d/auto-workflow-pi5` (Pi5)
+- `cron.d/auto-workflow` (macOS)
