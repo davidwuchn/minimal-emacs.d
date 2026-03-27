@@ -55,4 +55,10 @@ were created after the hiding but before restoration."
 ;; Run after all init is complete
 (add-hook 'emacs-startup-hook #'my/fix-mode-line-for-all-buffers 100)
 
+;; Start Emacs server so cron jobs connect to GUI Emacs
+;; This makes *Messages* visible instead of running a separate daemon
+(require 'server)
+(unless (server-running-p)
+  (server-start))
+
 ;;; post-init.el ends here
