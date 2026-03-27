@@ -76,10 +76,11 @@
 
 (use-package corfu
   :ensure t
-  :hook ((prog-mode . corfu-mode)
-         (text-mode . corfu-mode)
-         (shell-mode . corfu-mode)
-         (eshell-mode . corfu-mode))
+:hook ((prog-mode . corfu-mode)
+          (text-mode . corfu-mode)
+          (shell-mode . corfu-mode)
+          (eshell-mode . corfu-mode)
+          (agent-shell-mode . corfu-mode))
   :custom
   (corfu-auto t)
   (corfu-auto-delay 0.2)
