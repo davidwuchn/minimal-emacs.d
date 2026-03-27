@@ -1928,8 +1928,9 @@ See `gptel-auto-workflow-recent-input-minutes'."
   :type 'boolean
   :group 'gptel)
 
-(defcustom gptel-auto-workflow-recent-input-minutes 5
-  "Minutes of inactivity required before auto-workflow can run."
+(defcustom gptel-auto-workflow-recent-input-minutes 30
+  "Minutes of inactivity required before auto-workflow can run.
+Default 30 min covers lunch breaks and short meetings."
   :type 'integer
   :group 'gptel)
 
