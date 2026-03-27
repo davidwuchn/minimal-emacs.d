@@ -145,7 +145,10 @@
   ;; Disable auto-context injection
   (agent-shell-context-sources nil)
   ;; Context usage display
-  (agent-shell-show-context-usage-indicator 'detailed))
+  (agent-shell-show-context-usage-indicator 'detailed)
+  :config
+  ;; Enable ai-code-behaviors integration
+  (ai-code-behaviors-agent-shell-setup))
 
 ;; Load ECA security utilities
 (require 'eca-security)
