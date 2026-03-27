@@ -879,6 +879,38 @@ On Forgejo web UI:
 
 ---
 
+## Debugging Patterns
+
+### Transient Display Conflicts
+
+**Problem:** `force-mode-line-update` and other display operations cause deadlock when called during buffer initialization triggered from transient menus (e.g., `C-c a a`). Works fine with `M-x`.
+
+**Root Cause:** Transient controls window/buffer management and conflicts with synchronous display updates during initialization.
+
+**Solution Pattern:** Use event-based initialization:
+
+```elisp
+;; BAD: Synchronous hook causes deadlock
+(add-hook 'agent-shell-mode-hook #'my-display-update)
+
+;; GOOD: Event-based waits for initialization
+(add-hook 'agent-shell-mode-hook
+          (lambda ()
+            (agent-shell-subscribe-to
+             :shell-buffer (current-buffer)
+             :event 'prompt-ready  ; Shell ready for input
+             :on-event (lambda (_) (my-display-update)))))
+```
+
+**Key Insight:** Different entry points have different display constraints:
+- `M-x`: Normal Emacs state - display updates work
+- `C-c a a`: Transient active - display locked until transient exits
+- Solution: Defer display operations until after initialization completes
+
+**Evidence:** Fixed deadlock in ai-code-behaviors.el where mode-line update during agent-shell initialization via transient caused Emacs to freeze.
+
+---
+
 ## Scheduled Runs (Cron)
 
 ### Install Cron Job
@@ -1030,7 +1062,7 @@ Logs: `var/tmp/cron/*.log`
 
 ---
 
-**Document Version:** 1.9  
+**Document Version:** 1.10  
 **Last Updated:** 2026-03-27  
 **Release:** v2026.03.27  
-**Changes:** Added active-use protection, 30 min inactivity timeout, guarded cron entry point
+**Changes:** Added debugging patterns section with transient display conflict solution
