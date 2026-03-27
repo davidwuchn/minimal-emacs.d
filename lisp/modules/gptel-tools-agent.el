@@ -1909,12 +1909,32 @@ Tries multiple patterns in order:
 (defvar gptel-auto-workflow--current-target nil
   "Current target file being processed by auto-workflow.")
 
-(defcustom gptel-auto-workflow-quiet-hours nil
+(defun gptel-auto-workflow--headless-p ()
+  "Check if running on a headless server (Pi5, server, etc).
+Returns non-nil if this machine should run 24/7 background jobs."
+  (let ((host (downcase (system-name))))
+    (cond
+     ((string-match-p "pi5\\|raspberry\\|headless\\|server" host) t)
+     ((eq system-type 'darwin) nil)
+     (t nil))))
+
+(defun gptel-auto-workflow--default-quiet-hours ()
+  "Auto-detect quiet hours based on machine type.
+macOS (daily driver): Block 9AM-5PM work hours
+Pi5/headless: No quiet hours (run 24/7)"
+  (if (gptel-auto-workflow--headless-p)
+      nil
+    '(9 10 11 12 13 14 15 16 17)))
+
+(defvar gptel-auto-workflow-quiet-hours (gptel-auto-workflow--default-quiet-hours)
   "List of hours (0-23) when auto-workflow should NOT run.
-Useful to prevent runs during your typical work hours.
-Example: '(9 10 11 12 13 14 15 16 17) for 9AM-5PM"
-  :type '(repeat integer)
-  :group 'gptel)
+Auto-set based on machine type:
+- macOS (daily driver): '(9 10 11 12 13 14 15 16 17) (9AM-5PM)
+- Pi5/headless: nil (24/7 background worker)
+
+Override in your config:
+  (setq gptel-auto-workflow-quiet-hours nil)  ; Disable quiet hours
+  (setq gptel-auto-workflow-quiet-hours '(0 1 2 3 4 5))  ; Night only")
 
 (defcustom gptel-auto-workflow-skip-if-unsaved nil
   "If non-nil, skip auto-workflow when there are unsaved buffers.
