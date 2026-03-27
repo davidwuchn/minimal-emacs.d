@@ -9,10 +9,9 @@
 # Logs: var/tmp/cron/
 
 SHELL=/bin/bash
-LOGDIR=$HOME/.emacs.d/var/tmp/cron
 
 # Ensure log directory exists
-@reboot mkdir -p $LOGDIR
+@reboot mkdir -p $HOME/.emacs.d/var/tmp/cron
 
 # ─────────────────────────────────────────────────────────────
 # Auto-Workflow: Overnight optimization experiments
@@ -34,18 +33,18 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 #   11PM, 3AM, 7AM, 11AM, 3PM, 7PM
 #
 # Total: 9 runs/day across both machines
-0 10,14,18 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
+0 10,14,18 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 
 # Alternative schedules (uncomment to use):
 
 # Every 6 hours (includes business hours - not recommended)
-# 0 */6 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
+# 0 */6 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 
 # Night only (1 AM, 3 AM, 5 AM)
-# 0 1,3,5 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
+# 0 1,3,5 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 
 # Daily at 2 AM (conservative)
-# 0 2 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $LOGDIR/auto-workflow.log 2>&1
+# 0 2 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
 # Periodic Researcher: Code pattern analysis
@@ -55,7 +54,7 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 # Findings cached in var/tmp/research-findings.md for analyzer
 # This is separate from auto-workflow (can run independently)
 
-0 */4 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $LOGDIR/researcher.log 2>&1
+0 */4 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
 # Weekly Mementum: Synthesis + Decay
@@ -63,7 +62,7 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 
 # Run weekly synthesis every Sunday at 4 AM
 # Converts ≥3 memories into knowledge pages
-0 4 * * 0 emacsclient -e '(gptel-mementum-weekly-job)' >> $LOGDIR/mementum.log 2>&1
+0 4 * * 0 emacsclient -e '(gptel-mementum-weekly-job)' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
 # Weekly Instincts: Evolution batch commit
@@ -71,4 +70,4 @@ LOGDIR=$HOME/.emacs.d/var/tmp/cron
 
 # Run weekly instincts evolution every Sunday at 5 AM
 # Commits Eight Keys updates and applies decay to mementum/knowledge/
-0 5 * * 0 emacsclient -e '(gptel-benchmark-instincts-weekly-job)' >> $LOGDIR/instincts.log 2>&1
+0 5 * * 0 emacsclient -e '(gptel-benchmark-instincts-weekly-job)' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
