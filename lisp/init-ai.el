@@ -123,7 +123,9 @@
   (define-key agent-shell-mode-map (kbd "C-c m") #'agent-shell-set-session-mode)
   (define-key agent-shell-mode-map (kbd "C-c M") #'agent-shell-cycle-session-mode)
   ;; Keybinding for preset selection
-  (define-key agent-shell-mode-map (kbd "C-c P") #'ai-code-behaviors-preset))
+  (define-key agent-shell-mode-map (kbd "C-c p") #'ai-code-behaviors-preset)
+  ;; Keybinding to show injected context
+  (define-key agent-shell-mode-map (kbd "C-c P") #'ai-code-behaviors-show-last-prompt))
 
 (use-package agent-shell
   :ensure t
