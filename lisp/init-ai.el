@@ -93,7 +93,7 @@
   :bind ("C-c a" . ai-code-menu)
   :config
   (require 'ai-code-eca)
-  (ai-code-set-backend 'eca)
+  (ai-code-set-backend 'agent-shell)
   (advice-add 'ai-code-call-gptel-sync :around #'my/ai-code--ensure-gptel-helper-model))
 
 (use-package buttercup
