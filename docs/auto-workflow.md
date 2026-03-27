@@ -288,6 +288,30 @@ Stops when:
 | `gptel-auto-experiment-use-subagents` | t | Use analyzer/grader/comparator |
 | `my/gptel-agent-task-timeout` | 300s | Timeout for executor/reviewer subagents |
 
+### Active-Use Protection
+
+Auto-workflow skips when Emacs is in active use:
+
+| Check | Default | Config |
+|-------|---------|--------|
+| Unsaved buffers | nil | `gptel-auto-workflow-skip-if-unsaved` |
+| Recent input (< 30 min) | t | `gptel-auto-workflow-skip-if-recent-input` |
+| Quiet hours | nil | `gptel-auto-workflow-quiet-hours` |
+
+**Why these defaults:**
+- Unsaved buffers are normal when using Emacs
+- 30 min covers lunch breaks, short meetings
+- Quiet hours configurable per user schedule
+
+**Customize:**
+```elisp
+;; Require 1 hour inactivity
+(setq gptel-auto-workflow-recent-input-minutes 60)
+
+;; Block work hours (9 AM - 5 PM)
+(setq gptel-auto-workflow-quiet-hours '(9 10 11 12 13 14 15 16 17))
+```
+
 ## Usage
 
 ### Cron (Scheduled)
@@ -297,8 +321,10 @@ Stops when:
 crontab cron.d/auto-workflow
 
 # Cron command (with -a '' to start daemon if needed)
-emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))'
+emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async--guarded))'
 ```
+
+**Note:** Uses `gptel-auto-workflow-run-async--guarded` which skips when Emacs is in active use.
 
 **Schedule:**
 - **macOS**: 10:00 AM, 2:00 PM, 6:00 PM (daylight hours)
@@ -334,8 +360,10 @@ git cherry-pick <sha>
 | Function | Purpose |
 |----------|---------|
 | `gptel-auto-workflow-run-async` | Main entry point (async, non-blocking) |
+| `gptel-auto-workflow-run-async--guarded` | Entry for cron (skips if active use) |
 | `gptel-auto-workflow-status` | Check current workflow status |
 | `gptel-auto-workflow-log` | Get recent log entries |
+| `gptel-auto-workflow--active-use-p` | Check if Emacs is in active use |
 | `gptel-auto-experiment-loop` | Per-target experiment loop with dynamic stop |
 | `gptel-auto-experiment-run` | Single experiment with full subagent pipeline |
 | `gptel-auto-experiment-analyze` | Pattern detection from previous experiments |
@@ -1002,7 +1030,7 @@ Logs: `var/tmp/cron/*.log`
 
 ---
 
-**Document Version:** 1.8  
+**Document Version:** 1.9  
 **Last Updated:** 2026-03-27  
 **Release:** v2026.03.27  
-**Changes:** Updated for async workflow, multi-machine cron setup, $HOME path fix, subagent timeout (300s)
+**Changes:** Added active-use protection, 30 min inactivity timeout, guarded cron entry point
