@@ -1,40 +1,40 @@
 # Mementum State
 
-> Last session: 2026-03-27 15:05
+> Last session: 2026-03-28 00:30
 
-## Total Improvements: 100+ Real Code Fixes
+## Total Improvements: 110+ Real Code Fixes
 
-351 commits since March 25, 2026.
+456 commits since March 25, 2026.
 
 ### Recent Fixes (Last 25)
 
 | # | File | Fix |
 |---|------|-----|
-| 100 | gptel-ext-context-cache.el | Fix redundant buffer-file-name call |
-| 99 | gptel-tools-code.el | Fix LSP backend lookup in find-usages |
-| 98 | gptel-ext-tool-sanitize.el | Fix gptel-get-tool called without arguments |
-| 97 | gptel-tools-agent.el | Hostname-based worktree cleanup |
-| 96 | gptel-tools-agent.el | Simplify: remove ALL old worktrees |
-| 95 | scripts/setup-packages.sh | Add --force and --clean options |
-| 94 | post-init.el | Add server-start for GUI Emacs |
-| 93 | gptel-tools-agent.el | Simplify headless detection (OS type) |
-| 92 | gptel-tools-agent.el | Auto-detect quiet hours based on OS |
-| 91 | gptel-tools-agent.el | Default inactivity timeout 30 min |
-| 90 | cron.d/auto-workflow* | Use $HOME instead of $LOGDIR |
-| 89 | ai-code | Cons cell validation in cache-get |
-| 88 | gptel-auto-workflow-strategic.el | Extract target parsing helpers |
-| 87 | gptel-workflow-benchmark.el | Fix P1 phase detection |
-| 86 | gptel-ext-context.el | Use buffer-size for accurate chars-after |
-| 85 | gptel-ext-retry.el | Eliminate list conversion overhead |
-| 84 | gptel-tools-agent.el | Temp file cleanup in deliver-subagent-result |
-| 83 | gptel-tools-agent.el | Extract response normalization helper |
-| 82 | gptel-tools-code.el | Symbol-name validation in find-usages |
-| 81 | gptel-ext-context-cache.el | Eliminate redundant model-id computation |
-| 80 | gptel-tools-agent.el | Unicode sanitization in log |
-| 79 | gptel-tools-code.el | Fix LSP retry logic |
-| 78 | gptel-tools-agent.el | Use setf for plist modification |
-| 77 | gptel-ext-core.el | Extract char validation helper |
-| 76 | gptel-ext-context-cache.el | Error handling for make-process |
+| 110 | init-ai.el | C-c L keybinding for mode-line toggle |
+| 109 | init-ai.el | agent-shell as default backend |
+| 108 | init-ai.el | C-c P preset selection for agent-shell |
+| 107 | init-ai.el | C-c P to show injected context |
+| 106 | gptel-tools-agent.el | Fix workflow hang: 600s subagent timeout |
+| 105 | gptel-tools-agent.el | Worktree cleanup: hostname-based |
+| 104 | scripts/git-hooks/pre-push | Auto-push submodules before parent |
+| 103 | scripts/install-git-hooks.sh | Auto-install hooks |
+| 102 | gptel-ext-context-cache.el | Fix redundant buffer-file-name call |
+| 101 | gptel-tools-code.el | Fix LSP backend lookup in find-usages |
+| 100 | gptel-ext-tool-sanitize.el | Fix gptel-get-tool called without arguments |
+| 99 | gptel-tools-agent.el | Hostname-based worktree cleanup |
+| 98 | gptel-tools-agent.el | Simplify: remove ALL old worktrees |
+| 97 | scripts/setup-packages.sh | Add --force and --clean options |
+| 96 | post-init.el | Add server-start for GUI Emacs |
+| 95 | gptel-tools-agent.el | Simplify headless detection (OS type) |
+| 94 | gptel-tools-agent.el | Auto-detect quiet hours based on OS |
+| 93 | gptel-tools-agent.el | Default inactivity timeout 30 min |
+| 92 | cron.d/auto-workflow* | Use $HOME instead of $LOGDIR |
+| 91 | ai-code | Cons cell validation in cache-get |
+| 90 | gptel-auto-workflow-strategic.el | Extract target parsing helpers |
+| 89 | gptel-workflow-benchmark.el | Fix P1 phase detection |
+| 88 | gptel-ext-context.el | Use buffer-size for accurate chars-after |
+| 87 | gptel-ext-retry.el | Eliminate list conversion overhead |
+| 86 | gptel-tools-agent.el | Temp file cleanup in deliver-subagent-result |
 
 ---
 
@@ -44,7 +44,7 @@
 λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7 Linux)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 100+ code fixes, 351 commits since Mar 25
+λ real. 110+ code fixes, 456 commits since Mar 25
 λ reviewer. qwen3-coder-next on DashScope (no thinking mode)
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
@@ -63,17 +63,20 @@
 λ server-start. GUI Emacs acts as server for cron jobs
 λ worktree-cleanup. Hostname-based, clean ALL at run start
 λ experiment-suffix. Derived from (system-name) for multi-machine
+λ subagent-timeout. 600s default prevents workflow hang
+λ pre-push-hook. Auto-push submodules before parent
 ```
 
 ---
 
 ## Current Status
 
-- **Main branch**: `31e70ca`
-- **Workflow**: Running (5 targets)
-- **Worktrees**: 5 active (cache, change, code, sanitize, strategic)
-- **Next scheduled**: 15:00 (in progress)
-- **Cron**: 4 jobs installed, executing on schedule
+- **Main branch**: `2513adf`
+- **Workflow**: Idle
+- **Worktrees**: 0 (clean)
+- **Emacs daemon**: 1 running (PID 2034159)
+- **Next scheduled**: 03:00
+- **Cron**: 4 jobs installed
 
 ---
 
@@ -88,7 +91,9 @@
 | `#hashtag` completion | ✅ |
 | Hash table for `C-c P` inspection | ✅ |
 | Mode-line indicator | ✅ |
+| C-c L mode-line toggle | ✅ |
+| agent-shell as default backend | ✅ |
 
 **Key files**:
-- `packages/ai-code/ai-code-behaviors.el:3290` - `ai-code-agent-shell-request-decorator`
-- `lisp/init-ai.el:99-135` - agent-shell configuration
+- `packages/ai-code/ai-code-behaviors.el` - behavior injection
+- `lisp/init-ai.el` - agent-shell configuration
