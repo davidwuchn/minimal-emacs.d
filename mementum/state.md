@@ -1,15 +1,17 @@
 # Mementum State
 
-> Last session: 2026-03-26 23:30
+> Last session: 2026-03-27 10:15
 
-## Total Improvements: 88+ Real Code Fixes
+## Total Improvements: 90+ Real Code Fixes
 
-252 commits since March 25, 2026.
+379 commits since March 25, 2026.
 
 ### Recent Fixes (Last 25)
 
 | # | File | Fix |
 |---|------|-----|
+| 90 | cron.d/auto-workflow* | Use $HOME instead of $LOGDIR |
+| 89 | ai-code | Cons cell validation in cache-get |
 | 88 | gptel-auto-workflow-strategic.el | Extract target parsing helpers |
 | 87 | gptel-workflow-benchmark.el | Fix P1 phase detection |
 | 86 | gptel-ext-context.el | Use buffer-size for accurate chars-after |
@@ -33,8 +35,6 @@
 | 68 | eca-security.el | Fix temp directory path |
 | 67 | gptel-ext-context-cache.el | Replace regex with string-prefix-p |
 | 66 | gptel-auto-workflow-strategic.el | Extract validation logic into helper |
-| 65 | gptel-auto-workflow-strategic.el | Validate-and-add-target returns nil |
-| 64 | gptel-auto-workflow-strategic.el | Remove extra closing paren |
 
 ---
 
@@ -44,7 +44,7 @@
 λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7 Linux)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 88+ code fixes, 252 commits since Mar 25
+λ real. 90+ code fixes, 379 commits since Mar 25
 λ reviewer. qwen3-coder-next on DashScope (no thinking mode)
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
@@ -57,4 +57,5 @@
 λ daemon. systemctl --user restart emacs (NOT pkill)
 λ string-prefix. Replace regex with string-prefix-p for partial match
 λ buffer-size. Use buffer-size for accurate chars-after measurement
+λ cron. Use $HOME directly, not $LOGDIR variable
 ```
