@@ -71,7 +71,11 @@
 ;; VC-installed packages need manual load-path addition
 (let ((ai-code-dir (expand-file-name "packages/ai-code" minimal-emacs-user-directory)))
   (when (file-directory-p ai-code-dir)
-    (add-to-list 'load-path ai-code-dir)))
+    (add-to-list 'load-path ai-code-dir)
+    ;; Load autoloads
+    (let ((autoloads (expand-file-name "ai-code-autoloads.el" ai-code-dir)))
+      (when (file-exists-p autoloads)
+        (load autoloads nil t)))))
 
 (use-package ai-code
   :ensure nil
