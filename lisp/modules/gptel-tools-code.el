@@ -459,6 +459,21 @@ the tool to suggest as alternative."
   (format "Error: No tree-sitter parser active for %s\n\nACTION:\n  1. Install parser: M-x treesit-install-language-grammar RET %s RET\n  2. Reopen file: C-x C-k (kill-buffer) then C-x C-f %s\n  3. Verify: M-x eval-expression RET (treesit-language-available-p '%s) RET\n  4. Fallback: Use %s"
           file-path (or lang "language") file-path (or lang "language") action-fallback))
 
+(defun gptel-tools-code--validate-replace-args (file-path node-name new-code)
+  "Validate arguments for Code_Replace operation.
+Signals an error if any argument is nil or invalid.
+FILE-PATH, NODE-NAME, and NEW-CODE must all be non-nil strings.
+NEW-CODE must also be non-empty."
+  (cond
+   ((not file-path)
+    (error "gptel-tools-code--replace-node: file_path is nil"))
+   ((not node-name)
+    (error "gptel-tools-code--replace-node: node_name is nil"))
+   ((not new-code)
+    (error "gptel-tools-code--replace-node: new_code is nil"))
+   ((string-empty-p new-code)
+    (error "gptel-tools-code--replace-node: new_code is empty"))))
+
 (defun gptel-tools-code--map-file (file_path)
   "Get a high-level outline of all functions and classes in FILE_PATH.
 Returns a formatted string with the file map, or an error message."
@@ -512,15 +527,7 @@ When FILE_PATH is nil, searches the entire project workspace."
 (defun gptel-tools-code--replace-node (file_path node_name new_code)
   "Surgically replace NODE_NAME in FILE_PATH with NEW_CODE.
 Syncs buffer with disk, validates parser, guards against truncation."
-  (cond
-   ((not file_path)
-    (error "gptel-tools-code--replace-node: file_path is nil"))
-   ((not node_name)
-    (error "gptel-tools-code--replace-node: node_name is nil"))
-   ((not new_code)
-    (error "gptel-tools-code--replace-node: new_code is nil"))
-   ((string-empty-p new_code)
-    (error "gptel-tools-code--replace-node: new_code is empty")))
+  (gptel-tools-code--validate-replace-args file_path node_name new_code)
   (condition-case err
       (with-timeout (5 (format "Error: Code_Replace timed out on %s" file_path))
         (with-current-buffer (find-file-noselect file_path)
