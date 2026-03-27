@@ -1917,21 +1917,21 @@ Detection: macOS (darwin) = user machine, Linux = headless."
 
 (defun gptel-auto-workflow--default-quiet-hours ()
   "Auto-detect quiet hours based on OS.
-macOS (darwin): Block 9AM-5PM work hours
-Linux (Pi5, servers): No quiet hours (24/7 background worker)"
-  (if (gptel-auto-workflow--headless-p)
-      nil
-    '(9 10 11 12 13 14 15 16 17)))
+Returns nil for all systems - rely on 30-min inactivity check instead.
+This allows cron-scheduled runs while still protecting active use.
+
+Users can override in their config if needed."
+  nil)
 
 (defvar gptel-auto-workflow-quiet-hours (gptel-auto-workflow--default-quiet-hours)
   "List of hours (0-23) when auto-workflow should NOT run.
-Auto-set based on OS:
-- macOS (darwin): '(9 10 11 12 13 14 15 16 17) (9AM-5PM)
-- Linux (Pi5, servers): nil (24/7 background worker)
+Default is nil for all systems - we rely on:
+  - 30-min inactivity check (gptel-auto-workflow-skip-if-recent-input)
+  - Cron schedule (macOS: 10AM,2PM,6PM; Pi5: every 4h)
 
 Override in your config:
-  (setq gptel-auto-workflow-quiet-hours nil)  ; Disable quiet hours
-  (setq gptel-auto-workflow-quiet-hours '(0 1 2 3 4 5))  ; Night only")
+  (setq gptel-auto-workflow-quiet-hours '(9 10 11 12 13 14 15 16 17))  ; Work hours
+  (setq gptel-auto-workflow-quiet-hours '(0 1 2 3 4 5 6))  ; Night only")
 
 (defcustom gptel-auto-workflow-skip-if-unsaved nil
   "If non-nil, skip auto-workflow when there are unsaved buffers.
