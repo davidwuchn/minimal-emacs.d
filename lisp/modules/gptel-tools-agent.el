@@ -2098,25 +2098,18 @@ Works across macOS and Linux."
      (t "unknown"))))
 
 (defun gptel-auto-workflow--cleanup-old-worktrees ()
-  "Remove old optimize worktrees and their branches.
-Keeps the last 3 most recent, removes older ones.
-Works across different machines (macOS, Linux, etc)."
+  "Remove ALL optimize worktrees and their branches from previous runs.
+Called at start of new run to ensure clean state."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (worktree-base (expand-file-name
                          gptel-auto-workflow-worktree-base proj-root))
          (optimize-dir (expand-file-name "optimize" worktree-base))
          (suffix (gptel-auto-workflow--experiment-suffix))
          (pattern (concat suffix "-exp"))
-         (kept 3)
          (removed 0))
     (when (file-exists-p optimize-dir)
-      (let* ((dirs (directory-files optimize-dir t pattern))
-             (sorted (sort dirs (lambda (a b)
-                                   (time-less-p
-                                    (nth 5 (file-attributes b))
-                                    (nth 5 (file-attributes a))))))
-             (to-remove (nthcdr kept sorted)))
-        (dolist (dir to-remove)
+      (let ((dirs (directory-files optimize-dir t pattern)))
+        (dolist (dir dirs)
           (when (file-exists-p dir)
             (let ((dirname (file-name-nondirectory dir)))
               (condition-case err
