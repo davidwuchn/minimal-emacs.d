@@ -96,6 +96,41 @@
   :ensure t
   :defer t)
 
+;;; ==============================================================================
+;;; AGENT-SHELL (OpenCode backend)
+;;; ==============================================================================
+
+;; Ensure Unicode symbols render (busy indicators, icons)
+(set-fontset-font t 'unicode "DejaVuSansM Nerd Font" nil 'prepend)
+
+(use-package agent-shell
+  :ensure t
+  :defer t
+  :custom
+  ;; OpenCode as default backend, latest session
+  (agent-shell-preferred-agent-config 'opencode)
+  (agent-shell-session-strategy 'latest)
+  (agent-shell-opencode-authentication
+   (agent-shell-opencode-make-authentication :none t))
+  ;; Default model for new sessions (when no existing session)
+  (agent-shell-opencode-default-model-id "alibaba-coding-plan-cn/glm-5")
+  ;; UI styling
+  (agent-shell-header-style 'text)
+  (agent-shell-show-config-icons t)
+  (agent-shell-show-busy-indicator t)
+  (agent-shell-busy-indicator-frames 'wave)
+  (agent-shell-highlight-blocks t)
+  (agent-shell-thought-process-expand-by-default nil)
+  (agent-shell-tool-use-expand-by-default nil)
+  (agent-shell-user-message-expand-by-default nil)
+  ;; Use background tint style for status labels
+  (agent-shell-status-kind-label-function
+   #'agent-shell--background-tint-status-kind-label)
+  ;; Disable auto-context injection
+  (agent-shell-context-sources nil)
+  ;; Context usage display
+  (agent-shell-show-context-usage-indicator 'detailed))
+
 ;; Load ECA security utilities
 (require 'eca-security)
 
