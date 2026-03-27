@@ -78,13 +78,18 @@ gptel-auto-workflow-research-before-fix   ; default nil
 
 ## Entry Points
 
-```elisp
-;; Cron: 2 AM daily (recommended)
+```bash
+# Install cron jobs (macOS: 10AM, 2PM, 6PM; Pi5: 11PM, 3AM, 7AM, 11AM, 3PM, 7PM)
 crontab cron.d/auto-workflow
 
-;; Manual run
-M-x gptel-auto-workflow-run-sync
+# Manual run (starts daemon if needed)
+emacsclient -a '' -e '(gptel-auto-workflow-run-async)'
+
+# Or from Emacs
+M-x gptel-auto-workflow-run-async
 ```
+
+**Note:** Uses `-a ''` flag to start Emacs daemon automatically if not running.
 
 ## Architecture
 
@@ -281,25 +286,31 @@ Stops when:
 | `gptel-auto-experiment-max-per-target` | 10 | Max experiments per file |
 | `gptel-auto-experiment-no-improvement-threshold` | 3 | Stop after N no-improvements |
 | `gptel-auto-experiment-use-subagents` | t | Use analyzer/grader/comparator |
+| `my/gptel-agent-task-timeout` | 300s | Timeout for executor/reviewer subagents |
 
 ## Usage
 
 ### Cron (Scheduled)
 
 ```bash
-# 2 AM daily (use -sync version for cron)
-emacsclient -e '(gptel-auto-workflow-run-sync)'
+# Install cron jobs
+crontab cron.d/auto-workflow
+
+# Cron command (with -a '' to start daemon if needed)
+emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))'
 ```
 
-**Important:** Use `gptel-auto-workflow-run-sync` (not `-run`) for cron. The sync version blocks until all experiments complete, keeping the event loop alive with `accept-process-output`.
+**Schedule:**
+- **macOS**: 10:00 AM, 2:00 PM, 6:00 PM (daylight hours)
+- **Pi5**: 11 PM, 3 AM, 7 AM, 11 AM, 3 PM, 7 PM (24/7)
 
 ### Manual
 
 ```elisp
-M-x gptel-auto-workflow-run-sync
+M-x gptel-auto-workflow-run-async
 
-;; Or programmatically
-(gptel-auto-workflow-run-sync '("gptel-ext-retry.el"))
+;; Or from shell (starts daemon if needed)
+emacsclient -a '' -e '(gptel-auto-workflow-run-async)'
 ```
 
 ### Morning Review
@@ -322,8 +333,9 @@ git cherry-pick <sha>
 
 | Function | Purpose |
 |----------|---------|
-| `gptel-auto-workflow-run-sync` | Main entry for cron (~32 experiments/night), blocks until complete |
-| `gptel-auto-workflow-run` | Async entry for interactive use |
+| `gptel-auto-workflow-run-async` | Main entry point (async, non-blocking) |
+| `gptel-auto-workflow-status` | Check current workflow status |
+| `gptel-auto-workflow-log` | Get recent log entries |
 | `gptel-auto-experiment-loop` | Per-target experiment loop with dynamic stop |
 | `gptel-auto-experiment-run` | Single experiment with full subagent pipeline |
 | `gptel-auto-experiment-analyze` | Pattern detection from previous experiments |
@@ -846,70 +858,52 @@ On Forgejo web UI:
 ```bash
 # Install the provided cron configuration
 crontab cron.d/auto-workflow
-
-# Or manually add to your crontab
-crontab -e
-# Add: 0 2 * * * emacsclient -e '(gptel-auto-workflow-run)'
 ```
 
-### Default Schedule
+### Schedule
 
-The default cron job runs nightly at 2 AM:
+**Multi-machine parallel setup:**
 
-```
-0 2 * * * emacsclient -e '(gptel-auto-workflow-run-sync)'
-```
+| Machine | Schedule | Purpose |
+|---------|----------|---------|
+| macOS | 10:00 AM, 2:00 PM, 6:00 PM | Daylight hours |
+| Pi5 | 11 PM, 3 AM, 7 AM, 11 AM, 3 PM, 7 PM | 24/7 |
 
-### Custom Schedules
+**Total: 9 runs/day across both machines**
 
-Edit `cron.d/auto-workflow` to customize:
+### Cron Format
 
 ```cron
-# Every night at 2:30 AM
-30 2 * * * emacsclient -e '(gptel-auto-workflow-run-sync)'
+# macOS (this machine)
+0 10,14,18 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 
-# Every Sunday at 3 AM (weekly instead of daily)
-0 3 * * 0 emacsclient -e '(gptel-auto-workflow-run-sync)'
-
-# Every 6 hours
-0 */6 * * * emacsclient -e '(gptel-auto-workflow-run-sync)'
+# Researcher (every 4 hours)
+0 */4 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
 ```
 
-### Specific Targets at Different Times
-
-```cron
-# Run specific targets at staggered times
-0 2 * * * emacsclient -e '(gptel-auto-workflow-run-sync (quote ("gptel-ext-retry.el")))'
-30 2 * * * emacsclient -e '(gptel-auto-workflow-run-sync (quote ("gptel-ext-context.el")))'
-0 3 * * * emacsclient -e '(gptel-auto-workflow-run-sync (quote ("gptel-tools-code.el")))'
-```
+**Note:** Uses `$HOME` (not `$LOGDIR`) for proper variable expansion in cron.
 
 ### Prerequisites
 
-1. **Emacs daemon must be running:**
-   ```bash
-   emacs --daemon
-   ```
+1. **Emacs daemon auto-start:** The `-a ''` flag starts daemon automatically if not running.
 
-2. **Or start daemon in cron:**
+2. **Or start daemon at boot:**
    ```cron
    @reboot emacs --daemon
-   0 2 * * * emacsclient -e '(gptel-auto-workflow-run-sync)'
    ```
-
-**Note:** Always use `gptel-auto-workflow-run-sync` for cron. The `-sync` version uses `accept-process-output` to keep the event loop alive until experiments complete.
 
 ### Logs
 
 Cron output is logged to:
 
 ```
-var/tmp/cron/auto-workflow.log
+$HOME/.emacs.d/var/tmp/cron/auto-workflow.log
+$HOME/.emacs.d/var/tmp/cron/researcher.log
 ```
 
 View logs:
 ```bash
-tail -f var/tmp/cron/auto-workflow.log
+tail -f $HOME/.emacs.d/var/tmp/cron/auto-workflow.log
 ```
 
 ### Configure Targets
@@ -1008,7 +1002,7 @@ Logs: `var/tmp/cron/*.log`
 
 ---
 
-**Document Version:** 1.7  
-**Last Updated:** 2026-03-25  
-**Release:** v2026.03.25  
-**Changes:** Updated for sync version (cron compatibility), 50/50 comparator weights, relaxed grader criteria
+**Document Version:** 1.8  
+**Last Updated:** 2026-03-27  
+**Release:** v2026.03.27  
+**Changes:** Updated for async workflow, multi-machine cron setup, $HOME path fix, subagent timeout (300s)
