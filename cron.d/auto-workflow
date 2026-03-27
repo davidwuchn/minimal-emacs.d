@@ -26,6 +26,12 @@ SHELL=/bin/bash
 # IMPORTANT: Runs async - daemon stays responsive
 # Check status: emacsclient -e '(gptel-auto-workflow-status)'
 #
+# ACTIVE-USE PROTECTION:
+#   - Skips if unsaved buffers exist
+#   - Skips if user input within last 5 minutes
+#   - Skips if magit buffers are open
+#   - Configure via gptel-auto-workflow-skip-if-* variables
+#
 # This machine (macOS): Daylight hours when user is active
 #   10:00 AM, 2:00 PM, 6:00 PM
 #
@@ -33,18 +39,18 @@ SHELL=/bin/bash
 #   11PM, 3AM, 7AM, 11AM, 3PM, 7PM
 #
 # Total: 9 runs/day across both machines
-0 10,14,18 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+0 10,14,18 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async--guarded))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 
 # Alternative schedules (uncomment to use):
 
 # Every 6 hours (includes business hours - not recommended)
-# 0 */6 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+# 0 */6 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async--guarded))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 
 # Night only (1 AM, 3 AM, 5 AM)
-# 0 1,3,5 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+# 0 1,3,5 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async--guarded))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 
 # Daily at 2 AM (conservative)
-# 0 2 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+# 0 2 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async--guarded))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
 # Periodic Researcher: Code pattern analysis

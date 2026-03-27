@@ -1909,6 +1909,56 @@ Tries multiple patterns in order:
 (defvar gptel-auto-workflow--current-target nil
   "Current target file being processed by auto-workflow.")
 
+(defcustom gptel-auto-workflow-quiet-hours nil
+  "List of hours (0-23) when auto-workflow should NOT run.
+Useful to prevent runs during your typical work hours.
+Example: '(9 10 11 12 13 14 15 16 17) for 9AM-5PM"
+  :type '(repeat integer)
+  :group 'gptel)
+
+(defcustom gptel-auto-workflow-skip-if-unsaved t
+  "If non-nil, skip auto-workflow when there are unsaved buffers."
+  :type 'boolean
+  :group 'gptel)
+
+(defcustom gptel-auto-workflow-skip-if-recent-input t
+  "If non-nil, skip when user has typed within last N minutes.
+See `gptel-auto-workflow-recent-input-minutes'."
+  :type 'boolean
+  :group 'gptel)
+
+(defcustom gptel-auto-workflow-recent-input-minutes 5
+  "Minutes of inactivity required before auto-workflow can run."
+  :type 'integer
+  :group 'gptel)
+
+(defun gptel-auto-workflow--active-use-p ()
+  "Check if Emacs is being actively used.
+Returns cons cell (REASONS . REASONS) where REASONS is a list
+of strings describing why workflow should skip.
+Returns (nil . nil) if safe to run."
+  (let ((reasons '()))
+    (when gptel-auto-workflow-skip-if-unsaved
+      (let ((unsaved (cl-remove-if-not
+                      (lambda (buf)
+                        (and (buffer-file-name buf)
+                             (buffer-modified-p buf)))
+                      (buffer-list))))
+        (when (and unsaved (> (length unsaved) 0))
+          (push (format "%d unsaved buffers" (length unsaved)) reasons))))
+    (when (and gptel-auto-workflow-skip-if-recent-input
+               (boundp 'last-command-event-time)
+               last-command-event-time)
+      (let* ((last-input-seconds (float-time (time-subtract nil last-command-event-time)))
+             (last-input-minutes (/ last-input-seconds 60.0)))
+        (when (< last-input-minutes gptel-auto-workflow-recent-input-minutes)
+          (push (format "recent input (%.1f min ago)" last-input-minutes) reasons))))
+    (when gptel-auto-workflow-quiet-hours
+      (let ((current-hour (string-to-number (format-time-string "%H"))))
+        (when (memq current-hour gptel-auto-workflow-quiet-hours)
+          (push (format "quiet hours (hour %d)" current-hour) reasons))))
+    (cons reasons reasons)))
+
 (defun gptel-auto-workflow-status ()
   "Return current workflow status as plist.
 Returns (:running :kept :total :phase :results)."
@@ -1954,19 +2004,13 @@ Safe for external tools - contains only [auto-] and [nucleus] messages."
 (declare-function gptel-auto-workflow-select-targets "gptel-auto-workflow-strategic")
 
 (defun gptel-auto-workflow-run-async (&optional targets completion-callback)
-  "Run auto-workflow asynchronously.
+  "Run auto-workflow asynchronously with TARGETS.
 Non-blocking - returns immediately, check status with `gptel-auto-workflow-status'.
-
-TARGETS: When nil, LLM selects best targets dynamically.
-         When non-nil, use provided targets directly.
-
-Each target runs up to gptel-auto-experiment-max-per-target experiments.
-Stops early if gptel-auto-experiment-no-improvement-threshold consecutive
-experiments show no improvement.
-
-Results logged to var/tmp/experiments/{date}/results.tsv
-
+TARGETS defaults to `gptel-auto-workflow-targets'.
 COMPLETION-CALLBACK is called with results when all targets are done.
+
+Skips if Emacs is in active use (unsaved buffers, recent input, etc.).
+Check `gptel-auto-workflow--active-use-p' for details.
 
 Usage:
   emacsclient -e '(gptel-auto-workflow-run-async)'
@@ -1975,6 +2019,10 @@ Usage:
   (interactive)
   (when gptel-auto-workflow--running
     (error "[auto-workflow] Already running. Check status first."))
+  (let ((active (gptel-auto-workflow--active-use-p)))
+    (when (car active)
+      (message "[auto-workflow] Skipping: %s" (string-join (car active) ", "))
+      (cl-return-from gptel-auto-workflow-run-async nil)))
   (unless (require 'magit-worktree nil t)
     (user-error "magit-worktree is required"))
   (unless (require 'magit-git nil t)
@@ -1987,6 +2035,18 @@ Usage:
     (gptel-auto-workflow-select-targets
      (lambda (selected-targets)
        (gptel-auto-workflow--run-with-targets selected-targets completion-callback)))))
+
+(defun gptel-auto-workflow-run-async--guarded (&optional targets completion-callback)
+  "Run auto-workflow with active-use guard using catch/throw.
+Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
+  (catch 'skip-workflow
+    (when gptel-auto-workflow--running
+      (error "[auto-workflow] Already running. Check status first."))
+    (let ((active (gptel-auto-workflow--active-use-p)))
+      (when (car active)
+        (message "[auto-workflow] Skipping: %s" (string-join (car active) ", "))
+        (throw 'skip-workflow nil)))
+    (gptel-auto-workflow-run-async targets completion-callback)))
 
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
   "Run experiments for TARGETS asynchronously."
