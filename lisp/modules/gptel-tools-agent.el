@@ -1916,8 +1916,9 @@ Example: '(9 10 11 12 13 14 15 16 17) for 9AM-5PM"
   :type '(repeat integer)
   :group 'gptel)
 
-(defcustom gptel-auto-workflow-skip-if-unsaved t
-  "If non-nil, skip auto-workflow when there are unsaved buffers."
+(defcustom gptel-auto-workflow-skip-if-unsaved nil
+  "If non-nil, skip auto-workflow when there are unsaved buffers.
+Default is nil since unsaved buffers are normal when using Emacs."
   :type 'boolean
   :group 'gptel)
 
