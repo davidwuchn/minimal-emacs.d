@@ -15,9 +15,10 @@
   "Subagent delegation for gptel-agent."
   :group 'gptel)
 
-(defcustom my/gptel-agent-task-timeout nil
+(defcustom my/gptel-agent-task-timeout 600
   "Seconds before a delegated Agent/RunAgent task is force-stopped.
-Set to nil for no timeout (default)."
+Default 600s (10 min) prevents stuck workflows.
+Set to nil for no timeout (not recommended for auto-workflow)."
   :type '(choice (const :tag "No timeout" nil) integer)
   :group 'gptel-tools-agent)
 
