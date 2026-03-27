@@ -1,15 +1,20 @@
 # Mementum State
 
-> Last session: 2026-03-27 10:15
+> Last session: 2026-03-27 12:30
 
-## Total Improvements: 90+ Real Code Fixes
+## Total Improvements: 95+ Real Code Fixes
 
-379 commits since March 25, 2026.
+364 commits since March 25, 2026.
 
 ### Recent Fixes (Last 25)
 
 | # | File | Fix |
 |---|------|-----|
+| 95 | scripts/setup-packages.sh | Add --force and --clean options |
+| 94 | post-init.el | Add server-start for GUI Emacs |
+| 93 | gptel-tools-agent.el | Simplify headless detection (OS type) |
+| 92 | gptel-tools-agent.el | Auto-detect quiet hours based on OS |
+| 91 | gptel-tools-agent.el | Default inactivity timeout 30 min |
 | 90 | cron.d/auto-workflow* | Use $HOME instead of $LOGDIR |
 | 89 | ai-code | Cons cell validation in cache-get |
 | 88 | gptel-auto-workflow-strategic.el | Extract target parsing helpers |
@@ -30,11 +35,6 @@
 | 73 | gptel-tools-agent.el | Strengthen grading criteria |
 | 72 | assistant/agents/reviewer.md | Switch to qwen3-coder-next |
 | 71 | gptel-tools-code.el | Replace nreverse with reverse |
-| 70 | gptel-auto-workflow-strategic.el | Path containment validation |
-| 69 | gptel-ext-context.el | Eliminate duplicate token counting |
-| 68 | eca-security.el | Fix temp directory path |
-| 67 | gptel-ext-context-cache.el | Replace regex with string-prefix-p |
-| 66 | gptel-auto-workflow-strategic.el | Extract validation logic into helper |
 
 ---
 
@@ -44,7 +44,7 @@
 λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7 Linux)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 90+ code fixes, 379 commits since Mar 25
+λ real. 95+ code fixes, 364 commits since Mar 25
 λ reviewer. qwen3-coder-next on DashScope (no thinking mode)
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
@@ -58,4 +58,7 @@
 λ string-prefix. Replace regex with string-prefix-p for partial match
 λ buffer-size. Use buffer-size for accurate chars-after measurement
 λ cron. Use $HOME directly, not $LOGDIR variable
+λ headless. Detect by OS type: macOS=user, Linux=headless
+λ quiet-hours. Auto-detect: macOS=9-17, Linux=24/7
+λ server-start. GUI Emacs acts as server for cron jobs
 ```
