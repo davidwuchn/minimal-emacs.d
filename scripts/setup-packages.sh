@@ -89,3 +89,9 @@ echo ""
 echo "Done. Packages are in packages/"
 echo "Use './scripts/setup-packages.sh --update' to update to latest versions."
 echo "Use './scripts/setup-packages.sh --update --force' to discard local changes first."
+
+# Install git hooks
+if [ -f "$DIR/scripts/install-git-hooks.sh" ]; then
+    echo ""
+    "$DIR/scripts/install-git-hooks.sh"
+fi
