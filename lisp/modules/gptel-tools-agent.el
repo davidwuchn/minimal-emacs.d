@@ -1910,27 +1910,24 @@ Tries multiple patterns in order:
   "Current target file being processed by auto-workflow.")
 
 (defun gptel-auto-workflow--headless-p ()
-  "Check if running on a headless server (Pi5, server, etc).
-Returns non-nil if this machine should run 24/7 background jobs."
-  (let ((host (downcase (system-name))))
-    (cond
-     ((string-match-p "pi5\\|raspberry\\|headless\\|server" host) t)
-     ((eq system-type 'darwin) nil)
-     (t nil))))
+  "Check if running on a headless server (Linux, Pi5, etc).
+Returns non-nil if this machine should run 24/7 background jobs.
+Detection: macOS (darwin) = user machine, Linux = headless."
+  (not (eq system-type 'darwin)))
 
 (defun gptel-auto-workflow--default-quiet-hours ()
-  "Auto-detect quiet hours based on machine type.
-macOS (daily driver): Block 9AM-5PM work hours
-Pi5/headless: No quiet hours (run 24/7)"
+  "Auto-detect quiet hours based on OS.
+macOS (darwin): Block 9AM-5PM work hours
+Linux (Pi5, servers): No quiet hours (24/7 background worker)"
   (if (gptel-auto-workflow--headless-p)
       nil
     '(9 10 11 12 13 14 15 16 17)))
 
 (defvar gptel-auto-workflow-quiet-hours (gptel-auto-workflow--default-quiet-hours)
   "List of hours (0-23) when auto-workflow should NOT run.
-Auto-set based on machine type:
-- macOS (daily driver): '(9 10 11 12 13 14 15 16 17) (9AM-5PM)
-- Pi5/headless: nil (24/7 background worker)
+Auto-set based on OS:
+- macOS (darwin): '(9 10 11 12 13 14 15 16 17) (9AM-5PM)
+- Linux (Pi5, servers): nil (24/7 background worker)
 
 Override in your config:
   (setq gptel-auto-workflow-quiet-hours nil)  ; Disable quiet hours
