@@ -2036,12 +2036,13 @@ Usage:
   emacsclient -e '(gptel-auto-workflow-status)'
   M-x gptel-auto-workflow-run"
   (interactive)
-  (when gptel-auto-workflow--running
-    (error "[auto-workflow] Already running. Check status first."))
-  (let ((active (gptel-auto-workflow--active-use-p)))
-    (when (car active)
-      (message "[auto-workflow] Skipping: %s" (string-join (car active) ", "))
-      (cl-return-from gptel-auto-workflow-run-async nil)))
+  (cl-block gptel-auto-workflow-run-async
+    (when gptel-auto-workflow--running
+      (error "[auto-workflow] Already running. Check status first."))
+    (let ((active (gptel-auto-workflow--active-use-p)))
+      (when (car active)
+        (message "[auto-workflow] Skipping: %s" (string-join (car active) ", "))
+        (cl-return-from gptel-auto-workflow-run-async nil)))
   (unless (require 'magit-worktree nil t)
     (user-error "magit-worktree is required"))
   (unless (require 'magit-git nil t)
@@ -2053,7 +2054,7 @@ Usage:
     (require 'gptel-auto-workflow-strategic)
     (gptel-auto-workflow-select-targets
      (lambda (selected-targets)
-       (gptel-auto-workflow--run-with-targets selected-targets completion-callback)))))
+       (gptel-auto-workflow--run-with-targets selected-targets completion-callback))))))
 
 (defun gptel-auto-workflow-run-async--guarded (&optional targets completion-callback)
   "Run auto-workflow with active-use guard using catch/throw.
@@ -2066,6 +2067,53 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
         (message "[auto-workflow] Skipping: %s" (string-join (car active) ", "))
         (throw 'skip-workflow nil)))
     (gptel-auto-workflow-run-async targets completion-callback)))
+
+(defun gptel-auto-workflow-cron-safe ()
+  "Run auto-workflow with full cleanup for cron jobs.
+Cancels stale timers, kills orphaned buffers, resets state, then runs.
+Safe to call from cron - handles all edge cases."
+  (let ((proj-root (or (gptel-auto-workflow--project-root)
+                       (expand-file-name "~/.emacs.d/"))))
+    (setq default-directory proj-root)
+    (require 'magit)
+    (require 'json)
+    (unless (featurep 'gptel-tools-agent)
+      (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root)))
+    (condition-case err
+        (progn
+          (gptel-auto-workflow--cleanup-stale-state)
+          (gptel-auto-workflow-run-async--guarded))
+      (error
+       (message "[auto-workflow] Cron error: %s" err)
+       nil))))
+
+(defun gptel-auto-workflow--cleanup-stale-state ()
+  "Clean up stale timers, buffers, and state from aborted runs."
+  (let ((proj-root (gptel-auto-workflow--project-root))
+        (cleaned 0))
+    (when proj-root
+      (dolist (timer (copy-sequence timer-list))
+        (when (timerp timer)
+          (let* ((fn-rep (prin1-to-string (timer--function timer))))
+            (when (or (string-match-p "nucleus" fn-rep)
+                      (string-match-p "gptel.*agent" fn-rep)
+                      (string-match-p "auto-experiment" fn-rep))
+              (cancel-timer timer)
+              (cl-incf cleaned)))))
+      (dolist (buf (buffer-list))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf
+            (when (and default-directory
+                       (string-match-p "optimize/.*-neopi5" default-directory)
+                       (not (file-exists-p default-directory)))
+              (kill-buffer buf)
+              (cl-incf cleaned)))))
+      (setq gptel-auto-workflow--running nil
+            gptel-auto-workflow--worktree-dir nil
+            gptel-auto-workflow--current-branch nil
+            gptel-auto-workflow--current-target nil))
+    (when (> cleaned 0)
+      (message "[auto-workflow] Cleaned %d stale items" cleaned))))
 
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
   "Run experiments for TARGETS asynchronously."
