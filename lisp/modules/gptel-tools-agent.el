@@ -2087,17 +2087,30 @@ Safe to call from cron - handles all edge cases."
        (message "[auto-workflow] Cron error: %s" err)
        nil))))
 
+(defun gptel-auto-workflow--experiment-suffix ()
+  "Get experiment suffix based on hostname.
+Returns short hostname like 'onepi5', 'daylight', or 'macbook'.
+Works across macOS and Linux."
+  (let ((name (downcase (system-name))))
+    (cond
+     ((string-match "^\\([a-z0-9]+\\)" name)
+      (match-string 1 name))
+     (t "unknown"))))
+
 (defun gptel-auto-workflow--cleanup-old-worktrees ()
   "Remove old optimize worktrees and their branches.
-Keeps the last 3 most recent, removes older ones."
+Keeps the last 3 most recent, removes older ones.
+Works across different machines (macOS, Linux, etc)."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (worktree-base (expand-file-name
                          gptel-auto-workflow-worktree-base proj-root))
          (optimize-dir (expand-file-name "optimize" worktree-base))
+         (suffix (gptel-auto-workflow--experiment-suffix))
+         (pattern (concat suffix "-exp"))
          (kept 3)
          (removed 0))
     (when (file-exists-p optimize-dir)
-      (let* ((dirs (directory-files optimize-dir t "onepi5-exp"))
+      (let* ((dirs (directory-files optimize-dir t pattern))
              (sorted (sort dirs (lambda (a b)
                                    (time-less-p
                                     (nth 5 (file-attributes b))
@@ -2140,7 +2153,7 @@ Keeps the last 3 most recent, removes older ones."
         (when (buffer-live-p buf)
           (with-current-buffer buf
             (when (and default-directory
-                       (string-match-p "optimize/.*-neopi5" default-directory)
+                       (string-match-p (format "optimize/.*-%s" (gptel-auto-workflow--experiment-suffix)) default-directory)
                        (not (file-exists-p default-directory)))
               (kill-buffer buf)
               (cl-incf cleaned)))))
