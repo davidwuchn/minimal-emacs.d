@@ -61,8 +61,8 @@ Findings stored in var/tmp/research-findings.md for analyzer."
 (defvar gptel-auto-workflow--research-timer nil
   "Timer for periodic researcher runs.")
 
-(defvar gptel-auto-workflow--last-research-findings ""
-  "Cached research findings from last researcher run.")
+(defvar gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal)
+  "Hash table mapping project roots to cached research findings.")
 
 (defun gptel-auto-workflow--discover-targets ()
   "Discover all Elisp files in lisp/modules/ as potential targets."
@@ -309,42 +309,63 @@ LLM decides if available, otherwise uses static list."
 (defun gptel-auto-workflow-run-research ()
   "Run researcher and store findings to cache.
 Call periodically to keep findings fresh.
-Findings available to analyzer during target selection."
+Findings available to analyzer during target selection.
+Findings are cached per-project."
   (interactive)
-  (message "[research] Starting periodic research...")
-  (gptel-auto-workflow--research-patterns
-   (lambda (findings)
-     (setq gptel-auto-workflow--last-research-findings findings)
-     (let ((file (gptel-auto-workflow--research-file)))
-       (make-directory (file-name-directory file) t)
-       (with-temp-file file
-         (insert (format "# Research Findings\n\n> Updated: %s\n\n%s"
-                         (format-time-string "%Y-%m-%d %H:%M")
-                         findings)))
-       (message "[research] Findings cached to %s (%d chars)"
-                file (length findings))))))
+  (let ((proj-root (gptel-auto-workflow--project-root)))
+    (message "[research] Starting periodic research for %s..." proj-root)
+    (gptel-auto-workflow--research-patterns
+     (lambda (findings)
+       ;; Cache in hash table per-project
+       (puthash proj-root findings gptel-auto-workflow--research-findings-cache)
+       (let ((file (gptel-auto-workflow--research-file)))
+         (make-directory (file-name-directory file) t)
+         (with-temp-file file
+           (insert (format "# Research Findings\n\n> Project: %s\n> Updated: %s\n\n%s"
+                           proj-root
+                           (format-time-string "%Y-%m-%d %H:%M")
+                           findings)))
+         (message "[research] Findings cached for %s (%d chars)"
+                  proj-root (length findings)))))))
 
 (defun gptel-auto-workflow-load-research-findings ()
-  "Load cached research findings from file.
-Returns empty string if no cache exists."
-  (if (not (string-empty-p gptel-auto-workflow--last-research-findings))
-      (progn
-        (message "[research] Using in-memory findings (%d chars)"
-                 (length gptel-auto-workflow--last-research-findings))
-        gptel-auto-workflow--last-research-findings)
-    (let ((file (gptel-auto-workflow--research-file)))
-      (if (file-exists-p file)
-          (with-temp-buffer
-            (insert-file-contents file)
-            (goto-char (point-min))
-            (forward-line 3)
-            (let ((findings (buffer-substring (point) (point-max))))
-              (message "[research] Loaded cached findings from %s (%d chars)"
-                       file (length findings))
-              findings))
-        (progn
-          (message "[research] No cached findings found at %s" file)
-          "")))))
+  "Load cached research findings for current project.
+Returns empty string if no cache exists.
+Findings are cached per-project."
+  (let ((proj-root (gptel-auto-workflow--project-root)))
+    ;; First check in-memory cache for this project
+    (let ((cached (gethash proj-root gptel-auto-workflow--research-findings-cache)))
+      (if (and cached (not (string-empty-p cached)))
+          (progn
+            (message "[research] Using in-memory findings for %s (%d chars)"
+                     proj-root (length cached))
+            cached)
+        ;; Fall back to file cache
+        (let ((file (gptel-auto-workflow--research-file)))
+          (if (file-exists-p file)
+              (let ((findings
+                     (with-temp-buffer
+                       (insert-file-contents file)
+                       (goto-char (point-min))
+                       ;; Skip header lines (find first blank line)
+                       (let ((content-start nil))
+                         (while (and (not (eobp)) (not content-start))
+                           (if (looking-at "^$")
+                               (progn
+                                 (forward-line 1)
+                                 (setq content-start (point)))
+                             (forward-line 1)))
+                         (if content-start
+                             (buffer-substring content-start (point-max))
+                           "")))))
+                ;; Cache in hash table for this project
+                (puthash proj-root findings gptel-auto-workflow--research-findings-cache)
+                (message "[research] Loaded cached findings for %s (%d chars)"
+                         proj-root (length findings))
+                findings)
+            (progn
+              (message "[research] No cached findings found for %s" proj-root)
+              "")))))))
 
 (defun gptel-auto-workflow-start-periodic-research ()
   "Start periodic researcher runs.
@@ -371,13 +392,15 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
     (message "[research] Periodic research stopped")))
 
 (defun gptel-auto-workflow-research-status ()
-  "Show researcher status."
+  "Show researcher status for current project."
   (interactive)
-  (list :running (timerp gptel-auto-workflow--research-timer)
-        :interval gptel-auto-workflow-research-interval
-        :findings-cached (not (string-empty-p gptel-auto-workflow--last-research-findings))
-        :findings-length (length gptel-auto-workflow--last-research-findings)
-        :cache-file (gptel-auto-workflow--research-file)))
+  (let ((proj-root (gptel-auto-workflow--project-root)))
+    (list :running (timerp gptel-auto-workflow--research-timer)
+          :interval gptel-auto-workflow-research-interval
+          :project proj-root
+          :findings-cached (not (string-empty-p (gethash proj-root gptel-auto-workflow--research-findings-cache "")))
+          :findings-length (length (gethash proj-root gptel-auto-workflow--research-findings-cache ""))
+          :cache-file (gptel-auto-workflow--research-file))))
 
 (provide 'gptel-auto-workflow-strategic)
 

@@ -943,7 +943,8 @@ Multiple machines can optimize same target without conflicts."
 (defun gptel-auto-workflow-create-worktree (target &optional experiment-id)
   "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch.
 Stores worktree-dir and current-branch in hash table keyed by TARGET.
-Uses git CLI directly to avoid magit-worktree-branch hangs."
+Uses git CLI directly to avoid magit-worktree-branch hangs.
+If branch exists locally, deletes it first to avoid conflicts."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (branch (gptel-auto-workflow--branch-name target experiment-id))
          (worktree-dir (expand-file-name
@@ -952,13 +953,15 @@ Uses git CLI directly to avoid magit-worktree-branch hangs."
     (condition-case err
         (progn
           (make-directory (file-name-directory worktree-dir) t)
-          ;; Use git CLI directly - more reliable than magit-worktree-branch
-          (let ((default-directory proj-root)
-                (exit-code (call-process "git" nil nil nil
-                                         "worktree" "add" "-b" branch
-                                         worktree-dir "main")))
-            (unless (eq exit-code 0)
-              (error "git worktree add failed with exit code %s" exit-code)))
+          (let ((default-directory proj-root))
+            ;; Delete branch if it exists locally (stale from previous run)
+            (call-process "git" nil nil nil "branch" "-D" branch)
+            ;; Create worktree with new branch
+            (let ((exit-code (call-process "git" nil nil nil
+                                           "worktree" "add" "-b" branch
+                                           worktree-dir "main")))
+              (unless (eq exit-code 0)
+                (error "git worktree add failed with exit code %s" exit-code))))
           (message "[auto-workflow] Created: %s" branch)
           (puthash target (list :worktree-dir worktree-dir :current-branch branch)
                    gptel-auto-workflow--worktree-state)
@@ -971,17 +974,23 @@ Uses git CLI directly to avoid magit-worktree-branch hangs."
 
 (defun gptel-auto-workflow-delete-worktree (target)
   "Delete worktree for TARGET from hash table.
+Also deletes the associated branch.
 Uses git CLI directly to avoid magit issues."
   (let* ((state (gethash target gptel-auto-workflow--worktree-state))
-         (worktree-dir (plist-get state :worktree-dir)))
+         (worktree-dir (plist-get state :worktree-dir))
+         (branch (plist-get state :current-branch)))
     (when (and worktree-dir (file-exists-p worktree-dir))
       (let ((proj-root (gptel-auto-workflow--project-root)))
         (condition-case err
-            (let ((default-directory proj-root)
-                  (exit-code (call-process "git" nil nil nil
-                                           "worktree" "remove" worktree-dir)))
-              (unless (eq exit-code 0)
-                (error "git worktree remove failed with exit code %s" exit-code)))
+            (let ((default-directory proj-root))
+              ;; Remove worktree
+              (let ((exit-code (call-process "git" nil nil nil
+                                               "worktree" "remove" worktree-dir)))
+                (unless (eq exit-code 0)
+                  (error "git worktree remove failed with exit code %s" exit-code)))
+              ;; Delete the branch
+              (when branch
+                (call-process "git" nil nil nil "branch" "-D" branch)))
           (error
            (message "[auto-workflow] Failed to delete worktree: %s" err)))))
     (puthash target (list :worktree-dir nil :current-branch nil)

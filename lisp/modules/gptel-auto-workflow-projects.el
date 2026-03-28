@@ -215,8 +215,8 @@ Installs advice on gptel-agent--task to route subagents to per-project buffers."
   (setq gptel-auto-workflow--persist-executor-overlays nil)
   (message "[auto-workflow] Per-project subagent buffers disabled"))
 
-;; Auto-enable on load (disabled for testing)
-;; (gptel-auto-workflow-enable-per-project-subagents)
+;; Auto-enable on load
+(gptel-auto-workflow-enable-per-project-subagents)
 
 ;;; Executor Overlay Management
 
@@ -305,6 +305,38 @@ then runs researcher for that project."
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                         results ", "))
     results))
+
+;;; Research Cache Management
+
+(defun gptel-auto-workflow-clear-research-cache (&optional project-root)
+  "Clear research findings cache for PROJECT-ROOT or all projects.
+Without PROJECT-ROOT, clears cache for all projects."
+  (interactive)
+  (if project-root
+      (let ((root (expand-file-name project-root)))
+        (remhash root gptel-auto-workflow--research-findings-cache)
+        (message "[research] Cleared findings cache for %s" root))
+    (clrhash gptel-auto-workflow--research-findings-cache)
+    (message "[research] Cleared findings cache for all projects")))
+
+(defun gptel-auto-workflow-research-status-all ()
+  "Show research status for all configured projects."
+  (interactive)
+  (let ((status-lines '()))
+    (dolist (project-root gptel-auto-workflow-projects)
+      (let* ((findings (gethash project-root gptel-auto-workflow--research-findings-cache ""))
+             (cache-file (expand-file-name "var/tmp/research-findings.md" project-root))
+             (file-exists (file-exists-p cache-file))
+             (file-size (if file-exists
+                            (nth 7 (file-attributes cache-file))
+                          0)))
+        (push (format "  %s:\n    In-memory: %d chars\n    File: %s (%d bytes)"
+                      project-root
+                      (length findings)
+                      (if file-exists "exists" "none")
+                      file-size)
+              status-lines)))
+    (message "Research cache status:\n%s" (string-join (nreverse status-lines) "\n"))))
 
 ;;; Mementum Multi-Project Support
 
