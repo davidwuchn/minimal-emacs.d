@@ -50,8 +50,8 @@ case "$MACHINE" in
         SCHEDULE="11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6 runs/day)"
         ;;
     macos)
-        SECTION_START=49
-        SECTION_END=52
+        SECTION_START=60
+        SECTION_END=63
         SOCKET=""
         SCHEDULE="10AM, 2PM, 6PM (3 runs/day) + weekly instincts"
         ;;
