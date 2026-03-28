@@ -120,6 +120,25 @@ Important: `~/.emacs.d/eca` is the real directory used by this setup. The
 adds tool management, preset routing, security ACLs, prompt infrastructure,
 payload resilience, and an agent workflow inside Emacs.
 
+### AI Code Behaviors
+
+This fork includes [ai-code](https://github.com/davidwuchn/ai-code-interface.el)
+with [ai-behaviors](https://github.com/xificurC/ai-behaviors) integration:
+
+- **ai-code** - Unified interface for AI coding assistants (Claude Code, Gemini, Copilot, etc.)
+- **ai-behaviors** - Structured prompting framework with 40+ predefined behaviors
+
+Behaviors are loaded from the `packages/ai-behaviors` submodule. Use them in prompts:
+
+```
+#=code Fix the auth bug          # Production code mode
+#=debug Why is this failing      # Systematic debugging
+#=review This function           # Code review mode
+#=deep Thorough analysis         # Deep thinking mode
+```
+
+Setup automatically handled by `./scripts/setup-packages.sh`.
+
 ## Upstream init chain note
 
 Recent upstream `minimal-emacs.d` now exposes four startup-stage toggles:

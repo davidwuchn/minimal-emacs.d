@@ -2,14 +2,20 @@
 
 > Last session: 2026-03-28 00:30
 
-## Total Improvements: 110+ Real Code Fixes
+## Total Improvements: 116+ Real Code Fixes
 
-456 commits since March 25, 2026.
+460+ commits since March 25, 2026.
 
 ### Recent Fixes (Last 25)
 
 | # | File | Fix |
-|---|------|-----|
+|---|---|------|
+| 116 | gptel-tools-edit.el | Add missing closing paren (parse fix) |
+| 115 | gptel-tools-{bash,edit,glob,grep}.el | Always call callback to prevent FSM hangs |
+| 114 | scripts/install-cron.sh | Enable instincts job for macOS |
+| 113 | scripts/install-cron.sh | Comment out other sections first |
+| 112 | gptel-tools-agent.el | Fix subagent timeout buffer-local bug |
+| 111 | init-ai.el | Add ai-behaviors repo-path configuration |
 | 110 | init-ai.el | C-c L keybinding for mode-line toggle |
 | 109 | init-ai.el | agent-shell as default backend |
 | 108 | init-ai.el | C-c P preset selection for agent-shell |
@@ -44,7 +50,8 @@
 λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7 Linux)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 110+ code fixes, 456 commits since Mar 25
+λ real. 116+ code fixes, 460+ commits since Mar 25
+λ behaviors. 40+ AI code behaviors in packages/ai-behaviors
 λ reviewer. qwen3-coder-next on DashScope (no thinking mode)
 λ async. Daemon never blocks
 λ safety. Main NEVER touched by auto-workflow
@@ -71,12 +78,13 @@
 
 ## Current Status
 
-- **Main branch**: `2513adf`
+- **Main branch**: `fc8ca69`
 - **Workflow**: Idle
 - **Worktrees**: 0 (clean)
-- **Emacs daemon**: 1 running (PID 2034159)
-- **Next scheduled**: 03:00
+- **Emacs daemon**: Not running
+- **Next scheduled**: 14:00
 - **Cron**: 4 jobs installed
+- **ai-behaviors**: 40 behaviors available in packages/ai-behaviors
 
 ---
 
