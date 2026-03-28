@@ -1927,6 +1927,9 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
+         ;; CRITICAL: Set default-directory to worktree so all subagents
+         ;; operate in the correct context. Each worktree = one session.
+         (default-directory (or worktree default-directory))
          (start-time (float-time))
          (timeout-timer nil)
          (finished nil))
