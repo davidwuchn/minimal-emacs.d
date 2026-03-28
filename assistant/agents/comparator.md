@@ -1,5 +1,6 @@
 ---
 name: comparator
+backend: moonshot
 model: kimi-k2.5
 max-tokens: 2048
 temperature: 0.1

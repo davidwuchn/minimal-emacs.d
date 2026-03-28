@@ -1,5 +1,6 @@
 ---
 name: researcher
+backend: DashScope
 model: qwen3-max
 max-tokens: 2048
 temperature: 0.3

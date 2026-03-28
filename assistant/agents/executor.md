@@ -1,5 +1,6 @@
 ---
 name: executor
+backend: DashScope
 model: qwen3-coder-next
 max-tokens: 16384
 temperature: 0.1

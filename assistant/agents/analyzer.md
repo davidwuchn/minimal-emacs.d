@@ -1,5 +1,6 @@
 ---
 name: analyzer
+backend: moonshot
 model: kimi-k2.5
 max-tokens: 8192
 temperature: 0.3
