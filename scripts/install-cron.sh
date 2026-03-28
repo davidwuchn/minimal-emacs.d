@@ -64,7 +64,9 @@ case "$MACHINE" in
 esac
 
 if [ "$1" = "--dry-run" ]; then
-    echo "DRY RUN - Would uncomment lines $SECTION_START-$SECTION_END in cron.d/auto-workflow"
+    echo "DRY RUN - Would:"
+    echo "  1. Comment out all job lines"
+    echo "  2. Uncomment lines $SECTION_START-$SECTION_END for $MACHINE"
     echo ""
     sed -n "${SECTION_START},${SECTION_END}p" "$CRON_FILE" | sed 's/^#0/0/'
     echo ""
@@ -72,7 +74,8 @@ if [ "$1" = "--dry-run" ]; then
     echo "  ./scripts/install-cron.sh"
 else
     TMP_FILE=$(mktemp)
-    sed "${SECTION_START},${SECTION_END}s/^#0/0/" "$CRON_FILE" > "$TMP_FILE"
+    # First comment out ALL job lines (0 at start of line), then uncomment selected section
+    sed -e 's/^0 /#0 /' -e "${SECTION_START},${SECTION_END}s/^#0/0/" "$CRON_FILE" > "$TMP_FILE"
     crontab "$TMP_FILE"
     rm "$TMP_FILE"
     echo "Installed crontab with $MACHINE schedule"
