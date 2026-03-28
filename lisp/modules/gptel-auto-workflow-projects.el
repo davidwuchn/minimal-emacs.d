@@ -215,8 +215,8 @@ Installs advice on gptel-agent--task to route subagents to per-project buffers."
   (setq gptel-auto-workflow--persist-executor-overlays nil)
   (message "[auto-workflow] Per-project subagent buffers disabled"))
 
-;; Auto-enable on load
-(gptel-auto-workflow-enable-per-project-subagents)
+;; Auto-enable on load (disabled for testing)
+;; (gptel-auto-workflow-enable-per-project-subagents)
 
 ;;; Executor Overlay Management
 
