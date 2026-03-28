@@ -44,7 +44,7 @@ Returns (output . exit-code) or (error-message . -1) on timeout."
             (setq exit-code -1))
           (cons result exit-code))
       (when (buffer-live-p buffer)
-        (kill-buffer buffer)))))
+        (kill-buffer buffer))))
 
 (defun gptel-auto-workflow--shell-command-string (command &optional timeout)
   "Execute shell COMMAND with TIMEOUT, return output string.
