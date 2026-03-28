@@ -138,6 +138,26 @@ BUILDS ON DISCOVERY: O(1) lookup enables efficient FSM retrieval
 in performance-critical nested agent scenarios."
   (gethash id my/gptel--fsm-registry))
 
+(defun my/gptel--fsm-get-id (fsm)
+  "Retrieve FSM ID from registry by FSM struct.
+
+ASSUMPTION: FSM is a valid gptel-fsm struct with proper structure.
+ASSUMPTION: Registry maintains bidirectional FSM↔ID mapping.
+BEHAVIOR: Returns ID string if FSM exists in registry.
+BEHAVIOR: Returns nil for unregistered FSMs (no error).
+EDGE CASE: Nil FSM returns nil.
+EDGE CASE: Unregistered FSM returns nil (safe lookup).
+TEST: (my/gptel--fsm-get-id fsm) => ID string or nil
+TEST: (my/gptel--fsm-get-id nil) => nil
+TEST: (my/gptel--fsm-get-id unregistered-fsm) => nil
+
+BUILDS ON DISCOVERY: Extracting FSM→ID lookup into helper reduces
+duplication across coerce-fsm and other functions.
+
+PROACTIVE MITIGATION: Centralizes FSM→ID lookup logic, preventing
+inconsistent lookups if registry structure changes."
+  (gethash fsm my/gptel--fsm-registry))
+
 ;;; FSM Predicates and Coercion
 
 (defun my/gptel--fsm-p (object)
@@ -191,7 +211,7 @@ Returns FSM struct or nil if not found."
    ((my/gptel--fsm-p object)
     (if (null context-id)
         object
-      (let ((id (gethash object my/gptel--fsm-registry)))
+      (let ((id (my/gptel--fsm-get-id object)))
         (if (and id (equal id context-id))
             object
           nil))))
