@@ -44,20 +44,20 @@ echo ""
 
 case "$MACHINE" in
     pi5)
-        SECTION_START=34
-        SECTION_END=37
+        SECTION_START=35
+        SECTION_END=38
         SOCKET="-s /run/user/1000/emacs/server"
         SCHEDULE="11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6 runs/day)"
         ;;
     macos)
-        SECTION_START=48
-        SECTION_END=51
+        SECTION_START=49
+        SECTION_END=52
         SOCKET=""
         SCHEDULE="10AM, 2PM, 6PM (3 runs/day)"
         ;;
     single)
-        SECTION_START=59
-        SECTION_END=62
+        SECTION_START=60
+        SECTION_END=63
         SOCKET=""
         SCHEDULE="Every 4 hours"
         ;;
