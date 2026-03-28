@@ -104,7 +104,9 @@ An orphan is a commit that exists but is not reachable from any branch."
 (defun gptel-auto-workflow--sync-staging-with-main ()
   "Fast-forward staging branch to match main.
 Ensures experiments run against latest code."
-  (let ((default-directory (gptel-auto-workflow--project-root)))
+  (let ((default-directory (gptel-auto-workflow--project-root))
+        (original-branch (string-trim
+                          (shell-command-to-string "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main"))))
     (condition-case err
         (progn
           (shell-command-to-string "git fetch origin")
@@ -118,10 +120,12 @@ Ensures experiments run against latest code."
                 (shell-command-to-string "git checkout staging")
                 (shell-command-to-string "git merge origin/main --ff-only")
                 (shell-command-to-string "git push origin staging")
+                (shell-command-to-string (format "git checkout %s" original-branch))
                 (message "[auto-workflow] Synced staging with main (%s -> %s)"
                          (substring staging-commit 0 7)
                          (substring main-commit 0 7))))))
       (error
+       (shell-command-to-string (format "git checkout %s" original-branch))
        (message "[auto-workflow] Failed to sync staging: %s" err)
        nil))))
 
