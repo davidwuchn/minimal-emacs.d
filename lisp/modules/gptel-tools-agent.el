@@ -614,81 +614,81 @@ FILES are validated against project root for security.
 
 ;;; Subagent Functions
 
-(defvar my/gptel--agent-task-done nil
-  "Flag to track if agent task has completed.")
+(defvar my/gptel--agent-task-state (make-hash-table :test 'eql)
+  "Hash table for per-task state. Keyed by task-id.
+Values are plist: (:done :timeout-timer :progress-timer).")
 
-(defvar my/gptel--agent-task-timeout-timer nil
-  "Timer for agent task timeout.")
-
-(defvar my/gptel--agent-task-progress-timer nil
-  "Timer for agent task progress messages.")
+(defvar my/gptel--agent-task-counter 0
+  "Counter for generating unique task IDs.")
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
-
-CALLBACK is called with the result or a timeout error."
-  (setq my/gptel--agent-task-done nil)
-  (setq my/gptel--agent-task-timeout-timer nil)
-  (setq my/gptel--agent-task-progress-timer nil)
-  (let* ((start-time (current-time))
+CALLBACK is called with the result or a timeout error.
+Uses hash table keyed by task-id to support parallel execution."
+  (let* ((task-id (cl-incf my/gptel--agent-task-counter))
+         (start-time (current-time))
          (parent-fsm (buffer-local-value 'gptel--fsm-last (current-buffer)))
          (origin-buf (current-buffer))
          (packaged-prompt (my/gptel--build-subagent-context prompt files include-history include-diff origin-buf))
          (wrapped-cb
           (lambda (result)
-            (unless my/gptel--agent-task-done
-              (setq my/gptel--agent-task-done t)
-              (when (timerp my/gptel--agent-task-timeout-timer) 
-                (cancel-timer my/gptel--agent-task-timeout-timer))
-              (when (timerp my/gptel--agent-task-progress-timer) 
-                (cancel-timer my/gptel--agent-task-progress-timer))
-              (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
-                       agent-type (float-time (time-since start-time))
-                       (if (stringp result) (length result) 0))
+            (let ((state (gethash task-id my/gptel--agent-task-state)))
+              (when (and state (not (plist-get state :done)))
+                (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                (when (timerp (plist-get state :timeout-timer))
+                  (cancel-timer (plist-get state :timeout-timer)))
+                (when (timerp (plist-get state :progress-timer))
+                  (cancel-timer (plist-get state :progress-timer)))
+                (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
+                         agent-type (float-time (time-since start-time))
+                         (if (stringp result) (length result) 0)))
               (when (buffer-live-p origin-buf)
                 (with-current-buffer origin-buf
-                  (setq-local gptel--fsm-last parent-fsm)))
-              (funcall callback result)))))
-
+                  (setq-local gptel--fsm-last parent-fsm))))
+            (funcall callback result)
+            (remhash task-id my/gptel--agent-task-state))))
+    (puthash task-id (list :done nil :timeout-timer nil :progress-timer nil) my/gptel--agent-task-state)
     (message "[nucleus] Delegating to subagent %s%s..."
              agent-type
              (if my/gptel-agent-task-timeout
                  (format " (timeout: %ds)" my/gptel-agent-task-timeout)
                ""))
-
-    (setq my/gptel--agent-task-progress-timer
-          (run-at-time my/gptel-subagent-progress-interval
-                       my/gptel-subagent-progress-interval
-                       (lambda ()
-                         (unless my/gptel--agent-task-done
-                           (message "[nucleus] Subagent %s still running... (%.1fs elapsed)"
-                                    agent-type (float-time (time-since start-time)))))))
-
+    (let ((progress-timer
+           (run-at-time my/gptel-subagent-progress-interval
+                        my/gptel-subagent-progress-interval
+                        (lambda ()
+                          (let ((state (gethash task-id my/gptel--agent-task-state)))
+                            (when (and state (not (plist-get state :done)))
+                              (message "[nucleus] Subagent %s still running... (%.1fs elapsed)"
+                                       agent-type (float-time (time-since start-time)))))))))
+      (puthash task-id (list :done nil :timeout-timer nil :progress-timer progress-timer) my/gptel--agent-task-state))
     (when my/gptel-agent-task-timeout
-      (setq my/gptel--agent-task-timeout-timer
-            (run-at-time
-             my/gptel-agent-task-timeout nil
-              (lambda ()
-                (when (buffer-live-p origin-buf)
-                  (with-current-buffer origin-buf
-                    (unless my/gptel--agent-task-done
-                      (setq my/gptel--agent-task-done t)
-                      (when (timerp my/gptel--agent-task-progress-timer)
-                        (cancel-timer my/gptel--agent-task-progress-timer))
-                      (message "[nucleus] Subagent %s timed out after %ds, aborting request"
-                               agent-type my/gptel-agent-task-timeout)
-                      (when (fboundp 'gptel-abort)
-                        (ignore-errors (gptel-abort origin-buf)))
-                      (setq-local gptel--fsm-last parent-fsm)
-                      (funcall callback
-                               (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                       description agent-type my/gptel-agent-task-timeout)))))))))
-
+      (let ((timeout-timer
+             (run-at-time my/gptel-agent-task-timeout nil
+                          (lambda ()
+                            (when (buffer-live-p origin-buf)
+                              (with-current-buffer origin-buf
+                                (let ((state (gethash task-id my/gptel--agent-task-state)))
+                                  (when (and state (not (plist-get state :done)))
+                                    (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                                    (when (timerp (plist-get state :progress-timer))
+                                      (cancel-timer (plist-get state :progress-timer)))
+                                    (message "[nucleus] Subagent %s timed out after %ds, aborting request"
+                                             agent-type my/gptel-agent-task-timeout)
+                                    (when (fboundp 'gptel-abort)
+                                      (ignore-errors (gptel-abort origin-buf)))
+                                    (setq-local gptel--fsm-last parent-fsm)
+                                    (funcall callback
+                                             (format "Error: Task \"%s\" (%s) timed out after %ds."
+                                                     description agent-type my/gptel-agent-task-timeout))))))))))
+        (let ((state (gethash task-id my/gptel--agent-task-state)))
+          (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
     (unwind-protect
         (gptel-agent--task wrapped-cb agent-type description packaged-prompt)
-      (when (and (not my/gptel--agent-task-done) (buffer-live-p origin-buf))
-        (with-current-buffer origin-buf
-          (setq-local gptel--fsm-last parent-fsm))))))
+      (let ((state (gethash task-id my/gptel--agent-task-state)))
+        (when (and state (not (plist-get state :done)) (buffer-live-p origin-buf))
+          (with-current-buffer origin-buf
+            (setq-local gptel--fsm-last parent-fsm)))))))
 
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.
@@ -1556,11 +1556,12 @@ Scores based on commit message + code diff (not just stat)."
        callback)
     (funcall callback nil)))
 
-(defvar gptel-auto-experiment--grade-done nil
-  "Flag to track if grading has completed.")
+(defvar gptel-auto-experiment--grade-state (make-hash-table :test 'eql)
+  "Hash table for per-grade state. Keyed by grade-id.
+Values are plist: (:done :timer).")
 
-(defvar gptel-auto-experiment--grade-timer nil
-  "Timer for grading timeout.")
+(defvar gptel-auto-experiment--grade-counter 0
+  "Counter for generating unique grade IDs.")
 
 (defvar gptel-auto-experiment-grade-timeout 60
   "Timeout in seconds for grading subagent.")
@@ -1586,43 +1587,52 @@ Returns nil if valid, or error message string if invalid."
 (defun gptel-auto-experiment-grade (output callback)
   "Grade experiment OUTPUT. LLM decides quality threshold.
 Timeout fails the grade (conservative).
-If OUTPUT is an error message, fails immediately."
-  (cl-block gptel-auto-experiment-grade
-    (when (gptel-auto-experiment--agent-error-p output)
-      (funcall callback (list :score 0 :passed nil :details "Agent error"))
-      (cl-return-from gptel-auto-experiment-grade))
-    (setq gptel-auto-experiment--grade-done nil)
-    (setq gptel-auto-experiment--grade-timer
-          (run-with-timer gptel-auto-experiment-grade-timeout nil
-                          (lambda ()
-                            (unless gptel-auto-experiment--grade-done
-                              (setq gptel-auto-experiment--grade-done t)
-                              (message "[auto-exp] Grading timeout after %ds, failing"
-                                       gptel-auto-experiment-grade-timeout)
-                              (funcall callback (list :score 0 :passed nil :details "timeout"))))))
-    (if (and gptel-auto-experiment-use-subagents
-             (fboundp 'gptel-benchmark-grade))
-        (gptel-benchmark-grade
-         output
-         '("change clearly described"
-           "change is minimal and focused"
-           "fixes real bug, improves performance, or addresses TODO/FIXME"
-           "tests pass after change")
-         '("large refactor unrelated to fix"
-           "changed security files without review"
-           "no description or unclear purpose"
-           "style-only change without functional impact"
-           "replaces working code with equivalent code")
-         (lambda (result)
-           (unless gptel-auto-experiment--grade-done
-             (setq gptel-auto-experiment--grade-done t)
-             (when gptel-auto-experiment--grade-timer
-               (cancel-timer gptel-auto-experiment--grade-timer))
-             (funcall callback result))))
-      (setq gptel-auto-experiment--grade-done t)
-      (when gptel-auto-experiment--grade-timer
-        (cancel-timer gptel-auto-experiment--grade-timer))
-      (funcall callback (list :score 100 :passed t)))))
+If OUTPUT is an error message, fails immediately.
+Uses hash table keyed by grade-id to support parallel execution."
+  (let ((grade-id (cl-incf gptel-auto-experiment--grade-counter)))
+    (cl-block gptel-auto-experiment-grade
+      (when (gptel-auto-experiment--agent-error-p output)
+        (funcall callback (list :score 0 :passed nil :details "Agent error"))
+        (cl-return-from gptel-auto-experiment-grade))
+      (puthash grade-id (list :done nil :timer nil) gptel-auto-experiment--grade-state)
+      (let ((timeout-timer
+             (run-with-timer gptel-auto-experiment-grade-timeout nil
+                             (lambda ()
+                               (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
+                                 (when (and state (not (plist-get state :done)))
+                                   (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
+                                   (message "[auto-exp] Grading timeout after %ds, failing"
+                                            gptel-auto-experiment-grade-timeout)
+                                   (funcall callback (list :score 0 :passed nil :details "timeout"))
+                                   (remhash grade-id gptel-auto-experiment--grade-state)))))))
+        (puthash grade-id (list :done nil :timer timeout-timer) gptel-auto-experiment--grade-state))
+      (if (and gptel-auto-experiment-use-subagents
+               (fboundp 'gptel-benchmark-grade))
+          (gptel-benchmark-grade
+           output
+           '("change clearly described"
+             "change is minimal and focused"
+             "fixes real bug, improves performance, or addresses TODO/FIXME"
+             "tests pass after change")
+           '("large refactor unrelated to fix"
+             "changed security files without review"
+             "no description or unclear purpose"
+             "style-only change without functional impact"
+             "replaces working code with equivalent code")
+           (lambda (result)
+             (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
+               (when (and state (not (plist-get state :done)))
+                 (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
+                 (when (timerp (plist-get state :timer))
+                   (cancel-timer (plist-get state :timer)))
+                 (funcall callback result)
+                 (remhash grade-id gptel-auto-experiment--grade-state)))))
+        (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
+          (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
+          (when (timerp (plist-get state :timer))
+            (cancel-timer (plist-get state :timer)))
+          (funcall callback (list :score 100 :passed t))
+          (remhash grade-id gptel-auto-experiment--grade-state))))))
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
