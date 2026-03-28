@@ -2,6 +2,7 @@
 name: grader
 model: qwen3.5-plus
 max-tokens: 2048
+temperature: 0.1
 description: Evaluate skill outputs (DashScope)
 tools:
   - Read
