@@ -9,7 +9,8 @@
 ### Recent Fixes (Last 25)
 
 | # | File | Fix |
-|---|---|------|
+|---|------|------|
+| 124 | gptel-auto-workflow-projects.el | Per-project executor overlays stick in dedicated buffers |
 | 123 | gptel-ext-abort.el | Remove -y/-Y low-speed timeout (fixes exit 28) |
 | 122 | gptel-ext-backends.el | DashScope timeout 600s → 900s |
 | 121 | gptel-ext-retry.el | Add 1013/server initializing to transient errors |
@@ -79,6 +80,8 @@
 λ subagent-timeout. 1200s default prevents workflow hang
 λ shell-timeout. 30s timeout kills deadlocked shell processes
 λ curl-low-speed. -y/-Y removed (was causing exit 28 during LLM thinking)
+λ executor-overlay. ALL subagents route to per-project buffers (no global fallback)
+λ subagent-routing. 4-tier project detection: explicit > override > configured > auto-detect
 λ api-timeout. DashScope 900s, Moonshot 900s
 λ transient-1013. server is initializing → retry
 λ experiment-callback. Timeout must call completion callback (stuck 33min)

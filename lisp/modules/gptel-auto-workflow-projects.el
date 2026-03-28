@@ -11,6 +11,14 @@
 
 ;;; Code:
 
+(require 'cl-lib)
+
+;; Forward declarations for functions defined in gptel-tools-agent.el
+(declare-function gptel-auto-workflow--project-root "gptel-tools-agent")
+(declare-function gptel-auto-workflow-cron-safe "gptel-tools-agent")
+(declare-function gptel-auto-workflow-run-async--guarded "gptel-tools-agent")
+(declare-function gptel-auto-workflow-run-research "gptel-auto-workflow-strategic")
+
 (defvar gptel-auto-workflow-projects
   (list (expand-file-name
          (or (bound-and-true-p minimal-emacs-user-directory)
@@ -18,6 +26,31 @@
   "List of project roots with auto-workflow enabled.
 Each project should have .dir-locals.el with workflow configuration.
 Customize this variable to add more projects.")
+
+(defvar gptel-auto-workflow--project-buffers (make-hash-table :test 'equal)
+  "Hash table mapping project roots to their gptel-agent buffers.")
+
+(defvar gptel-auto-workflow--current-project nil
+  "Currently active project root for subagent context.")
+
+(defun gptel-auto-workflow--get-project-buffer (project-root)
+  "Get or create a gptel-agent buffer for PROJECT-ROOT.
+Each project gets its own isolated buffer for executor overlays."
+  (let* ((root (expand-file-name project-root))
+         (buf-name (format "*gptel-agent:%s*" (file-name-nondirectory (directory-file-name root))))
+         (existing (gethash root gptel-auto-workflow--project-buffers)))
+    (if (and existing (buffer-live-p existing))
+        existing
+      (let ((buf (get-buffer-create buf-name)))
+        (with-current-buffer buf
+          (unless (bound-and-true-p gptel-mode)
+            (gptel-mode))
+          ;; Set project context
+          (setq-local default-directory root)
+          (when (boundp 'gptel-auto-workflow--project-root-override)
+            (setq-local gptel-auto-workflow--project-root-override root)))
+        (puthash root buf gptel-auto-workflow--project-buffers)
+        buf))))
 
 (defun gptel-auto-workflow-add-project (project-root)
   "Add PROJECT-ROOT to auto-workflow projects list.
@@ -61,27 +94,158 @@ then runs workflow for that project."
   (let ((results nil))
     (dolist (project-root gptel-auto-workflow-projects)
       (message "[auto-workflow] Processing project: %s" project-root)
-      (let ((default-directory project-root))
+      (let* ((default-directory project-root)
+             (project-buf (gptel-auto-workflow--get-project-buffer project-root)))
         ;; .dir-locals.el will be loaded when we change to project directory
         (condition-case err
             (progn
               ;; Re-initialize with project context
               (setq gptel-auto-workflow--project-root-override project-root)
+              ;; Set current project context for subagents
+              (setq gptel-auto-workflow--current-project project-root)
               ;; Clear per-project state
               (when (hash-table-p gptel-auto-workflow--worktree-state)
                 (clrhash gptel-auto-workflow--worktree-state))
               
-              ;; Run workflow for this project
-              (gptel-auto-workflow-cron-safe)
+              ;; Run workflow for this project in its dedicated buffer
+              (with-current-buffer project-buf
+                (gptel-auto-workflow-cron-safe))
               (push (cons project-root 'success) results)
               (message "[auto-workflow] ✓ Completed: %s" project-root))
           (error
            (push (cons project-root (format "error: %s" err)) results)
            (message "[auto-workflow] ✗ Failed: %s - %s" project-root err)))))
+    (setq gptel-auto-workflow--current-project nil)
     (message "[auto-workflow] All projects processed: %s" 
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                         results ", "))
     results))
+
+;;; Per-Project Subagent Buffer Support
+
+(defvar gptel-auto-workflow--persist-executor-overlays nil
+  "When non-nil, executor overlays persist after task completion.")
+
+(defun gptel-auto-workflow--get-project-for-context ()
+  "Determine which project context we're in.
+Returns (project-root . project-buffer) or nil if can't determine."
+  (cond
+   ;; Case 1: Explicitly in multi-project mode
+   (gptel-auto-workflow--current-project
+    (cons gptel-auto-workflow--current-project
+          (gptel-auto-workflow--get-project-buffer gptel-auto-workflow--current-project)))
+   ;; Case 2: Check gptel-auto-workflow--project-root-override
+   ((and (boundp 'gptel-auto-workflow--project-root-override)
+         gptel-auto-workflow--project-root-override)
+    (cons gptel-auto-workflow--project-root-override
+          (gptel-auto-workflow--get-project-buffer gptel-auto-workflow--project-root-override)))
+   ;; Case 3: Check if current directory is a configured project
+   ((and (boundp 'gptel-auto-workflow-projects)
+         (cl-some (lambda (proj)
+                    (when (string-prefix-p (expand-file-name proj)
+                                          (expand-file-name default-directory))
+                      proj))
+                  gptel-auto-workflow-projects))
+    (let ((proj (cl-some (lambda (p)
+                          (when (string-prefix-p (expand-file-name p)
+                                                (expand-file-name default-directory))
+                            p))
+                        gptel-auto-workflow-projects)))
+      (cons proj (gptel-auto-workflow--get-project-buffer proj))))
+   ;; Case 4: Try to detect project from default-directory
+   (t
+    (let* ((proj (condition-case nil
+                   (gptel-auto-workflow--project-root)
+                 (error default-directory)))
+           (expanded-proj (expand-file-name proj)))
+      (cons expanded-proj (gptel-auto-workflow--get-project-buffer expanded-proj))))))
+
+(defun gptel-auto-workflow--advice-task-override (orig-fun main-cb agent-type description prompt)
+  "Advice around subagent task execution to use per-project buffers.
+ORIG-FUN is the original task function, other args passed through.
+ALL subagents MUST belong to a project - no global subagents allowed."
+  (if-let* ((proj-context (gptel-auto-workflow--get-project-for-context))
+            (project-root (car proj-context))
+            (project-buf (cdr proj-context)))
+      ;; Route to per-project buffer
+      (let* ((default-directory project-root)
+             (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+             (info (and parent-fsm (gptel-fsm-info parent-fsm)))
+             ;; Override the buffer in FSM info to use project buffer
+             (modified-info (plist-put (copy-sequence info) :buffer project-buf)))
+        (cl-letf (((symbol-function 'gptel-fsm-info)
+                   (lambda (&optional fsm) (if (eq fsm parent-fsm) modified-info info)))
+                  ;; Also set current buffer for overlay creation
+                  ((symbol-function 'current-buffer)
+                   (lambda () project-buf)))
+          ;; For executor tasks, make overlay persist
+          (if (and gptel-auto-workflow--persist-executor-overlays
+                   (equal agent-type "executor"))
+              (cl-letf (((symbol-function 'delete-overlay)
+                         (lambda (&rest _) nil)))
+                (funcall orig-fun main-cb agent-type description prompt))
+            (funcall orig-fun main-cb agent-type description prompt))))
+    ;; Should never reach here - all subagents must belong to a project
+    (error "[auto-workflow] Cannot determine project context for subagent '%s'. \
+All subagents must belong to a project." agent-type)))
+
+(defun gptel-auto-workflow-enable-per-project-subagents ()
+  "Enable per-project subagent buffer support.
+Installs advice on gptel-agent--task to route subagents to per-project buffers."
+  (interactive)
+  (when (fboundp 'gptel-agent--task)
+    (advice-add 'gptel-agent--task :around #'gptel-auto-workflow--advice-task-override))
+  (setq gptel-auto-workflow--persist-executor-overlays t)
+  (message "[auto-workflow] Per-project subagent buffers enabled"))
+
+(defun gptel-auto-workflow-disable-per-project-subagents ()
+  "Disable per-project subagent buffer support."
+  (interactive)
+  (when (fboundp 'gptel-agent--task)
+    (advice-remove 'gptel-agent--task #'gptel-auto-workflow--advice-task-override))
+  (setq gptel-auto-workflow--persist-executor-overlays nil)
+  (message "[auto-workflow] Per-project subagent buffers disabled"))
+
+;; Auto-enable on load
+(gptel-auto-workflow-enable-per-project-subagents)
+
+;;; Executor Overlay Management
+
+(defun gptel-auto-workflow-clear-executor-overlays (&optional project-root)
+  "Clear all persistent executor overlays for PROJECT-ROOT or all projects.
+Without PROJECT-ROOT, clears overlays for all projects."
+  (interactive)
+  (if project-root
+      (when-let* ((buf (gethash (expand-file-name project-root)
+                                gptel-auto-workflow--project-buffers)))
+        (with-current-buffer buf
+          (dolist (ov (overlays-in (point-min) (point-max)))
+            (when (overlay-get ov 'gptel-agent--task-type)
+              (delete-overlay ov))))
+        (message "[auto-workflow] Cleared executor overlays for %s" project-root))
+    (maphash (lambda (_ buf)
+               (when (buffer-live-p buf)
+                 (with-current-buffer buf
+                   (dolist (ov (overlays-in (point-min) (point-max)))
+                     (when (overlay-get ov 'gptel-agent--task-type)
+                       (delete-overlay ov))))))
+             gptel-auto-workflow--project-buffers)
+    (message "[auto-workflow] Cleared all executor overlays")))
+
+(defun gptel-auto-workflow-list-project-buffers ()
+  "List all project gptel-agent buffers."
+  (interactive)
+  (let ((buffers nil))
+    (maphash (lambda (root buf)
+               (push (format "%s -> %s (%s)"
+                             root
+                             (buffer-name buf)
+                             (if (buffer-live-p buf) "live" "dead"))
+                     buffers))
+             gptel-auto-workflow--project-buffers)
+    (if buffers
+        (message "Project buffers:\n%s" (string-join buffers "\n"))
+      (message "No project buffers created yet"))))
 
 ;;; Researcher Multi-Project Support
 
@@ -89,15 +253,18 @@ then runs workflow for that project."
   "Run researcher for specific PROJECT-ROOT.
 Loads .dir-locals.el from project and runs researcher in that context."
   (interactive "DProject root: ")
-  (let ((root (expand-file-name project-root))
-        (default-directory (expand-file-name project-root)))
+  (let* ((root (expand-file-name project-root))
+         (default-directory root)
+         (project-buf (gptel-auto-workflow--get-project-buffer root)))
     (message "[research] Starting for project: %s" root)
     ;; Ensure gptel-auto-workflow-strategic is loaded
     (unless (featurep 'gptel-auto-workflow-strategic)
       (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)))
-    ;; Override project root temporarily
-    (let ((gptel-auto-workflow--project-root-override root))
-      (gptel-auto-workflow-run-research))))
+    ;; Override project root temporarily and run in project buffer
+    (let ((gptel-auto-workflow--project-root-override root)
+          (gptel-auto-workflow--current-project root))
+      (with-current-buffer project-buf
+        (gptel-auto-workflow-run-research)))))
 
 (defun gptel-auto-workflow-run-all-research ()
   "Run researcher for all configured projects.
@@ -109,18 +276,22 @@ then runs researcher for that project."
   (let ((results nil))
     (dolist (project-root gptel-auto-workflow-projects)
       (message "[research] Processing project: %s" project-root)
-      (let ((default-directory project-root))
+      (let* ((default-directory project-root)
+             (project-buf (gptel-auto-workflow--get-project-buffer project-root)))
         ;; .dir-locals.el will be loaded when we change to project directory
         (condition-case err
             (progn
               ;; Override project root temporarily
-              (let ((gptel-auto-workflow--project-root-override project-root))
-                (gptel-auto-workflow-run-research))
+              (let ((gptel-auto-workflow--project-root-override project-root)
+                    (gptel-auto-workflow--current-project project-root))
+                (with-current-buffer project-buf
+                  (gptel-auto-workflow-run-research)))
               (push (cons project-root 'success) results)
               (message "[research] ✓ Completed: %s" project-root))
           (error
            (push (cons project-root (format "error: %s" err)) results)
            (message "[research] ✗ Failed: %s - %s" project-root err)))))
+    (setq gptel-auto-workflow--current-project nil)
     (message "[research] All projects processed: %s" 
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                         results ", "))
