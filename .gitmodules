@@ -14,3 +14,11 @@
 	path = packages/ai-behaviors
 	url = https://github.com/xificurC/ai-behaviors.git
 	branch = main
+[submodule "packages/mementum"]
+	path = packages/mementum
+	url = https://github.com/davidwuchn/mementum
+	branch = main
+[submodule "packages/nucleus"]
+	path = packages/nucleus
+	url = https://github.com/davidwuchn/nucleus
+	branch = main

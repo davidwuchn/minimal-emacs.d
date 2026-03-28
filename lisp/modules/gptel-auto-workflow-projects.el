@@ -39,12 +39,19 @@ Each project gets its own isolated buffer for executor overlays."
   (let* ((root (expand-file-name project-root))
          (buf-name (format "*gptel-agent:%s*" (file-name-nondirectory (directory-file-name root))))
          (existing (gethash root gptel-auto-workflow--project-buffers)))
+    ;; Check if existing buffer is still live
     (if (and existing (buffer-live-p existing))
         existing
+      ;; Create new buffer (or recreate if previous was killed)
       (let ((buf (get-buffer-create buf-name)))
         (with-current-buffer buf
-          (unless (bound-and-true-p gptel-mode)
-            (gptel-mode))
+          ;; Set major mode first, then enable gptel
+          (unless (derived-mode-p 'text-mode)
+            (text-mode))
+          (when (and (fboundp 'gptel-mode) (not (bound-and-true-p gptel-mode)))
+            (condition-case err
+                (gptel-mode)
+              (error (message "[auto-workflow] Could not enable gptel-mode: %s" err))))
           ;; Set project context
           (setq-local default-directory root)
           (when (boundp 'gptel-auto-workflow--project-root-override)
@@ -166,7 +173,9 @@ ORIG-FUN is the original task function, other args passed through.
 ALL subagents MUST belong to a project - no global subagents allowed."
   (if-let* ((proj-context (gptel-auto-workflow--get-project-for-context))
             (project-root (car proj-context))
-            (project-buf (cdr proj-context)))
+            (project-buf (cdr proj-context))
+            ;; Ensure buffer is still live
+            (_ (buffer-live-p project-buf)))
       ;; Route to per-project buffer
       (let* ((default-directory project-root)
              (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
@@ -206,8 +215,8 @@ Installs advice on gptel-agent--task to route subagents to per-project buffers."
   (setq gptel-auto-workflow--persist-executor-overlays nil)
   (message "[auto-workflow] Per-project subagent buffers disabled"))
 
-;; Auto-enable on load
-(gptel-auto-workflow-enable-per-project-subagents)
+;; Auto-enable on load (disabled for testing)
+;; (gptel-auto-workflow-enable-per-project-subagents)
 
 ;;; Executor Overlay Management
 
@@ -293,6 +302,98 @@ then runs researcher for that project."
            (message "[research] ✗ Failed: %s - %s" project-root err)))))
     (setq gptel-auto-workflow--current-project nil)
     (message "[research] All projects processed: %s" 
+             (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
+                        results ", "))
+    results))
+
+;;; Mementum Multi-Project Support
+
+(defun gptel-auto-workflow-run-mementum-for-project (project-root)
+  "Run mementum weekly job for specific PROJECT-ROOT.
+Loads project context and runs mementum maintenance in that context."
+  (interactive "DProject root: ")
+  (let* ((root (expand-file-name project-root))
+         (default-directory root))
+    (message "[mementum] Starting weekly job for project: %s" root)
+    ;; Ensure gptel-tools-agent is loaded for mementum functions
+    (unless (featurep 'gptel-tools-agent)
+      (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)))
+    ;; Override project context and run
+    (let ((gptel-auto-workflow--project-root-override root)
+          (gptel-auto-workflow--current-project root)
+          (mementum-root root))  ; Set mementum-root for mementum functions
+      (condition-case err
+          (progn
+            (gptel-mementum-weekly-job)
+            (message "[mementum] ✓ Completed: %s" root))
+        (error
+         (message "[mementum] ✗ Failed: %s - %s" root err)
+         nil)))))
+
+(defun gptel-auto-workflow-run-all-mementum ()
+  "Run mementum weekly job for all configured projects.
+To be called from cron - runs mementum maintenance for each project."
+  (interactive)
+  (message "[mementum] Running weekly job for %d projects..."
+           (length gptel-auto-workflow-projects))
+  (let ((results nil))
+    (dolist (project-root gptel-auto-workflow-projects)
+      (message "[mementum] Processing project: %s" project-root)
+      (condition-case err
+          (progn
+            (gptel-auto-workflow-run-mementum-for-project project-root)
+            (push (cons project-root 'success) results))
+        (error
+         (push (cons project-root (format "error: %s" err)) results)
+         (message "[mementum] ✗ Failed: %s - %s" project-root err))))
+    (setq gptel-auto-workflow--current-project nil)
+    (message "[mementum] All projects processed: %s"
+             (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
+                        results ", "))
+    results))
+
+;;; Instincts (Benchmark) Multi-Project Support
+
+(defun gptel-auto-workflow-run-instincts-for-project (project-root)
+  "Run instincts weekly job for specific PROJECT-ROOT.
+Loads project context and runs instincts evolution in that context."
+  (interactive "DProject root: ")
+  (let* ((root (expand-file-name project-root))
+         (default-directory root))
+    (message "[instincts] Starting weekly job for project: %s" root)
+    ;; Ensure gptel-benchmark-instincts is loaded
+    (unless (featurep 'gptel-benchmark-instincts)
+      (load-file (expand-file-name "lisp/modules/gptel-benchmark-instincts.el" root)))
+    ;; Override project context and run
+    (let ((gptel-auto-workflow--project-root-override root)
+          (gptel-auto-workflow--current-project root)
+          (mementum-root root))  ; Set mementum-root for instincts functions
+      (condition-case err
+          (progn
+            (gptel-benchmark-instincts-weekly-job)
+            (message "[instincts] ✓ Completed: %s" root))
+        (error
+         (message "[instincts] ✗ Failed: %s - %s" root err)
+         nil)))))
+
+(defun gptel-auto-workflow-run-all-instincts ()
+  "Run instincts weekly job for all configured projects.
+To be called from cron - runs instincts evolution for each project."
+  (interactive)
+  (message "[instincts] Running weekly job for %d projects..."
+           (length gptel-auto-workflow-projects))
+  (let ((results nil))
+    (dolist (project-root gptel-auto-workflow-projects)
+      (message "[instincts] Processing project: %s" project-root)
+      (condition-case err
+          (progn
+            (gptel-auto-workflow-run-instincts-for-project project-root)
+            (push (cons project-root 'success) results))
+        (error
+         (push (cons project-root (format "error: %s" err)) results)
+         (message "[instincts] ✗ Failed: %s - %s" project-root err))))
+    (setq gptel-auto-workflow--current-project nil)
+    (message "[instincts] All projects processed: %s"
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                         results ", "))
     results))
