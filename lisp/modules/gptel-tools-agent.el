@@ -2156,15 +2156,16 @@ Uses local state captured in closure for parallel execution safety."
                      target exp-id max-exp
                      best-score
                      results
-                     (lambda (result)
-                       (push result results)
-                       (let ((score-after (plist-get result :score-after)))
-                         (when (and score-after (> score-after (or best-score 0)))
-                           (setq best-score score-after
-                                 no-improvement-count 0))
-                         (when (and score-after (<= score-after (or best-score 0)))
-                           (cl-incf no-improvement-count)))
-                       (run-next (1+ exp-id)))))))
+                      (lambda (result)
+                        (push result results)
+                        (gptel-auto-workflow--update-progress)  ; Update watchdog
+                        (let ((score-after (plist-get result :score-after)))
+                          (when (and score-after (> score-after (or best-score 0)))
+                            (setq best-score score-after
+                                  no-improvement-count 0))
+                          (when (and score-after (<= score-after (or best-score 0)))
+                            (cl-incf no-improvement-count)))
+                        (run-next (1+ exp-id)))))))
       (run-next 1))))
 
 ;;; Main Entry Point
@@ -2177,6 +2178,49 @@ Uses local state captured in closure for parallel execution safety."
 
 (defvar gptel-auto-workflow--current-target nil
   "Current target file being processed by auto-workflow.")
+
+(defvar gptel-auto-workflow--watchdog-timer nil
+  "Watchdog timer to prevent workflow from getting stuck.")
+
+(defvar gptel-auto-workflow--last-progress-time nil
+  "Timestamp of last progress update.")
+
+(defvar gptel-auto-workflow--max-stuck-minutes 30
+  "Maximum minutes workflow can be stuck before auto-stopping.")
+
+(defun gptel-auto-workflow--watchdog-check ()
+  "Check if workflow is stuck and force-stop if necessary.
+Prevents workflow from hanging indefinitely due to callback failures."
+  (when gptel-auto-workflow--running
+    (let ((stuck-minutes (and gptel-auto-workflow--last-progress-time
+                              (/ (float-time (time-subtract (current-time) gptel-auto-workflow--last-progress-time))
+                                 60))))
+      (if (and stuck-minutes (> stuck-minutes gptel-auto-workflow--max-stuck-minutes))
+          (progn
+            (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
+                     stuck-minutes)
+            (setq gptel-auto-workflow--running nil)
+            (plist-put gptel-auto-workflow--stats :phase "idle")
+            (when gptel-auto-workflow--watchdog-timer
+              (cancel-timer gptel-auto-workflow--watchdog-timer)
+              (setq gptel-auto-workflow--watchdog-timer nil)))
+        ;; Still running normally, check again in 5 minutes
+        t))))
+
+(defun gptel-auto-workflow--update-progress ()
+  "Update progress timestamp for watchdog tracking."
+  (setq gptel-auto-workflow--last-progress-time (current-time)))
+
+(defun gptel-auto-workflow-force-stop ()
+  "Force stop a stuck workflow.
+Interactive command to recover from hung workflow state."
+  (interactive)
+  (setq gptel-auto-workflow--running nil)
+  (plist-put gptel-auto-workflow--stats :phase "idle")
+  (when gptel-auto-workflow--watchdog-timer
+    (cancel-timer gptel-auto-workflow--watchdog-timer)
+    (setq gptel-auto-workflow--watchdog-timer nil))
+  (message "[auto-workflow] Force-stopped"))
 
 (defun gptel-auto-workflow--headless-p ()
   "Check if running on a headless server (Linux, Pi5, etc).
@@ -2317,7 +2361,13 @@ Usage:
   (unless (require 'magit-git nil t)
     (user-error "magit-git is required"))
   (setq gptel-auto-workflow--running t
-        gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0))
+        gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
+        gptel-auto-workflow--last-progress-time (current-time))
+  ;; Start watchdog timer
+  (when gptel-auto-workflow--watchdog-timer
+    (cancel-timer gptel-auto-workflow--watchdog-timer))
+  (setq gptel-auto-workflow--watchdog-timer
+        (run-with-timer 300 300 #'gptel-auto-workflow--watchdog-check))
   (if targets
       (gptel-auto-workflow--run-with-targets targets completion-callback)
     (require 'gptel-auto-workflow-strategic)
