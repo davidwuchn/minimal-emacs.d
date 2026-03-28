@@ -1,17 +1,18 @@
 # Mementum State
 
-> Last session: 2026-03-28 14:30
+> Last session: 2026-03-28 15:10
 
-## Total Improvements: 116+ Real Code Fixes
+## Total Improvements: 118+ Real Code Fixes
 
-460+ commits since March 25, 2026.
+462+ commits since March 25, 2026.
 
 ### Recent Fixes (Last 25)
 
 | # | File | Fix |
 |---|---|------|
+| 119 | gptel-tools-agent.el | Correct paren in shell-timeout function |
+| 120 | staging branch | Synced with main (recovered orphan commits) |
 | 117 | gptel-tools-agent.el | Shell command timeout protection (prevent deadlocks) |
-| 118 | staging branch | Synced with main (recovered orphan commits) |
 | 116 | gptel-tools-edit.el | Add missing closing paren (parse fix) |
 | 115 | gptel-tools-{bash,edit,glob,grep}.el | Always call callback to prevent FSM hangs |
 | 114 | scripts/install-cron.sh | Enable instincts job for macOS |
@@ -52,7 +53,7 @@
 λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7 Linux)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 116+ code fixes, 460+ commits since Mar 25
+λ real. 118+ code fixes, 462+ commits since Mar 25
 λ behaviors. 40+ AI code behaviors in packages/ai-behaviors
 λ reviewer. qwen3-coder-next on DashScope (no thinking mode)
 λ async. Daemon never blocks
@@ -72,7 +73,8 @@
 λ server-start. GUI Emacs acts as server for cron jobs
 λ worktree-cleanup. Hostname-based, clean ALL at run start
 λ experiment-suffix. Derived from (system-name) for multi-machine
-λ subagent-timeout. 600s default prevents workflow hang
+λ subagent-timeout. 1200s default prevents workflow hang
+λ shell-timeout. 30s timeout kills deadlocked shell processes
 λ pre-push-hook. Auto-push submodules before parent
 ```
 
@@ -80,14 +82,15 @@
 
 ## Current Status
 
-- **Main branch**: `8b1c5d7` (timeout protection for shell commands)
-- **Staging**: Synced with main (force-pushed)
-- **Workflow**: Ready
+- **Main branch**: `e8baa6b` (shell timeout paren fix)
+- **Staging**: Synced with main
+- **Workflow**: Running (selecting targets)
 - **Worktrees**: 0 (clean)
 - **Emacs daemon**: Running
-- **Next scheduled**: 15:00
+- **Next scheduled**: 19:00
 - **Cron**: 4 jobs installed
 - **ai-behaviors**: 40 behaviors available in packages/ai-behaviors
+- **Shell deadlock**: Fixed with timeout protection
 
 ---
 
