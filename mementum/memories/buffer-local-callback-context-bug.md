@@ -13,23 +13,15 @@ Workflow gets stuck because buffer-local variables (`my/gptel--agent-task-done`,
 - `gptel-auto-experiment--grade-done=nil` in worktree buffer
 - 5 timeout messages, only 1 result recorded
 
-## Fix Required
-Wrap all buffer-local variable access in `with-current-buffer origin-buf`:
+## Fix
+Changed to regular `defvar` (global) since experiments run sequentially:
+- `my/gptel--agent-task-done` (line 617)
+- `my/gptel--agent-task-timeout-timer` (line 620)
+- `my/gptel--agent-task-progress-timer` (line 623)
+- `gptel-auto-experiment--grade-done` (line 1559)
+- `gptel-auto-experiment--grade-timer` (line 1563)
 
-1. **my/gptel--agent-task-with-timeout** (line 626):
-   - Move `setq` initializations after `let*` captures `origin-buf`
-   - Wrap in `(with-current-buffer origin-buf ...)`
-   - Wrap wrapped-cb body in `with-current-buffer`
-
-2. **gptel-auto-experiment-grade** (line 1595):
-   - Capture `origin-buf` at start
-   - Wrap `setq` and timer callbacks in `with-current-buffer`
-
-## Files
-- `lisp/modules/gptel-tools-agent.el`
-- Lines 617-625 (defvar-local declarations)
-- Lines 626-691 (my/gptel--agent-task-with-timeout)
-- Lines 1595-1634 (gptel-auto-experiment-grade)
+Removed `make-variable-buffer-local` calls.
 
 ## Status
-Identified 2026-03-28, fix pending (paren balancing issues in edit)
+✅ Fixed 2026-03-28, commit 54382a9
