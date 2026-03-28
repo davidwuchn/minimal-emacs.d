@@ -96,7 +96,7 @@ to prevent callers from hanging indefinitely."
                   (funcall callback result))
                  ;; Aborted: deliver with error prefix so caller can proceed
                  (t
-                  (funcall callback (format "Error: Request aborted\n%s" result))))))))
+                  (funcall callback (format "Error: Request aborted\n%s" result)))))))))
     (condition-case err
         (progn
           (let ((patch-mode (and diffp (not (eq diffp :json-false)))))
