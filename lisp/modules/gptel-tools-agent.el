@@ -66,7 +66,7 @@ On timeout or error, returns empty string and logs warning."
 TARGET is optional description. Enables recovery if workflow interrupted."
   (let* ((default-directory (or (gptel-auto-workflow--get-worktree-dir (or target gptel-auto-workflow--current-target))
                                  (gptel-auto-workflow--project-root)))
-         (commit-hash (gptel-auto-workflow--shell-command-string "git rev-parse HEAD" 10))
+         (commit-hash (gptel-auto-workflow--git-cmd "git rev-parse HEAD"))
          (date (format-time-string "%Y-%m-%d"))
          (tracking-file (expand-file-name
                          (format "var/tmp/experiments/%s/commits.txt" date)
@@ -103,8 +103,8 @@ An orphan is a commit that exists but is not reachable from any branch."
                  (exp-id (cadr parts))
                  (target (caddr parts)))
             (when (and hash (string-match-p "^[a-f0-9]+$" hash))
-              (let ((in-branch (gptel-auto-workflow--shell-command-string
-                                 (format "git branch --contains %s 2>/dev/null | head -1" hash) 10)))
+              (let ((in-branch (gptel-auto-workflow--git-cmd
+                                 (format "git branch --contains %s 2>/dev/null | head -1" hash))))
                 (when (string-empty-p in-branch)
                   (push (list hash exp-id target) orphans))))))))
     (if orphans
@@ -118,17 +118,17 @@ An orphan is a commit that exists but is not reachable from any branch."
   "Cherry-pick COMMIT-HASH to staging branch for recovery."
   (interactive "sCommit hash: ")
   (let ((default-directory (gptel-auto-workflow--project-root)))
-    (gptel-auto-workflow--shell-command-string "git stash" 10)
-    (gptel-auto-workflow--shell-command-string "git checkout staging" 10)
-    (let ((result (gptel-auto-workflow--shell-command-string
-                   (format "git cherry-pick %s 2>&1" commit-hash) 30)))
+    (gptel-auto-workflow--git-cmd "git stash")
+    (gptel-auto-workflow--git-cmd "git checkout staging")
+    (let ((result (gptel-auto-workflow--git-cmd
+                   (format "git cherry-pick %s 2>&1" commit-hash))))
       (if (string-match-p "error\\|conflict" result)
           (progn
             (message "[auto-workflow] Cherry-pick failed: %s" result)
-            (gptel-auto-workflow--shell-command-string "git cherry-pick --abort" 10)
+            (gptel-auto-workflow--git-cmd "git cherry-pick --abort")
             nil)
         (message "[auto-workflow] Recovered %s to staging" commit-hash)
-        (gptel-auto-workflow--shell-command-string "git checkout main" 10)
+        (gptel-auto-workflow--git-cmd "git checkout main")
         t))))
 
 (defun gptel-auto-workflow-recover-all-orphans ()
@@ -144,38 +144,38 @@ An orphan is a commit that exists but is not reachable from any branch."
              (if (gptel-auto-workflow--cherry-pick-orphan hash)
                  (cl-incf recovered)
                (cl-incf failed))))
-         (message "[auto-workflow] Recovered %d/%d orphans to staging"
-                  recovered (length orphans))
+(message "[auto-workflow] Recovered %d/%d orphans to staging"
+                   recovered (length orphans))
           (when (> recovered 0)
             (let ((default-directory (gptel-auto-workflow--project-root)))
-              (gptel-auto-workflow--shell-command-string "git push origin staging" 30)))))))
+              (gptel-auto-workflow--git-cmd "git push origin staging")))))))
 
 (defun gptel-auto-workflow--sync-staging-with-main ()
   "Fast-forward staging branch to match main.
 Ensures experiments run against latest code.
 All shell commands have timeout protection to prevent deadlocks."
   (let ((default-directory (gptel-auto-workflow--project-root))
-        (original-branch (gptel-auto-workflow--shell-command-string
-                          "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main" 10)))
+        (original-branch (gptel-auto-workflow--git-cmd
+                          "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
     (condition-case err
         (progn
-          (gptel-auto-workflow--shell-command-string "git fetch origin" 60)
-          (let ((main-commit (gptel-auto-workflow--shell-command-string
-                               "git rev-parse origin/main" 10))
-                (staging-commit (gptel-auto-workflow--shell-command-string
-                                 "git rev-parse origin/staging 2>/dev/null || echo \"none\"" 10)))
+          (gptel-auto-workflow--git-cmd "git fetch origin" 180)
+          (let ((main-commit (gptel-auto-workflow--git-cmd
+                               "git rev-parse origin/main"))
+                (staging-commit (gptel-auto-workflow--git-cmd
+                                 "git rev-parse origin/staging 2>/dev/null || echo \"none\"")))
             (if (string= main-commit staging-commit)
                 (message "[auto-workflow] Staging already in sync with main")
               (progn
-                (gptel-auto-workflow--shell-command-string "git checkout staging" 10)
-                (gptel-auto-workflow--shell-command-string "git merge origin/main --ff-only" 30)
-                (gptel-auto-workflow--shell-command-string "git push origin staging" 30)
-                (gptel-auto-workflow--shell-command-string (format "git checkout %s" original-branch) 10)
+                (gptel-auto-workflow--git-cmd "git checkout staging")
+                (gptel-auto-workflow--git-cmd "git merge origin/main --ff-only")
+                (gptel-auto-workflow--git-cmd "git push origin staging")
+                (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
                 (message "[auto-workflow] Synced staging with main (%s -> %s)"
                          (substring staging-commit 0 7)
                          (substring main-commit 0 7))))))
       (error
-       (gptel-auto-workflow--shell-command-string (format "git checkout %s" original-branch) 10)
+       (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
        (message "[auto-workflow] Failed to sync staging: %s" err)
        nil))))
 
@@ -2156,15 +2156,16 @@ Uses local state captured in closure for parallel execution safety."
                      target exp-id max-exp
                      best-score
                      results
-                     (lambda (result)
-                       (push result results)
-                       (let ((score-after (plist-get result :score-after)))
-                         (when (and score-after (> score-after (or best-score 0)))
-                           (setq best-score score-after
-                                 no-improvement-count 0))
-                         (when (and score-after (<= score-after (or best-score 0)))
-                           (cl-incf no-improvement-count)))
-                       (run-next (1+ exp-id)))))))
+                      (lambda (result)
+                        (push result results)
+                        (gptel-auto-workflow--update-progress)  ; Update watchdog
+                        (let ((score-after (plist-get result :score-after)))
+                          (when (and score-after (> score-after (or best-score 0)))
+                            (setq best-score score-after
+                                  no-improvement-count 0))
+                          (when (and score-after (<= score-after (or best-score 0)))
+                            (cl-incf no-improvement-count)))
+                        (run-next (1+ exp-id)))))))
       (run-next 1))))
 
 ;;; Main Entry Point
@@ -2177,6 +2178,61 @@ Uses local state captured in closure for parallel execution safety."
 
 (defvar gptel-auto-workflow--current-target nil
   "Current target file being processed by auto-workflow.")
+
+(defvar gptel-auto-workflow--watchdog-timer nil
+  "Watchdog timer to prevent workflow from getting stuck.")
+
+(defvar gptel-auto-workflow--last-progress-time nil
+  "Timestamp of last progress update.")
+
+(defvar gptel-auto-workflow--max-stuck-minutes 30
+  "Maximum minutes workflow can be stuck before auto-stopping.")
+
+(defcustom gptel-auto-workflow-git-timeout 120
+  "Timeout in seconds for git commands during auto-workflow.
+Default 120s (2 minutes) handles slow network connections.
+Increase if git operations frequently timeout."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-workflow--git-cmd (cmd &optional timeout)
+  "Run git command CMD with TIMEOUT (default: gptel-auto-workflow-git-timeout).
+Returns command output as string."
+  (gptel-auto-workflow--shell-command-string cmd (or timeout gptel-auto-workflow-git-timeout)))
+
+(defun gptel-auto-workflow--watchdog-check ()
+  "Check if workflow is stuck and force-stop if necessary.
+Prevents workflow from hanging indefinitely due to callback failures."
+  (when gptel-auto-workflow--running
+    (let ((stuck-minutes (and gptel-auto-workflow--last-progress-time
+                              (/ (float-time (time-subtract (current-time) gptel-auto-workflow--last-progress-time))
+                                 60))))
+      (if (and stuck-minutes (> stuck-minutes gptel-auto-workflow--max-stuck-minutes))
+          (progn
+            (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
+                     stuck-minutes)
+            (setq gptel-auto-workflow--running nil)
+            (plist-put gptel-auto-workflow--stats :phase "idle")
+            (when gptel-auto-workflow--watchdog-timer
+              (cancel-timer gptel-auto-workflow--watchdog-timer)
+              (setq gptel-auto-workflow--watchdog-timer nil)))
+        ;; Still running normally, check again in 5 minutes
+        t))))
+
+(defun gptel-auto-workflow--update-progress ()
+  "Update progress timestamp for watchdog tracking."
+  (setq gptel-auto-workflow--last-progress-time (current-time)))
+
+(defun gptel-auto-workflow-force-stop ()
+  "Force stop a stuck workflow.
+Interactive command to recover from hung workflow state."
+  (interactive)
+  (setq gptel-auto-workflow--running nil)
+  (plist-put gptel-auto-workflow--stats :phase "idle")
+  (when gptel-auto-workflow--watchdog-timer
+    (cancel-timer gptel-auto-workflow--watchdog-timer)
+    (setq gptel-auto-workflow--watchdog-timer nil))
+  (message "[auto-workflow] Force-stopped"))
 
 (defun gptel-auto-workflow--headless-p ()
   "Check if running on a headless server (Linux, Pi5, etc).
@@ -2317,7 +2373,13 @@ Usage:
   (unless (require 'magit-git nil t)
     (user-error "magit-git is required"))
   (setq gptel-auto-workflow--running t
-        gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0))
+        gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
+        gptel-auto-workflow--last-progress-time (current-time))
+  ;; Start watchdog timer
+  (when gptel-auto-workflow--watchdog-timer
+    (cancel-timer gptel-auto-workflow--watchdog-timer))
+  (setq gptel-auto-workflow--watchdog-timer
+        (run-with-timer 300 300 #'gptel-auto-workflow--watchdog-check))
   (if targets
       (gptel-auto-workflow--run-with-targets targets completion-callback)
     (require 'gptel-auto-workflow-strategic)

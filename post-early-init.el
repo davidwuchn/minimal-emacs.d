@@ -11,6 +11,22 @@
 (setq treesit-extra-load-path
       (list (expand-file-name "tree-sitter" user-emacs-directory)))
 
+;; ═══════════════════════════════════════════════════════════════════════════
+;; AUTO-WORKFLOW: Mark all project variables as safe
+;; ═══════════════════════════════════════════════════════════════════════════
+
+;; These variables are used by auto-workflow in .dir-locals.el files
+;; Marking them as safe prevents the prompt when opening project files
+(dolist (var '(gptel-auto-workflow-targets
+                gptel-auto-experiment-max-per-target
+                gptel-auto-experiment-time-budget
+                gptel-auto-experiment-no-improvement-threshold
+                gptel-auto-workflow-projects
+                gptel-auto-workflow--project-root-override
+                gptel-backend
+                gptel-model))
+  (add-to-list 'safe-local-variable-values (cons var t)))
+
 (provide 'post-early-init)
 
 ;;; post-early-init.el ends here
