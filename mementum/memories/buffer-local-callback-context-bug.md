@@ -1,27 +1,32 @@
 # Buffer-Local Callback Context Bug
 
 ## Issue
-Workflow gets stuck because buffer-local variables (`my/gptel--agent-task-done`, `gptel-auto-experiment--grade-done`) are accessed in wrong buffer context when callbacks fire.
+Workflow gets stuck because experiments run in parallel (dolist spawns all 5 targets at once) but state was stored in global/buffer-local variables.
 
 ## Root Cause
-1. Variables defined with `defvar-local` or `make-variable-buffer-local`
-2. Callbacks from `gptel-agent--task` fire in arbitrary buffer context
-3. `setq` and `unless` checks happen in wrong buffer
+1. `dolist` in `gptel-auto-workflow--run-with-targets` spawns 5 experiments in parallel
+2. Callbacks from `gptel-agent--task` fire asynchronously
+3. Global/buffer-local variables get overwritten by race conditions
 
 ## Evidence
-- `gptel-auto-experiment--grade-done=t` found in `*Minibuf-1*` (emacsclient buffer)
-- `gptel-auto-experiment--grade-done=nil` in worktree buffer
+- `gptel-auto-experiment--grade-done=t` found in `*Minibuf-1*` (wrong buffer)
 - 5 timeout messages, only 1 result recorded
+- Hash table shows 5 tasks, 4 grades in progress after fix
 
 ## Fix
-Changed to regular `defvar` (global) since experiments run sequentially:
-- `my/gptel--agent-task-done` (line 617)
-- `my/gptel--agent-task-timeout-timer` (line 620)
-- `my/gptel--agent-task-progress-timer` (line 623)
-- `gptel-auto-experiment--grade-done` (line 1559)
-- `gptel-auto-experiment--grade-timer` (line 1563)
+Changed to hash tables keyed by unique id:
 
-Removed `make-variable-buffer-local` calls.
+```elisp
+(defvar my/gptel--agent-task-state (make-hash-table :test 'eql))
+(defvar gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+```
+
+Each callback looks up its own state by id:
+- `task-id` from `my/gptel--agent-task-counter`
+- `grade-id` from `gptel-auto-experiment--grade-counter`
+
+Cleanup via `remhash` after callback completes.
 
 ## Status
-✅ Fixed 2026-03-28, commit 54382a9
+✅ Fixed 2026-03-28, commit 4a23297
+Verified: 5 parallel tasks running, hash tables tracking independent state
