@@ -9,6 +9,98 @@
 (require 'subr-x)
 (require 'gptel-agent)
 
+;;; Orphan Commit Tracking
+
+(defun gptel-auto-workflow--track-commit (experiment-id &optional target)
+  "Save current commit hash to tracking file for EXPERIMENT-ID.
+TARGET is optional description. Enables recovery if workflow interrupted."
+  (let* ((default-directory (or gptel-auto-workflow--worktree-dir
+                                (gptel-auto-workflow--project-root)))
+         (commit-hash (string-trim (shell-command-to-string "git rev-parse HEAD")))
+         (date (format-time-string "%Y-%m-%d"))
+         (tracking-file (expand-file-name
+                         (format "var/tmp/experiments/%s/commits.txt" date)
+                         (gptel-auto-workflow--project-root)))
+         (tracking-dir (file-name-directory tracking-file)))
+    (unless (file-exists-p tracking-dir)
+      (make-directory tracking-dir t))
+    (with-temp-buffer
+      (insert (format "%s %s %s %s\n"
+                      commit-hash
+                      experiment-id
+                      (or target "unknown")
+                      (format-time-string "%H:%M:%S")))
+      (append-to-file (point-min) (point-max) tracking-file))
+    (message "[auto-workflow] Tracked commit %s for exp-%s" 
+             (substring commit-hash 0 7) experiment-id)
+    commit-hash))
+
+(defun gptel-auto-workflow--recover-orphans ()
+  "Check for orphan commits from previous runs and offer to recover.
+An orphan is a commit that exists but is not reachable from any branch."
+  (interactive)
+  (let* ((date (format-time-string "%Y-%m-%d"))
+         (tracking-file (expand-file-name
+                         (format "var/tmp/experiments/%s/commits.txt" date)
+                         (gptel-auto-workflow--project-root)))
+         (orphans nil))
+    (when (file-exists-p tracking-file)
+      (with-temp-buffer
+        (insert-file-contents tracking-file)
+        (dolist (line (split-string (buffer-string) "\n" t))
+          (let* ((parts (split-string line))
+                 (hash (car parts))
+                 (exp-id (cadr parts))
+                 (target (caddr parts)))
+            (when (and hash (string-match-p "^[a-f0-9]+$" hash))
+              (let ((in-branch (string-trim
+                                (shell-command-to-string
+                                 (format "git branch --contains %s 2>/dev/null | head -1" hash)))))
+                (when (string-empty-p in-branch)
+                  (push (list hash exp-id target) orphans))))))))
+    (if orphans
+        (message "[auto-workflow] Found %d orphan(s): %s"
+                 (length orphans)
+                 (mapconcat (lambda (o) (substring (car o) 0 7)) orphans " "))
+      (message "[auto-workflow] No orphan commits found"))
+    orphans))
+
+(defun gptel-auto-workflow--cherry-pick-orphan (commit-hash)
+  "Cherry-pick COMMIT-HASH to staging branch for recovery."
+  (interactive "sCommit hash: ")
+  (let ((default-directory (gptel-auto-workflow--project-root)))
+    (shell-command-to-string "git stash")
+    (shell-command-to-string "git checkout staging")
+    (let ((result (shell-command-to-string
+                   (format "git cherry-pick %s 2>&1" commit-hash))))
+      (if (string-match-p "error\\|conflict" result)
+          (progn
+            (message "[auto-workflow] Cherry-pick failed: %s" result)
+            (shell-command-to-string "git cherry-pick --abort")
+            nil)
+        (message "[auto-workflow] Recovered %s to staging" commit-hash)
+        (shell-command-to-string "git checkout main")
+        t))))
+
+(defun gptel-auto-workflow-recover-all-orphans ()
+  "Recover all orphan commits from today to staging branch."
+  (interactive)
+  (let ((orphans (gptel-auto-workflow--recover-orphans)))
+    (if (not orphans)
+        (message "[auto-workflow] No orphans to recover")
+      (let ((recovered 0)
+            (failed 0))
+        (dolist (orphan orphans)
+          (let ((hash (car orphan)))
+            (if (gptel-auto-workflow--cherry-pick-orphan hash)
+                (cl-incf recovered)
+              (cl-incf failed))))
+        (message "[auto-workflow] Recovered %d/%d orphans to staging"
+                 recovered (length orphans))
+        (when (> recovered 0)
+          (let ((default-directory (gptel-auto-workflow--project-root)))
+            (shell-command-to-string "git push origin staging")))))))
+
 ;;; Customization
 
 (defgroup gptel-tools-agent nil
@@ -1810,11 +1902,12 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                                           (if (> baseline 0) (* 100 (/ (- score-after baseline) baseline)) 0)))
                                              (default-directory (or gptel-auto-workflow--worktree-dir
                                                                     (gptel-auto-workflow--project-root))))
-                                        (gptel-auto-workflow--assert-main-untouched)
-                                        (message "[auto-experiment] ✓ Committing improvement for %s" target)
-                                        (magit-git-success "add" "-A")
-                                        (magit-git-success "commit" "-m" msg)
-                                        (setq gptel-auto-experiment--best-score score-after
+(gptel-auto-workflow--assert-main-untouched)
+                                         (message "[auto-experiment] ✓ Committing improvement for %s" target)
+                                         (magit-git-success "add" "-A")
+                                         (magit-git-success "commit" "-m" msg)
+                                         (gptel-auto-workflow--track-commit experiment-id target)
+                                         (setq gptel-auto-experiment--best-score score-after
                                               gptel-auto-experiment--no-improvement-count 0)
                                         (when gptel-auto-experiment-auto-push
                                           (message "[auto-experiment] Pushing to %s" gptel-auto-workflow--current-branch)
@@ -2088,6 +2181,11 @@ Safe to call from cron - handles all edge cases."
     (condition-case err
         (progn
           (gptel-auto-workflow--cleanup-stale-state)
+          (let ((orphans (gptel-auto-workflow--recover-orphans)))
+            (when orphans
+              (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
+                       (length orphans))
+              (message "[auto-workflow] Run M-x gptel-auto-workflow-recover-all-orphans to recover")))
           (gptel-auto-workflow-run-async--guarded))
       (error
        (message "[auto-workflow] Cron error: %s" err)
