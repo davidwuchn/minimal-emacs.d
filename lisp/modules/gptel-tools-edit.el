@@ -73,9 +73,8 @@ This prevents path traversal via crafted diff headers."
 This is only truly async/interruptible for patch mode (DIFFP true).
 For simple string replacements it executes synchronously.
 
-CALLBACK is called at most once. Errors are always delivered.
-Success results are only delivered if the origin buffer is still live
-and the generation hasn't been aborted."
+CALLBACK is called exactly once. Even on abort, callback receives result
+to prevent callers from hanging indefinitely."
   (let* ((origin (current-buffer))
          (gen my/gptel--abort-generation)
          (done nil)
@@ -84,14 +83,20 @@ and the generation hasn't been aborted."
             (unless done
               (setq done t)
               (let ((is-error (and (stringp result) (string-prefix-p "Error" result))))
-                ;; Always deliver errors so FSM doesn't hang.
-                ;; For success, check if buffer is still valid and not aborted.
-                (if is-error
-                    (funcall callback result)
-                  (when (and (buffer-live-p origin)
-                             (with-current-buffer origin
-                               (= gen my/gptel--abort-generation)))
-                    (funcall callback result))))))))
+                (cond
+                 ;; Always deliver errors
+                 (is-error (funcall callback result))
+                 ;; Normal case: buffer alive and not aborted
+                 ((and (buffer-live-p origin)
+                       (with-current-buffer origin
+                         (= gen my/gptel--abort-generation)))
+                  (funcall callback result))
+                 ;; Buffer dead: still deliver result
+                 ((not (buffer-live-p origin))
+                  (funcall callback result))
+                 ;; Aborted: deliver with error prefix so caller can proceed
+                 (t
+                  (funcall callback (format "Error: Request aborted\n%s" result))))))))
     (condition-case err
         (progn
           (let ((patch-mode (and diffp (not (eq diffp :json-false)))))

@@ -61,7 +61,7 @@ the first 50 lines are returned with a reference to the full content."
 Finds files matching PATTERN using the `tree' command.
 PATH defaults to current directory. DEPTH limits recursion.
 
-CALLBACK is called exactly once unless the buffer has been aborted."
+CALLBACK is called exactly once, even on abort (with error message)."
   (let* ((origin (current-buffer))
          (gen my/gptel--abort-generation)
          (buf nil)
@@ -71,10 +71,17 @@ CALLBACK is called exactly once unless the buffer has been aborted."
            (unless done
              (setq done t)
              (when (buffer-live-p buf) (kill-buffer buf))
-             (when (and (buffer-live-p origin)
-                        (with-current-buffer origin
-                          (= gen my/gptel--abort-generation)))
-               (funcall callback result)))))
+             (cond
+              ((and (buffer-live-p origin)
+                    (with-current-buffer origin
+                      (= gen my/gptel--abort-generation)))
+               (funcall callback result))
+              ((not (buffer-live-p origin))
+               (funcall callback result))
+              (t
+               (funcall callback (format "Error: Request aborted\n%s"
+                                         (if (string-prefix-p "Error:" result) result
+                                           (concat "Partial output:\n" result)))))))))
       (condition-case err
           (progn
             (when (string-empty-p pattern)

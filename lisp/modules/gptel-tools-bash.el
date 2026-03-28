@@ -134,10 +134,20 @@ CALLBACK is called with the result string on completion."
         ((finish (result)
            (unless done
              (setq done t)
-             (when (and (buffer-live-p origin)
-                        (with-current-buffer origin
-                          (= gen my/gptel--abort-generation)))
-               (funcall callback result)))))
+             (cond
+              ;; Normal case: buffer alive and not aborted
+              ((and (buffer-live-p origin)
+                    (with-current-buffer origin
+                      (= gen my/gptel--abort-generation)))
+               (funcall callback result))
+              ;; Buffer dead: still call callback with result (caller needs to know)
+              ((not (buffer-live-p origin))
+               (funcall callback result))
+              ;; Aborted: call callback with error so caller can proceed
+              (t
+               (funcall callback (format "Error: Request aborted (generation changed)\n%s"
+                                         (if (string-prefix-p "Error:" result) result
+                                           (concat "Partial output:\n" result)))))))))
       (condition-case err
           (progn
             (unless (and (stringp command) (not (string-empty-p (string-trim command))))

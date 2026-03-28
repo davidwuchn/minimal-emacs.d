@@ -34,8 +34,8 @@ Passed as --max-count to rg/grep."
 Searches for REGEX in PATH using ripgrep (preferred) or grep.
 GLOB pattern and CONTEXT-LINES are optional.
 
-CALLBACK is called exactly once with the result unless the buffer
-has been aborted, in which case results are dropped."
+CALLBACK is called exactly once with the result. Even if aborted, callback
+receives an error message to prevent callers from hanging."
   (let* ((origin (current-buffer))
          (gen my/gptel--abort-generation))
     (condition-case err
@@ -75,10 +75,17 @@ has been aborted, in which case results are dropped."
                     (unless done
                       (setq done t)
                       (when (buffer-live-p buf) (kill-buffer buf))
-                      (when (and (buffer-live-p origin)
-                                 (with-current-buffer origin
-                                   (= gen my/gptel--abort-generation)))
-                        (funcall callback result))))))
+                      (cond
+                       ((and (buffer-live-p origin)
+                             (with-current-buffer origin
+                               (= gen my/gptel--abort-generation)))
+                        (funcall callback result))
+                       ((not (buffer-live-p origin))
+                        (funcall callback result))
+                       (t
+                        (funcall callback (format "Error: Request aborted\n%s"
+                                                  (if (string-prefix-p "Error:" result) result
+                                                    (concat "Partial output:\n" result))))))))))
             (let ((proc
                    (make-process
                     :name "gptel-grep"
