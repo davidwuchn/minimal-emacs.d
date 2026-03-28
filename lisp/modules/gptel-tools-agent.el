@@ -1457,15 +1457,22 @@ ROOT should be an absolute path to the project directory."
   "Return the MAIN project root directory.
 Priority:
 1. gptel-auto-workflow--project-root-override (if set via .dir-locals.el)
-2. Git worktree root (git rev-parse --show-toplevel)
-3. ~/.emacs.d/ (fallback)
+2. project.el detection (project-current + project-root)
+3. Git worktree root (git rev-parse --show-toplevel)
+4. ~/.emacs.d/ (fallback)
 Always returns absolute path."
   (cond
    ;; 1. Explicit override (from .dir-locals.el)
    (gptel-auto-workflow--project-root-override
     gptel-auto-workflow--project-root-override)
    
-   ;; 2. Git detection
+   ;; 2. project.el detection (preferred method)
+   ((and (fboundp 'project-current)
+         (fboundp 'project-root)
+         (project-current nil))
+    (expand-file-name (project-root (project-current nil))))
+   
+   ;; 3. Git detection (fallback)
    ((let ((git-root (string-trim
                      (shell-command-to-string
                       "git rev-parse --show-toplevel 2>/dev/null || echo ''"))))
@@ -1473,7 +1480,7 @@ Always returns absolute path."
            (file-directory-p git-root)
            git-root)))
    
-   ;; 3. Fallback
+   ;; 4. Fallback
    (t (expand-file-name
        (or (when (boundp 'minimal-emacs-user-directory)
              minimal-emacs-user-directory)
