@@ -39,8 +39,10 @@ Each project gets its own isolated buffer for executor overlays."
   (let* ((root (expand-file-name project-root))
          (buf-name (format "*gptel-agent:%s*" (file-name-nondirectory (directory-file-name root))))
          (existing (gethash root gptel-auto-workflow--project-buffers)))
+    ;; Check if existing buffer is still live
     (if (and existing (buffer-live-p existing))
         existing
+      ;; Create new buffer (or recreate if previous was killed)
       (let ((buf (get-buffer-create buf-name)))
         (with-current-buffer buf
           ;; Set major mode first, then enable gptel
@@ -171,7 +173,9 @@ ORIG-FUN is the original task function, other args passed through.
 ALL subagents MUST belong to a project - no global subagents allowed."
   (if-let* ((proj-context (gptel-auto-workflow--get-project-for-context))
             (project-root (car proj-context))
-            (project-buf (cdr proj-context)))
+            (project-buf (cdr proj-context))
+            ;; Ensure buffer is still live
+            (_ (buffer-live-p project-buf)))
       ;; Route to per-project buffer
       (let* ((default-directory project-root)
              (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
