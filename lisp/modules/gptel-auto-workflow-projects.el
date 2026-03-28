@@ -170,13 +170,16 @@ Returns (project-root . project-buffer) or nil if can't determine."
 (defun gptel-auto-workflow--advice-task-override (orig-fun main-cb agent-type description prompt)
   "Advice around subagent task execution to use per-project buffers.
 ORIG-FUN is the original task function, other args passed through.
-ALL subagents MUST belong to a project - no global subagents allowed."
+When in auto-workflow context, routes to per-project buffer.
+Otherwise, passes through to original function (no error)."
   (if-let* ((proj-context (gptel-auto-workflow--get-project-for-context))
             (project-root (car proj-context))
             (project-buf (cdr proj-context))
+            ;; Only route if we're in auto-workflow context (explicitly set)
+            (gptel-auto-workflow--current-project)
             ;; Ensure buffer is still live
             (_ (buffer-live-p project-buf)))
-      ;; Route to per-project buffer
+      ;; Route to per-project buffer (only in auto-workflow context)
       (let* ((default-directory project-root)
              (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
              (info (and parent-fsm (gptel-fsm-info parent-fsm)))
@@ -194,9 +197,8 @@ ALL subagents MUST belong to a project - no global subagents allowed."
                          (lambda (&rest _) nil)))
                 (funcall orig-fun main-cb agent-type description prompt))
             (funcall orig-fun main-cb agent-type description prompt))))
-    ;; Should never reach here - all subagents must belong to a project
-    (error "[auto-workflow] Cannot determine project context for subagent '%s'. \
-All subagents must belong to a project." agent-type)))
+    ;; Not in auto-workflow context - pass through to original
+    (funcall orig-fun main-cb agent-type description prompt)))
 
 (defun gptel-auto-workflow-enable-per-project-subagents ()
   "Enable per-project subagent buffer support.
@@ -215,8 +217,8 @@ Installs advice on gptel-agent--task to route subagents to per-project buffers."
   (setq gptel-auto-workflow--persist-executor-overlays nil)
   (message "[auto-workflow] Per-project subagent buffers disabled"))
 
-;; Auto-enable on load (disabled - causes startup issues when emacsclient connects)
-;; (gptel-auto-workflow-enable-per-project-subagents)
+;; Auto-enable on load - safe now that pass-through is implemented
+(gptel-auto-workflow-enable-per-project-subagents)
 
 ;;; Executor Overlay Management
 
