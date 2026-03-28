@@ -64,7 +64,7 @@ On timeout or error, returns empty string and logs warning."
 (defun gptel-auto-workflow--track-commit (experiment-id &optional target)
   "Save current commit hash to tracking file for EXPERIMENT-ID.
 TARGET is optional description. Enables recovery if workflow interrupted."
-  (let* ((default-directory (or gptel-auto-workflow--worktree-dir
+  (let* ((default-directory (or (gptel-auto-exp--get target :worktree-dir)
                                  (gptel-auto-workflow--project-root)))
          (commit-hash (gptel-auto-workflow--shell-command-string "git rev-parse HEAD" 10))
          (date (format-time-string "%Y-%m-%d"))
@@ -909,14 +909,33 @@ This branch is NEVER deleted and NEVER auto-merged to main."
 ;;; State
 
 (defvar gptel-auto-workflow--staging-worktree-dir nil)
-(defvar gptel-auto-workflow--current-branch nil)
-(defvar gptel-auto-experiment--results nil)
 (defvar gptel-auto-workflow--review-retry-count 0
   "Retry count for current review cycle.")
 (defvar gptel-auto-workflow--review-max-retries 2
   "Maximum retries when review is blocked. 0 = no retry.")
-(defvar gptel-auto-experiment--best-score nil)
-(defvar gptel-auto-experiment--no-improvement-count 0)
+
+(defvar gptel-auto-experiment--target-state (make-hash-table :test 'equal)
+  "Hash table for per-target experiment state.
+Key: target string. Value: plist with :results, :best-score, :no-improvement-count, :worktree-dir, :current-branch.")
+
+(defun gptel-auto-exp--get (target prop)
+  "Get PROP from state for TARGET."
+  (plist-get (gethash target gptel-auto-experiment--target-state) prop))
+
+(defun gptel-auto-exp--set (target prop value)
+  "Set PROP to VALUE in state for TARGET."
+  (let ((state (gethash target gptel-auto-experiment--target-state)))
+    (puthash target (plist-put state prop value) gptel-auto-experiment--target-state)))
+
+(defun gptel-auto-exp--init (target baseline)
+  "Initialize state for TARGET with BASELINE score."
+  (puthash target (list :results nil :best-score baseline :no-improvement-count 0
+                        :worktree-dir nil :current-branch nil)
+           gptel-auto-experiment--target-state))
+
+(defun gptel-auto-exp--cleanup (target)
+  "Remove state for TARGET."
+  (remhash target gptel-auto-experiment--target-state))
 
 ;;; Worktree Management
 
@@ -933,7 +952,8 @@ Multiple machines can optimize same target without conflicts."
       (format "optimize/%s-%s" name host))))
 
 (defun gptel-auto-workflow-create-worktree (target &optional experiment-id)
-  "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch."
+  "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch.
+Stores worktree-dir and current-branch in hash table keyed by TARGET."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (branch (gptel-auto-workflow--branch-name target experiment-id))
          (worktree-dir (expand-file-name
@@ -945,27 +965,27 @@ Multiple machines can optimize same target without conflicts."
           (let ((default-directory proj-root))
             (magit-worktree-branch worktree-dir branch "main"))
           (message "[auto-workflow] Created: %s" branch)
-          (setq gptel-auto-workflow--worktree-dir worktree-dir
-                gptel-auto-workflow--current-branch branch)
+          (gptel-auto-exp--set target :worktree-dir worktree-dir)
+          (gptel-auto-exp--set target :current-branch branch)
           worktree-dir)
       (error
        (message "[auto-workflow] Failed to create worktree: %s" err)
-       (setq gptel-auto-workflow--worktree-dir nil
-             gptel-auto-workflow--current-branch nil)
+       (gptel-auto-exp--set target :worktree-dir nil)
+       (gptel-auto-exp--set target :current-branch nil)
        nil))))
 
-(defun gptel-auto-workflow-delete-worktree ()
-  "Delete current worktree if exists."
-  (when (and gptel-auto-workflow--worktree-dir
-             (file-exists-p gptel-auto-workflow--worktree-dir))
-    (let ((proj-root (gptel-auto-workflow--project-root)))
-      (condition-case err
-          (let ((default-directory proj-root))
-            (magit-worktree-delete gptel-auto-workflow--worktree-dir))
-        (error
-         (message "[auto-workflow] Failed to delete worktree: %s" err)))))
-  (setq gptel-auto-workflow--worktree-dir nil
-        gptel-auto-workflow--current-branch nil))
+(defun gptel-auto-workflow-delete-worktree (target)
+  "Delete worktree for TARGET from hash table."
+  (let ((worktree-dir (gptel-auto-exp--get target :worktree-dir)))
+    (when (and worktree-dir (file-exists-p worktree-dir))
+      (let ((proj-root (gptel-auto-workflow--project-root)))
+        (condition-case err
+            (let ((default-directory proj-root))
+              (magit-worktree-delete worktree-dir))
+          (error
+           (message "[auto-workflow] Failed to delete worktree: %s" err)))))
+    (gptel-auto-exp--set target :worktree-dir nil)
+    (gptel-auto-exp--set target :current-branch nil)))
 
 ;;; Staging Branch Protection
 
@@ -1445,7 +1465,7 @@ Always returns absolute path."
 Tests run in worktree if set, otherwise project root.
 Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
   (let* ((proj-root (gptel-auto-workflow--project-root))
-         (default-directory (or gptel-auto-workflow--worktree-dir proj-root))
+         (default-directory (or (gptel-auto-exp--get target :worktree-dir) proj-root))
          (test-script (expand-file-name "scripts/run-tests.sh" proj-root))
          (output-buffer (generate-new-buffer "*test-output*"))
          result)
@@ -1468,7 +1488,7 @@ If SKIP-TESTS is non-nil, skip test execution (tests run in staging flow).
 Returns plist with :passed, :tests-passed, :eight-keys, etc."
   (let* ((start (float-time))
          (proj-root (gptel-auto-workflow--project-root))
-         (default-directory (or gptel-auto-workflow--worktree-dir proj-root))
+         (default-directory (or (gptel-auto-exp--get target :worktree-dir) proj-root))
          (target-file (when gptel-auto-workflow--current-target
                         (expand-file-name gptel-auto-workflow--current-target default-directory)))
          (validation-error (when target-file
@@ -1499,7 +1519,7 @@ Returns plist with :passed, :tests-passed, :eight-keys, etc."
   "Get full Eight Keys scores alist from current codebase.
 Scores based on commit message + code diff (not just stat)."
   (when (fboundp 'gptel-benchmark-eight-keys-score)
-    (let* ((worktree (or gptel-auto-workflow--worktree-dir
+    (let* ((worktree (or (gptel-auto-exp--get target :worktree-dir)
                          (gptel-auto-workflow--project-root)))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
            (worktree-quoted (shell-quote-argument worktree))
@@ -1520,7 +1540,7 @@ Scores based on commit message + code diff (not just stat)."
 (defun gptel-auto-experiment--code-quality-score ()
   "Get code quality score from current changes."
   (when (fboundp 'gptel-benchmark--code-quality-score)
-    (let* ((worktree (or gptel-auto-workflow--worktree-dir
+    (let* ((worktree (or (gptel-auto-exp--get target :worktree-dir)
                          (gptel-auto-workflow--project-root)))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
            (worktree-quoted (shell-quote-argument worktree))
@@ -1706,7 +1726,7 @@ Then on a new line, briefly explain why (1 sentence)."
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline)
   "Build prompt for experiment EXPERIMENT-ID on TARGET.
 Uses loaded skills and Eight Keys breakdown for focused improvements."
-  (let* ((worktree-path (or gptel-auto-workflow--worktree-dir
+  (let* ((worktree-path (or (gptel-auto-exp--get target :worktree-dir)
                             (gptel-auto-workflow--project-root)))
          ;; SECURITY: Use shell-quote-argument to prevent shell injection
          (worktree-quoted (shell-quote-argument worktree-path))
@@ -1902,7 +1922,7 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                  (lambda ()
                                    (unless finished
                                      (setq finished t)
-                                     (gptel-auto-workflow-delete-worktree)
+                                     (gptel-auto-workflow-delete-worktree target)
                                      (funcall callback
                                               (list :target target
                                                     :id experiment-id
@@ -1922,7 +1942,7 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                      (if (not grade-passed)
                          (progn
                            (setq finished t)
-                           (gptel-auto-workflow-delete-worktree)
+                           (gptel-auto-workflow-delete-worktree target)
                            (let ((exp-result (list :target target
                                                    :id experiment-id
                                                    :hypothesis hypothesis
@@ -1943,11 +1963,11 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                               (tests-passed (plist-get bench :tests-passed))
                               (score-after (plist-get bench :eight-keys)))
                          (if (not passed)
-                             (let ((default-directory (or gptel-auto-workflow--worktree-dir
-                                                          (gptel-auto-workflow--project-root))))
+(let ((default-directory (or (gptel-auto-exp--get target :worktree-dir)
+                                                           (gptel-auto-workflow--project-root))))
                                (setq finished t)
                                (magit-git-success "checkout" "--" ".")
-                               (gptel-auto-workflow-delete-worktree)
+                               (gptel-auto-workflow-delete-worktree target)
                                (let ((reason (cond
                                               ((not (plist-get bench :nucleus-passed)) "nucleus-validation-failed")
                                               ((not tests-passed) "tests-failed")
@@ -1996,28 +2016,28 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                                           hypothesis
                                                           baseline score-after
                                                           (if (> baseline 0) (* 100 (/ (- score-after baseline) baseline)) 0)))
-                                             (default-directory (or gptel-auto-workflow--worktree-dir
+                                             (default-directory (or (gptel-auto-exp--get target :worktree-dir)
                                                                     (gptel-auto-workflow--project-root))))
                                          (gptel-auto-workflow--assert-main-untouched)
                                          (message "[auto-experiment] ✓ Committing improvement for %s" target)
                                          (magit-git-success "add" "-A")
                                          (magit-git-success "commit" "-m" msg)
                                          (gptel-auto-workflow--track-commit experiment-id target)
-                                         (setq gptel-auto-experiment--best-score score-after
-                                              gptel-auto-experiment--no-improvement-count 0)
+(gptel-auto-exp--set target :best-score score-after)
+                                          (gptel-auto-exp--set target :no-improvement-count 0)
                                         (when gptel-auto-experiment-auto-push
-                                          (message "[auto-experiment] Pushing to %s" gptel-auto-workflow--current-branch)
-                                          (magit-git-success "push" "origin" gptel-auto-workflow--current-branch)
+                                          (message "[auto-experiment] Pushing to %s" (gptel-auto-exp--get target :current-branch))
+                                          (magit-git-success "push" "origin" (gptel-auto-exp--get target :current-branch))
                                           (when gptel-auto-workflow-use-staging
-                                            (gptel-auto-workflow--staging-flow gptel-auto-workflow--current-branch))))
-                                    (let ((default-directory (or gptel-auto-workflow--worktree-dir
+                                            (gptel-auto-workflow--staging-flow (gptel-auto-exp--get target :current-branch)))))
+                                    (let ((default-directory (or (gptel-auto-exp--get target :worktree-dir)
                                                                  (gptel-auto-workflow--project-root))))
                                       (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
                                       (magit-git-success "checkout" "--" ".")
-                                      (cl-incf gptel-auto-experiment--no-improvement-count)))
+                                      (let ((n (gptel-auto-exp--get target :no-improvement-count))) (gptel-auto-exp--set target :no-improvement-count (1+ n)))))
                                   (gptel-auto-experiment-log-tsv
                                    (format-time-string "%Y-%m-%d") exp-result)
-                                  (gptel-auto-workflow-delete-worktree)
+                                  (gptel-auto-workflow-delete-worktree target)
                                   (funcall callback exp-result)))))))))))))
             "executor"
             (format "Experiment %d: optimize %s" experiment-id target)
@@ -2064,33 +2084,48 @@ Tries multiple patterns in order:
 ;;; Experiment Loop
 
 (defun gptel-auto-experiment-loop (target callback)
-  "Run experiments for TARGET until stop condition. Call CALLBACK with results."
-  (setq gptel-auto-experiment--results nil
-        gptel-auto-experiment--best-score nil
-        gptel-auto-experiment--no-improvement-count 0
-        gptel-auto-workflow--worktree-dir nil
-        gptel-auto-workflow--current-branch nil)
+  "Run experiments for TARGET until stop condition. Call CALLBACK with results.
+Uses per-target hash table state for parallel execution safety."
   (let ((baseline (gptel-auto-experiment-benchmark t))
         (max-exp gptel-auto-experiment-max-per-target)
         (threshold gptel-auto-experiment-no-improvement-threshold))
-    (setq gptel-auto-experiment--best-score (or (plist-get baseline :eight-keys) 0.0))
-    (message "[auto-experiment] Baseline for %s: %.2f" target gptel-auto-experiment--best-score)
+    (gptel-auto-exp--init target (or (plist-get baseline :eight-keys) 0.0))
+    (message "[auto-experiment] Baseline for %s: %.2f" target (gptel-auto-exp--get target :best-score))
     (cl-labels ((run-next (exp-id)
-                  (gptel-auto-workflow-delete-worktree)
-                  (if (or (> exp-id max-exp)
-                          (gptel-auto-experiment-should-stop-p threshold))
-                      (progn
-                        (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
-                                 target (length gptel-auto-experiment--results)
-                                 (or gptel-auto-experiment--best-score 0))
-                        (funcall callback (nreverse gptel-auto-experiment--results)))
-                    (gptel-auto-experiment-run
-                     target exp-id max-exp
-                     gptel-auto-experiment--best-score
-                     gptel-auto-experiment--results
-                     (lambda (result)
-                       (push result gptel-auto-experiment--results)
-                       (run-next (1+ exp-id)))))))
+                  (gptel-auto-workflow-delete-worktree target)
+                  (let ((state (gethash target gptel-auto-experiment--target-state)))
+                    (if (or (> exp-id max-exp)
+                            (>= (plist-get state :no-improvement-count) threshold))
+                        (progn
+                          (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
+                                   target (length (plist-get state :results))
+                                   (or (plist-get state :best-score) 0))
+                          (funcall callback (nreverse (plist-get state :results)))
+                          (gptel-auto-exp--cleanup target))
+                      (gptel-auto-experiment-run
+                       target exp-id max-exp
+                       (plist-get state :best-score)
+                       (plist-get state :results)
+                       (lambda (result)
+                         (let* ((s (gethash target gptel-auto-experiment--target-state))
+                                (results (plist-get s :results))
+                                (best (plist-get s :best-score))
+                                (no-imp (plist-get s :no-improvement-count))
+                                (score-after (plist-get result :score-after)))
+                           (push result results)
+                           (when (and score-after (> score-after (or best 0)))
+                             (setq best score-after
+                                   no-imp 0))
+                           (when (and score-after (<= score-after (or best 0)))
+                             (cl-incf no-imp))
+                           (puthash target
+                                    (list :results results
+                                          :best-score best
+                                          :no-improvement-count no-imp
+                                          :worktree-dir (plist-get s :worktree-dir)
+                                          :current-branch (plist-get s :current-branch))
+                                    gptel-auto-experiment--target-state)
+                           (run-next (1+ exp-id)))))))))
       (run-next 1))))
 
 ;;; Main Entry Point
@@ -2352,8 +2387,8 @@ Called at start of new run to ensure clean state."
               (kill-buffer buf)
               (cl-incf cleaned)))))
       (setq gptel-auto-workflow--running nil
-            gptel-auto-workflow--worktree-dir nil
-            gptel-auto-workflow--current-branch nil
+            (gptel-auto-exp--get target :worktree-dir) nil
+            (gptel-auto-exp--get target :current-branch) nil
             gptel-auto-workflow--current-target nil))
     (when (> cleaned 0)
       (message "[auto-workflow] Cleaned %d stale items" cleaned))))
