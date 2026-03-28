@@ -2262,35 +2262,29 @@ Called at start of new run to ensure clean state."
       (message "[auto-workflow] Cleaned %d stale items" cleaned))))
 
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
-  "Run experiments for TARGETS sequentially (one at a time).
-Sequential execution avoids API rate limiting and allows longer timeouts."
+  "Run experiments for TARGETS asynchronously."
   (let* ((run-id (format-time-string "%Y-%m-%d"))
          (all-results '())
          (completed-targets 0)
-         (kept-count 0)
-         (remaining-targets targets))
+         (kept-count 0))
     (plist-put gptel-auto-workflow--stats :phase "running")
     (plist-put gptel-auto-workflow--stats :total (length targets))
-    (message "[auto-workflow] Starting %s with %d targets (sequential)" run-id (length targets))
-    (cl-labels ((run-next-target ()
-                  (if (not remaining-targets)
-                      (progn
-                        (setq gptel-auto-workflow--running nil)
-                        (plist-put gptel-auto-workflow--stats :phase "complete")
-                        (message "[auto-workflow] Complete: %d experiments, %d kept"
-                                 (length all-results) kept-count)
-                        (when completion-callback
-                          (funcall completion-callback all-results)))
-                    (let ((target (pop remaining-targets)))
-                      (gptel-auto-experiment-loop
-                       target
-                       (lambda (results)
-                         (setq all-results (append all-results results))
-                         (cl-incf completed-targets)
-                         (setq kept-count (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
-                         (plist-put gptel-auto-workflow--stats :kept kept-count)
-                         (run-next-target)))))))
-      (run-next-target))))
+    (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
+    (dolist (target targets)
+      (gptel-auto-experiment-loop
+       target
+       (lambda (results)
+         (setq all-results (append all-results results))
+         (cl-incf completed-targets)
+         (setq kept-count (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
+         (plist-put gptel-auto-workflow--stats :kept kept-count)
+         (when (= completed-targets (length targets))
+           (setq gptel-auto-workflow--running nil)
+           (plist-put gptel-auto-workflow--stats :phase "complete")
+           (message "[auto-workflow] Complete: %d experiments, %d kept"
+                    (length all-results) kept-count)
+           (when completion-callback
+             (funcall completion-callback all-results))))))))
 
 (defun gptel-auto-workflow-run (&optional targets)
   "Run auto-workflow asynchronously.
