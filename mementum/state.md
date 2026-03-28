@@ -1,17 +1,17 @@
 # Mementum State
 
-> Last session: 2026-03-28 15:10
+> Last session: 2026-03-28 15:45
 
 ## Total Improvements: 118+ Real Code Fixes
 
-462+ commits since March 25, 2026.
+463+ commits since March 25, 2026.
 
 ### Recent Fixes (Last 25)
 
 | # | File | Fix |
 |---|---|------|
+| 121 | auto-workflow | Stuck experiments cleaned up (timeout issue) |
 | 119 | gptel-tools-agent.el | Correct paren in shell-timeout function |
-| 120 | staging branch | Synced with main (recovered orphan commits) |
 | 117 | gptel-tools-agent.el | Shell command timeout protection (prevent deadlocks) |
 | 116 | gptel-tools-edit.el | Add missing closing paren (parse fix) |
 | 115 | gptel-tools-{bash,edit,glob,grep}.el | Always call callback to prevent FSM hangs |
@@ -75,6 +75,7 @@
 λ experiment-suffix. Derived from (system-name) for multi-machine
 λ subagent-timeout. 1200s default prevents workflow hang
 λ shell-timeout. 30s timeout kills deadlocked shell processes
+λ experiment-callback. Timeout must call completion callback (stuck 33min)
 λ pre-push-hook. Auto-push submodules before parent
 ```
 
@@ -82,15 +83,16 @@
 
 ## Current Status
 
-- **Main branch**: `e8baa6b` (shell timeout paren fix)
+- **Main branch**: `a75e5c0` (gptel submodule sync)
 - **Staging**: Synced with main
-- **Workflow**: Running (selecting targets)
+- **Workflow**: Idle (last run stuck 33min, cleaned up)
 - **Worktrees**: 0 (clean)
 - **Emacs daemon**: Running
 - **Next scheduled**: 19:00
 - **Cron**: 4 jobs installed
 - **ai-behaviors**: 40 behaviors available in packages/ai-behaviors
 - **Shell deadlock**: Fixed with timeout protection
+- **Issue**: Experiment timeout not triggering completion callback
 
 ---
 
