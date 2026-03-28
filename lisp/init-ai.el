@@ -90,6 +90,8 @@
   (ai-code-notes-use-gptel-headline t)
   (ai-code-task-use-gptel-filename t)
   (ai-code-behaviors-auto-enable t)
+  (ai-code-behaviors-repo-path (expand-file-name "packages/ai-behaviors" minimal-emacs-user-directory))
+  (ai-code-behaviors-auto-clone t)
   :bind ("C-c a" . ai-code-menu)
   :config
   (require 'ai-code-eca)
