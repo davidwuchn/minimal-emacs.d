@@ -9,14 +9,61 @@
 (require 'subr-x)
 (require 'gptel-agent)
 
+;;; Shell Command with Timeout
+
+(defcustom gptel-auto-workflow-shell-timeout 30
+  "Seconds before a shell command is force-killed.
+Prevents deadlocks from hanging git/shell commands."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-workflow--shell-command-with-timeout (command &optional timeout)
+  "Execute shell COMMAND with TIMEOUT (default 30s).
+Returns (output . exit-code) or (error-message . -1) on timeout."
+  (let* ((timeout-seconds (or timeout gptel-auto-workflow-shell-timeout))
+         (buffer (generate-new-buffer " *shell-timeout*"))
+         (process nil)
+         (done nil)
+         (result nil)
+         (exit-code nil))
+    (unwind-protect
+        (progn
+          (setq process (start-process-shell-command "shell-timeout" buffer command))
+          (set-process-sentinel process
+                                 (lambda (proc _event)
+                                   (unless done
+                                     (setq done t)
+                                     (setq exit-code (process-exit-status proc))
+                                     (with-current-buffer buffer
+                                       (setq result (buffer-string)))))))
+          (accept-process-output process timeout-seconds nil t)
+          (unless done
+            (setq done t)
+            (delete-process process)
+            (setq result (format "Error: Command timed out after %ds: %s" timeout-seconds command))
+            (setq exit-code -1))
+          (cons result exit-code))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(defun gptel-auto-workflow--shell-command-string (command &optional timeout)
+  "Execute shell COMMAND with TIMEOUT, return output string.
+On timeout or error, returns empty string and logs warning."
+  (let ((result (gptel-auto-workflow--shell-command-with-timeout command timeout)))
+    (if (eq (cdr result) -1)
+        (progn
+          (message "[auto-workflow] %s" (car result))
+          "")
+      (string-trim (car result)))))
+
 ;;; Orphan Commit Tracking
 
 (defun gptel-auto-workflow--track-commit (experiment-id &optional target)
   "Save current commit hash to tracking file for EXPERIMENT-ID.
 TARGET is optional description. Enables recovery if workflow interrupted."
   (let* ((default-directory (or gptel-auto-workflow--worktree-dir
-                                (gptel-auto-workflow--project-root)))
-         (commit-hash (string-trim (shell-command-to-string "git rev-parse HEAD")))
+                                 (gptel-auto-workflow--project-root)))
+         (commit-hash (gptel-auto-workflow--shell-command-string "git rev-parse HEAD" 10))
          (date (format-time-string "%Y-%m-%d"))
          (tracking-file (expand-file-name
                          (format "var/tmp/experiments/%s/commits.txt" date)
@@ -53,9 +100,8 @@ An orphan is a commit that exists but is not reachable from any branch."
                  (exp-id (cadr parts))
                  (target (caddr parts)))
             (when (and hash (string-match-p "^[a-f0-9]+$" hash))
-              (let ((in-branch (string-trim
-                                (shell-command-to-string
-                                 (format "git branch --contains %s 2>/dev/null | head -1" hash)))))
+              (let ((in-branch (gptel-auto-workflow--shell-command-string
+                                 (format "git branch --contains %s 2>/dev/null | head -1" hash) 10)))
                 (when (string-empty-p in-branch)
                   (push (list hash exp-id target) orphans))))))))
     (if orphans
@@ -69,17 +115,17 @@ An orphan is a commit that exists but is not reachable from any branch."
   "Cherry-pick COMMIT-HASH to staging branch for recovery."
   (interactive "sCommit hash: ")
   (let ((default-directory (gptel-auto-workflow--project-root)))
-    (shell-command-to-string "git stash")
-    (shell-command-to-string "git checkout staging")
-    (let ((result (shell-command-to-string
-                   (format "git cherry-pick %s 2>&1" commit-hash))))
+    (gptel-auto-workflow--shell-command-string "git stash" 10)
+    (gptel-auto-workflow--shell-command-string "git checkout staging" 10)
+    (let ((result (gptel-auto-workflow--shell-command-string
+                   (format "git cherry-pick %s 2>&1" commit-hash) 30)))
       (if (string-match-p "error\\|conflict" result)
           (progn
             (message "[auto-workflow] Cherry-pick failed: %s" result)
-            (shell-command-to-string "git cherry-pick --abort")
+            (gptel-auto-workflow--shell-command-string "git cherry-pick --abort" 10)
             nil)
         (message "[auto-workflow] Recovered %s to staging" commit-hash)
-        (shell-command-to-string "git checkout main")
+        (gptel-auto-workflow--shell-command-string "git checkout main" 10)
         t))))
 
 (defun gptel-auto-workflow-recover-all-orphans ()
@@ -91,41 +137,42 @@ An orphan is a commit that exists but is not reachable from any branch."
       (let ((recovered 0)
             (failed 0))
         (dolist (orphan orphans)
-          (let ((hash (car orphan)))
-            (if (gptel-auto-workflow--cherry-pick-orphan hash)
-                (cl-incf recovered)
-              (cl-incf failed))))
+(let ((hash (car orphan)))
+             (if (gptel-auto-workflow--cherry-pick-orphan hash)
+                 (cl-incf recovered)
+               (cl-incf failed))))
          (message "[auto-workflow] Recovered %d/%d orphans to staging"
                   recovered (length orphans))
           (when (> recovered 0)
             (let ((default-directory (gptel-auto-workflow--project-root)))
-              (shell-command-to-string "git push origin staging")))))))
+              (gptel-auto-workflow--shell-command-string "git push origin staging" 30)))))))
 
 (defun gptel-auto-workflow--sync-staging-with-main ()
   "Fast-forward staging branch to match main.
-Ensures experiments run against latest code."
+Ensures experiments run against latest code.
+All shell commands have timeout protection to prevent deadlocks."
   (let ((default-directory (gptel-auto-workflow--project-root))
-        (original-branch (string-trim
-                          (shell-command-to-string "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main"))))
+        (original-branch (gptel-auto-workflow--shell-command-string
+                          "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main" 10)))
     (condition-case err
         (progn
-          (shell-command-to-string "git fetch origin")
-          (let ((main-commit (string-trim
-                              (shell-command-to-string "git rev-parse origin/main")))
-                (staging-commit (string-trim
-                                 (shell-command-to-string "git rev-parse origin/staging 2>/dev/null || echo \"none\""))))
+          (gptel-auto-workflow--shell-command-string "git fetch origin" 60)
+          (let ((main-commit (gptel-auto-workflow--shell-command-string
+                               "git rev-parse origin/main" 10))
+                (staging-commit (gptel-auto-workflow--shell-command-string
+                                 "git rev-parse origin/staging 2>/dev/null || echo \"none\"" 10)))
             (if (string= main-commit staging-commit)
                 (message "[auto-workflow] Staging already in sync with main")
               (progn
-                (shell-command-to-string "git checkout staging")
-                (shell-command-to-string "git merge origin/main --ff-only")
-                (shell-command-to-string "git push origin staging")
-                (shell-command-to-string (format "git checkout %s" original-branch))
+                (gptel-auto-workflow--shell-command-string "git checkout staging" 10)
+                (gptel-auto-workflow--shell-command-string "git merge origin/main --ff-only" 30)
+                (gptel-auto-workflow--shell-command-string "git push origin staging" 30)
+                (gptel-auto-workflow--shell-command-string (format "git checkout %s" original-branch) 10)
                 (message "[auto-workflow] Synced staging with main (%s -> %s)"
                          (substring staging-commit 0 7)
                          (substring main-commit 0 7))))))
       (error
-       (shell-command-to-string (format "git checkout %s" original-branch))
+       (gptel-auto-workflow--shell-command-string (format "git checkout %s" original-branch) 10)
        (message "[auto-workflow] Failed to sync staging: %s" err)
        nil))))
 
