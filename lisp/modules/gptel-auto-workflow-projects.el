@@ -43,8 +43,13 @@ Each project gets its own isolated buffer for executor overlays."
         existing
       (let ((buf (get-buffer-create buf-name)))
         (with-current-buffer buf
-          (unless (bound-and-true-p gptel-mode)
-            (gptel-mode))
+          ;; Set major mode first, then enable gptel
+          (unless (derived-mode-p 'text-mode)
+            (text-mode))
+          (when (and (fboundp 'gptel-mode) (not (bound-and-true-p gptel-mode)))
+            (condition-case err
+                (gptel-mode)
+              (error (message "[auto-workflow] Could not enable gptel-mode: %s" err))))
           ;; Set project context
           (setq-local default-directory root)
           (when (boundp 'gptel-auto-workflow--project-root-override)
