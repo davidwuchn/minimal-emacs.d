@@ -44,7 +44,7 @@
   :type 'symbol
   :group 'gptel)
 
-(defcustom my/ai-code-gptel-helper-model 'qwen3-coder-next
+(defcustom my/ai-code-gptel-helper-model 'glm-5
   "Fast non-reasoning model used for ai-code helper requests."
   :type 'symbol
   :group 'gptel)
