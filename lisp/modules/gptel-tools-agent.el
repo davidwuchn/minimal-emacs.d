@@ -25,7 +25,8 @@ Returns (output . exit-code) or (error-message . -1) on timeout."
          (process nil)
          (done nil)
          (result nil)
-         (exit-code nil))
+         (exit-code nil)
+         (start-time (current-time)))
     (unwind-protect
         (progn
           (setq process (start-process-shell-command "shell-timeout" buffer command))
@@ -35,8 +36,10 @@ Returns (output . exit-code) or (error-message . -1) on timeout."
                                      (setq done t)
                                      (setq exit-code (process-exit-status proc))
                                      (with-current-buffer buffer
-                                       (setq result (buffer-string)))))))
-          (accept-process-output process timeout-seconds nil t)
+                                       (setq result (buffer-string))))))
+          (while (and (not done)
+                      (< (float-time (time-subtract (current-time) start-time)) timeout-seconds))
+            (accept-process-output process 0.1 nil t))
           (unless done
             (setq done t)
             (delete-process process)
@@ -44,7 +47,7 @@ Returns (output . exit-code) or (error-message . -1) on timeout."
             (setq exit-code -1))
           (cons result exit-code))
       (when (buffer-live-p buffer)
-        (kill-buffer buffer))))
+        (kill-buffer buffer)))))
 
 (defun gptel-auto-workflow--shell-command-string (command &optional timeout)
   "Execute shell COMMAND with TIMEOUT, return output string.
