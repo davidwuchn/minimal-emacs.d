@@ -1,16 +1,17 @@
 # Mementum State
 
-> Last session: 2026-03-28 15:45
+> Last session: 2026-03-28 16:05
 
-## Total Improvements: 118+ Real Code Fixes
+## Total Improvements: 119+ Real Code Fixes
 
-463+ commits since March 25, 2026.
+465+ commits since March 25, 2026.
 
 ### Recent Fixes (Last 25)
 
 | # | File | Fix |
 |---|---|------|
-| 121 | auto-workflow | Stuck experiments cleaned up (timeout issue) |
+| 122 | gptel-benchmark-core.el | Fix inconsistent indentation in key-names vector (auto-workflow) |
+| 121 | auto-workflow | Stuck experiments cleaned up (API timeout issue) |
 | 119 | gptel-tools-agent.el | Correct paren in shell-timeout function |
 | 117 | gptel-tools-agent.el | Shell command timeout protection (prevent deadlocks) |
 | 116 | gptel-tools-edit.el | Add missing closing paren (parse fix) |
@@ -83,16 +84,16 @@
 
 ## Current Status
 
-- **Main branch**: `a75e5c0` (gptel submodule sync)
+- **Main branch**: `9613e10` (workflow fix cherry-picked)
 - **Staging**: Synced with main
-- **Workflow**: Idle (last run stuck 33min, cleaned up)
+- **Workflow**: Idle (cleaned up, 1 fix cherry-picked)
 - **Worktrees**: 0 (clean)
 - **Emacs daemon**: Running
 - **Next scheduled**: 19:00
 - **Cron**: 4 jobs installed
 - **ai-behaviors**: 40 behaviors available in packages/ai-behaviors
-- **Shell deadlock**: Fixed with timeout protection
-- **Issue**: Experiment timeout not triggering completion callback
+- **API issues**: Curl timeout (28) + websocket 1013 "server initializing"
+- **Last run**: 1 success, 4 failures (API timeouts)
 
 ---
 
