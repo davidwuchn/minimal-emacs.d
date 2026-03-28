@@ -95,11 +95,35 @@ An orphan is a commit that exists but is not reachable from any branch."
             (if (gptel-auto-workflow--cherry-pick-orphan hash)
                 (cl-incf recovered)
               (cl-incf failed))))
-        (message "[auto-workflow] Recovered %d/%d orphans to staging"
-                 recovered (length orphans))
-        (when (> recovered 0)
-          (let ((default-directory (gptel-auto-workflow--project-root)))
-            (shell-command-to-string "git push origin staging")))))))
+         (message "[auto-workflow] Recovered %d/%d orphans to staging"
+                  recovered (length orphans))
+          (when (> recovered 0)
+            (let ((default-directory (gptel-auto-workflow--project-root)))
+              (shell-command-to-string "git push origin staging")))))))
+
+(defun gptel-auto-workflow--sync-staging-with-main ()
+  "Fast-forward staging branch to match main.
+Ensures experiments run against latest code."
+  (let ((default-directory (gptel-auto-workflow--project-root)))
+    (condition-case err
+        (progn
+          (shell-command-to-string "git fetch origin")
+          (let ((main-commit (string-trim
+                              (shell-command-to-string "git rev-parse origin/main")))
+                (staging-commit (string-trim
+                                 (shell-command-to-string "git rev-parse origin/staging 2>/dev/null || echo \"none\""))))
+            (if (string= main-commit staging-commit)
+                (message "[auto-workflow] Staging already in sync with main")
+              (progn
+                (shell-command-to-string "git checkout staging")
+                (shell-command-to-string "git merge origin/main --ff-only")
+                (shell-command-to-string "git push origin staging")
+                (message "[auto-workflow] Synced staging with main (%s -> %s)"
+                         (substring staging-commit 0 7)
+                         (substring main-commit 0 7))))))
+      (error
+       (message "[auto-workflow] Failed to sync staging: %s" err)
+       nil))))
 
 ;;; Customization
 
@@ -2181,6 +2205,7 @@ Safe to call from cron - handles all edge cases."
     (condition-case err
         (progn
           (gptel-auto-workflow--cleanup-stale-state)
+          (gptel-auto-workflow--sync-staging-with-main)
           (let ((orphans (gptel-auto-workflow--recover-orphans)))
             (when orphans
               (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
