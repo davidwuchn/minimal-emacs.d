@@ -8,7 +8,7 @@
 ;; ═══════════════════════════════════════════════════════════════════════════
 
 ((nil
-  . ((gptel-auto-workflow--project-root-override . "/Users/davidwu/.emacs.d")
+  . ((gptel-auto-workflow--project-root-override . "/home/davidwu/.emacs.d")
      ;; Target files to optimize (if not specified, analyzer will select)
      (gptel-auto-workflow-targets
       . ("lisp/modules/gptel-tools-agent.el"
