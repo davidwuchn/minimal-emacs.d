@@ -6,47 +6,37 @@
 
 set -e
 
-# Get the remote being pushed to
 remote="$1"
 url="$2"
 
-# Only check for origin remote
 if [[ "$remote" != "origin" ]]; then
     exit 0
 fi
 
-# Get the branch being pushed (from stdin)
 while read local_ref local_sha remote_ref remote_sha; do
     branch=$(echo "$remote_ref" | sed 's|refs/heads/||')
     
-    # Check each submodule
     git config --file .gitmodules --get-regexp path | while read key path; do
         submodule_path=$(echo "$path")
         
-        # Get the commit that would be pushed for this submodule
         if [[ -z "$remote_sha" || "$remote_sha" == "0000000000000000000000000000000000000000" ]]; then
-            # New branch, compare against main
             base_sha=$(git rev-parse origin/main 2>/dev/null || echo "")
         else
             base_sha="$remote_sha"
         fi
         
         if [[ -n "$base_sha" ]]; then
-            # Check if submodule is being updated
             old_commit=$(git ls-tree "$base_sha" "$submodule_path" 2>/dev/null | awk '{print $3}')
             new_commit=$(git ls-tree "$local_sha" "$submodule_path" 2>/dev/null | awk '{print $3}')
             
             if [[ -n "$new_commit" && "$old_commit" != "$new_commit" ]]; then
-                # Submodule is being updated
                 submodule_url=$(git config --file .gitmodules --get "submodule.$submodule_path.url")
                 
                 if [[ -n "$submodule_url" ]]; then
                     cd "$submodule_path" 2>/dev/null || continue
                     
-                    # Fetch from submodule remote
                     git fetch origin 2>/dev/null || true
                     
-                    # Determine default branch
                     default_branch="main"
                     if ! git rev-parse --verify "origin/main" >/dev/null 2>&1; then
                         if git rev-parse --verify "origin/master" >/dev/null 2>&1; then
@@ -54,41 +44,33 @@ while read local_ref local_sha remote_ref remote_sha; do
                         fi
                     fi
                     
-                    # Check if the new commit exists on remote
                     if ! git merge-base --is-ancestor "$new_commit" "origin/$default_branch" 2>/dev/null; then
-                        # Commit doesn't exist on remote - need to push
                         echo ""
                         echo "Submodule $submodule_path has new commits not on remote."
                         echo "Auto-pushing submodule to origin/$default_branch..."
                         
-                        # Check if we have uncommitted changes in submodule
                         if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
                             echo "  Stashing uncommitted changes..."
                             git stash push -m "auto-stash by pre-push hook" 2>/dev/null || true
                         fi
                         
-                        # Push the submodule
-                        if git push origin "$default_branch" 2>&1; then
-                            echo "  ✓ Submodule pushed successfully"
+                        push_output=$(git push origin HEAD:"$default_branch" 2>&1)
+                        push_exit=$?
+                        
+                        if [[ $push_exit -eq 0 ]]; then
+                            if echo "$push_output" | grep -q "Everything up-to-date"; then
+                                echo "  ✓ Submodule already up-to-date"
+                            else
+                                echo "  ✓ Submodule pushed successfully"
+                            fi
                         else
                             echo ""
                             echo "ERROR: Failed to push submodule $submodule_path"
-                            echo "       Please push manually: cd $submodule_path && git push origin $default_branch"
+                            echo "       Push output: $push_output"
+                            echo "       Please push manually: cd $submodule_path && git push origin HEAD:$default_branch"
                             echo ""
                             cd - > /dev/null
                             exit 1
-                        fi
-                        
-                        # Verify push succeeded (with retry for eventual consistency)
-                        sleep 1
-                        git fetch origin 2>/dev/null || true
-                        # Check if commit is now on remote (allow it to be the same as HEAD)
-                        if ! git merge-base --is-ancestor "$new_commit" "origin/$default_branch" 2>/dev/null && \
-                           [[ "$(git rev-parse origin/$default_branch)" != "$new_commit" ]]; then
-                            echo ""
-                            echo "WARNING: Submodule push verification may have failed"
-                            echo "         The push succeeded but commit may not be visible yet"
-                            echo "         Continuing with parent push..."
                         fi
                     fi
                     
