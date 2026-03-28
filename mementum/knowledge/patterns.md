@@ -192,6 +192,20 @@ Migrated from LEARNING.md (32 patterns).
 - **Workspace provenance aids AI understanding**: Add `:workspace` property to file context.
 - **Cross-session context sharing**: Use `eca--shared-context` for common files.
 
+## Per-Project Subagent Buffer Pattern
+
+- **ALL subagents MUST belong to a project - NO global subagents**: This is enforced; attempting to run a subagent without project context raises an error.
+- **Isolate subagent execution per project**: Each project gets dedicated gptel-agent buffer via hash table.
+- **Executor overlays persist**: Override `delete-overlay` for executor tasks to maintain visibility.
+- **Buffer naming convention**: `*gptel-agent:<project-name>*` for easy identification.
+- **4-tier project detection cascade**:
+  1. Explicit multi-project mode (`gptel-auto-workflow--current-project`)
+  2. Project root override (`gptel-auto-workflow--project-root-override`)
+  3. Configured project list (`gptel-auto-workflow-projects`)
+  4. Auto-detect from `default-directory`
+- **Advice pattern for buffer injection**: Override FSM info and `current-buffer` dynamically; error if no project context found.
+- **Overlay cleanup**: Provide explicit cleanup command for persistent executor overlays.
+
 ## ai-code-menu Transient Integration
 
 - **Menu-first UX reduces cognitive load**: Add commands to `ai-code-menu` via `transient-append-suffix`.
