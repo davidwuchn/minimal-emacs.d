@@ -1,10 +1,10 @@
 ---
 name: analyzer
-model: qwen3.5-plus
+model: kimi-k2.5
 max-tokens: 8192
 temperature: 0.3
 steps: 50
-description: Analyzer for target selection (DashScope)
+description: Analyzer for target selection (Moonshot)
 tools:
   - Read
   - Glob

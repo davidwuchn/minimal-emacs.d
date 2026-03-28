@@ -1,10 +1,10 @@
 ---
 name: executor
-model: qwen3.5-plus
+model: qwen3-coder-next
 max-tokens: 16384
 temperature: 0.1
 steps: 100
-description: Nucleus executor for multi-step tasks
+description: Nucleus executor for multi-step tasks (DashScope)
 tools:
   - ApplyPatch
   - Bash

@@ -1,7 +1,6 @@
 ---
 name: reviewer
-model: qwen3-coder-next
-backend: DashScope
+model: qwen3-max
 max-tokens: 8192
 temperature: 0.3
 description: Code reviewer (DashScope)

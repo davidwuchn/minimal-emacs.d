@@ -1,10 +1,9 @@
 ---
 name: researcher
-model: qwen3-coder-plus
-backend: DashScope
+model: qwen3-max
 max-tokens: 2048
 temperature: 0.3
-description: Research agent (DashScope/Qwen)
+description: Research agent (DashScope)
 tools:
   - Bash
   - Glob

@@ -1,8 +1,9 @@
 ---
 name: comparator
-model: qwen3.5-plus
+model: kimi-k2.5
 max-tokens: 2048
-description: Perform blind A/B comparison (DashScope)
+temperature: 0.1
+description: Perform blind A/B comparison (Moonshot)
 tools:
   - Read
   - Glob
