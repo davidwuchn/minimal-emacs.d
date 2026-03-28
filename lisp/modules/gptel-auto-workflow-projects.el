@@ -83,5 +83,48 @@ then runs workflow for that project."
                         results ", "))
     results))
 
+;;; Researcher Multi-Project Support
+
+(defun gptel-auto-workflow-run-research-for-project (project-root)
+  "Run researcher for specific PROJECT-ROOT.
+Loads .dir-locals.el from project and runs researcher in that context."
+  (interactive "DProject root: ")
+  (let ((root (expand-file-name project-root))
+        (default-directory (expand-file-name project-root)))
+    (message "[research] Starting for project: %s" root)
+    ;; Ensure gptel-auto-workflow-strategic is loaded
+    (unless (featurep 'gptel-auto-workflow-strategic)
+      (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)))
+    ;; Override project root temporarily
+    (let ((gptel-auto-workflow--project-root-override root))
+      (gptel-auto-workflow-run-research))))
+
+(defun gptel-auto-workflow-run-all-research ()
+  "Run researcher for all configured projects.
+To be called from cron - visits each project directory (loading .dir-locals.el),
+then runs researcher for that project."
+  (interactive)
+  (message "[research] Running for %d projects..." 
+           (length gptel-auto-workflow-projects))
+  (let ((results nil))
+    (dolist (project-root gptel-auto-workflow-projects)
+      (message "[research] Processing project: %s" project-root)
+      (let ((default-directory project-root))
+        ;; .dir-locals.el will be loaded when we change to project directory
+        (condition-case err
+            (progn
+              ;; Override project root temporarily
+              (let ((gptel-auto-workflow--project-root-override project-root))
+                (gptel-auto-workflow-run-research))
+              (push (cons project-root 'success) results)
+              (message "[research] ✓ Completed: %s" project-root))
+          (error
+           (push (cons project-root (format "error: %s" err)) results)
+           (message "[research] ✗ Failed: %s - %s" project-root err)))))
+    (message "[research] All projects processed: %s" 
+             (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
+                        results ", "))
+    results))
+
 (provide 'gptel-auto-workflow-projects)
 ;;; gptel-auto-workflow-projects.el ends here
