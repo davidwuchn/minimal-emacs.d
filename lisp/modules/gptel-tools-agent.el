@@ -2076,12 +2076,12 @@ Tries multiple patterns in order:
 (defun gptel-auto-experiment-loop (target callback)
   "Run experiments for TARGET until stop condition. Call CALLBACK with results.
 Uses local state captured in closure for parallel execution safety."
-  (let ((baseline (gptel-auto-experiment-benchmark t))
-        (max-exp gptel-auto-experiment-max-per-target)
-        (threshold gptel-auto-experiment-no-improvement-threshold)
-        (results nil)
-        (best-score (or (plist-get baseline :eight-keys) 0.0))
-        (no-improvement-count 0))
+  (let* ((baseline (gptel-auto-experiment-benchmark t))
+         (max-exp gptel-auto-experiment-max-per-target)
+         (threshold gptel-auto-experiment-no-improvement-threshold)
+         (results nil)
+         (best-score (or (plist-get baseline :eight-keys) 0.0))
+         (no-improvement-count 0))
     (message "[auto-experiment] Baseline for %s: %.2f" target best-score)
     (cl-labels ((run-next (exp-id)
                   (gptel-auto-workflow-delete-worktree target)
