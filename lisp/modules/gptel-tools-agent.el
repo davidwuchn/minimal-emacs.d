@@ -1902,7 +1902,7 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                                           (if (> baseline 0) (* 100 (/ (- score-after baseline) baseline)) 0)))
                                              (default-directory (or gptel-auto-workflow--worktree-dir
                                                                     (gptel-auto-workflow--project-root))))
-(gptel-auto-workflow--assert-main-untouched)
+                                         (gptel-auto-workflow--assert-main-untouched)
                                          (message "[auto-experiment] ✓ Committing improvement for %s" target)
                                          (magit-git-success "add" "-A")
                                          (magit-git-success "commit" "-m" msg)
