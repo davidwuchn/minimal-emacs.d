@@ -132,9 +132,10 @@
   (define-key agent-shell-mode-map (kbd "C-c L") #'ai-code-behaviors-mode-line-enable)
   ;; Fix corfu-auto-prefix for @ and # triggers
   ;; agent-shell triggers completion on @ but corfu needs 2 chars by default
+  ;; Use 1 (not 0) to avoid position calculation issues in CAPF
   (add-hook 'agent-shell-mode-hook
             (lambda ()
-              (setq-local corfu-auto-prefix 0))))
+              (setq-local corfu-auto-prefix 1))))
 
 (use-package agent-shell
   :ensure t
