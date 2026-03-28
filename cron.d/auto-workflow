@@ -19,6 +19,7 @@
 
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin
+XDG_RUNTIME_DIR=/run/user/1000
 
 # Ensure log directory exists
 @reboot mkdir -p $HOME/.emacs.d/var/tmp/cron
