@@ -1,16 +1,19 @@
 # Mementum State
 
-> Last session: 2026-03-28 15:45
+> Last session: 2026-03-28 17:10
 
-## Total Improvements: 118+ Real Code Fixes
+## Total Improvements: 120+ Real Code Fixes
 
-463+ commits since March 25, 2026.
+468+ commits since March 25, 2026.
 
 ### Recent Fixes (Last 25)
 
 | # | File | Fix |
 |---|---|------|
-| 121 | auto-workflow | Stuck experiments cleaned up (timeout issue) |
+| 123 | gptel-ext-abort.el | Remove -y/-Y low-speed timeout (fixes exit 28) |
+| 122 | gptel-ext-backends.el | DashScope timeout 600s → 900s |
+| 121 | gptel-ext-retry.el | Add 1013/server initializing to transient errors |
+| 120 | gptel-benchmark-core.el | Fix inconsistent indentation (auto-workflow) |
 | 119 | gptel-tools-agent.el | Correct paren in shell-timeout function |
 | 117 | gptel-tools-agent.el | Shell command timeout protection (prevent deadlocks) |
 | 116 | gptel-tools-edit.el | Add missing closing paren (parse fix) |
@@ -75,6 +78,9 @@
 λ experiment-suffix. Derived from (system-name) for multi-machine
 λ subagent-timeout. 1200s default prevents workflow hang
 λ shell-timeout. 30s timeout kills deadlocked shell processes
+λ curl-low-speed. -y/-Y removed (was causing exit 28 during LLM thinking)
+λ api-timeout. DashScope 900s, Moonshot 900s
+λ transient-1013. server is initializing → retry
 λ experiment-callback. Timeout must call completion callback (stuck 33min)
 λ pre-push-hook. Auto-push submodules before parent
 ```
@@ -83,16 +89,16 @@
 
 ## Current Status
 
-- **Main branch**: `a75e5c0` (gptel submodule sync)
+- **Main branch**: `9613e10` (workflow fix cherry-picked)
 - **Staging**: Synced with main
-- **Workflow**: Idle (last run stuck 33min, cleaned up)
+- **Workflow**: Idle (cleaned up, 1 fix cherry-picked)
 - **Worktrees**: 0 (clean)
 - **Emacs daemon**: Running
 - **Next scheduled**: 19:00
 - **Cron**: 4 jobs installed
 - **ai-behaviors**: 40 behaviors available in packages/ai-behaviors
-- **Shell deadlock**: Fixed with timeout protection
-- **Issue**: Experiment timeout not triggering completion callback
+- **API issues**: Curl timeout (28) + websocket 1013 "server initializing"
+- **Last run**: 1 success, 4 failures (API timeouts)
 
 ---
 

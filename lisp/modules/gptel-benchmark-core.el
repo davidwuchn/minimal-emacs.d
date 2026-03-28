@@ -217,7 +217,7 @@ RESULTS should contain :eight-keys-scores in each entry."
   (let ((key-totals (make-vector 8 0.0))
         (key-counts (make-vector 8 0))
         (key-names [phi-vitality fractal-clarity epsilon-purpose tau-wisdom
-                                 pi-synthesis mu-directness exists-truth forall-vigilance]))
+                    pi-synthesis mu-directness exists-truth forall-vigilance]))
     (dolist (r results)
       (let ((eight-keys (gptel-benchmark--get-score r :eight-keys-scores)))
         (when eight-keys

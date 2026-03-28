@@ -301,6 +301,13 @@ wrong FSM selection occurs."
 
 ;;; Registry Validation
 
+(defun my/gptel--fsm-id-valid-p (id)
+  "Return t if ID matches expected FSM ID format.
+ASSUMPTION: Valid ID format is \"fsm-N-TIMESTAMP\" where N is integer.
+EDGE_CASE: Nil or non-string input returns nil."
+  (and (stringp id)
+       (string-match-p "^fsm-[0-9]+-[0-9]+\\.[0-9]+$" id)))
+
 (defun my/gptel--fsm-registry-validate ()
   "Validate registry integrity and return t if all invariants hold.
 
@@ -309,35 +316,32 @@ ASSUMPTION: All IDs match format \"fsm-N-TIMESTAMP\".
 BEHAVIOR: Returns t if registry is consistent.
 BEHAVIOR: Returns nil if any invariant is violated.
 BEHAVIOR: Signals error with details on first violation found.
-EDGE CASE: Empty registry returns t (valid state).
-EDGE CASE: Single entry validated for bidirectional consistency.
-EDGE CASE: Multiple entries checked for unique IDs.
+EDGE_CASE: Empty registry returns t (valid state).
+EDGE_CASE: Single entry validated for bidirectional consistency.
+EDGE_CASE: Multiple entries checked for unique IDs.
 TEST: Empty registry => t
 TEST: After register/unregister cycle => t
 TEST: Manual corruption => error with details
 
-INVARIANTS CHECKED:
+INVARIANTS_CHECKED:
 1. Bidirectional consistency: (gethash (gethash id R) R) == id
 2. Unique IDs: No two FSMs share the same ID
 3. ID format: All IDs match regex \"^fsm-[0-9]+-[0-9]+\\\\.[0-9]+$\"
 
-BUILDS ON DISCOVERY: Validation function enables automated testing
+BUILDS_ON_DISCOVERY: Validation function enables automated testing
 of registry integrity after complex nested agent operations.
 
-ADAPTS TO: Catches corruption early before wrong FSM selection occurs.
+ADAPTS_TO: Catches corruption early before wrong FSM selection occurs.
 
-PROACTIVE MITIGATION: Can be called periodically or after operations
+PROACTIVE_MITIGATION: Can be called periodically or after operations
 to ensure registry remains in valid state.
 
 Returns t on success, signals error on failure."
-  (let ((id-to-fsm (make-hash-table :test 'equal))
-        (fsm-to-id (make-hash-table :test 'eq))
-        (id-pattern "^fsm-[0-9]+-[0-9]+\\.[0-9]+$"))
-    ;; Collect all mappings
+  (let ((id-to-fsm (make-hash-table :test 'equal)))
+    ;; Collect all ID→FSM mappings
     (maphash (lambda (k v)
-               (if (stringp k)
-                   (puthash k v id-to-fsm)
-                 (puthash k v fsm-to-id)))
+               (when (stringp k)
+                 (puthash k v id-to-fsm)))
              my/gptel--fsm-registry)
     ;; Check bidirectional consistency
     (maphash (lambda (id fsm)
@@ -355,7 +359,7 @@ Returns t on success, signals error on failure."
         (error "FSM registry invariant violated: duplicate IDs detected")))
     ;; Check ID format
     (maphash (lambda (id _fsm)
-               (unless (string-match-p id-pattern id)
+               (unless (my/gptel--fsm-id-valid-p id)
                  (error "FSM registry invariant violated: invalid ID format: %s" id)))
              id-to-fsm)
     t))
