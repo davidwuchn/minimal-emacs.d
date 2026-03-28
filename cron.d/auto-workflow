@@ -32,10 +32,10 @@ XDG_RUNTIME_DIR=/run/user/1000
 #
 # ACTIVE-USE PROTECTION: Skips if unsaved buffers, recent input, magit open
 
-0 23,3,7,11,15,19 * * * emacsclient -s /run/user/1000/emacs/server -e '(gptel-auto-workflow-cron-safe)' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
-0 */4 * * * emacsclient -s /run/user/1000/emacs/server -e '(progn (setq default-directory "~/.emacs.d/") (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
-0 4 * * 0 emacsclient -s /run/user/1000/emacs/server -e '(progn (setq default-directory "~/.emacs.d/") (gptel-mementum-weekly-job))' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
-0 5 * * 0 emacsclient -s /run/user/1000/emacs/server -e '(progn (setq default-directory "~/.emacs.d/") (gptel-benchmark-instincts-weekly-job))' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
+0 23,3,7,11,15,19 * * * emacsclient -s /run/user/1000/emacs/server -e '(progn (setq default-directory "~/.emacs.d/") (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-cron-safe))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+0 */4 * * * emacsclient -s /run/user/1000/emacs/server -e '(progn (setq default-directory "~/.emacs.d/") (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
+0 4 * * 0 emacsclient -s /run/user/1000/emacs/server -e '(progn (setq default-directory "~/.emacs.d/") (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (load-file "~/.emacs.d/lisp/modules/gptel-benchmark-instincts.el") (gptel-mementum-weekly-job))' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
+0 5 * * 0 emacsclient -s /run/user/1000/emacs/server -e '(progn (setq default-directory "~/.emacs.d/") (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (load-file "~/.emacs.d/lisp/modules/gptel-benchmark-instincts.el") (gptel-benchmark-instincts-weekly-job))' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
 # MACOS: Daylight hours (interactive use)
