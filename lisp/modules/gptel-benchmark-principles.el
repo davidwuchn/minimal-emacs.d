@@ -154,7 +154,7 @@ Returns alist: ((key . score) ...) plus overall score."
         (push (cons key score) scores)
         (cl-incf total (* score weight))
         (cl-incf count weight)))
-    (push (cons 'overall (/ total count)) scores)
+    (push (cons 'overall (if (> count 0) (/ total count) 0.0)) scores)
     (nreverse scores)))
 
 (defun gptel-benchmark-eight-keys-summary (scores)

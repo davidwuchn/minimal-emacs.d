@@ -145,19 +145,20 @@ Returns list of test plists."
   (advice-remove 'gptel--handle-tool-use
                  #'gptel-workflow--tool-use-advice))
 
-(defun gptel-workflow--tool-use-advice (calls &rest _)
-  "Advice to collect tool CALLS."
-  (when (and gptel-workflow--current-run calls)
-    (dolist (call (if (listp calls) calls (list calls)))
-      (let* ((tool-name (if (consp call)
-                            (if (symbolp (car call)) (car call)
-                              (alist-get 'name call))
-                          call))
-             (args (if (consp call)
-                       (if (symbolp (car call)) (cdr call)
-                         (alist-get 'arguments call))
-                     nil)))
-        (gptel-workflow--collect-tool-call tool-name args)))))
+(defun gptel-workflow--tool-use-advice (fsm &rest _)
+  "Advice to collect tool calls from FSM state.
+FSM is the finite state machine object containing tool-use information.
+Extracts tool calls from the FSM's :tool-use plist and records them."
+  (when (and gptel-workflow--current-run fsm
+             (fboundp 'gptel-fsm-info))
+    (when-let* ((info (gptel-fsm-info fsm))
+                (tool-use (plist-get info :tool-use)))
+      (dolist (call (if (listp tool-use) tool-use (list tool-use)))
+        (when (plistp call)
+          (let* ((tool-name (plist-get call :name))
+                 (args (plist-get call :args)))
+            (when tool-name
+              (gptel-workflow--collect-tool-call tool-name args))))))))
 
 ;;; Memory Integration
 
@@ -704,38 +705,38 @@ TEST-ID is the test case ID."
                  (avg-completion (* 100 (or (plist-get summary :avg-completion) 0))))
             (princ (format "%-25s %6.1f%%      %6.1f%%        %6.1f%%\n"
                            timestamp avg-overall avg-efficiency avg-completion))))
-        (princ "\n"))))
+        (princ "\n")))))
 
-  (defun gptel-workflow-benchmark-trend-analysis (workflow-name)
-    "Analyze trend for WORKFLOW-NAME and return evolution-relevant data.
+(defun gptel-workflow-benchmark-trend-analysis (workflow-name)
+  "Analyze trend for WORKFLOW-NAME and return evolution-relevant data.
 Returns plist with :direction, :velocity, :recommendation."
-    (let* ((history (gptel-workflow-benchmark-load-history workflow-name))
-           (result (list :workflow workflow-name
-                         :data-points (length history)
-                         :direction 'stable
-                         :velocity 0.0
-                         :recommendation nil)))
-      (when (and history (>= (length history) 2))
-        (let* ((recent (seq-take history 5))
-               (scores (mapcar (lambda (e)
-                                 (let ((s (plist-get e :summary)))
-                                   (or (plist-get s :avg-overall) 0)))
-                               (if (listp recent) recent (append recent nil))))
-               (first-half (seq-subseq scores 0 (floor (/ (length scores) 2))))
-               (second-half (seq-subseq scores (floor (/ (length scores) 2)))))
-          (when (and first-half second-half)
-            (let* ((avg-first (/ (apply #'+ first-half) (length first-half)))
-                   (avg-second (/ (apply #'+ second-half) (length second-half)))
-                   (velocity (- avg-second avg-first)))
-              (setq result (plist-put result :velocity velocity))
-              (setq result (plist-put result :direction
-                                      (cond ((> velocity 0.05) 'improving)
-                                            ((< velocity -0.05) 'declining)
-                                            (t 'stable))))
-              (setq result (plist-put result :recommendation
-                                      (cond ((> velocity 0.05) "Continue current approach")
-                                            ((< velocity -0.05) "Investigate and apply fixes")
-                                            (t "Consider optimization")))))))))
+  (let* ((history (gptel-workflow-benchmark-load-history workflow-name))
+         (result (list :workflow workflow-name
+                       :data-points (length history)
+                       :direction 'stable
+                       :velocity 0.0
+                       :recommendation nil)))
+    (when (and history (>= (length history) 2))
+      (let* ((recent (seq-take history 5))
+             (scores (mapcar (lambda (e)
+                               (let ((s (plist-get e :summary)))
+                                 (or (plist-get s :avg-overall) 0)))
+                             (if (listp recent) recent (append recent nil))))
+             (first-half (seq-subseq scores 0 (floor (/ (length scores) 2))))
+             (second-half (seq-subseq scores (floor (/ (length scores) 2)))))
+        (when (and first-half second-half)
+          (let* ((avg-first (/ (apply #'+ first-half) (length first-half)))
+                 (avg-second (/ (apply #'+ second-half) (length second-half)))
+                 (velocity (- avg-second avg-first)))
+            (setq result (plist-put result :velocity velocity))
+            (setq result (plist-put result :direction
+                                    (cond ((> velocity 0.05) 'improving)
+                                          ((< velocity -0.05) 'declining)
+                                          (t 'stable))))
+            (setq result (plist-put result :recommendation
+                                    (cond ((> velocity 0.05) "Continue current approach")
+                                          ((< velocity -0.05) "Investigate and apply fixes")
+                                          (t "Consider optimization"))))))))
     result))
 
 ;;; Eight Keys Breakdown

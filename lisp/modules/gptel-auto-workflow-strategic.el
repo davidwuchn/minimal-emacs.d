@@ -215,22 +215,28 @@ Returns list of validated relative paths, up to MAX-TARGETS."
     (reverse targets)))
 
 (defun gptel-auto-workflow--parse-targets (response)
-  "Parse LLM RESPONSE to extract target file list."
+  "Parse LLM RESPONSE to extract target file list.
+Logs when fallback to regex parsing is used."
   (let ((proj-root (gptel-auto-workflow--project-root))
         (max-targets gptel-auto-workflow-max-targets-per-run)
         (normalized-response (gptel-auto-workflow--normalize-response response)))
     (if (not proj-root)
-        nil
+        (progn
+          (message "[auto-workflow] Cannot parse targets: no project root")
+          nil)
       (let ((targets (gptel-auto-workflow--parse-json-targets
                       normalized-response proj-root max-targets)))
         (if targets
             targets
-          (gptel-auto-workflow--parse-regex-targets
-           normalized-response proj-root max-targets))))))
+          (progn
+            (message "[auto-workflow] JSON parse failed, using regex fallback")
+            (gptel-auto-workflow--parse-regex-targets
+             normalized-response proj-root max-targets)))))))
 
 (defun gptel-auto-workflow--parse-json-targets (response proj-root max-targets)
   "Parse JSON from RESPONSE to extract targets.
-Returns nil if parsing fails or no targets found."
+Returns nil if parsing fails or no targets found.
+Logs parsing failures for debugging."
   (condition-case err
       (with-temp-buffer
         (insert response)
@@ -250,8 +256,12 @@ Returns nil if parsing fails or no targets found."
                   (gptel-auto-workflow--filter-valid-targets
                    (mapcar (lambda (item) (plist-get item :file)) candidates)
                    proj-root max-targets)))))))
-    (json-error nil)
-    (error nil)))
+    (json-error
+     (message "[auto-workflow] JSON parse error: %s" (error-message-string err))
+     nil)
+    (error
+     (message "[auto-workflow] Target parse error: %s" (error-message-string err))
+     nil)))
 
 (defun gptel-auto-workflow--parse-regex-targets (response proj-root max-targets)
   "Parse RESPONSE using regex fallback to extract targets.
