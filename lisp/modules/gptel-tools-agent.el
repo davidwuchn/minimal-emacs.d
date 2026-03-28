@@ -488,21 +488,21 @@ CALLBACK is called with the result or a timeout error."
       (setq my/gptel--agent-task-timeout-timer
             (run-at-time
              my/gptel-agent-task-timeout nil
-             (lambda ()
-               (unless my/gptel--agent-task-done
-                 (setq my/gptel--agent-task-done t)
-                 (when (timerp my/gptel--agent-task-progress-timer) 
-                   (cancel-timer my/gptel--agent-task-progress-timer))
-                 (message "[nucleus] Subagent %s timed out after %ds, aborting request"
-                          agent-type my/gptel-agent-task-timeout)
-                 (when (buffer-live-p origin-buf)
-                   (with-current-buffer origin-buf
-                     (when (fboundp 'gptel-abort)
-                       (ignore-errors (gptel-abort origin-buf)))
-                     (setq-local gptel--fsm-last parent-fsm)))
-                 (funcall callback
-                          (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                  description agent-type my/gptel-agent-task-timeout)))))))
+              (lambda ()
+                (when (buffer-live-p origin-buf)
+                  (with-current-buffer origin-buf
+                    (unless my/gptel--agent-task-done
+                      (setq my/gptel--agent-task-done t)
+                      (when (timerp my/gptel--agent-task-progress-timer)
+                        (cancel-timer my/gptel--agent-task-progress-timer))
+                      (message "[nucleus] Subagent %s timed out after %ds, aborting request"
+                               agent-type my/gptel-agent-task-timeout)
+                      (when (fboundp 'gptel-abort)
+                        (ignore-errors (gptel-abort origin-buf)))
+                      (setq-local gptel--fsm-last parent-fsm)
+                      (funcall callback
+                               (format "Error: Task \"%s\" (%s) timed out after %ds."
+                                       description agent-type my/gptel-agent-task-timeout)))))))))
 
     (unwind-protect
         (gptel-agent--task wrapped-cb agent-type description packaged-prompt)
