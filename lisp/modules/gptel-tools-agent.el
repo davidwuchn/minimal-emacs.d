@@ -614,13 +614,13 @@ FILES are validated against project root for security.
 
 ;;; Subagent Functions
 
-(defvar-local my/gptel--agent-task-done nil
+(defvar my/gptel--agent-task-done nil
   "Flag to track if agent task has completed.")
 
-(defvar-local my/gptel--agent-task-timeout-timer nil
+(defvar my/gptel--agent-task-timeout-timer nil
   "Timer for agent task timeout.")
 
-(defvar-local my/gptel--agent-task-progress-timer nil
+(defvar my/gptel--agent-task-progress-timer nil
   "Timer for agent task progress messages.")
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
@@ -1558,11 +1558,9 @@ Scores based on commit message + code diff (not just stat)."
 
 (defvar gptel-auto-experiment--grade-done nil
   "Flag to track if grading has completed.")
-(make-variable-buffer-local 'gptel-auto-experiment--grade-done)
 
 (defvar gptel-auto-experiment--grade-timer nil
   "Timer for grading timeout.")
-(make-variable-buffer-local 'gptel-auto-experiment--grade-timer)
 
 (defvar gptel-auto-experiment-grade-timeout 60
   "Timeout in seconds for grading subagent.")
