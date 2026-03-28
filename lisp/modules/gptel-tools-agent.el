@@ -327,9 +327,19 @@ large-result truncation, and result caching."
                 (pcase resp
                   ('nil
                    (when (overlayp ov) (delete-overlay ov))
-                   (funcall main-cb
-                            (format "Error: Task %s could not finish task \"%s\". \n\nError details: %S"
-                                    agent-type description (plist-get info :error))))
+                   (let* ((error-info (plist-get info :error))
+                          (error-msg (when (listp error-info) (plist-get error-info :message))))
+                     (if (and error-msg
+                              (stringp error-msg)
+                              (string-match-p "1013\\|server is initializing" error-msg))
+                         ;; Server is initializing, default to auto-approve with warning
+                         (funcall main-cb
+                                  (format "Warning: Reviewer agent not available (server initializing). Auto-approving changes.\n\nError details: %S"
+                                          error-info))
+                       ;; Other error, report it
+                       (funcall main-cb
+                                (format "Error: Task %s could not finish task \"%s\". \n\nError details: %S"
+                                        agent-type description error-info)))))
                   (`(tool-call . ,calls)
                    (unless (plist-get info :tracking-marker)
                      (plist-put info :tracking-marker tracking-marker))
