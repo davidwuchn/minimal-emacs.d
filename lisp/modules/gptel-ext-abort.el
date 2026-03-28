@@ -39,13 +39,17 @@
   :group 'my/gptel-interrupt)
 
 (defun my/gptel--install-fast-curl-timeouts ()
-  "Set `gptel-curl-extra-args' for fast failure on stalls."
+  "Set `gptel-curl-extra-args' for fast failure on stalls.
+NOTE: Low-speed timeout (-y/-Y) removed - caused false positives for subagents.
+Backend-specific timeouts (DashScope 900s, Moonshot 900s) handle long-running calls."
   (setq gptel-curl-extra-args
         (list
          "--connect-timeout" (number-to-string my/gptel-curl-connect-timeout)
          "--max-time" (number-to-string my/gptel-curl-max-time)
-         "-y" (number-to-string my/gptel-curl-low-speed-time)
-         "-Y" (number-to-string my/gptel-curl-low-speed-limit)
+         ;; NOTE: -y/-Y (low-speed timeout) intentionally REMOVED.
+         ;; These caused curl exit 28 during subagent calls when LLM thinks
+         ;; for >15s without streaming output. Backend :curl-args override
+         ;; max-time but low-speed detection is independent.
          ;; NOTE: --http1.1 is intentionally NOT set here globally.
          ;; It caused DashScope (and other HTTP/2-capable backends) to fail on
          ;; large request bodies (e.g. subagent 3rd turn with full file content).
