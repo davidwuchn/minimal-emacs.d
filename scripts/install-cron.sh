@@ -53,7 +53,7 @@ case "$MACHINE" in
         SECTION_START=49
         SECTION_END=52
         SOCKET=""
-        SCHEDULE="10AM, 2PM, 6PM (3 runs/day)"
+        SCHEDULE="10AM, 2PM, 6PM (3 runs/day) + weekly instincts"
         ;;
     single)
         SECTION_START=60
