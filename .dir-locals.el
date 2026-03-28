@@ -23,10 +23,10 @@
      ;; No-improvement threshold (stop after N consecutive failures)
      (gptel-auto-experiment-no-improvement-threshold . 3)
      
-     ;; Backend and model (uncomment to override)
-     ;; (gptel-backend . gptel--dashscope)
-     ;; (gptel-model . qwen3.5-plus)
-     )))
+;; Backend and model (uncomment to override)
+      ;; (gptel-backend . gptel--dashscope)
+      (gptel-model . glm-5)
+      )))
 
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; HOW TO USE
