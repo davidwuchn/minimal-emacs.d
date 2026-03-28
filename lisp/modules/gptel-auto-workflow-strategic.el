@@ -134,12 +134,12 @@ finds patterns first for better selection."
     (gptel-auto-workflow--ask-analyzer-with-findings
      (gptel-auto-workflow-load-research-findings) callback)))
 
-(defun gptel-auto-workflow--ask-analyzer-with-findings (research-findings callback)
-  "Ask analyzer with optional RESEARCH-FINDINGS for target selection.
-CALLBACK receives list of target files."
-  (let* ((context (gptel-auto-workflow--gather-context))
-         (max-targets gptel-auto-workflow-max-targets-per-run)
-         (prompt (format "Select optimization targets for this Emacs Lisp project.
+(defun gptel-auto-workflow--build-analyzer-prompt (context research-findings max-targets)
+  "Build prompt for analyzer LLM target selection.
+CONTEXT is the gathered context plist.
+RESEARCH-FINDINGS is the research findings string or empty.
+MAX-TARGETS is the maximum number of targets to select."
+  (format "Select optimization targets for this Emacs Lisp project.
 
 FILES AVAILABLE:
 %s
@@ -160,14 +160,22 @@ TASK: Select exactly %d files from lisp/modules/ or packages/ to optimize.
 
 OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\" or \"packages/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
-                         (plist-get context :file-list)
-                         (plist-get context :git-history)
-                         (plist-get context :file-sizes)
-                         (plist-get context :todos)
-                         (if (string-empty-p research-findings)
-                             "Not available (research disabled)"
-                           (truncate-string-to-width research-findings 1000 nil nil "..."))
-                         max-targets)))
+          (plist-get context :file-list)
+          (plist-get context :git-history)
+          (plist-get context :file-sizes)
+          (plist-get context :todos)
+          (if (string-empty-p research-findings)
+              "Not available (research disabled)"
+            (truncate-string-to-width research-findings 1000 nil nil "..."))
+          max-targets))
+
+(defun gptel-auto-workflow--ask-analyzer-with-findings (research-findings callback)
+  "Ask analyzer with optional RESEARCH-FINDINGS for target selection.
+CALLBACK receives list of target files."
+  (let* ((context (gptel-auto-workflow--gather-context))
+         (max-targets gptel-auto-workflow-max-targets-per-run)
+         (prompt (gptel-auto-workflow--build-analyzer-prompt
+                  context research-findings max-targets)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (progn
