@@ -13,7 +13,6 @@ lisp/modules/*.elc
 !pre-early-init.el
 !post-early-init.el
 !post-init.el
-!custom.el
 !AGENTS.md
 !INTRO.md
 !SECURITY.md
