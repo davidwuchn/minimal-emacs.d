@@ -1428,27 +1428,65 @@ REVIEW-RESULT is (approved-p . review-output)."
               (gptel-auto-workflow--push-staging)
               (message "[auto-workflow] ✓ Staging pushed. Human must merge to main."))))))))
 
-;;; Benchmark & Evaluation
+;;; Multi-Project Support
+
+;; Auto-workflow uses .dir-locals.el for per-project configuration.
+;; Place .dir-locals.el in your project root with workflow-specific settings.
+;;
+;; Example .dir-locals.el:
+;; ((nil . ((gptel-auto-workflow-targets . ("src/main.el" "src/utils.el"))
+;;          (gptel-auto-experiment-max-per-target . 3)
+;;          (gptel-auto-experiment-time-budget . 900)
+;;          (gptel-backend . gptel--dashscope)
+;;          (gptel-model . qwen3.5-plus))))
+
+(defvar gptel-auto-workflow--project-root-override nil
+  "Override for project root when running from non-git directory.
+Set via .dir-locals.el or M-x gptel-auto-workflow-set-project-root")
+
+(defun gptel-auto-workflow-set-project-root (root)
+  "Set the project ROOT for current session.
+Useful when working on projects without git or with complex layouts.
+ROOT should be an absolute path to the project directory."
+  (interactive "DProject root: ")
+  (setq gptel-auto-workflow--project-root-override (expand-file-name root))
+  (message "[auto-workflow] Project root set to: %s" 
+           gptel-auto-workflow--project-root-override))
 
 (defun gptel-auto-workflow--project-root ()
-  "Return the MAIN project root directory (never a worktree subdirectory).
-When running inside a worktree, returns the main worktree's root.
+  "Return the MAIN project root directory.
+Priority:
+1. gptel-auto-workflow--project-root-override (if set via .dir-locals.el)
+2. project.el detection (project-current + project-root)
+3. Git worktree root (git rev-parse --show-toplevel)
+4. ~/.emacs.d/ (fallback)
 Always returns absolute path."
-  (let ((git-root (string-trim
-                   (shell-command-to-string
-                    "git rev-parse --show-toplevel 2>/dev/null || echo ''"))))
-    (if (string-empty-p git-root)
-        (expand-file-name
-         (or (when (boundp 'minimal-emacs-user-directory)
-               minimal-emacs-user-directory)
-             "~/.emacs.d/"))
-      (let ((git-common-dir (string-trim
-                             (shell-command-to-string
-                              "git rev-parse --git-common-dir 2>/dev/null || echo ''"))))
-        (if (and (not (string-empty-p git-common-dir))
-                 (string-match-p "/\\.git$" git-common-dir))
-            (directory-file-name (file-name-directory git-common-dir))
-          git-root)))))
+  (cond
+   ;; 1. Explicit override (from .dir-locals.el)
+   (gptel-auto-workflow--project-root-override
+    gptel-auto-workflow--project-root-override)
+   
+   ;; 2. project.el detection (preferred method)
+   ((and (fboundp 'project-current)
+         (fboundp 'project-root)
+         (project-current nil))
+    (expand-file-name (project-root (project-current nil))))
+   
+   ;; 3. Git detection (fallback)
+   ((let ((git-root (string-trim
+                     (shell-command-to-string
+                      "git rev-parse --show-toplevel 2>/dev/null || echo ''"))))
+      (and (not (string-empty-p git-root))
+           (file-directory-p git-root)
+           git-root)))
+   
+   ;; 4. Fallback
+   (t (expand-file-name
+       (or (when (boundp 'minimal-emacs-user-directory)
+             minimal-emacs-user-directory)
+           "~/.emacs.d/")))))
+
+;;; Benchmark & Evaluation
 
 (defun gptel-auto-experiment-run-tests ()
   "Run ERT tests and return (passed . output).
@@ -1896,6 +1934,9 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
+         ;; CRITICAL: Set default-directory to worktree so all subagents
+         ;; operate in the correct context. Each worktree = one session.
+         (default-directory (or worktree default-directory))
          (start-time (float-time))
          (timeout-timer nil)
          (finished nil))
