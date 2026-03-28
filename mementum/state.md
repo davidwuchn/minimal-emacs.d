@@ -1,17 +1,19 @@
 # Mementum State
 
-> Last session: 2026-03-28 16:05
+> Last session: 2026-03-28 17:10
 
-## Total Improvements: 119+ Real Code Fixes
+## Total Improvements: 120+ Real Code Fixes
 
-465+ commits since March 25, 2026.
+468+ commits since March 25, 2026.
 
 ### Recent Fixes (Last 25)
 
 | # | File | Fix |
 |---|---|------|
-| 122 | gptel-benchmark-core.el | Fix inconsistent indentation in key-names vector (auto-workflow) |
-| 121 | auto-workflow | Stuck experiments cleaned up (API timeout issue) |
+| 123 | gptel-ext-abort.el | Remove -y/-Y low-speed timeout (fixes exit 28) |
+| 122 | gptel-ext-backends.el | DashScope timeout 600s → 900s |
+| 121 | gptel-ext-retry.el | Add 1013/server initializing to transient errors |
+| 120 | gptel-benchmark-core.el | Fix inconsistent indentation (auto-workflow) |
 | 119 | gptel-tools-agent.el | Correct paren in shell-timeout function |
 | 117 | gptel-tools-agent.el | Shell command timeout protection (prevent deadlocks) |
 | 116 | gptel-tools-edit.el | Add missing closing paren (parse fix) |
@@ -76,6 +78,9 @@
 λ experiment-suffix. Derived from (system-name) for multi-machine
 λ subagent-timeout. 1200s default prevents workflow hang
 λ shell-timeout. 30s timeout kills deadlocked shell processes
+λ curl-low-speed. -y/-Y removed (was causing exit 28 during LLM thinking)
+λ api-timeout. DashScope 900s, Moonshot 900s
+λ transient-1013. server is initializing → retry
 λ experiment-callback. Timeout must call completion callback (stuck 33min)
 λ pre-push-hook. Auto-push submodules before parent
 ```
