@@ -10,6 +10,3 @@
 	path = packages/ai-code
 	url = https://github.com/davidwuchn/ai-code-interface.el
 	branch = main
-[submodule "packages/ai-behaviors"]
-	path = packages/ai-behaviors
-	url = https://github.com/xificurC/ai-behaviors.git
