@@ -364,7 +364,7 @@ large-result truncation, and result caching."
                                   m))
                (partial (format "%s result for task: %s\n\n"
                                 (capitalize agent-type) description)))
-          (gptel--update-status " Calling Agent..." 'font-font-lock-escape-face)
+          (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
           (gptel-request prompt
             :context (gptel-agent--task-overlay where agent-type description)
             :fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)
