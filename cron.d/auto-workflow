@@ -18,54 +18,51 @@
 # STATUS: emacsclient -e '(gptel-auto-workflow-status)'
 
 SHELL=/bin/bash
-PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin
-XDG_RUNTIME_DIR=/run/user/1000
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
+
+# Platform-specific settings (set by install-cron.sh)
+# LINUX: XDG_RUNTIME_DIR=/run/user/1000
+# MACOS: No XDG_RUNTIME_DIR needed
 
 # Ensure log directory exists
 @reboot mkdir -p $HOME/.emacs.d/var/tmp/cron
 
 # ─────────────────────────────────────────────────────────────
-# PI5: Linux systemd (24/7 headless)
+# PI5: Linux systemd (24/7 headless) - SECTION: pi5
 # ─────────────────────────────────────────────────────────────
 # Socket: /run/user/1000/emacs/server (explicit path prevents duplicates)
 # Schedule: 11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6 runs/day)
 #
 # ACTIVE-USE PROTECTION: Skips if unsaved buffers, recent input, magit open
 
-0 23,3,7,11,15,19 * * * emacsclient -s /run/user/1000/emacs/server -e '(progn (setq default-directory "~/.emacs.d/") (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-cron-safe))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
-0 */4 * * * emacsclient -s /run/user/1000/emacs/server -e '(progn (setq default-directory "~/.emacs.d/") (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
-0 4 * * 0 emacsclient -s /run/user/1000/emacs/server -e '(progn (setq default-directory "~/.emacs.d/") (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (load-file "~/.emacs.d/lisp/modules/gptel-benchmark-instincts.el") (gptel-mementum-weekly-job))' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
-0 5 * * 0 emacsclient -s /run/user/1000/emacs/server -e '(progn (setq default-directory "~/.emacs.d/") (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (load-file "~/.emacs.d/lisp/modules/gptel-benchmark-instincts.el") (gptel-benchmark-instincts-weekly-job))' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
+#0 23,3,7,11,15,19 * * * emacsclient -a '' -s /run/user/1000/emacs/server -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-projects))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+#0 */4 * * * emacsclient -a '' -s /run/user/1000/emacs/server -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
+#0 4 * * 0 emacsclient -a '' -s /run/user/1000/emacs/server -e '(gptel-mementum-weekly-job)' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
+#0 5 * * 0 emacsclient -a '' -s /run/user/1000/emacs/server -e '(gptel-benchmark-instincts-weekly-job)' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
-# MACOS: Daylight hours (interactive use)
+# MACOS: Daylight hours (interactive use) - SECTION: macos
 # ─────────────────────────────────────────────────────────────
 # Socket: TMPDIR/emacs${UID}/server (default location)
 # Schedule: 10AM, 2PM, 6PM (3 runs/day, when user typically active)
+# Uses emacsclient -a '' to auto-start daemon if not running
+# Multi-project support: runs workflow for all configured projects
 #
 # For parallel setup with Pi5: use MACOS here + PI5 on Pi5 machine
 # Total: 9 runs/day across both machines
 
-#0 10,14,18 * * * emacsclient -e '(gptel-auto-workflow-cron-safe)' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
-#0 */4 * * * emacsclient -e '(progn (setq default-directory "~/.emacs.d/") (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
-#0 4 * * 0 emacsclient -e '(progn (setq default-directory "~/.emacs.d/") (gptel-mementum-weekly-job))' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
-#0 5 * * 0 emacsclient -e '(progn (setq default-directory "~/.emacs.d/") (gptel-benchmark-instincts-weekly-job))' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
+#0 10,14,18 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-projects))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+#0 */4 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
+#0 4 * * 0 emacsclient -a '' -e '(gptel-mementum-weekly-job)' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
+#0 5 * * 0 emacsclient -a '' -e '(gptel-benchmark-instincts-weekly-job)' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
 
 # ─────────────────────────────────────────────────────────────
-# MACOS: Daylight hours (interactive use)
+# SINGLE: Single machine (any OS) - SECTION: single
 # ─────────────────────────────────────────────────────────────
-# Schedule: 10AM, 2PM, 6PM (3 runs/day)
+# Schedule: Every 4 hours
 # Uses emacsclient -a '' to auto-start daemon if not running
 
-# ─────────────────────────────────────────────────────────────
-# MACOS: Daylight hours (interactive use)
-# ─────────────────────────────────────────────────────────────
-# Schedule: 10AM, 2PM, 6PM (3 runs/day)
-# Uses emacsclient -a '' to auto-start daemon if not running
-# Multi-project support: runs workflow for all projects in .auto-workflow/projects.el
-
-# Auto-workflow: Optimize code across all configured projects
-0 10,14,18 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-projects))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
-0 */4 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
-0 4 * * 0 emacsclient -a '' -e '(gptel-mementum-weekly-job)' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
-0 5 * * 0 emacsclient -a '' -e '(gptel-benchmark-instincts-weekly-job)' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
+#0 */4 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-projects))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+#0 */6 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
+#0 4 * * 0 emacsclient -a '' -e '(gptel-mementum-weekly-job)' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
+#0 5 * * 0 emacsclient -a '' -e '(gptel-benchmark-instincts-weekly-job)' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
