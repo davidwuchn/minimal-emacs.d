@@ -1282,8 +1282,9 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
           (message "[auto-experiment] ✓ Tests passed"))
         result))))
 
-(defun gptel-auto-experiment-benchmark ()
-  "Run syntax validation + nucleus verification + tests + Eight Keys scoring.
+(defun gptel-auto-experiment-benchmark (&optional skip-tests)
+  "Run syntax validation + nucleus verification + Eight Keys scoring.
+If SKIP-TESTS is non-nil, skip test execution (tests run in staging flow).
 Returns plist with :passed, :tests-passed, :eight-keys, etc."
   (let* ((start (float-time))
          (proj-root (gptel-auto-workflow--project-root))
@@ -1300,14 +1301,16 @@ Returns plist with :passed, :tests-passed, :eight-keys, etc."
                 :time (- (float-time) start)))
       (let* ((verify-result (call-process "/bin/bash" nil nil nil
                                           (expand-file-name "scripts/verify-nucleus.sh" proj-root)))
-             (tests-result (when (zerop verify-result)
+             (tests-result (when (and (zerop verify-result) (not skip-tests))
                              (gptel-auto-experiment-run-tests)))
-             (scores (when (and (zerop verify-result) (car tests-result))
+             (tests-passed (or skip-tests (car tests-result)))
+             (scores (when (zerop verify-result)
                        (gptel-auto-experiment--eight-keys-scores))))
-        (list :passed (and (zerop verify-result) (car tests-result))
+        (list :passed (and (zerop verify-result) tests-passed)
               :nucleus-passed (zerop verify-result)
-              :tests-passed (car tests-result)
-              :tests-output (cdr tests-result)
+              :tests-passed tests-passed
+              :tests-output (when tests-result (cdr tests-result))
+              :tests-skipped skip-tests
               :time (- (float-time) start)
               :eight-keys (when scores (alist-get 'overall scores))
               :eight-keys-scores scores)))))
@@ -1747,7 +1750,7 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                              (gptel-auto-experiment-log-tsv
                               (format-time-string "%Y-%m-%d") exp-result)
                              (funcall callback exp-result)))
-                       (let* ((bench (gptel-auto-experiment-benchmark))
+                       (let* ((bench (gptel-auto-experiment-benchmark t))
                               (passed (plist-get bench :passed))
                               (tests-passed (plist-get bench :tests-passed))
                               (score-after (plist-get bench :eight-keys)))
@@ -1799,7 +1802,7 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                                          :analyzer-patterns (format "%s" patterns)
                                                          :agent-output agent-output)))
                                   (if keep
-                                      (let* ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\n\nEVIDENCE: Tests pass, Nucleus valid\nScore: %.2f → %.2f (+%.0f%%)"
+                                      (let* ((msg (format "◈ Optimize %s: %s\n\nHYPOTHESIS: %s\n\nEVIDENCE: Nucleus valid, tests in staging\nScore: %.2f → %.2f (+%.0f%%)"
                                                           target
                                                           (gptel-auto-experiment--summarize hypothesis)
                                                           hypothesis
@@ -1878,7 +1881,7 @@ Tries multiple patterns in order:
         gptel-auto-experiment--no-improvement-count 0
         gptel-auto-workflow--worktree-dir nil
         gptel-auto-workflow--current-branch nil)
-  (let ((baseline (gptel-auto-experiment-benchmark))
+  (let ((baseline (gptel-auto-experiment-benchmark t))
         (max-exp gptel-auto-experiment-max-per-target)
         (threshold gptel-auto-experiment-no-improvement-threshold))
     (setq gptel-auto-experiment--best-score (or (plist-get baseline :eight-keys) 0.0))
