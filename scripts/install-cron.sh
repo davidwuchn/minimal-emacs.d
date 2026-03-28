@@ -9,112 +9,87 @@
 # Options:
 #   --dry-run    Show what would be installed without modifying crontab
 #
-# Auto-detects machine and uses appropriate schedule:
-#   - macOS (imacpro): cron.d/auto-workflow (1:00, 5:00 AM)
-#   - Pi5:             cron.d/auto-workflow-pi5 (11:00 PM, 3:00 AM)
+# Auto-detects machine and uncomment appropriate section in cron.d/auto-workflow
 
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CRON_FILE="$DIR/cron.d/auto-workflow"
 
-# Detect machine and select appropriate cron file
+detect_machine() {
+    local hostname=$(hostname)
+    local os=$(uname -s)
+    
+    if [ "$os" = "Darwin" ]; then
+        echo "macos"
+    elif echo "$hostname" | grep -qiE "pi5|raspberrypi|onepi"; then
+        echo "pi5"
+    else
+        echo "single"
+    fi
+}
+
+MACHINE=$(detect_machine)
 HOSTNAME=$(hostname)
-if echo "$HOSTNAME" | grep -q "imacpro\|macbook\|mac"; then
-    CRON_FILE="$DIR/cron.d/auto-workflow"
-    MACHINE="macOS"
-elif echo "$HOSTNAME" | grep -q "pi5\|raspberrypi"; then
-    CRON_FILE="$DIR/cron.d/auto-workflow-pi5"
-    MACHINE="Pi5"
-else
-    # Default to auto-workflow, warn user
-    CRON_FILE="$DIR/cron.d/auto-workflow"
-    MACHINE="unknown"
-fi
 
 echo "=== Installing Cron Jobs for Autonomous Operation ==="
 echo ""
-echo "Detected machine: $HOSTNAME ($MACHINE)"
-echo "Using cron file: $(basename $CRON_FILE)"
+echo "Detected: $HOSTNAME ($MACHINE)"
 echo ""
 
-# Check if cron file exists
-if [ ! -f "$CRON_FILE" ]; then
-    echo "Error: Cron file not found: $CRON_FILE"
-    exit 1
-fi
-
-# Create required directories
-echo "Creating required directories..."
 mkdir -p "$DIR/var/tmp/cron"
 mkdir -p "$DIR/var/tmp/experiments"
-echo "  ✓ var/tmp/cron/"
-echo "  ✓ var/tmp/experiments/"
+echo "Created: var/tmp/cron/ var/tmp/experiments/"
 echo ""
 
-# Check current crontab
-echo "Current crontab:"
-echo "---"
-crontab -l 2>/dev/null || echo "(empty)"
-echo "---"
-echo ""
+case "$MACHINE" in
+    pi5)
+        SECTION_START=34
+        SECTION_END=37
+        SOCKET="-s /run/user/1000/emacs/server"
+        SCHEDULE="11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6 runs/day)"
+        ;;
+    macos)
+        SECTION_START=48
+        SECTION_END=51
+        SOCKET=""
+        SCHEDULE="10AM, 2PM, 6PM (3 runs/day)"
+        ;;
+    single)
+        SECTION_START=59
+        SECTION_END=62
+        SOCKET=""
+        SCHEDULE="Every 4 hours"
+        ;;
+esac
 
 if [ "$1" = "--dry-run" ]; then
-    echo "DRY RUN - Would install:"
-    echo "---"
-    cat "$CRON_FILE" | grep -v "^#" | grep -v "^$" | grep -v "^SHELL" | grep -v "^LOGDIR" | grep -v "@reboot"
-    echo "---"
+    echo "DRY RUN - Would uncomment lines $SECTION_START-$SECTION_END in cron.d/auto-workflow"
+    echo ""
+    sed -n "${SECTION_START},${SECTION_END}p" "$CRON_FILE" | sed 's/^#0/0/'
     echo ""
     echo "To install for real, run:"
     echo "  ./scripts/install-cron.sh"
 else
-    echo "Installing crontab from: $CRON_FILE"
-    crontab "$CRON_FILE"
-    echo "✓ Crontab installed"
+    TMP_FILE=$(mktemp)
+    sed "${SECTION_START},${SECTION_END}s/^#0/0/" "$CRON_FILE" > "$TMP_FILE"
+    crontab "$TMP_FILE"
+    rm "$TMP_FILE"
+    echo "Installed crontab with $MACHINE schedule"
     echo ""
-    echo "Installed jobs:"
-    crontab -l | grep -v "^#" | grep -v "^$" | grep -v "^SHELL" | grep -v "^LOGDIR" | grep -v "@reboot"
+    echo "Active jobs:"
+    crontab -l | grep "^0"
     echo ""
-    echo "Logs will be written to: $DIR/var/tmp/cron/"
+    echo "Socket: ${SOCKET:-default}"
+    echo "Schedule: $SCHEDULE"
 fi
 
 echo ""
-echo "=== Scheduled Jobs ($MACHINE) ==="
-echo ""
-if [ "$MACHINE" = "Pi5" ]; then
-    echo "Pi5: Heavy 24/7 usage (headless, always on)"
-    echo ""
-    echo "| Schedule                       | Function                              |"
-    echo "|--------------------------------|---------------------------------------|"
-    echo "| 11PM, 3AM, 7AM, 11AM, 3PM, 7PM| gptel-auto-workflow-run-async        |"
-    echo "| Every 4 hours                  | gptel-auto-workflow-run-research     |"
-    echo "| Weekly Sun 4:00 AM             | gptel-mementum-weekly-job            |"
-    echo "| Weekly Sun 5:00 AM             | gptel-benchmark-instincts-weekly-job |"
-    echo ""
-    echo "Pi5: 6 workflow runs/day + 6 researcher runs/day"
-else
-    echo "macOS: Daylight hours only (when user is active)"
-    echo ""
-    echo "| Schedule          | Function                              |"
-    echo "|-------------------|---------------------------------------|"
-    echo "| 10AM, 2PM, 6PM    | gptel-auto-workflow-run-async        |"
-    echo "| Every 4 hours     | gptel-auto-workflow-run-research     |"
-    echo "| Weekly Sun 4:00 AM| gptel-mementum-weekly-job            |"
-    echo "| Weekly Sun 5:00 AM| gptel-benchmark-instincts-weekly-job |"
-    echo ""
-    echo "macOS: 3 workflow runs/day + 6 researcher runs/day"
-fi
 echo "=== Prerequisites ==="
 echo ""
-echo "1. Emacs daemon must be running:"
-echo "   emacs --daemon"
-echo ""
-echo "2. For overnight experiments, edit targets in:"
-echo "   docs/auto-workflow-program.md"
-echo ""
-echo "3. Check logs:"
-echo "   tail -f var/tmp/cron/*.log"
-echo ""
-echo "4. Verify setup:"
-echo "   ./scripts/test-cron-e2e.sh"
+echo "1. Emacs daemon running: systemctl --user start emacs"
+echo "2. Verify: emacsclient -e 't'"
+echo "3. Check status: emacsclient -e '(gptel-auto-workflow-status)'"
+echo "4. View logs: tail -f var/tmp/cron/*.log"
 echo ""
 echo "Done."
