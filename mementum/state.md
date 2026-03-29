@@ -10,6 +10,7 @@
 
 | # | File | Fix |
 |---|------|------|
+| 147 | gptel-skill-benchmark.el | Fix: use executor agent (not skill name as agent) |
 | 146 | benchmarks/skill-tests/elisp-expert.json | Benchmark test definitions (5 cases for dangerous patterns) |
 | 145 | assistant/agents/*.md | {{SKILLS}} template for autonomous skill discovery |
 | 144 | assistant/skills/elisp-expert/SKILL.md | Skill for gptel-agent subagents (dangerous patterns) |
@@ -50,6 +51,7 @@
 λ skill-autonomy. Subagent uses Skill tool autonomously (parent instructs, child loads)
 λ gptel-agent-skill-dirs. ~/.emacs.d/assistant/skills/ first, then ~/.opencode/skill/, etc.
 λ {{SKILLS}}-template. Inject available_skills into agent system prompt (gptel-agent auto-expands)
+λ agent-vs-skill. gptel-agent--task expects agent name (executor), NOT skill name (elisp-expert)
 ```
 
 ---
@@ -104,13 +106,28 @@
 
 ## Current Status
 
-- **Main branch**: `475b456` (ai-code submodule updated)
-- **ai-code submodule**: `ba5d0c9` (cl-block fix pushed)
-- **Workflow**: Ready to test (validation should pass now)
+- **Main branch**: `63e0a0e`
+- **Staging branch**: Needs merge from main
 - **Emacs daemon**: Running
-- **API issues**: None (qwen3.5-plus working correctly)
-- **Worktrees**: Managed by workflow (never manual cleanup)
-- **Next**: Test auto-workflow to verify experiments pass validation
+- **Skill elisp-expert**: ✓ Created, loaded, tested
+- **Benchmark**: ✓ Fixed (agent-vs-skill bug), single test 83% pass rate
+- **Auto-workflow**: Ready to use skill when editing .el files
+
+### Bug Fixed
+
+**Issue**: 5 stuck "Elisp-Expert" task overlays waiting
+**Root Cause**: `gptel-skill-benchmark.el` used skill name "elisp-expert" as agent name
+**Fix**: Use "executor" agent (which loads skill via Skill tool)
+
+### Benchmark Result (Single Test)
+
+```
+Test: elisp-001 (cl_return_from_guard)
+- Executor: ✓ Generated correct cl-block + cl-return-from patterns
+- Grader: 5/6 behaviors passed (83%)
+- Byte-compile: ✓ Mentioned verification
+- Eight Keys: 40% overall
+```
 
 ---
 
@@ -125,3 +142,4 @@
 7. **cl-return-from** - Requires cl-block wrapper in Elisp (validation catches this)
 8. **gptel-agent Skill** - gptel-agent has own Skill tool, skills go in `gptel-agent-skill-dirs` (~/.emacs.d/assistant/skills/ first)
 9. **Skill autonomy** - Parent instructs "use Skill", subagent loads autonomously (not injection from parent)
+10. **Agent vs Skill** - `gptel-agent--task` expects agent name (e.g. "executor"), NOT skill name - skills are loaded BY agents
