@@ -2222,6 +2222,9 @@ Uses local state captured in closure for parallel execution safety."
 (defvar gptel-auto-workflow--running nil
   "Flag to track if auto-workflow is currently running.")
 
+(defvar gptel-auto-workflow--headless nil
+  "Flag to suppress interactive prompts during headless operation.")
+
 (defvar gptel-auto-workflow--stats nil
   "Current run statistics: (:kept :total :phase).")
 
@@ -2236,6 +2239,44 @@ Uses local state captured in closure for parallel execution safety."
 
 (defvar gptel-auto-workflow--max-stuck-minutes 30
   "Maximum minutes workflow can be stuck before auto-stopping.")
+
+(defun gptel-auto-workflow--suppress-ask-user-about-supersession-threat (orig-fn &rest args)
+  "Suppress supersession threat prompts in headless mode."
+  (if gptel-auto-workflow--headless
+      'revert
+    (apply orig-fn args)))
+
+(defun gptel-auto-workflow--suppress-yes-or-no-p (orig-fn prompt)
+  "Suppress yes-or-no prompts in headless mode, auto-answer yes."
+  (if gptel-auto-workflow--headless
+      t
+    (funcall orig-fn prompt)))
+
+(defun gptel-auto-workflow--suppress-y-or-n-p (orig-fn prompt)
+  "Suppress y-or-n prompts in headless mode, auto-answer yes."
+  (if gptel-auto-workflow--headless
+      t
+    (funcall orig-fn prompt)))
+
+(defun gptel-auto-workflow--enable-headless-suppression ()
+  "Enable suppression of interactive prompts for headless operation."
+  (setq gptel-auto-workflow--headless t)
+  (advice-add 'ask-user-about-supersession-threat :around 
+              #'gptel-auto-workflow--suppress-ask-user-about-supersession-threat)
+  (advice-add 'yes-or-no-p :around 
+              #'gptel-auto-workflow--suppress-yes-or-no-p)
+  (advice-add 'y-or-n-p :around 
+              #'gptel-auto-workflow--suppress-y-or-n-p))
+
+(defun gptel-auto-workflow--disable-headless-suppression ()
+  "Disable suppression of interactive prompts."
+  (setq gptel-auto-workflow--headless nil)
+  (advice-remove 'ask-user-about-supersession-threat 
+                 #'gptel-auto-workflow--suppress-ask-user-about-supersession-threat)
+  (advice-remove 'yes-or-no-p 
+                 #'gptel-auto-workflow--suppress-yes-or-no-p)
+  (advice-remove 'y-or-n-p 
+                 #'gptel-auto-workflow--suppress-y-or-n-p))
 
 (defcustom gptel-auto-workflow-git-timeout 120
   "Timeout in seconds for git commands during auto-workflow.
@@ -2453,12 +2494,14 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
 Cancels stale timers, kills orphaned buffers, resets state, then runs.
 Safe to call from cron - handles all edge cases."
   (let ((proj-root (or (gptel-auto-workflow--project-root)
-                       (expand-file-name "~/.emacs.d/"))))
+                        (expand-file-name "~/.emacs.d/"))))
     (setq default-directory proj-root)
     (require 'magit)
     (require 'json)
     (unless (featurep 'gptel-tools-agent)
       (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root)))
+    ;; Enable headless suppression for async operations
+    (gptel-auto-workflow--enable-headless-suppression)
     (condition-case err
         (progn
           (gptel-auto-workflow--cleanup-stale-state)
@@ -2468,10 +2511,14 @@ Safe to call from cron - handles all edge cases."
               (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
                        (length orphans))
               (message "[auto-workflow] Run M-x gptel-auto-workflow-recover-all-orphans to recover")))
-          (gptel-auto-workflow-run-async--guarded))
+          (gptel-auto-workflow-run-async--guarded nil
+            (lambda (_)
+              ;; Disable headless suppression after workflow completes
+              (gptel-auto-workflow--disable-headless-suppression))))
       (error
        (message "[auto-workflow] Cron error: %s" err)
-       nil))))
+       (gptel-auto-workflow--disable-headless-suppression)
+        nil))))
 
 (defun gptel-auto-workflow--experiment-suffix ()
   "Get experiment suffix based on hostname.
