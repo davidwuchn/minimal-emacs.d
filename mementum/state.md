@@ -10,7 +10,8 @@
 
 | # | File | Fix |
 |---|------|------|
-| 142 | executor.md + elisp-protocol.md | Move dangerous patterns to knowledge (skill-based) |
+| 144 | assistant/skills/elisp-expert/SKILL.md | Skill for gptel-agent subagents (dangerous patterns) |
+| 143 | executor.md + elisp-expert SKILL.md | Skill-based pattern loading (not knowledge page injection) |
 | 141 | ai-code-behaviors.el | cl-block wrappers for cl-return-from (3 functions fixed) |
 | 140 | gptel-tools-agent.el | Keep worktree for entire target, delete only at next run start |
 | 139 | gptel-auto-workflow-projects.el | Check worktree exists before routing |
@@ -44,6 +45,8 @@
 λ never-manual-cleanup. Let workflow manage its own resources
 λ cl-return-from. Requires cl-block wrapper in Elisp (dangerous pattern)
 λ skill-based-patterns. Use knowledge pages (skills), NOT system prompt modifications
+λ skill-autonomy. Subagent uses Skill tool autonomously (parent instructs, child loads)
+λ gptel-agent-skill-dirs. ~/.emacs.d/assistant/skills/ first, then ~/.opencode/skill/, etc.
 ```
 
 ---
@@ -117,4 +120,5 @@
 5. **qwen-coder** - Can't use for tool calling (malformed JSON)
 6. **kill-buffer-query** - Use hook, not advice
 7. **cl-return-from** - Requires cl-block wrapper in Elisp (validation catches this)
-8. **Skill-based patterns** - Use knowledge pages (skills) instead of bloating system prompts
+8. **gptel-agent Skill** - gptel-agent has own Skill tool, skills go in `gptel-agent-skill-dirs` (~/.emacs.d/assistant/skills/ first)
+9. **Skill autonomy** - Parent instructs "use Skill", subagent loads autonomously (not injection from parent)
