@@ -120,38 +120,36 @@
 
 ## Current Status
 
-- **Main branch**: `23202a0`
-- **Staging branch**: `93acfd0` (has behaviors-exp3 merge)
-- **Emacs daemon**: Running
+- **Main branch**: `ac7c8b4`
+- **Staging branch**: `1863ef3` (synced with main)
 - **Skill elisp-expert**: ✓ Created, loaded, tested
+- **Grader**: ✓ Reliability improved (80% threshold, 120s timeout, no fallback)
 
-### Auto-Workflow Results Summary
+### Grader Reliability Fixes
 
-**4 Useful Fixes Merged to Main:**
-| Source | Target | Fix |
-|--------|--------|-----|
-| sanitize-exp2 | gptel-ext-tool-sanitize.el | Tool lookup bug (gptel-get-tool without args) |
-| tools-exp2 | nucleus-tools.el | Remove redundant conditional |
-| cache-exp1 | gptel-ext-context-cache.el | Context window normalization (5000→1000) |
-| cache-exp2 | gptel-ext-context-cache.el | Seed OpenAI/Anthropic models |
+| Issue | Before | After |
+|-------|--------|-------|
+| Pass threshold | 100% (perfect) | 80% (realistic) |
+| Timeout | 60s | 120s |
+| Fallback | Local-grader (weak) | Fail (no false passes) |
+| Auto-revert | Enabled (buffer reverts) | Disabled during workflow |
+| Uniquify | Enabled (confusing names) | Disabled during workflow |
 
-**Kept in Staging:**
-- behaviors-exp3: Params validation in ai-code--reconstruct-prompt-vec
+### Expected Improvement
 
-### Failure Investigation
+| Metric | Before | After (expected) |
+|--------|--------|------------------|
+| Success rate | 7% (1/14) | 30-50% |
+| "Unknown error" | 10 failures | Clear categorization |
+| Grader false fails | Many | Fewer (80% threshold) |
 
-**Issue**: 10 "Unknown error" in failure-analysis.log
+### Next Run Checklist
 
-**Root Cause**: Grader returns `:passed nil` when score < total (not perfect score).
-The error categorization treated all `:passed nil` as errors.
-
-**Fix**: Added `:grader-failed` category - detect when executor output looks valid
-but grader returns score 0. Patterns checked:
-- `^Executor result` - valid executor output
-- `^✓` - success marker
-- `^**HYPOTHESIS` - hypothesis block
-
-**Pattern**:
+- [ ] Worktrees cleaned up at start
+- [ ] Auto-revert disabled
+- [ ] Uniquify disabled
+- [ ] Grader uses 80% threshold
+- [ ] Error categorization improved
 ```
 λ grader-failed ≠ api-error. Executor success + grader score 0 = grader issue
 ```
@@ -178,3 +176,6 @@ but grader returns score 0. Patterns checked:
 9. **Skill autonomy** - Parent instructs "use Skill", subagent loads autonomously (not injection from parent)
 10. **Agent vs Skill** - `gptel-agent--task` expects agent name (e.g. "executor"), NOT skill name - skills are loaded BY agents
 11. **Async overlay context** - Overlays created in callbacks lose buffer context, need advice on `gptel-agent--task-overlay` to route
+12. **Grader threshold** - 80% is realistic, 100% perfect score is unrealistic for LLM output
+13. **No weak fallback** - Local-grader pattern matching gives false passes, fail instead
+14. **Auto-revert/uniquify** - Disable during headless workflow to prevent interference
