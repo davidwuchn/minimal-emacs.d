@@ -270,7 +270,8 @@ Always includes all params to distinguish nil from \"false\"."
 (defun my/gptel--subagent-cache-get (agent-type prompt &optional files include-history include-diff)
   "Get cached result for (AGENT-TYPE, PROMPT, ...) if still valid.
 Returns nil if cache disabled, not found, or expired."
-  (when (> my/gptel-subagent-cache-ttl 0)
+  (when (and (> my/gptel-subagent-cache-ttl 0)
+             (hash-table-p my/gptel--subagent-cache))
     (let* ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff))
            (cached (gethash key my/gptel--subagent-cache)))
       (when cached
@@ -283,7 +284,8 @@ Returns nil if cache disabled, not found, or expired."
 (defun my/gptel--subagent-cache-put (agent-type prompt result &optional files include-history include-diff)
   "Cache RESULT for (AGENT-TYPE, PROMPT, ...).
 Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
-  (when (> my/gptel-subagent-cache-ttl 0)
+  (when (and (> my/gptel-subagent-cache-ttl 0)
+             (hash-table-p my/gptel--subagent-cache))
     (let ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff)))
       (puthash key (cons (float-time) result) my/gptel--subagent-cache)
       ;; Evict oldest entries if over limit
@@ -920,11 +922,13 @@ Values: plist (:worktree-dir :current-branch).")
 
 (defun gptel-auto-workflow--get-worktree-dir (target)
   "Get worktree-dir for TARGET from hash table."
-  (plist-get (gethash target gptel-auto-workflow--worktree-state) :worktree-dir))
+  (when (hash-table-p gptel-auto-workflow--worktree-state)
+    (plist-get (gethash target gptel-auto-workflow--worktree-state) :worktree-dir)))
 
 (defun gptel-auto-workflow--get-current-branch (target)
   "Get current-branch for TARGET from hash table."
-  (plist-get (gethash target gptel-auto-workflow--worktree-state) :current-branch))
+  (when (hash-table-p gptel-auto-workflow--worktree-state)
+    (plist-get (gethash target gptel-auto-workflow--worktree-state) :current-branch)))
 
 ;;; Worktree Management
 
