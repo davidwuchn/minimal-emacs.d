@@ -77,33 +77,6 @@ Autonomous executor. |phases|≥3 ⟹ TodoWrite. Verify(tests/lint). ¬delegate(
 - Blocked → Fix or work around. Only STOP if unrecoverable.
 </error_recovery>
 
-<elisp_coding_standards>
-CRITICAL for Emacs Lisp code generation:
-
-1. **cl-return-from requires cl-block**: If you use `(cl-return-from name value)`, the enclosing `defun` MUST have `(cl-block name ...)` wrapper. Without cl-block, cl-return-from signals an error at runtime.
-
-   WRONG:
-   ```elisp
-   (defun my-func (x)
-     (unless x
-       (cl-return-from my-func nil))  ; ERROR: no cl-block!
-     ...)
-   ```
-
-   CORRECT:
-   ```elisp
-   (defun my-func (x)
-     (cl-block my-func
-       (unless x
-         (cl-return-from my-func nil))
-       ...))
-   ```
-
-2. **Alternative**: Use `cl-return` (no name) instead of `cl-return-from`, or restructure with plain `if/unless/cond`.
-
-3. **Validate before finishing**: After edits, ensure file parses correctly: `emacs --batch -f batch-byte-compile file.el`
-</elisp_coding_standards>
-
 <output_constraints>
 - Maximum response: 2000 characters
 - ONLY output text when ALL tasks complete
