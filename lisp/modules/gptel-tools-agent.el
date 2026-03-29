@@ -1754,13 +1754,13 @@ The grader subagent overlay will appear in the current buffer at time of call."
              output
              '("change clearly described"
                "change is minimal and focused"
-               "fixes real bug, improves performance, or addresses TODO/FIXME"
-               "tests pass after change")
-             '("large refactor unrelated to fix"
+               "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
+               "verification attempted (byte-compile, nucleus, tests, or manual)")
+             '("large refactor unrelated to stated improvement"
                "changed security files without review"
                "no description or unclear purpose"
                "style-only change without functional impact"
-               "replaces working code with equivalent code")
+               "replaces working code without clear improvement")
              (lambda (result)
                (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
                  (when (and state (not (plist-get state :done)))
