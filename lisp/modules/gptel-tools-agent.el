@@ -1090,15 +1090,15 @@ SAFETY: Never touches main branch."
     (message "[auto-workflow] Syncing staging from main")
     (condition-case err
         (progn
-          (if (gptel-auto-workflow--staging-branch-exists-p)
-              (progn
-                (magit-git-success "checkout" staging)
-                (magit-git-success "reset" "--hard" "main")
-                (magit-git-success "push" "--force" "origin" staging))
-            (progn
-              (message "[auto-workflow] Creating staging branch from main")
-              (magit-git-success "branch" staging "main")
-              (magit-git-success "push" "-u" "origin" staging)))
+          (cond
+           ((gptel-auto-workflow--staging-branch-exists-p)
+            (magit-git-success "checkout" staging)
+            (magit-git-success "reset" "--hard" "main")
+            (magit-git-success "push" "--force" "origin" staging))
+           (t
+            (message "[auto-workflow] Creating staging branch from main")
+            (magit-git-success "branch" staging "main")
+            (magit-git-success "push" "-u" "origin" staging)))
           (message "[auto-workflow] ✓ Staging synced from main")
           t)
       (error
