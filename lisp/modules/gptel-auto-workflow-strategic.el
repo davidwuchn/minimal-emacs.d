@@ -252,17 +252,17 @@ Logs parsing failures for debugging."
         (when (re-search-forward "{" nil t)
           (goto-char (match-beginning 0))
           (let* ((data (json-read))
-                 (target-list (plist-get data :targets)))
+                 (target-list (alist-get 'targets data)))
             (when (listp target-list)
               (let ((candidates
                      (cl-remove-if
                       (lambda (item)
                         (or (not (listp item))
-                            (not (plist-get item :file))))
+                            (not (alist-get 'file item))))
                       target-list)))
                 (when candidates
                   (gptel-auto-workflow--filter-valid-targets
-                   (mapcar (lambda (item) (plist-get item :file)) candidates)
+                   (mapcar (lambda (item) (alist-get 'file item)) candidates)
                    proj-root max-targets)))))))
     (json-error
      (message "[auto-workflow] JSON parse error: %s" (error-message-string err))
