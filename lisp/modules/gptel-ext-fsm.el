@@ -49,15 +49,17 @@ Only operates on FSMs with a live buffer."
   (when (boundp 'gptel--fsm-last)
     (let* ((fsm (my/gptel--coerce-fsm gptel--fsm-last))
            (info (and fsm (gptel-fsm-info fsm))))
-      (when (and info (listp info))
+      (when (and info (listp info) (plist-member info :buffer))
         (let* ((fsm-buffer (plist-get info :buffer))
                (error-msg (plist-get info :error))
-               (stop-reason (plist-get info :stop-reason)))
+               (stop-reason (plist-get info :stop-reason))
+               (fsm-state (and fsm (gptel-fsm-state fsm))))
           (when (and fsm-buffer
                      (buffer-live-p fsm-buffer)
                      error-msg
                      (eq stop-reason 'STOP)
-                     (not (eq (gptel-fsm-state fsm) 'DONE)))
+                     fsm-state
+                     (not (eq fsm-state 'DONE)))
             (cl-incf my/gptel--recovery-count)
             (when (> my/gptel--recovery-count 3)
               (message "[gptel-fsm] WARNING: %d FSM recoveries this session"
