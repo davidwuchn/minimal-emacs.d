@@ -2,14 +2,16 @@
 
 > Last session: 2026-03-29 22:00
 
-## Total Improvements: 152+ Real Code Fixes
+## Total Improvements: 154+ Real Code Fixes
 
-520+ commits since March 25, 2026.
+522+ commits since March 25, 2026.
 
 ### Recent Fixes (Last 35)
 
 | # | File | Fix |
 |---|------|------|
+| 154 | gptel-tools-agent.el | Disable uniquify during headless workflow (prevents .emacs.d/ prefix) |
+| 153 | gptel-tools-agent.el | Disable auto-revert during headless workflow (prevents buffer reverts) |
 | 152 | gptel-tools-agent.el | Improve error categorization (detect grader failures vs real errors) |
 | 151 | gptel-tools-agent.el | Safer staging branch sync (use cond) |
 | 150 | cache-exp1, cache-exp2 | Merged: context window normalization + cache seeding |
@@ -59,6 +61,8 @@
 λ agent-vs-skill. gptel-agent--task expects agent name (executor), NOT skill name (elisp-expert)
 λ overlay-buffer-context. make-overlay(nil) uses current-buffer, advice needed for async callbacks
 λ grader-passed. :passed = (score = total), not perfect ≠ error
+λ auto-revert-conflict. Worktree file writes trigger revert on main buffer → disable during workflow
+λ uniquify-buffer-names. Multiple same-name files get prefixes like .emacs.d/ → disable during workflow
 ```
 
 ---
