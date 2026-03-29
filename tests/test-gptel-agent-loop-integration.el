@@ -9,7 +9,7 @@
 (defvar gptel--preset nil)
 (defvar gptel-request--transitions nil)
 
-(cl-defstruct gptel-fsm info)
+(cl-defstruct gptel-fsm (state 'INIT) table handlers info)
 
 (defun gptel--preset-syms (_preset) nil)
 (defun gptel--apply-preset (preset) (setq gptel--preset preset))
