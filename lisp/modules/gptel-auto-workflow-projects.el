@@ -284,6 +284,8 @@ Also removes old conflicting :override advice if present."
       (error nil))
     ;; Install new :around advice for buffer routing
     (advice-add 'gptel-agent--task :around #'gptel-auto-workflow--advice-task-override))
+  ;; Install overlay buffer routing advice
+  (gptel-auto-workflow--enable-overlay-buffer-advice)
   (setq gptel-auto-workflow--persist-executor-overlays t)
   (message "[auto-workflow] Per-project subagent buffers enabled"))
 
@@ -292,11 +294,34 @@ Also removes old conflicting :override advice if present."
   (interactive)
   (when (fboundp 'gptel-agent--task)
     (advice-remove 'gptel-agent--task #'gptel-auto-workflow--advice-task-override))
+  (when (fboundp 'gptel-agent--task-overlay)
+    (advice-remove 'gptel-agent--task-overlay #'gptel-auto-workflow--advice-task-overlay-buffer))
   (setq gptel-auto-workflow--persist-executor-overlays nil)
   (message "[auto-workflow] Per-project subagent buffers disabled"))
 
+;;; Advice for overlay buffer routing
+
+(defun gptel-auto-workflow--advice-task-overlay-buffer (orig-fun where &optional agent-type description)
+  "Ensure overlay is created in the correct buffer.
+ORIG-FUN is the original function. WHERE is position/marker.
+Gets target buffer from gptel-fsm-info and creates overlay there."
+  (let* ((fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+         (info (and fsm (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
+         (target-buf (and info (plist-get info :buffer))))
+    (if (and target-buf (buffer-live-p target-buf))
+        (with-current-buffer target-buf
+          (funcall orig-fun where agent-type description))
+      (funcall orig-fun where agent-type description))))
+
+(defun gptel-auto-workflow--enable-overlay-buffer-advice ()
+  "Enable advice to route overlays to correct buffer."
+  (when (fboundp 'gptel-agent--task-overlay)
+    (advice-add 'gptel-agent--task-overlay :around 
+                #'gptel-auto-workflow--advice-task-overlay-buffer)))
+
 ;; Auto-enable on load - safe now that pass-through is implemented
 (gptel-auto-workflow-enable-per-project-subagents)
+(gptel-auto-workflow--enable-overlay-buffer-advice)
 
 ;;; Executor Overlay Management
 
