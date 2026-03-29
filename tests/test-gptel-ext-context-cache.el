@@ -76,14 +76,19 @@
   (should (= (my/gptel--normalize-context-window 32768) 32768)))
 
 (ert-deftest cache/normalize/boundary-value ()
-  "Should treat 5000 as large."
+  "Should treat 1000 as boundary (not multiplied)."
   (test--context-cache-setup)
-  (should (= (my/gptel--normalize-context-window 5000) 5000)))
+  (should (= (my/gptel--normalize-context-window 1000) 1000)))
 
 (ert-deftest cache/normalize/just-under-boundary ()
-  "Should multiply values just under boundary."
+  "Should keep values >= 1000 as-is (not multiply)."
   (test--context-cache-setup)
-  (should (= (my/gptel--normalize-context-window 4999) 4999000)))
+  (should (= (my/gptel--normalize-context-window 4999) 4999)))
+
+(ert-deftest cache/normalize/at-new-boundary ()
+  "Should multiply values < 1000 by 1000."
+  (test--context-cache-setup)
+  (should (= (my/gptel--normalize-context-window 999) 999000)))
 
 (ert-deftest cache/normalize/nil-input ()
   "Should return nil for nil."
