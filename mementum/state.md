@@ -10,6 +10,7 @@
 
 | # | File | Fix |
 |---|------|------|
+| 147 | gptel-skill-benchmark.el | Fix: use executor agent (not skill name as agent) |
 | 146 | benchmarks/skill-tests/elisp-expert.json | Benchmark test definitions (5 cases for dangerous patterns) |
 | 145 | assistant/agents/*.md | {{SKILLS}} template for autonomous skill discovery |
 | 144 | assistant/skills/elisp-expert/SKILL.md | Skill for gptel-agent subagents (dangerous patterns) |
@@ -50,6 +51,7 @@
 λ skill-autonomy. Subagent uses Skill tool autonomously (parent instructs, child loads)
 λ gptel-agent-skill-dirs. ~/.emacs.d/assistant/skills/ first, then ~/.opencode/skill/, etc.
 λ {{SKILLS}}-template. Inject available_skills into agent system prompt (gptel-agent auto-expands)
+λ agent-vs-skill. gptel-agent--task expects agent name (executor), NOT skill name (elisp-expert)
 ```
 
 ---
@@ -148,3 +150,4 @@
 7. **cl-return-from** - Requires cl-block wrapper in Elisp (validation catches this)
 8. **gptel-agent Skill** - gptel-agent has own Skill tool, skills go in `gptel-agent-skill-dirs` (~/.emacs.d/assistant/skills/ first)
 9. **Skill autonomy** - Parent instructs "use Skill", subagent loads autonomously (not injection from parent)
+10. **Agent vs Skill** - `gptel-agent--task` expects agent name (e.g. "executor"), NOT skill name - skills are loaded BY agents
