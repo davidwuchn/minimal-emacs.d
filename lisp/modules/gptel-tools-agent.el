@@ -1995,14 +1995,15 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
-         ;; CRITICAL: Set default-directory to worktree so all subagents
-         ;; operate in the correct context. Each worktree = one session.
-         (default-directory (or worktree default-directory))
-         ;; Get project buffer for overlay routing
-         (project-buf (when (and (boundp 'gptel-auto-workflow--current-project)
-                                 gptel-auto-workflow--current-project)
-                        (gethash (expand-file-name gptel-auto-workflow--current-project)
-                                 gptel-auto-workflow--project-buffers)))
+;; CRITICAL: Set default-directory to worktree so all subagents
+          ;; operate in the correct context. Each worktree = one session.
+          (default-directory (or worktree default-directory))
+          ;; Get project buffer for overlay routing (ensure hash table exists)
+          (project-buf (when (and (boundp 'gptel-auto-workflow--current-project)
+                                  gptel-auto-workflow--current-project
+                                  (hash-table-p gptel-auto-workflow--project-buffers))
+                         (gethash (expand-file-name gptel-auto-workflow--current-project)
+                                  gptel-auto-workflow--project-buffers)))
          ;; Disable preview for headless auto-workflow
          (gptel-tools-preview-enabled nil)
          ;; Disable tool confirmations for headless auto-workflow
