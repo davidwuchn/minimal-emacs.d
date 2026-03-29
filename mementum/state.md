@@ -10,6 +10,7 @@
 
 | # | File | Fix |
 |---|------|------|
+| 160 | gptel-tools-agent.el | Handle nil agent-output in error categorization + better grader logging |
 | 159 | gptel-tools-agent.el | Skill gaps → benchmark tests (feedback loop for skill improvement) |
 | 158 | executor.md | Skill check step 1 of tool loop (before editing .el/.clj) |
 | 157 | gptel-tools-agent.el | Retry validation failures with skill instruction + skill gap logging |
@@ -126,10 +127,37 @@
 
 ## Current Status
 
-- **Main branch**: `ac7c8b4`
-- **Staging branch**: `1863ef3` (synced with main)
-- **Skill elisp-expert**: ✓ Created, loaded, tested
-- **Grader**: ✓ Reliability improved (80% threshold, 120s timeout, no fallback)
+- **Main branch**: `cd73639`
+- **Staging branch**: synced
+- **Auto-workflow complete**: 5 experiments, 1 kept (20% success rate)
+
+### Workflow Results
+
+| Metric | Before Fixes | After Fixes |
+|--------|--------------|-------------|
+| Success rate | 7% (1/14) | 20% (1/5) |
+| Grader threshold | 100% | 80% |
+| Skill loading | After failure | Before editing |
+
+**Kept Fix:**
+- `nucleus-tools.el`: Early termination at 50% threshold (performance)
+
+### Grader Failure Investigation
+
+**Symptoms:**
+- Grader returns score 0
+- agent_output shows "nil" in TSV
+- Error categorized as `:unknown`
+
+**Root Causes Found:**
+1. `agent-output` can be nil from executor
+2. Error categorization didn't handle nil → now returns `:grader-failed`
+3. Need better logging to trace grader results
+
+**Fixes Applied:**
+- Check for nil/empty agent-output
+- Log grade score/total/passed for debugging
+- Log agent output preview when available
 
 ### Grader Reliability Fixes
 
