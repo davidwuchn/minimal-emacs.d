@@ -2249,7 +2249,7 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                       (funcall callback exp-result))))
                            (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
                              (gptel-auto-experiment-decide
-                              (list :score baseline :code-quality 0.5)
+                              (list :score baseline :code-quality baseline-code-quality)
                               (list :score score-after :code-quality code-quality :output agent-output)
                               (lambda (decision)
                                 (setq finished t)
@@ -2446,6 +2446,7 @@ Creates feedback loop: gaps → tests → skill improvements → fewer gaps."
 Uses local state captured in closure for parallel execution safety.
 Adapts max-experiments based on API error rate."
   (let* ((baseline (gptel-auto-experiment-benchmark t))
+         (baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5))
          (original-max gptel-auto-experiment-max-per-target)
          (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
          (threshold gptel-auto-experiment-no-improvement-threshold)
