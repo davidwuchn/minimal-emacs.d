@@ -935,6 +935,11 @@ Values: plist (:worktree-dir :current-branch).")
 (defvar gptel-auto-experiment--best-score 0.0
   "Best score achieved in current experiment loop.")
 
+;; Safety: Ensure worktree-state is initialized (handles case where
+;; variable was previously bound but not as hash-table)
+(unless (hash-table-p gptel-auto-workflow--worktree-state)
+  (setq gptel-auto-workflow--worktree-state (make-hash-table :test 'equal)))
+
 (defun gptel-auto-workflow--get-worktree-dir (target)
   "Get worktree-dir for TARGET from hash table."
   (when (hash-table-p gptel-auto-workflow--worktree-state)
