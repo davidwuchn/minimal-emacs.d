@@ -2342,31 +2342,42 @@ Tries multiple patterns in order:
 
 (defvar gptel-auto-experiment-max-validation-retries 1
   "Maximum retries when validation fails due to teachable patterns.
-Executor will be instructed to load relevant skill and regenerate.")
+Retry signals a skill gap - the skill should be improved for future runs.")
+
+(defvar gptel-auto-experiment--skill-gaps nil
+  "List of detected skill gaps during this session.
+Each entry is (FILE PATTERN). Used to improve skills after workflow completes.")
+
+(defun gptel-auto-experiment--log-skill-gap (target pattern)
+  "Log skill gap for TARGET with PATTERN.
+Skill gaps indicate where skills need improvement."
+  (push (list target pattern) gptel-auto-experiment--skill-gaps)
+  (message "[auto-experiment] SKILL GAP: %s needs pattern: %s" target pattern))
 
 (defun gptel-auto-experiment--make-retry-prompt (target validation-error _original-prompt)
   "Create retry prompt after validation failure.
 TARGET is the file being edited.
 VALIDATION-ERROR is the error message.
-Instructs executor to load relevant skill instead of hardcoding patterns."
-  (format "Your previous edit to %s was REJECTED due to validation error:
+Logs skill gap and instructs executor to load relevant skill."
+  (let ((skill-name
+         (cond
+          ((string-match-p "cl-return-from.*without.*cl-block\\|Dangerous pattern.*\\.el$" validation-error)
+           (progn
+             (gptel-auto-experiment--log-skill-gap target "cl-return-from requires cl-block")
+             "elisp-expert"))
+          (t nil))))
+    (format "Your previous edit to %s was REJECTED due to validation error:
 
 ERROR: %s
 
-IMPORTANT: Before retrying, load the relevant skill for guidance.
-
 %s
 
-Read the file, understand the error, load the skill if available, and generate corrected code."
-          target
-          validation-error
-          (cond
-           ;; Elisp dangerous patterns - tell executor to load skill
-           ((string-match-p "cl-return-from.*without.*cl-block\\|Dangerous pattern.*\\.el$" validation-error)
-            "CALL THIS FIRST: Skill(\"elisp-expert\")
-This skill teaches dangerous Elisp patterns including cl-return-from requirements.")
-           ;; Add more skill mappings here as needed
-           (t ""))))
+Read the file, understand the error, and generate corrected code."
+            target
+            validation-error
+            (if skill-name
+                (format "IMPORTANT: Call Skill(\"%s\") first to learn the correct pattern." skill-name)
+              "IMPORTANT: Fix this issue and retry."))))
 
 (defun gptel-auto-experiment--agent-error-p (output)
   "Check if OUTPUT is an error message from agent tool."
@@ -2376,6 +2387,57 @@ This skill teaches dangerous Elisp patterns including cl-return-from requirement
   "Create short summary of HYPOTHESIS."
   (let ((words (split-string hypothesis)))
     (string-join (cl-subseq words 0 (min 6 (length words))) " ")))
+
+;;; Skill Gap to Benchmark Conversion
+
+(defun gptel-auto-experiment--skill-gaps-to-benchmark-tests ()
+  "Convert logged skill gaps to benchmark test cases.
+Saves to benchmarks/skill-tests/{skill}-auto-generated.json.
+Creates feedback loop: gaps → tests → skill improvements → fewer gaps."
+  (when gptel-auto-experiment--skill-gaps
+    (let* ((proj-root (gptel-auto-workflow--project-root))
+           (tests-dir (expand-file-name "benchmarks/skill-tests" proj-root))
+           (gaps-by-skill (make-hash-table :test 'equal)))
+      ;; Group gaps by skill
+      (dolist (gap gptel-auto-experiment--skill-gaps)
+        (let* ((file (car gap))
+               (pattern (cadr gap))
+               (skill-name (cond
+                            ((string-suffix-p ".el" file) "elisp-expert")
+                            ((string-suffix-p ".clj" file) "clojure-expert")
+                            (t "unknown"))))
+          (puthash skill-name (cons gap (gethash skill-name gaps-by-skill)) gaps-by-skill)))
+      ;; Write test file for each skill
+      (maphash
+       (lambda (skill-name gaps)
+         (when (not (string= skill-name "unknown"))
+           (let* ((test-file (expand-file-name (format "%s-auto-generated.json" skill-name) tests-dir))
+                  (test-id 0)
+                  (test-cases
+                   (mapcar
+                    (lambda (gap)
+                      (setq test-id (1+ test-id))
+                      `((id . ,(format "%s-auto-%d" skill-name test-id))
+                        (name . ,(format "Auto-detected: %s" (cadr gap)))
+                        (prompt . ,(format "Fix code in %s that has: %s" (car gap) (cadr gap)))
+                        (expected_behaviors . ["Pattern correctly handled"
+                                              "No validation error"
+                                              "Skill loaded before edit"])
+                        (forbidden_behaviors . ["Same validation error repeats"
+                                               "Pattern ignored"])))
+                    gaps)))
+             (make-directory tests-dir t)
+             (let ((json-content (json-encode `((skill . ,skill-name)
+                                                (version . "auto-generated")
+                                                (description . "Auto-generated from workflow skill gaps")
+                                                (test_cases . ,test-cases)))))
+               (with-temp-file test-file
+                 (insert json-content))
+               (message "[auto-experiment] Saved %d skill gap tests to %s" 
+                        (length gaps) test-file)))))
+       gaps-by-skill)
+      ;; Clear gaps after saving
+      (setq gptel-auto-experiment--skill-gaps nil))))
 
 ;;; Experiment Loop
 
@@ -2855,15 +2917,17 @@ Called at start of new run to ensure clean state."
        (lambda (results)
          (setq all-results (append all-results results))
          (cl-incf completed-targets)
-         (setq kept-count (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
-         (plist-put gptel-auto-workflow--stats :kept kept-count)
-         (when (= completed-targets (length targets))
-           (setq gptel-auto-workflow--running nil)
-           (plist-put gptel-auto-workflow--stats :phase "complete")
-           (message "[auto-workflow] Complete: %d experiments, %d kept"
-                    (length all-results) kept-count)
-           (when completion-callback
-             (funcall completion-callback all-results))))))))
+(setq kept-count (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
+          (plist-put gptel-auto-workflow--stats :kept kept-count)
+          (when (= completed-targets (length targets))
+            (setq gptel-auto-workflow--running nil)
+            (plist-put gptel-auto-workflow--stats :phase "complete")
+            ;; Convert skill gaps to benchmark tests (feedback loop)
+            (gptel-auto-experiment--skill-gaps-to-benchmark-tests)
+            (message "[auto-workflow] Complete: %d experiments, %d kept"
+                     (length all-results) kept-count)
+            (when completion-callback
+              (funcall completion-callback all-results))))))))
 
 (defun gptel-auto-workflow-run (&optional targets)
   "Run auto-workflow asynchronously.
@@ -3332,7 +3396,8 @@ Returns list of matching files."
     result))
 
 (defun gptel-mementum-decay-skills ()
-    "Apply decay to skill files not tested in 4+ weeks.
+  "Apply decay to skill files not tested in 4+ weeks.
+Run weekly via cron."
 Run weekly via cron."
     (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
                                          (gptel-auto-workflow--project-root)))
