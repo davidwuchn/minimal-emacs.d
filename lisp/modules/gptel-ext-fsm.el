@@ -29,14 +29,16 @@
                                             (string-match-p "^Error: Task" result))
                                    (message "[gptel-fsm] subagent '%s' error: %s"
                                             agent-type result))
-                                 (funcall main-cb result))))
+                                 (when (functionp main-cb)
+                                   (funcall main-cb result)))))
                   (condition-case err
                       (funcall orig new-cb agent-type desc prompt)
                     (error
                      (let ((err-msg (format "Error: Task '%s' failed: %s"
                                             agent-type (error-message-string err))))
                        (message "[gptel-fsm] %s" err-msg)
-                       (funcall main-cb err-msg))))))))
+                       (when (functionp main-cb)
+                         (funcall main-cb err-msg)))))))))
 
 ;;; --- Recover FSM from error+STOP limbo ---
 
