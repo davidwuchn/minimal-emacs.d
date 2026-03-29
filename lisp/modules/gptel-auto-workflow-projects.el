@@ -18,6 +18,9 @@
 (declare-function gptel-auto-workflow-cron-safe "gptel-tools-agent")
 (declare-function gptel-auto-workflow-run-async--guarded "gptel-tools-agent")
 (declare-function gptel-auto-workflow-run-research "gptel-auto-workflow-strategic")
+(declare-function gptel-fsm-info "gptel-fsm")
+(declare-function gptel-mementum-weekly-job "gptel-tools-agent")
+(declare-function gptel-benchmark-instincts-weekly-job "gptel-benchmark-instincts")
 
 (defvar gptel-auto-workflow-projects
   (list (expand-file-name
@@ -32,6 +35,18 @@ Customize this variable to add more projects.")
 
 (defvar gptel-auto-workflow--current-project nil
   "Currently active project root for subagent context.")
+
+(defvar gptel-auto-workflow--project-root-override nil
+  "Override for project root when running from non-git directory.")
+
+(defvar gptel-auto-workflow--worktree-state nil
+  "Hash table for worktree state. Defined in gptel-tools-agent.el.")
+
+(defvar gptel-auto-workflow--research-findings-cache nil
+  "Hash table for research findings cache. Defined in gptel-auto-workflow-strategic.el.")
+
+(defvar mementum-root nil
+  "Root directory for mementum. Set per-project.")
 
 (defun gptel-auto-workflow--get-project-buffer (project-root)
   "Get or create a gptel-agent buffer for PROJECT-ROOT.
@@ -63,6 +78,8 @@ Each project gets its own isolated buffer for executor overlays."
               (error (message "[auto-workflow] Could not apply nucleus preset: %s" err))))
           ;; Set project context
           (setq-local default-directory root)
+          ;; Load .dir-locals.el for project configuration
+          (hack-dir-local-variables-non-file-buffer)
           (when (boundp 'gptel-auto-workflow--project-root-override)
             (setq-local gptel-auto-workflow--project-root-override root)))
         (puthash root buf gptel-auto-workflow--project-buffers)
@@ -112,11 +129,8 @@ then runs workflow for that project."
       (message "[auto-workflow] Processing project: %s" project-root)
       (let* ((default-directory project-root)
              (project-buf (gptel-auto-workflow--get-project-buffer project-root)))
-        ;; .dir-locals.el will be loaded when we change to project directory
         (condition-case err
             (progn
-              ;; Re-initialize with project context
-              (setq gptel-auto-workflow--project-root-override project-root)
               ;; Set current project context for subagents
               (setq gptel-auto-workflow--current-project project-root)
               ;; Clear per-project state
@@ -125,6 +139,8 @@ then runs workflow for that project."
               
               ;; Run workflow for this project in its dedicated buffer
               (with-current-buffer project-buf
+                ;; Ensure .dir-locals.el is loaded for this project
+                (hack-dir-local-variables-non-file-buffer)
                 (gptel-auto-workflow-cron-safe))
               (push (cons project-root 'success) results)
               (message "[auto-workflow] ✓ Completed: %s" project-root))
@@ -274,17 +290,18 @@ Without PROJECT-ROOT, clears overlays for all projects."
 Loads .dir-locals.el from project and runs researcher in that context."
   (interactive "DProject root: ")
   (let* ((root (expand-file-name project-root))
-         (default-directory root)
          (project-buf (gptel-auto-workflow--get-project-buffer root)))
     (message "[research] Starting for project: %s" root)
     ;; Ensure gptel-auto-workflow-strategic is loaded
     (unless (featurep 'gptel-auto-workflow-strategic)
       (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)))
-    ;; Override project root temporarily and run in project buffer
-    (let ((gptel-auto-workflow--project-root-override root)
-          (gptel-auto-workflow--current-project root))
-      (with-current-buffer project-buf
-        (gptel-auto-workflow-run-research)))))
+    ;; Set current project context for subagents
+    (setq gptel-auto-workflow--current-project root)
+    (with-current-buffer project-buf
+      ;; Ensure .dir-locals.el is loaded for this project
+      (hack-dir-local-variables-non-file-buffer)
+      (gptel-auto-workflow-run-research))
+    (setq gptel-auto-workflow--current-project nil)))
 
 (defun gptel-auto-workflow-run-all-research ()
   "Run researcher for all configured projects.
@@ -298,20 +315,20 @@ then runs researcher for that project."
       (message "[research] Processing project: %s" project-root)
       (let* ((default-directory project-root)
              (project-buf (gptel-auto-workflow--get-project-buffer project-root)))
-        ;; .dir-locals.el will be loaded when we change to project directory
         (condition-case err
             (progn
-              ;; Override project root temporarily
-              (let ((gptel-auto-workflow--project-root-override project-root)
-                    (gptel-auto-workflow--current-project project-root))
-                (with-current-buffer project-buf
-                  (gptel-auto-workflow-run-research)))
+              ;; Set current project context for subagents
+              (setq gptel-auto-workflow--current-project project-root)
+              (with-current-buffer project-buf
+                ;; Ensure .dir-locals.el is loaded for this project
+                (hack-dir-local-variables-non-file-buffer)
+                (gptel-auto-workflow-run-research))
               (push (cons project-root 'success) results)
               (message "[research] ✓ Completed: %s" project-root))
           (error
            (push (cons project-root (format "error: %s" err)) results)
-           (message "[research] ✗ Failed: %s - %s" project-root err)))))
-    (setq gptel-auto-workflow--current-project nil)
+           (message "[research] ✗ Failed: %s - %s" project-root err))))
+      (setq gptel-auto-workflow--current-project nil))
     (message "[research] All projects processed: %s" 
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                         results ", "))
@@ -356,22 +373,21 @@ Without PROJECT-ROOT, clears cache for all projects."
 Loads project context and runs mementum maintenance in that context."
   (interactive "DProject root: ")
   (let* ((root (expand-file-name project-root))
-         (default-directory root))
+         (default-directory root)
+         (mementum-root root))
     (message "[mementum] Starting weekly job for project: %s" root)
     ;; Ensure gptel-tools-agent is loaded for mementum functions
     (unless (featurep 'gptel-tools-agent)
       (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)))
-    ;; Override project context and run
-    (let ((gptel-auto-workflow--project-root-override root)
-          (gptel-auto-workflow--current-project root)
-          (mementum-root root))  ; Set mementum-root for mementum functions
-      (condition-case err
-          (progn
-            (gptel-mementum-weekly-job)
-            (message "[mementum] ✓ Completed: %s" root))
-        (error
-         (message "[mementum] ✗ Failed: %s - %s" root err)
-         nil)))))
+    (setq gptel-auto-workflow--current-project root)
+    (condition-case err
+        (progn
+          (gptel-mementum-weekly-job)
+          (message "[mementum] ✓ Completed: %s" root))
+      (error
+       (message "[mementum] ✗ Failed: %s - %s" root err)
+       nil))
+    (setq gptel-auto-workflow--current-project nil)))
 
 (defun gptel-auto-workflow-run-all-mementum ()
   "Run mementum weekly job for all configured projects.
@@ -389,7 +405,6 @@ To be called from cron - runs mementum maintenance for each project."
         (error
          (push (cons project-root (format "error: %s" err)) results)
          (message "[mementum] ✗ Failed: %s - %s" project-root err))))
-    (setq gptel-auto-workflow--current-project nil)
     (message "[mementum] All projects processed: %s"
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                         results ", "))
@@ -402,22 +417,21 @@ To be called from cron - runs mementum maintenance for each project."
 Loads project context and runs instincts evolution in that context."
   (interactive "DProject root: ")
   (let* ((root (expand-file-name project-root))
-         (default-directory root))
+         (default-directory root)
+         (mementum-root root))
     (message "[instincts] Starting weekly job for project: %s" root)
     ;; Ensure gptel-benchmark-instincts is loaded
     (unless (featurep 'gptel-benchmark-instincts)
       (load-file (expand-file-name "lisp/modules/gptel-benchmark-instincts.el" root)))
-    ;; Override project context and run
-    (let ((gptel-auto-workflow--project-root-override root)
-          (gptel-auto-workflow--current-project root)
-          (mementum-root root))  ; Set mementum-root for instincts functions
-      (condition-case err
-          (progn
-            (gptel-benchmark-instincts-weekly-job)
-            (message "[instincts] ✓ Completed: %s" root))
-        (error
-         (message "[instincts] ✗ Failed: %s - %s" root err)
-         nil)))))
+    (setq gptel-auto-workflow--current-project root)
+    (condition-case err
+        (progn
+          (gptel-benchmark-instincts-weekly-job)
+          (message "[instincts] ✓ Completed: %s" root))
+      (error
+       (message "[instincts] ✗ Failed: %s - %s" root err)
+       nil))
+    (setq gptel-auto-workflow--current-project nil)))
 
 (defun gptel-auto-workflow-run-all-instincts ()
   "Run instincts weekly job for all configured projects.
@@ -435,7 +449,6 @@ To be called from cron - runs instincts evolution for each project."
         (error
          (push (cons project-root (format "error: %s" err)) results)
          (message "[instincts] ✗ Failed: %s - %s" project-root err))))
-    (setq gptel-auto-workflow--current-project nil)
     (message "[instincts] All projects processed: %s"
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                         results ", "))
