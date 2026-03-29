@@ -10,6 +10,7 @@
 
 | # | File | Fix |
 |---|------|------|
+| 142 | executor.md + elisp-protocol.md | Move dangerous patterns to knowledge (skill-based) |
 | 141 | ai-code-behaviors.el | cl-block wrappers for cl-return-from (3 functions fixed) |
 | 140 | gptel-tools-agent.el | Keep worktree for entire target, delete only at next run start |
 | 139 | gptel-auto-workflow-projects.el | Check worktree exists before routing |
@@ -42,6 +43,7 @@
 λ worktree-lifecycle. Created at start, deleted at NEXT run start
 λ never-manual-cleanup. Let workflow manage its own resources
 λ cl-return-from. Requires cl-block wrapper in Elisp (dangerous pattern)
+λ skill-based-patterns. Use knowledge pages (skills), NOT system prompt modifications
 ```
 
 ---
@@ -115,3 +117,4 @@
 5. **qwen-coder** - Can't use for tool calling (malformed JSON)
 6. **kill-buffer-query** - Use hook, not advice
 7. **cl-return-from** - Requires cl-block wrapper in Elisp (validation catches this)
+8. **Skill-based patterns** - Use knowledge pages (skills) instead of bloating system prompts
