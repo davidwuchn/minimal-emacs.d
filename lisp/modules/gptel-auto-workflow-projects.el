@@ -42,12 +42,19 @@ Customize this variable to add more projects.")
 (defvar gptel-auto-workflow--project-root-override)
 (defvar gptel-auto-workflow--research-findings-cache)
 
-(defun gptel-auto-workflow--get-project-buffer (project-root)
-  "Get or create a gptel-agent buffer for PROJECT-ROOT.
-All subagents for this project (main, staging, experiments) route here."
-  (let* ((root (file-name-as-directory (expand-file-name project-root)))
-         (buf-name (format "*gptel-agent:%s*" (file-name-nondirectory (directory-file-name root))))
-         (existing (gethash root gptel-auto-workflow--project-buffers)))
+(defvar gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal)
+  "Hash table of gptel-agent buffers per worktree.
+Key: worktree directory, Value: buffer.
+Each worktree gets its own isolated buffer for subagent overlays.")
+
+(defun gptel-auto-workflow--get-worktree-buffer (worktree-dir)
+  "Get or create a gptel-agent buffer for WORKTREE-DIR.
+Each worktree gets its own isolated buffer for subagent overlays."
+  (let* ((root (file-name-as-directory (expand-file-name worktree-dir)))
+         ;; Use worktree path to create unique buffer name
+         (worktree-name (file-name-nondirectory (directory-file-name root)))
+         (buf-name (format "*gptel-agent:%s*" worktree-name))
+         (existing (gethash root gptel-auto-workflow--worktree-buffers)))
     ;; Check if existing buffer is still live
     (if (and existing (buffer-live-p existing))
         existing
@@ -70,23 +77,25 @@ All subagents for this project (main, staging, experiments) route here."
                    (lambda (sym val) (set (make-local-variable sym) val)))
                   (message "[auto-workflow] Applied nucleus-gptel-agent preset to %s" buf-name))
               (error (message "[auto-workflow] Could not apply nucleus preset: %s" err))))
-          ;; Set project context (all subagents route to project buffer)
-          (setq-local default-directory (or (gptel-auto-workflow--project-root) root))
+          ;; Set worktree context
+          (setq-local default-directory root)
           ;; Load .dir-locals.el for project configuration
           (hack-dir-local-variables-non-file-buffer)
-          (when (boundp 'gptel-auto-workflow--project-root-override)
-            (setq-local gptel-auto-workflow--project-root-override 
-                        (gptel-auto-workflow--project-root)))
           ;; Protect buffer from being killed during experiments
           (setq-local kill-buffer-query-functions
                       (cons (lambda ()
                               (when (and (boundp 'gptel-auto-workflow--running)
                                          gptel-auto-workflow--running)
-                                (message "[auto-workflow] Blocking kill of project buffer during run")
+                                (message "[auto-workflow] Blocking kill of worktree buffer during run")
                                 nil))
                             kill-buffer-query-functions)))
-        (puthash root buf gptel-auto-workflow--project-buffers)
+        (puthash root buf gptel-auto-workflow--worktree-buffers)
         buf))))
+
+(defun gptel-auto-workflow--get-project-buffer (project-root)
+  "Get or create a gptel-agent buffer for PROJECT-ROOT.
+Legacy function - routes to worktree buffer for backward compatibility."
+  (gptel-auto-workflow--get-worktree-buffer project-root))
 
 (defun gptel-auto-workflow-add-project (project-root)
   "Add PROJECT-ROOT to auto-workflow projects list.
@@ -200,42 +209,47 @@ Returns (project-root . project-buffer) or nil if can't determine."
 ORIG-FUN is the original task function, other args passed through.
 When in auto-workflow context, routes to per-project buffer.
 Otherwise, passes through to original function (no error)."
-  (if-let* ((proj-context (gptel-auto-workflow--get-project-for-context))
-            (project-root (car proj-context))
-            (project-buf (cdr proj-context))
-            ;; Only route if we're in auto-workflow context (explicitly set)
-            (gptel-auto-workflow--current-project)
-            ;; Ensure buffer is still live
-            (_ (buffer-live-p project-buf)))
-      ;; Route to per-project buffer (only in auto-workflow context)
-      (let* ((default-directory project-root)
-             (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
-             (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
-                       ;; Create minimal info if no parent FSM (e.g., started from scratch)
-                       (list :buffer project-buf :position (with-current-buffer project-buf (point-marker)))))
-             ;; Save original current-buffer before overriding
-             (orig-current-buffer (symbol-function 'current-buffer))
-             ;; Override the buffer in FSM info to use project buffer
-             (modified-info (plist-put (copy-sequence info) :buffer project-buf)))
-        (cl-letf (((symbol-function 'gptel-fsm-info)
-                   (lambda (&optional fsm) (if (eq fsm parent-fsm) modified-info info)))
-                  ;; Also set current buffer for overlay creation
-                  ;; IMPORTANT: Check liveness each time, fall back if killed
-                  ((symbol-function 'current-buffer)
-                   (lambda () 
-                     (if (buffer-live-p project-buf)
-                         project-buf
-                       ;; Fall back to actual current buffer if project buffer killed
-                       (funcall orig-current-buffer)))))
-          ;; For executor tasks, make overlay persist
-          (if (and gptel-auto-workflow--persist-executor-overlays
-                   (equal agent-type "executor"))
-              (cl-letf (((symbol-function 'delete-overlay)
-                         (lambda (&rest _) nil)))
-                (funcall orig-fun main-cb agent-type description prompt))
-            (funcall orig-fun main-cb agent-type description prompt))))
-    ;; Not in auto-workflow context - pass through to original
-    (funcall orig-fun main-cb agent-type description prompt)))
+  ;; Determine routing: worktree buffer or project buffer
+  (let* ((in-auto-workflow gptel-auto-workflow--current-project)
+         (proj-context (gptel-auto-workflow--get-project-for-context))
+         (project-root (car proj-context))
+         ;; Check if we're in a worktree (experiment context)
+         (worktree-dir (when (and in-auto-workflow
+                                  (string-match-p gptel-auto-workflow-worktree-base 
+                                                  default-directory))
+                         default-directory))
+         ;; Get appropriate buffer: worktree-specific or project-wide
+         (target-buf (if worktree-dir
+                         (gptel-auto-workflow--get-worktree-buffer worktree-dir)
+                       (cdr proj-context))))
+    (if (and target-buf (buffer-live-p target-buf))
+        ;; Route to appropriate buffer
+        (let* ((default-directory (or worktree-dir project-root))
+               (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+               (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
+                         ;; Create minimal info if no parent FSM
+                         (list :buffer target-buf :position (with-current-buffer target-buf (point-marker)))))
+               ;; Save original current-buffer before overriding
+               (orig-current-buffer (symbol-function 'current-buffer))
+               ;; Override the buffer in FSM info
+               (modified-info (plist-put (copy-sequence info) :buffer target-buf)))
+          (cl-letf (((symbol-function 'gptel-fsm-info)
+                     (lambda (&optional fsm) (if (eq fsm parent-fsm) modified-info info)))
+                    ;; Also set current buffer for overlay creation
+                    ((symbol-function 'current-buffer)
+                     (lambda () 
+                       (if (buffer-live-p target-buf)
+                           target-buf
+                         (funcall orig-current-buffer)))))
+            ;; For executor tasks, make overlay persist
+            (if (and gptel-auto-workflow--persist-executor-overlays
+                     (equal agent-type "executor"))
+                (cl-letf (((symbol-function 'delete-overlay)
+                           (lambda (&rest _) nil)))
+                  (funcall orig-fun main-cb agent-type description prompt))
+              (funcall orig-fun main-cb agent-type description prompt))))
+      ;; Not in auto-workflow context - pass through to original
+      (funcall orig-fun main-cb agent-type description prompt))))
 
 (defun gptel-auto-workflow-enable-per-project-subagents ()
   "Enable per-project subagent buffer support.
