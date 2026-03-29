@@ -30,7 +30,7 @@ emacs --batch -Q \
   -L "$DIR/tests" \
   -l ert \
   $(find tests -name "test-*.el" -exec echo "-l {}" \;) \
-  --eval "(ert-run-tests-batch-and-exit '$PATTERN)" 2>&1 | tee /tmp/ert-output.txt
+  --eval "(ert-run-tests-batch-and-exit \"$PATTERN\")" 2>&1 | tee /tmp/ert-output.txt
 
 # Check for success
 if grep -q "0 unexpected" /tmp/ert-output.txt 2>/dev/null; then

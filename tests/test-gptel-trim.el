@@ -1,7 +1,7 @@
 ;;; test-gptel-trim.el --- ERT tests for progressive payload trimming -*- lexical-binding: t; no-byte-compile: t; -*-
 
-;; Tests for my/gptel--trim-tool-results-for-retry and
-;; my/gptel--trim-reasoning-content in gptel-ext-core.el.
+;; Tests for test-trim--trim-tool-results-for-retry and
+;; test-trim--trim-reasoning-content in gptel-ext-core.el.
 
 (require 'ert)
 (require 'cl-lib)
@@ -26,7 +26,7 @@
 ;; We eval the function definitions directly to avoid requiring the full
 ;; gptel-ext-core.el which has heavy dependencies.
 
-(defun my/gptel--trim-tool-results-for-retry (info)
+(defun test-trim--trim-tool-results-for-retry (info)
   "Trim old tool-result content in INFO's :data :messages to reduce payload.
 Progressive trimming based on :retries in INFO."
   (if (null my/gptel-retry-keep-recent-tool-results)
@@ -64,7 +64,7 @@ Progressive trimming based on :retries in INFO."
                       (cl-incf truncated)))))))))
       truncated)))
 
-(defun my/gptel--trim-reasoning-content (info)
+(defun test-trim--trim-reasoning-content (info)
   "Strip reasoning_content from older assistant messages in INFO.
 Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-turns'."
   (if (null my/gptel-reasoning-keep-turns)
@@ -91,7 +91,7 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
                   (cl-incf stripped)))))))
       stripped)))
 
-(defun my/gptel--reasoning-key-for-model (model &optional _backend)
+(defun test-trim--reasoning-key-for-model (model &optional _backend)
   "Test stub: return the reasoning key for MODEL."
   (when (stringp model)
     (setq model (intern model)))
@@ -104,11 +104,11 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
 (defvar-local my/gptel--tool-reasoning-alist nil
   "Test stub buffer-local reasoning store.")
 
-(defun my/gptel--valid-reasoning-value-p (value)
+(defun test-trim--valid-reasoning-value-p (value)
   "Test stub: return non-nil when VALUE is a valid serialized reasoning field."
   (stringp value))
 
-(defun my/gptel--fallback-reasoning-value (tool-calls reasoning-alist)
+(defun test-trim--fallback-reasoning-value (tool-calls reasoning-alist)
   "Test stub: return stored reasoning for TOOL-CALLS, or empty string."
   (let* ((tc (and (vectorp tool-calls)
                   (> (length tool-calls) 0)
@@ -119,7 +119,7 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
                    :absent)))
     (if (stringp stored) stored "")))
 
-(defun my/gptel--ensure-reasoning-on-messages (messages reasoning-key &optional reasoning-alist)
+(defun test-trim--ensure-reasoning-on-messages (messages reasoning-key &optional reasoning-alist)
   "Test stub: ensure assistant tool-call messages carry a valid reasoning field."
   (let ((repaired 0))
     (seq-doseq (msg messages)
@@ -128,18 +128,18 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
                  (plist-get msg :tool_calls)
                  (let ((value (plist-get msg reasoning-key)))
                    (or (not (plist-member msg reasoning-key))
-                       (not (my/gptel--valid-reasoning-value-p value)))))
+                       (not (test-trim--valid-reasoning-value-p value)))))
         (plist-put msg reasoning-key
-                   (my/gptel--fallback-reasoning-value
+                   (test-trim--fallback-reasoning-value
                     (plist-get msg :tool_calls) reasoning-alist))
         (cl-incf repaired)))
     repaired))
 
-(defun my/gptel--repair-thinking-tool-call-messages (info)
+(defun test-trim--repair-thinking-tool-call-messages (info)
   "Ensure thinking-enabled assistant tool-call messages carry a reasoning field."
   (let* ((model (plist-get info :model))
          (backend (plist-get info :backend))
-         (reasoning-key (my/gptel--reasoning-key-for-model model backend))
+         (reasoning-key (test-trim--reasoning-key-for-model model backend))
          (data (plist-get info :data))
          (messages (and data (plist-get data :messages)))
          (gptel-buf (plist-get info :buffer))
@@ -149,7 +149,7 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
          (repaired 0))
     (when (and reasoning-key messages (> (length messages) 0))
       (setq repaired
-            (my/gptel--ensure-reasoning-on-messages
+            (test-trim--ensure-reasoning-on-messages
              messages reasoning-key reasoning-alist)))
     repaired))
 
@@ -179,7 +179,7 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
       (plist-put info :retries retries))
     info))
 
-(defun my/gptel--transient-error-p (error-data http-status)
+(defun test-trim--transient-error-p (error-data http-status)
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error."
   (or (and (stringp error-data)
            (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
@@ -204,7 +204,7 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
                (list (test--make-user-msg "hello")
                      (test--make-assistant-msg))
                1)))
-    (should (= 0 (my/gptel--trim-tool-results-for-retry info)))))
+    (should (= 0 (test-trim--trim-tool-results-for-retry info)))))
 
 (ert-deftest trim-tool-results/disabled-when-nil ()
   "Setting keep-recent to nil disables trimming entirely."
@@ -213,17 +213,17 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
                (list (test--make-tool-msg "big content here that is definitely long enough")
                      (test--make-tool-msg "another big result that should be long enough"))
                1)))
-    (should (= 0 (my/gptel--trim-tool-results-for-retry info)))))
+    (should (= 0 (test-trim--trim-tool-results-for-retry info)))))
 
 (ert-deftest trim-tool-results/empty-messages ()
   "Empty messages vector → 0 truncated."
   (let ((info (test--make-info '() 1)))
-    (should (= 0 (my/gptel--trim-tool-results-for-retry info)))))
+    (should (= 0 (test-trim--trim-tool-results-for-retry info)))))
 
 (ert-deftest trim-tool-results/nil-data ()
   "Nil :data → 0 truncated."
   (let ((info (list :data nil :retries 1)))
-    (should (= 0 (my/gptel--trim-tool-results-for-retry info)))))
+    (should (= 0 (test-trim--trim-tool-results-for-retry info)))))
 
 (ert-deftest trim-tool-results/short-content-not-truncated ()
   "Content shorter than replacement text is not truncated."
@@ -233,18 +233,19 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
                      (test--make-tool-msg "ok"))
                1)))
     ;; "ok" is shorter than the truncation text, so nothing should be truncated
-    (should (= 0 (my/gptel--trim-tool-results-for-retry info)))))
+    (should (= 0 (test-trim--trim-tool-results-for-retry info)))))
 
 ;;; ---- Progressive trimming: retry 1 (retries=1) ----
 
 (ert-deftest trim-tool-results/retry-1-keeps-1-of-3 ()
   "Retry 1 with default=2: keep max(0, 2-1)=1 recent, truncate 2 of 3."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (msg1 (test--make-tool-msg "first tool result with enough length to be truncated by the replacement"))
          (msg2 (test--make-tool-msg "second tool result with enough length to be truncated by replacement"))
          (msg3 (test--make-tool-msg "third tool result that is recent and should be kept intact because it is newest"))
          (info (test--make-info (list msg1 msg2 msg3) 1))
-         (result (my/gptel--trim-tool-results-for-retry info))
+         (result (test-trim--trim-tool-results-for-retry info))
          (messages (plist-get (plist-get info :data) :messages)))
     (should (= 2 result))
     ;; First two truncated
@@ -255,11 +256,12 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
 
 (ert-deftest trim-tool-results/retry-1-keeps-1-of-2 ()
   "Retry 1 with default=2: keep 1 of 2 tool messages."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (msg1 (test--make-tool-msg "old result with enough content length to be truncated properly"))
          (msg2 (test--make-tool-msg "recent result that should be kept intact because it is the newest one"))
          (info (test--make-info (list msg1 msg2) 1))
-         (result (my/gptel--trim-tool-results-for-retry info))
+         (result (test-trim--trim-tool-results-for-retry info))
          (messages (plist-get (plist-get info :data) :messages)))
     (should (= 1 result))
     (should (equal test--truncation-text (plist-get (aref messages 0) :content)))
@@ -267,22 +269,24 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
 
 (ert-deftest trim-tool-results/retry-1-single-tool-kept ()
   "Retry 1 with default=2 and only 1 tool: nothing to truncate (1 <= keep=1)."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (msg1 (test--make-tool-msg "only tool result, should be kept because count <= keep"))
          (info (test--make-info (list msg1) 1))
-         (result (my/gptel--trim-tool-results-for-retry info)))
+         (result (test-trim--trim-tool-results-for-retry info)))
     (should (= 0 result))))
 
 ;;; ---- Progressive trimming: retry 2 (retries=2) ----
 
 (ert-deftest trim-tool-results/retry-2-keeps-0 ()
   "Retry 2 with default=2: keep max(0, 2-2)=0, truncate ALL."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (msg1 (test--make-tool-msg "first tool result with enough length to definitely be truncated"))
          (msg2 (test--make-tool-msg "second tool result with enough length to definitely be truncated"))
          (msg3 (test--make-tool-msg "third most recent tool result also truncated because keep is zero"))
          (info (test--make-info (list msg1 msg2 msg3) 2))
-         (result (my/gptel--trim-tool-results-for-retry info))
+         (result (test-trim--trim-tool-results-for-retry info))
          (messages (plist-get (plist-get info :data) :messages)))
     (should (= 3 result))
     (should (equal test--truncation-text (plist-get (aref messages 0) :content)))
@@ -293,11 +297,12 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
 
 (ert-deftest trim-tool-results/retry-3-keeps-0 ()
   "Retry 3 with default=2: keep max(0, 2-3)=0, truncate ALL."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (msg1 (test--make-tool-msg "first tool result content that is long enough to be truncated"))
          (msg2 (test--make-tool-msg "second tool result content that is long enough to be truncated"))
          (info (test--make-info (list msg1 msg2) 3))
-         (result (my/gptel--trim-tool-results-for-retry info))
+         (result (test-trim--trim-tool-results-for-retry info))
          (messages (plist-get (plist-get info :data) :messages)))
     (should (= 2 result))
     (should (equal test--truncation-text (plist-get (aref messages 0) :content)))
@@ -307,12 +312,13 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
 
 (ert-deftest trim-tool-results/no-retries-defaults-to-1 ()
   "When :retries is missing from INFO, defaults to 1."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (msg1 (test--make-tool-msg "old result content that is definitely long enough for truncation"))
          (msg2 (test--make-tool-msg "recent result content that should be kept intact as the newest"))
          ;; No :retries in info
          (info (test--make-info (list msg1 msg2)))
-         (result (my/gptel--trim-tool-results-for-retry info))
+         (result (test-trim--trim-tool-results-for-retry info))
          (messages (plist-get (plist-get info :data) :messages)))
     ;; retries defaults to 1, keep = max(0, 2-1) = 1
     (should (= 1 result))
@@ -323,14 +329,15 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
 
 (ert-deftest trim-tool-results/keep-3-retry-1 ()
   "With default=3 and retry 1: keep 2, truncate rest."
-  (let* ((my/gptel-retry-keep-recent-tool-results 3)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 3)
          (msgs (list
                 (test--make-tool-msg "tool result 1 old enough to be truncated on retry one with keep three")
                 (test--make-tool-msg "tool result 2 old enough to be truncated on retry one with keep three")
                 (test--make-tool-msg "tool result 3 kept because it is within the recent two window")
                 (test--make-tool-msg "tool result 4 kept because it is within the recent two window")))
          (info (test--make-info msgs 1))
-         (result (my/gptel--trim-tool-results-for-retry info))
+         (result (test-trim--trim-tool-results-for-retry info))
          (messages (plist-get (plist-get info :data) :messages)))
     ;; keep = max(0, 3-1) = 2, so truncate 2, keep 2
     (should (= 2 result))
@@ -343,13 +350,14 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
 
 (ert-deftest trim-tool-results/mixed-messages-only-tools-affected ()
   "User and assistant messages are not touched, only tool messages."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (user-msg (test--make-user-msg "user input text"))
          (asst-msg (test--make-assistant-msg "thinking hard about this"))
          (tool1 (test--make-tool-msg "old tool result content that is long enough for truncation replacement"))
          (tool2 (test--make-tool-msg "recent tool content that should be kept intact as it is newest tool"))
          (info (test--make-info (list user-msg asst-msg tool1 user-msg tool2) 1))
-         (result (my/gptel--trim-tool-results-for-retry info))
+         (result (test-trim--trim-tool-results-for-retry info))
          (messages (plist-get (plist-get info :data) :messages)))
     ;; keep=1, 2 tool msgs, truncate 1
     (should (= 1 result))
@@ -364,18 +372,20 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
 
 (ert-deftest trim-tool-results/idempotent-on-already-truncated ()
   "Running trim again on already-truncated messages returns 0."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (msg1 (test--make-tool-msg "old content that is long enough to be truncated by replacement text"))
          (msg2 (test--make-tool-msg "recent content that should be kept intact as it is newest tool msg"))
          (info (test--make-info (list msg1 msg2) 1)))
     ;; First trim
-    (should (= 1 (my/gptel--trim-tool-results-for-retry info)))
+    (should (= 1 (test-trim--trim-tool-results-for-retry info)))
     ;; Second trim with same retries — already truncated, replacement not longer than itself
-    (should (= 0 (my/gptel--trim-tool-results-for-retry info)))))
+    (should (= 0 (test-trim--trim-tool-results-for-retry info)))))
 
 (ert-deftest trim-tool-results/progressive-across-retries ()
   "Simulates escalating retries: retry 1 trims some, retry 2 trims rest."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (msgs (list
                 (test--make-tool-msg "tool result A with enough content to be truncated by the replacement text")
                 (test--make-tool-msg "tool result B with enough content to be truncated by the replacement text")
@@ -383,13 +393,13 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
          (info (test--make-info msgs 1))
          (messages (plist-get (plist-get info :data) :messages)))
     ;; Retry 1: keep=1, truncate 2
-    (should (= 2 (my/gptel--trim-tool-results-for-retry info)))
+    (should (= 2 (test-trim--trim-tool-results-for-retry info)))
     (should (equal test--truncation-text (plist-get (aref messages 0) :content)))
     (should (equal test--truncation-text (plist-get (aref messages 1) :content)))
     (should (string-match-p "tool result C" (plist-get (aref messages 2) :content)))
     ;; Retry 2: keep=0, truncate remaining 1
     (plist-put info :retries 2)
-    (should (= 1 (my/gptel--trim-tool-results-for-retry info)))
+    (should (= 1 (test-trim--trim-tool-results-for-retry info)))
     (should (equal test--truncation-text (plist-get (aref messages 2) :content)))))
 
 ;;; ===========================================================================
@@ -402,7 +412,7 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
          (msg2 (test--make-assistant-msg "Analyzing the file contents carefully"))
          (msg3 (test--make-user-msg "user text"))
          (info (test--make-info (list msg1 msg2 msg3)))
-         (result (my/gptel--trim-reasoning-content info))
+         (result (test-trim--trim-reasoning-content info))
          (messages (plist-get (plist-get info :data) :messages)))
     (should (= 1 result))
     (should (equal "" (plist-get (aref messages 0) :reasoning_content)))
@@ -415,7 +425,7 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
   "When reasoning blocks <= keep count, none are stripped."
   (let* ((msg1 (test--make-assistant-msg "single reasoning block"))
          (info (test--make-info (list msg1)))
-         (result (my/gptel--trim-reasoning-content info))
+         (result (test-trim--trim-reasoning-content info))
          (messages (plist-get (plist-get info :data) :messages)))
     (should (= 0 result))
     (should (equal "single reasoning block"
@@ -427,7 +437,7 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
          (msg1 (test--make-assistant-msg "thinking 1"))
          (msg2 (test--make-assistant-msg "thinking 2"))
          (info (test--make-info (list msg1 msg2)))
-         (result (my/gptel--trim-reasoning-content info)))
+         (result (test-trim--trim-reasoning-content info)))
     (should (= 2 result))))
 
 (ert-deftest trim-reasoning/disabled-when-nil ()
@@ -435,7 +445,7 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
   (let* ((my/gptel-reasoning-keep-turns nil)
          (msg1 (test--make-assistant-msg "thinking"))
          (info (test--make-info (list msg1)))
-         (result (my/gptel--trim-reasoning-content info)))
+         (result (test-trim--trim-reasoning-content info)))
     (should (= 0 result))))
 
 (ert-deftest trim-reasoning/keep-2-turns ()
@@ -446,7 +456,7 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
          (msg3 (test--make-assistant-msg "thinking 3"))
          (msg4 (test--make-assistant-msg "thinking 4"))
          (info (test--make-info (list msg1 msg2 msg3 msg4)))
-         (result (my/gptel--trim-reasoning-content info))
+         (result (test-trim--trim-reasoning-content info))
          (messages (plist-get (plist-get info :data) :messages)))
     (should (= 2 result))
     (should (equal "" (plist-get (aref messages 0) :reasoning_content)))
@@ -460,7 +470,7 @@ With 1 reasoning block and keep=1, nothing is stripped."
   (let* ((msg1 (test--make-assistant-msg nil))
          (msg2 (test--make-assistant-msg "has reasoning content"))
          (info (test--make-info (list msg1 msg2)))
-         (result (my/gptel--trim-reasoning-content info)))
+         (result (test-trim--trim-reasoning-content info)))
     (should (= 0 result))))
 
 (ert-deftest trim-reasoning/ignores-non-assistant-messages ()
@@ -468,26 +478,26 @@ With 1 reasoning block and keep=1, nothing is stripped."
   (let* ((user-msg (test--make-user-msg "user text"))
          (tool-msg (test--make-tool-msg "tool result"))
          (info (test--make-info (list user-msg tool-msg)))
-         (result (my/gptel--trim-reasoning-content info)))
+         (result (test-trim--trim-reasoning-content info)))
     (should (= 0 result))))
 
 (ert-deftest trim-reasoning/empty-messages ()
   "Empty messages → 0 stripped."
   (let ((info (test--make-info '())))
-    (should (= 0 (my/gptel--trim-reasoning-content info)))))
+    (should (= 0 (test-trim--trim-reasoning-content info)))))
 
 (ert-deftest trim-reasoning/nil-data ()
   "Nil :data → 0 stripped."
   (let ((info (list :data nil)))
-    (should (= 0 (my/gptel--trim-reasoning-content info)))))
+    (should (= 0 (test-trim--trim-reasoning-content info)))))
 
 (ert-deftest trim-reasoning/idempotent ()
   "Running reasoning trim twice returns 0 on second run (already stripped)."
   (let* ((msg1 (test--make-assistant-msg "deep thoughts 1"))
          (msg2 (test--make-assistant-msg "deep thoughts 2"))
          (info (test--make-info (list msg1 msg2))))
-    (should (= 1 (my/gptel--trim-reasoning-content info)))
-    (should (= 0 (my/gptel--trim-reasoning-content info)))))
+    (should (= 1 (test-trim--trim-reasoning-content info)))
+    (should (= 0 (test-trim--trim-reasoning-content info)))))
 
 (ert-deftest trim-reasoning/repair-thinking-tool-call-message-with-empty-string ()
   "Thinking-enabled assistant tool-call messages keep an empty reasoning field."
@@ -498,7 +508,7 @@ With 1 reasoning block and keep=1, nothing is stripped."
                                                     :function (list :name "Read" :arguments "{}")))))
          (info (test--make-info (list assistant))))
     (plist-put info :model 'moonshot)
-    (should (= 1 (my/gptel--repair-thinking-tool-call-messages info)))
+    (should (= 1 (test-trim--repair-thinking-tool-call-messages info)))
     (let ((messages (plist-get (plist-get info :data) :messages)))
       (should (plist-member (aref messages 0) :reasoning_content))
       (should (equal "" (plist-get (aref messages 0) :reasoning_content))))))
@@ -515,7 +525,7 @@ With 1 reasoning block and keep=1, nothing is stripped."
     (with-temp-buffer
       (setq-local my/gptel--tool-reasoning-alist `((,tool-id . "stored reasoning")))
       (plist-put info :buffer (current-buffer))
-      (should (= 1 (my/gptel--repair-thinking-tool-call-messages info))))
+      (should (= 1 (test-trim--repair-thinking-tool-call-messages info))))
     (let ((messages (plist-get (plist-get info :data) :messages)))
       (should (equal "stored reasoning"
                      (plist-get (aref messages 0) :reasoning_content))))))
@@ -528,7 +538,7 @@ With 1 reasoning block and keep=1, nothing is stripped."
                                                     :function (list :name "Read" :arguments "{}")))))
          (info (test--make-info (list assistant))))
     (plist-put info :model 'plain-model)
-    (should (= 0 (my/gptel--repair-thinking-tool-call-messages info)))
+    (should (= 0 (test-trim--repair-thinking-tool-call-messages info)))
     (let ((messages (plist-get (plist-get info :data) :messages)))
       (should-not (plist-member (aref messages 0) :reasoning_content)))))
 
@@ -541,7 +551,7 @@ With 1 reasoning block and keep=1, nothing is stripped."
                                                     :function (list :name "Read" :arguments "{}")))))
          (info (test--make-info (list assistant))))
     (plist-put info :model "moonshot")
-    (should (= 1 (my/gptel--repair-thinking-tool-call-messages info)))
+    (should (= 1 (test-trim--repair-thinking-tool-call-messages info)))
     (let ((messages (plist-get (plist-get info :data) :messages)))
       (should (plist-member (aref messages 0) :reasoning_content))
       (should (equal "" (plist-get (aref messages 0) :reasoning_content))))))
@@ -556,7 +566,7 @@ With 1 reasoning block and keep=1, nothing is stripped."
                           :reasoning_content :null))
          (info (test--make-info (list assistant))))
     (plist-put info :model 'moonshot)
-    (should (= 1 (my/gptel--repair-thinking-tool-call-messages info)))
+    (should (= 1 (test-trim--repair-thinking-tool-call-messages info)))
     (let ((messages (plist-get (plist-get info :data) :messages)))
       (should (equal "" (plist-get (aref messages 0) :reasoning_content))))))
 
@@ -570,7 +580,7 @@ With 1 reasoning block and keep=1, nothing is stripped."
                           :reasoning_content nil))
          (info (test--make-info (list assistant))))
     (plist-put info :model 'moonshot)
-    (should (= 1 (my/gptel--repair-thinking-tool-call-messages info)))
+    (should (= 1 (test-trim--repair-thinking-tool-call-messages info)))
     (let ((messages (plist-get (plist-get info :data) :messages)))
       (should (equal "" (plist-get (aref messages 0) :reasoning_content))))))
 
@@ -580,7 +590,8 @@ With 1 reasoning block and keep=1, nothing is stripped."
 
 (ert-deftest integration/retry-1-trims-tools-not-reasoning ()
   "Retry 1: tool results trimmed progressively, reasoning kept."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (msgs (list
                 (test--make-assistant-msg "reasoning round 1")
                 (test--make-tool-msg "tool 1 old result long enough for truncation by the replacement text string")
@@ -589,7 +600,7 @@ With 1 reasoning block and keep=1, nothing is stripped."
          (info (test--make-info msgs 1))
          (messages (plist-get (plist-get info :data) :messages)))
     ;; Retry 1: keep=1, truncate tool 1 only
-    (let ((trimmed (my/gptel--trim-tool-results-for-retry info)))
+    (let ((trimmed (test-trim--trim-tool-results-for-retry info)))
       (should (= 1 trimmed)))
     ;; Reasoning NOT stripped on retry 1
     (should (equal "reasoning round 1" (plist-get (aref messages 0) :reasoning_content)))
@@ -597,7 +608,8 @@ With 1 reasoning block and keep=1, nothing is stripped."
 
 (ert-deftest integration/retry-2-trims-all-tools-and-reasoning ()
   "Retry 2: all tool results truncated AND reasoning stripped."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (my/gptel-reasoning-keep-turns 0)
          (msgs (list
                 (test--make-assistant-msg "reasoning round 1")
@@ -606,18 +618,19 @@ With 1 reasoning block and keep=1, nothing is stripped."
                 (test--make-tool-msg "tool 2 result content that is long enough for truncation by replacement")))
          (info (test--make-info msgs 2))
          (messages (plist-get (plist-get info :data) :messages)))
-    (let ((trimmed (my/gptel--trim-tool-results-for-retry info)))
+    (let ((trimmed (test-trim--trim-tool-results-for-retry info)))
       (should (= 2 trimmed)))
     (should (equal test--truncation-text (plist-get (aref messages 1) :content)))
     (should (equal test--truncation-text (plist-get (aref messages 3) :content)))
-    (let ((reasoning-stripped (my/gptel--trim-reasoning-content info)))
+    (let ((reasoning-stripped (test-trim--trim-reasoning-content info)))
       (should (= 2 reasoning-stripped)))
     (should (equal "" (plist-get (aref messages 0) :reasoning_content)))
     (should (equal "" (plist-get (aref messages 2) :reasoning_content)))))
 
 (ert-deftest integration/full-progressive-sequence ()
   "Simulates a full retry sequence: 3 retries with escalating trimming."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (my/gptel-reasoning-keep-turns 0)
          (make-fresh-msgs
           (lambda ()
@@ -630,15 +643,15 @@ With 1 reasoning block and keep=1, nothing is stripped."
              (test--make-tool-msg "tool C the most recent result that may or may not survive trimming")))))
     (let* ((info (test--make-info (funcall make-fresh-msgs) 1))
            (messages (plist-get (plist-get info :data) :messages)))
-      (should (= 2 (my/gptel--trim-tool-results-for-retry info)))
+      (should (= 2 (test-trim--trim-tool-results-for-retry info)))
       (should (equal test--truncation-text (plist-get (aref messages 1) :content)))
       (should (equal test--truncation-text (plist-get (aref messages 3) :content)))
       (should (string-match-p "tool C" (plist-get (aref messages 5) :content)))
       (should (equal "thinking 1" (plist-get (aref messages 0) :reasoning_content))))
     (let* ((info (test--make-info (funcall make-fresh-msgs) 2))
            (messages (plist-get (plist-get info :data) :messages)))
-      (should (= 3 (my/gptel--trim-tool-results-for-retry info)))
-      (should (= 3 (my/gptel--trim-reasoning-content info)))
+      (should (= 3 (test-trim--trim-tool-results-for-retry info)))
+      (should (= 3 (test-trim--trim-reasoning-content info)))
       (should (equal test--truncation-text (plist-get (aref messages 1) :content)))
       (should (equal test--truncation-text (plist-get (aref messages 3) :content)))
       (should (equal test--truncation-text (plist-get (aref messages 5) :content)))
@@ -647,8 +660,8 @@ With 1 reasoning block and keep=1, nothing is stripped."
       (should (equal "" (plist-get (aref messages 4) :reasoning_content))))
     (let* ((info (test--make-info (funcall make-fresh-msgs) 3))
            (messages (plist-get (plist-get info :data) :messages)))
-      (should (= 3 (my/gptel--trim-tool-results-for-retry info)))
-      (should (= 3 (my/gptel--trim-reasoning-content info))))))
+      (should (= 3 (test-trim--trim-tool-results-for-retry info)))
+      (should (= 3 (test-trim--trim-reasoning-content info))))))
 
 (provide 'test-gptel-trim)
 
@@ -890,7 +903,8 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
 
 (ert-deftest integration/retry-2-trims-results-reasoning-and-tools ()
   "Retry 2: tool results truncated, reasoning stripped, AND tools reduced."
-  (let* ((my/gptel-retry-keep-recent-tool-results 2)
+  (let* ((my/gptel-trim-min-bytes 0)
+         (my/gptel-retry-keep-recent-tool-results 2)
          (my/gptel-reasoning-keep-turns 0)
          (asst1 (test--make-assistant-with-tool-calls '("read_file")))
          (asst2 (test--make-assistant-with-tool-calls '("search")))
@@ -904,8 +918,8 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
          (info (test--make-tools-info msgs '("read_file" "write_file" "search" "list_dir" "run_command")))
          (messages (plist-get (plist-get info :data) :messages)))
     (plist-put info :retries 2)
-    (should (= 2 (my/gptel--trim-tool-results-for-retry info)))
-    (should (= 2 (my/gptel--trim-reasoning-content info)))
+    (should (= 2 (test-trim--trim-tool-results-for-retry info)))
+    (should (= 2 (test-trim--trim-reasoning-content info)))
     (should (= 3 (test-trim--reduce-tools-for-retry info)))
     (let* ((remaining (plist-get (plist-get info :data) :tools))
            (names (mapcar (lambda (td) (plist-get (plist-get td :function) :name))
@@ -937,7 +951,7 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
     (json-serialize obj :null-object :null :false-object :json-false)))
 
 ;; Copy of helper functions under test
-(defun my/gptel--estimate-payload-bytes (info)
+(defun test-trim--estimate-payload-bytes (info)
   "Estimate the JSON byte size of INFO's :data payload."
   (let ((data (plist-get info :data)))
     (if data
@@ -946,7 +960,7 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
           (error 0))
       0)))
 
-(defun my/gptel--effective-byte-limit (info)
+(defun test-trim--effective-byte-limit (info)
   "Return the byte limit for INFO's request."
   (let* ((model (plist-get info :model))
          (global-limit (or my/gptel-payload-byte-limit 999999999))
@@ -959,34 +973,34 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
 Returns the number of items trimmed, or 0 if no compaction needed."
   (when my/gptel-payload-byte-limit
     (let* ((retries (or (plist-get info :retries) 0))
-           (limit (my/gptel--effective-byte-limit info))
-           (bytes (my/gptel--estimate-payload-bytes info))
+           (limit (test-trim--effective-byte-limit info))
+           (bytes (test-trim--estimate-payload-bytes info))
            (trimmed-total 0))
       (when (and (= retries 0) (> bytes limit))
         ;; Pass 1: trim tool results (keep 2 recent)
         (let ((my/gptel-retry-keep-recent-tool-results 2))
           (plist-put info :retries 1)
-          (let ((n (my/gptel--trim-tool-results-for-retry info)))
+          (let ((n (test-trim--trim-tool-results-for-retry info)))
             (cl-incf trimmed-total n)
-            (setq bytes (my/gptel--estimate-payload-bytes info))))
+            (setq bytes (test-trim--estimate-payload-bytes info))))
         ;; Pass 2: strip reasoning (if still over)
         (when (> bytes limit)
-          (let ((n (my/gptel--trim-reasoning-content info)))
+          (let ((n (test-trim--trim-reasoning-content info)))
             (cl-incf trimmed-total n)
-            (cl-incf trimmed-total (my/gptel--repair-thinking-tool-call-messages info))
-            (setq bytes (my/gptel--estimate-payload-bytes info))))
+            (cl-incf trimmed-total (test-trim--repair-thinking-tool-call-messages info))
+            (setq bytes (test-trim--estimate-payload-bytes info))))
         ;; Pass 3: reduce tools array (if still over)
         (when (> bytes limit)
           (let ((n (test-trim--reduce-tools-for-retry info)))
             (cl-incf trimmed-total n)
-            (setq bytes (my/gptel--estimate-payload-bytes info))))
+            (setq bytes (test-trim--estimate-payload-bytes info))))
         ;; Pass 4: aggressive tool result trim (keep 0)
         (when (> bytes limit)
           (let ((my/gptel-retry-keep-recent-tool-results 2))
             (plist-put info :retries 3)
-            (let ((n (my/gptel--trim-tool-results-for-retry info)))
+            (let ((n (test-trim--trim-tool-results-for-retry info)))
               (cl-incf trimmed-total n)
-              (setq bytes (my/gptel--estimate-payload-bytes info)))))
+              (setq bytes (test-trim--estimate-payload-bytes info)))))
         ;; Reset retries
         (plist-put info :retries 0))
       trimmed-total)))
@@ -1009,12 +1023,12 @@ Returns the number of items trimmed, or 0 if no compaction needed."
 
 (ert-deftest estimate-bytes/nil-data ()
   "Nil :data returns 0."
-  (should (= 0 (my/gptel--estimate-payload-bytes (list :data nil)))))
+  (should (= 0 (test-trim--estimate-payload-bytes (list :data nil)))))
 
 (ert-deftest estimate-bytes/empty-data ()
   "Empty messages produces small payload."
   (let* ((info (list :data (list :messages [] :model "test")))
-         (bytes (my/gptel--estimate-payload-bytes info)))
+         (bytes (test-trim--estimate-payload-bytes info)))
     (should (> bytes 0))
     (should (< bytes 100))))
 
@@ -1025,8 +1039,8 @@ Returns the number of items trimmed, or 0 if no compaction needed."
          (large (list :data (list :messages
                                    (vector (list :role "user"
                                                  :content (make-string 10000 ?x)))))))
-    (should (> (my/gptel--estimate-payload-bytes large)
-               (my/gptel--estimate-payload-bytes small)))))
+    (should (> (test-trim--estimate-payload-bytes large)
+               (test-trim--estimate-payload-bytes small)))))
 
 ;;; ---- Effective byte limit tests ----
 
@@ -1034,25 +1048,25 @@ Returns the number of items trimmed, or 0 if no compaction needed."
   "When model has no specific limit, use global limit."
   (let ((my/gptel-payload-byte-limit 150000)
         (info (list :model 'unknown-model)))
-    (should (= 150000 (my/gptel--effective-byte-limit info)))))
+    (should (= 150000 (test-trim--effective-byte-limit info)))))
 
 (ert-deftest effective-limit/model-smaller-than-global ()
   "Model-specific limit wins when smaller than global."
   (let ((my/gptel-payload-byte-limit 200000)
         (info (list :model 'tiny-model)))
-    (should (= 50000 (my/gptel--effective-byte-limit info)))))
+    (should (= 50000 (test-trim--effective-byte-limit info)))))
 
 (ert-deftest effective-limit/global-smaller-than-model ()
   "Global limit wins when smaller than model limit."
   (let ((my/gptel-payload-byte-limit 100000)
         (info (list :model 'kimi-k2\.5)))
-    (should (= 100000 (my/gptel--effective-byte-limit info)))))
+    (should (= 100000 (test-trim--effective-byte-limit info)))))
 
 (ert-deftest effective-limit/nil-global-means-no-limit ()
   "nil global limit effectively disables size checking."
   (let ((my/gptel-payload-byte-limit nil)
         (info (list :model 'unknown-model)))
-    (should (= 999999999 (my/gptel--effective-byte-limit info)))))
+    (should (= 999999999 (test-trim--effective-byte-limit info)))))
 
 ;;; ---- Compaction logic tests ----
 
@@ -1179,99 +1193,99 @@ run because payload is oversized."
 
 (ert-deftest transient-error/timeout-string ()
   "Should detect timeout in error string."
-  (should (my/gptel--transient-error-p "Timeout connecting to server" nil)))
+  (should (test-trim--transient-error-p "Timeout connecting to server" nil)))
 
 (ert-deftest transient-error/overloaded-string ()
   "Should detect overloaded in error string."
-  (should (my/gptel--transient-error-p "Server is overloaded" nil)))
+  (should (test-trim--transient-error-p "Server is overloaded" nil)))
 
 (ert-deftest transient-error/rate-limit-string ()
   "Should detect rate limit in error string."
-  (should (my/gptel--transient-error-p "Too Many Requests" nil)))
+  (should (test-trim--transient-error-p "Too Many Requests" nil)))
 
 (ert-deftest transient-error/bad-gateway-string ()
   "Should detect Bad Gateway in error string."
-  (should (my/gptel--transient-error-p "Bad Gateway" nil)))
+  (should (test-trim--transient-error-p "Bad Gateway" nil)))
 
 (ert-deftest transient-error/service-unavailable-string ()
   "Should detect Service Unavailable in error string."
-  (should (my/gptel--transient-error-p "Service Unavailable" nil)))
+  (should (test-trim--transient-error-p "Service Unavailable" nil)))
 
 (ert-deftest transient-error/gateway-timeout-string ()
   "Should detect Gateway Timeout in error string."
-  (should (my/gptel--transient-error-p "Gateway Timeout" nil)))
+  (should (test-trim--transient-error-p "Gateway Timeout" nil)))
 
 (ert-deftest transient-error/curl-error-28 ()
   "Should detect curl timeout error."
-  (should (my/gptel--transient-error-p "curl: (28) Operation timed out" nil)))
+  (should (test-trim--transient-error-p "curl: (28) Operation timed out" nil)))
 
 (ert-deftest transient-error/curl-error-6 ()
   "Should detect curl DNS error."
-  (should (my/gptel--transient-error-p "curl: (6) Could not resolve host" nil)))
+  (should (test-trim--transient-error-p "curl: (6) Could not resolve host" nil)))
 
 (ert-deftest transient-error/curl-error-7 ()
   "Should detect curl connection error."
-  (should (my/gptel--transient-error-p "curl: (7) Failed to connect" nil)))
+  (should (test-trim--transient-error-p "curl: (7) Failed to connect" nil)))
 
 (ert-deftest transient-error/http-408 ()
   "Should detect HTTP 408 as transient."
-  (should (my/gptel--transient-error-p nil 408)))
+  (should (test-trim--transient-error-p nil 408)))
 
 (ert-deftest transient-error/http-429 ()
   "Should detect HTTP 429 as transient."
-  (should (my/gptel--transient-error-p nil 429)))
+  (should (test-trim--transient-error-p nil 429)))
 
 (ert-deftest transient-error/http-500 ()
   "Should detect HTTP 500 as transient."
-  (should (my/gptel--transient-error-p nil 500)))
+  (should (test-trim--transient-error-p nil 500)))
 
 (ert-deftest transient-error/http-502 ()
   "Should detect HTTP 502 as transient."
-  (should (my/gptel--transient-error-p nil 502)))
+  (should (test-trim--transient-error-p nil 502)))
 
 (ert-deftest transient-error/http-503 ()
   "Should detect HTTP 503 as transient."
-  (should (my/gptel--transient-error-p nil 503)))
+  (should (test-trim--transient-error-p nil 503)))
 
 (ert-deftest transient-error/http-504 ()
   "Should detect HTTP 504 as transient."
-  (should (my/gptel--transient-error-p nil 504)))
+  (should (test-trim--transient-error-p nil 504)))
 
 (ert-deftest transient-error/http-400-not-transient ()
   "Should NOT detect HTTP 400 as transient."
-  (should-not (my/gptel--transient-error-p nil 400)))
+  (should-not (test-trim--transient-error-p nil 400)))
 
 (ert-deftest transient-error/http-401-not-transient ()
   "Should NOT detect HTTP 401 as transient."
-  (should-not (my/gptel--transient-error-p nil 401)))
+  (should-not (test-trim--transient-error-p nil 401)))
 
 (ert-deftest transient-error/http-403-not-transient ()
   "Should NOT detect HTTP 403 as transient."
-  (should-not (my/gptel--transient-error-p nil 403)))
+  (should-not (test-trim--transient-error-p nil 403)))
 
 (ert-deftest transient-error/http-404-not-transient ()
   "Should NOT detect HTTP 404 as transient."
-  (should-not (my/gptel--transient-error-p nil 404)))
+  (should-not (test-trim--transient-error-p nil 404)))
 
 (ert-deftest transient-error/plist-overloaded ()
   "Should detect overloaded from plist error."
-  (should (my/gptel--transient-error-p '(:message "Server overloaded") nil)))
+  (should (test-trim--transient-error-p '(:message "Server overloaded") nil)))
 
 (ert-deftest transient-error/plist-rate-limit ()
   "Should detect rate limit from plist error."
-  (should (my/gptel--transient-error-p '(:message "Rate limit exceeded") nil)))
+  (should (test-trim--transient-error-p '(:message "Rate limit exceeded") nil)))
 
 (ert-deftest transient-error/plist-timeout ()
   "Should detect timeout from plist error."
-  (should (my/gptel--transient-error-p '(:message "Request timeout") nil)))
+  (should (test-trim--transient-error-p '(:message "Request timeout") nil)))
 
 (ert-deftest transient-error/non-transient-string ()
   "Should NOT detect non-transient errors."
-  (should-not (my/gptel--transient-error-p "Invalid API key" nil)))
+  (should-not (test-trim--transient-error-p "Invalid API key" nil)))
 
 (ert-deftest transient-error/non-transient-plist ()
   "Should NOT detect non-transient plist errors."
-  (should-not (my/gptel--transient-error-p '(:message "Invalid authentication") nil)))
+  (should-not (test-trim--transient-error-p '(:message "Invalid authentication") nil)))
 
 (provide 'test-gptel-trim)
 ;;; test-gptel-trim.el ends here
