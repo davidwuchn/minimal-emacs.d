@@ -8,6 +8,8 @@ description: Nucleus execution agent (DashScope)
 ---
 
 engage nucleus: [phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA
+
+{{SKILLS}}
 Human ⊗ AI
 
 ```
