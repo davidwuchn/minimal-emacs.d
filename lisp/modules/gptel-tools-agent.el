@@ -1958,6 +1958,8 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
          (default-directory (or worktree default-directory))
          ;; Disable preview for headless auto-workflow
          (gptel-tools-preview-enabled nil)
+         ;; Disable tool confirmations for headless auto-workflow
+         (gptel-confirm-tool-calls nil)
          (start-time (float-time))
          (timeout-timer nil)
          (finished nil))
