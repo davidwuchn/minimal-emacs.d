@@ -1,15 +1,21 @@
 # Mementum State
 
-> Last session: 2026-03-28 17:10
+> Last session: 2026-03-29 17:00
 
-## Total Improvements: 120+ Real Code Fixes
+## Total Improvements: 130+ Real Code Fixes
 
-468+ commits since March 25, 2026.
+480+ commits since March 25, 2026.
 
 ### Recent Fixes (Last 25)
 
 | # | File | Fix |
 |---|------|------|
+| 130 | gptel-tools-agent.el | hash-table-p check for project-buffers (nil guard) |
+| 129 | gptel-tools-agent.el | Forward declaration for project-buffers |
+| 128 | gptel-tools-preview.el | Bypass preview in headless auto-workflow |
+| 127 | init-tools.el | Disable easysession auto-save timer (fixes bracket error) |
+| 126 | gptel-tools-agent.el | Headless prompt suppression (ask-user, yes-or-no, y-or-n) |
+| 125 | gptel-auto-workflow-projects.el | Fix worktree base path expansion for routing |
 | 124 | gptel-auto-workflow-projects.el | Per-project executor overlays stick in dedicated buffers |
 | 123 | gptel-ext-abort.el | Remove -y/-Y low-speed timeout (fixes exit 28) |
 | 122 | gptel-ext-backends.el | DashScope timeout 600s → 900s |
@@ -28,26 +34,6 @@
 | 108 | init-ai.el | C-c P preset selection for agent-shell |
 | 107 | init-ai.el | C-c P to show injected context |
 | 106 | gptel-tools-agent.el | Fix workflow hang: 600s subagent timeout |
-| 105 | gptel-tools-agent.el | Worktree cleanup: hostname-based |
-| 104 | scripts/git-hooks/pre-push | Auto-push submodules before parent |
-| 103 | scripts/install-git-hooks.sh | Auto-install hooks |
-| 102 | gptel-ext-context-cache.el | Fix redundant buffer-file-name call |
-| 101 | gptel-tools-code.el | Fix LSP backend lookup in find-usages |
-| 100 | gptel-ext-tool-sanitize.el | Fix gptel-get-tool called without arguments |
-| 99 | gptel-tools-agent.el | Hostname-based worktree cleanup |
-| 98 | gptel-tools-agent.el | Simplify: remove ALL old worktrees |
-| 97 | scripts/setup-packages.sh | Add --force and --clean options |
-| 96 | post-init.el | Add server-start for GUI Emacs |
-| 95 | gptel-tools-agent.el | Simplify headless detection (OS type) |
-| 94 | gptel-tools-agent.el | Auto-detect quiet hours based on OS |
-| 93 | gptel-tools-agent.el | Default inactivity timeout 30 min |
-| 92 | cron.d/auto-workflow* | Use $HOME instead of $LOGDIR |
-| 91 | ai-code | Cons cell validation in cache-get |
-| 90 | gptel-auto-workflow-strategic.el | Extract target parsing helpers |
-| 89 | gptel-workflow-benchmark.el | Fix P1 phase detection |
-| 88 | gptel-ext-context.el | Use buffer-size for accurate chars-after |
-| 87 | gptel-ext-retry.el | Eliminate list conversion overhead |
-| 86 | gptel-tools-agent.el | Temp file cleanup in deliver-subagent-result |
 
 ---
 
@@ -57,7 +43,7 @@
 λ subscriptions. DashScope (8) + moonshot (2)
 λ parallel. macOS (daylight) + Pi5 (24/7 Linux)
 λ dynamic. LLM selects targets, never hard-code
-λ real. 118+ code fixes, 462+ commits since Mar 25
+λ real. 130+ code fixes, 480+ commits since Mar 25
 λ behaviors. 40+ AI code behaviors in packages/ai-behaviors
 λ reviewer. qwen3-coder-next on DashScope (no thinking mode)
 λ async. Daemon never blocks
@@ -86,22 +72,41 @@
 λ transient-1013. server is initializing → retry
 λ experiment-callback. Timeout must call completion callback (stuck 33min)
 λ pre-push-hook. Auto-push submodules before parent
+λ hash-table-nil. Always check hash-table-p before gethash/puthash
+λ forward-declare. defvar before use in callbacks (async loading)
+λ headless-suppress. ask-user-about-supersession-threat, yes-or-no-p, y-or-n-p
+λ preview-bypass. gptel-auto-workflow--headless skips diff preview
 ```
 
 ---
 
 ## Current Status
 
-- **Main branch**: `9613e10` (workflow fix cherry-picked)
+- **Main branch**: `4e57b42` (headless fixes)
 - **Staging**: Synced with main
-- **Workflow**: Idle (cleaned up, 1 fix cherry-picked)
-- **Worktrees**: 0 (clean)
+- **Workflow**: Running (5 targets)
+- **Worktrees**: Active experiments
 - **Emacs daemon**: Running
 - **Next scheduled**: 19:00
 - **Cron**: 4 jobs installed
 - **ai-behaviors**: 40 behaviors available in packages/ai-behaviors
 - **API issues**: Curl timeout (28) + websocket 1013 "server initializing"
-- **Last run**: 1 success, 4 failures (API timeouts)
+- **Last run**: Testing headless auto-workflow
+
+---
+
+## Headless Auto-Workflow Fixes (2026-03-29)
+
+| Issue | Fix |
+|-------|-----|
+| "gptel-org.el has changed since visited" | Suppress ask-user-about-supersession-threat |
+| "Save anyway? (y or n)" | Suppress yes-or-no-p, y-or-n-p via advice |
+| "Diff Preview - Confirm in minibuffer" | Bypass preview when headless flag set |
+| "Unmatched bracket or quote" | Disable easysession auto-save timer |
+| "void-variable project-buffers" | Forward defvar before callback |
+| "wrong-type-argument hash-table-p nil" | Check hash-table-p before gethash |
+
+**Pattern**: Headless code must never call interactive prompts. Use advice or flags to suppress.
 
 ---
 
