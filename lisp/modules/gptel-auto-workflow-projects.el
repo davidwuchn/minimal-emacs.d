@@ -36,17 +36,12 @@ Customize this variable to add more projects.")
 (defvar gptel-auto-workflow--current-project nil
   "Currently active project root for subagent context.")
 
-(defvar gptel-auto-workflow--project-root-override nil
-  "Override for project root when running from non-git directory.")
-
-(defvar gptel-auto-workflow--worktree-state nil
-  "Hash table for worktree state. Defined in gptel-tools-agent.el.")
-
-(defvar gptel-auto-workflow--research-findings-cache nil
-  "Hash table for research findings cache. Defined in gptel-auto-workflow-strategic.el.")
-
 (defvar mementum-root nil
   "Root directory for mementum. Set per-project.")
+
+(defvar gptel-auto-workflow--project-root-override)
+(defvar gptel-auto-workflow--worktree-state)
+(defvar gptel-auto-workflow--research-findings-cache)
 
 (defun gptel-auto-workflow--get-project-buffer (project-root)
   "Get or create a gptel-agent buffer for PROJECT-ROOT.
