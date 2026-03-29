@@ -84,14 +84,15 @@ Returns list of test plists with :id, :name, :prompt, :expected_behaviors, :forb
 ;;; Async Skill Execution
 
 (defun gptel-skill-execute-test (skill test-id prompt callback)
-  "Execute TEST-ID for SKILL with PROMPT using gptel-agent--task.
+  "Execute TEST-ID for SKILL with PROMPT using executor agent.
+Executor will load SKILL via Skill tool if relevant.
 Calls CALLBACK with result string asynchronously."
   (gptel-skill-feedback-log 'execute (format "Executing test %s for skill %s" test-id skill))
   (condition-case err
       (if (fboundp 'gptel-agent--task)
           (gptel-agent--task
            callback
-           skill
+           "executor"
            (format "Benchmark test: %s" test-id)
            prompt)
         (funcall callback (format "[MOCK] Skill %s: %s"
