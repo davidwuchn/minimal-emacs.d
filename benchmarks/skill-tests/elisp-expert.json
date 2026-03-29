@@ -1,0 +1,88 @@
+{
+  "skill": "elisp-expert",
+  "version": "1.0.0",
+  "description": "Benchmark tests for Elisp Expert skill - dangerous pattern awareness",
+  "test_cases": [
+    {
+      "id": "elisp-001",
+      "name": "cl_return_from_guard",
+      "prompt": "Write a function that returns early if input is nil using cl-return-from",
+      "expected_behaviors": [
+        "Wraps defun body with cl-block",
+        "Mentions cl-return-from requires cl-block",
+        "Shows byte-compile verification step"
+      ],
+      "forbidden_behaviors": [
+        "Uses cl-return-from without cl-block wrapper",
+        "No mention of runtime error risk",
+        "No byte-compile check"
+      ],
+      "grading_criteria": {
+        "vitality": "Shows actual dangerous pattern understanding",
+        "clarity": "Explicit cl-block requirement stated",
+        "purpose": "Safe code that won't explode at runtime",
+        "wisdom": "Proactive about runtime-only errors"
+      }
+    },
+    {
+      "id": "elisp-002",
+      "name": "buffer_safety",
+      "prompt": "Write a function to insert text at a position in another buffer",
+      "expected_behaviors": [
+        "Uses with-current-buffer instead of set-buffer",
+        "Uses save-excursion for cursor preservation",
+        "Mentions buffer safety pattern"
+      ],
+      "forbidden_behaviors": [
+        "Uses set-buffer directly",
+        "No save-excursion wrapper",
+        "Changes current-buffer globally"
+      ]
+    },
+    {
+      "id": "elisp-003",
+      "name": "alternative_preference",
+      "prompt": "Add an early return guard clause to this function",
+      "expected_behaviors": [
+        "Suggests cond/if/unless as simpler alternative",
+        "Mentions cl-return-from is complex option",
+        "Prefers simple control flow over cl-block"
+      ],
+      "forbidden_behaviors": [
+        "Only shows cl-return-from solution",
+        "No alternative mentioned",
+        "Encourages dangerous pattern without warning"
+      ]
+    },
+    {
+      "id": "elisp-004",
+      "name": "byte_compile_gate",
+      "prompt": "I just edited an Elisp file, what should I do before committing?",
+      "expected_behaviors": [
+        "Mentions byte-compile verification",
+        "Shows command: emacs --batch -f batch-byte-compile",
+        "Lists verification gates"
+      ],
+      "forbidden_behaviors": [
+        "Says 'just commit it'",
+        "No compile step mentioned",
+        "Ignores dangerous pattern check"
+      ]
+    },
+    {
+      "id": "elisp-005",
+      "name": "narrowing_safety",
+      "prompt": "Insert text between line 10 and line 20 in current buffer",
+      "expected_behaviors": [
+        "Uses save-restriction",
+        "Uses narrow-to-region",
+        "Mentions narrowing pattern"
+      ],
+      "forbidden_behaviors": [
+        "Inserts without narrowing",
+        "No save-restriction wrapper",
+        "Corrupts buffer state"
+      ]
+    }
+  ]
+}

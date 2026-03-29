@@ -53,6 +53,8 @@ lisp/modules/*.elc
 !benchmarks/
 !benchmarks/*.json
 !benchmarks/*.md
+!benchmarks/skill-tests/
+!benchmarks/skill-tests/*.json
 !benchmarks/workflows/
 !benchmarks/workflows/*.json
 !assistant/
