@@ -43,34 +43,34 @@ When enabled, validates:
 
 (defconst nucleus-toolsets
   '((:readonly . ("Bash" "Eval" "Glob" "Grep" "Read" "RunAgent" "Skill" "TodoWrite"
-                   "Programmatic"
-                   "WebFetch" "WebSearch"
-                   "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                    "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
-      (:researcher . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill" "Programmatic"
-                      "WebFetch" "WebSearch" "YouTube"
-                      "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                      "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"))
-      (:nucleus . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
-                    "Insert" "Mkdir" "Move" "Read" "Skill" "TodoWrite"
-                    "RunAgent"
-                    "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
+                  "Programmatic"
+                  "WebFetch" "WebSearch"
+                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                  "Code_Map" "Code_Inspect" "Diagnostics" "Code_Usages"))
+    (:researcher . ("Bash" "Eval" "Glob" "Grep" "Read" "Skill" "Programmatic"
+                    "WebFetch" "WebSearch" "YouTube"
                     "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                     "Preview"
-                     "create_skill"
-                    "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-      (:executor . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
-                     "Insert" "Mkdir" "Move" "Read" "Skill" "TodoWrite"
-                     "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
-                     "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
-                     "Preview"
-                     "create_skill"
-                     "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
-      (:explorer . ("Glob" "Grep" "Read" "Code_Map" "Code_Inspect"))
-      (:reviewer . ("Glob" "Grep" "Read" "Diagnostics"))
-      (:analyzer . ("Read" "Glob" "Grep"))
-      (:comparator . ("Read" "Glob" "Grep"))
-      (:grader . ("Read" "Glob" "Grep" "Bash" "Eval")))
+                    "Code_Map" "Code_Inspect" "Code_Usages" "Diagnostics"))
+    (:nucleus . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
+                 "Insert" "Mkdir" "Move" "Read" "Skill" "TodoWrite"
+                 "RunAgent"
+                 "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
+                 "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                 "Preview"
+                 "create_skill"
+                 "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
+    (:executor . ("ApplyPatch" "Bash" "Edit" "Eval" "Glob" "Grep"
+                  "Insert" "Mkdir" "Move" "Read" "Skill" "TodoWrite"
+                  "WebFetch" "WebSearch" "Write" "YouTube" "Programmatic"
+                  "find_buffers_and_recent" "describe_symbol" "get_symbol_source"
+                  "Preview"
+                  "create_skill"
+                  "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
+    (:explorer . ("Glob" "Grep" "Read" "Code_Map" "Code_Inspect"))
+    (:reviewer . ("Glob" "Grep" "Read" "Diagnostics"))
+    (:analyzer . ("Read" "Glob" "Grep"))
+    (:comparator . ("Read" "Glob" "Grep"))
+    (:grader . ("Read" "Glob" "Grep" "Bash" "Eval")))
   "Canonical toolset definitions for nucleus.
 
 :readonly — Emacs introspection (18 tools): Eval, RunAgent, web search
@@ -250,21 +250,25 @@ defers sync via idle timer to allow tool registration to complete."
               (when nucleus-tools-verbose
                 (message "[nucleus-tools] Tools not ready, deferring sync for %s" active-preset))
               (run-with-idle-timer 0.5 nil
-                                    (lambda ()
-                                      (when (buffer-live-p (current-buffer))
-                                        (nucleus-sync-tool-profile preset)))))))))))
+                                   (lambda ()
+                                     (when (buffer-live-p (current-buffer))
+                                       (nucleus-sync-tool-profile preset)))))))))))
 
 (defun nucleus--tools-ready-p (toolset-key)
   "Check if essential tools for TOOLSET-KEY are registered.
 Returns non-nil if at least 50% of expected tools are available."
   (let* ((expected (alist-get toolset-key nucleus-toolsets))
-         (available 0)
          (total (length expected)))
     (when (and expected (fboundp 'gptel-get-tool))
-      (dolist (tool expected)
-        (when (ignore-errors (gptel-get-tool tool))
-          (cl-incf available))))
-    (>= available (* 0.5 total))))
+      (let ((available 0)
+            (threshold (ceiling (* 0.5 total))))
+        (catch 'ready
+          (dolist (tool expected)
+            (when (ignore-errors (gptel-get-tool tool))
+              (cl-incf available)
+              (when (>= available threshold)
+                (throw 'ready t))))
+          nil)))))
 
 ;;; Interactive Commands
 
@@ -317,7 +321,7 @@ Expected toolsets:
                                        expected-count
                                        actual-count
                                        (if missing (length missing) 0)
-                                        (if extra (length extra) 0))))
+                                       (if extra (length extra) 0))))
                  (length (nucleus-get-tools :executor))
                  (length (nucleus-get-tools :researcher))
                  (length (nucleus-get-tools :readonly))
@@ -561,8 +565,8 @@ Supports JSON Schema-like validators:
                  (user-error "Tool Contract Violation (%s): expected '%s' to be an object, got %S"
                              tool-name arg-name val)))
               (_ nil))))
-        (cl-incf i)))
-    (apply func call-args))))
+          (cl-incf i)))
+      (apply func call-args))))
 
 (defun nucleus-tools--advise-make-tool (orig-fn &rest kwargs)
   "Advice for `gptel-make-tool' to enforce tool contracts at runtime.
