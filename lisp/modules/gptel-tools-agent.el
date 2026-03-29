@@ -975,27 +975,37 @@ If branch exists locally, deletes it first to avoid conflicts."
          (branch (gptel-auto-workflow--branch-name target experiment-id))
          (worktree-dir (expand-file-name
                         (format "%s/%s" gptel-auto-workflow-worktree-base branch)
-                        proj-root)))
+                        proj-root))
+         (stderr-buffer (generate-new-buffer "*git-stderr*")))
     (condition-case err
         (progn
           (make-directory (file-name-directory worktree-dir) t)
           (let ((default-directory proj-root))
             ;; Remove existing worktree if present (stale from previous run)
             (when (file-exists-p worktree-dir)
-              (call-process "git" nil nil nil "worktree" "remove" "-f" worktree-dir))
+              (call-process "git" nil nil stderr-buffer "worktree" "remove" "-f" worktree-dir))
             ;; Delete branch if it exists locally (stale from previous run)
-            (call-process "git" nil nil nil "branch" "-D" branch)
+            (call-process "git" nil nil stderr-buffer "branch" "-D" branch)
             ;; Create worktree with new branch
-            (let ((exit-code (call-process "git" nil nil nil
+            (let ((exit-code (call-process "git" nil nil stderr-buffer
                                            "worktree" "add" "-b" branch
-                                           worktree-dir "main")))
+                                           worktree-dir "main"))
+                  (stderr-output (when (buffer-live-p stderr-buffer)
+                                   (with-current-buffer stderr-buffer
+                                     (buffer-string)))))
               (unless (eq exit-code 0)
-                (error "git worktree add failed with exit code %s" exit-code))))
+                (when stderr-output
+                  (message "[auto-workflow] Git stderr: %s" stderr-output))
+                (error "git worktree add failed with exit code %s: %s" 
+                       exit-code (or stderr-output "no output")))))
+          (kill-buffer stderr-buffer)
           (message "[auto-workflow] Created: %s" branch)
           (puthash target (list :worktree-dir worktree-dir :current-branch branch)
                    gptel-auto-workflow--worktree-state)
           worktree-dir)
       (error
+       (when (buffer-live-p stderr-buffer)
+         (kill-buffer stderr-buffer))
        (message "[auto-workflow] Failed to create worktree: %s" err)
        (puthash target (list :worktree-dir nil :current-branch nil)
                 gptel-auto-workflow--worktree-state)

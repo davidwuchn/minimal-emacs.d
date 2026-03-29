@@ -15,7 +15,7 @@
 
 ;; External variables from gptel-tools-agent.el
 (defvar gptel-auto-workflow--worktree-state nil)
-(defvar gptel-auto-workflow-worktree-base "/tmp/gptel-worktrees/")
+(defvar gptel-auto-workflow-worktree-base nil)
 
 ;; Forward declarations for functions defined in gptel-tools-agent.el
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent")
@@ -218,11 +218,13 @@ Otherwise, passes through to original function (no error)."
   (let* ((in-auto-workflow gptel-auto-workflow--current-project)
          (proj-context (gptel-auto-workflow--get-project-for-context))
          (project-root (car proj-context))
-         ;; Check if we're in a worktree (experiment context)
-         (worktree-dir (when (and in-auto-workflow
-                                  (string-match-p gptel-auto-workflow-worktree-base 
-                                                  default-directory))
-                         default-directory))
+;; Check if we're in a worktree (experiment context)
+          (worktree-base-expanded (when gptel-auto-workflow-worktree-base
+                                    (expand-file-name gptel-auto-workflow-worktree-base project-root)))
+          (worktree-dir (when (and in-auto-workflow
+                                   worktree-base-expanded
+                                   (string-match-p worktree-base-expanded default-directory))
+                          default-directory))
          ;; Get appropriate buffer: worktree-specific or project-wide
          (target-buf (if worktree-dir
                          (gptel-auto-workflow--get-worktree-buffer worktree-dir)
