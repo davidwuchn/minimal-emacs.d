@@ -2093,16 +2093,16 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
          (let* ((patterns (when analysis (plist-get analysis :patterns)))
                 (prompt (gptel-auto-experiment-build-prompt
                          target experiment-id max-experiments analysis baseline)))
-           (setq timeout-timer
-                 (run-with-timer gptel-auto-experiment-time-budget nil
-                                 (lambda ()
-                                   (unless finished
-                                     (setq finished t)
-                                     (gptel-auto-workflow-delete-worktree target)
-                                     (funcall callback
-                                              (list :target target
-                                                    :id experiment-id
-                                                    :error "timeout"))))))
+(setq timeout-timer
+                  (run-with-timer gptel-auto-experiment-time-budget nil
+                                  (lambda ()
+                                    (unless finished
+                                      (setq finished t)
+                                      ;; Don't delete worktree - will be cleaned up by run-next
+                                      (funcall callback
+                                               (list :target target
+                                                     :id experiment-id
+                                                     :error "timeout"))))))
            ;; Routing handled by gptel-auto-workflow--advice-task-override
            (my/gptel--run-agent-tool
             (lambda (agent-output)
@@ -2128,11 +2128,11 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                               (cl-incf gptel-auto-experiment--api-error-count)
                               (message "[auto-workflow] API error #%d: %s"
                                        gptel-auto-experiment--api-error-count error-details))
-                            ;; Log failure analysis
-                            (gptel-auto-experiment--log-failure-analysis
-                             target error-category error-details)
-                            (gptel-auto-workflow-delete-worktree target)
-                            (let ((exp-result (list :target target
+;; Log failure analysis
+                             (gptel-auto-experiment--log-failure-analysis
+                              target error-category error-details)
+                             ;; Don't delete worktree - will be cleaned up by run-next
+                             (let ((exp-result (list :target target
                                                     :id experiment-id
                                                     :hypothesis hypothesis
                                                     :score-before baseline
@@ -2152,12 +2152,12 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                               (tests-passed (plist-get bench :tests-passed))
                               (score-after (plist-get bench :eight-keys)))
                          (if (not passed)
-                             (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
-                                                          (gptel-auto-workflow--project-root))))
-                               (setq finished t)
-                               (magit-git-success "checkout" "--" ".")
-                               (gptel-auto-workflow-delete-worktree target)
-                               (let ((reason (cond
+(let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
+                                                           (gptel-auto-workflow--project-root))))
+                                (setq finished t)
+                                (magit-git-success "checkout" "--" ".")
+                                ;; Don't delete worktree - will be cleaned up by run-next
+                                (let ((reason (cond
                                               ((not (plist-get bench :nucleus-passed)) "nucleus-validation-failed")
                                               ((not tests-passed) "tests-failed")
                                               (t "verification-failed"))))
@@ -2224,10 +2224,10 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                       (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
                                       (magit-git-success "checkout" "--" ".")
                                       (cl-incf gptel-auto-experiment--no-improvement-count)))
-                                  (gptel-auto-experiment-log-tsv
-                                   (format-time-string "%Y-%m-%d") exp-result)
-                                  (gptel-auto-workflow-delete-worktree target)
-                                  (funcall callback exp-result)))))))))))))
+(gptel-auto-experiment-log-tsv
+                                    (format-time-string "%Y-%m-%d") exp-result)
+                                   ;; Don't delete worktree - will be cleaned up by run-next
+                                   (funcall callback exp-result)))))))))))))
             "executor"
             (format "Experiment %d: optimize %s" experiment-id target)
             prompt
@@ -2286,7 +2286,8 @@ Adapts max-experiments based on API error rate."
     (message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
              target best-score max-exp)
     (cl-labels ((run-next (exp-id)
-                  (gptel-auto-workflow-delete-worktree target)
+                  ;; DON'T delete worktree here - keep it for the entire target
+                  ;; Worktree will be cleaned up at end of workflow run
                   ;; Check if we should stop early due to too many API errors
                   (when (and (> gptel-auto-experiment--api-error-count 5)
                              (< exp-id max-exp))
@@ -2296,6 +2297,8 @@ Adapts max-experiments based on API error rate."
                   (if (or (> exp-id max-exp)
                           (>= no-improvement-count threshold))
                       (progn
+                        ;; Now delete worktree since we're done with this target
+                        (gptel-auto-workflow-delete-worktree target)
                         (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
                                  target (length results)
                                  (or best-score 0))

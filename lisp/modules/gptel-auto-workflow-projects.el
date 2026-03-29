@@ -236,36 +236,41 @@ Also handles caching and result truncation from old advice."
              (target-buf (if worktree-dir
                              (gptel-auto-workflow--get-worktree-buffer worktree-dir)
                            (cdr proj-context))))
-        (if (and target-buf 
-                 (buffer-live-p target-buf)
-                 (not (string= (buffer-name target-buf) "*Messages*")))
-            (with-current-buffer target-buf
-              (let* ((default-directory (or worktree-dir project-root))
-                     (target-marker (point-marker))
-                     (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
-                     (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
-                               (list :buffer target-buf :position target-marker)))
-                     (modified-info (list :buffer target-buf 
-                                          :position target-marker
-                                          :tracking-marker target-marker))
-                     ;; Wrap callback to cache results
-                     (wrapped-cb (lambda (result)
-                                    (when (and (stringp result)
-                                               (fboundp 'my/gptel--subagent-cache-put))
-                                      (my/gptel--subagent-cache-put agent-type prompt result))
-                                    (funcall main-cb result))))
-                (cl-letf (((symbol-function 'gptel-fsm-info)
-                           (lambda (&optional fsm) 
-                             (if (or (eq fsm parent-fsm) (null fsm))
-                                 modified-info 
-                               info))))
-                  (if (and gptel-auto-workflow--persist-executor-overlays
-                           (equal agent-type "executor"))
-                      (cl-letf (((symbol-function 'delete-overlay)
-                                 (lambda (&rest _) nil)))
-                        (funcall orig-fun wrapped-cb agent-type description prompt))
-                    (funcall orig-fun wrapped-cb agent-type description prompt)))))
-          (funcall orig-fun main-cb agent-type description prompt))))))
+        ;; CRITICAL: Validate worktree exists before proceeding
+        (if (and worktree-dir (not (file-exists-p worktree-dir)))
+            (progn
+              (message "[auto-workflow] Worktree deleted, aborting: %s" worktree-dir)
+              (funcall main-cb (format "Error: Worktree no longer exists: %s" worktree-dir)))
+          (if (and target-buf 
+                   (buffer-live-p target-buf)
+                   (not (string= (buffer-name target-buf) "*Messages*")))
+              (with-current-buffer target-buf
+                (let* ((default-directory (or worktree-dir project-root))
+                       (target-marker (point-marker))
+                       (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+                       (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
+                                 (list :buffer target-buf :position target-marker)))
+                       (modified-info (list :buffer target-buf 
+                                            :position target-marker
+                                            :tracking-marker target-marker))
+                       ;; Wrap callback to cache results
+                       (wrapped-cb (lambda (result)
+                                     (when (and (stringp result)
+                                                (fboundp 'my/gptel--subagent-cache-put))
+                                       (my/gptel--subagent-cache-put agent-type prompt result))
+                                     (funcall main-cb result))))
+                  (cl-letf (((symbol-function 'gptel-fsm-info)
+                             (lambda (&optional fsm) 
+                               (if (or (eq fsm parent-fsm) (null fsm))
+                                   modified-info 
+                                 info))))
+                    (if (and gptel-auto-workflow--persist-executor-overlays
+                             (equal agent-type "executor"))
+                        (cl-letf (((symbol-function 'delete-overlay)
+                                   (lambda (&rest _) nil)))
+                          (funcall orig-fun wrapped-cb agent-type description prompt))
+                      (funcall orig-fun wrapped-cb agent-type description prompt)))))
+            (funcall orig-fun main-cb agent-type description prompt)))))))
 
 (defun gptel-auto-workflow-enable-per-project-subagents ()
   "Enable per-project subagent buffer support.
