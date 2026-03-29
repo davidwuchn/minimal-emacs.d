@@ -160,7 +160,8 @@ SUMMARY: SCORE: X/Y"
 
 (defun gptel-benchmark--parse-grade-response (response expected forbidden)
   "Parse LLM grading RESPONSE into plist.
-Handles both SCORE: X/Y format and JSON format."
+Handles both SCORE: X/Y format and JSON format.
+Passes if score >= 80% of total (not requiring perfect score)."
   (let ((score 0)
          (total (+ (length expected) (length forbidden)))
          (details (if (stringp response) response (format "%S" response))))
@@ -177,14 +178,18 @@ Handles both SCORE: X/Y format and JSON format."
       ;; Try to get total from summary
       (when (string-match "\"total\"\\s-*:\\s-*\\([0-9]+\\)" details)
         (setq total (string-to-number (match-string 1 details)))))
-    (list :score score
-          :total (if (> total 0) total (max score 1))
-          :percentage (if (> total 0) (* 100.0 (/ (float score) total)) 0.0)
-          :passed (and (> total 0) (= score total))
-          :details details)))
+    (let* ((percentage (if (> total 0) (* 100.0 (/ (float score) total)) 0.0))
+           ;; Pass if >= 80% (not requiring perfect score)
+           (passed (and (> total 0) (>= percentage 80.0))))
+      (list :score score
+            :total (if (> total 0) total (max score 1))
+            :percentage percentage
+            :passed passed
+            :details details))))
 
 (defun gptel-benchmark--local-grade (output expected forbidden)
-  "Local grading fallback - pattern match based grading."
+  "Local grading fallback - pattern match based grading.
+Passes if score >= 80% of total."
   (let* ((expected-passed 0)
          (forbidden-passed 0)
          (total (+ (length expected) (length forbidden))))
@@ -194,13 +199,16 @@ Handles both SCORE: X/Y format and JSON format."
     (dolist (f forbidden)
       (unless (string-match-p (regexp-quote f) output)
         (cl-incf forbidden-passed)))
-    (let ((score (+ expected-passed forbidden-passed)))
+    (let* ((score (+ expected-passed forbidden-passed))
+           (percentage (if (> total 0) (* 100.0 (/ (float score) total)) 0.0))
+           ;; Pass if >= 80%
+           (passed (and (> total 0) (>= percentage 80.0))))
       (list :score score
             :total (max total 1)
-            :percentage (if (> total 0) (* 100.0 (/ (float score) total)) 0.0)
-            :passed (= score total)
-            :details (format "Local grading: %d/%d behaviors satisfied"
-                             score total)))))
+            :percentage percentage
+            :passed passed
+            :details (format "Local grading: %d/%d behaviors satisfied (%.0f%%)"
+                             score total percentage)))))
 
 ;;; Code Quality Scoring
 

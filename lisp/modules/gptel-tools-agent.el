@@ -1680,8 +1680,9 @@ Values are plist: (:done :timer).")
 (defvar gptel-auto-experiment--grade-counter 0
   "Counter for generating unique grade IDs.")
 
-(defvar gptel-auto-experiment-grade-timeout 60
-  "Timeout in seconds for grading subagent.")
+(defvar gptel-auto-experiment-grade-timeout 120
+  "Timeout in seconds for grading subagent.
+Default 120s (2 min) allows grader to process complex outputs.")
 
 (defun gptel-auto-experiment--validate-code (file)
   "Validate code in FILE for syntax and dangerous patterns.
