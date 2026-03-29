@@ -458,7 +458,9 @@ large-result truncation, and result caching."
     (funcall callback result)))
 
 (with-eval-after-load 'gptel-agent-tools
-  (advice-add 'gptel-agent--task :override #'my/gptel-agent--task-override)
+  ;; REMOVED: Old :override advice conflicts with new :around advice
+  ;; in gptel-auto-workflow-projects.el that routes to correct buffer
+  ;; (advice-add 'gptel-agent--task :override #'my/gptel-agent--task-override)
   (advice-add 'gptel-agent--task-overlay :around #'my/gptel-agent--task-overlay-around))
 
 (defun my/gptel-agent--task-overlay-around (orig where &optional agent-type description)
@@ -2355,6 +2357,11 @@ Adapts max-experiments based on API error rate."
       t
     (funcall orig-fn prompt)))
 
+(defun gptel-auto-workflow--suppress-kill-buffer-query ()
+  "Suppress kill-buffer queries in headless mode.
+Returns t to allow killing modified buffers without asking."
+  (not gptel-auto-workflow--headless))
+
 (defun gptel-auto-workflow--enable-headless-suppression ()
   "Enable suppression of interactive prompts for headless operation."
   (setq gptel-auto-workflow--headless t)
@@ -2363,7 +2370,10 @@ Adapts max-experiments based on API error rate."
   (advice-add 'yes-or-no-p :around 
               #'gptel-auto-workflow--suppress-yes-or-no-p)
   (advice-add 'y-or-n-p :around 
-              #'gptel-auto-workflow--suppress-y-or-n-p))
+              #'gptel-auto-workflow--suppress-y-or-n-p)
+  ;; Suppress kill-buffer queries for modified buffers
+  (add-hook 'kill-buffer-query-functions 
+            #'gptel-auto-workflow--suppress-kill-buffer-query))
 
 (defun gptel-auto-workflow--disable-headless-suppression ()
   "Disable suppression of interactive prompts."
@@ -2373,7 +2383,9 @@ Adapts max-experiments based on API error rate."
   (advice-remove 'yes-or-no-p 
                  #'gptel-auto-workflow--suppress-yes-or-no-p)
   (advice-remove 'y-or-n-p 
-                 #'gptel-auto-workflow--suppress-y-or-n-p))
+                 #'gptel-auto-workflow--suppress-y-or-n-p)
+  (remove-hook 'kill-buffer-query-functions 
+               #'gptel-auto-workflow--suppress-kill-buffer-query))
 
 (defcustom gptel-auto-workflow-git-timeout 120
   "Timeout in seconds for git commands during auto-workflow.

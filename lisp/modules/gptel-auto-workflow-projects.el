@@ -214,61 +214,70 @@ Returns (project-root . project-buffer) or nil if can't determine."
 ORIG-FUN is the original task function, other args passed through.
 When in auto-workflow context, routes to per-project buffer.
 Otherwise, passes through to original function (no error).
-NEVER allows overlays in *Messages* buffer."
-  ;; Determine routing: worktree buffer or project buffer
-  (let* ((in-auto-workflow gptel-auto-workflow--current-project)
-         (proj-context (gptel-auto-workflow--get-project-for-context))
-         (project-root (car proj-context))
-         ;; Check if we're in a worktree (experiment context)
-         (worktree-base-expanded (when gptel-auto-workflow-worktree-base
-                                   (expand-file-name gptel-auto-workflow-worktree-base project-root)))
-         (worktree-dir (when (and in-auto-workflow
-                                  worktree-base-expanded
-                                  (string-match-p worktree-base-expanded default-directory))
-                         default-directory))
-         ;; Get appropriate buffer: worktree-specific or project-wide
-         (target-buf (if worktree-dir
-                         (gptel-auto-workflow--get-worktree-buffer worktree-dir)
-                       (cdr proj-context))))
-    (if (and target-buf 
-             (buffer-live-p target-buf)
-             ;; CRITICAL: Never route to *Messages* buffer
-             (not (string= (buffer-name target-buf) "*Messages*")))
-        ;; CRITICAL: Use with-current-buffer to ensure make-overlay creates
-        ;; overlay in the CORRECT buffer. make-overlay uses current buffer
-        ;; DIRECTLY, not by calling current-buffer function.
-        (with-current-buffer target-buf
-          (let* ((default-directory (or worktree-dir project-root))
-                 ;; Create marker at current position in target buffer
-                 (target-marker (point-marker))
-                 (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
-                 (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
-                           (list :buffer target-buf :position target-marker)))
-                 (modified-info (list :buffer target-buf 
-                                      :position target-marker
-                                      :tracking-marker target-marker)))
-            ;; Override gptel-fsm-info to return our modified info
-            (cl-letf (((symbol-function 'gptel-fsm-info)
-                       (lambda (&optional fsm) 
-                         (if (or (eq fsm parent-fsm) (null fsm))
-                             modified-info 
-                           info))))
-              ;; Now call original function - it will create overlay in target-buf
-              ;; because we're inside with-current-buffer
-              (if (and gptel-auto-workflow--persist-executor-overlays
-                       (equal agent-type "executor"))
-                  (cl-letf (((symbol-function 'delete-overlay)
-                             (lambda (&rest _) nil)))
-                    (funcall orig-fun main-cb agent-type description prompt))
-                (funcall orig-fun main-cb agent-type description prompt)))))
-      ;; Not in auto-workflow context or invalid buffer - pass through to original
-      (funcall orig-fun main-cb agent-type description prompt))))
+NEVER allows overlays in *Messages* buffer.
+Also handles caching and result truncation from old advice."
+  ;; Check cache first (from old my/gptel-agent--task-override)
+  (let ((cached (and (fboundp 'my/gptel--subagent-cache-get)
+                     (my/gptel--subagent-cache-get agent-type prompt))))
+    (if cached
+        (progn
+          (message "[nucleus] Subagent %s cache hit" agent-type)
+          (funcall main-cb cached))
+      ;; Not cached - determine routing
+      (let* ((in-auto-workflow gptel-auto-workflow--current-project)
+             (proj-context (gptel-auto-workflow--get-project-for-context))
+             (project-root (car proj-context))
+             (worktree-base-expanded (when gptel-auto-workflow-worktree-base
+                                       (expand-file-name gptel-auto-workflow-worktree-base project-root)))
+             (worktree-dir (when (and in-auto-workflow
+                                      worktree-base-expanded
+                                      (string-match-p worktree-base-expanded default-directory))
+                             default-directory))
+             (target-buf (if worktree-dir
+                             (gptel-auto-workflow--get-worktree-buffer worktree-dir)
+                           (cdr proj-context))))
+        (if (and target-buf 
+                 (buffer-live-p target-buf)
+                 (not (string= (buffer-name target-buf) "*Messages*")))
+            (with-current-buffer target-buf
+              (let* ((default-directory (or worktree-dir project-root))
+                     (target-marker (point-marker))
+                     (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+                     (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
+                               (list :buffer target-buf :position target-marker)))
+                     (modified-info (list :buffer target-buf 
+                                          :position target-marker
+                                          :tracking-marker target-marker))
+                     ;; Wrap callback to cache results
+                     (wrapped-cb (lambda (result)
+                                    (when (and (stringp result)
+                                               (fboundp 'my/gptel--subagent-cache-put))
+                                      (my/gptel--subagent-cache-put agent-type prompt result))
+                                    (funcall main-cb result))))
+                (cl-letf (((symbol-function 'gptel-fsm-info)
+                           (lambda (&optional fsm) 
+                             (if (or (eq fsm parent-fsm) (null fsm))
+                                 modified-info 
+                               info))))
+                  (if (and gptel-auto-workflow--persist-executor-overlays
+                           (equal agent-type "executor"))
+                      (cl-letf (((symbol-function 'delete-overlay)
+                                 (lambda (&rest _) nil)))
+                        (funcall orig-fun wrapped-cb agent-type description prompt))
+                    (funcall orig-fun wrapped-cb agent-type description prompt)))))
+          (funcall orig-fun main-cb agent-type description prompt))))))
 
 (defun gptel-auto-workflow-enable-per-project-subagents ()
   "Enable per-project subagent buffer support.
-Installs advice on gptel-agent--task to route subagents to per-project buffers."
+Installs advice on gptel-agent--task to route subagents to per-project buffers.
+Also removes old conflicting :override advice if present."
   (interactive)
   (when (fboundp 'gptel-agent--task)
+    ;; Remove old conflicting :override advice if present
+    (condition-case nil
+        (advice-remove 'gptel-agent--task #'my/gptel-agent--task-override)
+      (error nil))
+    ;; Install new :around advice for buffer routing
     (advice-add 'gptel-agent--task :around #'gptel-auto-workflow--advice-task-override))
   (setq gptel-auto-workflow--persist-executor-overlays t)
   (message "[auto-workflow] Per-project subagent buffers enabled"))
