@@ -76,7 +76,15 @@ Each project gets its own isolated buffer for executor overlays."
           ;; Load .dir-locals.el for project configuration
           (hack-dir-local-variables-non-file-buffer)
           (when (boundp 'gptel-auto-workflow--project-root-override)
-            (setq-local gptel-auto-workflow--project-root-override root)))
+            (setq-local gptel-auto-workflow--project-root-override root))
+          ;; Protect buffer from being killed during experiments
+          (setq-local kill-buffer-query-functions
+                      (cons (lambda ()
+                              (when (and (boundp 'gptel-auto-workflow--running)
+                                         gptel-auto-workflow--running)
+                                (message "[auto-workflow] Blocking kill of project buffer during run")
+                                nil))
+                            kill-buffer-query-functions)))
         (puthash root buf gptel-auto-workflow--project-buffers)
         buf))))
 
@@ -203,13 +211,20 @@ Otherwise, passes through to original function (no error)."
       (let* ((default-directory project-root)
              (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
              (info (and parent-fsm (gptel-fsm-info parent-fsm)))
+             ;; Save original current-buffer before overriding
+             (orig-current-buffer (symbol-function 'current-buffer))
              ;; Override the buffer in FSM info to use project buffer
              (modified-info (plist-put (copy-sequence info) :buffer project-buf)))
         (cl-letf (((symbol-function 'gptel-fsm-info)
                    (lambda (&optional fsm) (if (eq fsm parent-fsm) modified-info info)))
                   ;; Also set current buffer for overlay creation
+                  ;; IMPORTANT: Check liveness each time, fall back if killed
                   ((symbol-function 'current-buffer)
-                   (lambda () project-buf)))
+                   (lambda () 
+                     (if (buffer-live-p project-buf)
+                         project-buf
+                       ;; Fall back to actual current buffer if project buffer killed
+                       (funcall orig-current-buffer)))))
           ;; For executor tasks, make overlay persist
           (if (and gptel-auto-workflow--persist-executor-overlays
                    (equal agent-type "executor"))
