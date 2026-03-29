@@ -1956,6 +1956,61 @@ Example HYPOTHESES:
                       truncated-output))
       (write-region (point-min) (point-max) file))))
 
+;;; Error Analysis and Adaptive Workflow
+
+(defvar gptel-auto-experiment--api-error-count 0
+  "Count of API errors in current run.")
+
+(defvar gptel-auto-experiment--api-error-threshold 3
+  "Threshold of API errors before reducing experiment count.")
+
+(defun gptel-auto-experiment--categorize-error (agent-output)
+  "Categorize error from AGENT-OUTPUT and return (CATEGORY . DETAILS).
+Categories: :api-rate-limit :api-error :tool-error :timeout :unknown"
+  (cond
+   ((string-match-p "throttling\\|rate.limit\\|quota exceeded\\|429" agent-output)
+    (cons :api-rate-limit "API rate limit exceeded"))
+   ((string-match-p "hour allocated quota exceeded" agent-output)
+    (cons :api-rate-limit "Hourly quota exhausted"))
+   ((string-match-p "timeout" agent-output)
+    (cons :timeout "Experiment timed out"))
+   ((string-match-p "error.*executor\\|failed to finish" agent-output)
+    (cons :tool-error "Tool execution failed"))
+   ((string-match-p "could not finish" agent-output)
+    (cons :api-error "API request failed"))
+   (t (cons :unknown "Unknown error"))))
+
+(defun gptel-auto-experiment--should-reduce-experiments-p ()
+  "Check if we should reduce experiment count due to API issues."
+  (>= gptel-auto-experiment--api-error-count gptel-auto-experiment--api-error-threshold))
+
+(defun gptel-auto-experiment--adaptive-max-experiments (original-max)
+  "Return adjusted experiment count based on API error rate."
+  (if (gptel-auto-experiment--should-reduce-experiments-p)
+      (progn
+        (message "[auto-workflow] Reducing experiments from %d to %d due to API errors"
+                 original-max (max 1 (/ original-max 2)))
+        (max 1 (/ original-max 2)))
+    original-max))
+
+(defun gptel-auto-experiment--log-failure-analysis (target error-category error-details)
+  "Log failure analysis for TARGET with ERROR-CATEGORY and ERROR-DETAILS.
+This helps understand patterns in discarded experiments."
+  (let ((log-file (expand-file-name 
+                   "var/tmp/experiments/failure-analysis.log"
+                   (gptel-auto-workflow--project-root))))
+    (make-directory (file-name-directory log-file) t)
+    (with-temp-buffer
+      (when (file-exists-p log-file)
+        (insert-file-contents log-file))
+      (goto-char (point-max))
+      (insert (format "%s | %s | %s | %s\n"
+                      (format-time-string "%Y-%m-%d %H:%M:%S")
+                      target
+                      error-category
+                      error-details))
+      (write-region (point-min) (point-max) log-file))))
+
 ;;; Dynamic Stop
 
 (defun gptel-auto-experiment-should-stop-p (threshold)
@@ -2044,25 +2099,37 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                    (let* ((grade-score (plist-get grade :score))
                           (grade-passed (plist-get grade :passed))
                           (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
-                     (if (not grade-passed)
-                         (progn
-                           (setq finished t)
-                           (gptel-auto-workflow-delete-worktree target)
-                           (let ((exp-result (list :target target
-                                                   :id experiment-id
-                                                   :hypothesis hypothesis
-                                                   :score-before baseline
-                                                   :score-after 0
-                                                   :kept nil
-                                                   :duration (- (float-time) start-time)
-                                                   :grader-quality grade-score
-                                                   :grader-reason (plist-get grade :details)
-                                                   :comparator-reason "early-discard"
-                                                   :analyzer-patterns (format "%s" patterns)
-                                                   :agent-output agent-output)))
-                             (gptel-auto-experiment-log-tsv
-                              (format-time-string "%Y-%m-%d") exp-result)
-                             (funcall callback exp-result)))
+                      ;; Check if grader passed
+                      (if (not grade-passed)
+                          ;; Grader failed - categorize the error
+                          (let* ((error-info (gptel-auto-experiment--categorize-error agent-output))
+                                 (error-category (car error-info))
+                                 (error-details (cdr error-info)))
+                            (setq finished t)
+                            ;; Track API errors for adaptive reduction
+                            (when (memq error-category '(:api-rate-limit :api-error))
+                              (cl-incf gptel-auto-experiment--api-error-count)
+                              (message "[auto-workflow] API error #%d: %s"
+                                       gptel-auto-experiment--api-error-count error-details))
+                            ;; Log failure analysis
+                            (gptel-auto-experiment--log-failure-analysis
+                             target error-category error-details)
+                            (gptel-auto-workflow-delete-worktree target)
+                            (let ((exp-result (list :target target
+                                                    :id experiment-id
+                                                    :hypothesis hypothesis
+                                                    :score-before baseline
+                                                    :score-after 0
+                                                    :kept nil
+                                                    :duration (- (float-time) start-time)
+                                                    :grader-quality grade-score
+                                                    :grader-reason (format "%s: %s" error-category error-details)
+                                                    :comparator-reason (format "%s | %s" error-category error-details)
+                                                    :analyzer-patterns (format "%s" patterns)
+                                                    :agent-output agent-output)))
+                              (gptel-auto-experiment-log-tsv
+                               (format-time-string "%Y-%m-%d") exp-result)
+                              (funcall callback exp-result)))
                        (let* ((bench (gptel-auto-experiment-benchmark t))
                               (passed (plist-get bench :passed))
                               (tests-passed (plist-get bench :tests-passed))
@@ -2190,16 +2257,25 @@ Tries multiple patterns in order:
 
 (defun gptel-auto-experiment-loop (target callback)
   "Run experiments for TARGET until stop condition. Call CALLBACK with results.
-Uses local state captured in closure for parallel execution safety."
+Uses local state captured in closure for parallel execution safety.
+Adapts max-experiments based on API error rate."
   (let* ((baseline (gptel-auto-experiment-benchmark t))
-         (max-exp gptel-auto-experiment-max-per-target)
+         (original-max gptel-auto-experiment-max-per-target)
+         (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
          (threshold gptel-auto-experiment-no-improvement-threshold)
          (results nil)
          (best-score (or (plist-get baseline :eight-keys) 0.0))
          (no-improvement-count 0))
-    (message "[auto-experiment] Baseline for %s: %.2f" target best-score)
+    (message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
+             target best-score max-exp)
     (cl-labels ((run-next (exp-id)
                   (gptel-auto-workflow-delete-worktree target)
+                  ;; Check if we should stop early due to too many API errors
+                  (when (and (> gptel-auto-experiment--api-error-count 5)
+                             (< exp-id max-exp))
+                    (message "[auto-workflow] Too many API errors (%d), stopping early for %s"
+                             gptel-auto-experiment--api-error-count target)
+                    (setq max-exp exp-id))
                   (if (or (> exp-id max-exp)
                           (>= no-improvement-count threshold))
                       (progn
@@ -2508,6 +2584,8 @@ Safe to call from cron - handles all edge cases."
       (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root)))
     ;; Enable headless suppression for async operations
     (gptel-auto-workflow--enable-headless-suppression)
+    ;; Reset API error counter for new run
+    (setq gptel-auto-experiment--api-error-count 0)
     (condition-case err
         (progn
           (gptel-auto-workflow--cleanup-stale-state)
