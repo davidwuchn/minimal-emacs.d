@@ -40,7 +40,6 @@ Customize this variable to add more projects.")
   "Root directory for mementum. Set per-project.")
 
 (defvar gptel-auto-workflow--project-root-override)
-(defvar gptel-auto-workflow--worktree-state)
 (defvar gptel-auto-workflow--research-findings-cache)
 
 (defun gptel-auto-workflow--get-project-buffer (project-root)
