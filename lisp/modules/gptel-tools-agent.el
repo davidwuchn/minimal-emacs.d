@@ -2015,10 +2015,8 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                                (list :target target
                                                      :id experiment-id
                                                      :error "timeout"))))))
-            ;; Ensure overlay appears in project buffer, not current buffer
-            (cl-letf (((symbol-function 'current-buffer)
-                       (lambda () (or project-buf (current-buffer)))))
-              (my/gptel--run-agent-tool
+;; Routing handled by gptel-auto-workflow--advice-task-override
+             (my/gptel--run-agent-tool
                (lambda (agent-output)
               (message "[auto-exp] Agent output (first 500 chars): %s"
                        (truncate-string-to-width (or agent-output "nil") 500 nil nil "..."))
@@ -2133,7 +2131,7 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
             "executor"
             (format "Experiment %d: optimize %s" experiment-id target)
             prompt
-             nil "false" nil))))))))
+             nil "false" nil)))))))
 
 (defun gptel-auto-experiment--extract-hypothesis (output)
   "Extract HYPOTHESIS from agent OUTPUT.

@@ -13,6 +13,10 @@
 
 (require 'cl-lib)
 
+;; External variables from gptel-tools-agent.el
+(defvar gptel-auto-workflow--worktree-state nil)
+(defvar gptel-auto-workflow-worktree-base "/tmp/gptel-worktrees/")
+
 ;; Forward declarations for functions defined in gptel-tools-agent.el
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent")
 (declare-function gptel-auto-workflow-cron-safe "gptel-tools-agent")
