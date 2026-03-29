@@ -106,35 +106,27 @@
 
 ## Current Status
 
-- **Main branch**: `376d0cf`
-- **Staging branch**: `214596e` (merged main, has elisp-expert skill)
+- **Main branch**: `63e0a0e`
+- **Staging branch**: Needs merge from main
 - **Emacs daemon**: Running
 - **Skill elisp-expert**: ✓ Created, loaded, tested
-- **Benchmark tests**: 5 cases defined in `benchmarks/skill-tests/elisp-expert.json`
+- **Benchmark**: ✓ Fixed (agent-vs-skill bug), single test 83% pass rate
 - **Auto-workflow**: Ready to use skill when editing .el files
 
-### Verification Results
+### Bug Fixed
 
-| Test | Result |
-|------|--------|
-| Skill discovery | ✓ elisp-expert in gptel-agent--skills |
-| {{SKILLS}} expansion | ✓ Available skills in executor system prompt |
-| Skill loading | ✓ Executor loaded elisp-expert when prompted |
-| Correct pattern | ✓ Generated cl-block wrapper + cl-return-from |
-| Byte-compile | ✓ Mentioned verification step |
+**Issue**: 5 stuck "Elisp-Expert" task overlays waiting
+**Root Cause**: `gptel-skill-benchmark.el` used skill name "elisp-expert" as agent name
+**Fix**: Use "executor" agent (which loads skill via Skill tool)
 
-### Test Output Example
+### Benchmark Result (Single Test)
 
 ```
-✓ **elisp-expert skill loaded** - Dangerous patterns documented
-
-**Key pattern** (from elisp-expert skill):
-(cl-block function-name
-  (when guard-condition
-    (cl-return-from function-name value))
-  ...rest of logic...)
-
-**Verification**: Byte-compile clean (no errors/warnings)
+Test: elisp-001 (cl_return_from_guard)
+- Executor: ✓ Generated correct cl-block + cl-return-from patterns
+- Grader: 5/6 behaviors passed (83%)
+- Byte-compile: ✓ Mentioned verification
+- Eight Keys: 40% overall
 ```
 
 ---
