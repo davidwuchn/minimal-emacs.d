@@ -1657,15 +1657,19 @@ Scores based on commit message + code diff (not just stat)."
 ;;; Subagent Integrations
 
 (defun gptel-auto-experiment-analyze (previous-results callback)
-  "Analyze patterns from PREVIOUS-RESULTS. Call CALLBACK with analysis."
-  (if (and gptel-auto-experiment-use-subagents
-           (fboundp 'gptel-benchmark-analyze)
-           previous-results)
-      (gptel-benchmark-analyze
-       previous-results
-       "Experiment patterns"
-       callback)
-    (funcall callback nil)))
+  "Analyze patterns from PREVIOUS-RESULTS. Call CALLBACK with analysis.
+The analyzer subagent overlay will appear in the current buffer at time of call."
+  ;; Capture the current buffer to ensure analyzer overlay appears in right place
+  (let ((analyze-buffer (current-buffer)))
+    (if (and gptel-auto-experiment-use-subagents
+             (fboundp 'gptel-benchmark-analyze)
+             previous-results)
+        (with-current-buffer analyze-buffer
+          (gptel-benchmark-analyze
+           previous-results
+           "Experiment patterns"
+           callback))
+      (funcall callback nil))))
 
 (defvar gptel-auto-experiment--grade-state (make-hash-table :test 'eql)
   "Hash table for per-grade state. Keyed by grade-id.
@@ -1753,8 +1757,11 @@ The grader subagent overlay will appear in the current buffer at time of call."
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
 CALLBACK receives keep/discard decision with reasoning.
-LLM decides when available; local fallback for tests."
-  (let* ((score-before (plist-get before :score))
+LLM decides when available; local fallback for tests.
+The comparator subagent overlay will appear in the current buffer at time of call."
+  ;; Capture the current buffer to ensure comparator overlay appears in right place
+  (let* ((decide-buffer (current-buffer))
+         (score-before (plist-get before :score))
          (score-after (plist-get after :score))
          (quality-before (or (plist-get before :code-quality) 0.5))
          (quality-after (or (plist-get after :code-quality) 0.5))
@@ -1785,27 +1792,28 @@ Output ONLY a single line: \"A\" or \"B\" or \"tie\"
 Then on a new line, briefly explain why (1 sentence)."
                                       score-before quality-before combined-before
                                       score-after quality-after combined-after)))
-          (gptel-benchmark-call-subagent
-           'comparator
-           "Compare experiment results"
-           compare-prompt
-           (lambda (result)
-             (let* ((response (if (stringp result) result (format "%S" result)))
-                    (winner (cond
-                             ((string-match "^\\s-*A\\b" response) "A")
-                             ((string-match "^\\s-*B\\b" response) "B")
-                             ((string-match "^\\s-*tie\\b" response) "tie")
-                             (t "B")))
-                    (keep (string= winner "B")))
-               (funcall callback
-                        (list :keep keep
-                              :reasoning (format "Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                                 winner score-before score-after
-                                                 quality-before quality-after
-                                                 combined-before combined-after)
-                              :improvement (list :score (- score-after score-before)
-                                                 :quality (- quality-after quality-before)
-                                                 :combined (- combined-after combined-before))))))))
+          (with-current-buffer decide-buffer
+            (gptel-benchmark-call-subagent
+             'comparator
+             "Compare experiment results"
+             compare-prompt
+             (lambda (result)
+               (let* ((response (if (stringp result) result (format "%S" result)))
+                      (winner (cond
+                               ((string-match "^\\s-*A\\b" response) "A")
+                               ((string-match "^\\s-*B\\b" response) "B")
+                               ((string-match "^\\s-*tie\\b" response) "tie")
+                               (t "B")))
+                      (keep (string= winner "B")))
+                 (funcall callback
+                          (list :keep keep
+                                :reasoning (format "Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
+                                                   winner score-before score-after
+                                                   quality-before quality-after
+                                                   combined-before combined-after)
+                                :improvement (list :score (- score-after score-before)
+                                                   :quality (- quality-after quality-before)
+                                                   :combined (- combined-after combined-before)))))))))
       (let ((keep (> combined-after combined-before)))
         (funcall callback
                  (list :keep keep

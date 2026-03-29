@@ -213,41 +213,53 @@ Returns (project-root . project-buffer) or nil if can't determine."
   "Advice around subagent task execution to use per-project buffers.
 ORIG-FUN is the original task function, other args passed through.
 When in auto-workflow context, routes to per-project buffer.
-Otherwise, passes through to original function (no error)."
+Otherwise, passes through to original function (no error).
+NEVER allows overlays in *Messages* buffer."
   ;; Determine routing: worktree buffer or project buffer
   (let* ((in-auto-workflow gptel-auto-workflow--current-project)
          (proj-context (gptel-auto-workflow--get-project-for-context))
          (project-root (car proj-context))
-;; Check if we're in a worktree (experiment context)
-          (worktree-base-expanded (when gptel-auto-workflow-worktree-base
-                                    (expand-file-name gptel-auto-workflow-worktree-base project-root)))
-          (worktree-dir (when (and in-auto-workflow
-                                   worktree-base-expanded
-                                   (string-match-p worktree-base-expanded default-directory))
-                          default-directory))
+         ;; Check if we're in a worktree (experiment context)
+         (worktree-base-expanded (when gptel-auto-workflow-worktree-base
+                                   (expand-file-name gptel-auto-workflow-worktree-base project-root)))
+         (worktree-dir (when (and in-auto-workflow
+                                  worktree-base-expanded
+                                  (string-match-p worktree-base-expanded default-directory))
+                         default-directory))
          ;; Get appropriate buffer: worktree-specific or project-wide
          (target-buf (if worktree-dir
                          (gptel-auto-workflow--get-worktree-buffer worktree-dir)
                        (cdr proj-context))))
-    (if (and target-buf (buffer-live-p target-buf))
+    (if (and target-buf 
+             (buffer-live-p target-buf)
+             ;; CRITICAL: Never route to *Messages* buffer
+             (not (string= (buffer-name target-buf) "*Messages*")))
         ;; Route to appropriate buffer
         (let* ((default-directory (or worktree-dir project-root))
                (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+               ;; Create marker in target buffer explicitly
+               (target-marker (with-current-buffer target-buf (point-marker)))
                (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
-                         ;; Create minimal info if no parent FSM
-                         (list :buffer target-buf :position (with-current-buffer target-buf (point-marker)))))
-               ;; Save original current-buffer before overriding
-               (orig-current-buffer (symbol-function 'current-buffer))
-               ;; Override the buffer in FSM info
-               (modified-info (plist-put (copy-sequence info) :buffer target-buf)))
+                         ;; Create info with marker in CORRECT buffer
+                         (list :buffer target-buf :position target-marker)))
+               ;; Override the buffer in FSM info with correct marker
+               (modified-info (list :buffer target-buf 
+                                    :position target-marker
+                                    :tracking-marker target-marker)))
+          ;; Use cl-letf to override ALL buffer-related functions
           (cl-letf (((symbol-function 'gptel-fsm-info)
-                     (lambda (&optional fsm) (if (eq fsm parent-fsm) modified-info info)))
-                    ;; Also set current buffer for overlay creation
+                     (lambda (&optional fsm) 
+                       (if (or (eq fsm parent-fsm) (null fsm))
+                           modified-info 
+                         info)))
+                    ;; Override current-buffer for overlay creation
                     ((symbol-function 'current-buffer)
+                     (lambda () target-buf))
+                    ;; Override selected-window to prevent wrong buffer focus
+                    ((symbol-function 'selected-window)
                      (lambda () 
-                       (if (buffer-live-p target-buf)
-                           target-buf
-                         (funcall orig-current-buffer)))))
+                       (or (get-buffer-window target-buf)
+                           (selected-window)))))
             ;; For executor tasks, make overlay persist
             (if (and gptel-auto-workflow--persist-executor-overlays
                      (equal agent-type "executor"))
@@ -255,7 +267,7 @@ Otherwise, passes through to original function (no error)."
                            (lambda (&rest _) nil)))
                   (funcall orig-fun main-cb agent-type description prompt))
               (funcall orig-fun main-cb agent-type description prompt))))
-      ;; Not in auto-workflow context - pass through to original
+      ;; Not in auto-workflow context or invalid buffer - pass through to original
       (funcall orig-fun main-cb agent-type description prompt))))
 
 (defun gptel-auto-workflow-enable-per-project-subagents ()
