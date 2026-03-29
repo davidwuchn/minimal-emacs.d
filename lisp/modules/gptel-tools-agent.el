@@ -3099,7 +3099,7 @@ Implements λ termination(x): synthesis ≡ AI | approval ≡ human."
                  (content (format "\n\n# %s\n\nSynthesized from %d memories.\n\n## Key Patterns\n\nPatterns identified from:\n%s\n"
                                   topic (length memories-content)
                                   (mapconcat (lambda (f) (format "- %s" (file-name-nondirectory f))) files "\n")))
-                 (know-dir (expand-file-name "mementum/knowledge" (gptel-auto-workflow--base-dir)))
+                 (know-dir (expand-file-name "mementum/knowledge" (gptel-auto-workflow--project-root)))
                  (know-file (expand-file-name (format "%s.md" topic) know-dir)))
             (make-directory know-dir t)
             (with-temp-file know-file
