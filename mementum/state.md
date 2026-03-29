@@ -2,15 +2,17 @@
 
 > Last session: 2026-03-29 22:00
 
-## Total Improvements: 157+ Real Code Fixes
+## Total Improvements: 159+ Real Code Fixes
 
-525+ commits since March 25, 2026.
+527+ commits since March 25, 2026.
 
 ### Recent Fixes (Last 35)
 
 | # | File | Fix |
 |---|------|------|
-| 157 | gptel-tools-agent.el | Retry validation failures with teaching (cl-return-from pattern) |
+| 159 | gptel-tools-agent.el | Skill gaps → benchmark tests (feedback loop for skill improvement) |
+| 158 | executor.md | Skill check step 1 of tool loop (before editing .el/.clj) |
+| 157 | gptel-tools-agent.el | Retry validation failures with skill instruction + skill gap logging |
 | 156 | gptel-benchmark-subagent.el | Remove local-grader fallback (fail if subagent unavailable) |
 | 155 | gptel-benchmark-subagent.el, gptel-tools-agent.el | Grader reliability: 80% threshold (not perfect), 120s timeout |
 | 154 | gptel-tools-agent.el | Disable uniquify during headless workflow (prevents .emacs.d/ prefix) |
@@ -65,7 +67,9 @@
 λ overlay-buffer-context. make-overlay(nil) uses current-buffer, advice needed for async callbacks
 λ grader-passed. :passed >= 80% threshold (not perfect), perfect score unrealistic
 λ grader-fail. No local fallback - fail experiment if grader subagent unavailable
-λ validation-retry. Teach pattern on failure, retry once with skill loading (not hardcoded patterns)
+λ validation-retry. Retry with skill instruction + log skill gap for improvement
+λ skill-first-rule. Tool loop step 1: check file type → load skill before editing
+λ skill-gap-feedback. Validation fails → log gap → convert to benchmark → improve skill → fewer gaps
 λ auto-revert-conflict. Worktree file writes trigger revert on main buffer → disable during workflow
 λ uniquify-buffer-names. Multiple same-name files get prefixes like .emacs.d/ → disable during workflow
 ```
