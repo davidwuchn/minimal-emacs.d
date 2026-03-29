@@ -237,10 +237,7 @@ When nil, subagents start with clean context unless explicitly requested."
   :type 'boolean
   :group 'gptel-tools-agent)
 
-(defvar my/gptel--subagent-target-buffer nil
-  "Target buffer for subagent overlays.
-When set, all subagent overlays route to this buffer instead of current buffer.
-Used by auto-workflow to keep subagents in one place.")
+
 
 (defvar-local my/gptel--subagent-temp-files nil
   "Buffer-local list of temp files created by subagent results.
@@ -364,9 +361,7 @@ large-result truncation, and result caching."
            (gptel--apply-preset preset)
            (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
                   (info (and parent-fsm (gptel-fsm-info parent-fsm)))
-                  (parent-buf (or (when (buffer-live-p my/gptel--subagent-target-buffer)
-                                    my/gptel--subagent-target-buffer)
-                                  (when (buffer-live-p (plist-get info :buffer))
+                  (parent-buf (or (when (buffer-live-p (plist-get info :buffer))
                                     (plist-get info :buffer))
                                   (current-buffer)))
                  (where (or (let ((tm (plist-get info :tracking-marker)))
@@ -472,9 +467,6 @@ but WHERE may be a marker pointing to a different buffer, or an
 integer position that should be in the parent chat buffer.
 This wrapper ensures the overlay is created in the correct buffer."
   (let* ((target-buf (cond
-                      ;; First check if we have a target buffer set (auto-workflow)
-                      ((buffer-live-p my/gptel--subagent-target-buffer)
-                       my/gptel--subagent-target-buffer)
                       ;; Marker case: use marker's buffer
                       ((markerp where) (marker-buffer where))
                       ;; Integer case: try to get parent buffer from FSM
@@ -2424,11 +2416,6 @@ Usage:
   (setq gptel-auto-workflow--running t
         gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
         gptel-auto-workflow--last-progress-time (current-time))
-  ;; Setup target buffer for subagent routing
-  (let* ((proj-root (gptel-auto-workflow--project-root))
-         (project-buf (gptel-auto-workflow--get-project-buffer proj-root)))
-    (setq my/gptel--subagent-target-buffer project-buf)
-    (message "[auto-workflow] Subagent target buffer: %s" (buffer-name project-buf)))
   ;; Start watchdog timer
   (when gptel-auto-workflow--watchdog-timer
     (cancel-timer gptel-auto-workflow--watchdog-timer))

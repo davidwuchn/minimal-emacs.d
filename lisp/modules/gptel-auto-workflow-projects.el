@@ -44,7 +44,7 @@ Customize this variable to add more projects.")
 
 (defun gptel-auto-workflow--get-project-buffer (project-root)
   "Get or create a gptel-agent buffer for PROJECT-ROOT.
-Each project gets its own isolated buffer for executor overlays."
+All subagents for this project (main, staging, experiments) route here."
   (let* ((root (file-name-as-directory (expand-file-name project-root)))
          (buf-name (format "*gptel-agent:%s*" (file-name-nondirectory (directory-file-name root))))
          (existing (gethash root gptel-auto-workflow--project-buffers)))
@@ -70,12 +70,13 @@ Each project gets its own isolated buffer for executor overlays."
                    (lambda (sym val) (set (make-local-variable sym) val)))
                   (message "[auto-workflow] Applied nucleus-gptel-agent preset to %s" buf-name))
               (error (message "[auto-workflow] Could not apply nucleus preset: %s" err))))
-          ;; Set project context
-          (setq-local default-directory root)
+          ;; Set project context (all subagents route to project buffer)
+          (setq-local default-directory (or (gptel-auto-workflow--project-root) root))
           ;; Load .dir-locals.el for project configuration
           (hack-dir-local-variables-non-file-buffer)
           (when (boundp 'gptel-auto-workflow--project-root-override)
-            (setq-local gptel-auto-workflow--project-root-override root))
+            (setq-local gptel-auto-workflow--project-root-override 
+                        (gptel-auto-workflow--project-root)))
           ;; Protect buffer from being killed during experiments
           (setq-local kill-buffer-query-functions
                       (cons (lambda ()
