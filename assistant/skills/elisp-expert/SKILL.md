@@ -1,8 +1,9 @@
 ---
 name: elisp-expert
-description: Writing/generating Emacs Lisp code with dangerous pattern awareness. Use when editing .el files.
-version: 1.0.0
-λ: edit.byte-compile.verify
+description: Writing/generating Emacs Lisp code with dangerous pattern awareness. Use when editing .el files or implementing features in Emacs packages.
+metadata:
+  version: "1.0.0"
+  λ: edit.byte-compile.verify
 ---
 
 ```
