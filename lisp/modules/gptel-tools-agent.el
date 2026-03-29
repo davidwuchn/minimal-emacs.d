@@ -2303,46 +2303,7 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
             prompt
             nil "false" nil)))))))
 
-(defvar gptel-auto-experiment-max-validation-retries 1
-  "Maximum retries when validation fails due to dangerous patterns.
-Executor will be taught about the pattern and asked to regenerate.")
-
-(defun gptel-auto-experiment--make-retry-prompt (target validation-error original-prompt)
-  "Create retry prompt after validation failure.
-TARGET is the file being edited.
-VALIDATION-ERROR is the error message.
-ORIGINAL-PROMPT is the original experiment prompt."
-  (format "Your previous edit to %s was REJECTED due to validation error:
-
-ERROR: %s
-
-IMPORTANT: Fix this issue and try again. 
-
-%s
-
-Read the file, understand the error, and generate corrected code."
-          target
-          validation-error
-          (if (string-match-p "cl-return-from.*without.*cl-block" validation-error)
-              "
-## Elisp Dangerous Pattern: cl-return-from requires cl-block
-
-If you use `(cl-return-from name value)`, the function MUST have `(cl-block name ...)` wrapper.
-
-WRONG:
-(defun my-func (x)
-  (unless x (cl-return-from my-func nil))  ; ERROR at runtime!
-  ...)
-
-CORRECT:
-(defun my-func (x)
-  (cl-block my-func
-    (unless x (cl-return-from my-func nil))
-    ...))
-
-BETTER: Use simple `cond`/`if`/`unless` instead of cl-return-from when possible.
-"
-            "")))
+(defun gptel-auto-experiment--extract-hypothesis (output)
   "Extract HYPOTHESIS from agent OUTPUT.
 Tries multiple patterns in order:
 1. Check for error message (returns 'Agent error')
@@ -2369,6 +2330,43 @@ Tries multiple patterns in order:
     (let ((match (match-string 1 output)))
       (string-trim match)))
    (t "No hypothesis stated")))
+
+(defun gptel-auto-experiment--agent-error-p (output)
+  "Check if OUTPUT is an error message from agent tool."
+  (and (stringp output) (string-match-p "^Error:" output)))
+
+(defun gptel-auto-experiment--summarize (hypothesis)
+  "Create short summary of HYPOTHESIS."
+  (let ((words (split-string hypothesis)))
+    (string-join (cl-subseq words 0 (min 6 (length words))) " ")))
+
+(defvar gptel-auto-experiment-max-validation-retries 1
+  "Maximum retries when validation fails due to teachable patterns.
+Executor will be instructed to load relevant skill and regenerate.")
+
+(defun gptel-auto-experiment--make-retry-prompt (target validation-error _original-prompt)
+  "Create retry prompt after validation failure.
+TARGET is the file being edited.
+VALIDATION-ERROR is the error message.
+Instructs executor to load relevant skill instead of hardcoding patterns."
+  (format "Your previous edit to %s was REJECTED due to validation error:
+
+ERROR: %s
+
+IMPORTANT: Before retrying, load the relevant skill for guidance.
+
+%s
+
+Read the file, understand the error, load the skill if available, and generate corrected code."
+          target
+          validation-error
+          (cond
+           ;; Elisp dangerous patterns - tell executor to load skill
+           ((string-match-p "cl-return-from.*without.*cl-block\\|Dangerous pattern.*\\.el$" validation-error)
+            "CALL THIS FIRST: Skill(\"elisp-expert\")
+This skill teaches dangerous Elisp patterns including cl-return-from requirements.")
+           ;; Add more skill mappings here as needed
+           (t ""))))
 
 (defun gptel-auto-experiment--agent-error-p (output)
   "Check if OUTPUT is an error message from agent tool."
@@ -3330,9 +3328,10 @@ Returns list of matching files."
                (shell-command-to-string
                 (format "git grep -l %s -- mementum/knowledge/ 2>/dev/null || true"
                         (shell-quote-argument query)))
-               "\n" t))))))
+               "\n" t)))))))
+    result))
 
-  (defun gptel-mementum-decay-skills ()
+(defun gptel-mementum-decay-skills ()
     "Apply decay to skill files not tested in 4+ weeks.
 Run weekly via cron."
     (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
