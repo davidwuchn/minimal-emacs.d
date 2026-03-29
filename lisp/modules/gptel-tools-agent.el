@@ -2508,9 +2508,12 @@ Called at start of new run to ensure clean state."
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
   "Run experiments for TARGETS asynchronously."
   (let* ((run-id (format-time-string "%Y-%m-%d"))
+         (proj-root (gptel-auto-workflow--project-root))
          (all-results '())
          (completed-targets 0)
          (kept-count 0))
+    ;; Set project context for subagent routing
+    (setq gptel-auto-workflow--current-project proj-root)
     (plist-put gptel-auto-workflow--stats :phase "running")
     (plist-put gptel-auto-workflow--stats :total (length targets))
     (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
