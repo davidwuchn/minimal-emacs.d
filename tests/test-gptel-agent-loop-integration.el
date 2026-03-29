@@ -3,24 +3,18 @@
 (require 'ert)
 (require 'cl-lib)
 
+(require 'gptel)
+(require 'gptel-request)
+(require 'gptel-ext-fsm)
+(require 'gptel-ext-fsm-utils)
+(require 'gptel-ext-retry)
+(require 'gptel-agent-loop)
+
 (defvar gptel-agent--agents nil)
 (defvar gptel--fsm-last nil)
 (defvar gptel-agent-request--handlers nil)
 (defvar gptel--preset nil)
 (defvar gptel-request--transitions nil)
-
-(cl-defstruct gptel-fsm info)
-
-(defun gptel--preset-syms (_preset) nil)
-(defun gptel--apply-preset (preset) (setq gptel--preset preset))
-(defun gptel--update-status (&rest _args) nil)
-(defun gptel--display-tool-calls (&rest _args) nil)
-(defun gptel-make-fsm (&rest args) args)
-(defun gptel-agent--task-overlay (&rest _args) nil)
-(defun my/gptel--coerce-fsm (obj) obj)
-(defun my/gptel--deliver-subagent-result (callback result) (funcall callback result))
-
-(require 'gptel-agent-loop)
 
 (ert-deftest gptel-agent-loop-integration-test-enable-disable ()
   (cl-letf (((symbol-function 'gptel-agent--task) #'ignore))
@@ -34,7 +28,7 @@
         callback)
     (with-temp-buffer
       (setq gptel--fsm-last
-            (make-gptel-fsm :info (list :buffer (current-buffer)
+            (gptel-make-fsm :info (list :buffer (current-buffer)
                                         :position (point-marker))))
       (cl-letf (((symbol-function 'gptel-request)
                  (lambda (_prompt &rest args)

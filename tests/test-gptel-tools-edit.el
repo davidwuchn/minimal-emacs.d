@@ -14,7 +14,7 @@
 ;;; Stub gptel dependencies
 
 (cl-defstruct (gptel-fsm (:constructor gptel-make-fsm))
-  state info)
+  (state (quote INIT)) table handlers info)
 
 (defvar gptel--request-alist nil)
 (defvar gptel--fsm-last nil)

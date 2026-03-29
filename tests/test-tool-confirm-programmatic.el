@@ -4,7 +4,7 @@
 (require 'cl-lib)
 
 (cl-defstruct (gptel-fsm (:constructor gptel-make-fsm))
-  state info)
+  (state (quote INIT)) table handlers info)
 
 ;;; Minimal gptel stubs before loading the module
 

@@ -3,38 +3,25 @@
 (require 'ert)
 (require 'cl-lib)
 
+;;; Load real dependencies
+(require 'gptel)
+(require 'gptel-request)
+(require 'gptel-ext-fsm)
+(require 'gptel-ext-fsm-utils)
+(require 'gptel-ext-retry)
+(require 'gptel-agent-loop)
+
 (defvar gptel--preset nil)
 (defvar gptel--fsm-last nil)
 (defvar gptel-agent-request--handlers nil)
 (defvar gptel-agent--agents nil)
 (defvar gptel-request--transitions nil)
 
-(cl-defstruct gptel-fsm info)
-
-(defun gptel--preset-syms (_preset) nil)
-(defun gptel--apply-preset (preset) (setq gptel--preset preset))
-(defun gptel--update-status (&rest _args) nil)
-(defun gptel--display-tool-calls (_calls _info) nil)
-(defun gptel-make-fsm (&rest args) args)
-(defun gptel-agent--task-overlay (&rest _args) nil)
-(defun my/gptel--coerce-fsm (obj) obj)
-(defun my/gptel--deliver-subagent-result (callback result) (funcall callback result))
-(defun my/gptel--transient-error-p (error-data _http-status)
-  "Test stub for transient error detection.
-Matches the patterns from gptel-ext-retry.el for consistency.
-Handles both string errors and plist formats like (:message \"...\") or
-nested in (:error (:message \"...\"))."
-  (let ((error-msg (when (listp error-data) (plist-get error-data :message))))
-    (or (and (stringp error-data)
-             (string-match-p
-              "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests\\|InvalidParameter\\|function\\.arguments"
-              error-data))
-        (and (listp error-data)
-             (stringp error-msg)
-             (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
-                             (downcase error-msg))))))
-
-(require 'gptel-agent-loop)
+(defun gptel-agent-loop-test--preset-syms (_preset) nil)
+(defun gptel-agent-loop-test--apply-preset (preset) (setq gptel--preset preset))
+(defun gptel-agent-loop-test--update-status (&rest _args) nil)
+(defun gptel-agent-loop-test--display-tool-calls (_calls _info) nil)
+(defun gptel-agent-loop-test--task-overlay (&rest _args) nil)
 
 (defmacro gptel-agent-loop-test--with-env (&rest body)
   `(let ((gptel-agent--agents '(("executor" :steps 1)
@@ -45,8 +32,8 @@ nested in (:error (:message \"...\"))."
          (gptel--preset nil))
      (with-temp-buffer
        (setq gptel--fsm-last
-             (make-gptel-fsm :info (list :buffer (current-buffer)
-                                         :position (point-marker))))
+             (gptel-make-fsm :info (list :buffer (current-buffer)
+                                          :position (point-marker))))
        ,@body)))
 
 (ert-deftest gptel-agent-loop-test-incomplete-marker ()
@@ -183,8 +170,8 @@ nested in (:error (:message \"...\"))."
        (should-not (plist-get (car requests) :use-tools))
        (should (string-match-p "MAXIMUM STEPS REACHED" (plist-get (car requests) :prompt)))
        (funcall (plist-get (car requests) :callback) "summary only" '(:tool-use nil))
-       (should (string-match-p "step-limited task" delivered))
-       (should (string-match-p "summary only" delivered))))))
+(should (string-match-p "step-limited task" delivered))
+        (should (string-match-p "summary only" delivered))))))
 
 (ert-deftest gptel-agent-loop-test-seems-complete ()
   (should (gptel-agent-loop--seems-complete-p "All tasks completed successfully."))
