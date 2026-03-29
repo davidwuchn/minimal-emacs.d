@@ -10,6 +10,7 @@
 
 | # | File | Fix |
 |---|------|------|
+| 141 | ai-code-behaviors.el | cl-block wrappers for cl-return-from (3 functions fixed) |
 | 140 | gptel-tools-agent.el | Keep worktree for entire target, delete only at next run start |
 | 139 | gptel-auto-workflow-projects.el | Check worktree exists before routing |
 | 138 | gptel-auto-workflow-projects.el | Remove conflicting old advice, merge caching |
@@ -40,6 +41,7 @@
 λ executor-model. Use qwen3.5-plus (NOT qwen3-coder-plus) for tool calling
 λ worktree-lifecycle. Created at start, deleted at NEXT run start
 λ never-manual-cleanup. Let workflow manage its own resources
+λ cl-return-from. Requires cl-block wrapper in Elisp (dangerous pattern)
 ```
 
 ---
@@ -94,11 +96,13 @@
 
 ## Current Status
 
-- **Main branch**: `53c8ba9`
-- **Workflow**: Running (testing fixes)
+- **Main branch**: `475b456` (ai-code submodule updated)
+- **ai-code submodule**: `ba5d0c9` (cl-block fix pushed)
+- **Workflow**: Ready to test (validation should pass now)
 - **Emacs daemon**: Running
 - **API issues**: None (qwen3.5-plus working correctly)
 - **Worktrees**: Managed by workflow (never manual cleanup)
+- **Next**: Test auto-workflow to verify experiments pass validation
 
 ---
 
@@ -110,3 +114,4 @@
 4. **Advice conflicts** - `:override` + `:around` = unpredictable behavior
 5. **qwen-coder** - Can't use for tool calling (malformed JSON)
 6. **kill-buffer-query** - Use hook, not advice
+7. **cl-return-from** - Requires cl-block wrapper in Elisp (validation catches this)
