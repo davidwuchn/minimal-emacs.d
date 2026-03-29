@@ -54,6 +54,10 @@
 (gptel-benchmark-daily-setup)
 
 ;; --- Configuration Defaults ---
+;; Use setq-default to set the global default values
+(setq-default gptel-backend gptel--dashscope
+              gptel-model 'qwen3.5-plus)
+;; Also set current values for this buffer
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3.5-plus)
 
