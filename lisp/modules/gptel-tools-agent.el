@@ -837,6 +837,7 @@ Uses cached overlay reference for O(1) lookup instead of O(n) buffer scan."
 Empty by default - LLM selects targets dynamically.
 Monthly subscription: LLM selection finds best targets each run."
   :type '(repeat string)
+  :safe #'always
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-worktree-base "var/tmp/experiments"
@@ -847,18 +848,21 @@ Monthly subscription: LLM selection finds best targets each run."
 (defcustom gptel-auto-experiment-time-budget 600
   "Time budget per experiment in seconds (default: 10 min)."
   :type 'integer
+  :safe #'integerp
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-experiment-max-per-target 5
   "Maximum experiments per target.
 Monthly subscription: 5 is optimal (diminishing returns after 3-4)."
   :type 'integer
+  :safe #'integerp
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-experiment-no-improvement-threshold 2
   "Stop after N consecutive no-improvements.
 Monthly subscription: 2 for fail-fast, try more different files."
   :type 'integer
+  :safe #'integerp
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-experiment-use-subagents t

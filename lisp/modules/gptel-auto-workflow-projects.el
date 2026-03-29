@@ -46,7 +46,7 @@ Customize this variable to add more projects.")
 (defun gptel-auto-workflow--get-project-buffer (project-root)
   "Get or create a gptel-agent buffer for PROJECT-ROOT.
 Each project gets its own isolated buffer for executor overlays."
-  (let* ((root (expand-file-name project-root))
+  (let* ((root (file-name-as-directory (expand-file-name project-root)))
          (buf-name (format "*gptel-agent:%s*" (file-name-nondirectory (directory-file-name root))))
          (existing (gethash root gptel-auto-workflow--project-buffers)))
     ;; Check if existing buffer is still live

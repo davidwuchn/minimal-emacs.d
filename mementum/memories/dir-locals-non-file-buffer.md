@@ -2,19 +2,27 @@
 
 **Discovery:** Setting `default-directory` alone does NOT auto-load `.dir-locals.el`. Must call `hack-dir-local-variables-non-file-buffer` explicitly.
 
-**Context:** Multi-project auto-workflow assumed `.dir-locals.el` would load when changing directory. This was wrong - Emacs only auto-loads it when visiting files.
+**Critical:** `default-directory` MUST have a **trailing slash** for `hack-dir-local-variables-non-file-buffer` to work!
 
-**Fix:** Add `(hack-dir-local-variables-non-file-buffer)` after:
-1. Setting buffer-local `default-directory`
-2. Creating project-specific gptel-agent buffers
-3. Before running workflow in `with-current-buffer`
+Without trailing slash:
+- `(file-name-directory "~/.emacs.d")` → `"~/"`
+- `locate-dominating-file` fails to find `.dir-locals.el`
+
+With trailing slash:
+- `(file-name-directory "~/.emacs.d/")` → `"~/.emacs.d/"`
+- `locate-dominating-file` finds `.dir-locals.el`
+
+**Fix:** Use `(file-name-as-directory (expand-file-name dir))` to ensure trailing slash.
+
+**Context:** Multi-project auto-workflow assumed `.dir-locals.el` would load when changing directory. This was wrong - Emacs only auto-loads it when visiting files.
 
 **Pattern:**
 ```elisp
-(with-current-buffer project-buf
-  (setq-local default-directory project-root)
-  (hack-dir-local-variables-non-file-buffer)  ;; <- critical
-  (gptel-auto-workflow-run))
+(let ((root (file-name-as-directory (expand-file-name project-root))))
+  (with-current-buffer buf
+    (setq-local default-directory root)  ;; MUST have trailing slash!
+    (hack-dir-local-variables-non-file-buffer)
+    ...))
 ```
 
 **Related:** gptel-auto-workflow-projects.el, multi-project support
