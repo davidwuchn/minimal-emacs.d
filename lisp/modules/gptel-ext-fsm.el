@@ -43,25 +43,25 @@
 (defun my/gptel--recover-fsm-on-error (_start _end)
   "Force FSM to DONE state if it has error + STOP but is still cycling.
 START and END are the response positions (ignored).
-Only operates on FSMs belonging to the current buffer."
+Only operates on FSMs with a live buffer."
   (when (boundp 'gptel--fsm-last)
     (let* ((fsm (my/gptel--coerce-fsm gptel--fsm-last))
-           (info (and fsm (gptel-fsm-info fsm)))
-           (fsm-buffer (plist-get info :buffer))
-           (error-msg (plist-get info :error))
-           (stop-reason (plist-get info :stop-reason)))
-      (when (and fsm-buffer
-                 (buffer-live-p fsm-buffer)
-                 (eq (current-buffer) fsm-buffer)
-                 error-msg
-                 (eq stop-reason 'STOP)
-                 (not (eq (gptel-fsm-state fsm) 'DONE)))
-        (cl-incf my/gptel--recovery-count)
-        (when (> my/gptel--recovery-count 3)
-          (message "[gptel-fsm] WARNING: %d FSM recoveries this session"
-                   my/gptel--recovery-count))
-        (setf (gptel-fsm-state fsm) 'DONE)
-        (force-mode-line-update t)))))
+           (info (and fsm (gptel-fsm-info fsm))))
+      (when (and info (listp info))
+        (let* ((fsm-buffer (plist-get info :buffer))
+               (error-msg (plist-get info :error))
+               (stop-reason (plist-get info :stop-reason)))
+          (when (and fsm-buffer
+                     (buffer-live-p fsm-buffer)
+                     error-msg
+                     (eq stop-reason 'STOP)
+                     (not (eq (gptel-fsm-state fsm) 'DONE)))
+            (cl-incf my/gptel--recovery-count)
+            (when (> my/gptel--recovery-count 3)
+              (message "[gptel-fsm] WARNING: %d FSM recoveries this session"
+                       my/gptel--recovery-count))
+            (setf (gptel-fsm-state fsm) 'DONE)
+            (force-mode-line-update t)))))))
 
 (add-hook 'gptel-post-response-functions #'my/gptel--recover-fsm-on-error)
 
