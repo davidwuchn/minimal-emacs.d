@@ -173,12 +173,6 @@ Note: qwen3.5-flash (¥0.2) is not available on the Coding Plan subscription."
   ;; Enable ai-code-behaviors integration
   (ai-code-behaviors-agent-shell-setup))
 
-;; Fix corfu-auto-prefix for gptel-agent buffers (same as agent-shell)
-;; # and @ triggers need 1 char prefix for immediate completion
-(add-hook 'gptel-mode-hook
-          (lambda ()
-            (setq-local corfu-auto-prefix 1)))
-
 ;; Load ECA security utilities
 (require 'eca-security)
 
