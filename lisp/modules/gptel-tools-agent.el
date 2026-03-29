@@ -1981,7 +1981,8 @@ Example HYPOTHESES:
 
 (defun gptel-auto-experiment--categorize-error (agent-output)
   "Categorize error from AGENT-OUTPUT and return (CATEGORY . DETAILS).
-Categories: :api-rate-limit :api-error :tool-error :timeout :unknown"
+Categories: :api-rate-limit :api-error :tool-error :timeout :grader-failed :unknown
+Also logs agent-output snippet for debugging when category is :unknown."
   (cond
    ((string-match-p "throttling\\|rate.limit\\|quota exceeded\\|429" agent-output)
     (cons :api-rate-limit "API rate limit exceeded"))
@@ -1995,7 +1996,17 @@ Categories: :api-rate-limit :api-error :tool-error :timeout :unknown"
     (cons :tool-error "Tool execution failed"))
    ((string-match-p "could not finish" agent-output)
     (cons :api-error "API request failed"))
-   (t (cons :unknown "Unknown error"))))
+   ;; Check if output looks valid but grader failed
+   ((string-match-p "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output)
+    (cons :grader-failed "Executor succeeded, grader returned score 0"))
+   ((string-match-p "error\\|failed\\|exception" agent-output)
+    (let ((snippet (substring agent-output 0 (min 200 (length agent-output)))))
+      (message "[auto-experiment] Unknown error snippet: %s" snippet)
+      (cons :unknown (format "Error pattern: %s" snippet))))
+   (t 
+    (let ((snippet (substring agent-output 0 (min 200 (length agent-output)))))
+      (message "[auto-experiment] No error pattern found, snippet: %s" snippet)
+      (cons :unknown "Unknown error")))))
 
 (defun gptel-auto-experiment--should-reduce-experiments-p ()
   "Check if we should reduce experiment count due to API issues."
