@@ -11,63 +11,18 @@
 (require 'ert)
 (require 'cl-lib)
 
-;;; Mock required dependencies
+;;; Load real dependencies first
+(require 'gptel)
+(require 'gptel-request)
+(require 'gptel-ext-fsm)
+(require 'gptel-ext-fsm-utils)
+(require 'gptel-tools-agent)
 
 (defvar gptel--preset nil)
 (defvar gptel-backend nil)
 (defvar gptel-model nil)
 (defvar gptel-agent-request--handlers nil)
 (defvar gptel--fsm-last nil)
-
-(defun gptel--preset-syms (_preset) nil)
-(defun gptel--apply-preset (_preset) nil)
-(defun gptel-make-fsm (&rest _args) nil)
-(defun gptel-request (_prompt &rest _args) nil)
-(defun gptel--update-status (&rest _args) nil)
-(defun gptel-agent--task-overlay (&rest _args) nil)
-
-(defun my/gptel--coerce-fsm (obj)
-  "Mock: coerce to FSM."
-  obj)
-
-(defun my/gptel-make-temp-file (prefix &optional dir-flag suffix)
-  "Mock: create temp file."
-  (make-temp-file prefix dir-flag suffix))
-
-;;; Define the actual functions under test
-
-(defvar my/gptel-subagent-result-limit 4000
-  "Max characters to return inline from a subagent result.")
-
-(defun my/gptel--deliver-subagent-result (callback result)
-  "Deliver RESULT to CALLBACK, truncating large results to a temp file."
-  (if (> (length result) my/gptel-subagent-result-limit)
-      (let* ((temp-file (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt"))
-             (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
-                                (substring result 0 my/gptel-subagent-result-limit)
-                                temp-file)))
-        (with-temp-file temp-file
-          (insert result))
-        (funcall callback trunc-msg))
-    (funcall callback result)))
-
-(defun my/gptel--build-subagent-context (prompt files include-history include-diff &optional origin-buf)
-  "Package context for a subagent payload."
-  (let ((context ""))
-    (when files
-      (let ((file-context ""))
-        (dolist (f files)
-          (if (file-readable-p f)
-              (let ((content (with-temp-buffer
-                               (insert-file-contents f)
-                               (buffer-string))))
-                (setq file-context (concat file-context (format "<file path=\"%s\">\n%s\n</file>\n" f content))))
-            (setq file-context (concat file-context (format "<file path=\"%s\">\n[Error: File not found or not readable]\n</file>\n" f)))))
-        (when (not (string-empty-p file-context))
-          (setq context (concat context "<files>\n" file-context "</files>\n\n")))))
-    (if (string-empty-p context)
-        prompt
-      (concat context "Task:\n" prompt))))
 
 ;;; Tests for my/gptel--deliver-subagent-result
 
@@ -270,3 +225,5 @@
 ;;; Footer
 
 (provide 'test-gptel-tools-agent-integration)
+
+;;; test-gptel-tools-agent-integration.el ends here
