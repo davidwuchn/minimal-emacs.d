@@ -1989,6 +1989,9 @@ Example HYPOTHESES:
 Categories: :api-rate-limit :api-error :tool-error :timeout :grader-failed :unknown
 Also logs agent-output snippet for debugging when category is :unknown."
   (cond
+   ;; Handle nil or empty output
+   ((or (null agent-output) (string= agent-output ""))
+    (cons :grader-failed "Grader returned no output"))
    ((string-match-p "throttling\\|rate.limit\\|quota exceeded\\|429" agent-output)
     (cons :api-rate-limit "API rate limit exceeded"))
    ((string-match-p "hour allocated quota exceeded" agent-output)
@@ -2126,14 +2129,21 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                        (truncate-string-to-width (or agent-output "nil") 500 nil nil "..."))
               (when timeout-timer (cancel-timer timeout-timer))
               (unless finished
-                (gptel-auto-experiment-grade
+(gptel-auto-experiment-grade
                  agent-output
                  (lambda (grade)
                    (let* ((grade-score (plist-get grade :score))
+                          (grade-total (plist-get grade :total))
                           (grade-passed (plist-get grade :passed))
+                          (grade-details (plist-get grade :details))
                           (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
-                      ;; Check if grader passed
-                      (if (not grade-passed)
+                     (message "[auto-exp] Grade result: score=%s/%s passed=%s"
+                              grade-score grade-total grade-passed)
+                     (when (and agent-output (> (length agent-output) 0))
+                       (message "[auto-exp] Agent output preview: %s"
+                                (substring agent-output 0 (min 200 (length agent-output)))))
+                     ;; Check if grader passed
+                     (if (not grade-passed)
                           ;; Grader failed - categorize the error
                           (let* ((error-info (gptel-auto-experiment--categorize-error agent-output))
                                  (error-category (car error-info))
@@ -2193,8 +2203,8 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                                       (message "[auto-experiment] ✓ Retry succeeded")
                                                       (setq finished t)
                                                       (gptel-auto-experiment-decide
-                                                       (list :score baseline :code-quality 0.5)
-                                                       (list :score retry-score :code-quality 0.5 :output retry-output)
+                                                       (list :score baseline :code-quality baseline-code-quality)
+                                                       (list :score retry-score :code-quality code-quality :output retry-output)
                                                        (lambda (decision)
                                                          (let ((keep (plist-get decision :keep)))
                                                            (when keep
@@ -2253,7 +2263,7 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                       (funcall callback exp-result))))
                            (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
                              (gptel-auto-experiment-decide
-                              (list :score baseline :code-quality 0.5)
+                              (list :score baseline :code-quality baseline-code-quality)
                               (list :score score-after :code-quality code-quality :output agent-output)
                               (lambda (decision)
                                 (setq finished t)
@@ -2388,6 +2398,7 @@ This skill teaches dangerous Elisp patterns including cl-return-from requirement
 Uses local state captured in closure for parallel execution safety.
 Adapts max-experiments based on API error rate."
   (let* ((baseline (gptel-auto-experiment-benchmark t))
+         (baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5))
          (original-max gptel-auto-experiment-max-per-target)
          (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
          (threshold gptel-auto-experiment-no-improvement-threshold)
@@ -3322,60 +3333,59 @@ Returns list of matching files."
         (goto-char (point-min))
         (when (re-search-forward (format "^%s: " (regexp-quote query)) nil t)
           (let ((line (buffer-substring-no-properties (point) (line-end-position))))
-            (setq result (split-string line ",\\s-*")))))
-      (or result
-          (progn
-            (message "[mementum] Index miss, using git grep for: %s" query)
-            (let ((default-directory (gptel-auto-workflow--project-root)))
-              ;; SECURITY: Use shell-quote-argument to prevent shell injection
-              (split-string
-               (shell-command-to-string
-                (format "git grep -l %s -- mementum/knowledge/ 2>/dev/null || true"
-                        (shell-quote-argument query)))
-               "\n" t)))))))
-    result))
+            (setq result (split-string line ",\\s-*"))))))
+    (or result
+        (progn
+          (message "[mementum] Index miss, using git grep for: %s" query)
+          (let ((default-directory (gptel-auto-workflow--project-root)))
+            ;; SECURITY: Use shell-quote-argument to prevent shell injection
+            (split-string
+             (shell-command-to-string
+              (format "git grep -l %s -- mementum/knowledge/ 2>/dev/null || true"
+                      (shell-quote-argument query)))
+             "\n" t))))))
 
 (defun gptel-mementum-decay-skills ()
-    "Apply decay to skill files not tested in 4+ weeks.
+  "Apply decay to skill files not tested in 4+ weeks.
 Run weekly via cron."
-    (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
-                                         (gptel-auto-workflow--project-root)))
-           (mutations-dir (expand-file-name "mementum/knowledge/mutations"
-                                            (gptel-auto-workflow--project-root)))
-           (now (float-time))
-           (four-weeks (* 4 7 24 60 60))
-           (decayed 0)
-           (archived 0))
-      (dolist (dir (list skills-dir mutations-dir))
-        (when (file-exists-p dir)
-          (dolist (file (directory-files dir t "\\.md$"))
-            (let ((content (with-temp-buffer
-                             (insert-file-contents file)
-                             (buffer-string))))
-              (when (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content)
-                (let* ((date-str (match-string 1 content))
-                       (last-tested (encode-time 0 0 0 (string-to-number (substring date-str 8 10))
-                                                 (string-to-number (substring date-str 5 7))
-                                                 (string-to-number (substring date-str 0 4))))
-                       (age (- now (float-time last-tested))))
-                  (when (> age four-weeks)
-                    (let ((new-phi (max 0.3 (- (if (string-match "^phi:[[:space:]]*\\([0-9.]+\\)" content)
-                                                   (string-to-number (match-string 1 content))
-                                                 0.5)
-                                               0.02))))
-                      (if (< new-phi 0.3)
-                          (progn
-                            (let ((archive-dir (expand-file-name "archive" dir)))
-                              (make-directory archive-dir t)
-                              (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir))
-                              (cl-incf archived)))
-                        (with-temp-buffer
-                          (insert content)
-                          (goto-char (point-min))
-                          (when (re-search-forward "^phi:[[:space:]]*[0-9.]+" nil t)
-                            (replace-match (format "phi: %.2f" new-phi)))
-                          (write-region (point-min) (point-max) file)
-                          (cl-incf decayed))))))))))))
+  (let* ((skills-dir (expand-file-name "mementum/knowledge/optimization-skills"
+                                       (gptel-auto-workflow--project-root)))
+         (mutations-dir (expand-file-name "mementum/knowledge/mutations"
+                                          (gptel-auto-workflow--project-root)))
+         (now (float-time))
+         (four-weeks (* 4 7 24 60 60))
+         (decayed 0)
+         (archived 0))
+    (dolist (dir (list skills-dir mutations-dir))
+      (when (file-exists-p dir)
+        (dolist (file (directory-files dir t "\\.md$"))
+          (let ((content (with-temp-buffer
+                           (insert-file-contents file)
+                           (buffer-string))))
+            (when (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content)
+              (let* ((date-str (match-string 1 content))
+                     (last-tested (encode-time 0 0 0 (string-to-number (substring date-str 8 10))
+                                               (string-to-number (substring date-str 5 7))
+                                               (string-to-number (substring date-str 0 4))))
+                     (age (- now (float-time last-tested))))
+                (when (> age four-weeks)
+                  (let ((new-phi (max 0.3 (- (if (string-match "^phi:[[:space:]]*\\([0-9.]+\\)" content)
+                                                 (string-to-number (match-string 1 content))
+                                               0.5)
+                                             0.02))))
+                    (if (< new-phi 0.3)
+                        (progn
+                          (let ((archive-dir (expand-file-name "archive" dir)))
+                            (make-directory archive-dir t)
+                            (rename-file file (expand-file-name (file-name-nondirectory file) archive-dir))
+                            (cl-incf archived)))
+                      (with-temp-buffer
+                        (insert content)
+                        (goto-char (point-min))
+                        (when (re-search-forward "^phi:[[:space:]]*[0-9.]+" nil t)
+                          (replace-match (format "phi: %.2f" new-phi)))
+                        (write-region (point-min) (point-max) file)
+                        (cl-incf decayed)))))))))))
     (message "[mementum] Decay: %d decayed, %d archived" decayed archived)))
 
 (defun gptel-mementum-check-synthesis-candidates ()
