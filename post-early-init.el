@@ -22,10 +22,11 @@
                 gptel-auto-experiment-time-budget
                 gptel-auto-experiment-no-improvement-threshold
                 gptel-auto-workflow-projects
-                gptel-auto-workflow--project-root-override
-                gptel-backend
-                gptel-model))
+                gptel-auto-workflow--project-root-override))
   (add-to-list 'safe-local-variable-values (cons var t)))
+
+;; Note: gptel-backend and gptel-model are handled by :safe predicates
+;; in their defcustom definitions, not by safe-local-variable-values
 
 (provide 'post-early-init)
 
