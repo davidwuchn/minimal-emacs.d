@@ -335,88 +335,88 @@ Call periodically to prevent memory growth from unaccessed entries."
 Like upstream `gptel-agent--task' but adds parent-buffer tracking-marker,
 large-result truncation, and result caching."
   (cl-block my/gptel-agent--task-override
-    ;; Validate agent-type exists
-    (let ((agent-config (assoc agent-type gptel-agent--agents)))
+    ;; Validate agent-type exists and get config
+    (let* ((agent-config (assoc agent-type gptel-agent--agents)))
       (unless agent-config
         (error "[nucleus] Unknown agent type: %s. Available: %s"
                agent-type
-               (mapconcat #'car gptel-agent--agents ", "))))
-    ;; Check cache first
-    (let ((cached (my/gptel--subagent-cache-get agent-type prompt)))
-      (when cached
-        (message "[nucleus] Subagent %s cache hit" agent-type)
-        (funcall main-cb cached)
-        (cl-return-from my/gptel-agent--task-override)))
-    ;; Not cached, run the subagent
-    (let* ((preset (nconc (list :include-reasoning nil
-                                :use-tools t
-                                :use-context nil
-                                :stream my/gptel-subagent-stream)
-                          (cdr agent-config)))
-           (syms (cons 'gptel--preset (gptel--preset-syms preset)))
-           (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
-      (cl-progv syms vals
-        (gptel--apply-preset preset)
-        (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
-               (info (and parent-fsm (gptel-fsm-info parent-fsm)))
-               (parent-buf (or (when (buffer-live-p (plist-get info :buffer))
-                                 (plist-get info :buffer))
-                               (current-buffer)))
-               (where (or (let ((tm (plist-get info :tracking-marker)))
-                            (and (markerp tm) (marker-position tm) tm))
-                          (let ((pos (plist-get info :position)))
-                            (and (markerp pos) (marker-position pos) pos))
-                          (with-current-buffer parent-buf (point-marker))))
-               (tracking-marker (let ((m (copy-marker where t)))
-                                  (set-marker m (marker-position where) parent-buf)
-                                  m))
-               (partial (format "%s result for task: %s\n\n"
-                                (capitalize agent-type) description)))
-          (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
-          (gptel-request prompt
-            :context (gptel-agent--task-overlay where agent-type description)
-            :fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)
-            :position tracking-marker
-            :buffer parent-buf
-            :in-place t
-            :callback
-            (lambda (resp info)
-              (let ((ov (plist-get info :context)))
-                (pcase resp
-                  ('nil
-                   (when (overlayp ov) (delete-overlay ov))
-                   (let* ((error-info (plist-get info :error))
-                          (error-msg (when (listp error-info) (plist-get error-info :message))))
-                     (if (and error-msg
-                              (stringp error-msg)
-                              (string-match-p "1013\\|server is initializing" error-msg))
-                         ;; Server is initializing, default to auto-approve with warning
-                         (funcall main-cb
-                                  (format "Warning: Reviewer agent not available (server initializing). Auto-approving changes.\n\nError details: %S"
-                                          error-info))
-                       ;; Other error, report it
-                       (funcall main-cb
-                                (format "Error: Task %s could not finish task \"%s\". \n\nError details: %S"
-                                        agent-type description error-info)))))
-                  (`(tool-call . ,calls)
-                   (unless (plist-get info :tracking-marker)
-                     (plist-put info :tracking-marker tracking-marker))
-                   (gptel--display-tool-calls calls info))
-                  (`(tool-result . ,_results)) ;; FSM handles transition
-                  ((pred stringp)
-                   (setq partial (concat partial resp))
-                   (unless (plist-get info :tool-use)
+               (mapconcat #'car gptel-agent--agents ", ")))
+      ;; Check cache first
+      (let ((cached (my/gptel--subagent-cache-get agent-type prompt)))
+        (when cached
+          (message "[nucleus] Subagent %s cache hit" agent-type)
+          (funcall main-cb cached)
+          (cl-return-from my/gptel-agent--task-override)))
+      ;; Not cached, run the subagent
+      (let* ((preset (nconc (list :include-reasoning nil
+                                  :use-tools t
+                                  :use-context nil
+                                  :stream my/gptel-subagent-stream)
+                            (cdr agent-config)))
+             (syms (cons 'gptel--preset (gptel--preset-syms preset)))
+             (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
+        (cl-progv syms vals
+          (gptel--apply-preset preset)
+          (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
+                 (info (and parent-fsm (gptel-fsm-info parent-fsm)))
+                 (parent-buf (or (when (buffer-live-p (plist-get info :buffer))
+                                   (plist-get info :buffer))
+                                 (current-buffer)))
+                 (where (or (let ((tm (plist-get info :tracking-marker)))
+                              (and (markerp tm) (marker-position tm) tm))
+                            (let ((pos (plist-get info :position)))
+                              (and (markerp pos) (marker-position pos) pos))
+                            (with-current-buffer parent-buf (point-marker))))
+                 (tracking-marker (let ((m (copy-marker where t)))
+                                    (set-marker m (marker-position where) parent-buf)
+                                    m))
+                 (partial (format "%s result for task: %s\n\n"
+                                  (capitalize agent-type) description)))
+            (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
+            (gptel-request prompt
+              :context (gptel-agent--task-overlay where agent-type description)
+              :fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)
+              :position tracking-marker
+              :buffer parent-buf
+              :in-place t
+              :callback
+              (lambda (resp info)
+                (let ((ov (plist-get info :context)))
+                  (pcase resp
+                    ('nil
                      (when (overlayp ov) (delete-overlay ov))
-                     (when-let* ((transformer (plist-get info :transformer)))
-                       (setq partial (funcall transformer partial)))
-                     ;; Cache the result before delivering
-                     (my/gptel--subagent-cache-put agent-type prompt partial)
-                     (my/gptel--deliver-subagent-result main-cb partial)))
-                  ('abort
-                   (when (overlayp ov) (delete-overlay ov))
-                   (funcall main-cb
-                            (format "Error: Task \"%s\" was aborted by the user. \n%s could not finish."
-                                    description agent-type))))))))))))
+                     (let* ((error-info (plist-get info :error))
+                            (error-msg (when (listp error-info) (plist-get error-info :message))))
+                       (if (and error-msg
+                                (stringp error-msg)
+                                (string-match-p "1013\\|server is initializing" error-msg))
+                           ;; Server is initializing, default to auto-approve with warning
+                           (funcall main-cb
+                                    (format "Warning: Reviewer agent not available (server initializing). Auto-approving changes.\n\nError details: %S"
+                                            error-info))
+                         ;; Other error, report it
+                         (funcall main-cb
+                                  (format "Error: Task %s could not finish task \"%s\". \n\nError details: %S"
+                                          agent-type description error-info)))))
+                    (`(tool-call . ,calls)
+                     (unless (plist-get info :tracking-marker)
+                       (plist-put info :tracking-marker tracking-marker))
+                     (gptel--display-tool-calls calls info))
+                    (`(tool-result . ,_results)) ;; FSM handles transition
+                    ((pred stringp)
+                     (setq partial (concat partial resp))
+                     (unless (plist-get info :tool-use)
+                       (when (overlayp ov) (delete-overlay ov))
+                       (when-let* ((transformer (plist-get info :transformer)))
+                         (setq partial (funcall transformer partial)))
+                       ;; Cache the result before delivering
+                       (my/gptel--subagent-cache-put agent-type prompt partial)
+                       (my/gptel--deliver-subagent-result main-cb partial)))
+                    ('abort
+                     (when (overlayp ov) (delete-overlay ov))
+                     (funcall main-cb
+                              (format "Error: Task \"%s\" was aborted by the user. \n%s could not finish."
+                                      description agent-type)))))))))))))
 
 
 (defun my/gptel--deliver-subagent-result (callback result)
