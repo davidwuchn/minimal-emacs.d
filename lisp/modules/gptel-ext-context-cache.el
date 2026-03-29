@@ -399,7 +399,7 @@ Image tokens are counted from `gptel-context' if available."
 
 (defun my/gptel--seed-cache-from-gptel-model-tables ()
   "Seed context-window cache from gptel's built-in model tables."
-  (dolist (var '(gptel--gemini-models gptel--gh-models))
+  (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
     (when (boundp var)
       (dolist (entry (symbol-value var))
         (when (and (consp entry) (symbolp (car entry)))
