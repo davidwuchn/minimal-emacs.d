@@ -978,6 +978,9 @@ If branch exists locally, deletes it first to avoid conflicts."
         (progn
           (make-directory (file-name-directory worktree-dir) t)
           (let ((default-directory proj-root))
+            ;; Remove existing worktree if present (stale from previous run)
+            (when (file-exists-p worktree-dir)
+              (call-process "git" nil nil nil "worktree" "remove" "-f" worktree-dir))
             ;; Delete branch if it exists locally (stale from previous run)
             (call-process "git" nil nil nil "branch" "-D" branch)
             ;; Create worktree with new branch

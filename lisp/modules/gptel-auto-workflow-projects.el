@@ -209,7 +209,9 @@ Otherwise, passes through to original function (no error)."
       ;; Route to per-project buffer (only in auto-workflow context)
       (let* ((default-directory project-root)
              (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
-             (info (and parent-fsm (gptel-fsm-info parent-fsm)))
+             (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
+                       ;; Create minimal info if no parent FSM (e.g., started from scratch)
+                       (list :buffer project-buf :position (with-current-buffer project-buf (point-marker)))))
              ;; Save original current-buffer before overriding
              (orig-current-buffer (symbol-function 'current-buffer))
              ;; Override the buffer in FSM info to use project buffer
