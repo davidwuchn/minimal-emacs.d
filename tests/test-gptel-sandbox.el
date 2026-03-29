@@ -88,12 +88,14 @@ Returns error message string on failure, nil on success."
 (ert-deftest sandbox/check-tool/allows-readonly-tool-in-readonly-mode ()
   "Read tool should be allowed in readonly mode."
   (let ((gptel-sandbox-profile 'readonly)
+        (gptel-confirm-tool-calls nil)
         (tool (test-gptel-tool-create :name "Read" :confirm nil)))
     (should (null (test-sandbox--check-tool tool '("/path"))))))
 
 (ert-deftest sandbox/check-tool/allows-grep-in-readonly-mode ()
   "Grep tool should be allowed in readonly mode."
   (let ((gptel-sandbox-profile 'readonly)
+        (gptel-confirm-tool-calls nil)
         (tool (test-gptel-tool-create :name "Grep" :confirm nil)))
     (should (null (test-sandbox--check-tool tool '("pattern" "/path"))))))
 

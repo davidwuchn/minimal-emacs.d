@@ -17,7 +17,7 @@
 (defvar gptel--tool-preview-alist nil)
 (defvar gptel--request-alist nil)
 (defvar gptel--fsm-last nil)
-(defvar gptel-backend 'stub-backend)
+(defvar gptel-backend nil)  ; Will be set after gptel is loaded
 (defvar my/gptel-permitted-tools (make-hash-table :test 'equal))
 (defvar test-tool-confirm--accepted nil)
 (defvar test-tool-confirm--rejected nil)
@@ -85,10 +85,14 @@ Search backward for PROPERTY equal to VALUE, optionally filtering with PREDICATE
   "Remember TOOL-NAME as permitted."
   (puthash tool-name t my/gptel-permitted-tools))
 
-(provide 'gptel)
+;; NOTE: This file provides stubs but does not provide 'gptel to allow
+;; other test files to load the real gptel module.
 
 (load-file (expand-file-name "lisp/modules/gptel-ext-tool-confirm.el"
                              (expand-file-name ".." (file-name-directory load-file-name))))
+
+;; Initialize gptel-backend after gptel is loaded
+(setq gptel-backend (gptel--make-backend :name "test"))
 
 (defun test-tool-confirm--programmatic-overlay ()
   "Return the active Programmatic confirmation overlay in current buffer."
@@ -97,7 +101,8 @@ Search backward for PROPERTY equal to VALUE, optionally filtering with PREDICATE
 
 (ert-deftest tool-confirm/programmatic-minibuffer-callback-accepts ()
   (let ((approved nil)
-        (test-tool-confirm--accepted nil))
+        (test-tool-confirm--accepted nil)
+        (gptel-backend (gptel--make-backend :name "test")))
     (cl-letf (((symbol-function 'map-y-or-n-p)
                (lambda (_prompt-fn action tool-calls &rest _)
                  (funcall action (car tool-calls)))))
@@ -110,7 +115,8 @@ Search backward for PROPERTY equal to VALUE, optionally filtering with PREDICATE
 
 (ert-deftest tool-confirm/programmatic-overlay-accept-callbacks ()
   (let ((approved nil)
-        (test-tool-confirm--accepted nil))
+        (test-tool-confirm--accepted nil)
+        (gptel-backend (gptel--make-backend :name "test")))
     (with-temp-buffer
       (insert "assistant response")
       (add-text-properties (point-min) (point-max) '(gptel response))
@@ -131,7 +137,8 @@ Search backward for PROPERTY equal to VALUE, optionally filtering with PREDICATE
 
 (ert-deftest tool-confirm/programmatic-overlay-reject-callbacks ()
   (let ((approved :unset)
-        (test-tool-confirm--rejected nil))
+        (test-tool-confirm--rejected nil)
+        (gptel-backend (gptel--make-backend :name "test")))
     (with-temp-buffer
       (insert "assistant response")
       (add-text-properties (point-min) (point-max) '(gptel response))
@@ -151,7 +158,8 @@ Search backward for PROPERTY equal to VALUE, optionally filtering with PREDICATE
 
 (ert-deftest tool-confirm/programmatic-aggregate-overlay-accept-callbacks ()
   (let ((approved nil)
-        (test-tool-confirm--accepted nil))
+        (test-tool-confirm--accepted nil)
+        (gptel-backend (gptel--make-backend :name "test")))
     (with-temp-buffer
       (insert "assistant response")
       (add-text-properties (point-min) (point-max) '(gptel response))

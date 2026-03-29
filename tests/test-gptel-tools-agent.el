@@ -41,9 +41,6 @@ INCLUDE-DIFF injects git diff."
         :include-diff include-diff
         :status "mocked"))
 
-;; Provide gptel-agent-tools to satisfy dependencies
-(provide 'gptel-agent-tools)
-
 ;;; RunAgent Tests
 
 (ert-deftest test-gptel-agent-runagent-valid-agent-names ()

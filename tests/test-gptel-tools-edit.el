@@ -58,10 +58,8 @@
 
 (defun gptel-make-tool (&rest args) (plist-get args :name))
 
-(provide 'gptel)
 (provide 'gptel-ext-core)
 (provide 'gptel-ext-fsm-utils)
-(provide 'gptel-agent-tools)
 
 ;;; Load modules under test
 

@@ -50,7 +50,6 @@
         (my/gptel--coerce-fsm (cdr object))))
    (t nil)))
 
-(provide 'gptel)
 (provide 'gptel-ext-core)
 (provide 'gptel-ext-fsm-utils)
 

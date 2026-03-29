@@ -51,10 +51,8 @@
 (defun project-current (&optional _prompt) nil)
 (defun project-root (_proj) default-directory)
 
-(provide 'gptel)
 (provide 'gptel-ext-core)
 (provide 'gptel-ext-fsm-utils)
-(provide 'gptel-agent-tools)
 (provide 'project)
 
 ;;; Load modules under test
