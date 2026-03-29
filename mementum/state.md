@@ -2,15 +2,19 @@
 
 > Last session: 2026-03-29 22:00
 
-## Total Improvements: 140+ Real Code Fixes
+## Total Improvements: 152+ Real Code Fixes
 
-515+ commits since March 25, 2026.
+520+ commits since March 25, 2026.
 
 ### Recent Fixes (Last 35)
 
 | # | File | Fix |
 |---|------|------|
-| 148 | gptel-auto-workflow-projects.el | Route task overlays to correct buffer (not scratch) |
+| 152 | gptel-tools-agent.el | Improve error categorization (detect grader failures vs real errors) |
+| 151 | gptel-tools-agent.el | Safer staging branch sync (use cond) |
+| 150 | cache-exp1, cache-exp2 | Merged: context window normalization + cache seeding |
+| 149 | tools-exp2 | Merged: remove redundant conditional in nucleus-tools--validate-array |
+| 148 | sanitize-exp2 | Merged: fix tool lookup bug (gptel-get-tool without args) |
 | 147 | gptel-skill-benchmark.el | Fix: use executor agent (not skill name as agent) |
 | 146 | benchmarks/skill-tests/elisp-expert.json | Benchmark test definitions (5 cases for dangerous patterns) |
 | 145 | assistant/agents/*.md | {{SKILLS}} template for autonomous skill discovery |
@@ -54,6 +58,7 @@
 λ {{SKILLS}}-template. Inject available_skills into agent system prompt (gptel-agent auto-expands)
 λ agent-vs-skill. gptel-agent--task expects agent name (executor), NOT skill name (elisp-expert)
 λ overlay-buffer-context. make-overlay(nil) uses current-buffer, advice needed for async callbacks
+λ grader-passed. :passed = (score = total), not perfect ≠ error
 ```
 
 ---
@@ -108,11 +113,41 @@
 
 ## Current Status
 
-- **Main branch**: `2466510`
-- **Staging branch**: `1e44504` (synced with main)
+- **Main branch**: `23202a0`
+- **Staging branch**: `93acfd0` (has behaviors-exp3 merge)
 - **Emacs daemon**: Running
 - **Skill elisp-expert**: ✓ Created, loaded, tested
-- **Auto-workflow**: Running on staging, some failures (unknown errors)
+
+### Auto-Workflow Results Summary
+
+**4 Useful Fixes Merged to Main:**
+| Source | Target | Fix |
+|--------|--------|-----|
+| sanitize-exp2 | gptel-ext-tool-sanitize.el | Tool lookup bug (gptel-get-tool without args) |
+| tools-exp2 | nucleus-tools.el | Remove redundant conditional |
+| cache-exp1 | gptel-ext-context-cache.el | Context window normalization (5000→1000) |
+| cache-exp2 | gptel-ext-context-cache.el | Seed OpenAI/Anthropic models |
+
+**Kept in Staging:**
+- behaviors-exp3: Params validation in ai-code--reconstruct-prompt-vec
+
+### Failure Investigation
+
+**Issue**: 10 "Unknown error" in failure-analysis.log
+
+**Root Cause**: Grader returns `:passed nil` when score < total (not perfect score).
+The error categorization treated all `:passed nil` as errors.
+
+**Fix**: Added `:grader-failed` category - detect when executor output looks valid
+but grader returns score 0. Patterns checked:
+- `^Executor result` - valid executor output
+- `^✓` - success marker
+- `^**HYPOTHESIS` - hypothesis block
+
+**Pattern**:
+```
+λ grader-failed ≠ api-error. Executor success + grader score 0 = grader issue
+```
 
 ### Bugs Fixed Today
 
