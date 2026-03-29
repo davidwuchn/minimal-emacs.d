@@ -1956,6 +1956,8 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
          ;; CRITICAL: Set default-directory to worktree so all subagents
          ;; operate in the correct context. Each worktree = one session.
          (default-directory (or worktree default-directory))
+         ;; Disable preview for headless auto-workflow
+         (gptel-tools-preview-enabled nil)
          (start-time (float-time))
          (timeout-timer nil)
          (finished nil))
