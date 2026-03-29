@@ -310,9 +310,11 @@ use floats (e.g. 8.192 for 8192 tokens).  OpenRouter's `context_length' is in
 raw tokens."
   (cond
    ((not (numberp n)) nil)
-   ;; Heuristic: values under 5000 represent "thousands of tokens".
-   ;; Ex: 128 => 128k tokens, 8.192 => 8192 tokens.
-   ((< n 5000) (round (* n 1000)))
+   ;; Float values (e.g., 8.192) represent thousands - convert to tokens
+   ((floatp n) (round (* n 1000)))
+   ;; Small integers (< 1000) likely represent thousands (e.g., 128 -> 128k)
+   ((< n 1000) (round (* n 1000)))
+   ;; Larger values are already in raw tokens
    (t (round n))))
 
 (defun my/gptel--estimate-text-tokens (chars)
@@ -397,7 +399,7 @@ Image tokens are counted from `gptel-context' if available."
 
 (defun my/gptel--seed-cache-from-gptel-model-tables ()
   "Seed context-window cache from gptel's built-in model tables."
-  (dolist (var '(gptel--gemini-models gptel--gh-models))
+  (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
     (when (boundp var)
       (dolist (entry (symbol-value var))
         (when (and (consp entry) (symbolp (car entry)))

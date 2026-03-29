@@ -93,19 +93,25 @@ RunAgent was registered, leaving it out of the buffer's tool list."
                  (or (ignore-errors (gptel-get-tool name))
                      ;; Try fuzzy match globally
                      (when my/gptel-tool-repair-enabled
-                       (cl-find-if
-                        (lambda (ts)
-                          (string= (my/gptel--normalize-tool-name name)
-                                   (my/gptel--normalize-tool-name 
-                                    (gptel-tool-name ts))))
-                        (ignore-errors (gptel-get-tool))))))
-            (let* ((global-tool (or (ignore-errors (gptel-get-tool name))
+                       (let ((all-tools (when (boundp 'gptel--known-tools)
+                                          (apply #'append
+                                                 (mapcar #'cdr gptel--known-tools)))))
+                         (cl-find-if
+                          (lambda (ts)
+                            (string= (my/gptel--normalize-tool-name name)
+                                     (my/gptel--normalize-tool-name 
+                                      (gptel-tool-name ts))))
+                          all-tools)))))
+            (let* ((all-tools (when (boundp 'gptel--known-tools)
+                                (apply #'append
+                                       (mapcar #'cdr gptel--known-tools))))
+                   (global-tool (or (ignore-errors (gptel-get-tool name))
                                     (cl-find-if
                                      (lambda (ts)
                                        (string= (my/gptel--normalize-tool-name name)
                                                 (my/gptel--normalize-tool-name 
                                                  (gptel-tool-name ts))))
-                                     (ignore-errors (gptel-get-tool)))))
+                                     all-tools)))
                    (correct-name (gptel-tool-name global-tool))
                    (new-tools (append tools (list global-tool))))
               ;; Repair name if fuzzy matched

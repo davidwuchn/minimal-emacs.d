@@ -2,15 +2,21 @@
 
 > Last session: 2026-03-29 22:00
 
-## Total Improvements: 141+ Real Code Fixes
+## Total Improvements: 154+ Real Code Fixes
 
-516+ commits since March 25, 2026.
+522+ commits since March 25, 2026.
 
 ### Recent Fixes (Last 35)
 
 | # | File | Fix |
 |---|------|------|
-| 148 | ai-code-behaviors.el | Add params validation in ai-code--reconstruct-prompt-vec (prevent nil map-elt error) |
+| 154 | gptel-tools-agent.el | Disable uniquify during headless workflow (prevents .emacs.d/ prefix) |
+| 153 | gptel-tools-agent.el | Disable auto-revert during headless workflow (prevents buffer reverts) |
+| 152 | gptel-tools-agent.el | Improve error categorization (detect grader failures vs real errors) |
+| 151 | gptel-tools-agent.el | Safer staging branch sync (use cond) |
+| 150 | cache-exp1, cache-exp2 | Merged: context window normalization + cache seeding |
+| 149 | tools-exp2 | Merged: remove redundant conditional in nucleus-tools--validate-array |
+| 148 | sanitize-exp2 | Merged: fix tool lookup bug (gptel-get-tool without args) |
 | 147 | gptel-skill-benchmark.el | Fix: use executor agent (not skill name as agent) |
 | 146 | benchmarks/skill-tests/elisp-expert.json | Benchmark test definitions (5 cases for dangerous patterns) |
 | 145 | assistant/agents/*.md | {{SKILLS}} template for autonomous skill discovery |
@@ -53,6 +59,10 @@
 λ gptel-agent-skill-dirs. ~/.emacs.d/assistant/skills/ first, then ~/.opencode/skill/, etc.
 λ {{SKILLS}}-template. Inject available_skills into agent system prompt (gptel-agent auto-expands)
 λ agent-vs-skill. gptel-agent--task expects agent name (executor), NOT skill name (elisp-expert)
+λ overlay-buffer-context. make-overlay(nil) uses current-buffer, advice needed for async callbacks
+λ grader-passed. :passed = (score = total), not perfect ≠ error
+λ auto-revert-conflict. Worktree file writes trigger revert on main buffer → disable during workflow
+λ uniquify-buffer-names. Multiple same-name files get prefixes like .emacs.d/ → disable during workflow
 ```
 
 ---
@@ -107,28 +117,48 @@
 
 ## Current Status
 
-- **Main branch**: `63e0a0e`
-- **Staging branch**: Needs merge from main
+- **Main branch**: `23202a0`
+- **Staging branch**: `93acfd0` (has behaviors-exp3 merge)
 - **Emacs daemon**: Running
 - **Skill elisp-expert**: ✓ Created, loaded, tested
-- **Benchmark**: ✓ Fixed (agent-vs-skill bug), single test 83% pass rate
-- **Auto-workflow**: Ready to use skill when editing .el files
 
-### Bug Fixed
+### Auto-Workflow Results Summary
 
-**Issue**: 5 stuck "Elisp-Expert" task overlays waiting
-**Root Cause**: `gptel-skill-benchmark.el` used skill name "elisp-expert" as agent name
-**Fix**: Use "executor" agent (which loads skill via Skill tool)
+**4 Useful Fixes Merged to Main:**
+| Source | Target | Fix |
+|--------|--------|-----|
+| sanitize-exp2 | gptel-ext-tool-sanitize.el | Tool lookup bug (gptel-get-tool without args) |
+| tools-exp2 | nucleus-tools.el | Remove redundant conditional |
+| cache-exp1 | gptel-ext-context-cache.el | Context window normalization (5000→1000) |
+| cache-exp2 | gptel-ext-context-cache.el | Seed OpenAI/Anthropic models |
 
-### Benchmark Result (Single Test)
+**Kept in Staging:**
+- behaviors-exp3: Params validation in ai-code--reconstruct-prompt-vec
 
+### Failure Investigation
+
+**Issue**: 10 "Unknown error" in failure-analysis.log
+
+**Root Cause**: Grader returns `:passed nil` when score < total (not perfect score).
+The error categorization treated all `:passed nil` as errors.
+
+**Fix**: Added `:grader-failed` category - detect when executor output looks valid
+but grader returns score 0. Patterns checked:
+- `^Executor result` - valid executor output
+- `^✓` - success marker
+- `^**HYPOTHESIS` - hypothesis block
+
+**Pattern**:
 ```
-Test: elisp-001 (cl_return_from_guard)
-- Executor: ✓ Generated correct cl-block + cl-return-from patterns
-- Grader: 5/6 behaviors passed (83%)
-- Byte-compile: ✓ Mentioned verification
-- Eight Keys: 40% overall
+λ grader-failed ≠ api-error. Executor success + grader score 0 = grader issue
 ```
+
+### Bugs Fixed Today
+
+| Issue | Root Cause | Fix |
+|-------|------------|-----|
+| 5 stuck "Elisp-Expert" overlays | skill name used as agent name | Use "executor" agent |
+| Overlays in *scratch* | make-overlay uses current buffer | Advice on task-overlay to route to target buffer |
 
 ---
 
@@ -144,3 +174,4 @@ Test: elisp-001 (cl_return_from_guard)
 8. **gptel-agent Skill** - gptel-agent has own Skill tool, skills go in `gptel-agent-skill-dirs` (~/.emacs.d/assistant/skills/ first)
 9. **Skill autonomy** - Parent instructs "use Skill", subagent loads autonomously (not injection from parent)
 10. **Agent vs Skill** - `gptel-agent--task` expects agent name (e.g. "executor"), NOT skill name - skills are loaded BY agents
+11. **Async overlay context** - Overlays created in callbacks lose buffer context, need advice on `gptel-agent--task-overlay` to route

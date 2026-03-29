@@ -1090,15 +1090,15 @@ SAFETY: Never touches main branch."
     (message "[auto-workflow] Syncing staging from main")
     (condition-case err
         (progn
-          (if (gptel-auto-workflow--staging-branch-exists-p)
-              (progn
-                (magit-git-success "checkout" staging)
-                (magit-git-success "reset" "--hard" "main")
-                (magit-git-success "push" "--force" "origin" staging))
-            (progn
-              (message "[auto-workflow] Creating staging branch from main")
-              (magit-git-success "branch" staging "main")
-              (magit-git-success "push" "-u" "origin" staging)))
+          (cond
+           ((gptel-auto-workflow--staging-branch-exists-p)
+            (magit-git-success "checkout" staging)
+            (magit-git-success "reset" "--hard" "main")
+            (magit-git-success "push" "--force" "origin" staging))
+           (t
+            (message "[auto-workflow] Creating staging branch from main")
+            (magit-git-success "branch" staging "main")
+            (magit-git-success "push" "-u" "origin" staging)))
           (message "[auto-workflow] ✓ Staging synced from main")
           t)
       (error
@@ -1981,7 +1981,8 @@ Example HYPOTHESES:
 
 (defun gptel-auto-experiment--categorize-error (agent-output)
   "Categorize error from AGENT-OUTPUT and return (CATEGORY . DETAILS).
-Categories: :api-rate-limit :api-error :tool-error :timeout :unknown"
+Categories: :api-rate-limit :api-error :tool-error :timeout :grader-failed :unknown
+Also logs agent-output snippet for debugging when category is :unknown."
   (cond
    ((string-match-p "throttling\\|rate.limit\\|quota exceeded\\|429" agent-output)
     (cons :api-rate-limit "API rate limit exceeded"))
@@ -1995,7 +1996,17 @@ Categories: :api-rate-limit :api-error :tool-error :timeout :unknown"
     (cons :tool-error "Tool execution failed"))
    ((string-match-p "could not finish" agent-output)
     (cons :api-error "API request failed"))
-   (t (cons :unknown "Unknown error"))))
+   ;; Check if output looks valid but grader failed
+   ((string-match-p "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output)
+    (cons :grader-failed "Executor succeeded, grader returned score 0"))
+   ((string-match-p "error\\|failed\\|exception" agent-output)
+    (let ((snippet (substring agent-output 0 (min 200 (length agent-output)))))
+      (message "[auto-experiment] Unknown error snippet: %s" snippet)
+      (cons :unknown (format "Error pattern: %s" snippet))))
+   (t 
+    (let ((snippet (substring agent-output 0 (min 200 (length agent-output)))))
+      (message "[auto-experiment] No error pattern found, snippet: %s" snippet)
+      (cons :unknown "Unknown error")))))
 
 (defun gptel-auto-experiment--should-reduce-experiments-p ()
   "Check if we should reduce experiment count due to API issues."
@@ -2327,6 +2338,12 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--headless nil
   "Flag to suppress interactive prompts during headless operation.")
 
+(defvar gptel-auto-workflow--auto-revert-was-enabled nil
+  "Remember if global-auto-revert-mode was enabled before headless operation.")
+
+(defvar gptel-auto-workflow--uniquify-style nil
+  "Remember uniquify-buffer-name-style before headless operation.")
+
 (defvar gptel-auto-workflow--stats nil
   "Current run statistics: (:kept :total :phase).")
 
@@ -2366,8 +2383,20 @@ Returns t to allow killing modified buffers without asking."
   (not gptel-auto-workflow--headless))
 
 (defun gptel-auto-workflow--enable-headless-suppression ()
-  "Enable suppression of interactive prompts for headless operation."
+  "Enable suppression of interactive prompts for headless operation.
+Also disables auto-revert and uniquify to prevent buffer issues when worktree files change."
   (setq gptel-auto-workflow--headless t)
+  ;; Remember and disable auto-revert
+  (setq gptel-auto-workflow--auto-revert-was-enabled 
+        (bound-and-true-p global-auto-revert-mode))
+  (when gptel-auto-workflow--auto-revert-was-enabled
+    (global-auto-revert-mode -1))
+  ;; Remember and disable uniquify (prevents ".emacs.d/" prefix in buffer names)
+  (setq gptel-auto-workflow--uniquify-style 
+        (when (boundp 'uniquify-buffer-name-style)
+          uniquify-buffer-name-style))
+  (when (boundp 'uniquify-buffer-name-style)
+    (setq uniquify-buffer-name-style nil))
   (advice-add 'ask-user-about-supersession-threat :around 
               #'gptel-auto-workflow--suppress-ask-user-about-supersession-threat)
   (advice-add 'yes-or-no-p :around 
@@ -2379,8 +2408,17 @@ Returns t to allow killing modified buffers without asking."
             #'gptel-auto-workflow--suppress-kill-buffer-query))
 
 (defun gptel-auto-workflow--disable-headless-suppression ()
-  "Disable suppression of interactive prompts."
+  "Disable suppression of interactive prompts.
+Restores auto-revert and uniquify if they were enabled before headless operation."
   (setq gptel-auto-workflow--headless nil)
+  ;; Restore auto-revert
+  (when (and (boundp 'gptel-auto-workflow--auto-revert-was-enabled)
+             gptel-auto-workflow--auto-revert-was-enabled)
+    (global-auto-revert-mode 1))
+  ;; Restore uniquify
+  (when (and (boundp 'gptel-auto-workflow--uniquify-style)
+             gptel-auto-workflow--uniquify-style)
+    (setq uniquify-buffer-name-style gptel-auto-workflow--uniquify-style))
   (advice-remove 'ask-user-about-supersession-threat 
                  #'gptel-auto-workflow--suppress-ask-user-about-supersession-threat)
   (advice-remove 'yes-or-no-p 
