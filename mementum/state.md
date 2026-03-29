@@ -2,14 +2,15 @@
 
 > Last session: 2026-03-29 22:00
 
-## Total Improvements: 140+ Real Code Fixes
+## Total Improvements: 141+ Real Code Fixes
 
-515+ commits since March 25, 2026.
+516+ commits since March 25, 2026.
 
 ### Recent Fixes (Last 35)
 
 | # | File | Fix |
 |---|------|------|
+| 148 | ai-code-behaviors.el | Add params validation in ai-code--reconstruct-prompt-vec (prevent nil map-elt error) |
 | 147 | gptel-skill-benchmark.el | Fix: use executor agent (not skill name as agent) |
 | 146 | benchmarks/skill-tests/elisp-expert.json | Benchmark test definitions (5 cases for dangerous patterns) |
 | 145 | assistant/agents/*.md | {{SKILLS}} template for autonomous skill discovery |
