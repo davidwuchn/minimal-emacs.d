@@ -52,6 +52,15 @@ Each project gets its own isolated buffer for executor overlays."
             (condition-case err
                 (gptel-mode)
               (error (message "[auto-workflow] Could not enable gptel-mode: %s" err))))
+          ;; Apply nucleus preset for full agent capabilities
+          (when (fboundp 'gptel--apply-preset)
+            (condition-case err
+                (progn
+                  (gptel--apply-preset
+                   'gptel-agent
+                   (lambda (sym val) (set (make-local-variable sym) val)))
+                  (message "[auto-workflow] Applied nucleus-gptel-agent preset to %s" buf-name))
+              (error (message "[auto-workflow] Could not apply nucleus preset: %s" err))))
           ;; Set project context
           (setq-local default-directory root)
           (when (boundp 'gptel-auto-workflow--project-root-override)
