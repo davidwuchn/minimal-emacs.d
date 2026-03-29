@@ -17,18 +17,25 @@
 
 ;; These variables are used by auto-workflow in .dir-locals.el files
 ;; Marking them as safe prevents the prompt when opening project files
-(dolist (var '(gptel-auto-workflow-targets
-                gptel-auto-experiment-max-per-target
-                gptel-auto-experiment-time-budget
-                gptel-auto-experiment-no-improvement-threshold
-                gptel-auto-workflow-projects
-                gptel-auto-workflow--project-root-override))
-  (add-to-list 'safe-local-variable-values (cons var t)))
-
-;; Explicitly mark specific values from .dir-locals.el as safe
-;; This prevents the "may not be safe" prompt
+;; NOTE: For complex types (lists), we must explicitly mark the EXACT values
+(add-to-list 'safe-local-variable-values
+             '(gptel-auto-workflow-targets
+               "lisp/modules/gptel-tools-agent.el"
+               "lisp/modules/gptel-auto-workflow-strategic.el"
+               "lisp/modules/gptel-benchmark-core.el"))
+(add-to-list 'safe-local-variable-values
+             '(gptel-auto-experiment-max-per-target . 5))
+(add-to-list 'safe-local-variable-values
+             '(gptel-auto-experiment-time-budget . 1200))
+(add-to-list 'safe-local-variable-values
+             '(gptel-auto-experiment-no-improvement-threshold . 3))
 (add-to-list 'safe-local-variable-values
              '(gptel-model . qwen3.5-plus))
+
+;; Mark variable names as safe (for future flexibility)
+(dolist (var '(gptel-auto-workflow-projects
+                gptel-auto-workflow--project-root-override))
+  (add-to-list 'safe-local-variable-values (cons var t)))
 
 (provide 'post-early-init)
 
