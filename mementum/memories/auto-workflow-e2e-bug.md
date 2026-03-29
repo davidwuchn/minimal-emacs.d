@@ -9,15 +9,16 @@
 - Error: `gptel callback error: (error "Selecting deleted buffer")`
 
 **Root Cause:**
-The `gptel-auto-workflow--advice-task-override` advice tries to access the project buffer after it's been killed. The buffer management in multi-project mode needs fixing.
+The `gptel-auto-workflow--advice-task-override` advice overrides `current-buffer` to return a fixed project buffer. If that buffer is killed during async execution, all callbacks fail.
 
-**Location:**
-- `gptel-auto-workflow-projects.el:gptel-auto-workflow--advice-task-override`
-- The `(lambda () project-buf)` override for `current-buffer` causes issues when buffer is deleted
+**Fix Applied:**
+1. Added `kill-buffer-query-functions` protection to prevent buffer kill during runs
+2. Made `current-buffer` override check liveness each call, fall back if killed
+3. Saved original `current-buffer` function before overriding to avoid recursion
 
-**Fix Needed:**
-1. Check buffer liveness before routing to project buffer
-2. Fall back to current buffer if project buffer is dead
-3. Ensure project buffer persists throughout experiment
+**Result:**
+- E2E test passed - experiment completed in 230s with `kept` decision
+- Score improved: 0.40 → 0.41
+- Commit `bae1b73` merged to staging
 
-**Symbol:** ❌
+**Symbol:** ✅ (fixed)
