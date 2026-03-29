@@ -112,12 +112,13 @@
   (global-evil-surround-mode 1))
 
 ;; Session management (save/restore windows, buffers, desktop)
+;; Disabled: auto-save timer causes errors with AI-generated buffer content
 (use-package easysession
   :ensure t
-  :hook (after-init . easysession-save-mode)
   :config
   (setq easysession-directory (locate-user-emacs-file "session"))
-  (setq easysession-save-interval 300))  ; Auto-save every 5 minutes
+  ;; Manual save only: M-x easysession-save-session
+  (setq easysession-save-interval nil))
 
 ;; Auto-update packages on startup
 ;; Disabled by default to prevent network hangs on startup.
