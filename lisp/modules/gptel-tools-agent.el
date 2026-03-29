@@ -924,6 +924,11 @@ This branch is NEVER deleted and NEVER auto-merged to main."
   "Hash table for per-target worktree state. Keyed by target.
 Values: plist (:worktree-dir :current-branch).")
 
+(defvar gptel-auto-experiment--no-improvement-count 0
+  "Count of consecutive experiments with no improvement.")
+(defvar gptel-auto-experiment--best-score 0.0
+  "Best score achieved in current experiment loop.")
+
 (defun gptel-auto-workflow--get-worktree-dir (target)
   "Get worktree-dir for TARGET from hash table."
   (when (hash-table-p gptel-auto-workflow--worktree-state)

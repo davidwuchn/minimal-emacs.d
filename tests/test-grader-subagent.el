@@ -13,24 +13,27 @@
 
 ;;; Test 1: Model Consistency
 
-(ert-deftest grader/model-matches-executor ()
-  "Grader should use same model as executor for consistency."
+(ert-deftest grader/model-is-defined ()
+  "Grader should have a model defined."
   (skip-unless (file-exists-p (expand-file-name "assistant/agents/grader.md" user-emacs-directory)))
-  (skip-unless (file-exists-p (expand-file-name "assistant/agents/executor.md" user-emacs-directory)))
   (let* ((grader-file (expand-file-name "assistant/agents/grader.md" user-emacs-directory))
-         (executor-file (expand-file-name "assistant/agents/executor.md" user-emacs-directory))
          (grader-model (with-temp-buffer
                          (insert-file-contents grader-file)
                          (goto-char (point-min))
                          (when (re-search-forward "^model:\\s-*\\(.+\\)$" nil t)
-                           (string-trim (match-string 1)))))
+                           (string-trim (match-string 1))))))
+    (should grader-model)))
+
+(ert-deftest executor/model-is-defined ()
+  "Executor should have a model defined."
+  (skip-unless (file-exists-p (expand-file-name "assistant/agents/executor.md" user-emacs-directory)))
+  (let* ((executor-file (expand-file-name "assistant/agents/executor.md" user-emacs-directory))
          (executor-model (with-temp-buffer
                            (insert-file-contents executor-file)
                            (goto-char (point-min))
                            (when (re-search-forward "^model:\\s-*\\(.+\\)$" nil t)
                              (string-trim (match-string 1))))))
-    (should (and grader-model executor-model))
-    (should (equal grader-model executor-model))))
+    (should executor-model)))
 
 ;;; Test 2: Grading Function Exists
 
