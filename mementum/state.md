@@ -10,6 +10,7 @@
 
 | # | File | Fix |
 |---|------|------|
+| 146 | benchmarks/skill-tests/elisp-expert.json | Benchmark test definitions (5 cases for dangerous patterns) |
 | 145 | assistant/agents/*.md | {{SKILLS}} template for autonomous skill discovery |
 | 144 | assistant/skills/elisp-expert/SKILL.md | Skill for gptel-agent subagents (dangerous patterns) |
 | 143 | executor.md + elisp-expert SKILL.md | Skill-based pattern loading (not knowledge page injection) |
