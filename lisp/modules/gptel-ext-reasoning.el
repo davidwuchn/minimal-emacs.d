@@ -146,7 +146,7 @@ that turn — the API requires presence, not a non-empty value."
 ;; injection misses (e.g. non-streaming responses, buffer-reloads).
 
 
-(defun my/gptel--pre-serialize-inject-noop (info _token)
+(defun my/gptel--pre-serialize-inject-noop (info _uuid _include-headers)
   "Before-advice on `gptel-curl--get-args': inject dummy _noop tool for LiteLLM/Anthropic.
 If tool_calls are present in message history but no active tools are selected,
 many proxies crash with 400 Bad Request. We inject a dummy to satisfy validation."
@@ -171,7 +171,7 @@ many proxies crash with 400 Bad Request. We inject a dummy to satisfy validation
                                          :parameters (list :type "object" :properties (list :_dummy (list :type "string")))))))
                (plist-put info :data (plist-put data :tools (vector noop-tool))))))))))
 
-(defun my/gptel--pre-serialize-inject-reasoning (info _token)
+(defun my/gptel--pre-serialize-inject-reasoning (info _uuid _include-headers)
   "Before-advice on `gptel-curl--get-args': ensure reasoning_content on tool-call messages.
 For Moonshot (and any model with :thinking/:reasoning request-params), every
 assistant message that contains tool_calls must carry a reasoning_content field."

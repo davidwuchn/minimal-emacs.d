@@ -307,7 +307,7 @@ requires string values. Recursively processes nested :properties and :items."
              (when (listp nested-props)
                (my/gptel--sanitize-tool-props nested-props)))))
 
-(defun my/gptel--pre-serialize-sanitize-messages (info _token)
+(defun my/gptel--pre-serialize-sanitize-messages (info _uuid _include-headers)
   "Ensure no message has nil :content and sanitize all content for JSON serialization.
 
 nil :content is encoded as {} by json-serialize, causing a 400 Bad Request.
