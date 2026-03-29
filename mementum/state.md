@@ -65,7 +65,7 @@
 λ overlay-buffer-context. make-overlay(nil) uses current-buffer, advice needed for async callbacks
 λ grader-passed. :passed >= 80% threshold (not perfect), perfect score unrealistic
 λ grader-fail. No local fallback - fail experiment if grader subagent unavailable
-λ validation-retry. Teach pattern on failure, retry once with instruction before giving up
+λ validation-retry. Teach pattern on failure, retry once with skill loading (not hardcoded patterns)
 λ auto-revert-conflict. Worktree file writes trigger revert on main buffer → disable during workflow
 λ uniquify-buffer-names. Multiple same-name files get prefixes like .emacs.d/ → disable during workflow
 ```
