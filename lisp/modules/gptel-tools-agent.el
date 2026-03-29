@@ -2338,6 +2338,9 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--headless nil
   "Flag to suppress interactive prompts during headless operation.")
 
+(defvar gptel-auto-workflow--auto-revert-was-enabled nil
+  "Remember if global-auto-revert-mode was enabled before headless operation.")
+
 (defvar gptel-auto-workflow--stats nil
   "Current run statistics: (:kept :total :phase).")
 
@@ -2377,8 +2380,14 @@ Returns t to allow killing modified buffers without asking."
   (not gptel-auto-workflow--headless))
 
 (defun gptel-auto-workflow--enable-headless-suppression ()
-  "Enable suppression of interactive prompts for headless operation."
+  "Enable suppression of interactive prompts for headless operation.
+Also disables auto-revert to prevent buffer reverts when worktree files change."
   (setq gptel-auto-workflow--headless t)
+  ;; Remember auto-revert state and disable
+  (setq gptel-auto-workflow--auto-revert-was-enabled 
+        (bound-and-true-p global-auto-revert-mode))
+  (when gptel-auto-workflow--auto-revert-was-enabled
+    (global-auto-revert-mode -1))
   (advice-add 'ask-user-about-supersession-threat :around 
               #'gptel-auto-workflow--suppress-ask-user-about-supersession-threat)
   (advice-add 'yes-or-no-p :around 
@@ -2390,8 +2399,13 @@ Returns t to allow killing modified buffers without asking."
             #'gptel-auto-workflow--suppress-kill-buffer-query))
 
 (defun gptel-auto-workflow--disable-headless-suppression ()
-  "Disable suppression of interactive prompts."
+  "Disable suppression of interactive prompts.
+Restores auto-revert mode if it was enabled before headless operation."
   (setq gptel-auto-workflow--headless nil)
+  ;; Restore auto-revert if it was enabled
+  (when (and (boundp 'gptel-auto-workflow--auto-revert-was-enabled)
+             gptel-auto-workflow--auto-revert-was-enabled)
+    (global-auto-revert-mode 1))
   (advice-remove 'ask-user-about-supersession-threat 
                  #'gptel-auto-workflow--suppress-ask-user-about-supersession-threat)
   (advice-remove 'yes-or-no-p 
