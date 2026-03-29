@@ -335,6 +335,12 @@ Call periodically to prevent memory growth from unaccessed entries."
 Like upstream `gptel-agent--task' but adds parent-buffer tracking-marker,
 large-result truncation, and result caching."
   (cl-block my/gptel-agent--task-override
+    ;; Validate agent-type exists
+    (let ((agent-config (assoc agent-type gptel-agent--agents)))
+      (unless agent-config
+        (error "[nucleus] Unknown agent type: %s. Available: %s"
+               agent-type
+               (mapconcat #'car gptel-agent--agents ", "))))
     ;; Check cache first
     (let ((cached (my/gptel--subagent-cache-get agent-type prompt)))
       (when cached
@@ -346,7 +352,7 @@ large-result truncation, and result caching."
                                 :use-tools t
                                 :use-context nil
                                 :stream my/gptel-subagent-stream)
-                          (cdr (assoc agent-type gptel-agent--agents))))
+                          (cdr agent-config)))
            (syms (cons 'gptel--preset (gptel--preset-syms preset)))
            (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
       (cl-progv syms vals
