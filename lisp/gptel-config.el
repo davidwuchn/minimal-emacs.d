@@ -57,6 +57,16 @@
 (setq gptel-backend gptel--dashscope
       gptel-model 'qwen3.5-plus)
 
+;; Safety: Ensure gptel-model is never nil (falls back to default)
+(defun my/gptel--ensure-model-not-nil (orig-fun &rest args)
+  "Ensure `gptel-model' is not nil before calling ORIG-FUN."
+  (unless gptel-model
+    (setq-local gptel-model 'qwen3.5-plus))
+  (apply orig-fun args))
+
+(with-eval-after-load 'gptel
+  (advice-add 'gptel-request :around #'my/gptel--ensure-model-not-nil))
+
 ;; Subagent model/backend: DEPRECATED
 ;; Subagents now use their YAML model: field. See assistant/agents/*.md
 
