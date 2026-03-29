@@ -16,18 +16,16 @@
 **Also**: Worktree was deleted on every failure (grader failed, benchmark failed, timeout), preventing retry.
 
 **Solution**:
-- Remove ALL `delete-worktree` calls during experiment
-- Only delete worktree in `run-next` when target is COMPLETE (all experiments done or threshold reached)
-- Worktree persists for ALL experiments of a target
+- Removed ALL `delete-worktree` calls during experiment
+- Removed delete-worktree when target is done
+- Worktrees only cleaned at START of NEXT workflow run
+- Cleanup: `gptel-auto-workflow--cleanup-old-worktrees` in `gptel-auto-workflow-cron-safe`
 
-**Code locations changed**:
-- Line 2101: Removed delete on timeout
-- Line 2134: Removed delete on grader failure
-- Line 2159: Removed delete on benchmark failure
-- Line 2229: Removed delete on no-improvement
-- Line 2289: Removed delete at start of run-next
-- Line 2301: KEPT delete when target done (correct)
+**Why keep worktrees until next run?**
+1. After experiments complete, improvements may need to be merged to staging
+2. Staging merge happens AFTER workflow completes
+3. Only safe to delete at START of next run (clean slate for new experiments)
 
-**Commit**: d06a47f
+**Commit**: d06a47f (partial), 1834e09 (final)
 
-**Pattern**: Resources should only be cleaned up when truly done, not between iterations of a loop.
+**Pattern**: Resources should only be cleaned up when truly done - for auto-workflow, that means at the START of the NEXT run, not the end of the current run.

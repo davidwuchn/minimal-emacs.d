@@ -2287,7 +2287,7 @@ Adapts max-experiments based on API error rate."
              target best-score max-exp)
     (cl-labels ((run-next (exp-id)
                   ;; DON'T delete worktree here - keep it for the entire target
-                  ;; Worktree will be cleaned up at end of workflow run
+                  ;; Worktree will be cleaned up at START of NEXT workflow run
                   ;; Check if we should stop early due to too many API errors
                   (when (and (> gptel-auto-experiment--api-error-count 5)
                              (< exp-id max-exp))
@@ -2297,8 +2297,8 @@ Adapts max-experiments based on API error rate."
                   (if (or (> exp-id max-exp)
                           (>= no-improvement-count threshold))
                       (progn
-                        ;; Now delete worktree since we're done with this target
-                        (gptel-auto-workflow-delete-worktree target)
+                        ;; Don't delete worktree - keep it for staging merge
+                        ;; Will be cleaned up at START of next workflow run
                         (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
                                  target (length results)
                                  (or best-score 0))
