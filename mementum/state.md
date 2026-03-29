@@ -104,13 +104,36 @@
 
 ## Current Status
 
-- **Main branch**: `475b456` (ai-code submodule updated)
-- **ai-code submodule**: `ba5d0c9` (cl-block fix pushed)
-- **Workflow**: Ready to test (validation should pass now)
+- **Main branch**: `376d0cf`
+- **Staging branch**: `214596e` (merged main, has elisp-expert skill)
 - **Emacs daemon**: Running
-- **API issues**: None (qwen3.5-plus working correctly)
-- **Worktrees**: Managed by workflow (never manual cleanup)
-- **Next**: Test auto-workflow to verify experiments pass validation
+- **Skill elisp-expert**: ✓ Created, loaded, tested
+- **Benchmark tests**: 5 cases defined in `benchmarks/skill-tests/elisp-expert.json`
+- **Auto-workflow**: Ready to use skill when editing .el files
+
+### Verification Results
+
+| Test | Result |
+|------|--------|
+| Skill discovery | ✓ elisp-expert in gptel-agent--skills |
+| {{SKILLS}} expansion | ✓ Available skills in executor system prompt |
+| Skill loading | ✓ Executor loaded elisp-expert when prompted |
+| Correct pattern | ✓ Generated cl-block wrapper + cl-return-from |
+| Byte-compile | ✓ Mentioned verification step |
+
+### Test Output Example
+
+```
+✓ **elisp-expert skill loaded** - Dangerous patterns documented
+
+**Key pattern** (from elisp-expert skill):
+(cl-block function-name
+  (when guard-condition
+    (cl-return-from function-name value))
+  ...rest of logic...)
+
+**Verification**: Byte-compile clean (no errors/warnings)
+```
 
 ---
 
