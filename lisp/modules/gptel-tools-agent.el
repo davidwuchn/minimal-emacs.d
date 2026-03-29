@@ -1699,8 +1699,11 @@ Returns nil if valid, or error message string if invalid."
   "Grade experiment OUTPUT. LLM decides quality threshold.
 Timeout fails the grade (conservative).
 If OUTPUT is an error message, fails immediately.
-Uses hash table keyed by grade-id to support parallel execution."
-  (let ((grade-id (cl-incf gptel-auto-experiment--grade-counter)))
+Uses hash table keyed by grade-id to support parallel execution.
+The grader subagent overlay will appear in the current buffer at time of call."
+  (let ((grade-id (cl-incf gptel-auto-experiment--grade-counter))
+        ;; Capture the current buffer to ensure grader overlay appears in right place
+        (grade-buffer (current-buffer)))
     (cl-block gptel-auto-experiment-grade
       (when (gptel-auto-experiment--agent-error-p output)
         (funcall callback (list :score 0 :passed nil :details "Agent error"))
@@ -1719,25 +1722,27 @@ Uses hash table keyed by grade-id to support parallel execution."
         (puthash grade-id (list :done nil :timer timeout-timer) gptel-auto-experiment--grade-state))
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-grade))
-          (gptel-benchmark-grade
-           output
-           '("change clearly described"
-             "change is minimal and focused"
-             "fixes real bug, improves performance, or addresses TODO/FIXME"
-             "tests pass after change")
-           '("large refactor unrelated to fix"
-             "changed security files without review"
-             "no description or unclear purpose"
-             "style-only change without functional impact"
-             "replaces working code with equivalent code")
-           (lambda (result)
-             (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
-               (when (and state (not (plist-get state :done)))
-                 (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
-                 (when (timerp (plist-get state :timer))
-                   (cancel-timer (plist-get state :timer)))
-                 (funcall callback result)
-                 (remhash grade-id gptel-auto-experiment--grade-state)))))
+          ;; Ensure grader runs in the captured buffer context so overlay appears in right place
+          (with-current-buffer grade-buffer
+            (gptel-benchmark-grade
+             output
+             '("change clearly described"
+               "change is minimal and focused"
+               "fixes real bug, improves performance, or addresses TODO/FIXME"
+               "tests pass after change")
+             '("large refactor unrelated to fix"
+               "changed security files without review"
+               "no description or unclear purpose"
+               "style-only change without functional impact"
+               "replaces working code with equivalent code")
+             (lambda (result)
+               (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
+                 (when (and state (not (plist-get state :done)))
+                   (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
+                   (when (timerp (plist-get state :timer))
+                     (cancel-timer (plist-get state :timer)))
+                   (funcall callback result)
+                   (remhash grade-id gptel-auto-experiment--grade-state))))))
         (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
           (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
           (when (timerp (plist-get state :timer))
