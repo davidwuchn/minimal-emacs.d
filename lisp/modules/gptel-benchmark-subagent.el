@@ -116,7 +116,7 @@ TIMEOUT overrides default."
 (defun gptel-benchmark-grade (output expected forbidden callback)
   "Grade OUTPUT against EXPECTED and FORBIDDEN behaviors.
 Calls CALLBACK with grade plist: (:score :total :percentage :passed :details).
-Uses grader subagent if available, falls back to local grading."
+Uses grader subagent - no local fallback (fail if subagent unavailable)."
   (let ((grading-prompt (gptel-benchmark--make-grading-prompt output expected forbidden))
         (total (+ (length expected) (length forbidden))))
     (if (and gptel-benchmark-use-subagents
@@ -128,7 +128,12 @@ Uses grader subagent if available, falls back to local grading."
          grading-prompt
          (lambda (result)
            (funcall callback (gptel-benchmark--parse-grade-response result expected forbidden))))
-      (funcall callback (gptel-benchmark--local-grade output expected forbidden)))))
+      ;; No local fallback - fail the grade
+      (funcall callback (list :score 0 
+                              :total total
+                              :percentage 0.0
+                              :passed nil
+                              :details "Grader subagent unavailable")))))
 
 (defun gptel-benchmark--make-grading-prompt (output expected forbidden)
   "Create grading prompt for OUTPUT against EXPECTED and FORBIDDEN."
@@ -184,31 +189,8 @@ Passes if score >= 80% of total (not requiring perfect score)."
       (list :score score
             :total (if (> total 0) total (max score 1))
             :percentage percentage
-            :passed passed
-            :details details))))
-
-(defun gptel-benchmark--local-grade (output expected forbidden)
-  "Local grading fallback - pattern match based grading.
-Passes if score >= 80% of total."
-  (let* ((expected-passed 0)
-         (forbidden-passed 0)
-         (total (+ (length expected) (length forbidden))))
-    (dolist (e expected)
-      (when (string-match-p (regexp-quote e) output)
-        (cl-incf expected-passed)))
-    (dolist (f forbidden)
-      (unless (string-match-p (regexp-quote f) output)
-        (cl-incf forbidden-passed)))
-    (let* ((score (+ expected-passed forbidden-passed))
-           (percentage (if (> total 0) (* 100.0 (/ (float score) total)) 0.0))
-           ;; Pass if >= 80%
-           (passed (and (> total 0) (>= percentage 80.0))))
-      (list :score score
-            :total (max total 1)
-            :percentage percentage
-            :passed passed
-            :details (format "Local grading: %d/%d behaviors satisfied (%.0f%%)"
-                             score total percentage)))))
+:passed passed
+             :details details))))
 
 ;;; Code Quality Scoring
 
