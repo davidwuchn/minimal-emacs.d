@@ -2341,6 +2341,9 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--auto-revert-was-enabled nil
   "Remember if global-auto-revert-mode was enabled before headless operation.")
 
+(defvar gptel-auto-workflow--uniquify-style nil
+  "Remember uniquify-buffer-name-style before headless operation.")
+
 (defvar gptel-auto-workflow--stats nil
   "Current run statistics: (:kept :total :phase).")
 
@@ -2381,13 +2384,19 @@ Returns t to allow killing modified buffers without asking."
 
 (defun gptel-auto-workflow--enable-headless-suppression ()
   "Enable suppression of interactive prompts for headless operation.
-Also disables auto-revert to prevent buffer reverts when worktree files change."
+Also disables auto-revert and uniquify to prevent buffer issues when worktree files change."
   (setq gptel-auto-workflow--headless t)
-  ;; Remember auto-revert state and disable
+  ;; Remember and disable auto-revert
   (setq gptel-auto-workflow--auto-revert-was-enabled 
         (bound-and-true-p global-auto-revert-mode))
   (when gptel-auto-workflow--auto-revert-was-enabled
     (global-auto-revert-mode -1))
+  ;; Remember and disable uniquify (prevents ".emacs.d/" prefix in buffer names)
+  (setq gptel-auto-workflow--uniquify-style 
+        (when (boundp 'uniquify-buffer-name-style)
+          uniquify-buffer-name-style))
+  (when (boundp 'uniquify-buffer-name-style)
+    (setq uniquify-buffer-name-style nil))
   (advice-add 'ask-user-about-supersession-threat :around 
               #'gptel-auto-workflow--suppress-ask-user-about-supersession-threat)
   (advice-add 'yes-or-no-p :around 
@@ -2400,12 +2409,16 @@ Also disables auto-revert to prevent buffer reverts when worktree files change."
 
 (defun gptel-auto-workflow--disable-headless-suppression ()
   "Disable suppression of interactive prompts.
-Restores auto-revert mode if it was enabled before headless operation."
+Restores auto-revert and uniquify if they were enabled before headless operation."
   (setq gptel-auto-workflow--headless nil)
-  ;; Restore auto-revert if it was enabled
+  ;; Restore auto-revert
   (when (and (boundp 'gptel-auto-workflow--auto-revert-was-enabled)
              gptel-auto-workflow--auto-revert-was-enabled)
     (global-auto-revert-mode 1))
+  ;; Restore uniquify
+  (when (and (boundp 'gptel-auto-workflow--uniquify-style)
+             gptel-auto-workflow--uniquify-style)
+    (setq uniquify-buffer-name-style gptel-auto-workflow--uniquify-style))
   (advice-remove 'ask-user-about-supersession-threat 
                  #'gptel-auto-workflow--suppress-ask-user-about-supersession-threat)
   (advice-remove 'yes-or-no-p 
