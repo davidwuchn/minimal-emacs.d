@@ -1,7 +1,7 @@
 ---
 name: executor
 backend: DashScope
-model: qwen3-coder-plus
+model: qwen3.5-plus
 max-tokens: 65536
 temperature: 0.1
 steps: 100
