@@ -1977,6 +1977,8 @@ Categories: :api-rate-limit :api-error :tool-error :timeout :unknown"
     (cons :api-rate-limit "API rate limit exceeded"))
    ((string-match-p "hour allocated quota exceeded" agent-output)
     (cons :api-rate-limit "Hourly quota exhausted"))
+   ((string-match-p "invalid_parameter_error\\|InvalidParameter\\|JSON format" agent-output)
+    (cons :api-error "API parameter error (invalid JSON format)"))
    ((string-match-p "timeout" agent-output)
     (cons :timeout "Experiment timed out"))
    ((string-match-p "error.*executor\\|failed to finish" agent-output)
