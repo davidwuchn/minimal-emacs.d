@@ -1,10 +1,10 @@
 ---
 name: comparator
-backend: moonshot
+backend: DashScope
 model: kimi-k2.5
 max-tokens: 2048
 temperature: 0.1
-description: Perform blind A/B comparison (Moonshot)
+description: Perform blind A/B comparison (DashScope)
 tools:
   - Read
   - Glob

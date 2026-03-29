@@ -55,7 +55,7 @@
 
 ;; --- Configuration Defaults ---
 (setq gptel-backend gptel--dashscope
-      gptel-model 'glm-5)
+      gptel-model 'qwen3.5-plus)
 
 ;; Subagent model/backend: DEPRECATED
 ;; Subagents now use their YAML model: field. See assistant/agents/*.md

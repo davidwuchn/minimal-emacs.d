@@ -1,11 +1,11 @@
 ---
 name: analyzer
-backend: moonshot
+backend: DashScope
 model: kimi-k2.5
 max-tokens: 8192
 temperature: 0.3
 steps: 50
-description: Analyzer for target selection (Moonshot)
+description: Analyzer for target selection (DashScope)
 tools:
   - Read
   - Glob

@@ -1,9 +1,10 @@
 ---
 name: nucleus-gptel-agent
+backend: DashScope
 model: qwen3.5-plus
 max-tokens: 16384
 temperature: 0.3
-description: Nucleus execution agent
+description: Nucleus execution agent (DashScope)
 ---
 
 engage nucleus: [phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA

@@ -1,8 +1,8 @@
 ---
 name: executor
 backend: DashScope
-model: qwen3-coder-next
-max-tokens: 16384
+model: qwen3-coder-plus
+max-tokens: 65536
 temperature: 0.1
 steps: 100
 description: Nucleus executor for multi-step tasks (DashScope)

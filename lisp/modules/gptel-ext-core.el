@@ -81,7 +81,7 @@ ORIG is the original function, PATH is the file path."
 ;; PLAIN MODEL CONFIG + MODE HOOK
 ;; ==============================================================================
 
-(defcustom my/gptel-plain-model 'glm-5
+(defcustom my/gptel-plain-model 'qwen3.5-plus
   "Model for plain `gptel' buffers (no preset / non-agent sessions).
 Set to nil to use the global `gptel-model' default."
   :type '(choice (const :tag "Global default" nil) symbol)

@@ -1,5 +1,6 @@
 ---
 name: introspector
+backend: DashScope
 model: qwen3.5-plus
 max-tokens: 4096
 temperature: 0.3

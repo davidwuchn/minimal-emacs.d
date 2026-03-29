@@ -1,9 +1,10 @@
 ---
 name: nucleus-gptel-plan
+backend: DashScope
 model: qwen3.5-plus
 max-tokens: 16384
 temperature: 0.3
-description: Nucleus planning agent (read-only)
+description: Nucleus planning agent (read-only, DashScope)
 tools:
   - Bash
   - Eval

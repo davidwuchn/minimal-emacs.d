@@ -44,8 +44,13 @@
   :type 'symbol
   :group 'gptel)
 
-(defcustom my/ai-code-gptel-helper-model 'glm-5
-  "Fast non-reasoning model used for ai-code helper requests."
+(defcustom my/ai-code-gptel-helper-model 'qwen3-coder-next
+  "Fast non-reasoning model used for ai-code helper requests.
+
+Uses qwen3-coder-next on DashScope (¥0.3 input) for fast, cheap responses
+on simple tasks like headline generation and prompt classification.
+
+Note: qwen3.5-flash (¥0.2) is not available on the Coding Plan subscription."
   :type 'symbol
   :group 'gptel)
 
