@@ -25,8 +25,10 @@
                 gptel-auto-workflow--project-root-override))
   (add-to-list 'safe-local-variable-values (cons var t)))
 
-;; Note: gptel-backend and gptel-model are handled by :safe predicates
-;; in their defcustom definitions, not by safe-local-variable-values
+;; Explicitly mark specific values from .dir-locals.el as safe
+;; This prevents the "may not be safe" prompt
+(add-to-list 'safe-local-variable-values
+             '(gptel-model . qwen3.5-plus))
 
 (provide 'post-early-init)
 
