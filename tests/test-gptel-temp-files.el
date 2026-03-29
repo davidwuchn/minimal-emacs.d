@@ -14,6 +14,7 @@
 (require 'gptel-request)
 (require 'gptel-ext-fsm)
 (require 'gptel-ext-fsm-utils)
+(require 'gptel-ext-core)
 (require 'gptel-tools-agent)
 
 (defvar test--callback-result nil
@@ -66,6 +67,7 @@
   (test--temp-files-setup)
   (let ((large-result (make-string 5000 ?x)))
     (with-temp-buffer
+      (setq-local my/gptel--subagent-temp-files nil)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
       (should my/gptel--subagent-temp-files)
       (should (= (length my/gptel--subagent-temp-files) 1)))))
@@ -102,6 +104,7 @@
   (test--temp-files-setup)
   (let ((large-result (make-string 5000 ?x)))
     (with-temp-buffer
+      (setq-local my/gptel--subagent-temp-files nil)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
@@ -113,6 +116,7 @@
   (let ((large-result (make-string 5000 ?x))
         temp-path)
     (with-temp-buffer
+      (setq-local my/gptel--subagent-temp-files nil)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
       (setq temp-path (car my/gptel--subagent-temp-files)))
     (should temp-path)
@@ -125,6 +129,7 @@
   (let ((large-result (make-string 5000 ?x))
         temp-path)
     (with-temp-buffer
+      (setq-local my/gptel--subagent-temp-files nil)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
       (setq temp-path (car my/gptel--subagent-temp-files)))
     (should temp-path)
@@ -141,6 +146,7 @@
   (let ((my/gptel-subagent-temp-file-ttl 0)
         (large-result (make-string 5000 ?x)))
     (with-temp-buffer
+      (setq-local my/gptel--subagent-temp-files nil)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
       (should my/gptel--subagent-temp-files)
       (should (file-exists-p (car my/gptel--subagent-temp-files)))
