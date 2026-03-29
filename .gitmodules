@@ -12,7 +12,7 @@
 	branch = main
 [submodule "packages/ai-behaviors"]
 	path = packages/ai-behaviors
-	url = https://github.com/xificurC/ai-behaviors.git
+	url = https://github.com/davidwuchn/ai-behaviors
 	branch = main
 [submodule "packages/mementum"]
 	path = packages/mementum
