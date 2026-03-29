@@ -14,6 +14,8 @@ With trailing slash:
 
 **Fix:** Use `(file-name-as-directory (expand-file-name dir))` to ensure trailing slash.
 
+**Also:** Use `:safe #'always` in `defcustom` to mark variables as safe for dir-locals without prompting (which hangs in daemon mode - no UI to show the prompt).
+
 **Context:** Multi-project auto-workflow assumed `.dir-locals.el` would load when changing directory. This was wrong - Emacs only auto-loads it when visiting files.
 
 **Pattern:**
