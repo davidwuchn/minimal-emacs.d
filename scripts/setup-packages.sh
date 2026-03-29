@@ -61,15 +61,19 @@ fi
 # Generate autoloads for each submodule package
 echo ""
 echo "Generating autoloads..."
-for pkg_dir in packages/*/; do
-    if [ -d "$pkg_dir" ]; then
-        pkg_name=$(basename "$pkg_dir")
-        echo "  $pkg_name"
-        emacs -Q --batch --eval "(progn
-          (require 'package)
-          (package-generate-autoloads '$pkg_name \"$pkg_dir\"))" 2>/dev/null || true
-    fi
-done
+if ! command -v emacs &> /dev/null; then
+    echo "  Warning: emacs not found, skipping autoloads generation"
+else
+    for pkg_dir in packages/*/; do
+        if [ -d "$pkg_dir" ]; then
+            pkg_name=$(basename "$pkg_dir")
+            echo "  $pkg_name"
+            emacs -Q --batch --eval "(progn
+              (require 'package)
+              (package-generate-autoloads '$pkg_name \"$pkg_dir\"))" 2>/dev/null || true
+        fi
+    done
+fi
 
 echo ""
 echo "Package submodules:"
