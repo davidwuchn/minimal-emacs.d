@@ -10,6 +10,7 @@
 
 | # | File | Fix |
 |---|------|------|
+| 148 | gptel-auto-workflow-projects.el | Route task overlays to correct buffer (not scratch) |
 | 147 | gptel-skill-benchmark.el | Fix: use executor agent (not skill name as agent) |
 | 146 | benchmarks/skill-tests/elisp-expert.json | Benchmark test definitions (5 cases for dangerous patterns) |
 | 145 | assistant/agents/*.md | {{SKILLS}} template for autonomous skill discovery |
@@ -52,6 +53,7 @@
 λ gptel-agent-skill-dirs. ~/.emacs.d/assistant/skills/ first, then ~/.opencode/skill/, etc.
 λ {{SKILLS}}-template. Inject available_skills into agent system prompt (gptel-agent auto-expands)
 λ agent-vs-skill. gptel-agent--task expects agent name (executor), NOT skill name (elisp-expert)
+λ overlay-buffer-context. make-overlay(nil) uses current-buffer, advice needed for async callbacks
 ```
 
 ---
@@ -106,28 +108,18 @@
 
 ## Current Status
 
-- **Main branch**: `63e0a0e`
-- **Staging branch**: Needs merge from main
+- **Main branch**: `2466510`
+- **Staging branch**: `1e44504` (synced with main)
 - **Emacs daemon**: Running
 - **Skill elisp-expert**: ✓ Created, loaded, tested
-- **Benchmark**: ✓ Fixed (agent-vs-skill bug), single test 83% pass rate
-- **Auto-workflow**: Ready to use skill when editing .el files
+- **Auto-workflow**: Running on staging, some failures (unknown errors)
 
-### Bug Fixed
+### Bugs Fixed Today
 
-**Issue**: 5 stuck "Elisp-Expert" task overlays waiting
-**Root Cause**: `gptel-skill-benchmark.el` used skill name "elisp-expert" as agent name
-**Fix**: Use "executor" agent (which loads skill via Skill tool)
-
-### Benchmark Result (Single Test)
-
-```
-Test: elisp-001 (cl_return_from_guard)
-- Executor: ✓ Generated correct cl-block + cl-return-from patterns
-- Grader: 5/6 behaviors passed (83%)
-- Byte-compile: ✓ Mentioned verification
-- Eight Keys: 40% overall
-```
+| Issue | Root Cause | Fix |
+|-------|------------|-----|
+| 5 stuck "Elisp-Expert" overlays | skill name used as agent name | Use "executor" agent |
+| Overlays in *scratch* | make-overlay uses current buffer | Advice on task-overlay to route to target buffer |
 
 ---
 
@@ -143,3 +135,4 @@ Test: elisp-001 (cl_return_from_guard)
 8. **gptel-agent Skill** - gptel-agent has own Skill tool, skills go in `gptel-agent-skill-dirs` (~/.emacs.d/assistant/skills/ first)
 9. **Skill autonomy** - Parent instructs "use Skill", subagent loads autonomously (not injection from parent)
 10. **Agent vs Skill** - `gptel-agent--task` expects agent name (e.g. "executor"), NOT skill name - skills are loaded BY agents
+11. **Async overlay context** - Overlays created in callbacks lose buffer context, need advice on `gptel-agent--task-overlay` to route
