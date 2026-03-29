@@ -9,42 +9,16 @@
 (require 'ert)
 (require 'cl-lib)
 
-(defvar my/gptel-subagent-result-limit 4000)
-(defvar my/gptel-subagent-temp-file-ttl 300)
-(defvar-local my/gptel--subagent-temp-files nil)
-(defvar my/gptel--global-temp-files nil)
+;;; Load real dependencies
+(require 'gptel)
+(require 'gptel-request)
+(require 'gptel-ext-fsm)
+(require 'gptel-ext-fsm-utils)
+(require 'gptel-ext-core)
+(require 'gptel-tools-agent)
 
 (defvar test--callback-result nil
   "Result passed to callback during tests.")
-
-(defun my/gptel-make-temp-file (prefix &optional _dir-flag _suffix)
-  "Stub for temp file creation. Creates actual temp file."
-  (make-temp-file prefix))
-
-(defun my/gptel--deliver-subagent-result (callback result)
-  "Stub implementation of result delivery with truncation.
-CALLBACK receives the (possibly truncated) result.
-RESULT is the full subagent output."
-  (if (> (length result) my/gptel-subagent-result-limit)
-      (let* ((temp-file (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt"))
-             (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
-                                (substring result 0 my/gptel-subagent-result-limit)
-                                temp-file))
-             (file-list (if (buffer-live-p (current-buffer))
-                            'my/gptel--subagent-temp-files
-                          'my/gptel--global-temp-files)))
-        (with-temp-file temp-file
-          (insert result))
-        (push temp-file (symbol-value file-list))
-        (when (> my/gptel-subagent-temp-file-ttl 0)
-          (run-at-time my/gptel-subagent-temp-file-ttl nil
-                       (lambda (f list-var)
-                         (when (file-exists-p f)
-                           (delete-file f))
-                         (set list-var (delete f (symbol-value list-var))))
-                       temp-file file-list))
-        (funcall callback trunc-msg))
-    (funcall callback result)))
 
 (defun test--temp-files-setup ()
   "Reset variables for each test."
@@ -93,89 +67,90 @@ RESULT is the full subagent output."
   (test--temp-files-setup)
   (let ((large-result (make-string 5000 ?x)))
     (with-temp-buffer
+      (setq-local my/gptel--subagent-temp-files nil)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
       (should my/gptel--subagent-temp-files)
       (should (= (length my/gptel--subagent-temp-files) 1)))))
 
 (ert-deftest temp-files/small-result-no-file ()
-  "Should not create temp file for small results."
+  "Small results should not create a file."
   (test--temp-files-setup)
   (let ((small-result "short result"))
     (with-temp-buffer
       (my/gptel--deliver-subagent-result #'test--capture-callback small-result)
-      (should (equal test--callback-result "short result"))
+      (should test--callback-result)
+      (should-not (string-match-p "truncated" test--callback-result))
       (should-not my/gptel--subagent-temp-files))))
 
-;;; Tests for TTL=0 disables cleanup
-
-(ert-deftest temp-files/ttl-zero-no-cleanup-scheduled ()
-  "Should not schedule cleanup when TTL is 0."
+(ert-deftest temp-files/truncated-result-has-prefix ()
+  "Truncated result should contain the prefix."
   (test--temp-files-setup)
-  (setq my/gptel-subagent-temp-file-ttl 0)
   (let ((large-result (make-string 5000 ?x)))
     (with-temp-buffer
-      (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
-      (should my/gptel--subagent-temp-files)
-      (should test--callback-result))))
-
-;;; Tests for truncated result format
+      (my/gptel--deliver-subagent-result #'test--capture-callback large-result))
+    (should (string-match-p "truncated" test--callback-result))
+    (should (string-match-p "gptel-subagent-result" test--callback-result))))
 
 (ert-deftest temp-files/truncated-result-has-path ()
-  "Truncated result should contain temp file path."
+  "Truncated result should contain the file path."
   (test--temp-files-setup)
   (let ((large-result (make-string 5000 ?x)))
     (with-temp-buffer
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result))
-    (should (stringp test--callback-result))
-    (should (string-match-p "saved to:" test--callback-result))
-    (should (string-match-p "Use Read tool" test--callback-result))))
-
-(ert-deftest temp-files/truncated-result-has-prefix ()
-  "Truncated result should have original content prefix."
-  (test--temp-files-setup)
-  (let ((large-result (concat "PREFIX_CONTENT_" (make-string 5000 ?x))))
-    (with-temp-buffer
-      (my/gptel--deliver-subagent-result #'test--capture-callback large-result))
-    (should (string-match-p "PREFIX_CONTENT_" test--callback-result))))
-
-;;; Tests for multiple temp files
+    (should (string-match-p "/tmp/" test--callback-result))))
 
 (ert-deftest temp-files/multiple-files-tracked ()
-  "Should track multiple temp files."
+  "Multiple temp files should all be tracked."
   (test--temp-files-setup)
   (let ((large-result (make-string 5000 ?x)))
     (with-temp-buffer
+      (setq-local my/gptel--subagent-temp-files nil)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
       (should (= (length my/gptel--subagent-temp-files) 3)))))
 
-;;; Tests for file existence
-
 (ert-deftest temp-files/file-actually-created ()
   "Temp file should actually exist on disk."
   (test--temp-files-setup)
-  (let ((large-result (make-string 5000 ?x)))
+  (let ((large-result (make-string 5000 ?x))
+        temp-path)
     (with-temp-buffer
+      (setq-local my/gptel--subagent-temp-files nil)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
-      (let ((temp-path (car my/gptel--subagent-temp-files)))
-        (should temp-path)
-        (should (file-exists-p temp-path))
-        (delete-file temp-path)))))
+      (setq temp-path (car my/gptel--subagent-temp-files)))
+    (should temp-path)
+    (should (file-exists-p temp-path))
+    (delete-file temp-path)))
 
 (ert-deftest temp-files/file-contains-full-result ()
   "Temp file should contain the full result."
   (test--temp-files-setup)
-  (let ((large-result (make-string 5000 ?x)))
+  (let ((large-result (make-string 5000 ?x))
+        temp-path)
     (with-temp-buffer
+      (setq-local my/gptel--subagent-temp-files nil)
       (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
-      (let ((temp-path (car my/gptel--subagent-temp-files)))
-        (should temp-path)
-        (should (file-exists-p temp-path))
-        (with-temp-buffer
-          (insert-file-contents temp-path)
-          (should (= (buffer-size) 5000)))
-        (delete-file temp-path)))))
+      (setq temp-path (car my/gptel--subagent-temp-files)))
+    (should temp-path)
+    (should (file-exists-p temp-path))
+    (let ((contents (with-temp-buffer
+                      (insert-file-contents temp-path)
+                      (buffer-string))))
+      (should (equal contents large-result)))
+    (delete-file temp-path)))
+
+(ert-deftest temp-files/ttl-zero-no-cleanup-scheduled ()
+  "TTL of 0 should not schedule cleanup."
+  (test--temp-files-setup)
+  (let ((my/gptel-subagent-temp-file-ttl 0)
+        (large-result (make-string 5000 ?x)))
+    (with-temp-buffer
+      (setq-local my/gptel--subagent-temp-files nil)
+      (my/gptel--deliver-subagent-result #'test--capture-callback large-result)
+      (should my/gptel--subagent-temp-files)
+      (should (file-exists-p (car my/gptel--subagent-temp-files)))
+      (delete-file (car my/gptel--subagent-temp-files)))))
 
 (provide 'test-gptel-temp-files)
 

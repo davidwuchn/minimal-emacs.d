@@ -23,6 +23,8 @@ Prevents deadlocks from hanging git/shell commands."
 (defun gptel-auto-workflow--shell-command-with-timeout (command &optional timeout)
   "Execute shell COMMAND with TIMEOUT (default 30s).
 Returns (output . exit-code) or (error-message . -1) on timeout."
+  (unless (and (stringp command) (not (string-empty-p (string-trim command))))
+    (error "[auto-workflow] Invalid command: must be non-nil, non-empty string, got %S" command))
   (let* ((timeout-seconds (or timeout gptel-auto-workflow-shell-timeout))
          (buffer (generate-new-buffer " *shell-timeout*"))
          (process nil)
@@ -34,12 +36,12 @@ Returns (output . exit-code) or (error-message . -1) on timeout."
         (progn
           (setq process (start-process-shell-command "shell-timeout" buffer command))
           (set-process-sentinel process
-                                 (lambda (proc _event)
-                                   (unless done
-                                     (setq done t)
-                                     (setq exit-code (process-exit-status proc))
-                                     (with-current-buffer buffer
-                                       (setq result (buffer-string))))))
+                                (lambda (proc _event)
+                                  (unless done
+                                    (setq done t)
+                                    (setq exit-code (process-exit-status proc))
+                                    (with-current-buffer buffer
+                                      (setq result (buffer-string))))))
           (while (and (not done)
                       (< (float-time (time-subtract (current-time) start-time)) timeout-seconds))
             (accept-process-output process 0.1 nil t))
@@ -68,7 +70,7 @@ On timeout or error, returns empty string and logs warning."
   "Save current commit hash to tracking file for EXPERIMENT-ID.
 TARGET is optional description. Enables recovery if workflow interrupted."
   (let* ((default-directory (or (gptel-auto-workflow--get-worktree-dir (or target gptel-auto-workflow--current-target))
-                                 (gptel-auto-workflow--project-root)))
+                                (gptel-auto-workflow--project-root)))
          (commit-hash (gptel-auto-workflow--git-cmd "git rev-parse HEAD"))
          (date (format-time-string "%Y-%m-%d"))
          (tracking-file (expand-file-name
@@ -107,7 +109,7 @@ An orphan is a commit that exists but is not reachable from any branch."
                  (target (caddr parts)))
             (when (and hash (string-match-p "^[a-f0-9]+$" hash))
               (let ((in-branch (gptel-auto-workflow--git-cmd
-                                 (format "git branch --contains %s 2>/dev/null | head -1" hash))))
+                                (format "git branch --contains %s 2>/dev/null | head -1" hash))))
                 (when (string-empty-p in-branch)
                   (push (list hash exp-id target) orphans))))))))
     (if orphans
@@ -143,15 +145,15 @@ An orphan is a commit that exists but is not reachable from any branch."
       (let ((recovered 0)
             (failed 0))
         (dolist (orphan orphans)
-(let ((hash (car orphan)))
-             (if (gptel-auto-workflow--cherry-pick-orphan hash)
-                 (cl-incf recovered)
-               (cl-incf failed))))
-(message "[auto-workflow] Recovered %d/%d orphans to staging"
-                   recovered (length orphans))
-          (when (> recovered 0)
-            (let ((default-directory (gptel-auto-workflow--project-root)))
-              (gptel-auto-workflow--git-cmd "git push origin staging")))))))
+          (let ((hash (car orphan)))
+            (if (gptel-auto-workflow--cherry-pick-orphan hash)
+                (cl-incf recovered)
+              (cl-incf failed))))
+        (message "[auto-workflow] Recovered %d/%d orphans to staging"
+                 recovered (length orphans))
+        (when (> recovered 0)
+          (let ((default-directory (gptel-auto-workflow--project-root)))
+            (gptel-auto-workflow--git-cmd "git push origin staging")))))))
 
 (defun gptel-auto-workflow--sync-staging-with-main ()
   "Fast-forward staging branch to match main.
@@ -164,7 +166,7 @@ All shell commands have timeout protection to prevent deadlocks."
         (progn
           (gptel-auto-workflow--git-cmd "git fetch origin" 180)
           (let ((main-commit (gptel-auto-workflow--git-cmd
-                               "git rev-parse origin/main"))
+                              "git rev-parse origin/main"))
                 (staging-commit (gptel-auto-workflow--git-cmd
                                  "git rev-parse origin/staging 2>/dev/null || echo \"none\"")))
             (if (string= main-commit staging-commit)
@@ -360,13 +362,13 @@ large-result truncation, and result caching."
                             (cdr agent-config)))
              (syms (cons 'gptel--preset (gptel--preset-syms preset)))
              (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
-         (cl-progv syms vals
-           (gptel--apply-preset preset)
-           (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
-                  (info (and parent-fsm (gptel-fsm-info parent-fsm)))
-                  (parent-buf (or (when (buffer-live-p (plist-get info :buffer))
-                                    (plist-get info :buffer))
-                                  (current-buffer)))
+        (cl-progv syms vals
+          (gptel--apply-preset preset)
+          (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
+                 (info (and parent-fsm (gptel-fsm-info parent-fsm)))
+                 (parent-buf (or (when (buffer-live-p (plist-get info :buffer))
+                                   (plist-get info :buffer))
+                                 (current-buffer)))
                  (where (or (let ((tm (plist-get info :tracking-marker)))
                               (and (markerp tm) (marker-position tm) tm))
                             (let ((pos (plist-get info :position)))
@@ -1027,7 +1029,7 @@ Uses git CLI directly to avoid magit issues."
             (let ((default-directory proj-root))
               ;; Remove worktree
               (let ((exit-code (call-process "git" nil nil nil
-                                               "worktree" "remove" worktree-dir)))
+                                             "worktree" "remove" worktree-dir)))
                 (unless (eq exit-code 0)
                   (error "git worktree remove failed with exit code %s" exit-code)))
               ;; Delete the branch
@@ -2026,12 +2028,12 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                      (setq finished t)
                                      (gptel-auto-workflow-delete-worktree target)
                                      (funcall callback
-                                               (list :target target
-                                                     :id experiment-id
-                                                     :error "timeout"))))))
-;; Routing handled by gptel-auto-workflow--advice-task-override
-             (my/gptel--run-agent-tool
-               (lambda (agent-output)
+                                              (list :target target
+                                                    :id experiment-id
+                                                    :error "timeout"))))))
+           ;; Routing handled by gptel-auto-workflow--advice-task-override
+           (my/gptel--run-agent-tool
+            (lambda (agent-output)
               (message "[auto-exp] Agent output (first 500 chars): %s"
                        (truncate-string-to-width (or agent-output "nil") 500 nil nil "..."))
               (when timeout-timer (cancel-timer timeout-timer))
@@ -2121,12 +2123,12 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                                           (if (> baseline 0) (* 100 (/ (- score-after baseline) baseline)) 0)))
                                              (default-directory (or (gptel-auto-workflow--get-worktree-dir target)
                                                                     (gptel-auto-workflow--project-root))))
-                                         (gptel-auto-workflow--assert-main-untouched)
-                                         (message "[auto-experiment] ✓ Committing improvement for %s" target)
-                                         (magit-git-success "add" "-A")
-                                         (magit-git-success "commit" "-m" msg)
-                                         (gptel-auto-workflow--track-commit experiment-id target)
-                                         (setq gptel-auto-experiment--best-score score-after
+                                        (gptel-auto-workflow--assert-main-untouched)
+                                        (message "[auto-experiment] ✓ Committing improvement for %s" target)
+                                        (magit-git-success "add" "-A")
+                                        (magit-git-success "commit" "-m" msg)
+                                        (gptel-auto-workflow--track-commit experiment-id target)
+                                        (setq gptel-auto-experiment--best-score score-after
                                               gptel-auto-experiment--no-improvement-count 0)
                                         (when gptel-auto-experiment-auto-push
                                           (message "[auto-experiment] Pushing to %s" (gptel-auto-workflow--get-current-branch target))
@@ -2145,7 +2147,7 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
             "executor"
             (format "Experiment %d: optimize %s" experiment-id target)
             prompt
-             nil "false" nil)))))))
+            nil "false" nil)))))))
 
 (defun gptel-auto-experiment--extract-hypothesis (output)
   "Extract HYPOTHESIS from agent OUTPUT.
@@ -2209,16 +2211,16 @@ Uses local state captured in closure for parallel execution safety."
                      target exp-id max-exp
                      best-score
                      results
-                      (lambda (result)
-                        (push result results)
-                        (gptel-auto-workflow--update-progress)  ; Update watchdog
-                        (let ((score-after (plist-get result :score-after)))
-                          (when (and score-after (> score-after (or best-score 0)))
-                            (setq best-score score-after
-                                  no-improvement-count 0))
-                          (when (and score-after (<= score-after (or best-score 0)))
-                            (cl-incf no-improvement-count)))
-                        (run-next (1+ exp-id)))))))
+                     (lambda (result)
+                       (push result results)
+                       (gptel-auto-workflow--update-progress)  ; Update watchdog
+                       (let ((score-after (plist-get result :score-after)))
+                         (when (and score-after (> score-after (or best-score 0)))
+                           (setq best-score score-after
+                                 no-improvement-count 0))
+                         (when (and score-after (<= score-after (or best-score 0)))
+                           (cl-incf no-improvement-count)))
+                       (run-next (1+ exp-id)))))))
       (run-next 1))))
 
 ;;; Main Entry Point
@@ -2413,16 +2415,16 @@ Replaces curly quotes, dashes, and other problematic characters
 with their ASCII equivalents."
   (let ((clean str))
     (dolist (pair '(("RIGHT SINGLE QUOTATION MARK" . "'")
-                     ("LEFT SINGLE QUOTATION MARK" . "'")
-                     ("RIGHT DOUBLE QUOTATION MARK" . "\"")
-                     ("LEFT DOUBLE QUOTATION MARK" . "\"")
-                     ("EN DASH" . "-")
-                     ("EM DASH" . "-")
-                     ("HORIZONTAL ELLIPSIS" . "...")
-                     ("NON-BREAKING SPACE" . " ")
-                     ("ZERO WIDTH SPACE" . "")
-                     ("ZERO WIDTH NON-JOINER" . "")
-                     ("ZERO WIDTH JOINER" . "")))
+                    ("LEFT SINGLE QUOTATION MARK" . "'")
+                    ("RIGHT DOUBLE QUOTATION MARK" . "\"")
+                    ("LEFT DOUBLE QUOTATION MARK" . "\"")
+                    ("EN DASH" . "-")
+                    ("EM DASH" . "-")
+                    ("HORIZONTAL ELLIPSIS" . "...")
+                    ("NON-BREAKING SPACE" . " ")
+                    ("ZERO WIDTH SPACE" . "")
+                    ("ZERO WIDTH NON-JOINER" . "")
+                    ("ZERO WIDTH JOINER" . "")))
       (let ((char (char-from-name (car pair))))
         (when char
           (setq clean (replace-regexp-in-string (string char) (cdr pair) clean)))))
@@ -2462,24 +2464,24 @@ Usage:
       (when (car active)
         (message "[auto-workflow] Skipping: %s" (string-join (car active) ", "))
         (cl-return-from gptel-auto-workflow-run-async nil)))
-  (unless (require 'magit-worktree nil t)
-    (user-error "magit-worktree is required"))
-  (unless (require 'magit-git nil t)
-    (user-error "magit-git is required"))
-  (setq gptel-auto-workflow--running t
-        gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
-        gptel-auto-workflow--last-progress-time (current-time))
-  ;; Start watchdog timer
-  (when gptel-auto-workflow--watchdog-timer
-    (cancel-timer gptel-auto-workflow--watchdog-timer))
-  (setq gptel-auto-workflow--watchdog-timer
-        (run-with-timer 300 300 #'gptel-auto-workflow--watchdog-check))
-  (if targets
-      (gptel-auto-workflow--run-with-targets targets completion-callback)
-    (require 'gptel-auto-workflow-strategic)
-    (gptel-auto-workflow-select-targets
-     (lambda (selected-targets)
-       (gptel-auto-workflow--run-with-targets selected-targets completion-callback))))))
+    (unless (require 'magit-worktree nil t)
+      (user-error "magit-worktree is required"))
+    (unless (require 'magit-git nil t)
+      (user-error "magit-git is required"))
+    (setq gptel-auto-workflow--running t
+          gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
+          gptel-auto-workflow--last-progress-time (current-time))
+    ;; Start watchdog timer
+    (when gptel-auto-workflow--watchdog-timer
+      (cancel-timer gptel-auto-workflow--watchdog-timer))
+    (setq gptel-auto-workflow--watchdog-timer
+          (run-with-timer 300 300 #'gptel-auto-workflow--watchdog-check))
+    (if targets
+        (gptel-auto-workflow--run-with-targets targets completion-callback)
+      (require 'gptel-auto-workflow-strategic)
+      (gptel-auto-workflow-select-targets
+       (lambda (selected-targets)
+         (gptel-auto-workflow--run-with-targets selected-targets completion-callback))))))
 
 (defun gptel-auto-workflow-run-async--guarded (&optional targets completion-callback)
   "Run auto-workflow with active-use guard using catch/throw.
@@ -2498,7 +2500,7 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
 Cancels stale timers, kills orphaned buffers, resets state, then runs.
 Safe to call from cron - handles all edge cases."
   (let ((proj-root (or (gptel-auto-workflow--project-root)
-                        (expand-file-name "~/.emacs.d/"))))
+                       (expand-file-name "~/.emacs.d/"))))
     (setq default-directory proj-root)
     (require 'magit)
     (require 'json)
@@ -2516,13 +2518,13 @@ Safe to call from cron - handles all edge cases."
                        (length orphans))
               (message "[auto-workflow] Run M-x gptel-auto-workflow-recover-all-orphans to recover")))
           (gptel-auto-workflow-run-async--guarded nil
-            (lambda (_)
-              ;; Disable headless suppression after workflow completes
-              (gptel-auto-workflow--disable-headless-suppression))))
+                                                  (lambda (_)
+                                                    ;; Disable headless suppression after workflow completes
+                                                    (gptel-auto-workflow--disable-headless-suppression))))
       (error
        (message "[auto-workflow] Cron error: %s" err)
        (gptel-auto-workflow--disable-headless-suppression)
-        nil))))
+       nil))))
 
 (defun gptel-auto-workflow--experiment-suffix ()
   "Get experiment suffix based on hostname.
