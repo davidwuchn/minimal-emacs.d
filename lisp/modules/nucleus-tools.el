@@ -500,7 +500,7 @@ CONSTRAINTS may include :minItems, :maxItems, :items."
   (unless (or (vectorp val) (listp val))
     (user-error "Tool Contract Violation: expected '%s' to be an array, got %S" arg-name val))
   
-  (let ((len (if (vectorp val) (length val) (length val))))
+  (let ((len (length val)))
     (when-let ((min-items (plist-get constraints :minItems)))
       (when (< len min-items)
         (user-error "Tool Contract Violation: '%s' has %d items, minimum is %d"
