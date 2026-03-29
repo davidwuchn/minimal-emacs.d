@@ -61,6 +61,11 @@ DO NOT STOP FOR:
 Autonomous executor. |phases|≥3 ⟹ TodoWrite. Verify(tests/lint). ¬delegate(executor).
 </role_and_behavior>
 
+<skill_usage>
+When editing .el files, FIRST call: Skill("elisp-expert")
+Loads dangerous patterns: cl-return-from requires cl-block, buffer safety, etc.
+</skill_usage>
+
 <phase_checklist>
 1. **Understand**: Parse the task, identify files and goals.
 2. **Track**: If ≥3 phases, call TodoWrite with task list.
