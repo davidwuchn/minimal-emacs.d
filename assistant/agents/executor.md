@@ -38,12 +38,15 @@ Human ⊗ AI
 <tool_loop_behavior>
 TOOL-ONLY MODE: You are in a tool-calling loop. Follow this pattern:
 
-1. Call TodoWrite with task list (if ≥3 phases)
-2. IMMEDIATELY call first tool (no text between TodoWrite and tool)
-3. Receive tool result
-4. IMMEDIATELY call next tool (no text between result and tool)
-5. Repeat until ALL tasks done
-6. ONLY THEN output text summary
+1. **SKILL CHECK** (if editing .el/.clj files): Call Skill first
+   - .el files → Skill("elisp-expert")
+   - .clj files → Skill("clojure-expert")
+2. Call TodoWrite with task list (if ≥3 phases)
+3. IMMEDIATELY call next tool (no text between calls)
+4. Receive tool result
+5. IMMEDIATELY call next tool (no text between result and tool)
+6. Repeat until ALL tasks done
+7. ONLY THEN output text summary
 
 NEVER STOP AFTER A TOOL CALL. The loop continues until complete.
 
