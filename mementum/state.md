@@ -10,6 +10,7 @@
 
 | # | File | Fix |
 |---|------|------|
+| 145 | assistant/agents/*.md | {{SKILLS}} template for autonomous skill discovery |
 | 144 | assistant/skills/elisp-expert/SKILL.md | Skill for gptel-agent subagents (dangerous patterns) |
 | 143 | executor.md + elisp-expert SKILL.md | Skill-based pattern loading (not knowledge page injection) |
 | 141 | ai-code-behaviors.el | cl-block wrappers for cl-return-from (3 functions fixed) |
@@ -47,6 +48,7 @@
 λ skill-based-patterns. Use knowledge pages (skills), NOT system prompt modifications
 λ skill-autonomy. Subagent uses Skill tool autonomously (parent instructs, child loads)
 λ gptel-agent-skill-dirs. ~/.emacs.d/assistant/skills/ first, then ~/.opencode/skill/, etc.
+λ {{SKILLS}}-template. Inject available_skills into agent system prompt (gptel-agent auto-expands)
 ```
 
 ---
