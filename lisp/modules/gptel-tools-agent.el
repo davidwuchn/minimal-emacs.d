@@ -1956,6 +1956,11 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
          ;; CRITICAL: Set default-directory to worktree so all subagents
          ;; operate in the correct context. Each worktree = one session.
          (default-directory (or worktree default-directory))
+         ;; Get project buffer for overlay routing
+         (project-buf (when (and (boundp 'gptel-auto-workflow--current-project)
+                                 gptel-auto-workflow--current-project)
+                        (gethash (expand-file-name gptel-auto-workflow--current-project)
+                                 gptel-auto-workflow--project-buffers)))
          ;; Disable preview for headless auto-workflow
          (gptel-tools-preview-enabled nil)
          ;; Disable tool confirmations for headless auto-workflow
@@ -1978,11 +1983,14 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                      (setq finished t)
                                      (gptel-auto-workflow-delete-worktree target)
                                      (funcall callback
-                                              (list :target target
-                                                    :id experiment-id
-                                                    :error "timeout"))))))
-           (my/gptel--run-agent-tool
-            (lambda (agent-output)
+                                               (list :target target
+                                                     :id experiment-id
+                                                     :error "timeout"))))))
+            ;; Ensure overlay appears in project buffer, not current buffer
+            (cl-letf (((symbol-function 'current-buffer)
+                       (lambda () (or project-buf (current-buffer)))))
+              (my/gptel--run-agent-tool
+               (lambda (agent-output)
               (message "[auto-exp] Agent output (first 500 chars): %s"
                        (truncate-string-to-width (or agent-output "nil") 500 nil nil "..."))
               (when timeout-timer (cancel-timer timeout-timer))
@@ -2096,7 +2104,7 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
             "executor"
             (format "Experiment %d: optimize %s" experiment-id target)
             prompt
-            nil "false" nil)))))))
+             nil "false" nil))))))))
 
 (defun gptel-auto-experiment--extract-hypothesis (output)
   "Extract HYPOTHESIS from agent OUTPUT.
