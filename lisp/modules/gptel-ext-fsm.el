@@ -42,6 +42,42 @@
 
 ;;; --- Recover FSM from error+STOP limbo ---
 
+(defun my/gptel--fsm-needs-recovery-p (fsm info)
+  "Return non-nil if FSM needs recovery from error+STOP limbo.
+
+ASSUMPTION: FSM is a valid gptel-fsm struct.
+ASSUMPTION: INFO is the plist from (gptel-fsm-info FSM).
+BEHAVIOR: Returns t if FSM has error + STOP but is not in DONE state.
+BEHAVIOR: Returns nil if any condition is not met.
+EDGE CASE: Nil FSM returns nil.
+EDGE CASE: Nil INFO returns nil.
+EDGE CASE: Missing :buffer plist key returns nil.
+EDGE CASE: Dead buffer returns nil.
+EDGE CASE: Missing error message returns nil.
+EDGE CASE: STOP reason not 'STOP returns nil.
+EDGE CASE: FSM already in DONE state returns nil.
+TEST: (my/gptel--fsm-needs-recovery-p nil nil) => nil
+TEST: (my/gptel--fsm-needs-recovery-p fsm info-with-error+stop+not-done) => t
+TEST: (my/gptel--fsm-needs-recovery-p fsm info-without-error) => nil
+
+BUILDS ON DISCOVERY: Extracting validation logic enables reuse
+and makes the recovery condition explicit and testable.
+
+ADAPTS TO: Centralizes recovery decision logic for consistency.
+
+PROACTIVE MITIGATION: Prevents recovery attempts on invalid FSMs."
+  (when (and fsm info (listp info) (plist-member info :buffer))
+    (let* ((fsm-buffer (plist-get info :buffer))
+           (error-msg (plist-get info :error))
+           (stop-reason (plist-get info :stop-reason))
+           (fsm-state (gptel-fsm-state fsm)))
+      (and fsm-buffer
+           (buffer-live-p fsm-buffer)
+           error-msg
+           (eq stop-reason 'STOP)
+           fsm-state
+           (not (eq fsm-state 'DONE))))))
+
 (defun my/gptel--recover-fsm-on-error (_start _end)
   "Force FSM to DONE state if it has error + STOP but is still cycling.
 START and END are the response positions (ignored).
@@ -49,23 +85,15 @@ Only operates on FSMs with a live buffer."
   (when (boundp 'gptel--fsm-last)
     (let* ((fsm (my/gptel--coerce-fsm gptel--fsm-last))
            (info (and fsm (gptel-fsm-info fsm))))
-      (when (and info (listp info) (plist-member info :buffer))
-        (let* ((fsm-buffer (plist-get info :buffer))
-               (error-msg (plist-get info :error))
-               (stop-reason (plist-get info :stop-reason))
-               (fsm-state (and fsm (gptel-fsm-state fsm))))
-          (when (and fsm-buffer
-                     (buffer-live-p fsm-buffer)
-                     error-msg
-                     (eq stop-reason 'STOP)
-                     fsm-state
-                     (not (eq fsm-state 'DONE)))
-            (cl-incf my/gptel--recovery-count)
-            (when (> my/gptel--recovery-count 3)
-              (message "[gptel-fsm] WARNING: %d FSM recoveries this session"
-                       my/gptel--recovery-count))
-            (setf (gptel-fsm-state fsm) 'DONE)
-            (force-mode-line-update t)))))))
+      (when (my/gptel--fsm-needs-recovery-p fsm info)
+        (cl-incf my/gptel--recovery-count)
+        (when (> my/gptel--recovery-count 3)
+          (message "[gptel-fsm] WARNING: %d FSM recoveries this session"
+                   my/gptel--recovery-count))
+        (let* ((info (gptel-fsm-info fsm))
+               (fsm-buffer (plist-get info :buffer)))
+          (setf (gptel-fsm-state fsm) 'DONE)
+          (force-mode-line-update t))))))
 
 (add-hook 'gptel-post-response-functions #'my/gptel--recover-fsm-on-error)
 
