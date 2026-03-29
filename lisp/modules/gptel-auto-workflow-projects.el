@@ -234,39 +234,33 @@ NEVER allows overlays in *Messages* buffer."
              (buffer-live-p target-buf)
              ;; CRITICAL: Never route to *Messages* buffer
              (not (string= (buffer-name target-buf) "*Messages*")))
-        ;; Route to appropriate buffer
-        (let* ((default-directory (or worktree-dir project-root))
-               (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
-               ;; Create marker in target buffer explicitly
-               (target-marker (with-current-buffer target-buf (point-marker)))
-               (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
-                         ;; Create info with marker in CORRECT buffer
-                         (list :buffer target-buf :position target-marker)))
-               ;; Override the buffer in FSM info with correct marker
-               (modified-info (list :buffer target-buf 
-                                    :position target-marker
-                                    :tracking-marker target-marker)))
-          ;; Use cl-letf to override ALL buffer-related functions
-          (cl-letf (((symbol-function 'gptel-fsm-info)
-                     (lambda (&optional fsm) 
-                       (if (or (eq fsm parent-fsm) (null fsm))
-                           modified-info 
-                         info)))
-                    ;; Override current-buffer for overlay creation
-                    ((symbol-function 'current-buffer)
-                     (lambda () target-buf))
-                    ;; Override selected-window to prevent wrong buffer focus
-                    ((symbol-function 'selected-window)
-                     (lambda () 
-                       (or (get-buffer-window target-buf)
-                           (selected-window)))))
-            ;; For executor tasks, make overlay persist
-            (if (and gptel-auto-workflow--persist-executor-overlays
-                     (equal agent-type "executor"))
-                (cl-letf (((symbol-function 'delete-overlay)
-                           (lambda (&rest _) nil)))
-                  (funcall orig-fun main-cb agent-type description prompt))
-              (funcall orig-fun main-cb agent-type description prompt))))
+        ;; CRITICAL: Use with-current-buffer to ensure make-overlay creates
+        ;; overlay in the CORRECT buffer. make-overlay uses current buffer
+        ;; DIRECTLY, not by calling current-buffer function.
+        (with-current-buffer target-buf
+          (let* ((default-directory (or worktree-dir project-root))
+                 ;; Create marker at current position in target buffer
+                 (target-marker (point-marker))
+                 (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+                 (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
+                           (list :buffer target-buf :position target-marker)))
+                 (modified-info (list :buffer target-buf 
+                                      :position target-marker
+                                      :tracking-marker target-marker)))
+            ;; Override gptel-fsm-info to return our modified info
+            (cl-letf (((symbol-function 'gptel-fsm-info)
+                       (lambda (&optional fsm) 
+                         (if (or (eq fsm parent-fsm) (null fsm))
+                             modified-info 
+                           info))))
+              ;; Now call original function - it will create overlay in target-buf
+              ;; because we're inside with-current-buffer
+              (if (and gptel-auto-workflow--persist-executor-overlays
+                       (equal agent-type "executor"))
+                  (cl-letf (((symbol-function 'delete-overlay)
+                             (lambda (&rest _) nil)))
+                    (funcall orig-fun main-cb agent-type description prompt))
+                (funcall orig-fun main-cb agent-type description prompt)))))
       ;; Not in auto-workflow context or invalid buffer - pass through to original
       (funcall orig-fun main-cb agent-type description prompt))))
 
