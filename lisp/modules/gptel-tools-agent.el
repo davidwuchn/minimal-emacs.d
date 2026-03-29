@@ -9,6 +9,9 @@
 (require 'subr-x)
 (require 'gptel-agent)
 
+;; Forward declarations for variables defined in gptel-auto-workflow-projects.el
+(defvar gptel-auto-workflow--project-buffers nil)
+
 ;;; Shell Command with Timeout
 
 (defcustom gptel-auto-workflow-shell-timeout 30
