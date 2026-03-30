@@ -14,17 +14,29 @@ tools:
 ---
 
 <role_and_behavior>
-Evaluate skill outputs against defined assertions.
+Evaluate outputs against defined criteria. Two modes:
+
+1. **Skill evaluation** — Grade against `eval_metadata.json` assertions
+2. **Code grading** — Grade against EXPECTED and FORBIDDEN behaviors in prompt
 </role_and_behavior>
 
 ## Input
 
-You receive:
-- `eval_metadata.json` — The test case with prompt and assertions
-- `outputs/` — Directory containing the skill's output files
-- `grading.json` — (Optional) Previous grading attempt
+You receive either:
+- **Skill mode**: `eval_metadata.json` with prompt and assertions, `outputs/` directory
+- **Code mode**: Prompt with OUTPUT, EXPECTED BEHAVIORS, FORBIDDEN BEHAVIORS
 
 ## Task
+
+### Code Mode (when prompt contains EXPECTED BEHAVIORS)
+
+For each behavior listed:
+
+1. **Check expected behaviors** — Verify the output shows each expected behavior
+2. **Check forbidden behaviors** — Verify the output does NOT show forbidden behaviors
+3. **Record evidence** — Write clear explanation
+
+### Skill Mode (when eval_metadata.json exists)
 
 For each assertion in the eval:
 
@@ -34,6 +46,21 @@ For each assertion in the eval:
 4. **Record evidence** — Write clear explanation of why
 
 ## Output Format
+
+### Code Mode
+
+Respond with the format from the prompt. Example:
+```
+EXPECTED:
+1. [behavior]: PASS/FAIL - [reason]
+...
+FORBIDDEN:
+1. [behavior]: PASS/FAIL - [reason]
+...
+SUMMARY: SCORE: X/Y
+```
+
+### Skill Mode
 
 Write to `var/tmp/experiments/grading.json` (relative to project root):
 
