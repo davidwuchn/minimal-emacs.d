@@ -90,10 +90,8 @@ Only operates on FSMs with a live buffer."
         (when (> my/gptel--recovery-count 3)
           (message "[gptel-fsm] WARNING: %d FSM recoveries this session"
                    my/gptel--recovery-count))
-        (let* ((info (gptel-fsm-info fsm))
-               (fsm-buffer (plist-get info :buffer)))
-          (setf (gptel-fsm-state fsm) 'DONE)
-          (force-mode-line-update t))))))
+        (setf (gptel-fsm-state fsm) 'DONE)
+        (force-mode-line-update t)))))
 
 (add-hook 'gptel-post-response-functions #'my/gptel--recover-fsm-on-error)
 
