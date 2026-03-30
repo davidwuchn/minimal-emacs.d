@@ -1738,65 +1738,7 @@ Returns nil if valid, or error message string if invalid."
         (error (format "Syntax error in %s: %s" file err)))
       (when (and (string-match-p "cl-return-from" content)
                  (not (string-match-p "cl-block" content)))
-         (format "Dangerous pattern in %s: cl-return-from without cl-block" file)))))
-
-(defun gptel-auto-experiment--retry-validation-helper (target experiment-id baseline baseline-code-quality validation-error prompt callback finished-sym)
-  "Helper function to retry experiment with teaching.
-Handles dangerous patterns like cl-return-from without cl-block.
-Uses symbol for finished-sym to set outer scope variable."
-  (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
-                               (gptel-auto-workflow--project-root)))
-        (gptel-auto-experiment--in-retry t))
-    (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
-    (message "[auto-experiment] ✗ %s" validation-error)
-    (magit-git-success "checkout" "--" ".")
-    ;; Re-run executor with teaching prompt
-    (my/gptel--run-agent-tool
-     (lambda (retry-output)
-       (gptel-auto-experiment-grade
-        retry-output
-        (lambda (retry-grade)
-          (if (plist-get retry-grade :passed)
-              (let ((retry-bench (gptel-auto-experiment-benchmark t)))
-                (if (plist-get retry-bench :passed)
-                    ;; Retry succeeded - set finished and decide
-                    (let ((retry-score (plist-get retry-bench :eight-keys))
-                          (retry-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
-                      (message "[auto-experiment] ✓ Retry succeeded")
-                      (set finished-sym t)
-                      (gptel-auto-experiment-decide
-                       (list :score baseline :code-quality baseline-code-quality)
-                       (list :score retry-score :code-quality retry-quality :output retry-output)
-                       (lambda (decision)
-                         (let ((keep (plist-get decision :keep)))
-                           (when keep
-                             (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
-                                                          (gptel-auto-workflow--project-root)))
-                                   (msg (format "◈ Retry: fix validation in %s" target)))
-                               (magit-git-success "add" "-A")
-                               (magit-git-success "commit" "-m" msg)))
-                           (funcall callback (list :target target
-                                                   :id experiment-id
-                                                   :score-after retry-score
-                                                   :kept keep
-                                                   :retries 1))))))
-                  ;; Retry failed validation
-                  (progn
-                    (set finished-sym t)
-                    (message "[auto-experiment] ✗ Retry still failed validation")
-                    (funcall callback (list :target target
-                                            :id experiment-id
-                                            :kept nil
-                                            :validation-error (plist-get retry-bench :validation-error))))))
-            ;; Retry grader failed
-            (progn
-              (set finished-sym t)
-              (funcall callback (list :target target
-                                      :id experiment-id
-                                      :kept nil)))))))
-     "executor"
-     (format "Retry: fix validation error in %s" target)
-     (gptel-auto-experiment--make-retry-prompt target validation-error prompt))))
+        (format "Dangerous pattern in %s: cl-return-from without cl-block" file)))))
 
 (defun gptel-auto-experiment-grade (output callback)
   "Grade experiment OUTPUT. LLM decides quality threshold.
@@ -2275,13 +2217,64 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                (score-after (plist-get bench :eight-keys)))
                           (if (not passed)
                               ;; Check if validation error is teachable and we should retry
-                              (if (and validation-error
-                                       (string-match-p "cl-return-from.*without.*cl-block\\|Dangerous pattern" validation-error)
-                                       (not (bound-and-true-p gptel-auto-experiment--in-retry)))
-                                   ;; Retry with teaching - use helper function to avoid scope issues
-                                   (gptel-auto-experiment--retry-validation-helper
-                                    target experiment-id baseline baseline-code-quality
-                                    validation-error prompt callback 'finished)
+                               (if (and validation-error
+                                        (stringp validation-error)
+                                        (> (length validation-error) 0)
+                                        (string-match-p "cl-return-from.*without.*cl-block\\|Dangerous pattern" validation-error)
+                                        (not (bound-and-true-p gptel-auto-experiment--in-retry)))
+                                  ;; Retry with teaching
+                                  (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
+                                                               (gptel-auto-workflow--project-root)))
+                                        (gptel-auto-experiment--in-retry t))
+                                    (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
+                                    (message "[auto-experiment] ✗ %s" validation-error)
+                                    (magit-git-success "checkout" "--" ".")
+                                    ;; Re-run executor with teaching prompt
+                                    (my/gptel--run-agent-tool
+                                     (lambda (retry-output)
+                                       (gptel-auto-experiment-grade
+                                        retry-output
+                                        (lambda (retry-grade)
+                                          (if (plist-get retry-grade :passed)
+                                              (let ((retry-bench (gptel-auto-experiment-benchmark t)))
+                                                (if (plist-get retry-bench :passed)
+                                                    (let ((retry-score (plist-get retry-bench :eight-keys))
+                                                          (retry-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
+                                                       (message "[auto-experiment] ✓ Retry succeeded")
+                                                       (setq finished t)
+                                                       (gptel-auto-experiment-decide
+                                                        (list :score baseline :code-quality baseline-code-quality)
+                                                        (list :score retry-score :code-quality retry-quality :output retry-output)
+                                                        (lambda (decision)
+                                                          (let ((keep (plist-get decision :keep)))
+                                                            (when keep
+                                                              (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
+                                                                                           (gptel-auto-workflow--project-root)))
+                                                                    (msg (format "◈ Retry: fix validation in %s" target)))
+                                                                (magit-git-success "add" "-A")
+                                                                (magit-git-success "commit" "-m" msg)))
+                                                            (funcall callback (list :target target
+                                                                                    :id experiment-id
+                                                                                    :score-after retry-score
+                                                                                    :kept keep
+                                                                                    :retries 1))))))
+                                                  ;; Retry also failed validation
+                                                  (progn
+                                                    (setq finished t)
+                                                    (message "[auto-experiment] ✗ Retry still failed validation")
+                                                    (funcall callback (list :target target
+                                                                            :id experiment-id
+                                                                            :kept nil
+                                                                            :validation-error (plist-get retry-bench :validation-error)))))))
+                                            ;; Retry grader failed
+                                            (progn
+                                              (setq finished t)
+                                              (funcall callback (list :target target
+                                                                      :id experiment-id
+                                                                      :kept nil)))))))
+                                     "executor"
+                                     (format "Retry: fix validation error in %s" target)
+                                     (gptel-auto-experiment--make-retry-prompt target validation-error prompt)))
                                 ;; No retry - just fail
                                 (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
                                                              (gptel-auto-workflow--project-root))))
@@ -3515,4 +3508,3 @@ M-x gptel-mementum-synthesis-run"
 (provide 'gptel-tools-agent)
 
 ;;; gptel-tools-agent.el ends here
-)
