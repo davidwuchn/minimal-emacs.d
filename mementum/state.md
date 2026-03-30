@@ -133,41 +133,28 @@
 
 ## Current Status
 
-- **Main branch**: `88b416b` (worktree nesting + void-variable fixes)
+- **Main branch**: `92d11dd` (workflow improving)
 - **Staging branch**: synced
-- **Auto-workflow**: 28 experiments, 1 kept (3.7% success rate)
+- **Auto-workflow**: 62 experiments, 2 kept (3.2% success rate)
 
 ### Bugs Fixed Today
 
 | Bug | Root Cause | Fix |
 |-----|------------|-----|
-| Nested worktrees | project-root returns worktree root | Use git-common-dir to find main repo |
-| void-variable baseline-code-quality | Not passed to experiment-run | Add parameter to function |
-| void-variable code-quality | Not in retry lambda scope | Compute with code-quality-score |
+| Nested worktrees | project-root returns worktree root | Use git-common-dir |
+| void-variable baseline-code-quality | Not passed to experiment-run | Add parameter |
+| void-variable code-quality | Not in retry lambda scope | Compute locally |
+| Benchmark runs unconditionally | At column 0 (outside lambda) | Move to else branch |
 
-### Workflow Results (Pre-Fix)
+### Current Results
 
 | Metric | Value |
 |--------|-------|
-| Total experiments | 28 |
-| Kept | 1 (nucleus-tools.el) |
-| Success rate | 3.7% |
-| Grader failures | 18 (score 0) |
-| API errors | 1 (websocket) |
-
-### Expected Improvement (Post-Fix)
-
-With new fixes:
-- No more nested worktrees (correct repo root detection)
-- No more void-variable crashes in retry
-- Grader accepts code quality improvements
-- Expected success rate: 15-25%
-
-| Metric | Before | After (expected) |
-|--------|--------|------------------|
-| Success rate | 7% (1/14) | 30-50% |
-| "Unknown error" | 10 failures | Clear categorization |
-| Grader false fails | Many | Fewer (80% threshold) |
+| Total experiments | 62 |
+| Kept | 2 (nucleus-tools.el, ai-code-behaviors.el) |
+| Success rate | 3.2% |
+| Code crashes | None |
+| Grader issues | Wrong evaluation criteria (seo_geo) |
 
 ### Next Run Checklist
 
