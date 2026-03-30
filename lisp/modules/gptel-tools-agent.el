@@ -2205,7 +2205,8 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                               (gptel-auto-experiment-log-tsv
                                (format-time-string "%Y-%m-%d") exp-result)
                               (funcall callback exp-result)))
-(let* ((bench (gptel-auto-experiment-benchmark t))
+                        ;; Grader passed - run benchmark and validation
+                        (let* ((bench (gptel-auto-experiment-benchmark t))
                                (passed (plist-get bench :passed))
                                (validation-error (plist-get bench :validation-error))
                                (tests-passed (plist-get bench :tests-passed))
