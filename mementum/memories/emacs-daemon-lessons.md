@@ -172,3 +172,102 @@ After all fixes:
 3. **Test incrementally** - Don't make multiple complex changes at once
 4. **Use launchctl** - Proper daemon management on macOS
 5. **Validate syntax** - Always check before committing
+6. **Single daemon rule** - ALWAYS ensure only one daemon runs
+
+## Single Daemon Management (CRITICAL)
+
+### Problem: Multiple Daemons
+Running multiple Emacs daemons causes:
+- Port conflicts
+- Client connection issues
+- Resource waste
+- Confusing behavior
+
+### Solution: Check Before Start
+
+**ALWAYS run this procedure before starting daemon:**
+
+```bash
+#!/bin/bash
+# Ensure only ONE Emacs daemon is running
+
+echo "=== CHECKING FOR EXISTING DAEMONS ==="
+
+# Count existing Emacs daemon processes
+DAEMON_COUNT=$(pgrep -f "Emacs.*daemon" | wc -l)
+echo "Found $DAEMON_COUNT Emacs daemon process(es)"
+
+if [ "$DAEMON_COUNT" -gt 0 ]; then
+    echo ""
+    echo "Killing all existing Emacs processes..."
+    pgrep -f "Emacs.*daemon" | while read pid; do
+        echo "  Killing PID: $pid"
+        kill -9 $pid 2>/dev/null
+    done
+    
+    # Wait for termination
+    sleep 3
+    
+    # Verify killed
+    REMAINING=$(pgrep -f "Emacs.*daemon" | wc -l)
+    if [ "$REMAINING" -eq 0 ]; then
+        echo "✅ All Emacs processes killed"
+    else
+        echo "⚠️  $REMAINING process(es) still running, forcing..."
+        pkill -9 -f Emacs
+        sleep 2
+    fi
+    
+    # Clean up stale sockets
+    rm -rf /tmp/emacs$(id -u)/
+    rm -f /tmp/emacs*
+fi
+
+# Unload from launchctl first (if loaded)
+echo ""
+echo "Unloading from launchctl..."
+launchctl unload ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist 2>/dev/null
+sleep 2
+
+# Start fresh daemon via launchctl
+echo ""
+echo "Starting daemon via launchctl..."
+launchctl load ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
+
+# Wait for startup
+sleep 5
+
+# Verify single daemon
+NEW_COUNT=$(pgrep -f "Emacs.*daemon" | wc -l)
+echo ""
+echo "=== VERIFICATION ==="
+echo "Daemon processes: $NEW_COUNT"
+
+if [ "$NEW_COUNT" -eq 1 ]; then
+    echo "✅ Single daemon running successfully"
+    emacsclient -e "(+ 1 1)" 2>/dev/null && echo "✅ Daemon responsive"
+else
+    echo "❌ Expected 1 daemon, found $NEW_COUNT"
+    exit 1
+fi
+```
+
+### Quick Check Command
+```bash
+# Count daemons
+pgrep -f "Emacs.*daemon" | wc -l
+
+# If > 1, kill all and restart
+if [ $(pgrep -f "Emacs.*daemon" | wc -l) -gt 1 ]; then
+    pkill -9 -f Emacs
+    sleep 3
+    launchctl unload ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
+    launchctl load ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
+fi
+```
+
+### Why This Matters
+- **Port binding**: Only one daemon can bind to the server socket
+- **Client confusion**: `emacsclient` connects to first available daemon
+- **Resource usage**: Multiple daemons waste memory
+- **State consistency**: Worktrees and buffers get confused between daemons
