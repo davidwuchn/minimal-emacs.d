@@ -133,9 +133,9 @@
 
 ## Current Status
 
-- **Main branch**: `92d11dd` (workflow improving)
+- **Main branch**: `53ab3f7` (grader prioritizes Code Mode)
 - **Staging branch**: synced
-- **Auto-workflow**: 62 experiments, 2 kept (3.2% success rate)
+- **Auto-workflow**: 61 experiments, 3 kept (4.9% success rate)
 
 ### Bugs Fixed Today
 
@@ -145,16 +145,22 @@
 | void-variable baseline-code-quality | Not passed to experiment-run | Add parameter |
 | void-variable code-quality | Not in retry lambda scope | Compute locally |
 | Benchmark runs unconditionally | At column 0 (outside lambda) | Move to else branch |
+| Grader uses wrong criteria | Skill Mode taking priority | Prioritize Code Mode in prompt |
 
 ### Current Results
 
 | Metric | Value |
 |--------|-------|
-| Total experiments | 62 |
-| Kept | 2 (nucleus-tools.el, ai-code-behaviors.el) |
-| Success rate | 3.2% |
+| Total experiments | 61 |
+| Kept | 3 (nucleus-tools.el, gptel-sandbox.el x2) |
+| Success rate | 4.9% |
 | Code crashes | None |
-| Grader issues | Wrong evaluation criteria (seo_geo) |
+| Grader format | 10 Code Mode, 7 Skill Mode (improving) |
+
+### Grader Improvement
+
+Before: All responses used `seo_geo_optimization` or `eight-keys-grading`
+After: 10 responses use `EXPECTED:` / `SCORE:` format (correct Code Mode)
 
 ### Next Run Checklist
 
