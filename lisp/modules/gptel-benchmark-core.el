@@ -200,11 +200,10 @@ RESULTS is a list of (run . scores) cons cells or plists with :scores."
         (avg-constraints 0.0)
         (passed 0))
     (dolist (r results)
-      (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall (and scores (plist-get scores :overall-score)))
-             (efficiency (and scores (plist-get scores :efficiency-score)))
-             (completion (and scores (plist-get scores :completion-score)))
-             (constraints (and scores (plist-get scores :constraint-score))))
+      (let* ((overall (gptel-benchmark--get-score r :overall-score))
+             (efficiency (gptel-benchmark--get-score r :efficiency-score))
+             (completion (gptel-benchmark--get-score r :completion-score))
+             (constraints (gptel-benchmark--get-score r :constraint-score)))
         (cl-incf total)
         (cl-incf avg-overall (or overall 0))
         (cl-incf avg-efficiency (or efficiency 0))
@@ -302,8 +301,7 @@ RESULTS should contain :eight-keys-scores in each entry."
              (overall (or (and scores (plist-get scores :overall-score)) 0)))
         (cond
          ((< overall threshold) (cl-incf low-scores))
-         ((>= overall 0.9) (cl-incf high-scores))))
-      (let ((scores (gptel-benchmark--extract-scores r)))
+         ((>= overall 0.9) (cl-incf high-scores)))
         (when scores
           (cl-loop for (score-type . issue-type) in gptel-benchmark--score-type-map
                    for score = (plist-get scores score-type)
