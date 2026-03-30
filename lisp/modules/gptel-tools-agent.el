@@ -2222,11 +2222,14 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                  (hash-table-p gptel-auto-workflow--project-buffers))
                         (gethash (expand-file-name gptel-auto-workflow--current-project)
                                  gptel-auto-workflow--project-buffers)))
-         ;; Disable preview for headless auto-workflow
-         (gptel-tools-preview-enabled nil)
-         ;; Disable tool confirmations for headless auto-workflow
-         (gptel-confirm-tool-calls nil)
-         (start-time (float-time))
+;; Disable preview for headless auto-workflow
+          (gptel-tools-preview-enabled nil)
+          ;; Disable tool confirmations for headless auto-workflow
+          (gptel-confirm-tool-calls nil)
+          ;; CRITICAL: Use experiment time budget as agent task timeout
+          ;; This ensures the gptel request times out before the outer timer
+          (my/gptel-agent-task-timeout gptel-auto-experiment-time-budget)
+          (start-time (float-time))
          (timeout-timer nil)
          (finished nil))
     (if (not worktree)
