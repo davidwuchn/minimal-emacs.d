@@ -269,32 +269,17 @@ TEST: (my/gptel--collect-all-fsms '(fsm1 fsm2)) => (fsm1 fsm2)
 TEST: (my/gptel--collect-all-fsms '(a (b fsm) c)) => (fsm)
 
 BUILDS ON DISCOVERY: Need to collect all FSMs to detect
-nested subagent scenarios and select appropriate FSM."
-  (let ((result '()))
-    (my/gptel--collect-fsms-recursive object result)
-    (nreverse result)))
+nested subagent scenarios and select appropriate FSM.
 
-(defun my/gptel--collect-fsms-recursive (object result)
-  "Recursively collect FSMs from OBJECT into RESULT list.
-
-ASSUMPTION: RESULT is a mutable list passed by reference.
-ASSUMPTION: Traverses both car and cdr of cons cells.
-BEHAVIOR: Pushes FSM objects onto RESULT list.
-BEHAVIOR: Recursively processes cons cells.
-BEHAVIOR: Ignores atoms that are not FSMs.
-EDGE CASE: Nil object does nothing.
-EDGE CASE: Atom (non-cons, non-FSM) does nothing.
-EDGE CASE: Circular structures may cause infinite loop (caller's responsibility).
-TEST: Internal function - tested via my/gptel--collect-all-fsms
-
-PROACTIVE MITIGATION: Uses depth-first traversal to ensure
-all nested FSMs are found regardless of structure depth."
+ADAPTS TO: Pure functional approach eliminates mutable state,
+improving testability and reducing cognitive load."
   (cond
-   ((my/gptel--fsm-p object)
-    (push object result))
+   ((null object) nil)
+   ((my/gptel--fsm-p object) (list object))
    ((consp object)
-    (my/gptel--collect-fsms-recursive (car object) result)
-    (my/gptel--collect-fsms-recursive (cdr object) result))))
+    (append (my/gptel--collect-all-fsms (car object))
+            (my/gptel--collect-all-fsms (cdr object))))
+   (t nil)))
 
 (defun my/gptel--fsm-depth (object)
   "Return nesting depth of FSMs in OBJECT.
@@ -357,7 +342,8 @@ PROACTIVE_MITIGATION: Can be called periodically or after operations
 to ensure registry remains in valid state.
 
 Returns t on success, signals error on failure."
-  (let ((id-to-fsm (make-hash-table :test 'equal)))
+  (let ((id-to-fsm (make-hash-table :test 'equal))
+        (fsm-to-count (make-hash-table :test 'eq)))
     ;; Collect all ID→FSM mappings
     (maphash (lambda (k v)
                (when (stringp k)
@@ -371,12 +357,15 @@ Returns t on success, signals error on failure."
                               (equal lookup-id id))
                    (error "FSM registry invariant violated: bidirectional mismatch for ID %s" id))))
              id-to-fsm)
-    ;; Check unique IDs
-    (let ((id-count (hash-table-count id-to-fsm))
-          (unique-ids (hash-table-count (make-hash-table :test 'equal
-                                                         :data (hash-table-data id-to-fsm)))))
-      (unless (= id-count unique-ids)
-        (error "FSM registry invariant violated: duplicate IDs detected")))
+    ;; Check unique IDs: no FSM should be mapped by multiple IDs
+    (maphash (lambda (_id fsm)
+               (let ((count (gethash fsm fsm-to-count 0)))
+                 (puthash fsm (1+ count) fsm-to-count)))
+             id-to-fsm)
+    (maphash (lambda (fsm count)
+               (unless (= count 1)
+                 (error "FSM registry invariant violated: FSM mapped by %d IDs" count)))
+             fsm-to-count)
     ;; Check ID format
     (maphash (lambda (id _fsm)
                (unless (my/gptel--fsm-id-valid-p id)

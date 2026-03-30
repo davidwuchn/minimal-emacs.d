@@ -108,6 +108,14 @@ gptel preset.")
     (puthash 'nil nil env)
     env))
 
+(defun gptel-sandbox--bind-result (value env &optional symbol)
+  "Bind VALUE in ENV, updating `_` and `it` variables.
+When SYMBOL is non-nil, also bind it to that symbol."
+  (when symbol
+    (puthash symbol value env))
+  (puthash '_ value env)
+  (puthash 'it value env))
+
 (defun gptel-sandbox--copy-env (env)
   "Return a shallow copy of ENV."
   (let ((copy (make-hash-table :test #'eq)))
@@ -115,6 +123,12 @@ gptel preset.")
                (puthash key value copy))
              env)
     copy))
+
+(defun gptel-sandbox--bind-result (symbol value env)
+  "Bind SYMBOL to VALUE in ENV, also updating `_` and `it`."
+  (puthash symbol value env)
+  (puthash '_ value env)
+  (puthash 'it value env))
 
 (defun gptel-sandbox--normalize-binding (binding)
   "Normalize a let-style BINDING into `(SYMBOL VALUE-FORM)'."
@@ -139,9 +153,7 @@ gptel preset.")
         (unless (symbolp symbol)
           (error "Programmatic setq target must be a symbol, got: %S" symbol))
         (setq value (gptel-sandbox--eval-expr value-form env))
-        (puthash symbol value env)
-        (puthash '_ value env)
-        (puthash 'it value env)))
+        (gptel-sandbox--bind-result symbol value env)))
     value))
 
 (defun gptel-sandbox--eval-let (bindings body env sequentialp)
@@ -219,30 +231,30 @@ supports a small, explicit whitelist of pure operations."
       ('quote
        (cadr expr))
       ('if
-       (if (gptel-sandbox--eval-expr (nth 1 expr) env)
-           (gptel-sandbox--eval-expr (nth 2 expr) env)
-         (gptel-sandbox--eval-expr (nth 3 expr) env)))
+          (if (gptel-sandbox--eval-expr (nth 1 expr) env)
+              (gptel-sandbox--eval-expr (nth 2 expr) env)
+            (gptel-sandbox--eval-expr (nth 3 expr) env)))
       ('setq
        (gptel-sandbox--eval-setq-pairs (cdr expr) env))
       ('when
-       (when (gptel-sandbox--eval-expr (nth 1 expr) env)
-         (let ((value nil))
-           (dolist (form (cddr expr) value)
-             (setq value (gptel-sandbox--eval-expr form env))))))
+          (when (gptel-sandbox--eval-expr (nth 1 expr) env)
+            (let ((value nil))
+              (dolist (form (cddr expr) value)
+                (setq value (gptel-sandbox--eval-expr form env))))))
       ('unless
-       (unless (gptel-sandbox--eval-expr (nth 1 expr) env)
-         (let ((value nil))
-           (dolist (form (cddr expr) value)
-             (setq value (gptel-sandbox--eval-expr form env))))))
+          (unless (gptel-sandbox--eval-expr (nth 1 expr) env)
+            (let ((value nil))
+              (dolist (form (cddr expr) value)
+                (setq value (gptel-sandbox--eval-expr form env))))))
       ('progn
-       (let ((value nil))
-         (dolist (form (cdr expr))
-           (setq value (gptel-sandbox--eval-expr form env)))
-         value))
+        (let ((value nil))
+          (dolist (form (cdr expr))
+            (setq value (gptel-sandbox--eval-expr form env)))
+          value))
       ('let
-       (gptel-sandbox--eval-let (nth 1 expr) (cddr expr) env nil))
+          (gptel-sandbox--eval-let (nth 1 expr) (cddr expr) env nil))
       ('let*
-       (gptel-sandbox--eval-let (nth 1 expr) (cddr expr) env t))
+          (gptel-sandbox--eval-let (nth 1 expr) (cddr expr) env t))
       ('not
        (not (gptel-sandbox--eval-expr (nth 1 expr) env)))
       ('mapcar
@@ -451,6 +463,10 @@ CALLBACK receives non-nil when approved and nil when rejected."
               (substring text 0 my/gptel-programmatic-result-limit)
               temp-file))))
 
+(defun gptel-sandbox--format-error (message)
+  "Format MESSAGE as a sandbox error string."
+  (format "Error: %s" message))
+
 (defun gptel-sandbox--render-result (value)
   "Render VALUE into the final string returned by Programmatic.
 Strings are returned directly. Structured values are pretty-printed so the LLM
@@ -520,21 +536,16 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
      (if (and (consp expr) (eq (car expr) 'tool-call))
          (gptel-sandbox--execute-tool
           (lambda (value)
-             (puthash symbol value env)
-             (puthash '_ value env)
-             (puthash 'it value env)
-             (funcall callback (list :continue t :done nil)))
-           (nth 1 expr) (cddr expr) env state)
+            (gptel-sandbox--bind-result value env symbol)
+            (funcall callback (list :continue t :done nil)))
+          (nth 1 expr) (cddr expr) env state)
        (let ((value (gptel-sandbox--eval-expr expr env)))
-         (puthash symbol value env)
-         (puthash '_ value env)
-         (puthash 'it value env)
+         (gptel-sandbox--bind-result value env symbol)
          (funcall callback (list :continue t :done nil)))))
     (`(tool-call ,tool-name . ,arg-forms)
      (gptel-sandbox--execute-tool
       (lambda (value)
-        (puthash '_ value env)
-        (puthash 'it value env)
+        (gptel-sandbox--bind-result value env)
         (funcall callback (list :continue t :done nil)))
       tool-name arg-forms env state))
     (`(result ,expr)
@@ -591,13 +602,13 @@ PROFILE is either `agent' or `readonly'."
                    (state (list :tool-count 0
                                 :mutating-plan (gptel-sandbox--collect-confirming-plan forms)
                                 :aggregate-preview-shown nil)))
-            (setq timer
-                  (run-at-time
-                   my/gptel-programmatic-timeout nil
-                   (lambda ()
-                     (finish
-                      (format "Error: Programmatic timed out after %ss"
-                              my/gptel-programmatic-timeout)))))
+              (setq timer
+                    (run-at-time
+                     my/gptel-programmatic-timeout nil
+                     (lambda ()
+                       (finish
+                        (format "Error: Programmatic timed out after %ss"
+                                my/gptel-programmatic-timeout)))))
               (gptel-sandbox--run-forms forms env state #'finish)))
         (error
          (finish (format "Error: %s" (error-message-string err))))))))

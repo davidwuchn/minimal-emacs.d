@@ -37,6 +37,14 @@ Helper for validation in callback-based functions."
   (and (stringp value) (not (string-empty-p (string-trim value)))))
 
 (defun gptel-auto-workflow--shell-command-with-timeout (command &optional timeout)
+
+(defun gptel-auto-workflow--read-file-contents (filepath)
+  "Read contents of FILEPATH as string.
+Returns nil if file doesn't exist or isn't readable."
+  (when (and (stringp filepath) (file-exists-p filepath) (file-readable-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath)
+      (buffer-string))))
   "Execute shell COMMAND with TIMEOUT (default 30s).
 Returns (output . exit-code) or (error-message . -1) on timeout."
   (gptel-auto-workflow--validate-non-empty-string command "command")
@@ -1680,10 +1688,7 @@ Scores based on commit message + code diff (not just stat)."
               (file-count 0))
           (dolist (file (split-string changed-files "\n" t))
             (let* ((filepath (expand-file-name file worktree))
-                   (content (when (file-exists-p filepath)
-                              (with-temp-buffer
-                                (insert-file-contents filepath)
-                                (buffer-string)))))
+                   (content (gptel-auto-workflow--read-file-contents filepath)))
               (when content
                 (cl-incf total-score (gptel-benchmark--code-quality-score content))
                 (cl-incf file-count))))
@@ -1723,9 +1728,7 @@ Default 120s (2 min) allows grader to process complex outputs.")
   "Validate code in FILE for syntax and dangerous patterns.
 Returns nil if valid, or error message string if invalid."
   (when (and (stringp file) (file-exists-p file) (string-suffix-p ".el" file))
-    (let ((content (with-temp-buffer
-                     (insert-file-contents file)
-                     (buffer-string))))
+    (let ((content (gptel-auto-workflow--read-file-contents file)))
       (condition-case err
           (with-temp-buffer
             (insert content)
@@ -2161,7 +2164,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                        (truncate-string-to-width (or agent-output "nil") 500 nil nil "..."))
               (when timeout-timer (cancel-timer timeout-timer))
               (unless finished
-(gptel-auto-experiment-grade
+                (gptel-auto-experiment-grade
                  agent-output
                  (lambda (grade)
                    (let* ((grade-score (plist-get grade :score))
@@ -2176,37 +2179,38 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                 (substring agent-output 0 (min 200 (length agent-output)))))
                      ;; Check if grader passed
                      (if (not grade-passed)
-                          ;; Grader failed - categorize the error
-                          (let* ((error-info (gptel-auto-experiment--categorize-error agent-output))
-                                 (error-category (car error-info))
-                                 (error-details (cdr error-info)))
-                            (setq finished t)
-                            ;; Track API errors for adaptive reduction
-                            (when (memq error-category '(:api-rate-limit :api-error))
-                              (cl-incf gptel-auto-experiment--api-error-count)
-                              (message "[auto-workflow] API error #%d: %s"
-                                       gptel-auto-experiment--api-error-count error-details))
-;; Log failure analysis
-                             (gptel-auto-experiment--log-failure-analysis
-                              target error-category error-details)
-                             ;; Don't delete worktree - will be cleaned up by run-next
-                             (let ((exp-result (list :target target
-                                                    :id experiment-id
-                                                    :hypothesis hypothesis
-                                                    :score-before baseline
-                                                    :score-after 0
-                                                    :kept nil
-                                                    :duration (- (float-time) start-time)
-                                                    :grader-quality grade-score
-                                                    :grader-reason (format "%s: %s" error-category error-details)
-                                                    :comparator-reason (format "%s | %s" error-category error-details)
-                                                    :analyzer-patterns (format "%s" patterns)
-                                                    :agent-output agent-output)))
-                              (gptel-auto-experiment-log-tsv
-                               (format-time-string "%Y-%m-%d") exp-result)
-                              (funcall callback exp-result)))
-                        ;; Grader passed - run benchmark and validation
-                        (let* ((bench (gptel-auto-experiment-benchmark t))
+                         ;; Grader failed - categorize the error
+                         (let* ((error-info (gptel-auto-experiment--categorize-error agent-output))
+                                (error-category (car error-info))
+                                (error-details (cdr error-info)))
+                           (setq finished t)
+                           ;; Track API errors for adaptive reduction
+                           (when (memq error-category '(:api-rate-limit :api-error))
+                             (cl-incf gptel-auto-experiment--api-error-count)
+                             (message "[auto-workflow] API error #%d: %s"
+                                      gptel-auto-experiment--api-error-count error-category)
+                             ;; Reduce max experiments if too many API errors
+                             (when (>= gptel-auto-experiment--api-error-count 3)
+                               (setq max-exp (max 2 (/ max-exp 2)))
+                               (message "[auto-workflow] Reduced max experiments to %d due to API errors" max-exp)))
+                           ;; Log the failure
+                           (let ((exp-result (list :target target
+                                                  :id experiment-id
+                                                  :hypothesis hypothesis
+                                                  :score-before baseline
+                                                  :score-after 0
+                                                  :kept nil
+                                                  :duration (- (float-time) start-time)
+                                                  :grader-quality grade-score
+                                                  :grader-reason grade-details
+                                                  :comparator-reason (symbol-name error-category)
+                                                  :analyzer-patterns (format "%s" patterns)
+                                                  :agent-output agent-output)))
+                             (gptel-auto-experiment-log-tsv
+                              (format-time-string "%Y-%m-%d") exp-result)
+                             (funcall callback exp-result)))
+                       ;; Grader passed - run benchmark and validation
+                       (let* ((bench (gptel-auto-experiment-benchmark t))
                                (passed (plist-get bench :passed))
                                (validation-error (plist-get bench :validation-error))
                                (tests-passed (plist-get bench :tests-passed))
@@ -2232,26 +2236,26 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                           (if (plist-get retry-grade :passed)
                                               (let ((retry-bench (gptel-auto-experiment-benchmark t)))
                                                 (if (plist-get retry-bench :passed)
-(let ((retry-score (plist-get retry-bench :eight-keys))
+                                                    (let ((retry-score (plist-get retry-bench :eight-keys))
                                                           (retry-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
                                                        (message "[auto-experiment] ✓ Retry succeeded")
                                                        (setq finished t)
                                                        (gptel-auto-experiment-decide
                                                         (list :score baseline :code-quality baseline-code-quality)
                                                         (list :score retry-score :code-quality retry-quality :output retry-output)
-                                                       (lambda (decision)
-                                                         (let ((keep (plist-get decision :keep)))
-                                                           (when keep
-                                                             (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
-                                                                                          (gptel-auto-workflow--project-root)))
-                                                                   (msg (format "◈ Retry: fix validation in %s" target)))
-                                                               (magit-git-success "add" "-A")
-                                                               (magit-git-success "commit" "-m" msg)))
-                                                           (funcall callback (list :target target
-                                                                                   :id experiment-id
-                                                                                   :score-after retry-score
-                                                                                   :kept keep
-                                                                                   :retries 1))))))
+                                                        (lambda (decision)
+                                                          (let ((keep (plist-get decision :keep)))
+                                                            (when keep
+                                                              (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
+                                                                                           (gptel-auto-workflow--project-root)))
+                                                                    (msg (format "◈ Retry: fix validation in %s" target)))
+                                                                (magit-git-success "add" "-A")
+                                                                (magit-git-success "commit" "-m" msg)))
+                                                            (funcall callback (list :target target
+                                                                                    :id experiment-id
+                                                                                    :score-after retry-score
+                                                                                    :kept keep
+                                                                                    :retries 1))))))
                                                   ;; Retry also failed validation
                                                   (progn
                                                     (setq finished t)
@@ -2935,10 +2939,7 @@ TARGETS defaults to `gptel-auto-workflow-targets'."
   "Load and parse docs/auto-workflow-program.md."
   (let* ((file (expand-file-name gptel-auto-workflow-program-file
                                  (gptel-auto-workflow--project-root)))
-         (content (when (file-exists-p file)
-                    (with-temp-buffer
-                      (insert-file-contents file)
-                      (buffer-string))))
+         (content (gptel-auto-workflow--read-file-contents file))
          (targets '())
          (immutable '())
          (mutations '()))
@@ -2989,9 +2990,7 @@ TARGETS defaults to `gptel-auto-workflow-targets'."
   "Load skill from SKILL-FILE."
   (let ((file (expand-file-name skill-file (gptel-auto-workflow--project-root))))
     (when (file-exists-p file)
-      (let ((content (with-temp-buffer
-                       (insert-file-contents file)
-                       (buffer-string)))
+      (let ((content (gptel-auto-workflow--read-file-contents file))
             (skill (list :file skill-file)))
         (when (string-match "^phi:[[:space:]]*\\([0-9.]+\\)" content)
           (plist-put skill :phi (string-to-number (match-string 1 content))))
@@ -3088,9 +3087,7 @@ Returns formatted string with key names and signals."
   (let* ((skill-file (gptel-auto-workflow-skill-path target 'target))
          (file (expand-file-name skill-file (gptel-auto-workflow--project-root))))
     (when (file-exists-p file)
-      (let* ((content (with-temp-buffer
-                        (insert-file-contents file)
-                        (buffer-string)))
+      (let* ((content (gptel-auto-workflow--read-file-contents file))
              (by-mutation (make-hash-table :test 'equal))
              (successful '())
              (failed '())
@@ -3186,9 +3183,7 @@ Returns formatted string with key names and signals."
                              gptel-auto-workflow-skills-dir mutation-type))
          (file (expand-file-name skill-file (gptel-auto-workflow--project-root))))
     (when (file-exists-p file)
-      (let* ((content (with-temp-buffer
-                        (insert-file-contents file)
-                        (buffer-string)))
+      (let* ((content (gptel-auto-workflow--read-file-contents file))
              (relevant (cl-remove-if-not
                         (lambda (r)
                           (let ((hyp (or (plist-get r :hypothesis) "")))
@@ -3327,9 +3322,7 @@ Creates .index file with topic → file mapping for O(1) lookup."
          (index (make-hash-table :test 'equal)))
     (when (file-exists-p knowledge-dir)
       (dolist (file (directory-files-recursively knowledge-dir "\\.md$"))
-        (let ((content (with-temp-buffer
-                         (insert-file-contents file)
-                         (buffer-string)))
+        (let ((content (gptel-auto-workflow--read-file-contents file))
               (filename (file-relative-name file knowledge-dir)))
           (dolist (keyword '("caching" "lazy" "simplification" "retry" "context"
                              "code" "nucleus" "learning" "pattern" "evolution"
@@ -3385,9 +3378,7 @@ Run weekly via cron."
     (dolist (dir (list skills-dir mutations-dir))
       (when (file-exists-p dir)
         (dolist (file (directory-files dir t "\\.md$"))
-          (let ((content (with-temp-buffer
-                           (insert-file-contents file)
-                           (buffer-string))))
+          (let ((content (gptel-auto-workflow--read-file-contents file)))
             (when (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content)
               (let* ((date-str (match-string 1 content))
                      (last-tested (encode-time 0 0 0 (string-to-number (substring date-str 8 10))
@@ -3446,10 +3437,9 @@ Implements λ termination(x): synthesis ≡ AI | approval ≡ human."
          (memories-content '())
          (synthesized nil))
     (dolist (file files)
-      (when (file-exists-p file)
-        (with-temp-buffer
-          (insert-file-contents file)
-          (push (buffer-string) memories-content))))
+      (let ((content (gptel-auto-workflow--read-file-contents file)))
+        (when content
+          (push content memories-content))))
     (when (>= (length memories-content) 3)
       (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
         (with-current-buffer preview-buffer

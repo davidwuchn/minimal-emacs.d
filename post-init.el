@@ -55,10 +55,24 @@ were created after the hiding but before restoration."
 ;; Run after all init is complete
 (add-hook 'emacs-startup-hook #'my/fix-mode-line-for-all-buffers 100)
 
-;; Start Emacs server so cron jobs connect to GUI Emacs
-;; This makes *Messages* visible instead of running a separate daemon
-(require 'server)
-(unless (server-running-p)
-  (server-start))
+
 
 ;;; post-init.el ends here
+
+;; ==============================================================================
+;; RELOAD THEME-SETTING.EL FOR NEW GUI FRAMES
+;; ==============================================================================
+(defun my/reload-theme-setting-for-frame (frame)
+  "Reload theme-setting.el for FRAME to apply all visual settings."
+  (when (display-graphic-p frame)
+    (select-frame frame)
+    ;; Reload the entire theme configuration file
+    (load-file "~/.emacs.d/lisp/theme-setting.el")
+    (message "✅ Reloaded theme-setting.el for new frame")))
+
+;; Apply all settings from theme-setting.el to every new GUI frame
+(add-hook 'after-make-frame-functions #'my/reload-theme-setting-for-frame)
+
+;; Load theme initially for non-daemon mode
+(unless (daemonp)
+  (load-file "~/.emacs.d/lisp/theme-setting.el"))
