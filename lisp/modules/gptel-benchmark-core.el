@@ -250,7 +250,10 @@ RESULTS is a list of (run . scores) cons cells or plists with :scores."
                         (:constraint-score . 0.0))))
     (dolist (r results)
       (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall (and scores (plist-get scores :overall-score))))
+             (overall (and scores (plist-get scores :overall-score)))
+             (efficiency (and scores (plist-get scores :efficiency-score)))
+             (completion (and scores (plist-get scores :completion-score)))
+             (constraints (and scores (plist-get scores :constraint-score))))
         (cl-incf total)
         (when scores
           (setq score-totals
