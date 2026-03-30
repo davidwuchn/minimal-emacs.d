@@ -30,11 +30,15 @@
 (eval-when-compile
   (require 'gptel-benchmark-core nil t))
 
+;; Ensure tools agent is loaded for workflow functions
+(require 'gptel-tools-agent nil t)
+
 (declare-function gptel-benchmark-summarize-results "gptel-benchmark-core")
 (declare-function gptel-benchmark-load-history "gptel-benchmark-core")
 (defvar gptel-benchmark-default-dir)
 
 (declare-function gptel-agent--task "gptel-tools-agent")
+(declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent")
 
 ;;; Customization
 
