@@ -119,7 +119,8 @@ On timeout or error, returns empty string and logs warning."
 
 (defun gptel-auto-workflow--track-commit (experiment-id &optional target)
   "Save current commit hash to tracking file for EXPERIMENT-ID.
-TARGET is optional description. Enables recovery if workflow interrupted."
+TARGET is optional description. Enables recovery if workflow interrupted.
+Returns nil if git command fails or returns invalid hash."
   (let* ((default-directory (or (gptel-auto-workflow--get-worktree-dir (or target gptel-auto-workflow--current-target))
                                 (gptel-auto-workflow--project-root)))
          (commit-hash (gptel-auto-workflow--git-cmd "git rev-parse HEAD"))
@@ -128,21 +129,29 @@ TARGET is optional description. Enables recovery if workflow interrupted."
                          (format "var/tmp/experiments/%s/commits.txt" date)
                          (gptel-auto-workflow--project-root)))
          (tracking-dir (file-name-directory tracking-file)))
-    (unless (file-exists-p tracking-dir)
-      (make-directory tracking-dir t))
-    (with-temp-buffer
-      (insert (format "%s %s %s %s\n"
-                      commit-hash
-                      experiment-id
-                      (or target "unknown")
-                      (format-time-string "%H:%M:%S")))
-      (append-to-file (point-min) (point-max) tracking-file))
-    (message "[auto-workflow] Tracked commit %s for exp-%s" 
-             (if (>= (length commit-hash) 7)
-                 (substring commit-hash 0 7)
-               commit-hash)
-             experiment-id)
-    commit-hash))
+    (cond
+     ((string-empty-p commit-hash)
+      (message "[auto-workflow] Failed to track commit: git command returned empty hash")
+      nil)
+     ((not (string-match-p "^[a-f0-9]\\{7,40\\}$" commit-hash))
+      (message "[auto-workflow] Failed to track commit: invalid hash format %S" commit-hash)
+      nil)
+     (t
+      (unless (file-exists-p tracking-dir)
+        (make-directory tracking-dir t))
+      (with-temp-buffer
+        (insert (format "%s %s %s %s\n"
+                        commit-hash
+                        experiment-id
+                        (or target "unknown")
+                        (format-time-string "%H:%M:%S")))
+        (append-to-file (point-min) (point-max) tracking-file))
+      (message "[auto-workflow] Tracked commit %s for exp-%s" 
+               (if (>= (length commit-hash) 7)
+                   (substring commit-hash 0 7)
+                 commit-hash)
+               experiment-id)
+      commit-hash))))
 
 (defun gptel-auto-workflow--recover-orphans ()
   "Check for orphan commits from previous runs and offer to recover.
@@ -169,12 +178,12 @@ An orphan is a commit that exists but is not reachable from any branch."
     (if orphans
         (message "[auto-workflow] Found %d orphan(s): %s"
                  (length orphans)
-                  (mapconcat (lambda (o) 
-                               (let ((hash (car o)))
-                                 (if (>= (length hash) 7)
-                                     (substring hash 0 7)
-                                   hash))) 
-                             orphans " "))
+                 (mapconcat (lambda (o) 
+                              (let ((hash (car o)))
+                                (if (>= (length hash) 7)
+                                    (substring hash 0 7)
+                                  hash))) 
+                            orphans " "))
       (message "[auto-workflow] No orphan commits found"))
     orphans))
 
@@ -237,17 +246,17 @@ All shell commands have timeout protection to prevent deadlocks."
                 (gptel-auto-workflow--git-cmd "git merge origin/main --ff-only")
                 (gptel-auto-workflow--git-cmd "git push origin staging")
                 (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
-                 (message "[auto-workflow] Synced staging with main (%s -> %s)"
-                          (if (>= (length staging-commit) 7)
-                              (substring staging-commit 0 7)
-                            staging-commit)
-                          (if (>= (length main-commit) 7)
-                              (substring main-commit 0 7)
-                            main-commit))))))
+                (message "[auto-workflow] Synced staging with main (%s -> %s)"
+                         (if (>= (length staging-commit) 7)
+                             (substring staging-commit 0 7)
+                           staging-commit)
+                         (if (>= (length main-commit) 7)
+                             (substring main-commit 0 7)
+                           main-commit))))))
       (error
-        (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
-        (message "[auto-workflow] Failed to sync staging: %s" err)
-        nil))))
+       (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+       (message "[auto-workflow] Failed to sync staging: %s" err)
+       nil))))
 
 (defun gptel-auto-workflow--promote-staging-to-main ()
   "Fast-forward main branch to match staging if staging has new commits.
@@ -270,17 +279,17 @@ All shell commands have timeout protection to prevent deadlocks."
                 (gptel-auto-workflow--git-cmd "git merge origin/staging --ff-only")
                 (gptel-auto-workflow--git-cmd "git push origin main")
                 (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
-                 (message "[auto-workflow] Promoted staging to main (%s -> %s)"
-                          (if (>= (length main-commit) 7)
-                              (substring main-commit 0 7)
-                            main-commit)
-                          (if (>= (length staging-commit) 7)
-                              (substring staging-commit 0 7)
-                            staging-commit))))))
+                (message "[auto-workflow] Promoted staging to main (%s -> %s)"
+                         (if (>= (length main-commit) 7)
+                             (substring main-commit 0 7)
+                           main-commit)
+                         (if (>= (length staging-commit) 7)
+                             (substring staging-commit 0 7)
+                           staging-commit))))))
       (error
-        (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
-        (message "[auto-workflow] Failed to promote staging: %s" err)
-        nil))))
+       (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+       (message "[auto-workflow] Failed to promote staging: %s" err)
+       nil))))
 
 ;;; Customization
 
@@ -2224,14 +2233,14 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                  (hash-table-p gptel-auto-workflow--project-buffers))
                         (gethash (expand-file-name gptel-auto-workflow--current-project)
                                  gptel-auto-workflow--project-buffers)))
-;; Disable preview for headless auto-workflow
-          (gptel-tools-preview-enabled nil)
-          ;; Disable tool confirmations for headless auto-workflow
-          (gptel-confirm-tool-calls nil)
-          ;; CRITICAL: Use experiment time budget as agent task timeout
-          ;; This ensures the gptel request times out before the outer timer
-          (my/gptel-agent-task-timeout gptel-auto-experiment-time-budget)
-          (start-time (float-time))
+         ;; Disable preview for headless auto-workflow
+         (gptel-tools-preview-enabled nil)
+         ;; Disable tool confirmations for headless auto-workflow
+         (gptel-confirm-tool-calls nil)
+         ;; CRITICAL: Use experiment time budget as agent task timeout
+         ;; This ensures the gptel request times out before the outer timer
+         (my/gptel-agent-task-timeout gptel-auto-experiment-time-budget)
+         (start-time (float-time))
          (timeout-timer nil)
          (finished nil))
     (if (not worktree)
@@ -2393,11 +2402,11 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                        :comparator-reason reason
                                                        :analyzer-patterns (format "%s" patterns)
                                                        :agent-output agent-output)))
-(gptel-auto-experiment-log-tsv
-                                   (format-time-string "%Y-%m-%d") exp-result)
-                                  (funcall callback exp-result))))
-                          ;; Verification passed - decide whether to keep
-                          (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
+                                 (gptel-auto-experiment-log-tsv
+                                  (format-time-string "%Y-%m-%d") exp-result)
+                                 (funcall callback exp-result))))
+                           ;; Verification passed - decide whether to keep
+                           (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
                              (gptel-auto-experiment-decide
                               (list :score baseline :code-quality baseline-code-quality)
                               (list :score score-after :code-quality code-quality :output agent-output)
@@ -2895,20 +2904,20 @@ Safe to call from cron - handles all edge cases."
     (setq gptel-auto-experiment--api-error-count 0)
     (condition-case err
         (progn
-           (gptel-auto-workflow--cleanup-stale-state)
-           (gptel-auto-workflow--sync-staging-with-main)
-           ;; Auto-recover any orphan commits from previous runs
-           (let ((orphans (gptel-auto-workflow--recover-orphans)))
-             (when orphans
-               (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
-                        (length orphans))
-               (gptel-auto-workflow-recover-all-orphans t)))  ; t = no-push for cron
-           (gptel-auto-workflow-run-async--guarded nil
-                                                   (lambda (_)
-                                                     ;; Auto-promote kept commits from staging to main
-                                                     (gptel-auto-workflow--promote-staging-to-main)
-                                                     ;; Disable headless suppression after workflow completes
-                                                     (gptel-auto-workflow--disable-headless-suppression))))
+          (gptel-auto-workflow--cleanup-stale-state)
+          (gptel-auto-workflow--sync-staging-with-main)
+          ;; Auto-recover any orphan commits from previous runs
+          (let ((orphans (gptel-auto-workflow--recover-orphans)))
+            (when orphans
+              (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
+                       (length orphans))
+              (gptel-auto-workflow-recover-all-orphans t)))  ; t = no-push for cron
+          (gptel-auto-workflow-run-async--guarded nil
+                                                  (lambda (_)
+                                                    ;; Auto-promote kept commits from staging to main
+                                                    (gptel-auto-workflow--promote-staging-to-main)
+                                                    ;; Disable headless suppression after workflow completes
+                                                    (gptel-auto-workflow--disable-headless-suppression))))
       (error
        (message "[auto-workflow] Cron error: %s" err)
        (gptel-auto-workflow--disable-headless-suppression)
@@ -3480,15 +3489,15 @@ Run weekly via cron."
       (when (file-exists-p dir)
         (dolist (file (directory-files dir t "\\.md$"))
           (let ((content (gptel-auto-workflow--read-file-contents file)))
-             (when (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content)
-               (let* ((date-str (match-string 1 content))
-                      (last-tested (when (>= (length date-str) 10)
-                                     (encode-time 0 0 0 (string-to-number (substring date-str 8 10))
-                                                  (string-to-number (substring date-str 5 7))
-                                                  (string-to-number (substring date-str 0 4)))))
-                      (age (when last-tested
-                             (- now (float-time last-tested)))))
-                 (when (and age (> age four-weeks))
+            (when (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content)
+              (let* ((date-str (match-string 1 content))
+                     (last-tested (when (>= (length date-str) 10)
+                                    (encode-time 0 0 0 (string-to-number (substring date-str 8 10))
+                                                 (string-to-number (substring date-str 5 7))
+                                                 (string-to-number (substring date-str 0 4)))))
+                     (age (when last-tested
+                            (- now (float-time last-tested)))))
+                (when (and age (> age four-weeks))
                   (let ((new-phi (max 0.3 (- (if (string-match "^phi:[[:space:]]*\\([0-9.]+\\)" content)
                                                  (string-to-number (match-string 1 content))
                                                0.5)
