@@ -36,8 +36,6 @@ Signals an error if validation fails."
 Helper for validation in callback-based functions."
   (and (stringp value) (not (string-empty-p (string-trim value)))))
 
-(defun gptel-auto-workflow--shell-command-with-timeout (command &optional timeout)
-
 (defun gptel-auto-workflow--read-file-contents (filepath)
   "Read contents of FILEPATH as string.
 Returns nil if file doesn't exist or isn't readable."
@@ -45,6 +43,8 @@ Returns nil if file doesn't exist or isn't readable."
     (with-temp-buffer
       (insert-file-contents filepath)
       (buffer-string))))
+
+(defun gptel-auto-workflow--shell-command-with-timeout (command &optional timeout)
   "Execute shell COMMAND with TIMEOUT (default 30s).
 Returns (output . exit-code) or (error-message . -1) on timeout."
   (gptel-auto-workflow--validate-non-empty-string command "command")
