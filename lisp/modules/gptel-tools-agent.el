@@ -36,6 +36,7 @@ Signals an error if validation fails."
 Helper for validation in callback-based functions."
   (and (stringp value) (not (string-empty-p (string-trim value)))))
 
+;;;###autoload
 (defun gptel-auto-workflow--read-file-contents (filepath)
   "Read contents of FILEPATH as string.
 Returns nil if file doesn't exist or isn't readable."
