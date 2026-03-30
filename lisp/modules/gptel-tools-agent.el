@@ -7,6 +7,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'gptel)
 (require 'gptel-agent)
 
 ;; Forward declarations for variables defined in gptel-auto-workflow-projects.el
@@ -718,8 +719,8 @@ AGENT-NAME must exist in `gptel-agent--agents`.
 
 INCLUDE-HISTORY defaults to `my/gptel-subagent-include-history-default' when nil."
   (cl-block my/gptel--run-agent-tool
-    (unless (require 'gptel-agent nil t)
-      (funcall callback "Error: gptel-agent is not available")
+    (unless (and (require 'gptel nil t) (require 'gptel-agent nil t))
+      (funcall callback "Error: gptel or gptel-agent is not available")
       (cl-return-from my/gptel--run-agent-tool))
     (unless (and (boundp 'gptel-agent--agents) gptel-agent--agents)
       (ignore-errors (gptel-agent-update)))
