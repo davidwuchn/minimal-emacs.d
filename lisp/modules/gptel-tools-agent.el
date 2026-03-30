@@ -195,8 +195,9 @@ An orphan is a commit that exists but is not reachable from any branch."
         (gptel-auto-workflow--git-cmd "git checkout main")
         t))))
 
-(defun gptel-auto-workflow-recover-all-orphans ()
-  "Recover all orphan commits from today to staging branch."
+(defun gptel-auto-workflow-recover-all-orphans (&optional no-push)
+  "Recover all orphan commits from today to staging branch.
+If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
   (interactive)
   (let ((orphans (gptel-auto-workflow--recover-orphans)))
     (if (not orphans)
@@ -211,8 +212,9 @@ An orphan is a commit that exists but is not reachable from any branch."
         (message "[auto-workflow] Recovered %d/%d orphans to staging"
                  recovered (length orphans))
         (when (> recovered 0)
-          (let ((default-directory (gptel-auto-workflow--project-root)))
-            (gptel-auto-workflow--git-cmd "git push origin staging")))))))
+          (unless no-push
+            (let ((default-directory (gptel-auto-workflow--project-root)))
+              (gptel-auto-workflow--git-cmd "git push origin staging"))))))))
 
 (defun gptel-auto-workflow--sync-staging-with-main ()
   "Fast-forward staging branch to match main.
@@ -243,9 +245,42 @@ All shell commands have timeout protection to prevent deadlocks."
                               (substring main-commit 0 7)
                             main-commit))))))
       (error
-       (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
-       (message "[auto-workflow] Failed to sync staging: %s" err)
-       nil))))
+        (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+        (message "[auto-workflow] Failed to sync staging: %s" err)
+        nil))))
+
+(defun gptel-auto-workflow--promote-staging-to-main ()
+  "Fast-forward main branch to match staging if staging has new commits.
+Automatically promotes kept experiment commits from staging to main.
+All shell commands have timeout protection to prevent deadlocks."
+  (let ((default-directory (gptel-auto-workflow--project-root))
+        (original-branch (gptel-auto-workflow--git-cmd
+                          "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
+    (condition-case err
+        (progn
+          (gptel-auto-workflow--git-cmd "git fetch origin" 180)
+          (let ((main-commit (gptel-auto-workflow--git-cmd
+                              "git rev-parse origin/main"))
+                (staging-commit (gptel-auto-workflow--git-cmd
+                                 "git rev-parse origin/staging 2>/dev/null || echo \"none\"")))
+            (if (string= main-commit staging-commit)
+                (message "[auto-workflow] Main already in sync with staging")
+              (progn
+                (gptel-auto-workflow--git-cmd "git checkout main")
+                (gptel-auto-workflow--git-cmd "git merge origin/staging --ff-only")
+                (gptel-auto-workflow--git-cmd "git push origin main")
+                (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+                 (message "[auto-workflow] Promoted staging to main (%s -> %s)"
+                          (if (>= (length main-commit) 7)
+                              (substring main-commit 0 7)
+                            main-commit)
+                          (if (>= (length staging-commit) 7)
+                              (substring staging-commit 0 7)
+                            staging-commit))))))
+      (error
+        (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+        (message "[auto-workflow] Failed to promote staging: %s" err)
+        nil))))
 
 ;;; Customization
 
@@ -2854,17 +2889,20 @@ Safe to call from cron - handles all edge cases."
     (setq gptel-auto-experiment--api-error-count 0)
     (condition-case err
         (progn
-          (gptel-auto-workflow--cleanup-stale-state)
-          (gptel-auto-workflow--sync-staging-with-main)
-          (let ((orphans (gptel-auto-workflow--recover-orphans)))
-            (when orphans
-              (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
-                       (length orphans))
-              (message "[auto-workflow] Run M-x gptel-auto-workflow-recover-all-orphans to recover")))
-          (gptel-auto-workflow-run-async--guarded nil
-                                                  (lambda (_)
-                                                    ;; Disable headless suppression after workflow completes
-                                                    (gptel-auto-workflow--disable-headless-suppression))))
+           (gptel-auto-workflow--cleanup-stale-state)
+           (gptel-auto-workflow--sync-staging-with-main)
+           ;; Auto-recover any orphan commits from previous runs
+           (let ((orphans (gptel-auto-workflow--recover-orphans)))
+             (when orphans
+               (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
+                        (length orphans))
+               (gptel-auto-workflow-recover-all-orphans t)))  ; t = no-push for cron
+           (gptel-auto-workflow-run-async--guarded nil
+                                                   (lambda (_)
+                                                     ;; Auto-promote kept commits from staging to main
+                                                     (gptel-auto-workflow--promote-staging-to-main)
+                                                     ;; Disable headless suppression after workflow completes
+                                                     (gptel-auto-workflow--disable-headless-suppression))))
       (error
        (message "[auto-workflow] Cron error: %s" err)
        (gptel-auto-workflow--disable-headless-suppression)
