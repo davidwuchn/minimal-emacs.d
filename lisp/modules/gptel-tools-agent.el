@@ -76,8 +76,9 @@ Uses robust timeout mechanism to prevent blocking indefinitely."
           ;; Poll with short timeout to avoid blocking indefinitely
           (while (and (not done)
                       (< (float-time (time-subtract (current-time) start-time)) timeout-seconds))
-            ;; Use 0.1s timeout in accept-process-output, don't block
-            (accept-process-output process 0.1 nil nil)
+            ;; Use 0.1s timeout in accept-process-output with non-blocking flag
+            ;; The 't' as last arg prevents indefinite blocking
+            (accept-process-output process 0.1 nil t)
             ;; Small delay to prevent busy-waiting
             (sit-for 0.01))
           ;; Cancel timer if still active
