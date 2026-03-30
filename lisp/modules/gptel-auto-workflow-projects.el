@@ -270,7 +270,18 @@ Also handles caching and result truncation from old advice."
                                    (lambda (&rest _) nil)))
                           (funcall orig-fun wrapped-cb agent-type description prompt))
                       (funcall orig-fun wrapped-cb agent-type description prompt)))))
-            (funcall orig-fun main-cb agent-type description prompt)))))))
+            ;; SAFETY: Never execute in *Messages* buffer - find safe fallback
+            (let ((safe-buffer (cond
+                                ((not (string= (buffer-name) "*Messages*"))
+                                 (current-buffer))
+                                ((get-buffer "*gptel*")
+                                 (get-buffer "*gptel*"))
+                                ((get-buffer "*scratch*")  
+                                 (get-buffer "*scratch*"))
+                                (t
+                                 (get-buffer-create "*gptel-safe-fallback*")))))
+              (with-current-buffer safe-buffer
+                (funcall orig-fun main-cb agent-type description prompt)))))))))
 
 (defun gptel-auto-workflow-enable-per-project-subagents ()
   "Enable per-project subagent buffer support.
