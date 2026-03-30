@@ -1,6 +1,6 @@
 # Mementum State
 
-> Last session: 2026-03-30 16:45
+> Last session: 2026-03-30 17:35
 
 ## Total Improvements: 162+ Real Code Fixes
 
@@ -10,6 +10,7 @@
 
 | # | File | Fix |
 |---|------|-----|
+| 167 | gptel-tools-agent.el | Robust timeout: Timer-based safety net + non-blocking accept-process-output to prevent daemon blocking |
 | 166 | gptel-tools-agent.el | Fixed 4 substring args-out-of-range errors (commit-hash, orphan, staging/main, date parsing) |
 | 165 | gptel-tools-agent.el | Validation retry: Added type checking (stringp validation-error) and length check |
 | 164 | gptel-tools-agent.el | Fixed syntax error: Separated merged function definitions (shell-command-with-timeout + read-file-contents) |
@@ -84,6 +85,9 @@
 λ grader-behaviors. Expected: "improves code" (bug/perf/clarity/testability), not just "fixes bug"
 λ grader-forbidden. "replaces working code WITHOUT improvement" (not all refactoring forbidden)
 λ verification-flexible. "verification attempted" (byte-compile/nucleus/tests/manual) vs "tests pass"
+λ shell-timeout. Timer-based + non-blocking-poll > blocking-wait | prevents daemon freeze
+λ process-cleanup. timer-cancel → process-kill → buffer-kill | strict sequence
+λ accept-process-output. 't' = BLOCK (dangerous), nil = NON-BLOCK (safe)
 ```
 
 ---
@@ -138,16 +142,19 @@
 
 ## Current Status
 
-- **Main branch**: `04948b5` (substring safety fixes)
+- **Main branch**: `d8d79a4` (robust shell timeout + substring fixes)
 - **Staging branch**: synced
-- **Auto-workflow**: 114 experiments, 12 kept (10.5% success rate)
-- **Daemon**: Single instance stable (110+ seconds)
-- **Cron errors**: Fixed args-out-of-range (4 locations)
+- **Auto-workflow**: 130 experiments, 12+ kept (10%+ success rate)
+- **Daemon**: Single instance, responsive after timeout fix
+- **Critical bugs fixed**: 
+  - ✅ Shell command blocking (timer-based safety net)
+  - ✅ args-out-of-range (4 locations with length guards)
 
 ### Bugs Fixed Today
 
 | Bug | Root Cause | Fix |
 |-----|------------|-----|
+| Shell command timeout blocks daemon | accept-process-output with 't' flag blocks forever | Timer-based safety net + non-blocking poll |
 | args-out-of-range (1 0 7) | substring on short/empty strings | Add length guards before substring |
 | void-function read-file-contents | Cross-module visibility | Add require/declare-function |
 | Merged function definitions | Syntax error in file | Separate shell-command-with-timeout and read-file-contents |
@@ -242,3 +249,5 @@ Modify forbidden: "replaces working code WITHOUT improvement" (not all refactori
 12. **Grader threshold** - 80% is realistic, 100% perfect score is unrealistic for LLM output
 13. **No weak fallback** - Local-grader pattern matching gives false passes, fail instead
 14. **Auto-revert/uniquify** - Disable during headless workflow to prevent interference
+15. **Shell command timeout** - `accept-process-output` with `'t` flag BLOCKS FOREVER. Use timer-based safety net + non-blocking poll
+16. **Process cleanup order** - Cancel timer first, then kill process, then kill buffer. Reverse order causes race conditions
