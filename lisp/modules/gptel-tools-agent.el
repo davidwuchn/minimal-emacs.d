@@ -1234,7 +1234,9 @@ Returns worktree path or nil on failure."
           (when (file-exists-p worktree-dir)
             (delete-directory worktree-dir t))
           (make-directory (file-name-directory worktree-dir) t)
-          (magit-worktree-branch worktree-dir branch branch)
+          ;; Use magit-worktree-checkout for existing branch
+          ;; magit-worktree-branch is for creating NEW branches (fails if branch exists)
+          (magit-worktree-checkout worktree-dir branch)
           (setq gptel-auto-workflow--staging-worktree-dir worktree-dir)
           (message "[auto-workflow] Created staging worktree: %s" worktree-dir)
           worktree-dir)
@@ -2391,10 +2393,11 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                        :comparator-reason reason
                                                        :analyzer-patterns (format "%s" patterns)
                                                        :agent-output agent-output)))
-                                 (gptel-auto-experiment-log-tsv
-                                  (format-time-string "%Y-%m-%d") exp-result)
-                                 (funcall callback exp-result))))
-                           (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
+(gptel-auto-experiment-log-tsv
+                                   (format-time-string "%Y-%m-%d") exp-result)
+                                  (funcall callback exp-result))))
+                          ;; Verification passed - decide whether to keep
+                          (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
                              (gptel-auto-experiment-decide
                               (list :score baseline :code-quality baseline-code-quality)
                               (list :score score-after :code-quality code-quality :output agent-output)
