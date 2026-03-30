@@ -332,6 +332,7 @@ INVARIANTS_CHECKED:
 1. Bidirectional consistency: (gethash (gethash id R) R) == id
 2. Unique IDs: No two FSMs share the same ID
 3. ID format: All IDs match regex \"^fsm-[0-9]+-[0-9]+\\\\.[0-9]+$\"
+4. FSM coverage: Every FSM key has corresponding ID key
 
 BUILDS_ON_DISCOVERY: Validation function enables automated testing
 of registry integrity after complex nested agent operations.
@@ -343,13 +344,15 @@ to ensure registry remains in valid state.
 
 Returns t on success, signals error on failure."
   (let ((id-to-fsm (make-hash-table :test 'equal))
+        (fsm-to-id (make-hash-table :test 'eq))
         (fsm-to-count (make-hash-table :test 'eq)))
-    ;; Collect all ID→FSM mappings
+    ;; Collect all ID→FSM and FSM→ID mappings
     (maphash (lambda (k v)
-               (when (stringp k)
-                 (puthash k v id-to-fsm)))
+               (cond
+                ((stringp k) (puthash k v id-to-fsm))
+                ((not (stringp v)) (puthash k v fsm-to-id))))
              my/gptel--fsm-registry)
-    ;; Check bidirectional consistency
+    ;; Check bidirectional consistency for ID→FSM mappings
     (maphash (lambda (id fsm)
                (let ((lookup-fsm (gethash id my/gptel--fsm-registry))
                      (lookup-id (gethash fsm my/gptel--fsm-registry)))
@@ -357,6 +360,14 @@ Returns t on success, signals error on failure."
                               (equal lookup-id id))
                    (error "FSM registry invariant violated: bidirectional mismatch for ID %s" id))))
              id-to-fsm)
+    ;; Check bidirectional consistency for FSM→ID mappings
+    (maphash (lambda (fsm id)
+               (let ((lookup-id (gethash fsm my/gptel--fsm-registry))
+                     (lookup-fsm (gethash id my/gptel--fsm-registry)))
+                 (unless (and (equal lookup-id id)
+                              (eq lookup-fsm fsm))
+                   (error "FSM registry invariant violated: bidirectional mismatch for FSM %s" id))))
+             fsm-to-id)
     ;; Check unique IDs: no FSM should be mapped by multiple IDs
     (maphash (lambda (_id fsm)
                (let ((count (gethash fsm fsm-to-count 0)))

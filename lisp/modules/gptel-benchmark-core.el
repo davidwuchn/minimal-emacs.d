@@ -190,14 +190,19 @@ FIELD should be a keyword like :overall-score."
   (let ((scores (gptel-benchmark--extract-scores r)))
     (and scores (plist-get scores field))))
 
+(defun gptel-benchmark--accumulate-score (total score)
+  "Accumulate SCORE into TOTAL, treating nil as 0.
+Returns the new accumulated total."
+  (+ total (or score 0)))
+
 (defun gptel-benchmark-summarize-results (results)
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores."
   (let ((total 0)
-        (avg-overall 0.0)
-        (avg-efficiency 0.0)
-        (avg-completion 0.0)
-        (avg-constraints 0.0)
+        (sum-overall 0.0)
+        (sum-efficiency 0.0)
+        (sum-completion 0.0)
+        (sum-constraints 0.0)
         (passed 0))
     (dolist (r results)
       (let* ((overall (gptel-benchmark--get-score r :overall-score))
@@ -205,18 +210,18 @@ RESULTS is a list of (run . scores) cons cells or plists with :scores."
              (completion (gptel-benchmark--get-score r :completion-score))
              (constraints (gptel-benchmark--get-score r :constraint-score)))
         (cl-incf total)
-        (cl-incf avg-overall (or overall 0))
-        (cl-incf avg-efficiency (or efficiency 0))
-        (cl-incf avg-completion (or completion 0))
-        (cl-incf avg-constraints (or constraints 0))
+        (setq sum-overall (gptel-benchmark--accumulate-score sum-overall overall))
+        (setq sum-efficiency (gptel-benchmark--accumulate-score sum-efficiency efficiency))
+        (setq sum-completion (gptel-benchmark--accumulate-score sum-completion completion))
+        (setq sum-constraints (gptel-benchmark--accumulate-score sum-constraints constraints))
         (when (>= (or overall 0) 0.7)
           (cl-incf passed))))
     (list :total-tests total
           :passed-tests passed
-          :avg-overall (if (> total 0) (/ avg-overall total) 0.0)
-          :avg-efficiency (if (> total 0) (/ avg-efficiency total) 0.0)
-          :avg-completion (if (> total 0) (/ avg-completion total) 0.0)
-          :avg-constraints (if (> total 0) (/ avg-constraints total) 0.0))))
+          :avg-overall (if (> total 0) (/ sum-overall total) 0.0)
+          :avg-efficiency (if (> total 0) (/ sum-efficiency total) 0.0)
+          :avg-completion (if (> total 0) (/ sum-completion total) 0.0)
+          :avg-constraints (if (> total 0) (/ sum-constraints total) 0.0))))
 
 ;;; Eight Keys Integration
 

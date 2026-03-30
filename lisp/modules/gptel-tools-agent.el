@@ -3551,7 +3551,8 @@ Implements λ termination(x): synthesis ≡ AI | approval ≡ human."
                             (truncate-string-to-width content 50 nil nil "...")
                             content)))
           (insert "\n## Proposed Knowledge Page\n\n")
-          (insert (format "---\ntitle: %s\nstatus: open\ncategory: synthesized\n---\n\n" topic))
+          (insert (format "---\ntitle: %s\nstatus: open\ncategory: synthesized\ntags:\n  - %s\nsynthesized: %s\n---\n\n"
+                          topic topic (format-time-string "%Y-%m-%d")))
           (insert (format "# %s\n\nSynthesized from %d memories.\n\n" topic (length memories-content)))
           (insert "## Key Patterns\n\n(Auto-detected patterns)\n\n")
           (goto-char (point-min)))
