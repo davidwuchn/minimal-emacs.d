@@ -1,16 +1,19 @@
 # Mementum State
 
-> Last session: 2026-03-29 22:00
+> Last session: 2026-03-30 08:30
 
-## Total Improvements: 159+ Real Code Fixes
+## Total Improvements: 162+ Real Code Fixes
 
-527+ commits since March 25, 2026.
+529+ commits since March 25, 2026.
 
-### Recent Fixes (Last 35)
+### Recent Fixes (Last 39)
 
 | # | File | Fix |
-|---|------|------|
-| 160 | gptel-tools-agent.el | Handle nil agent-output in error categorization + better grader logging |
+|---|------|-----|
+| 162 | gptel-tools-agent.el | Worktree nesting: use git-common-dir to find main repo from worktree |
+| 161 | gptel-tools-agent.el | void-variable baseline-code-quality: pass to experiment-run |
+| 160 | gptel-tools-agent.el | Grader behaviors: accept code quality improvements (clarity/testability) |
+| 159 | gptel-tools-agent.el | Handle nil agent-output in error categorization + better grader logging |
 | 159 | gptel-tools-agent.el | Skill gaps → benchmark tests (feedback loop for skill improvement) |
 | 158 | executor.md | Skill check step 1 of tool loop (before editing .el/.clj) |
 | 157 | gptel-tools-agent.el | Retry validation failures with skill instruction + skill gap logging |
@@ -73,6 +76,9 @@
 λ skill-gap-feedback. Validation fails → log gap → convert to benchmark → improve skill → fewer gaps
 λ auto-revert-conflict. Worktree file writes trigger revert on main buffer → disable during workflow
 λ uniquify-buffer-names. Multiple same-name files get prefixes like .emacs.d/ → disable during workflow
+λ grader-behaviors. Expected: "improves code" (bug/perf/clarity/testability), not just "fixes bug"
+λ grader-forbidden. "replaces working code WITHOUT improvement" (not all refactoring forbidden)
+λ verification-flexible. "verification attempted" (byte-compile/nucleus/tests/manual) vs "tests pass"
 ```
 
 ---
@@ -127,55 +133,34 @@
 
 ## Current Status
 
-- **Main branch**: `cd73639`
+- **Main branch**: `53ab3f7` (grader prioritizes Code Mode)
 - **Staging branch**: synced
-- **Auto-workflow complete**: 5 experiments, 1 kept (20% success rate)
+- **Auto-workflow**: 61 experiments, 3 kept (4.9% success rate)
 
-### Workflow Results
+### Bugs Fixed Today
 
-| Metric | Before Fixes | After Fixes |
-|--------|--------------|-------------|
-| Success rate | 7% (1/14) | 20% (1/5) |
-| Grader threshold | 100% | 80% |
-| Skill loading | After failure | Before editing |
+| Bug | Root Cause | Fix |
+|-----|------------|-----|
+| Nested worktrees | project-root returns worktree root | Use git-common-dir |
+| void-variable baseline-code-quality | Not passed to experiment-run | Add parameter |
+| void-variable code-quality | Not in retry lambda scope | Compute locally |
+| Benchmark runs unconditionally | At column 0 (outside lambda) | Move to else branch |
+| Grader uses wrong criteria | Skill Mode taking priority | Prioritize Code Mode in prompt |
 
-**Kept Fix:**
-- `nucleus-tools.el`: Early termination at 50% threshold (performance)
+### Current Results
 
-### Grader Failure Investigation
+| Metric | Value |
+|--------|-------|
+| Total experiments | 61 |
+| Kept | 3 (nucleus-tools.el, gptel-sandbox.el x2) |
+| Success rate | 4.9% |
+| Code crashes | None |
+| Grader format | 10 Code Mode, 7 Skill Mode (improving) |
 
-**Symptoms:**
-- Grader returns score 0
-- agent_output shows "nil" in TSV
-- Error categorized as `:unknown`
+### Grader Improvement
 
-**Root Causes Found:**
-1. `agent-output` can be nil from executor
-2. Error categorization didn't handle nil → now returns `:grader-failed`
-3. Need better logging to trace grader results
-
-**Fixes Applied:**
-- Check for nil/empty agent-output
-- Log grade score/total/passed for debugging
-- Log agent output preview when available
-
-### Grader Reliability Fixes
-
-| Issue | Before | After |
-|-------|--------|-------|
-| Pass threshold | 100% (perfect) | 80% (realistic) |
-| Timeout | 60s | 120s |
-| Fallback | Local-grader (weak) | Fail (no false passes) |
-| Auto-revert | Enabled (buffer reverts) | Disabled during workflow |
-| Uniquify | Enabled (confusing names) | Disabled during workflow |
-
-### Expected Improvement
-
-| Metric | Before | After (expected) |
-|--------|--------|------------------|
-| Success rate | 7% (1/14) | 30-50% |
-| "Unknown error" | 10 failures | Clear categorization |
-| Grader false fails | Many | Fewer (80% threshold) |
+Before: All responses used `seo_geo_optimization` or `eight-keys-grading`
+After: 10 responses use `EXPECTED:` / `SCORE:` format (correct Code Mode)
 
 ### Next Run Checklist
 
@@ -184,9 +169,42 @@
 - [ ] Uniquify disabled
 - [ ] Grader uses 80% threshold
 - [ ] Error categorization improved
+- [ ] Grader behaviors include "improves code quality" (not just bug fixes)
 ```
 λ grader-failed ≠ api-error. Executor success + grader score 0 = grader issue
+λ grader-strict. Score 2/9 for valid refactoring → expected behaviors exclude code quality improvements
+λ forbidden-overreach. "replaces working code" catches beneficial refactoring
 ```
+
+### Grader Behavior Gap Analysis (2026-03-30)
+
+**Current Grader Expected Behaviors:**
+1. change clearly described
+2. change is minimal and focused
+3. fixes real bug, improves performance, or addresses TODO/FIXME
+4. tests pass after change
+
+**Current Grader Forbidden Behaviors:**
+1. large refactor unrelated to fix
+2. changed security files without review
+3. no description or unclear purpose
+4. style-only change without functional impact
+5. replaces working code with equivalent code
+
+**Problem:**
+- Refactoring (extracting helpers, deduplicating) fails "fixes real bug" (not a bug)
+- Refactoring triggers "replaces working code with equivalent code" (forbidden)
+- "tests pass" hard to verify from text output alone
+- Score 2/9 = only 22% → fails 80% threshold
+
+**Evidence:**
+- Row 10: `gptel-tools-agent.el` - extracted helper function → grader_quality=2, discarded
+- Row 13: `gptel-ext-tool-sanitize.el` - sliding window → grader_quality=2, discarded
+- Row 14: `gptel-ext-tool-confirm.el` - buffer validation → grader_quality=2, discarded
+
+**Proposed Fix:**
+Add expected behavior: "improves code quality (clarity, vitality, testability)"
+Modify forbidden: "replaces working code WITHOUT improvement" (not all refactoring)
 
 ### Bugs Fixed Today
 

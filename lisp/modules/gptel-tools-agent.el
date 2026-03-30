@@ -1539,32 +1539,48 @@ ROOT should be an absolute path to the project directory."
 
 (defun gptel-auto-workflow--project-root ()
   "Return the MAIN project root directory.
+When in a worktree, returns the main repo root (parent of .git/worktrees).
 Priority:
 1. gptel-auto-workflow--project-root-override (if set via .dir-locals.el)
-2. project.el detection (project-current + project-root)
-3. Git worktree root (git rev-parse --show-toplevel)
-4. ~/.emacs.d/ (fallback)
+2. Git common dir (handles worktrees correctly)
+3. project.el detection (project-current + project-root)
+4. Git worktree root (git rev-parse --show-toplevel)
+5. ~/.emacs.d/ (fallback)
 Always returns absolute path."
   (cond
    ;; 1. Explicit override (from .dir-locals.el)
    (gptel-auto-workflow--project-root-override
     gptel-auto-workflow--project-root-override)
-   
-   ;; 2. project.el detection (preferred method)
+    
+   ;; 2. Git common dir - returns main repo even from worktrees
+   ((let* ((git-common (string-trim
+                        (shell-command-to-string
+                         "git rev-parse --git-common-dir 2>/dev/null || echo ''")))
+           (git-dir (when (and (not (string-empty-p git-common))
+                               (file-directory-p (expand-file-name git-common)))
+                      (expand-file-name git-common))))
+      (when git-dir
+        (if (string-match-p "/.git/worktrees/" git-dir)
+            ;; Worktree: go up to find main repo root
+            (expand-file-name "../../.." git-dir)
+          ;; Main repo: use parent of .git
+          (file-name-directory (directory-file-name git-dir))))))
+    
+   ;; 3. project.el detection (preferred method)
    ((and (fboundp 'project-current)
          (fboundp 'project-root)
          (project-current nil))
     (expand-file-name (project-root (project-current nil))))
-   
-   ;; 3. Git detection (fallback)
+    
+   ;; 4. Git toplevel (fallback)
    ((let ((git-root (string-trim
                      (shell-command-to-string
                       "git rev-parse --show-toplevel 2>/dev/null || echo ''"))))
       (and (not (string-empty-p git-root))
            (file-directory-p git-root)
            git-root)))
-   
-   ;; 4. Fallback
+    
+   ;; 5. Fallback
    (t (expand-file-name
        (or (when (boundp 'minimal-emacs-user-directory)
              minimal-emacs-user-directory)
@@ -1754,13 +1770,13 @@ The grader subagent overlay will appear in the current buffer at time of call."
              output
              '("change clearly described"
                "change is minimal and focused"
-               "fixes real bug, improves performance, or addresses TODO/FIXME"
-               "tests pass after change")
-             '("large refactor unrelated to fix"
+               "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
+               "verification attempted (byte-compile, nucleus, tests, or manual)")
+             '("large refactor unrelated to stated improvement"
                "changed security files without review"
                "no description or unclear purpose"
                "style-only change without functional impact"
-               "replaces working code with equivalent code")
+               "replaces working code without clear improvement")
              (lambda (result)
                (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
                  (when (and state (not (plist-get state :done)))
@@ -2098,8 +2114,9 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
 
 ;;; Single Experiment
 
-(defun gptel-auto-experiment-run (target experiment-id max-experiments baseline previous-results callback)
-  "Run single experiment. Call CALLBACK with result plist."
+(defun gptel-auto-experiment-run (target experiment-id max-experiments baseline baseline-code-quality previous-results callback)
+  "Run single experiment. Call CALLBACK with result plist.
+BASELINE-CODE-QUALITY is the initial code quality score."
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
@@ -2188,7 +2205,8 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                               (gptel-auto-experiment-log-tsv
                                (format-time-string "%Y-%m-%d") exp-result)
                               (funcall callback exp-result)))
-(let* ((bench (gptel-auto-experiment-benchmark t))
+                        ;; Grader passed - run benchmark and validation
+                        (let* ((bench (gptel-auto-experiment-benchmark t))
                                (passed (plist-get bench :passed))
                                (validation-error (plist-get bench :validation-error))
                                (tests-passed (plist-get bench :tests-passed))
@@ -2214,12 +2232,13 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
                                           (if (plist-get retry-grade :passed)
                                               (let ((retry-bench (gptel-auto-experiment-benchmark t)))
                                                 (if (plist-get retry-bench :passed)
-                                                    (let ((retry-score (plist-get retry-bench :eight-keys)))
-                                                      (message "[auto-experiment] ✓ Retry succeeded")
-                                                      (setq finished t)
-                                                      (gptel-auto-experiment-decide
-                                                       (list :score baseline :code-quality baseline-code-quality)
-                                                       (list :score retry-score :code-quality code-quality :output retry-output)
+(let ((retry-score (plist-get retry-bench :eight-keys))
+                                                          (retry-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
+                                                       (message "[auto-experiment] ✓ Retry succeeded")
+                                                       (setq finished t)
+                                                       (gptel-auto-experiment-decide
+                                                        (list :score baseline :code-quality baseline-code-quality)
+                                                        (list :score retry-score :code-quality retry-quality :output retry-output)
                                                        (lambda (decision)
                                                          (let ((keep (plist-get decision :keep)))
                                                            (when keep
@@ -2431,10 +2450,11 @@ Adapts max-experiments based on API error rate."
                                  target (length results)
                                  (or best-score 0))
                         (funcall callback (nreverse results)))
-                    (gptel-auto-experiment-run
-                     target exp-id max-exp
-                     best-score
-                     results
+(gptel-auto-experiment-run
+                      target exp-id max-exp
+                      best-score
+                      baseline-code-quality
+                      results
                      (lambda (result)
                        (push result results)
                        (gptel-auto-workflow--update-progress)  ; Update watchdog
