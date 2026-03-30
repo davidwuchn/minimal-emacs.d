@@ -21,11 +21,25 @@ Prevents deadlocks from hanging git/shell commands."
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defun gptel-auto-workflow--validate-non-empty-string (value name &optional error-prefix)
+  "Validate that VALUE is a non-nil, non-empty string.
+NAME is used in error message. ERROR-PREFIX defaults to \"[auto-workflow]\".
+Signals an error if validation fails."
+  (unless (and (stringp value) (not (string-empty-p (string-trim value))))
+    (error "%s Invalid %s: must be non-nil, non-empty string, got %S"
+           (or error-prefix "[auto-workflow]")
+           name
+           value)))
+
+(defun gptel-auto-workflow--non-empty-string-p (value)
+  "Return t if VALUE is a non-nil, non-empty string.
+Helper for validation in callback-based functions."
+  (and (stringp value) (not (string-empty-p (string-trim value)))))
+
 (defun gptel-auto-workflow--shell-command-with-timeout (command &optional timeout)
   "Execute shell COMMAND with TIMEOUT (default 30s).
 Returns (output . exit-code) or (error-message . -1) on timeout."
-  (unless (and (stringp command) (not (string-empty-p (string-trim command))))
-    (error "[auto-workflow] Invalid command: must be non-nil, non-empty string, got %S" command))
+  (gptel-auto-workflow--validate-non-empty-string command "command")
   (let* ((timeout-seconds (or timeout gptel-auto-workflow-shell-timeout))
          (buffer (generate-new-buffer " *shell-timeout*"))
          (process nil)
@@ -724,7 +738,7 @@ INCLUDE-HISTORY defaults to `my/gptel-subagent-include-history-default' when nil
       (cl-return-from my/gptel--run-agent-tool))
     (unless (and (boundp 'gptel-agent--agents) gptel-agent--agents)
       (ignore-errors (gptel-agent-update)))
-    (unless (and (stringp agent-name) (not (string-empty-p (string-trim agent-name))))
+    (unless (gptel-auto-workflow--non-empty-string-p agent-name)
       (funcall callback "Error: agent-name is empty")
       (cl-return-from my/gptel--run-agent-tool))
     (unless (assoc agent-name gptel-agent--agents)
