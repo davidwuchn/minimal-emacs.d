@@ -446,74 +446,87 @@ Expected tools: %S"
 ;;             :type string
 ;;             :enum ("safe" "normal" "aggressive"))))
 
+(defun nucleus-tools--validation-error (arg-name constraint val &rest fmt-args)
+  "Signal a tool contract validation error.
+
+ARG-NAME is the argument being validated.
+CONSTRAINT is the constraint keyword (e.g., :pattern, :minimum).
+VAL is the actual value that failed validation.
+FMT-ARGS are additional format arguments for the message."
+  (let ((msg (pcase constraint
+               (:pattern "Tool Contract Violation: '%s' value '%s' does not match pattern '%s'")
+               (:minLength "Tool Contract Violation: '%s' length %d is less than minLength %d")
+               (:maxLength "Tool Contract Violation: '%s' length %d exceeds maxLength %d")
+               (:enum "Tool Contract Violation: '%s' value '%s' not in enum %S")
+               (:minimum "Tool Contract Violation: '%s' value %s is less than minimum %s")
+               (:maximum "Tool Contract Violation: '%s' value %s exceeds maximum %s")
+               (:exclusiveMinimum "Tool Contract Violation: '%s' value %s must be > %s (exclusive)")
+               (:exclusiveMaximum "Tool Contract Violation: '%s' value %s must be < %s (exclusive)")
+               (:minItems "Tool Contract Violation: '%s' has %d items, minimum is %d")
+               (:maxItems "Tool Contract Violation: '%s' has %d items, maximum is %d")
+               (:type "Tool Contract Violation: expected '%s' to be %s, got %S")
+               (:required "Tool Contract Violation (%s): missing or null required argument '%s'")
+               (_ "Tool Contract Violation: '%s' failed validation for %s"))))
+    (apply #'user-error msg arg-name val fmt-args)))
+
 (defun nucleus-tools--validate-string (val arg-name constraints)
   "Validate string VAL against CONSTRAINTS.
 CONSTRAINTS may include :pattern, :minLength, :maxLength, :enum."
   (unless (stringp val)
-    (user-error "Tool Contract Violation: expected '%s' to be a string, got %S" arg-name val))
+    (nucleus-tools--validation-error arg-name :type val "a string"))
   
   (when-let ((pattern (plist-get constraints :pattern)))
     (unless (string-match-p pattern val)
-      (user-error "Tool Contract Violation: '%s' value '%s' does not match pattern '%s'"
-                  arg-name val pattern)))
+      (nucleus-tools--validation-error arg-name :pattern val pattern)))
   
   (when-let ((min-len (plist-get constraints :minLength)))
     (when (< (length val) min-len)
-      (user-error "Tool Contract Violation: '%s' length %d is less than minLength %d"
-                  arg-name (length val) min-len)))
+      (nucleus-tools--validation-error arg-name :minLength (length val) min-len)))
   
   (when-let ((max-len (plist-get constraints :maxLength)))
     (when (> (length val) max-len)
-      (user-error "Tool Contract Violation: '%s' length %d exceeds maxLength %d"
-                  arg-name (length val) max-len)))
+      (nucleus-tools--validation-error arg-name :maxLength (length val) max-len)))
   
   (when-let ((enum (plist-get constraints :enum)))
     (unless (member val enum)
-      (user-error "Tool Contract Violation: '%s' value '%s' not in enum %S"
-                  arg-name val enum))))
+      (nucleus-tools--validation-error arg-name :enum val enum))))
 
 (defun nucleus-tools--validate-number (val arg-name constraints)
   "Validate number VAL against CONSTRAINTS.
 CONSTRAINTS may include :minimum, :maximum, :exclusiveMinimum, :exclusiveMaximum."
   (unless (numberp val)
-    (user-error "Tool Contract Violation: expected '%s' to be a number, got %S" arg-name val))
+    (nucleus-tools--validation-error arg-name :type val "a number"))
   
   (when-let ((min (plist-get constraints :minimum)))
     (when (< val min)
-      (user-error "Tool Contract Violation: '%s' value %s is less than minimum %s"
-                  arg-name val min)))
+      (nucleus-tools--validation-error arg-name :minimum val min)))
   
   (when-let ((max (plist-get constraints :maximum)))
     (when (> val max)
-      (user-error "Tool Contract Violation: '%s' value %s exceeds maximum %s"
-                  arg-name val max)))
+      (nucleus-tools--validation-error arg-name :maximum val max)))
   
   (when-let ((excl-min (plist-get constraints :exclusiveMinimum)))
     (when (<= val excl-min)
-      (user-error "Tool Contract Violation: '%s' value %s must be > %s (exclusive)"
-                  arg-name val excl-min)))
+      (nucleus-tools--validation-error arg-name :exclusiveMinimum val excl-min)))
   
   (when-let ((excl-max (plist-get constraints :exclusiveMaximum)))
     (when (>= val excl-max)
-      (user-error "Tool Contract Violation: '%s' value %s must be < %s (exclusive)"
-                  arg-name val excl-max))))
+      (nucleus-tools--validation-error arg-name :exclusiveMaximum val excl-max))))
 
 (defun nucleus-tools--validate-array (val arg-name constraints)
   "Validate array VAL against CONSTRAINTS.
 CONSTRAINTS may include :minItems, :maxItems, :items."
   (unless (or (vectorp val) (listp val))
-    (user-error "Tool Contract Violation: expected '%s' to be an array, got %S" arg-name val))
+    (nucleus-tools--validation-error arg-name :type val "an array"))
   
   (let ((len (length val)))
     (when-let ((min-items (plist-get constraints :minItems)))
       (when (< len min-items)
-        (user-error "Tool Contract Violation: '%s' has %d items, minimum is %d"
-                    arg-name len min-items)))
+        (nucleus-tools--validation-error arg-name :minItems len min-items)))
     
     (when-let ((max-items (plist-get constraints :maxItems)))
       (when (> len max-items)
-        (user-error "Tool Contract Violation: '%s' has %d items, maximum is %d"
-                    arg-name len max-items)))))
+        (nucleus-tools--validation-error arg-name :maxItems len max-items)))))
 
 ;;; Tool Contract Validation
 
@@ -539,8 +552,7 @@ Supports JSON Schema-like validators:
           (cond
            ;; Check for missing required arguments
            ((and (null val) (not optional) (not (member type '("boolean" boolean))))
-            (user-error "Tool Contract Violation (%s): missing or null required argument '%s'"
-                        tool-name arg-name))
+            (nucleus-tools--validation-error tool-name :required arg-name))
            
            ;; Validate non-null values
            ((not (null val))
@@ -550,20 +562,17 @@ Supports JSON Schema-like validators:
               ((or "integer" 'integer)
                (nucleus-tools--validate-number val arg-name spec)
                (unless (integerp val)
-                 (user-error "Tool Contract Violation (%s): expected '%s' to be an integer, got %S"
-                             tool-name arg-name val)))
+                 (nucleus-tools--validation-error arg-name :type val "an integer")))
               ((or "number" 'number)
                (nucleus-tools--validate-number val arg-name spec))
               ((or "boolean" 'boolean)
                (unless (memq val '(t nil :json-false))
-                 (user-error "Tool Contract Violation (%s): expected '%s' to be a boolean, got %S"
-                             tool-name arg-name val)))
+                 (nucleus-tools--validation-error arg-name :type val "a boolean")))
               ((or "array" 'array)
                (nucleus-tools--validate-array val arg-name spec))
               ((or "object" 'object)
                (unless (or (hash-table-p val) (listp val))
-                 (user-error "Tool Contract Violation (%s): expected '%s' to be an object, got %S"
-                             tool-name arg-name val)))
+                 (nucleus-tools--validation-error arg-name :type val "an object")))
               (_ nil))))
           (cl-incf i)))
       (apply func call-args))))
