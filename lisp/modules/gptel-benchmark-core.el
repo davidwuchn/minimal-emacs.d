@@ -108,9 +108,13 @@ Handles plists by converting to alists."
 
 (defun gptel-benchmark--get-field (obj field)
   "Get FIELD from OBJ, handling both plist and alist formats.
-FIELD should be a keyword like :score."
+FIELD should be a keyword like :score.
+For alist lookup, converts :score to 'score symbol."
   (or (plist-get obj field)
-      (cdr (assq (intern (substring (symbol-name field) 1)) obj))))
+      (let ((alist-key (if (keywordp field)
+                           (intern (substring (symbol-name field) 1))
+                         field)))
+        (cdr (assq alist-key obj)))))
 
 ;;; Historical Tracking
 

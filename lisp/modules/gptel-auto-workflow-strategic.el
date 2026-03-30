@@ -394,12 +394,16 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
 (defun gptel-auto-workflow-research-status ()
   "Show researcher status for current project."
   (interactive)
-  (let ((proj-root (gptel-auto-workflow--project-root)))
+  (let ((proj-root (gptel-auto-workflow--project-root))
+        (findings nil))
+    (setq findings (gethash proj-root
+                            gptel-auto-workflow--research-findings-cache
+                            ""))
     (list :running (timerp gptel-auto-workflow--research-timer)
           :interval gptel-auto-workflow-research-interval
           :project proj-root
-          :findings-cached (not (string-empty-p (gethash proj-root gptel-auto-workflow--research-findings-cache "")))
-          :findings-length (length (gethash proj-root gptel-auto-workflow--research-findings-cache ""))
+          :findings-cached (not (string-empty-p findings))
+          :findings-length (length findings)
           :cache-file (gptel-auto-workflow--research-file))))
 
 (provide 'gptel-auto-workflow-strategic)
