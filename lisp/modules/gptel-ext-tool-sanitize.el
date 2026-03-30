@@ -139,8 +139,12 @@ RunAgent was registered, leaving it out of the buffer's tool list."
       ;; This prevents orphaned tool role messages (tool_call_id=null) that
       ;; cause 400 errors when the assistant message has no matching tool_calls.
       (when pruned
+        ;; FIX: Remove actual pruned items (not just nil-named ones)
+        ;; my/gptel--nil-tool-call-p only catches nil/null/empty names,
+        ;; but pruned also contains unknown (non-nil) tool names.
+        ;; Use memq to remove exactly the items added to pruned.
         (plist-put info :tool-use
-                   (cl-remove-if #'my/gptel--nil-tool-call-p
+                   (cl-remove-if (lambda (tc) (memq tc pruned))
                                  tool-use))
         ;; Fix A: if all tool calls were malformed and :tool-use is now empty,
         ;; gptel--handle-tool-use's when-let* will short-circuit on (ntools 0)
