@@ -977,15 +977,29 @@ Values: plist (:worktree-dir :current-branch).")
 (unless (hash-table-p gptel-auto-workflow--worktree-state)
   (setq gptel-auto-workflow--worktree-state (make-hash-table :test 'equal)))
 
+(defun gptel-auto-workflow--get-worktree-state (target key)
+  "Get value for KEY from worktree state for TARGET.
+Helper to reduce duplication in worktree accessor functions.
+Returns nil if hash table is invalid or TARGET not found."
+  (when (hash-table-p gptel-auto-workflow--worktree-state)
+    (plist-get (gethash target gptel-auto-workflow--worktree-state) key)))
+
 (defun gptel-auto-workflow--get-worktree-dir (target)
   "Get worktree-dir for TARGET from hash table."
-  (when (hash-table-p gptel-auto-workflow--worktree-state)
-    (plist-get (gethash target gptel-auto-workflow--worktree-state) :worktree-dir)))
+  (gptel-auto-workflow--get-worktree-state target :worktree-dir))
 
 (defun gptel-auto-workflow--get-current-branch (target)
   "Get current-branch for TARGET from hash table."
+  (gptel-auto-workflow--get-worktree-state target :current-branch))
+
+(defun gptel-auto-workflow--clear-worktree-state (target)
+  "Clear worktree state for TARGET.
+Resets :worktree-dir and :current-branch to nil in hash table.
+ASSUMPTION: gptel-auto-workflow--worktree-state is a hash table.
+TESTABLE: Can verify state is cleared by checking gethash result."
   (when (hash-table-p gptel-auto-workflow--worktree-state)
-    (plist-get (gethash target gptel-auto-workflow--worktree-state) :current-branch)))
+    (puthash target (list :worktree-dir nil :current-branch nil)
+             gptel-auto-workflow--worktree-state)))
 
 ;;; Worktree Management
 
@@ -1042,8 +1056,7 @@ If branch exists locally, deletes it first to avoid conflicts."
        (when (buffer-live-p stderr-buffer)
          (kill-buffer stderr-buffer))
        (message "[auto-workflow] Failed to create worktree: %s" err)
-       (puthash target (list :worktree-dir nil :current-branch nil)
-                gptel-auto-workflow--worktree-state)
+       (gptel-auto-workflow--clear-worktree-state target)
        nil))))
 
 (defun gptel-auto-workflow-delete-worktree (target)
@@ -1067,8 +1080,7 @@ Uses git CLI directly to avoid magit issues."
                 (call-process "git" nil nil nil "branch" "-D" branch)))
           (error
            (message "[auto-workflow] Failed to delete worktree: %s" err)))))
-    (puthash target (list :worktree-dir nil :current-branch nil)
-             gptel-auto-workflow--worktree-state)))
+    (gptel-auto-workflow--clear-worktree-state target)))
 
 ;;; Staging Branch Protection
 
@@ -1560,7 +1572,7 @@ Always returns absolute path."
    ;; 1. Explicit override (from .dir-locals.el)
    (gptel-auto-workflow--project-root-override
     gptel-auto-workflow--project-root-override)
-    
+   
    ;; 2. Git common dir - returns main repo even from worktrees
    ((let* ((git-common (string-trim
                         (shell-command-to-string
@@ -1574,13 +1586,13 @@ Always returns absolute path."
             (expand-file-name "../../.." git-dir)
           ;; Main repo: use parent of .git
           (file-name-directory (directory-file-name git-dir))))))
-    
+   
    ;; 3. project.el detection (preferred method)
    ((and (fboundp 'project-current)
          (fboundp 'project-root)
          (project-current nil))
     (expand-file-name (project-root (project-current nil))))
-    
+   
    ;; 4. Git toplevel (fallback)
    ((let ((git-root (string-trim
                      (shell-command-to-string
@@ -1588,7 +1600,7 @@ Always returns absolute path."
       (and (not (string-empty-p git-root))
            (file-directory-p git-root)
            git-root)))
-    
+   
    ;; 5. Fallback
    (t (expand-file-name
        (or (when (boundp 'minimal-emacs-user-directory)
@@ -2124,15 +2136,15 @@ BASELINE-CODE-QUALITY is the initial code quality score."
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
-;; CRITICAL: Set default-directory to worktree so all subagents
-          ;; operate in the correct context. Each worktree = one session.
-          (default-directory (or worktree default-directory))
-          ;; Get project buffer for overlay routing (ensure hash table exists)
-          (project-buf (when (and (boundp 'gptel-auto-workflow--current-project)
-                                  gptel-auto-workflow--current-project
-                                  (hash-table-p gptel-auto-workflow--project-buffers))
-                         (gethash (expand-file-name gptel-auto-workflow--current-project)
-                                  gptel-auto-workflow--project-buffers)))
+         ;; CRITICAL: Set default-directory to worktree so all subagents
+         ;; operate in the correct context. Each worktree = one session.
+         (default-directory (or worktree default-directory))
+         ;; Get project buffer for overlay routing (ensure hash table exists)
+         (project-buf (when (and (boundp 'gptel-auto-workflow--current-project)
+                                 gptel-auto-workflow--current-project
+                                 (hash-table-p gptel-auto-workflow--project-buffers))
+                        (gethash (expand-file-name gptel-auto-workflow--current-project)
+                                 gptel-auto-workflow--project-buffers)))
          ;; Disable preview for headless auto-workflow
          (gptel-tools-preview-enabled nil)
          ;; Disable tool confirmations for headless auto-workflow
@@ -2148,16 +2160,16 @@ BASELINE-CODE-QUALITY is the initial code quality score."
          (let* ((patterns (when analysis (plist-get analysis :patterns)))
                 (prompt (gptel-auto-experiment-build-prompt
                          target experiment-id max-experiments analysis baseline)))
-(setq timeout-timer
-                  (run-with-timer gptel-auto-experiment-time-budget nil
-                                  (lambda ()
-                                    (unless finished
-                                      (setq finished t)
-                                      ;; Don't delete worktree - will be cleaned up by run-next
-                                      (funcall callback
-                                               (list :target target
-                                                     :id experiment-id
-                                                     :error "timeout"))))))
+           (setq timeout-timer
+                 (run-with-timer gptel-auto-experiment-time-budget nil
+                                 (lambda ()
+                                   (unless finished
+                                     (setq finished t)
+                                     ;; Don't delete worktree - will be cleaned up by run-next
+                                     (funcall callback
+                                              (list :target target
+                                                    :id experiment-id
+                                                    :error "timeout"))))))
            ;; Routing handled by gptel-auto-workflow--advice-task-override
            (my/gptel--run-agent-tool
             (lambda (agent-output)
@@ -2196,112 +2208,112 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                (message "[auto-workflow] Reduced max experiments to %d due to API errors" max-exp)))
                            ;; Log the failure
                            (let ((exp-result (list :target target
-                                                  :id experiment-id
-                                                  :hypothesis hypothesis
-                                                  :score-before baseline
-                                                  :score-after 0
-                                                  :kept nil
-                                                  :duration (- (float-time) start-time)
-                                                  :grader-quality grade-score
-                                                  :grader-reason grade-details
-                                                  :comparator-reason (symbol-name error-category)
-                                                  :analyzer-patterns (format "%s" patterns)
-                                                  :agent-output agent-output)))
+                                                   :id experiment-id
+                                                   :hypothesis hypothesis
+                                                   :score-before baseline
+                                                   :score-after 0
+                                                   :kept nil
+                                                   :duration (- (float-time) start-time)
+                                                   :grader-quality grade-score
+                                                   :grader-reason grade-details
+                                                   :comparator-reason (symbol-name error-category)
+                                                   :analyzer-patterns (format "%s" patterns)
+                                                   :agent-output agent-output)))
                              (gptel-auto-experiment-log-tsv
                               (format-time-string "%Y-%m-%d") exp-result)
                              (funcall callback exp-result)))
                        ;; Grader passed - run benchmark and validation
                        (let* ((bench (gptel-auto-experiment-benchmark t))
-                               (passed (plist-get bench :passed))
-                               (validation-error (plist-get bench :validation-error))
-                               (tests-passed (plist-get bench :tests-passed))
-                               (score-after (plist-get bench :eight-keys)))
-                          (if (not passed)
-                              ;; Check if validation error is teachable and we should retry
-                               (if (and validation-error
-                                        (stringp validation-error)
-                                        (> (length validation-error) 0)
-                                        (string-match-p "cl-return-from.*without.*cl-block\\|Dangerous pattern" validation-error)
-                                        (not (bound-and-true-p gptel-auto-experiment--in-retry)))
-                                  ;; Retry with teaching
-                                  (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
-                                                               (gptel-auto-workflow--project-root)))
-                                        (gptel-auto-experiment--in-retry t))
-                                    (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
-                                    (message "[auto-experiment] ✗ %s" validation-error)
-                                    (magit-git-success "checkout" "--" ".")
-                                    ;; Re-run executor with teaching prompt
-                                    (my/gptel--run-agent-tool
-                                     (lambda (retry-output)
-                                       (gptel-auto-experiment-grade
-                                        retry-output
-                                        (lambda (retry-grade)
-                                          (if (plist-get retry-grade :passed)
-                                              (let ((retry-bench (gptel-auto-experiment-benchmark t)))
-                                                (if (plist-get retry-bench :passed)
-                                                    (let ((retry-score (plist-get retry-bench :eight-keys))
-                                                          (retry-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
-                                                       (message "[auto-experiment] ✓ Retry succeeded")
-                                                       (setq finished t)
-                                                       (gptel-auto-experiment-decide
-                                                        (list :score baseline :code-quality baseline-code-quality)
-                                                        (list :score retry-score :code-quality retry-quality :output retry-output)
-                                                        (lambda (decision)
-                                                          (let ((keep (plist-get decision :keep)))
-                                                            (when keep
-                                                              (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
-                                                                                           (gptel-auto-workflow--project-root)))
-                                                                    (msg (format "◈ Retry: fix validation in %s" target)))
-                                                                (magit-git-success "add" "-A")
-                                                                (magit-git-success "commit" "-m" msg)))
-                                                            (funcall callback (list :target target
-                                                                                    :id experiment-id
-                                                                                    :score-after retry-score
-                                                                                    :kept keep
-                                                                                    :retries 1))))))
-                                                  ;; Retry also failed validation
-                                                  (progn
-                                                    (setq finished t)
-                                                    (message "[auto-experiment] ✗ Retry still failed validation")
-                                                    (funcall callback (list :target target
-                                                                            :id experiment-id
-                                                                            :kept nil
-                                                                            :validation-error (plist-get retry-bench :validation-error)))))))
-                                            ;; Retry grader failed
-                                            (progn
-                                              (setq finished t)
-                                              (funcall callback (list :target target
-                                                                      :id experiment-id
-                                                                      :kept nil)))))))
-                                     "executor"
-                                     (format "Retry: fix validation error in %s" target)
-                                     (gptel-auto-experiment--make-retry-prompt target validation-error prompt)))
-                                ;; No retry - just fail
-                                (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
-                                                             (gptel-auto-workflow--project-root))))
-                                  (setq finished t)
-                                  (magit-git-success "checkout" "--" ".")
-                                  (let ((reason (cond
-                                                 (validation-error validation-error)
-                                                 ((not (plist-get bench :nucleus-passed)) "nucleus-validation-failed")
-                                                 ((not tests-passed) "tests-failed")
-                                                 (t "verification-failed"))))
-                                    (message "[auto-experiment] ✗ %s for %s" reason target)
-                                    (let ((exp-result (list :target target
-                                                            :id experiment-id
-                                                            :hypothesis hypothesis
-                                                            :score-before baseline
-                                                            :score-after 0
-                                                            :kept nil
-                                                            :duration (- (float-time) start-time)
-                                                            :grader-quality grade-score
-                                                            :grader-reason (plist-get grade :details)
-                                                            :comparator-reason reason
-                                                            :analyzer-patterns (format "%s" patterns)
-                                                            :agent-output agent-output)))
-                                      (gptel-auto-experiment-log-tsv
-                                       (format-time-string "%Y-%m-%d") exp-result)
-                                      (funcall callback exp-result))))
+                              (passed (plist-get bench :passed))
+                              (validation-error (plist-get bench :validation-error))
+                              (tests-passed (plist-get bench :tests-passed))
+                              (score-after (plist-get bench :eight-keys)))
+                         (if (not passed)
+                             ;; Check if validation error is teachable and we should retry
+                             (if (and validation-error
+                                      (stringp validation-error)
+                                      (> (length validation-error) 0)
+                                      (string-match-p "cl-return-from.*without.*cl-block\\|Dangerous pattern" validation-error)
+                                      (not (bound-and-true-p gptel-auto-experiment--in-retry)))
+                                 ;; Retry with teaching
+                                 (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
+                                                              (gptel-auto-workflow--project-root)))
+                                       (gptel-auto-experiment--in-retry t))
+                                   (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
+                                   (message "[auto-experiment] ✗ %s" validation-error)
+                                   (magit-git-success "checkout" "--" ".")
+                                   ;; Re-run executor with teaching prompt
+                                   (my/gptel--run-agent-tool
+                                    (lambda (retry-output)
+                                      (gptel-auto-experiment-grade
+                                       retry-output
+                                       (lambda (retry-grade)
+                                         (if (plist-get retry-grade :passed)
+                                             (let ((retry-bench (gptel-auto-experiment-benchmark t)))
+                                               (if (plist-get retry-bench :passed)
+                                                   (let ((retry-score (plist-get retry-bench :eight-keys))
+                                                         (retry-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
+                                                     (message "[auto-experiment] ✓ Retry succeeded")
+                                                     (setq finished t)
+                                                     (gptel-auto-experiment-decide
+                                                      (list :score baseline :code-quality baseline-code-quality)
+                                                      (list :score retry-score :code-quality retry-quality :output retry-output)
+                                                      (lambda (decision)
+                                                        (let ((keep (plist-get decision :keep)))
+                                                          (when keep
+                                                            (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
+                                                                                         (gptel-auto-workflow--project-root)))
+                                                                  (msg (format "◈ Retry: fix validation in %s" target)))
+                                                              (magit-git-success "add" "-A")
+                                                              (magit-git-success "commit" "-m" msg)))
+                                                          (funcall callback (list :target target
+                                                                                  :id experiment-id
+                                                                                  :score-after retry-score
+                                                                                  :kept keep
+                                                                                  :retries 1))))))
+                                                 ;; Retry also failed validation
+                                                 (progn
+                                                   (setq finished t)
+                                                   (message "[auto-experiment] ✗ Retry still failed validation")
+                                                   (funcall callback (list :target target
+                                                                           :id experiment-id
+                                                                           :kept nil
+                                                                           :validation-error (plist-get retry-bench :validation-error)))))))
+                                         ;; Retry grader failed
+                                         (progn
+                                           (setq finished t)
+                                           (funcall callback (list :target target
+                                                                   :id experiment-id
+                                                                   :kept nil)))))))
+                                   "executor"
+                                   (format "Retry: fix validation error in %s" target)
+                                   (gptel-auto-experiment--make-retry-prompt target validation-error prompt)))
+                           ;; No retry - just fail
+                           (let ((default-directory (or (gptel-auto-workflow--get-worktree-dir target)
+                                                        (gptel-auto-workflow--project-root))))
+                             (setq finished t)
+                             (magit-git-success "checkout" "--" ".")
+                             (let ((reason (cond
+                                            (validation-error validation-error)
+                                            ((not (plist-get bench :nucleus-passed)) "nucleus-validation-failed")
+                                            ((not tests-passed) "tests-failed")
+                                            (t "verification-failed"))))
+                               (message "[auto-experiment] ✗ %s for %s" reason target)
+                               (let ((exp-result (list :target target
+                                                       :id experiment-id
+                                                       :hypothesis hypothesis
+                                                       :score-before baseline
+                                                       :score-after 0
+                                                       :kept nil
+                                                       :duration (- (float-time) start-time)
+                                                       :grader-quality grade-score
+                                                       :grader-reason (plist-get grade :details)
+                                                       :comparator-reason reason
+                                                       :analyzer-patterns (format "%s" patterns)
+                                                       :agent-output agent-output)))
+                                 (gptel-auto-experiment-log-tsv
+                                  (format-time-string "%Y-%m-%d") exp-result)
+                                 (funcall callback exp-result))))
                            (let ((code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
                              (gptel-auto-experiment-decide
                               (list :score baseline :code-quality baseline-code-quality)
@@ -2349,10 +2361,10 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                       (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
                                       (magit-git-success "checkout" "--" ".")
                                       (cl-incf gptel-auto-experiment--no-improvement-count)))
-(gptel-auto-experiment-log-tsv
-                                    (format-time-string "%Y-%m-%d") exp-result)
-                                   ;; Don't delete worktree - will be cleaned up by run-next
-                                   (funcall callback exp-result)))))))))))))
+                                  (gptel-auto-experiment-log-tsv
+                                   (format-time-string "%Y-%m-%d") exp-result)
+                                  ;; Don't delete worktree - will be cleaned up by run-next
+                                  (funcall callback exp-result)))))))))))))
             "executor"
             (format "Experiment %d: optimize %s" experiment-id target)
             prompt
@@ -2457,11 +2469,11 @@ Adapts max-experiments based on API error rate."
                                  target (length results)
                                  (or best-score 0))
                         (funcall callback (nreverse results)))
-(gptel-auto-experiment-run
-                      target exp-id max-exp
-                      best-score
-                      baseline-code-quality
-                      results
+                    (gptel-auto-experiment-run
+                     target exp-id max-exp
+                     best-score
+                     baseline-code-quality
+                     results
                      (lambda (result)
                        (push result results)
                        (gptel-auto-workflow--update-progress)  ; Update watchdog

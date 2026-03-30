@@ -276,9 +276,12 @@ Pricing is in USD per million tokens (input/output).")
   "Look up KEY in HASH-TABLE, falling back to ALIST partial match.
 Returns the value from hash table if found, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found."
-  (or (and (hash-table-p hash-table) (stringp key) (gethash key hash-table))
+  (let ((hash-value (and (hash-table-p hash-table) (stringp key)
+                         (gethash key hash-table :not-found))))
+    (if (not (eq hash-value :not-found))
+        hash-value
       (and (listp alist) (stringp key)
-           (my/gptel--alist-partial-match alist key))))
+           (my/gptel--alist-partial-match alist key)))))
 
 (defun my/gptel--alist-partial-match (alist search-str)
   "Find first entry in ALIST where key partially matches SEARCH-STR (case-insensitive).

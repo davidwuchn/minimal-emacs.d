@@ -106,6 +106,11 @@ Handles plists by converting to alists."
         (setq plist (cddr plist))))
     (reverse alist)))
 
+(defun gptel-benchmark--ensure-list (data)
+  "Ensure DATA is a list, converting vectors if necessary.
+JSON parsing returns vectors for arrays; this normalizes to lists."
+  (if (vectorp data) (append data nil) data))
+
 (defun gptel-benchmark--get-field (obj field)
   "Get FIELD from OBJ, handling both plist and alist formats.
 FIELD should be a keyword like :score.
@@ -134,7 +139,7 @@ Creates a history entry with timestamp and summary."
                       :summary summary)))
     (unless (file-exists-p dir)
       (make-directory dir t))
-    (let ((history (if (vectorp existing) (append existing nil) existing)))
+    (let ((history (gptel-benchmark--ensure-list existing)))
       (gptel-benchmark-write-json (cons entry history) history-file)
       entry)))
 
@@ -144,7 +149,7 @@ Creates a history entry with timestamp and summary."
          (history-file (expand-file-name (format "%s-history.json" name) dir)))
     (when (file-exists-p history-file)
       (let ((data (gptel-benchmark-read-json history-file)))
-        (if (vectorp data) (append data nil) data)))))
+        (gptel-benchmark--ensure-list data)))))
 
 (defun gptel-benchmark-trend (name &optional results-dir)
   "Show trend of benchmark scores over time for NAME."
@@ -277,6 +282,13 @@ RESULTS should contain :eight-keys-scores in each entry."
 
 ;;; Pattern Analysis
 
+(defconst gptel-benchmark--score-type-map
+  '((:completion-score . "completion")
+    (:efficiency-score . "efficiency")
+    (:constraint-score . "constraint")
+    (:tool-score . "tool"))
+  "Mapping from score type keywords to issue type strings.")
+
 (defun gptel-benchmark-analyze-patterns (results)
   "Analyze RESULTS for patterns, issues, and generate recommendations."
   (let ((issues (make-hash-table :test 'equal))
@@ -284,7 +296,6 @@ RESULTS should contain :eight-keys-scores in each entry."
         (total (length results))
         (low-scores 0)
         (high-scores 0)
-        (score-types '(:completion-score :efficiency-score :constraint-score :tool-score))
         (threshold 0.7))
     (dolist (r results)
       (let* ((scores (gptel-benchmark--extract-scores r))
@@ -294,11 +305,10 @@ RESULTS should contain :eight-keys-scores in each entry."
          ((>= overall 0.9) (cl-incf high-scores))))
       (let ((scores (gptel-benchmark--extract-scores r)))
         (when scores
-          (dolist (score-type score-types)
-            (let ((score (plist-get scores score-type)))
-              (when (and score (< score threshold))
-                (let ((issue-type (replace-regexp-in-string "-score$" "" (symbol-name score-type))))
-                  (puthash issue-type (1+ (gethash issue-type issues 0)) issues))))))))
+          (cl-loop for (score-type . issue-type) in gptel-benchmark--score-type-map
+                   for score = (plist-get scores score-type)
+                   when (and score (< score threshold))
+                   do (puthash issue-type (1+ (gethash issue-type issues 0)) issues)))))
     (when (> low-scores 0)
       (push (format "Review %d tests with low scores (< 70%%)" low-scores) recommendations))
     (when (= high-scores total)
