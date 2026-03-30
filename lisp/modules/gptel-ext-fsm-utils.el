@@ -357,11 +357,13 @@ PROACTIVE_MITIGATION: Can be called periodically or after operations
 to ensure registry remains in valid state.
 
 Returns t on success, signals error on failure."
-  (let ((id-to-fsm (make-hash-table :test 'equal)))
+  (let ((id-to-fsm (make-hash-table :test 'equal))
+        (fsm-to-id (make-hash-table :test 'eq)))
     ;; Collect all ID→FSM mappings
     (maphash (lambda (k v)
                (when (stringp k)
-                 (puthash k v id-to-fsm)))
+                 (puthash k v id-to-fsm)
+                 (puthash v k fsm-to-id)))
              my/gptel--fsm-registry)
     ;; Check bidirectional consistency
     (maphash (lambda (id fsm)
@@ -371,12 +373,10 @@ Returns t on success, signals error on failure."
                               (equal lookup-id id))
                    (error "FSM registry invariant violated: bidirectional mismatch for ID %s" id))))
              id-to-fsm)
-    ;; Check unique IDs
-    (let ((id-count (hash-table-count id-to-fsm))
-          (unique-ids (hash-table-count (make-hash-table :test 'equal
-                                                         :data (hash-table-data id-to-fsm)))))
-      (unless (= id-count unique-ids)
-        (error "FSM registry invariant violated: duplicate IDs detected")))
+    ;; Check unique IDs (no two FSMs share same ID)
+    (unless (= (hash-table-count id-to-fsm)
+               (hash-table-count fsm-to-id))
+      (error "FSM registry invariant violated: duplicate IDs detected"))
     ;; Check ID format
     (maphash (lambda (id _fsm)
                (unless (my/gptel--fsm-id-valid-p id)
