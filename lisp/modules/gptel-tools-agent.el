@@ -2382,15 +2382,6 @@ This skill teaches dangerous Elisp patterns including cl-return-from requirement
            ;; Add more skill mappings here as needed
            (t ""))))
 
-(defun gptel-auto-experiment--agent-error-p (output)
-  "Check if OUTPUT is an error message from agent tool."
-  (and (stringp output) (string-match-p "^Error:" output)))
-
-(defun gptel-auto-experiment--summarize (hypothesis)
-  "Create short summary of HYPOTHESIS."
-  (let ((words (split-string hypothesis)))
-    (string-join (cl-subseq words 0 (min 6 (length words))) " ")))
-
 ;;; Experiment Loop
 
 (defun gptel-auto-experiment-loop (target callback)
