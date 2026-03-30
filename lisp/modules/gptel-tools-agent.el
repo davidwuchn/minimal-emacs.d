@@ -47,7 +47,8 @@ Returns nil if file doesn't exist or isn't readable."
 
 (defun gptel-auto-workflow--shell-command-with-timeout (command &optional timeout)
   "Execute shell COMMAND with TIMEOUT (default 30s).
-Returns (output . exit-code) or (error-message . -1) on timeout."
+Returns (output . exit-code) or (error-message . -1) on timeout.
+Uses robust timeout mechanism to prevent blocking indefinitely."
   (gptel-auto-workflow--validate-non-empty-string command "command")
   (let* ((timeout-seconds (or timeout gptel-auto-workflow-shell-timeout))
          (buffer (generate-new-buffer " *shell-timeout*"))
@@ -55,26 +56,52 @@ Returns (output . exit-code) or (error-message . -1) on timeout."
          (done nil)
          (result nil)
          (exit-code nil)
-         (start-time (current-time)))
+         (start-time (current-time))
+         (timer nil))
     (unwind-protect
         (progn
           (setq process (start-process-shell-command "shell-timeout" buffer command))
+          ;; Set up a timer to force timeout even if accept-process-output blocks
+          (setq timer (run-with-timer timeout-seconds nil
+                                      (lambda ()
+                                        (unless done
+                                          (setq done 'timeout)))))
           (set-process-sentinel process
                                 (lambda (proc _event)
                                   (unless done
-                                    (setq done t)
+                                    (setq done 'finished)
                                     (setq exit-code (process-exit-status proc))
                                     (with-current-buffer buffer
                                       (setq result (buffer-string))))))
+          ;; Poll with short timeout to avoid blocking indefinitely
           (while (and (not done)
                       (< (float-time (time-subtract (current-time) start-time)) timeout-seconds))
-            (accept-process-output process 0.1 nil t))
-          (unless done
-            (setq done t)
-            (delete-process process)
-            (setq result (format "Error: Command timed out after %ds: %s" timeout-seconds command))
-            (setq exit-code -1))
-          (cons result exit-code))
+            ;; Use 0.1s timeout in accept-process-output, don't block
+            (accept-process-output process 0.1 nil nil)
+            ;; Small delay to prevent busy-waiting
+            (sit-for 0.01))
+          ;; Cancel timer if still active
+          (when timer
+            (cancel-timer timer)
+            (setq timer nil))
+          ;; Handle timeout or collect results
+          (if (eq done 'timeout)
+              (progn
+                (when (process-live-p process)
+                  (delete-process process))
+                (setq result (format "Error: Command timed out after %ds: %s" timeout-seconds command))
+                (setq exit-code -1)
+                (cons result exit-code))
+            ;; Process finished, ensure we have the result
+            (unless result
+              (with-current-buffer buffer
+                (setq result (buffer-string))))
+            (cons result (or exit-code 0))))
+      ;; Cleanup
+      (when timer
+        (cancel-timer timer))
+      (when (and process (process-live-p process))
+        (delete-process process))
       (when (buffer-live-p buffer)
         (kill-buffer buffer)))))
 
