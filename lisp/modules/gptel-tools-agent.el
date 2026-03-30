@@ -37,6 +37,14 @@ Helper for validation in callback-based functions."
   (and (stringp value) (not (string-empty-p (string-trim value)))))
 
 (defun gptel-auto-workflow--shell-command-with-timeout (command &optional timeout)
+
+(defun gptel-auto-workflow--read-file-contents (filepath)
+  "Read contents of FILEPATH as string.
+Returns nil if file doesn't exist or isn't readable."
+  (when (and (stringp filepath) (file-exists-p filepath) (file-readable-p filepath))
+    (with-temp-buffer
+      (insert-file-contents filepath)
+      (buffer-string))))
   "Execute shell COMMAND with TIMEOUT (default 30s).
 Returns (output . exit-code) or (error-message . -1) on timeout."
   (gptel-auto-workflow--validate-non-empty-string command "command")
@@ -1680,10 +1688,7 @@ Scores based on commit message + code diff (not just stat)."
               (file-count 0))
           (dolist (file (split-string changed-files "\n" t))
             (let* ((filepath (expand-file-name file worktree))
-                   (content (when (file-exists-p filepath)
-                              (with-temp-buffer
-                                (insert-file-contents filepath)
-                                (buffer-string)))))
+                   (content (gptel-auto-workflow--read-file-contents filepath)))
               (when content
                 (cl-incf total-score (gptel-benchmark--code-quality-score content))
                 (cl-incf file-count))))
@@ -1723,9 +1728,7 @@ Default 120s (2 min) allows grader to process complex outputs.")
   "Validate code in FILE for syntax and dangerous patterns.
 Returns nil if valid, or error message string if invalid."
   (when (and (stringp file) (file-exists-p file) (string-suffix-p ".el" file))
-    (let ((content (with-temp-buffer
-                     (insert-file-contents file)
-                     (buffer-string))))
+    (let ((content (gptel-auto-workflow--read-file-contents file)))
       (condition-case err
           (with-temp-buffer
             (insert content)
@@ -2935,10 +2938,7 @@ TARGETS defaults to `gptel-auto-workflow-targets'."
   "Load and parse docs/auto-workflow-program.md."
   (let* ((file (expand-file-name gptel-auto-workflow-program-file
                                  (gptel-auto-workflow--project-root)))
-         (content (when (file-exists-p file)
-                    (with-temp-buffer
-                      (insert-file-contents file)
-                      (buffer-string))))
+         (content (gptel-auto-workflow--read-file-contents file))
          (targets '())
          (immutable '())
          (mutations '()))
@@ -2989,9 +2989,7 @@ TARGETS defaults to `gptel-auto-workflow-targets'."
   "Load skill from SKILL-FILE."
   (let ((file (expand-file-name skill-file (gptel-auto-workflow--project-root))))
     (when (file-exists-p file)
-      (let ((content (with-temp-buffer
-                       (insert-file-contents file)
-                       (buffer-string)))
+      (let ((content (gptel-auto-workflow--read-file-contents file))
             (skill (list :file skill-file)))
         (when (string-match "^phi:[[:space:]]*\\([0-9.]+\\)" content)
           (plist-put skill :phi (string-to-number (match-string 1 content))))
@@ -3088,9 +3086,7 @@ Returns formatted string with key names and signals."
   (let* ((skill-file (gptel-auto-workflow-skill-path target 'target))
          (file (expand-file-name skill-file (gptel-auto-workflow--project-root))))
     (when (file-exists-p file)
-      (let* ((content (with-temp-buffer
-                        (insert-file-contents file)
-                        (buffer-string)))
+      (let* ((content (gptel-auto-workflow--read-file-contents file))
              (by-mutation (make-hash-table :test 'equal))
              (successful '())
              (failed '())
@@ -3186,9 +3182,7 @@ Returns formatted string with key names and signals."
                              gptel-auto-workflow-skills-dir mutation-type))
          (file (expand-file-name skill-file (gptel-auto-workflow--project-root))))
     (when (file-exists-p file)
-      (let* ((content (with-temp-buffer
-                        (insert-file-contents file)
-                        (buffer-string)))
+      (let* ((content (gptel-auto-workflow--read-file-contents file))
              (relevant (cl-remove-if-not
                         (lambda (r)
                           (let ((hyp (or (plist-get r :hypothesis) "")))
@@ -3327,9 +3321,7 @@ Creates .index file with topic → file mapping for O(1) lookup."
          (index (make-hash-table :test 'equal)))
     (when (file-exists-p knowledge-dir)
       (dolist (file (directory-files-recursively knowledge-dir "\\.md$"))
-        (let ((content (with-temp-buffer
-                         (insert-file-contents file)
-                         (buffer-string)))
+        (let ((content (gptel-auto-workflow--read-file-contents file))
               (filename (file-relative-name file knowledge-dir)))
           (dolist (keyword '("caching" "lazy" "simplification" "retry" "context"
                              "code" "nucleus" "learning" "pattern" "evolution"
@@ -3385,9 +3377,7 @@ Run weekly via cron."
     (dolist (dir (list skills-dir mutations-dir))
       (when (file-exists-p dir)
         (dolist (file (directory-files dir t "\\.md$"))
-          (let ((content (with-temp-buffer
-                           (insert-file-contents file)
-                           (buffer-string))))
+          (let ((content (gptel-auto-workflow--read-file-contents file)))
             (when (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content)
               (let* ((date-str (match-string 1 content))
                      (last-tested (encode-time 0 0 0 (string-to-number (substring date-str 8 10))
@@ -3446,10 +3436,9 @@ Implements λ termination(x): synthesis ≡ AI | approval ≡ human."
          (memories-content '())
          (synthesized nil))
     (dolist (file files)
-      (when (file-exists-p file)
-        (with-temp-buffer
-          (insert-file-contents file)
-          (push (buffer-string) memories-content))))
+      (let ((content (gptel-auto-workflow--read-file-contents file)))
+        (when content
+          (push content memories-content))))
     (when (>= (length memories-content) 3)
       (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
         (with-current-buffer preview-buffer
