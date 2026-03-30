@@ -482,21 +482,15 @@ Runs asynchronously; returns nil immediately."
            (age-days (and (numberp last)
                           (/ (- (float-time (current-time)) last) 86400.0)))
            (stale (or (not (numberp age-days))
-                      (>= age-days (max 1 my/gptel-context-window-auto-refresh-interval-days))))
-           (model-id (my/gptel--model-id-string gptel-model)))
+                      (>= age-days (max 1 my/gptel-context-window-auto-refresh-interval-days)))))
       (when stale
         ;; Seed from built-in tables (Gemini + Copilot) without network.
         (my/gptel--seed-cache-from-gptel-model-tables)
         ;; Fetch OpenRouter in the background when applicable.
+        ;; NOTE: Cache persistence happens in the async callback, not here.
         (when (and (boundp 'gptel--openrouter)
                    (eq gptel-backend gptel--openrouter))
-          (my/gptel--openrouter-fetch-context-window gptel-model))
-        ;; Persist cache with updated refresh timestamp only after successful operations.
-        (setq my/gptel--context-window-cache-last-refresh (float-time (current-time)))
-        (my/gptel--cache-put-context-window model-id
-                                            (or (gethash model-id
-                                                         my/gptel--context-window-cache)
-                                                my/gptel-default-context-window))))))
+          (my/gptel--openrouter-fetch-context-window gptel-model))))))
 
 (defun my/gptel-refresh-context-window-cache ()
   "Refresh (fetch) the current model's context window into the cache."
