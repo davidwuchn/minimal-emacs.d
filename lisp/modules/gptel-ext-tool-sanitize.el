@@ -71,9 +71,12 @@ RunAgent was registered, leaving it out of the buffer's tool list."
   (when-let* ((info (and (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
               (tool-use (plist-get info :tool-use)))
     ;; Get the tools list; may be nil if preset had no tools set.
+    ;; Compute global tools once for efficiency (BEHAVIOR: avoid recomputation)
     (let ((tools (plist-get info :tools))
+          (all-tools (when (boundp 'gptel--known-tools)
+                       (apply #'append (mapcar #'cdr gptel--known-tools))))
           pruned)
-(dolist (tc tool-use)
+      (dolist (tc tool-use)
         (let* ((name (plist-get tc :name))
                (matched-tool (and (stringp name)
                                   (my/gptel--find-tool-fuzzy name tools))))
@@ -93,19 +96,13 @@ RunAgent was registered, leaving it out of the buffer's tool list."
                  (or (ignore-errors (gptel-get-tool name))
                      ;; Try fuzzy match globally
                      (when my/gptel-tool-repair-enabled
-                       (let ((all-tools (when (boundp 'gptel--known-tools)
-                                          (apply #'append
-                                                 (mapcar #'cdr gptel--known-tools)))))
-                         (cl-find-if
-                          (lambda (ts)
-                            (string= (my/gptel--normalize-tool-name name)
-                                     (my/gptel--normalize-tool-name 
-                                      (gptel-tool-name ts))))
-                          all-tools)))))
-            (let* ((all-tools (when (boundp 'gptel--known-tools)
-                                (apply #'append
-                                       (mapcar #'cdr gptel--known-tools))))
-                   (global-tool (or (ignore-errors (gptel-get-tool name))
+                       (cl-find-if
+                        (lambda (ts)
+                          (string= (my/gptel--normalize-tool-name name)
+                                   (my/gptel--normalize-tool-name 
+                                    (gptel-tool-name ts))))
+                        all-tools))))
+            (let* ((global-tool (or (ignore-errors (gptel-get-tool name))
                                     (cl-find-if
                                      (lambda (ts)
                                        (string= (my/gptel--normalize-tool-name name)
@@ -128,16 +125,16 @@ RunAgent was registered, leaving it out of the buffer's tool list."
               (setf (gptel-fsm-info fsm) info)
               ;; Update our local tools reference for subsequent loop iterations.
               (setq tools new-tools)))
-;; Case 3: genuinely unknown / nil tool name — prune it
-            (t
-             (when (not (plist-get tc :result))
-               (message "gptel: skipping malformed tool call \
+           ;; Case 3: genuinely unknown / nil tool name — prune it
+           (t
+            (when (not (plist-get tc :result))
+              (message "gptel: skipping malformed tool call \
 (name=%S, available-tools=%S)"
-                        name
-                        (mapcar (lambda (ts) (gptel-tool-name ts)) tools))
-               (plist-put tc :result
-                          (format "Error: unknown or nil tool %S called by model" name))
-               (push tc pruned))))))
+                       name
+                       (mapcar (lambda (ts) (gptel-tool-name ts)) tools))
+              (plist-put tc :result
+                         (format "Error: unknown or nil tool %S called by model" name))
+              (push tc pruned))))))
       ;; Prune offending entries so gptel--parse-tool-results never sees them.
       ;; This prevents orphaned tool role messages (tool_call_id=null) that
       ;; cause 400 errors when the assistant message has no matching tool_calls.
