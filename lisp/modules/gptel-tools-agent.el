@@ -111,7 +111,10 @@ TARGET is optional description. Enables recovery if workflow interrupted."
                       (format-time-string "%H:%M:%S")))
       (append-to-file (point-min) (point-max) tracking-file))
     (message "[auto-workflow] Tracked commit %s for exp-%s" 
-             (substring commit-hash 0 7) experiment-id)
+             (if (>= (length commit-hash) 7)
+                 (substring commit-hash 0 7)
+               commit-hash)
+             experiment-id)
     commit-hash))
 
 (defun gptel-auto-workflow--recover-orphans ()
@@ -139,7 +142,12 @@ An orphan is a commit that exists but is not reachable from any branch."
     (if orphans
         (message "[auto-workflow] Found %d orphan(s): %s"
                  (length orphans)
-                 (mapconcat (lambda (o) (substring (car o) 0 7)) orphans " "))
+                  (mapconcat (lambda (o) 
+                               (let ((hash (car o)))
+                                 (if (>= (length hash) 7)
+                                     (substring hash 0 7)
+                                   hash))) 
+                             orphans " "))
       (message "[auto-workflow] No orphan commits found"))
     orphans))
 
@@ -200,9 +208,13 @@ All shell commands have timeout protection to prevent deadlocks."
                 (gptel-auto-workflow--git-cmd "git merge origin/main --ff-only")
                 (gptel-auto-workflow--git-cmd "git push origin staging")
                 (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
-                (message "[auto-workflow] Synced staging with main (%s -> %s)"
-                         (substring staging-commit 0 7)
-                         (substring main-commit 0 7))))))
+                 (message "[auto-workflow] Synced staging with main (%s -> %s)"
+                          (if (>= (length staging-commit) 7)
+                              (substring staging-commit 0 7)
+                            staging-commit)
+                          (if (>= (length main-commit) 7)
+                              (substring main-commit 0 7)
+                            main-commit))))))
       (error
        (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
        (message "[auto-workflow] Failed to sync staging: %s" err)
@@ -3397,13 +3409,15 @@ Run weekly via cron."
       (when (file-exists-p dir)
         (dolist (file (directory-files dir t "\\.md$"))
           (let ((content (gptel-auto-workflow--read-file-contents file)))
-            (when (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content)
-              (let* ((date-str (match-string 1 content))
-                     (last-tested (encode-time 0 0 0 (string-to-number (substring date-str 8 10))
-                                               (string-to-number (substring date-str 5 7))
-                                               (string-to-number (substring date-str 0 4))))
-                     (age (- now (float-time last-tested))))
-                (when (> age four-weeks)
+             (when (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content)
+               (let* ((date-str (match-string 1 content))
+                      (last-tested (when (>= (length date-str) 10)
+                                     (encode-time 0 0 0 (string-to-number (substring date-str 8 10))
+                                                  (string-to-number (substring date-str 5 7))
+                                                  (string-to-number (substring date-str 0 4)))))
+                      (age (when last-tested
+                             (- now (float-time last-tested)))))
+                 (when (and age (> age four-weeks))
                   (let ((new-phi (max 0.3 (- (if (string-match "^phi:[[:space:]]*\\([0-9.]+\\)" content)
                                                  (string-to-number (match-string 1 content))
                                                0.5)

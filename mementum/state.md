@@ -1,6 +1,6 @@
 # Mementum State
 
-> Last session: 2026-03-30 08:30
+> Last session: 2026-03-30 16:45
 
 ## Total Improvements: 162+ Real Code Fixes
 
@@ -10,6 +10,10 @@
 
 | # | File | Fix |
 |---|------|-----|
+| 166 | gptel-tools-agent.el | Fixed 4 substring args-out-of-range errors (commit-hash, orphan, staging/main, date parsing) |
+| 165 | gptel-tools-agent.el | Validation retry: Added type checking (stringp validation-error) and length check |
+| 164 | gptel-tools-agent.el | Fixed syntax error: Separated merged function definitions (shell-command-with-timeout + read-file-contents) |
+| 163 | gptel-benchmark-subagent.el | Fixed cross-module visibility: Added require/declare-function for gptel-auto-workflow--read-file-contents |
 | 162 | gptel-tools-agent.el | Worktree nesting: use git-common-dir to find main repo from worktree |
 | 161 | gptel-tools-agent.el | void-variable baseline-code-quality: pass to experiment-run |
 | 160 | gptel-tools-agent.el | Grader behaviors: accept code quality improvements (clarity/testability) |
@@ -76,6 +80,7 @@
 λ skill-gap-feedback. Validation fails → log gap → convert to benchmark → improve skill → fewer gaps
 λ auto-revert-conflict. Worktree file writes trigger revert on main buffer → disable during workflow
 λ uniquify-buffer-names. Multiple same-name files get prefixes like .emacs.d/ → disable during workflow
+λ substring-safety. (if (>= (length s) n) (substring s 0 n) s) | never assume string length
 λ grader-behaviors. Expected: "improves code" (bug/perf/clarity/testability), not just "fixes bug"
 λ grader-forbidden. "replaces working code WITHOUT improvement" (not all refactoring forbidden)
 λ verification-flexible. "verification attempted" (byte-compile/nucleus/tests/manual) vs "tests pass"
@@ -133,14 +138,20 @@
 
 ## Current Status
 
-- **Main branch**: `53ab3f7` (grader prioritizes Code Mode)
+- **Main branch**: `04948b5` (substring safety fixes)
 - **Staging branch**: synced
-- **Auto-workflow**: 61 experiments, 3 kept (4.9% success rate)
+- **Auto-workflow**: 114 experiments, 12 kept (10.5% success rate)
+- **Daemon**: Single instance stable (110+ seconds)
+- **Cron errors**: Fixed args-out-of-range (4 locations)
 
 ### Bugs Fixed Today
 
 | Bug | Root Cause | Fix |
 |-----|------------|-----|
+| args-out-of-range (1 0 7) | substring on short/empty strings | Add length guards before substring |
+| void-function read-file-contents | Cross-module visibility | Add require/declare-function |
+| Merged function definitions | Syntax error in file | Separate shell-command-with-timeout and read-file-contents |
+| Validation retry fails | nil validation-error | Add (stringp validation-error) and (> (length validation-error) 0) checks |
 | Nested worktrees | project-root returns worktree root | Use git-common-dir |
 | void-variable baseline-code-quality | Not passed to experiment-run | Add parameter |
 | void-variable code-quality | Not in retry lambda scope | Compute locally |
