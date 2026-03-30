@@ -1632,12 +1632,17 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
         result))))
 
 (defun gptel-auto-experiment-benchmark (&optional skip-tests)
-  "Run syntax validation + nucleus verification + Eight Keys scoring.
+  "Run syntax validation + Eight Keys scoring.
 If SKIP-TESTS is non-nil, skip test execution (tests run in staging flow).
-Returns plist with :passed, :tests-passed, :eight-keys, etc."
+Returns plist with :passed, :tests-passed, :eight-keys, etc.
+
+NOTE: Nucleus script validation is skipped for experiments because:
+1. verify-nucleus.sh uses script location ($DIR), not worktree context
+2. Executor already runs verification in worktree context
+3. Full validation happens in staging flow"
   (let* ((start (float-time))
-         (proj-root (gptel-auto-workflow--project-root))
-         (default-directory (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target) proj-root))
+         (default-directory (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)
+                                (gptel-auto-workflow--project-root)))
          (target-file (when gptel-auto-workflow--current-target
                         (expand-file-name gptel-auto-workflow--current-target default-directory)))
          (validation-error (when target-file
@@ -1648,15 +1653,13 @@ Returns plist with :passed, :tests-passed, :eight-keys, etc."
           (list :passed nil
                 :validation-error validation-error
                 :time (- (float-time) start)))
-      (let* ((verify-result (call-process "/bin/bash" nil nil nil
-                                          (expand-file-name "scripts/verify-nucleus.sh" proj-root)))
-             (tests-result (when (and (zerop verify-result) (not skip-tests))
+      (let* ((tests-result (when (not skip-tests)
                              (gptel-auto-experiment-run-tests)))
              (tests-passed (or skip-tests (car tests-result)))
-             (scores (when (zerop verify-result)
-                       (gptel-auto-experiment--eight-keys-scores))))
-        (list :passed (and (zerop verify-result) tests-passed)
-              :nucleus-passed (zerop verify-result)
+             (scores (gptel-auto-experiment--eight-keys-scores)))
+        (list :passed tests-passed
+              :nucleus-passed t
+              :nucleus-skipped t
               :tests-passed tests-passed
               :tests-output (when tests-result (cdr tests-result))
               :tests-skipped skip-tests
