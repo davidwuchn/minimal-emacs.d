@@ -463,6 +463,10 @@ CALLBACK receives non-nil when approved and nil when rejected."
               (substring text 0 my/gptel-programmatic-result-limit)
               temp-file))))
 
+(defun gptel-sandbox--format-error (message)
+  "Format MESSAGE as a sandbox error string."
+  (format "Error: %s" message))
+
 (defun gptel-sandbox--render-result (value)
   "Render VALUE into the final string returned by Programmatic.
 Strings are returned directly. Structured values are pretty-printed so the LLM
