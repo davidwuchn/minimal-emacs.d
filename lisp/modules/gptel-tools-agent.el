@@ -9,6 +9,7 @@
 (require 'subr-x)
 (require 'gptel)
 (require 'gptel-agent)
+(require 'magit-git)
 
 ;; Forward declarations for variables defined in gptel-auto-workflow-projects.el
 (defvar gptel-auto-workflow--project-buffers nil)
