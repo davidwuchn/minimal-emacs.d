@@ -1,17 +1,19 @@
 # Mementum State
 
-> Last session: 2026-03-29 22:00
+> Last session: 2026-03-30 08:30
 
-## Total Improvements: 161+ Real Code Fixes
+## Total Improvements: 162+ Real Code Fixes
 
-528+ commits since March 25, 2026.
+529+ commits since March 25, 2026.
 
-### Recent Fixes (Last 37)
+### Recent Fixes (Last 39)
 
 | # | File | Fix |
 |---|------|-----|
-| 161 | gptel-tools-agent.el | Grader behaviors: accept code quality improvements (clarity/testability), not just bug fixes |
-| 160 | gptel-tools-agent.el | Handle nil agent-output in error categorization + better grader logging |
+| 162 | gptel-tools-agent.el | Worktree nesting: use git-common-dir to find main repo from worktree |
+| 161 | gptel-tools-agent.el | void-variable baseline-code-quality: pass to experiment-run |
+| 160 | gptel-tools-agent.el | Grader behaviors: accept code quality improvements (clarity/testability) |
+| 159 | gptel-tools-agent.el | Handle nil agent-output in error categorization + better grader logging |
 | 159 | gptel-tools-agent.el | Skill gaps → benchmark tests (feedback loop for skill improvement) |
 | 158 | executor.md | Skill check step 1 of tool loop (before editing .el/.clj) |
 | 157 | gptel-tools-agent.el | Retry validation failures with skill instruction + skill gap logging |
@@ -131,47 +133,35 @@
 
 ## Current Status
 
-- **Main branch**: `ba43c31` (grader behaviors fix)
+- **Main branch**: `88b416b` (worktree nesting + void-variable fixes)
 - **Staging branch**: synced
-- **Auto-workflow**: 18 experiments, 1 kept (5.5% success rate)
+- **Auto-workflow**: 28 experiments, 1 kept (3.7% success rate)
+
+### Bugs Fixed Today
+
+| Bug | Root Cause | Fix |
+|-----|------------|-----|
+| Nested worktrees | project-root returns worktree root | Use git-common-dir to find main repo |
+| void-variable baseline-code-quality | Not passed to experiment-run | Add parameter to function |
+| void-variable code-quality | Not in retry lambda scope | Compute with code-quality-score |
 
 ### Workflow Results (Pre-Fix)
 
 | Metric | Value |
 |--------|-------|
-| Total experiments | 18 |
+| Total experiments | 28 |
 | Kept | 1 (nucleus-tools.el) |
-| Success rate | 5.5% |
-| Grader failures | 9 (score 0 or 2) |
+| Success rate | 3.7% |
+| Grader failures | 18 (score 0) |
 | API errors | 1 (websocket) |
-| Unknown errors | 7 |
 
 ### Expected Improvement (Post-Fix)
 
-With new grader behaviors:
-- Refactoring (helper extraction) now passes "improves code" (not just bug fixes)
-- "replaces working code without improvement" (not all refactoring forbidden)
-- Expected success rate: 20-30%
-
-### Grader Failure Categories
-
-| Category | Count | Example |
-|----------|-------|---------|
-| :grader-failed | 9 | Helper extraction, buffer validation |
-| :tool-error | 1 | Websocket connection failed |
-| :unknown | 7 | Pre-fix error categorization |
-
-### Grader Reliability Fixes
-
-| Issue | Before | After |
-|-------|--------|-------|
-| Pass threshold | 100% (perfect) | 80% (realistic) |
-| Timeout | 60s | 120s |
-| Fallback | Local-grader (weak) | Fail (no false passes) |
-| Auto-revert | Enabled (buffer reverts) | Disabled during workflow |
-| Uniquify | Enabled (confusing names) | Disabled during workflow |
-
-### Expected Improvement
+With new fixes:
+- No more nested worktrees (correct repo root detection)
+- No more void-variable crashes in retry
+- Grader accepts code quality improvements
+- Expected success rate: 15-25%
 
 | Metric | Before | After (expected) |
 |--------|--------|------------------|

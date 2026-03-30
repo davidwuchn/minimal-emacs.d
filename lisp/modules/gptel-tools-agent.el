@@ -1553,19 +1553,18 @@ Always returns absolute path."
     gptel-auto-workflow--project-root-override)
     
    ;; 2. Git common dir - returns main repo even from worktrees
-   ((let ((git-common (string-trim
-                       (shell-command-to-string
-                        "git rev-parse --git-common-dir 2>/dev/null || echo ''"))))
-      (when (and (not (string-empty-p git-common))
-                 (file-directory-p git-common))
-        ;; If .git is a directory, we're in main repo; if it's a file, we're in worktree
-        ;; git-common-dir returns .git/worktrees/X for worktrees, .git for main
-        (let ((git-dir (expand-file-name git-common)))
-          (if (string-match-p "/.git/worktrees/" git-dir)
-              ;; Worktree: go up to find main repo root
-              (expand-file-name "../../.." git-dir)
-            ;; Main repo: use parent of .git
-            (file-name-directory (directory-file-name git-dir))))))
+   ((let* ((git-common (string-trim
+                        (shell-command-to-string
+                         "git rev-parse --git-common-dir 2>/dev/null || echo ''")))
+           (git-dir (when (and (not (string-empty-p git-common))
+                               (file-directory-p (expand-file-name git-common)))
+                      (expand-file-name git-common))))
+      (when git-dir
+        (if (string-match-p "/.git/worktrees/" git-dir)
+            ;; Worktree: go up to find main repo root
+            (expand-file-name "../../.." git-dir)
+          ;; Main repo: use parent of .git
+          (file-name-directory (directory-file-name git-dir))))))
     
    ;; 3. project.el detection (preferred method)
    ((and (fboundp 'project-current)
@@ -1580,8 +1579,8 @@ Always returns absolute path."
       (and (not (string-empty-p git-root))
            (file-directory-p git-root)
            git-root)))
-   
-   ;; 4. Fallback
+    
+   ;; 5. Fallback
    (t (expand-file-name
        (or (when (boundp 'minimal-emacs-user-directory)
              minimal-emacs-user-directory)
@@ -2230,10 +2229,10 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                         retry-output
                                         (lambda (retry-grade)
                                           (if (plist-get retry-grade :passed)
-(let ((retry-bench (gptel-auto-experiment-benchmark t)))
-                                                 (if (plist-get retry-bench :passed)
-                                                     (let ((retry-score (plist-get retry-bench :eight-keys))
-                                                           (retry-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
+                                              (let ((retry-bench (gptel-auto-experiment-benchmark t)))
+                                                (if (plist-get retry-bench :passed)
+(let ((retry-score (plist-get retry-bench :eight-keys))
+                                                          (retry-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
                                                        (message "[auto-experiment] ✓ Retry succeeded")
                                                        (setq finished t)
                                                        (gptel-auto-experiment-decide
@@ -2451,10 +2450,10 @@ Adapts max-experiments based on API error rate."
                                  (or best-score 0))
                         (funcall callback (nreverse results)))
 (gptel-auto-experiment-run
-                     target exp-id max-exp
-                     best-score
-                     baseline-code-quality
-                     results
+                      target exp-id max-exp
+                      best-score
+                      baseline-code-quality
+                      results
                      (lambda (result)
                        (push result results)
                        (gptel-auto-workflow--update-progress)  ; Update watchdog
