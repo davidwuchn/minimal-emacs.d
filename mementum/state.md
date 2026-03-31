@@ -1,15 +1,15 @@
 # Mementum State
 
-> Last session: 2026-03-31 11:30
+> Last session: 2026-03-31 16:00
 
-## Total Improvements: 180+ Real Code Fixes
+## Total Improvements: 182+ Real Code Fixes
 
-1932 commits total. 59 experiments run today.
+1934 commits total. 59 experiments run today.
 
 ### Session Summary: 2026-03-31
 
-**Commits pushed:** 22+
-**Critical fixes:** 5
+**Commits pushed:** 24+
+**Critical fixes:** 7
 **Workflow status:** Running unattended (no user prompts blocking)
 
 ### Key Learnings
@@ -21,6 +21,8 @@
 | 3 | kill-buffer-query returns nil | `(not headless)` = nil when headless=t | `(or headless t)` returns t |
 | 4 | All experiments "Winner: tie" | No commit before Eight Keys scoring | Commit executor changes before benchmark |
 | 5 | Code Quality constant 0.50 | Only measured docstrings | Added function length + complexity metrics |
+| 6 | `(wrong-type-argument stringp nil)` in subagent | `capitalize` called on nil `agent-type` | `(capitalize (or agent-type "agent"))` |
+| 7 | Executor subagent fails with nil description | `format` with nil description | `(or description "unknown")` |
 
 ### Recent Fixes (Last 50)
 

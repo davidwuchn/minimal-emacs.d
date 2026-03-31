@@ -234,8 +234,8 @@ memory after long sessions or if tasks appear stuck."
 (defun gptel-agent-loop--result-prefix (state)
   "Return the standard result prefix for STATE."
   (format "%s result for task: %s\n\n"
-          (capitalize (gptel-agent-loop--task-agent-type state))
-          (gptel-agent-loop--task-description state)))
+          (capitalize (or (gptel-agent-loop--task-agent-type state) "agent"))
+          (or (gptel-agent-loop--task-description state) "unknown")))
 
 (defun gptel-agent-loop--build-final-result (state tail)
   "Build final response text for STATE ending with TAIL."
