@@ -6,10 +6,11 @@
 
 529+ commits since March 25, 2026.
 
-### Recent Fixes (Last 41)
+### Recent Fixes (Last 42)
 
 | # | File | Fix |
 |---|------|-----|
+| 169 | gptel-tools-agent.el | Commit executor changes before Eight Keys scoring (fixes "Winner: tie" discards) |
 | 168 | gptel-tools-agent.el | Route subagent overlays to correct buffer (dynamic variable + fallback) |
 | 167 | gptel-tools-agent.el | Sanitize multi-line output in log messages (fixes "Unknown message" errors) |
 | 166 | gptel-tools-agent.el | Fixed 4 substring args-out-of-range errors (commit-hash, orphan, staging/main, date parsing) |
