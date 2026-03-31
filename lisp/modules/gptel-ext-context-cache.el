@@ -521,7 +521,7 @@ Runs asynchronously; returns nil immediately."
                                  (error
                                   (message "OpenRouter context-window: parse failed (%s)" (error-message-string err))))))
                          (when (buffer-live-p buf) (kill-buffer buf))))))))
-            (process-put proc 'my/gptel-managed t)
+(process-put proc 'my/gptel-managed t)
             nil)))))))
 
 (defun my/gptel--auto-refresh-context-window-cache-maybe ()
