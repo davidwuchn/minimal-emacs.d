@@ -383,13 +383,17 @@ RESULTS should contain :eight-keys-scores in each entry."
   "Evolve CURRENT-SCORE based on OUTCOME.
 OUTCOME is :validated or :corrected.
 DELTA is the change amount (default 0.05).
-Returns new score clamped to 0.0-1.0."
+Returns new score clamped to 0.0-1.0.
+Signals error if CURRENT-SCORE is not a number or OUTCOME is invalid."
+  (unless (numberp current-score)
+    (error "gptel-benchmark-evolve-score: CURRENT-SCORE must be a number, got %S" current-score))
+  (unless (memq outcome '(:validated :corrected))
+    (error "gptel-benchmark-evolve-score: OUTCOME must be :validated or :corrected, got %S" outcome))
   (let ((d (or delta 0.05)))
     (let ((new-score
            (pcase outcome
              (:validated (+ current-score d))
-             (:corrected (- current-score (/ d 2.0)))
-             (_ current-score))))
+             (:corrected (- current-score (/ d 2.0))))))
       (max 0.0 (min 1.0 new-score)))))
 
 (defun gptel-benchmark-evolve-thresholds (history &key min-runs)
