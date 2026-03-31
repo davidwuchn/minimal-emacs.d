@@ -127,6 +127,13 @@ For alist lookup, converts :score to \\='score symbol."
       (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
         (cdr (assq alist-key obj)))))
 
+(defun gptel-benchmark--plist-get (plist field &optional default)
+  "Get FIELD from PLIST with optional DEFAULT value.
+Returns DEFAULT if FIELD is not present or value is nil.
+FIELD should be a keyword like :score."
+  (let ((val (plist-get plist field)))
+    (if val val default)))
+
 ;;; Historical Tracking
 
 (defun gptel-benchmark-save-historical (name results &optional results-dir)
@@ -169,10 +176,10 @@ Creates a history entry with timestamp and summary."
         (princ "Timestamp                 Avg Score    Total Tests\n")
         (princ "--------------------------------------------------\n")
         (dolist (entry (reverse history))
-          (let* ((summary (plist-get entry :summary))
-                 (timestamp (or (plist-get entry :timestamp) "unknown"))
-                 (avg-score (plist-get summary :avg-overall))
-                 (total (or (plist-get summary :total-tests) 0)))
+          (let* ((summary (gptel-benchmark--plist-get entry :summary))
+                 (timestamp (gptel-benchmark--plist-get entry :timestamp "unknown"))
+                 (avg-score (gptel-benchmark--plist-get summary :avg-overall 0.0))
+                 (total (gptel-benchmark--plist-get summary :total-tests 0)))
             (princ (format "%-25s %6.1f%%      %d\n"
                            timestamp
                            (* 100 (or avg-score 0))
@@ -328,7 +335,7 @@ RESULTS should contain :eight-keys-scores in each entry."
         (threshold 0.7))
     (dolist (r results)
       (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall (or (and scores (plist-get scores :overall-score)) 0)))
+             (overall (gptel-benchmark--plist-get scores :overall-score 0)))
         (cond
          ((< overall threshold) (cl-incf low-scores))
          ((>= overall 0.9) (cl-incf high-scores)))
@@ -379,7 +386,9 @@ Returns plist with suggested threshold adjustments."
               :message (format "Need %d runs, have %d" runs (length history)))
       (let* ((recent (cl-subseq history 0 (min runs (length history))))
              (raw-scores (mapcar (lambda (h)
-                                   (plist-get (plist-get h :summary) :avg-overall))
+                                   (gptel-benchmark--plist-get
+                                    (gptel-benchmark--plist-get h :summary)
+                                    :avg-overall))
                                  recent))
              (avg-scores (cl-remove-if-not #'numberp raw-scores))
              (count (length avg-scores)))
