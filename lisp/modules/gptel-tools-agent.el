@@ -45,6 +45,11 @@ Reduces duplication of `(or (plist-get ...) default-value)` patterns."
   (let ((value (plist-get plist key)))
     (if (null value) default value)))
 
+(defun gptel-auto-workflow--state-active-p (state)
+  "Return t if STATE is non-nil and not marked as done.
+Reduces duplication of `(when (and state (not (plist-get state :done)))` patterns."
+  (and state (not (plist-get state :done))))
+
 (defun gptel-auto-workflow--require-magit-dependencies ()
   "Require magit-worktree and magit-git dependencies.
 Signals user-error if either dependency fails to load."
@@ -824,7 +829,7 @@ Uses hash table keyed by task-id to support parallel execution."
          (wrapped-cb
           (lambda (result)
             (let ((state (gethash task-id my/gptel--agent-task-state)))
-              (when (and state (not (plist-get state :done)))
+              (when (gptel-auto-workflow--state-active-p state)
                 (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
                 (when (timerp (plist-get state :timeout-timer))
                   (cancel-timer (plist-get state :timeout-timer)))
@@ -849,7 +854,7 @@ Uses hash table keyed by task-id to support parallel execution."
                         my/gptel-subagent-progress-interval
                         (lambda ()
                           (let ((state (gethash task-id my/gptel--agent-task-state)))
-                            (when (and state (not (plist-get state :done)))
+                            (when (gptel-auto-workflow--state-active-p state)
                               (message "[nucleus] Subagent %s still running... (%.1fs elapsed)"
                                        agent-type (float-time (time-since start-time)))))))))
       (puthash task-id (list :done nil :timeout-timer nil :progress-timer progress-timer) my/gptel--agent-task-state))
@@ -860,7 +865,7 @@ Uses hash table keyed by task-id to support parallel execution."
                             (when (buffer-live-p origin-buf)
                               (with-current-buffer origin-buf
                                 (let ((state (gethash task-id my/gptel--agent-task-state)))
-                                  (when (and state (not (plist-get state :done)))
+                                  (when (gptel-auto-workflow--state-active-p state)
                                     (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
                                     (when (timerp (plist-get state :progress-timer))
                                       (cancel-timer (plist-get state :progress-timer)))
@@ -878,7 +883,7 @@ Uses hash table keyed by task-id to support parallel execution."
       (unwind-protect
           (gptel-agent--task wrapped-cb agent-type description packaged-prompt)
         (let ((state (gethash task-id my/gptel--agent-task-state)))
-          (when (and state (not (plist-get state :done)) (buffer-live-p origin-buf))
+          (when (and (gptel-auto-workflow--state-active-p state) (buffer-live-p origin-buf))
             (with-current-buffer origin-buf
               (setq-local gptel--fsm-last parent-fsm))))))))
 
@@ -2018,7 +2023,7 @@ The grader subagent overlay will appear in the current buffer at time of call."
              (run-with-timer gptel-auto-experiment-grade-timeout nil
                              (lambda ()
                                (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
-                                 (when (and state (not (plist-get state :done)))
+                                 (when (gptel-auto-workflow--state-active-p state)
                                    (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
                                    (message "[auto-exp] Grading timeout after %ds, failing"
                                             gptel-auto-experiment-grade-timeout)
@@ -2042,7 +2047,7 @@ The grader subagent overlay will appear in the current buffer at time of call."
                "replaces working code without clear improvement")
              (lambda (result)
                (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
-                 (when (and state (not (plist-get state :done)))
+                 (when (gptel-auto-workflow--state-active-p state)
                    (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
                    (when (timerp (plist-get state :timer))
                      (cancel-timer (plist-get state :timer)))
