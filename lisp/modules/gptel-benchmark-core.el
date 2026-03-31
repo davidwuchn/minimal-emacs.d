@@ -278,13 +278,12 @@ RESULTS should contain :eight-keys-scores in each entry."
     (dolist (r results)
       (let ((eight-keys (gptel-benchmark--get-score r :eight-keys-scores)))
         (when eight-keys
-          (cl-loop for key across key-names
-                   for i from 0
-                   for score = (plist-get eight-keys key)
-                   when (numberp score)
-                   do (progn
-                        (aset key-totals i (+ (aref key-totals i) score))
-                        (aset key-counts i (1+ (aref key-counts i))))))))
+          (dotimes (i 8)
+            (let* ((key (aref key-names i))
+                   (score (plist-get eight-keys key)))
+              (when (numberp score)
+                (aset key-totals i (+ (aref key-totals i) score))
+                (aset key-counts i (1+ (aref key-counts i)))))))))
     (let ((breakdown '()))
       (dotimes (i 8)
         (let* ((key (aref key-names i))
