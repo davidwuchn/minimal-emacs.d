@@ -77,12 +77,12 @@ if [ "$1" = "--dry-run" ]; then
 else
     TMP_FILE=$(mktemp)
     
-    # Build crontab from scratch
+    # Build crontab from scratch (skip original env lines to avoid duplicates)
     {
-        # Header (lines 1-26)
-        sed -n '1,26p' "$CRON_FILE"
+        # Header comment block (lines 1-19, before SHELL/PATH)
+        sed -n '1,19p' "$CRON_FILE"
         
-        # Environment variables (platform-specific)
+        # Environment variables (platform-specific, replaces original)
         echo "SHELL=/bin/bash"
         echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin"
         if [ "$MACHINE" = "pi5" ] || [ "$MACHINE" = "linux" ]; then
@@ -95,7 +95,7 @@ else
         echo "@reboot mkdir -p $HOME/.emacs.d/var/tmp/cron"
         echo ""
         
-        # Process each section: comment out all job lines, then uncomment selected section
+        # Process sections from line 30 (skip original env duplicate lines 20-29)
         awk -v machine="$MACHINE" '
             /^# .* SECTION: / {
                 current_section = $NF
@@ -103,16 +103,14 @@ else
             }
             /^#0 / {
                 if (in_selected) {
-                    # Uncomment (remove #)
                     print substr($0, 2)
                 } else {
-                    # Keep commented
                     print
                 }
                 next
             }
             { print }
-        ' "$CRON_FILE" | tail -n +27
+        ' "$CRON_FILE" | tail -n +30
     } > "$TMP_FILE"
     
     # Install crontab

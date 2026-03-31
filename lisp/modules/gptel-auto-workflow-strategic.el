@@ -66,10 +66,11 @@ Findings stored in var/tmp/research-findings.md for analyzer."
 
 (defun gptel-auto-workflow--discover-targets ()
   "Discover all Elisp files in lisp/modules/ as potential targets."
-  (let* ((proj-root (gptel-auto-workflow--project-root))
-         (modules-dir (and proj-root (expand-file-name "lisp/modules" proj-root)))
+  (let* ((proj-root (or (gptel-auto-workflow--project-root)
+                        (expand-file-name "~/.emacs.d/")))
+         (modules-dir (expand-file-name "lisp/modules" proj-root))
          (targets '()))
-    (when (and modules-dir (file-directory-p modules-dir))
+    (when (file-directory-p modules-dir)
       (dolist (file (directory-files-recursively modules-dir "\\.el$"))
         (let ((rel-path (file-relative-name file proj-root)))
           (unless (or (string-match-p "-test\\.el$" file)
@@ -81,22 +82,21 @@ Findings stored in var/tmp/research-findings.md for analyzer."
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
 Scans both lisp/modules/ and packages/ (forked packages)."
-  (let* ((proj-root (gptel-auto-workflow--project-root))
-         (safe-root (and proj-root (shell-quote-argument proj-root))))
-    (if safe-root
-        (list :git-history (shell-command-to-string
-                            (format "cd %s && git log --oneline -30 -- lisp/modules/ packages/ 2>/dev/null"
-                                    safe-root))
-              :file-sizes (shell-command-to-string
-                           (format "cd %s && find lisp/modules packages -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
-                                   safe-root))
-              :todos (shell-command-to-string
-                      (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ packages/ 2>/dev/null | head -30"
-                              safe-root))
-              :file-list (shell-command-to-string
-                          (format "cd %s && find lisp/modules packages -name '*.el' -type f 2>/dev/null"
-                                  safe-root)))
-      (list :git-history "" :file-sizes "" :todos "" :file-list ""))))
+  (let* ((proj-root (or (gptel-auto-workflow--project-root)
+                        (expand-file-name "~/.emacs.d/")))
+         (safe-root (shell-quote-argument proj-root)))
+    (list :git-history (shell-command-to-string
+                        (format "cd %s && git log --oneline -30 -- lisp/modules/ packages/ 2>/dev/null"
+                                safe-root))
+          :file-sizes (shell-command-to-string
+                       (format "cd %s && find lisp/modules packages -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
+                               safe-root))
+          :todos (shell-command-to-string
+                  (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ packages/ 2>/dev/null | head -30"
+                          safe-root))
+          :file-list (shell-command-to-string
+                      (format "cd %s && find lisp/modules packages -name '*.el' -type f 2>/dev/null"
+                              safe-root)))))
 
 (defun gptel-auto-workflow--research-patterns (callback)
   "Research code patterns.
@@ -160,11 +160,11 @@ TASK: Select exactly %d files from lisp/modules/ or packages/ to optimize.
 
 OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\" or \"packages/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
-          (plist-get context :file-list)
-          (plist-get context :git-history)
-          (plist-get context :file-sizes)
-          (plist-get context :todos)
-          (if (string-empty-p research-findings)
+          (or (plist-get context :file-list) "")
+          (or (plist-get context :git-history) "")
+          (or (plist-get context :file-sizes) "")
+          (or (plist-get context :todos) "")
+          (if (or (null research-findings) (string-empty-p research-findings))
               "Not available (research disabled)"
             (truncate-string-to-width research-findings 1000 nil nil "..."))
           max-targets))
@@ -225,21 +225,18 @@ Returns list of validated relative paths, up to MAX-TARGETS."
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list.
 Logs when fallback to regex parsing is used."
-  (let ((proj-root (gptel-auto-workflow--project-root))
+  (let ((proj-root (or (gptel-auto-workflow--project-root)
+                       (expand-file-name "~/.emacs.d/")))
         (max-targets gptel-auto-workflow-max-targets-per-run)
         (normalized-response (gptel-auto-workflow--normalize-response response)))
-    (if (not proj-root)
+    (let ((targets (gptel-auto-workflow--parse-json-targets
+                    normalized-response proj-root max-targets)))
+      (if targets
+          targets
         (progn
-          (message "[auto-workflow] Cannot parse targets: no project root")
-          nil)
-      (let ((targets (gptel-auto-workflow--parse-json-targets
-                      normalized-response proj-root max-targets)))
-        (if targets
-            targets
-          (progn
-            (message "[auto-workflow] JSON parse failed, using regex fallback")
-            (gptel-auto-workflow--parse-regex-targets
-             normalized-response proj-root max-targets)))))))
+          (message "[auto-workflow] JSON parse failed, using regex fallback")
+          (gptel-auto-workflow--parse-regex-targets
+           normalized-response proj-root max-targets))))))
 
 (defun gptel-auto-workflow--parse-json-targets (response proj-root max-targets)
   "Parse JSON from RESPONSE to extract targets.
@@ -304,7 +301,8 @@ LLM decides if available, otherwise uses static list."
 (defun gptel-auto-workflow--research-file ()
   "Return path to research findings cache file."
   (expand-file-name "var/tmp/research-findings.md"
-                    (gptel-auto-workflow--project-root)))
+                    (or (gptel-auto-workflow--project-root)
+                        (expand-file-name "~/.emacs.d/"))))
 
 (defun gptel-auto-workflow-run-research ()
   "Run researcher and store findings to cache.
@@ -312,7 +310,8 @@ Call periodically to keep findings fresh.
 Findings available to analyzer during target selection.
 Findings are cached per-project."
   (interactive)
-  (let ((proj-root (gptel-auto-workflow--project-root)))
+  (let ((proj-root (or (gptel-auto-workflow--project-root)
+                       (expand-file-name "~/.emacs.d/"))))
     (message "[research] Starting periodic research for %s..." proj-root)
     (gptel-auto-workflow--research-patterns
      (lambda (findings)
@@ -332,10 +331,11 @@ Findings are cached per-project."
   "Load cached research findings for current project.
 Returns empty string if no cache exists.
 Findings are cached per-project."
-  (let ((proj-root (gptel-auto-workflow--project-root)))
+  (let ((proj-root (or (gptel-auto-workflow--project-root)
+                       (expand-file-name "~/.emacs.d/"))))
     ;; First check in-memory cache for this project
     (let ((cached (gethash proj-root gptel-auto-workflow--research-findings-cache)))
-      (if (and cached (not (string-empty-p cached)))
+      (if (and (stringp cached) (not (string-empty-p cached)))
           (progn
             (message "[research] Using in-memory findings for %s (%d chars)"
                      proj-root (length cached))
@@ -394,15 +394,17 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
 (defun gptel-auto-workflow-research-status ()
   "Show researcher status for current project."
   (interactive)
-  (let ((proj-root (gptel-auto-workflow--project-root))
+  (let ((proj-root (or (gptel-auto-workflow--project-root)
+                       (expand-file-name "~/.emacs.d/")))
         (findings nil))
-    (setq findings (gethash proj-root
-                            gptel-auto-workflow--research-findings-cache
-                            ""))
+    (setq findings (or (gethash proj-root
+                                gptel-auto-workflow--research-findings-cache
+                                "")
+                       ""))
     (list :running (timerp gptel-auto-workflow--research-timer)
           :interval gptel-auto-workflow-research-interval
           :project proj-root
-          :findings-cached (not (string-empty-p findings))
+          :findings-cached (and (stringp findings) (not (string-empty-p findings)))
           :findings-length (length findings)
           :cache-file (gptel-auto-workflow--research-file))))
 

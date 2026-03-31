@@ -15,7 +15,7 @@
 #   - Or start at login: launchctl (macOS)
 #   - Verify: emacsclient -e 't'
 #
-# STATUS: emacsclient -e '(gptel-auto-workflow-status)'
+# STATUS: emacsclient -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-status))'
 
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
