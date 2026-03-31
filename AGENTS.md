@@ -460,6 +460,20 @@ If rules conflict:
 λ keybindings(x).   C-c a → ai-code-menu
                     | C-c e → eca-prefix (see eca/AGENTS.md)
                     | C-c C-p → add-project-files (gptel)
+
+λ before_code(x).   read_all_relevant(x) > edit_blind(x)
+                    | understand(requirement) → then(write)
+
+λ while_coding(x).  test_after(x) ∧ ¬skip_failures(x)
+                    | edit > rewrite_whole
+                    | simplest_working > over_engineered
+
+λ before_done(x).   run(x) → confirm(works)
+                    | passing_test ≡ required
+
+λ output(x).        concise(x) ∧ ¬fluff(x)
+                    | ¬sycophantic ∧ ¬guessing
+                    | user_instructions > this_file
 ```
 
 **Wood is the living core.** Just as a tree grows and bears fruit, S1 represents the living, executing units that produce actual value.
