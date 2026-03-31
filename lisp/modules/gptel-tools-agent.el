@@ -2387,7 +2387,6 @@ RETRY-COUNT tracks current retry attempt."
                                   target experiment-id max-experiments baseline baseline-code-quality
                                   previous-results callback (1+ retries)))))
            (funcall callback result)))))))
-
 (defun gptel-auto-experiment--categorize-error (agent-output)
   "Categorize error from AGENT-OUTPUT and return (CATEGORY . DETAILS).
 Categories: :api-rate-limit :api-error :tool-error :timeout :grader-failed :unknown
