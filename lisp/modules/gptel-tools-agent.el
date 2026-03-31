@@ -712,13 +712,14 @@ Returns sanitized string, or \"nil\" if TEXT is nil."
 
 (defun my/gptel--safe-file-p (filepath)
   "Return non-nil if FILEPATH is safe to include in subagent context.
-Rejects files outside project root, symlinks, and unreadable files."
-  (when-let* ((expanded (expand-file-name filepath))
-              (proj (project-current))
-              (proj-root (expand-file-name (project-root proj))))
-    (and (file-readable-p expanded)
-         (not (file-symlink-p expanded))
-         (string-prefix-p proj-root expanded))))
+Rejects files outside project root, symlinks, and unreadable files.
+Optimized: checks file validity before expensive project lookup."
+  (when (and (stringp filepath)
+             (file-readable-p filepath)
+             (not (file-symlink-p filepath)))
+    (when-let* ((proj (project-current))
+                (proj-root (expand-file-name (project-root proj))))
+      (string-prefix-p proj-root (expand-file-name filepath)))))
 
 (defun my/gptel--build-subagent-context (prompt files include-history include-diff &optional origin-buf)
   "Package context for a subagent payload.
@@ -2762,40 +2763,40 @@ Adapts max-experiments based on API error rate."
          (results nil)
          (best-score (gptel-auto-workflow--plist-get baseline :eight-keys 0.0))
          (no-improvement-count 0))
-(message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
-              target best-score max-exp)
-     (cl-labels ((run-next (exp-id)
-                   (when (and (> gptel-auto-experiment--api-error-count 5)
-                              (< exp-id max-exp))
-                     (message "[auto-workflow] Too many API errors (%d), stopping early for %s"
-                              gptel-auto-experiment--api-error-count target)
-                     (setq max-exp exp-id))
-                   (if (or (> exp-id max-exp)
-                           (>= no-improvement-count threshold))
-                       (progn
-                         (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
-                                  target (length results)
-                                  best-score)
-                         (funcall callback (nreverse results)))
-                     (gptel-auto-experiment-run
-                      target exp-id max-exp
-                      best-score
-                      baseline-code-quality
-                      results
-                      (lambda (result)
-                        (push result results)
-                        (gptel-auto-workflow--update-progress)
-                        (let ((score-after (gptel-auto-workflow--plist-get result :score-after 0)))
-                          (when (and score-after (> score-after best-score))
-                            (setq best-score score-after
-                                  no-improvement-count 0))
-                          (when (and score-after (<= score-after best-score))
-                            (cl-incf no-improvement-count)))
-                        (if (> gptel-auto-experiment-delay-between 0)
-                            (run-with-timer gptel-auto-experiment-delay-between nil
-                                            (lambda () (run-next (1+ exp-id))))
-                          (run-next (1+ exp-id))))))))
-       (run-next 1))))
+    (message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
+             target best-score max-exp)
+    (cl-labels ((run-next (exp-id)
+                  (when (and (> gptel-auto-experiment--api-error-count 5)
+                             (< exp-id max-exp))
+                    (message "[auto-workflow] Too many API errors (%d), stopping early for %s"
+                             gptel-auto-experiment--api-error-count target)
+                    (setq max-exp exp-id))
+                  (if (or (> exp-id max-exp)
+                          (>= no-improvement-count threshold))
+                      (progn
+                        (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
+                                 target (length results)
+                                 best-score)
+                        (funcall callback (nreverse results)))
+                    (gptel-auto-experiment-run
+                     target exp-id max-exp
+                     best-score
+                     baseline-code-quality
+                     results
+                     (lambda (result)
+                       (push result results)
+                       (gptel-auto-workflow--update-progress)
+                       (let ((score-after (gptel-auto-workflow--plist-get result :score-after 0)))
+                         (when (and score-after (> score-after best-score))
+                           (setq best-score score-after
+                                 no-improvement-count 0))
+                         (when (and score-after (<= score-after best-score))
+                           (cl-incf no-improvement-count)))
+                       (if (> gptel-auto-experiment-delay-between 0)
+                           (run-with-timer gptel-auto-experiment-delay-between nil
+                                           (lambda () (run-next (1+ exp-id))))
+                         (run-next (1+ exp-id))))))))
+      (run-next 1))))
 
 ;;; Main Entry Point
 
