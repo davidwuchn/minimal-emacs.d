@@ -498,8 +498,8 @@ large-result truncation, and result caching."
                  (tracking-marker (let ((m (copy-marker where t)))
                                     (set-marker m (marker-position where) parent-buf)
                                     m))
-                 (partial (format "%s result for task: %s\n\n"
-                                  (capitalize agent-type) description)))
+(partial (format "%s result for task: %s\n\n"
+                                 (capitalize (or agent-type "agent")) (or description "unknown"))))
             (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
             (gptel-request prompt
               :context (gptel-agent--task-overlay where agent-type description)
