@@ -21,7 +21,8 @@
   (push "/pre-init.el" compile-angel-excluded-files)
   (push "/post-init.el" compile-angel-excluded-files)
   (push "/pre-early-init.el" compile-angel-excluded-files)
-  (push "/post-early-init.el" compile-angel-excluded-files))
+  (push "/post-early-init.el" compile-angel-excluded-files)
+  (push "/ai-code-behaviors.el" compile-angel-excluded-files))
 
 ;; Environment Variable Synchronization (Essential for macOS users)
 (use-package exec-path-from-shell

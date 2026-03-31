@@ -63,10 +63,13 @@ were created after the hiding but before restoration."
 ;; RELOAD THEME-SETTING.EL FOR NEW GUI FRAMES
 ;; ==============================================================================
 (defun my/reload-theme-setting-for-frame (frame)
-  "Reload theme-setting.el for FRAME to apply all visual settings."
-  (when (display-graphic-p frame)
+  "Reload theme-setting.el for FRAME to apply all visual settings.
+Only reloads for top-level frames (not Corfu child frames) and only once per frame."
+  (when (and (display-graphic-p frame)
+             (not (frame-parameter frame 'parent-frame))
+             (not (frame-parameter frame 'theme-setting-loaded)))
+    (set-frame-parameter frame 'theme-setting-loaded t)
     (select-frame frame)
-    ;; Reload the entire theme configuration file
     (load-file "~/.emacs.d/lisp/theme-setting.el")
     (message "✅ Reloaded theme-setting.el for new frame")))
 
