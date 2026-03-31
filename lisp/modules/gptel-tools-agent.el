@@ -37,6 +37,14 @@ Signals an error if validation fails."
 Helper for validation in callback-based functions."
   (and (stringp value) (not (string-empty-p (string-trim value)))))
 
+
+(defun gptel-auto-workflow--require-magit-dependencies ()
+  "Require magit-worktree and magit-git dependencies.
+Signals user-error if either dependency fails to load."
+  (unless (require 'magit-worktree nil t)
+    (user-error "magit-worktree is required"))
+  (unless (require 'magit-git nil t)
+    (user-error "magit-git is required")))
 ;;;###autoload
 (defun gptel-auto-workflow--read-file-contents (filepath)
   "Read contents of FILEPATH as string.
@@ -229,77 +237,56 @@ If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
                                          (expand-file-name "~/.emacs.d/"))))
               (gptel-auto-workflow--git-cmd "git push origin staging"))))))))
 
+(defun gptel-auto-workflow--sync-branches (source-branch target-branch action-name)
+  "Fast-forward TARGET-BRANCH to match SOURCE-BRANCH.
+ACTION-NAME is used in log messages (e.g., \"Synced\", \"Promoted\").
+All shell commands have timeout protection to prevent deadlocks."
+  (let ((default-directory (or (gptel-auto-workflow--project-root)
+                               (expand-file-name "~/.emacs.d/")))
+        (original-branch (gptel-auto-workflow--git-cmd
+                          "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
+    (condition-case err
+        (progn
+          (gptel-auto-workflow--git-cmd "git fetch origin" 180)
+          (let* ((source-commit (gptel-auto-workflow--git-cmd
+                                 (format "git rev-parse origin/%s" source-branch)))
+                 (target-commit (gptel-auto-workflow--git-cmd
+                                 (format "git rev-parse origin/%s 2>/dev/null || echo \"none\"" target-branch)))
+                 (source-commit (or source-commit "none"))
+                 (target-commit (or target-commit "none")))
+            (if (string= source-commit target-commit)
+                (message "[auto-workflow] %s already in sync with %s" target-branch source-branch)
+              (progn
+                (gptel-auto-workflow--git-cmd (format "git checkout %s" target-branch))
+                (gptel-auto-workflow--git-cmd (format "git merge origin/%s --ff-only" source-branch))
+                (gptel-auto-workflow--git-cmd (format "git push origin %s" target-branch))
+                (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+                (message "[auto-workflow] %s %s to %s (%s -> %s)"
+                         action-name target-branch source-branch
+                         (if (>= (length target-commit) 7)
+                             (substring target-commit 0 7)
+                           target-commit)
+                         (if (>= (length source-commit) 7)
+                             (substring source-commit 0 7)
+                           source-commit))))))
+      (error
+       (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+       (message "[auto-workflow] Failed to %s %s to %s: %s" (downcase action-name) target-branch source-branch err)
+       nil))))
+
+;;;###autoload
 (defun gptel-auto-workflow--sync-staging-with-main ()
   "Fast-forward staging branch to match main.
 Ensures experiments run against latest code.
 All shell commands have timeout protection to prevent deadlocks."
-  (let ((default-directory (or (gptel-auto-workflow--project-root)
-                               (expand-file-name "~/.emacs.d/")))
-        (original-branch (gptel-auto-workflow--git-cmd
-                          "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
-    (condition-case err
-        (progn
-          (gptel-auto-workflow--git-cmd "git fetch origin" 180)
-          (let* ((main-commit (gptel-auto-workflow--git-cmd
-                              "git rev-parse origin/main"))
-                 (staging-commit (gptel-auto-workflow--git-cmd
-                                  "git rev-parse origin/staging 2>/dev/null || echo \"none\""))
-                 (main-commit (or main-commit "none"))
-                 (staging-commit (or staging-commit "none")))
-            (if (string= main-commit staging-commit)
-                (message "[auto-workflow] Staging already in sync with main")
-              (progn
-                (gptel-auto-workflow--git-cmd "git checkout staging")
-                (gptel-auto-workflow--git-cmd "git merge origin/main --ff-only")
-                (gptel-auto-workflow--git-cmd "git push origin staging")
-                (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
-                (message "[auto-workflow] Synced staging with main (%s -> %s)"
-                         (if (>= (length staging-commit) 7)
-                             (substring staging-commit 0 7)
-                           staging-commit)
-                         (if (>= (length main-commit) 7)
-                             (substring main-commit 0 7)
-                           main-commit))))))
-      (error
-       (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
-       (message "[auto-workflow] Failed to sync staging: %s" err)
-       nil))))
+  (gptel-auto-workflow--sync-branches "main" "staging" "Synced"))
 
+;;;###autoload
 (defun gptel-auto-workflow--promote-staging-to-main ()
   "Fast-forward main branch to match staging if staging has new commits.
 Automatically promotes kept experiment commits from staging to main.
 All shell commands have timeout protection to prevent deadlocks."
-  (let ((default-directory (or (gptel-auto-workflow--project-root)
-                               (expand-file-name "~/.emacs.d/")))
-        (original-branch (gptel-auto-workflow--git-cmd
-                          "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
-    (condition-case err
-        (progn
-          (gptel-auto-workflow--git-cmd "git fetch origin" 180)
-          (let* ((main-commit (gptel-auto-workflow--git-cmd
-                               "git rev-parse origin/main"))
-                 (staging-commit (gptel-auto-workflow--git-cmd
-                                  "git rev-parse origin/staging 2>/dev/null || echo \"none\""))
-                 (main-commit (or main-commit "none"))
-                 (staging-commit (or staging-commit "none")))
-            (if (string= main-commit staging-commit)
-                (message "[auto-workflow] Main already in sync with staging")
-              (progn
-                (gptel-auto-workflow--git-cmd "git checkout main")
-                (gptel-auto-workflow--git-cmd "git merge origin/staging --ff-only")
-                (gptel-auto-workflow--git-cmd "git push origin main")
-                (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
-                (message "[auto-workflow] Promoted staging to main (%s -> %s)"
-                         (if (>= (length main-commit) 7)
-                             (substring main-commit 0 7)
-                           main-commit)
-                         (if (>= (length staging-commit) 7)
-                             (substring staging-commit 0 7)
-                           staging-commit))))))
-      (error
-       (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
-       (message "[auto-workflow] Failed to promote staging: %s" err)
-       nil))))
+  (gptel-auto-workflow--sync-branches "staging" "main" "Promoted"))
 
 ;;; Customization
 
@@ -1384,17 +1371,17 @@ Maximum response: 1000 characters."
       (message "[auto-workflow] Reviewing changes in %s..." optimize-branch)
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-call-subagent))
-(gptel-benchmark-call-subagent
-            'reviewer
-            "Review changes before merge"
-            review-prompt
-            (lambda (result)
-              (let* ((response (if (stringp result) result (format "%S" result)))
-                     (approved (string-match-p "^APPROVED" response)))
-                (message "[auto-workflow] Review %s: %s"
-                         (if approved "PASSED" "BLOCKED")
-                         (my/gptel--sanitize-for-logging response 100))
-                (funcall callback (cons approved response)))))
+          (gptel-benchmark-call-subagent
+           'reviewer
+           "Review changes before merge"
+           review-prompt
+           (lambda (result)
+             (let* ((response (if (stringp result) result (format "%S" result)))
+                    (approved (string-match-p "^APPROVED" response)))
+               (message "[auto-workflow] Review %s: %s"
+                        (if approved "PASSED" "BLOCKED")
+                        (my/gptel--sanitize-for-logging response 100))
+               (funcall callback (cons approved response)))))
         (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
 
 (defun gptel-auto-workflow--fix-review-issues (optimize-branch review-output callback)
@@ -2344,25 +2331,25 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                     :id experiment-id
                                                     :error "timeout"))))))
            ;; Routing handled by gptel-auto-workflow--advice-task-override
-(my/gptel--run-agent-tool
-             (lambda (agent-output)
-               (message "[auto-exp] Agent output (first 500 chars): %s"
-                        (my/gptel--sanitize-for-logging agent-output 500))
-               (when timeout-timer (cancel-timer timeout-timer))
-               (unless finished
-                 (gptel-auto-experiment-grade
-                  agent-output
-                  (lambda (grade)
-                    (let* ((grade-score (plist-get grade :score))
-                           (grade-total (plist-get grade :total))
-                           (grade-passed (plist-get grade :passed))
-                           (grade-details (plist-get grade :details))
-                           (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
-                      (message "[auto-exp] Grade result: score=%s/%s passed=%s"
-                               grade-score grade-total grade-passed)
-                      (when (and agent-output (> (length agent-output) 0))
-                        (message "[auto-exp] Agent output preview: %s"
-                                 (my/gptel--sanitize-for-logging agent-output 200)))
+           (my/gptel--run-agent-tool
+            (lambda (agent-output)
+              (message "[auto-exp] Agent output (first 500 chars): %s"
+                       (my/gptel--sanitize-for-logging agent-output 500))
+              (when timeout-timer (cancel-timer timeout-timer))
+              (unless finished
+                (gptel-auto-experiment-grade
+                 agent-output
+                 (lambda (grade)
+                   (let* ((grade-score (plist-get grade :score))
+                          (grade-total (plist-get grade :total))
+                          (grade-passed (plist-get grade :passed))
+                          (grade-details (plist-get grade :details))
+                          (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
+                     (message "[auto-exp] Grade result: score=%s/%s passed=%s"
+                              grade-score grade-total grade-passed)
+                     (when (and agent-output (> (length agent-output) 0))
+                       (message "[auto-exp] Agent output preview: %s"
+                                (my/gptel--sanitize-for-logging agent-output 200)))
                      ;; Check if grader passed
                      (if (not grade-passed)
                          ;; Grader failed - categorize the error
@@ -2388,25 +2375,25 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                    :kept nil
                                                    :duration (- (float-time) start-time)
                                                    :grader-quality grade-score
-:grader-reason grade-details
-                                                    :comparator-reason (symbol-name error-category)
-                                                    :analyzer-patterns (format "%s" patterns)
-                                                    :agent-output agent-output)))
-                              (gptel-auto-experiment-log-tsv
-                               (format-time-string "%Y-%m-%d") exp-result)
-                              (funcall callback exp-result)))
-                        ;; Grader passed - commit changes, then run benchmark
-                        (let ((commit-dir (or (gptel-auto-workflow--get-worktree-dir target)
-                                              (gptel-auto-workflow--project-root))))
-                          (when commit-dir
-                            (let ((default-directory commit-dir))
-                              (magit-git-success "add" "-A")
-                              (magit-git-success "commit" "-m" (format "WIP: experiment %s" target)))))
-                        (let* ((bench (gptel-auto-experiment-benchmark t))
-                               (passed (plist-get bench :passed))
-                               (validation-error (plist-get bench :validation-error))
-                               (tests-passed (plist-get bench :tests-passed))
-                               (score-after (plist-get bench :eight-keys)))
+                                                   :grader-reason grade-details
+                                                   :comparator-reason (symbol-name error-category)
+                                                   :analyzer-patterns (format "%s" patterns)
+                                                   :agent-output agent-output)))
+                             (gptel-auto-experiment-log-tsv
+                              (format-time-string "%Y-%m-%d") exp-result)
+                             (funcall callback exp-result)))
+                       ;; Grader passed - commit changes, then run benchmark
+                       (let ((commit-dir (or (gptel-auto-workflow--get-worktree-dir target)
+                                             (gptel-auto-workflow--project-root))))
+                         (when commit-dir
+                           (let ((default-directory commit-dir))
+                             (magit-git-success "add" "-A")
+                             (magit-git-success "commit" "-m" (format "WIP: experiment %s" target)))))
+                       (let* ((bench (gptel-auto-experiment-benchmark t))
+                              (passed (plist-get bench :passed))
+                              (validation-error (plist-get bench :validation-error))
+                              (tests-passed (plist-get bench :tests-passed))
+                              (score-after (plist-get bench :eight-keys)))
                          (if (not passed)
                              ;; Check if validation error is teachable and we should retry
                              (if (and validation-error
@@ -2972,10 +2959,7 @@ Usage:
       (when (car active)
         (message "[auto-workflow] Skipping: %s" (string-join (car active) ", "))
         (cl-return-from gptel-auto-workflow-run-async nil)))
-    (unless (require 'magit-worktree nil t)
-      (user-error "magit-worktree is required"))
-    (unless (require 'magit-git nil t)
-      (user-error "magit-git is required"))
+    (gptel-auto-workflow--require-magit-dependencies)
     (setq gptel-auto-workflow--running t
           gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
           gptel-auto-workflow--last-progress-time (current-time))
@@ -3528,10 +3512,7 @@ Flow:
 Cron: emacsclient -e '(gptel-auto-workflow-run-autonomous)'
 Manual: M-x gptel-auto-workflow-run-autonomous"
   (interactive)
-  (unless (require 'magit-worktree nil t)
-    (user-error "magit-worktree is required"))
-  (unless (require 'magit-git nil t)
-    (user-error "magit-git is required"))
+  (gptel-auto-workflow--require-magit-dependencies)
   (let* ((program (gptel-auto-workflow-orient))
          (targets (plist-get program :targets))
          (run-id (format-time-string "%Y-%m-%d"))
