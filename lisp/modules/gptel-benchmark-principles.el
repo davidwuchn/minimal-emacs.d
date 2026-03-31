@@ -54,7 +54,7 @@
      :signals ("builds on discoveries" "adapts to new information" "progressive improvement"
                "non-repetitive" "evolves approach" "learns from feedback")
      :anti-patterns ("mechanical rephrasing" "circular logic" "repeated failed approaches"
-                      "retrying same way" "static approach" "ignores feedback"))
+                     "retrying same way" "static approach" "ignores feedback"))
     (fractal-clarity
      :symbol "fractal"
      :name "Clarity"
@@ -62,7 +62,7 @@
      :signals ("explicit assumptions" "testable definitions" "clear structure"
                "measurable criteria" "well-defined phases" "explicit success criteria")
      :anti-patterns ("vague terms" "handle properly" "look good" "ambiguous instructions"
-                      "undefined terms" "implicit assumptions"))
+                     "undefined terms" "implicit assumptions"))
     (epsilon-purpose
      :symbol "ε"
      :name "Purpose"
@@ -70,7 +70,7 @@
      :signals ("clear goals" "measurable outcomes" "actionable function"
                "specific objectives" "defined deliverables" "purposeful steps")
      :anti-patterns ("abstract descriptions" "no action" "unclear goals"
-                      "meandering" "no measurable outcome" "purposeless"))
+                     "meandering" "no measurable outcome" "purposeless"))
     (tau-wisdom
      :symbol "τ"
      :name "Wisdom"
@@ -78,7 +78,7 @@
      :signals ("planning before execution" "error prevention" "foresight"
                "plan file created" "risks identified" "proactive measures")
      :anti-patterns ("premature optimization" "reactive fixes" "no planning"
-                      "jump to execution" "ignores risks" "short-sighted"))
+                     "jump to execution" "ignores risks" "short-sighted"))
     (pi-synthesis
      :symbol "π"
      :name "Synthesis"
@@ -86,7 +86,7 @@
      :signals ("connects findings" "integrates knowledge" "holistic view"
                "findings integrated" "connections noted" "synthesizes information")
      :anti-patterns ("fragmented thinking" "isolated facts" "disconnected"
-                      "siloed information" "no integration" "missing connections"))
+                     "siloed information" "no integration" "missing connections"))
     (mu-directness
      :symbol "μ"
      :name "Directness"
@@ -94,7 +94,7 @@
      :signals ("direct communication" "no pleasantries" "efficient"
                "errors logged directly" "clear pass/fail" "concise")
      :anti-patterns ("polite evasion" "euphemisms" "softening language"
-                      "vague language" "unnecessary words" "beating around bush"))
+                     "vague language" "unnecessary words" "beating around bush"))
     (exists-truth
      :symbol "∃"
      :name "Truth"
@@ -102,7 +102,7 @@
      :signals ("actual data" "evidence-based" "acknowledges uncertainty"
                "actual errors logged" "verification based on evidence" "honest assessment")
      :anti-patterns ("surface agreement" "wishful thinking" "assumptions over data"
-                      "should work" "ignores evidence" "false confidence"))
+                     "should work" "ignores evidence" "false confidence"))
     (forall-vigilance
      :symbol "∀"
      :name "Vigilance"
@@ -110,7 +110,7 @@
      :signals ("proactive error handling" "never repeat failures" "defensive"
                "3-strike protocol" "failed attempts tracked" "approach mutates")
      :anti-patterns ("accepting failures" "repeating mistakes" "no error handling"
-                      "ignores edge cases" "gives up easily" "static after failure")))
+                     "ignores edge cases" "gives up easily" "static after failure")))
   "Eight Keys definitions.
 See mementum/knowledge/nucleus-patterns.md for documentation.")
 
@@ -118,23 +118,24 @@ See mementum/knowledge/nucleus-patterns.md for documentation.")
   "Return criteria list for KEY."
   (list (format "Check %s alignment" key)))
 
+(defun gptel-benchmark--get-key-property (key property)
+  "Get PROPERTY for KEY from Eight Keys definitions.
+Helper to reduce duplication in accessor functions."
+  (let ((def (alist-get key gptel-benchmark-eight-keys-definitions)))
+    (if def (plist-get def property)
+      (error "Unknown key: %s" key))))
+
 (defun gptel-benchmark-eight-keys-signals (key)
   "Return positive signal patterns for KEY."
-  (let ((def (alist-get key gptel-benchmark-eight-keys-definitions)))
-    (if def (plist-get def :signals)
-      (error "Unknown key: %s" key))))
+  (gptel-benchmark--get-key-property key :signals))
 
 (defun gptel-benchmark-eight-keys-anti-patterns (key)
   "Return anti-pattern list for KEY."
-  (let ((def (alist-get key gptel-benchmark-eight-keys-definitions)))
-    (if def (plist-get def :anti-patterns)
-      (error "Unknown key: %s" key))))
+  (gptel-benchmark--get-key-property key :anti-patterns))
 
 (defun gptel-benchmark-eight-keys-element (key)
   "Return Wu Xing element for KEY."
-  (let ((def (alist-get key gptel-benchmark-eight-keys-definitions)))
-    (if def (plist-get def :element)
-      (error "Unknown key: %s" key))))
+  (gptel-benchmark--get-key-property key :element))
 
 (defun gptel-benchmark-eight-keys-score (output)
   "Score OUTPUT against all Eight Keys using local pattern matching.
