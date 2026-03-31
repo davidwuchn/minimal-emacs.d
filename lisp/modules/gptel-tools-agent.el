@@ -665,10 +665,11 @@ remove it."
 
 ;;; Context Builder
 
-(defun my/gptel--string-to-bool (str)
-  "Convert string boolean to Elisp boolean.
-Returns t for \"true\", nil for \"false\" or nil."
-  (and (stringp str) (string= str "true")))
+(defun my/gptel--string-to-bool (val)
+  "Convert string or boolean VAL to Elisp boolean.
+Returns t for \"true\" or t, nil for \"false\", nil, or any other value."
+  (or (and (stringp val) (string= val "true"))
+      (and (booleanp val) val)))
 (defun my/gptel--xml-escape (text)
   "Escape XML special characters in TEXT.
 Prevents XML injection when inserting file contents into context tags.
@@ -750,9 +751,8 @@ FILES are validated against project root for security.
           (setq context (concat context "<files>\n" file-context "</files>\n\n")))))
 
     (when (my/gptel--string-to-bool include-diff)
-      (let* ((proj-root (and (fboundp 'project-current)
-                             (project-current)
-                             (project-root (project-current))))
+      (let* ((proj (when (fboundp 'project-current) (project-current)))
+             (proj-root (when proj (expand-file-name (project-root proj))))
              (default-directory
               (cond
                ((and proj-root (file-in-directory-p default-directory proj-root))
