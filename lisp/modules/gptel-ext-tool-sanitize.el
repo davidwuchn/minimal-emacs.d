@@ -53,6 +53,14 @@ Tries: exact, case-insensitive, underscore/hyphen normalization."
   (let ((name (plist-get tc :name)))
     (or (null name) (eq name :null) (equal name "null") (equal name ""))))
 
+(defun my/gptel--repair-tool-call (tc correct-name)
+  "Repair tool call TC to use CORRECT-NAME.
+Messages the repair and updates the :name property in place."
+  (let ((current-name (plist-get tc :name)))
+    (unless (string= current-name correct-name)
+      (message "gptel: repairing tool call %S -> %S" current-name correct-name)
+      (plist-put tc :name correct-name))))
+
 (defun my/gptel--sanitize-tool-calls (fsm)
   "Remove nil/unknown-named tool calls from FSM before execution.
 
@@ -80,10 +88,7 @@ RunAgent was registered, leaving it out of the buffer's tool list."
                                   (my/gptel--find-tool-fuzzy name tools))))
           (cond
            (matched-tool
-            (let ((correct-name (gptel-tool-name matched-tool)))
-              (unless (string= name correct-name)
-                (message "gptel: repairing tool call %S -> %S" name correct-name)
-                (plist-put tc :name correct-name))))
+            (my/gptel--repair-tool-call tc (gptel-tool-name matched-tool)))
            ((and (stringp name)
                  (fboundp 'gptel-get-tool)
                  (or (ignore-errors (gptel-get-tool name))
@@ -93,9 +98,7 @@ RunAgent was registered, leaving it out of the buffer's tool list."
                                     (my/gptel--find-tool-fuzzy name all-tools)))
                    (correct-name (gptel-tool-name global-tool))
                    (new-tools (append tools (list global-tool))))
-              (unless (string= name correct-name)
-                (message "gptel: repairing tool call %S -> %S" name correct-name)
-                (plist-put tc :name correct-name))
+              (my/gptel--repair-tool-call tc correct-name)
               (message "gptel: recovering tool call %S not in FSM tools \
 (preset misconfiguration); injecting from global registry" name)
               (setq info (plist-put info :tools new-tools))
