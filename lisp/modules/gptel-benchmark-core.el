@@ -239,9 +239,27 @@ Returns 0.0 if TOTAL is zero to avoid division by zero."
       (/ (alist-get score-type score-totals) (float total))
     0.0))
 
+(defun gptel-benchmark--extract-score-types (scores)
+  "Extract standard score types from SCORES plist.
+Returns alist of (score-type . value) for the four standard scores.
+Handles nil values gracefully by returning 0.0 for missing scores."
+  (when scores
+    (list (cons :overall-score (or (plist-get scores :overall-score) 0.0))
+          (cons :efficiency-score (or (plist-get scores :efficiency-score) 0.0))
+          (cons :completion-score (or (plist-get scores :completion-score) 0.0))
+          (cons :constraint-score (or (plist-get scores :constraint-score) 0.0)))))
+
+(defun gptel-benchmark--calculate-average (score-totals total score-type)
+  "Calculate average for SCORE-TYPE from SCORE-TOTALS over TOTAL items.
+Returns 0.0 if TOTAL is zero to avoid division by zero."
+  (if (> total 0)
+      (/ (alist-get score-type score-totals) (float total))
+    0.0))
+
 (defun gptel-benchmark-summarize-results (results)
   "Create summary of RESULTS.
-RESULTS is a list of (run . scores) cons cells or plists with :scores."
+RESULTS is a list of (run . scores) cons cells or plists with :scores.
+Returns plist with :total-tests, :passed-tests, and average scores."
   (let ((total 0)
         (passed 0)
         (score-totals '((:overall-score . 0.0)
@@ -262,13 +280,12 @@ RESULTS is a list of (run . scores) cons cells or plists with :scores."
                  (gptel-benchmark--extract-score-types scores))))
         (when (>= (or overall 0) 0.7)
           (cl-incf passed))))
-    (let ((reciprocal (if (> total 0) (/ 1.0 (float total)) 0.0)))
-      (list :total-tests total
-            :passed-tests passed
-            :avg-overall (* (alist-get :overall-score score-totals) reciprocal)
-            :avg-efficiency (* (alist-get :efficiency-score score-totals) reciprocal)
-            :avg-completion (* (alist-get :completion-score score-totals) reciprocal)
-            :avg-constraints (* (alist-get :constraint-score score-totals) reciprocal)))))
+    (list :total-tests total
+          :passed-tests passed
+          :avg-overall (gptel-benchmark--calculate-average score-totals total :overall-score)
+          :avg-efficiency (gptel-benchmark--calculate-average score-totals total :efficiency-score)
+          :avg-completion (gptel-benchmark--calculate-average score-totals total :completion-score)
+          :avg-constraints (gptel-benchmark--calculate-average score-totals total :constraint-score))))
 
 ;;; Eight Keys Integration
 
