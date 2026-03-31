@@ -2736,26 +2736,35 @@ Also disables auto-revert and uniquify to prevent buffer issues when worktree fi
   (add-hook 'kill-buffer-query-functions 
             #'gptel-auto-workflow--suppress-kill-buffer-query))
 
+(defcustom gptel-auto-workflow-persistent-headless nil
+  "If non-nil, keep headless suppression enabled between runs.
+Set to t when running as daemon/cron to prevent interactive prompts."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
 (defun gptel-auto-workflow--disable-headless-suppression ()
   "Disable suppression of interactive prompts.
-Restores auto-revert and uniquify if they were enabled before headless operation."
-  (setq gptel-auto-workflow--headless nil)
-  ;; Restore auto-revert
-  (when (and (boundp 'gptel-auto-workflow--auto-revert-was-enabled)
-             gptel-auto-workflow--auto-revert-was-enabled)
-    (global-auto-revert-mode 1))
-  ;; Restore uniquify
-  (when (and (boundp 'gptel-auto-workflow--uniquify-style)
-             gptel-auto-workflow--uniquify-style)
-    (setq uniquify-buffer-name-style gptel-auto-workflow--uniquify-style))
-  (advice-remove 'ask-user-about-supersession-threat 
-                 #'gptel-auto-workflow--suppress-ask-user-about-supersession-threat)
-  (advice-remove 'yes-or-no-p 
-                 #'gptel-auto-workflow--suppress-yes-or-no-p)
-  (advice-remove 'y-or-n-p 
-                 #'gptel-auto-workflow--suppress-y-or-n-p)
-  (remove-hook 'kill-buffer-query-functions 
-               #'gptel-auto-workflow--suppress-kill-buffer-query))
+Restores auto-revert and uniquify if they were enabled before headless operation.
+Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
+  (when (and (not gptel-auto-workflow-persistent-headless)
+             gptel-auto-workflow--headless)
+    (setq gptel-auto-workflow--headless nil)
+    ;; Restore auto-revert
+    (when (and (boundp 'gptel-auto-workflow--auto-revert-was-enabled)
+               gptel-auto-workflow--auto-revert-was-enabled)
+      (global-auto-revert-mode 1))
+    ;; Restore uniquify
+    (when (and (boundp 'gptel-auto-workflow--uniquify-style)
+               gptel-auto-workflow--uniquify-style)
+      (setq uniquify-buffer-name-style gptel-auto-workflow--uniquify-style))
+    (advice-remove 'ask-user-about-supersession-threat 
+                   #'gptel-auto-workflow--suppress-ask-user-about-supersession-threat)
+    (advice-remove 'yes-or-no-p 
+                   #'gptel-auto-workflow--suppress-yes-or-no-p)
+    (advice-remove 'y-or-n-p 
+                   #'gptel-auto-workflow--suppress-y-or-n-p)
+    (remove-hook 'kill-buffer-query-functions 
+                 #'gptel-auto-workflow--suppress-kill-buffer-query)))
 
 (defcustom gptel-auto-workflow-git-timeout 120
   "Timeout in seconds for git commands during auto-workflow.
@@ -2971,7 +2980,8 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
 (defun gptel-auto-workflow-cron-safe ()
   "Run auto-workflow with full cleanup for cron jobs.
 Cancels stale timers, kills orphaned buffers, resets state, then runs.
-Safe to call from cron - handles all edge cases."
+Safe to call from cron - handles all edge cases.
+Sets `gptel-auto-workflow-persistent-headless' to prevent interactive prompts."
   (let ((proj-root (or (gptel-auto-workflow--project-root)
                        (expand-file-name "~/.emacs.d/"))))
     (setq default-directory proj-root)
@@ -2979,6 +2989,8 @@ Safe to call from cron - handles all edge cases."
     (require 'json)
     (unless (featurep 'gptel-tools-agent)
       (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root)))
+    ;; Enable persistent headless mode for daemon/cron
+    (setq gptel-auto-workflow-persistent-headless t)
     ;; Enable headless suppression for async operations
     (gptel-auto-workflow--enable-headless-suppression)
     ;; Reset API error counter for new run
