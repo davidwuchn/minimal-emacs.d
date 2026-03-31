@@ -290,6 +290,24 @@ Matches if the alist key is a prefix of SEARCH-STR."
   (when (and (listp alist) (stringp search-str))
     (let ((search-lower (downcase search-str)))
       (catch 'found
+
+(defun my/gptel--lookup-context-window-in-gptel-tables (model)
+  "Look up context window for MODEL in gptel's built-in model tables.
+Returns the context window in tokens, or nil if not found."
+  (let ((model-sym (cond
+                    ((symbolp model) model)
+                    ((stringp model) (intern model))
+                    (t nil))))
+    (when model-sym
+      (catch 'found
+        (dolist (var (my/gptel--gptel-model-tables))
+          (let ((entry (assq model-sym (symbol-value var))))
+            (when entry
+              (let ((cw (my/gptel--normalize-context-window
+                         (plist-get (cdr entry) :context-window))))
+                (when (and (integerp cw) (> cw 0))
+                  (throw 'found cw))))))
+        nil))))
         (dolist (entry alist)
           (when (and (consp entry)
                      (stringp (car entry))
@@ -401,19 +419,23 @@ Image tokens are counted from `gptel-context' if available."
 
 ;;; Seeding and Refresh
 
+(defun my/gptel--gptel-model-tables ()
+  "Return list of gptel model table symbols to search.
+Filters to only bound variables."
+  (seq-filter #'boundp '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models)))
+
 (defun my/gptel--seed-cache-from-gptel-model-tables ()
   "Seed context-window cache from gptel's built-in model tables."
-  (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
-    (when (boundp var)
-      (dolist (entry (symbol-value var))
-        (when (and (consp entry) (symbolp (car entry)))
-          (let* ((model (car entry))
-                 (plist (cdr entry))
-                 (cw (plist-get plist :context-window))
-                 (tokens (my/gptel--normalize-context-window cw))
-                 (id (my/gptel--model-id-string model)))
-            (when (and (stringp id) (integerp tokens) (> tokens 0))
-              (puthash id tokens my/gptel--context-window-cache))))))))
+  (dolist (var (my/gptel--gptel-model-tables))
+    (dolist (entry (symbol-value var))
+      (when (and (consp entry) (symbolp (car entry)))
+        (let* ((model (car entry))
+               (plist (cdr entry))
+               (cw (plist-get plist :context-window))
+               (tokens (my/gptel--normalize-context-window cw))
+               (id (my/gptel--model-id-string model)))
+          (when (and (stringp id) (integerp tokens) (> tokens 0))
+            (puthash id tokens my/gptel--context-window-cache)))))))
 
 (cl-defun my/gptel--openrouter-fetch-context-window (&optional model)
   "Fetch context window for MODEL from OpenRouter and cache it.
@@ -484,8 +506,8 @@ Runs asynchronously; returns nil immediately."
                                  (error
                                   (message "OpenRouter context-window: parse failed (%s)" (error-message-string err))))))
                          (when (buffer-live-p buf) (kill-buffer buf))))))))
-(process-put proc 'my/gptel-managed t)
-             nil)))))))
+            (process-put proc 'my/gptel-managed t)
+            nil)))))))
 
 (defun my/gptel--auto-refresh-context-window-cache-maybe ()
   "Refresh context window cache if stale (non-blocking)."
@@ -741,21 +763,8 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                                        model-id))))
     (if window
         window
-      (catch 'found
-        (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
-          (when (boundp var)
-            (let ((model-sym (cond
-                              ((symbolp gptel-model) gptel-model)
-                              ((stringp gptel-model) (intern gptel-model))
-                              (t nil))))
-              (when model-sym
-                (let ((entry (assq model-sym (symbol-value var))))
-                  (when entry
-                    (let ((cw (my/gptel--normalize-context-window
-                               (plist-get (cdr entry) :context-window))))
-                      (when (and (integerp cw) (> cw 0))
-                        (throw 'found cw)))))))))
-        my/gptel-default-context-window))))
+      (or (my/gptel--lookup-context-window-in-gptel-tables gptel-model)
+          my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
 
