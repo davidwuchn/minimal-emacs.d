@@ -192,7 +192,8 @@ An orphan is a commit that exists but is not reachable from any branch."
 (defun gptel-auto-workflow--cherry-pick-orphan (commit-hash)
   "Cherry-pick COMMIT-HASH to staging branch for recovery."
   (interactive "sCommit hash: ")
-  (let ((default-directory (gptel-auto-workflow--project-root)))
+  (let ((default-directory (or (gptel-auto-workflow--project-root)
+                               (expand-file-name "~/.emacs.d/"))))
     (gptel-auto-workflow--git-cmd "git stash")
     (gptel-auto-workflow--git-cmd "git checkout staging")
     (let ((result (gptel-auto-workflow--git-cmd
@@ -224,23 +225,27 @@ If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
                  recovered (length orphans))
         (when (> recovered 0)
           (unless no-push
-            (let ((default-directory (gptel-auto-workflow--project-root)))
+            (let ((default-directory (or (gptel-auto-workflow--project-root)
+                                         (expand-file-name "~/.emacs.d/"))))
               (gptel-auto-workflow--git-cmd "git push origin staging"))))))))
 
 (defun gptel-auto-workflow--sync-staging-with-main ()
   "Fast-forward staging branch to match main.
 Ensures experiments run against latest code.
 All shell commands have timeout protection to prevent deadlocks."
-  (let ((default-directory (gptel-auto-workflow--project-root))
+  (let ((default-directory (or (gptel-auto-workflow--project-root)
+                               (expand-file-name "~/.emacs.d/")))
         (original-branch (gptel-auto-workflow--git-cmd
                           "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
     (condition-case err
         (progn
           (gptel-auto-workflow--git-cmd "git fetch origin" 180)
-          (let ((main-commit (gptel-auto-workflow--git-cmd
+          (let* ((main-commit (gptel-auto-workflow--git-cmd
                               "git rev-parse origin/main"))
-                (staging-commit (gptel-auto-workflow--git-cmd
-                                 "git rev-parse origin/staging 2>/dev/null || echo \"none\"")))
+                 (staging-commit (gptel-auto-workflow--git-cmd
+                                  "git rev-parse origin/staging 2>/dev/null || echo \"none\""))
+                 (main-commit (or main-commit "none"))
+                 (staging-commit (or staging-commit "none")))
             (if (string= main-commit staging-commit)
                 (message "[auto-workflow] Staging already in sync with main")
               (progn
@@ -264,16 +269,19 @@ All shell commands have timeout protection to prevent deadlocks."
   "Fast-forward main branch to match staging if staging has new commits.
 Automatically promotes kept experiment commits from staging to main.
 All shell commands have timeout protection to prevent deadlocks."
-  (let ((default-directory (gptel-auto-workflow--project-root))
+  (let ((default-directory (or (gptel-auto-workflow--project-root)
+                               (expand-file-name "~/.emacs.d/")))
         (original-branch (gptel-auto-workflow--git-cmd
                           "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
     (condition-case err
         (progn
           (gptel-auto-workflow--git-cmd "git fetch origin" 180)
-          (let ((main-commit (gptel-auto-workflow--git-cmd
-                              "git rev-parse origin/main"))
-                (staging-commit (gptel-auto-workflow--git-cmd
-                                 "git rev-parse origin/staging 2>/dev/null || echo \"none\"")))
+          (let* ((main-commit (gptel-auto-workflow--git-cmd
+                               "git rev-parse origin/main"))
+                 (staging-commit (gptel-auto-workflow--git-cmd
+                                  "git rev-parse origin/staging 2>/dev/null || echo \"none\""))
+                 (main-commit (or main-commit "none"))
+                 (staging-commit (or staging-commit "none")))
             (if (string= main-commit staging-commit)
                 (message "[auto-workflow] Main already in sync with staging")
               (progn
@@ -592,15 +600,53 @@ This wrapper ensures the overlay is created in the correct buffer."
                       ;; Integer case: try to get parent buffer from FSM
                       ((integerp where)
                        (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
-                              (info (and parent-fsm (gptel-fsm-info parent-fsm))))
-                         (when info (plist-get info :buffer))))
-                      (t nil)))
+                              (info (and parent-fsm (gptel-fsm-info parent-fsm)))
+                              (buf (and info (plist-get info :buffer))))
+                         (or buf
+                             ;; Fallback: use origin buffer from dynamic variable
+                             my/gptel--subagent-origin-buffer)))
+                      ;; No position: use origin buffer
+                      (t my/gptel--subagent-origin-buffer)))
          (result
           (if (and target-buf (buffer-live-p target-buf))
               (with-current-buffer target-buf
                 (funcall orig where agent-type description))
-            (funcall orig where agent-type description))))
+            ;; Last resort: check if current buffer is *scratch* or *Messages*
+            ;; and try to find a gptel buffer
+            (let ((fallback-buf (my/gptel--find-gptel-buffer)))
+              (if fallback-buf
+                  (with-current-buffer fallback-buf
+                    (funcall orig where agent-type description))
+                (funcall orig where agent-type description))))))
     result))
+
+(defun my/gptel--find-gptel-buffer ()
+  "Find a suitable gptel buffer for overlay placement.
+Returns nil if no suitable buffer found."
+  (catch 'found
+    (dolist (buf (buffer-list))
+      (when (and (buffer-live-p buf)
+                 (buffer-local-value 'gptel-mode buf)
+                 (not (string-match-p "^\\*\\(scratch\\|Messages\\|server\\)" (buffer-name buf))))
+        (throw 'found buf)))
+    nil))
+
+(defun my/gptel-cleanup-stray-overlays ()
+  "Remove gptel-agent overlays from buffers that shouldn't have them.
+Cleans *scratch*, *Messages*, and *server* buffers."
+  (interactive)
+  (let ((cleaned 0))
+    (dolist (buf-name '("*scratch*" "*Messages*" " *server*"))
+      (when-let ((buf (get-buffer buf-name)))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf
+            (dolist (ov (overlays-in (point-min) (point-max)))
+              (when (overlay-get ov 'gptel-agent)
+                (delete-overlay ov)
+                (cl-incf cleaned)))))))
+    (when (> cleaned 0)
+      (message "[gptel] Cleaned %d stray overlay(s) from system buffers" cleaned))
+    cleaned))
 
 (defun my/gptel--around-agent-update (orig &rest args)
   "Wrap `gptel-agent-update' to handle our deregistration of \"Agent\".
@@ -766,6 +812,11 @@ Values are plist: (:done :timeout-timer :progress-timer).")
 (defvar my/gptel--agent-task-counter 0
   "Counter for generating unique task IDs.")
 
+(defvar my/gptel--subagent-origin-buffer nil
+  "Buffer where subagent task was initiated.
+Used by overlay advice to route overlays to correct buffer.
+Dynamic variable, let-bound around gptel-agent--task calls.")
+
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
 CALLBACK is called with the result or a timeout error.
@@ -828,12 +879,13 @@ Uses hash table keyed by task-id to support parallel execution."
                                                      description agent-type my/gptel-agent-task-timeout))))))))))
         (let ((state (gethash task-id my/gptel--agent-task-state)))
           (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
-    (unwind-protect
-        (gptel-agent--task wrapped-cb agent-type description packaged-prompt)
-      (let ((state (gethash task-id my/gptel--agent-task-state)))
-        (when (and state (not (plist-get state :done)) (buffer-live-p origin-buf))
-          (with-current-buffer origin-buf
-            (setq-local gptel--fsm-last parent-fsm)))))))
+    (let ((my/gptel--subagent-origin-buffer origin-buf))
+      (unwind-protect
+          (gptel-agent--task wrapped-cb agent-type description packaged-prompt)
+        (let ((state (gethash task-id my/gptel--agent-task-state)))
+          (when (and state (not (plist-get state :done)) (buffer-live-p origin-buf))
+            (with-current-buffer origin-buf
+              (setq-local gptel--fsm-last parent-fsm))))))))
 
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.
@@ -1117,10 +1169,11 @@ Multiple machines can optimize same target without conflicts."
 
 (defun gptel-auto-workflow-create-worktree (target &optional experiment-id)
   "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch.
-Stores worktree-dir and current-branch in hash table keyed by TARGET.
+Stores worktree-dir, current-branch in hash table keyed by TARGET.
 Uses git CLI directly to avoid magit-worktree-branch hangs.
 If branch exists locally, deletes it first to avoid conflicts."
-  (let* ((proj-root (gptel-auto-workflow--project-root))
+  (let* ((proj-root (or (gptel-auto-workflow--project-root)
+                        (expand-file-name "~/.emacs.d/")))
          (branch (gptel-auto-workflow--branch-name target experiment-id))
          (worktree-dir (expand-file-name
                         (format "%s/%s" gptel-auto-workflow-worktree-base branch)
@@ -1167,7 +1220,8 @@ Uses git CLI directly to avoid magit issues."
          (worktree-dir (plist-get state :worktree-dir))
          (branch (plist-get state :current-branch)))
     (when (and worktree-dir (file-exists-p worktree-dir))
-      (let ((proj-root (gptel-auto-workflow--project-root)))
+      (let ((proj-root (or (gptel-auto-workflow--project-root)
+                           (expand-file-name "~/.emacs.d/"))))
         (condition-case err
             (let ((default-directory proj-root))
               ;; Remove worktree
@@ -1744,7 +1798,8 @@ NOTE: Nucleus script validation is skipped for experiments because:
 3. Full validation happens in staging flow"
   (let* ((start (float-time))
          (default-directory (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)
-                                (gptel-auto-workflow--project-root)))
+                                (gptel-auto-workflow--project-root)
+                                (expand-file-name "~/.emacs.d/")))
          (target-file (when gptel-auto-workflow--current-target
                         (expand-file-name gptel-auto-workflow--current-target default-directory)))
          (validation-error (when target-file
@@ -1774,7 +1829,8 @@ NOTE: Nucleus script validation is skipped for experiments because:
 Scores based on commit message + code diff (not just stat)."
   (when (fboundp 'gptel-benchmark-eight-keys-score)
     (let* ((worktree (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)
-                         (gptel-auto-workflow--project-root)))
+                         (gptel-auto-workflow--project-root)
+                         (expand-file-name "~/.emacs.d/")))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
            (worktree-quoted (shell-quote-argument worktree))
            (commit-msg (shell-command-to-string
@@ -1795,7 +1851,8 @@ Scores based on commit message + code diff (not just stat)."
   "Get code quality score from current changes."
   (when (fboundp 'gptel-benchmark--code-quality-score)
     (let* ((worktree (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)
-                         (gptel-auto-workflow--project-root)))
+                         (gptel-auto-workflow--project-root)
+                         (expand-file-name "~/.emacs.d/")))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
            (worktree-quoted (shell-quote-argument worktree))
            (changed-files (shell-command-to-string
@@ -1924,27 +1981,27 @@ The comparator subagent overlay will appear in the current buffer at time of cal
          (score-after (plist-get after :score))
          (quality-before (or (plist-get before :code-quality) 0.5))
          (quality-after (or (plist-get after :code-quality) 0.5))
-         (combined-before (+ (* 0.5 score-before) (* 0.5 quality-before)))
-         (combined-after (+ (* 0.5 score-after) (* 0.5 quality-after))))
+         (combined-before (+ (* 0.6 score-before) (* 0.4 quality-before)))
+         (combined-after (+ (* 0.6 score-after) (* 0.4 quality-after))))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (let ((compare-prompt (format "Compare these two experiment results and decide which is better.
 
 RESULT A (before):
-- Eight Keys Score: %.2f
-- Code Quality: %.2f
-- Combined Score: %.2f
+- Eight Keys Score: %.3f
+- Code Quality: %.3f
+- Combined Score: %.3f
 
 RESULT B (after):
-- Eight Keys Score: %.2f
-- Code Quality: %.2f
-- Combined Score: %.2f
+- Eight Keys Score: %.3f
+- Code Quality: %.3f
+- Combined Score: %.3f
 
 DECISION CRITERIA:
-- Combined score = 50%% Eight Keys + 50%% Code Quality
-- B should win if combined score improved
-- A should win if combined score decreased
-- Tie if equal
+- Combined score = 60%% Eight Keys + 40%% Code Quality
+- B should win if combined score improved by ≥0.005
+- A should win if combined score decreased by ≥0.005
+- Tie if difference < 0.005
 
 Output ONLY a single line: \"A\" or \"B\" or \"tie\"
 
@@ -2323,19 +2380,25 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                    :kept nil
                                                    :duration (- (float-time) start-time)
                                                    :grader-quality grade-score
-                                                   :grader-reason grade-details
-                                                   :comparator-reason (symbol-name error-category)
-                                                   :analyzer-patterns (format "%s" patterns)
-                                                   :agent-output agent-output)))
-                             (gptel-auto-experiment-log-tsv
-                              (format-time-string "%Y-%m-%d") exp-result)
-                             (funcall callback exp-result)))
-                       ;; Grader passed - run benchmark and validation
-                       (let* ((bench (gptel-auto-experiment-benchmark t))
-                              (passed (plist-get bench :passed))
-                              (validation-error (plist-get bench :validation-error))
-                              (tests-passed (plist-get bench :tests-passed))
-                              (score-after (plist-get bench :eight-keys)))
+:grader-reason grade-details
+                                                    :comparator-reason (symbol-name error-category)
+                                                    :analyzer-patterns (format "%s" patterns)
+                                                    :agent-output agent-output)))
+                              (gptel-auto-experiment-log-tsv
+                               (format-time-string "%Y-%m-%d") exp-result)
+                              (funcall callback exp-result)))
+                        ;; Grader passed - commit changes, then run benchmark
+                        (let ((commit-dir (or (gptel-auto-workflow--get-worktree-dir target)
+                                              (gptel-auto-workflow--project-root))))
+                          (when commit-dir
+                            (let ((default-directory commit-dir))
+                              (magit-git-success "add" "-A")
+                              (magit-git-success "commit" "-m" (format "WIP: experiment %s" target)))))
+                        (let* ((bench (gptel-auto-experiment-benchmark t))
+                               (passed (plist-get bench :passed))
+                               (validation-error (plist-get bench :validation-error))
+                               (tests-passed (plist-get bench :tests-passed))
+                               (score-after (plist-get bench :eight-keys)))
                          (if (not passed)
                              ;; Check if validation error is teachable and we should retry
                              (if (and validation-error
@@ -2644,8 +2707,9 @@ Adapts max-experiments based on API error rate."
 
 (defun gptel-auto-workflow--suppress-kill-buffer-query ()
   "Suppress kill-buffer queries in headless mode.
-Returns t to allow killing modified buffers without asking."
-  (not gptel-auto-workflow--headless))
+Returns t to allow killing modified buffers without asking.
+When not in headless mode, returns t to not interfere with normal behavior."
+  (or gptel-auto-workflow--headless t))
 
 (defun gptel-auto-workflow--enable-headless-suppression ()
   "Enable suppression of interactive prompts for headless operation.
@@ -2921,18 +2985,26 @@ Safe to call from cron - handles all edge cases."
     (setq gptel-auto-experiment--api-error-count 0)
     (condition-case err
         (progn
-          (gptel-auto-workflow--cleanup-stale-state)
-          (gptel-auto-workflow--sync-staging-with-main)
+          (condition-case err1
+              (gptel-auto-workflow--cleanup-stale-state)
+            (error (message "[auto-workflow] Cleanup failed (non-critical): %s" err1)))
+          (condition-case err2
+              (gptel-auto-workflow--sync-staging-with-main)
+            (error (message "[auto-workflow] Sync staging failed (non-critical): %s" err2)))
           ;; Auto-recover any orphan commits from previous runs
-          (let ((orphans (gptel-auto-workflow--recover-orphans)))
-            (when orphans
-              (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
-                       (length orphans))
-              (gptel-auto-workflow-recover-all-orphans t)))  ; t = no-push for cron
+          (condition-case err3
+              (let ((orphans (gptel-auto-workflow--recover-orphans)))
+                (when orphans
+                  (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
+                           (length orphans))
+                  (gptel-auto-workflow-recover-all-orphans t)))
+            (error (message "[auto-workflow] Orphan recovery failed (non-critical): %s" err3)))
           (gptel-auto-workflow-run-async--guarded nil
                                                   (lambda (_)
                                                     ;; Auto-promote kept commits from staging to main
-                                                    (gptel-auto-workflow--promote-staging-to-main)
+                                                    (condition-case err4
+                                                        (gptel-auto-workflow--promote-staging-to-main)
+                                                      (error (message "[auto-workflow] Promote staging failed (non-critical): %s" err4)))
                                                     ;; Disable headless suppression after workflow completes
                                                     (gptel-auto-workflow--disable-headless-suppression))))
       (error
@@ -2953,7 +3025,8 @@ Works across macOS and Linux."
 (defun gptel-auto-workflow--cleanup-old-worktrees ()
   "Remove ALL optimize worktrees and their branches from previous runs.
 Called at start of new run to ensure clean state."
-  (let* ((proj-root (gptel-auto-workflow--project-root))
+  (let* ((proj-root (or (gptel-auto-workflow--project-root)
+                        (expand-file-name "~/.emacs.d/")))
          (worktree-base (expand-file-name
                          gptel-auto-workflow-worktree-base proj-root))
          (optimize-dir (expand-file-name "optimize" worktree-base))
@@ -2983,22 +3056,26 @@ Called at start of new run to ensure clean state."
 
 (defun gptel-auto-workflow--cleanup-stale-state ()
   "Clean up stale timers, buffers, and state from aborted runs."
-  (let ((proj-root (gptel-auto-workflow--project-root))
+  (let ((proj-root (or (gptel-auto-workflow--project-root)
+                       (expand-file-name "~/.emacs.d/")))
         (cleaned 0))
     (when proj-root
       (gptel-auto-workflow--cleanup-old-worktrees)
       (dolist (timer (copy-sequence timer-list))
         (when (timerp timer)
-          (let* ((fn-rep (prin1-to-string (timer--function timer))))
-            (when (or (string-match-p "nucleus" fn-rep)
-                      (string-match-p "gptel.*agent" fn-rep)
-                      (string-match-p "auto-experiment" fn-rep))
+          (let* ((fn-rep (condition-case nil
+                             (prin1-to-string (timer--function timer))
+                           (error ""))))
+            (when (and (stringp fn-rep)
+                       (or (string-match-p "nucleus" fn-rep)
+                           (string-match-p "gptel.*agent" fn-rep)
+                           (string-match-p "auto-experiment" fn-rep)))
               (cancel-timer timer)
               (cl-incf cleaned)))))
       (dolist (buf (buffer-list))
         (when (buffer-live-p buf)
           (with-current-buffer buf
-            (when (and default-directory
+            (when (and (stringp default-directory)
                        (string-match-p (format "optimize/.*-%s" (gptel-auto-workflow--experiment-suffix)) default-directory)
                        (not (file-exists-p default-directory)))
               (kill-buffer buf)
@@ -3012,7 +3089,8 @@ Called at start of new run to ensure clean state."
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
   "Run experiments for TARGETS asynchronously."
   (let* ((run-id (format-time-string "%Y-%m-%d"))
-         (proj-root (gptel-auto-workflow--project-root))
+         (proj-root (or (gptel-auto-workflow--project-root)
+                        (expand-file-name "~/.emacs.d/")))
          (all-results '())
          (completed-targets 0)
          (kept-count 0))
