@@ -764,18 +764,16 @@ Optimized: single-pass character-by-character replacement."
 
 (defun my/gptel--sanitize-for-logging (text &optional max-len)
   "Sanitize TEXT for safe logging to Messages buffer.
-Replaces newlines, control chars, and backslashes with escaped representations.
-Optional MAX-LEN truncates output (default: no truncation).
+Replaces newlines and control chars with visible tokens.
+Optional MAX-LEN truncates output (default: 100 chars).
 Returns sanitized string, or \"nil\" if TEXT is nil."
   (if (not (stringp text))
       "nil"
     (let ((result (replace-regexp-in-string
-                   "[\n\r\t\\]" 
-                   (lambda (m) (pcase m ("\n" "\\n") ("\r" "\\r") ("\t" "\\t") ("\\" "\\\\")))
+                   "[\n\r\t]" 
+                   (lambda (m) (pcase m ("\n" " ") ("\r" " ") ("\t" " ")))
                    text t t)))
-      (if max-len
-          (truncate-string-to-width result max-len nil nil "...")
-        result))))
+      (truncate-string-to-width result (or max-len 100) nil nil "..."))))
 
 (defun my/gptel--safe-file-p (filepath)
   "Return non-nil if FILEPATH is safe to include in subagent context.
