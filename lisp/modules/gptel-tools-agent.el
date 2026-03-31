@@ -2505,26 +2505,26 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                     :error "timeout"))))))
            ;; Routing handled by gptel-auto-workflow--advice-task-override
            (my/gptel--run-agent-tool
-            (lambda (agent-output)
-              (message "[auto-exp] Agent output (first 500 chars): %s"
-                       (my/gptel--sanitize-for-logging agent-output 500))
-              (when timeout-timer (cancel-timer timeout-timer))
-              (unless finished
-                (gptel-auto-experiment-grade
-                 agent-output
-                 (lambda (grade)
-                   (let* ((grade-score (plist-get grade :score))
-                          (grade-total (plist-get grade :total))
-                          (grade-passed (plist-get grade :passed))
-                          (grade-details (plist-get grade :details))
-                          (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
-                     (message "[auto-exp] Grade result: score=%s/%s passed=%s"
-                              grade-score grade-total grade-passed)
-                     (when (and agent-output (> (length agent-output) 0))
-                       (message "[auto-exp] Agent output preview: %s"
-                                (my/gptel--sanitize-for-logging agent-output 200)))
-                     ;; Check if grader passed
-                     (if (not grade-passed)
+(lambda (agent-output)
+               (message "[auto-exp] Agent output (first 150 chars): %s"
+                        (my/gptel--sanitize-for-logging agent-output 150))
+               (when timeout-timer (cancel-timer timeout-timer))
+               (unless finished
+                 (gptel-auto-experiment-grade
+                  agent-output
+                  (lambda (grade)
+                    (let* ((grade-score (plist-get grade :score))
+                           (grade-total (plist-get grade :total))
+                           (grade-passed (plist-get grade :passed))
+                           (grade-details (plist-get grade :details))
+                           (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
+                      (message "[auto-exp] Grade result: score=%s/%s passed=%s"
+                               grade-score grade-total grade-passed)
+                      (when (and agent-output (> (length agent-output) 0))
+                        (message "[auto-exp] Agent preview: %s"
+                                 (my/gptel--sanitize-for-logging agent-output 100)))
+                      ;; Check if grader passed
+                      (if (not grade-passed)
                          ;; Grader failed - categorize the error
                          (let* ((error-info (gptel-auto-experiment--categorize-error agent-output))
                                 (error-category (car error-info))
