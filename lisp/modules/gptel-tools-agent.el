@@ -649,6 +649,21 @@ Optimized: single-pass replacement instead of 5 buffer passes."
     (setq result (replace-regexp-in-string "'" "&apos;" result t t))
     result))
 
+(defun my/gptel--sanitize-for-logging (text &optional max-len)
+  "Sanitize TEXT for safe logging to Messages buffer.
+Replaces newlines and control chars with escaped representations.
+Optional MAX-LEN truncates output (default: no truncation).
+Returns sanitized string, or \"nil\" if TEXT is nil."
+  (if (not (stringp text))
+      "nil"
+    (let ((result (replace-regexp-in-string
+                   "[\n\r\t]" 
+                   (lambda (m) (pcase m ("\n" "\\n") ("\r" "\\r") ("\t" "\\t")))
+                   text t t)))
+      (if max-len
+          (truncate-string-to-width result max-len nil nil "...")
+        result))))
+
 (defun my/gptel--safe-file-p (filepath)
   "Return non-nil if FILEPATH is safe to include in subagent context.
 Rejects files outside project root, symlinks, and unreadable files."
@@ -1310,17 +1325,17 @@ Maximum response: 1000 characters."
       (message "[auto-workflow] Reviewing changes in %s..." optimize-branch)
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-call-subagent))
-          (gptel-benchmark-call-subagent
-           'reviewer
-           "Review changes before merge"
-           review-prompt
-           (lambda (result)
-             (let* ((response (if (stringp result) result (format "%S" result)))
-                    (approved (string-match-p "^APPROVED" response)))
-               (message "[auto-workflow] Review %s: %s"
-                        (if approved "PASSED" "BLOCKED")
-                        (truncate-string-to-width response 100 nil nil "..."))
-               (funcall callback (cons approved response)))))
+(gptel-benchmark-call-subagent
+            'reviewer
+            "Review changes before merge"
+            review-prompt
+            (lambda (result)
+              (let* ((response (if (stringp result) result (format "%S" result)))
+                     (approved (string-match-p "^APPROVED" response)))
+                (message "[auto-workflow] Review %s: %s"
+                         (if approved "PASSED" "BLOCKED")
+                         (my/gptel--sanitize-for-logging response 100))
+                (funcall callback (cons approved response)))))
         (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
 
 (defun gptel-auto-workflow--fix-review-issues (optimize-branch review-output callback)
@@ -1542,7 +1557,7 @@ REVIEW-RESULT is (approved-p . review-output)."
                           optimize-branch
                           (lambda (re-review-result)
                             (gptel-auto-workflow--staging-flow-after-review optimize-branch re-review-result))))
-                     (message "[auto-workflow] Fix failed: %s" fix-output)
+                     (message "[auto-workflow] Fix failed: %s" (my/gptel--sanitize-for-logging fix-output 200))
                      (gptel-auto-experiment-log-tsv
                       (format-time-string "%Y-%m-%d")
                       (list :target "staging-review"
@@ -1558,7 +1573,7 @@ REVIEW-RESULT is (approved-p . review-output)."
                             :analyzer-patterns ""
                             :agent-output review-output)))))))
           (progn
-            (message "[auto-workflow] ✗ Review BLOCKED (max retries): %s" review-output)
+            (message "[auto-workflow] ✗ Review BLOCKED (max retries): %s" (my/gptel--sanitize-for-logging review-output 200))
             (gptel-auto-experiment-log-tsv
              (format-time-string "%Y-%m-%d")
              (list :target "staging-review"
@@ -2146,11 +2161,11 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (cons :grader-failed "Executor succeeded, grader returned score 0"))
    ((string-match-p "error\\|failed\\|exception" agent-output)
     (let ((snippet (substring agent-output 0 (min 200 (length agent-output)))))
-      (message "[auto-experiment] Unknown error snippet: %s" snippet)
+      (message "[auto-experiment] Unknown error snippet: %s" (my/gptel--sanitize-for-logging snippet))
       (cons :unknown (format "Error pattern: %s" snippet))))
    (t 
     (let ((snippet (substring agent-output 0 (min 200 (length agent-output)))))
-      (message "[auto-experiment] No error pattern found, snippet: %s" snippet)
+      (message "[auto-experiment] No error pattern found, snippet: %s" (my/gptel--sanitize-for-logging snippet))
       (cons :unknown "Unknown error")))))
 
 (defun gptel-auto-experiment--should-reduce-experiments-p ()
@@ -2264,25 +2279,25 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                     :id experiment-id
                                                     :error "timeout"))))))
            ;; Routing handled by gptel-auto-workflow--advice-task-override
-           (my/gptel--run-agent-tool
-            (lambda (agent-output)
-              (message "[auto-exp] Agent output (first 500 chars): %s"
-                       (truncate-string-to-width (or agent-output "nil") 500 nil nil "..."))
-              (when timeout-timer (cancel-timer timeout-timer))
-              (unless finished
-                (gptel-auto-experiment-grade
-                 agent-output
-                 (lambda (grade)
-                   (let* ((grade-score (plist-get grade :score))
-                          (grade-total (plist-get grade :total))
-                          (grade-passed (plist-get grade :passed))
-                          (grade-details (plist-get grade :details))
-                          (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
-                     (message "[auto-exp] Grade result: score=%s/%s passed=%s"
-                              grade-score grade-total grade-passed)
-                     (when (and agent-output (> (length agent-output) 0))
-                       (message "[auto-exp] Agent output preview: %s"
-                                (substring agent-output 0 (min 200 (length agent-output)))))
+(my/gptel--run-agent-tool
+             (lambda (agent-output)
+               (message "[auto-exp] Agent output (first 500 chars): %s"
+                        (my/gptel--sanitize-for-logging agent-output 500))
+               (when timeout-timer (cancel-timer timeout-timer))
+               (unless finished
+                 (gptel-auto-experiment-grade
+                  agent-output
+                  (lambda (grade)
+                    (let* ((grade-score (plist-get grade :score))
+                           (grade-total (plist-get grade :total))
+                           (grade-passed (plist-get grade :passed))
+                           (grade-details (plist-get grade :details))
+                           (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
+                      (message "[auto-exp] Grade result: score=%s/%s passed=%s"
+                               grade-score grade-total grade-passed)
+                      (when (and agent-output (> (length agent-output) 0))
+                        (message "[auto-exp] Agent output preview: %s"
+                                 (my/gptel--sanitize-for-logging agent-output 200)))
                      ;; Check if grader passed
                      (if (not grade-passed)
                          ;; Grader failed - categorize the error
@@ -2333,7 +2348,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                               (gptel-auto-workflow--project-root)))
                                        (gptel-auto-experiment--in-retry t))
                                    (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
-                                   (message "[auto-experiment] ✗ %s" validation-error)
+                                   (message "[auto-experiment] ✗ %s" (my/gptel--sanitize-for-logging validation-error 200))
                                    (magit-git-success "checkout" "--" ".")
                                    ;; Re-run executor with teaching prompt
                                    (my/gptel--run-agent-tool
