@@ -38,6 +38,13 @@ Helper for validation in callback-based functions."
   (and (stringp value) (not (string-empty-p (string-trim value)))))
 
 
+
+(defun gptel-auto-workflow--plist-get (plist key &optional default)
+  "Get value from PLIST for KEY, returning DEFAULT if not found.
+Reduces duplication of `(or (plist-get ...) default-value)` patterns."
+  (let ((value (plist-get plist key)))
+    (if (null value) default value)))
+
 (defun gptel-auto-workflow--require-magit-dependencies ()
   "Require magit-worktree and magit-git dependencies.
 Signals user-error if either dependency fails to load."
@@ -1514,11 +1521,11 @@ Returns t on success, nil on failure."
         (progn
           (gptel-auto-workflow--git-cmd "git fetch origin" 180)
           (let* ((local-exists (string-match-p staging 
-                                   (or (gptel-auto-workflow--git-cmd 
-                                        "git branch --list staging") "")))
+                                               (or (gptel-auto-workflow--git-cmd 
+                                                    "git branch --list staging") "")))
                  (remote-exists (string-match-p staging 
-                                  (or (gptel-auto-workflow--git-cmd 
-                                       "git branch -r --list origin/staging") ""))))
+                                                (or (gptel-auto-workflow--git-cmd 
+                                                     "git branch -r --list origin/staging") ""))))
             (cond
              ((and local-exists remote-exists)
               (message "[auto-workflow] Staging branch exists"))
@@ -2037,10 +2044,10 @@ LLM decides when available; local fallback for tests.
 The comparator subagent overlay will appear in the current buffer at time of call."
   ;; Capture the current buffer to ensure comparator overlay appears in right place
   (let* ((decide-buffer (current-buffer))
-         (score-before (plist-get before :score))
-         (score-after (plist-get after :score))
-         (quality-before (or (plist-get before :code-quality) 0.5))
-         (quality-after (or (plist-get after :code-quality) 0.5))
+         (score-before (gptel-auto-workflow--plist-get before :score 0))
+         (score-after (gptel-auto-workflow--plist-get after :score 0))
+         (quality-before (gptel-auto-workflow--plist-get before :code-quality 0.5))
+         (quality-after (gptel-auto-workflow--plist-get after :code-quality 0.5))
          (combined-before (+ (* 0.6 score-before) (* 0.4 quality-before)))
          (combined-after (+ (* 0.6 score-after) (* 0.4 quality-after))))
     (if (and gptel-auto-experiment-use-subagents
@@ -2220,7 +2227,7 @@ Example HYPOTHESES:
          (file (expand-file-name
                 (format "%s/%s/results.tsv" worktree-base-dir run-id)
                 base-dir))
-         (agent-output (or (plist-get experiment :agent-output) ""))
+         (agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
          (truncated-output (gptel-auto-experiment--tsv-escape
                             (truncate-string-to-width agent-output 500 nil nil "..."))))
     (make-directory (file-name-directory file) t)
@@ -2231,20 +2238,20 @@ Example HYPOTHESES:
       (insert-file-contents file)
       (goto-char (point-max))
       (insert (format "%s\t%s\t%s\t%.2f\t%.2f\t%.2f\t%+.2f\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n"
-                      (or (plist-get experiment :id) "?")
-                      (or (plist-get experiment :target) "?")
-                      (gptel-auto-experiment--tsv-escape (or (plist-get experiment :hypothesis) "unknown"))
-                      (or (plist-get experiment :score-before) 0)
-                      (or (plist-get experiment :score-after) 0)
-                      (or (plist-get experiment :code-quality) 0.5)
-                      (- (or (plist-get experiment :score-after) 0)
-                         (or (plist-get experiment :score-before) 0))
-                      (if (plist-get experiment :kept) "kept" "discarded")
-                      (or (plist-get experiment :duration) 0)
-                      (or (plist-get experiment :grader-quality) "?")
-                      (gptel-auto-experiment--tsv-escape (or (plist-get experiment :grader-reason) "N/A"))
-                      (gptel-auto-experiment--tsv-escape (or (plist-get experiment :comparator-reason) "N/A"))
-                      (gptel-auto-experiment--tsv-escape (or (plist-get experiment :analyzer-patterns) "N/A"))
+                      (gptel-auto-workflow--plist-get experiment :id "?")
+                      (gptel-auto-workflow--plist-get experiment :target "?")
+                      (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :hypothesis "unknown"))
+                      (gptel-auto-workflow--plist-get experiment :score-before 0)
+                      (gptel-auto-workflow--plist-get experiment :score-after 0)
+                      (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
+                      (- (gptel-auto-workflow--plist-get experiment :score-after 0)
+                         (gptel-auto-workflow--plist-get experiment :score-before 0))
+                      (if (gptel-auto-workflow--plist-get experiment :kept nil) "kept" "discarded")
+                      (gptel-auto-workflow--plist-get experiment :duration 0)
+                      (gptel-auto-workflow--plist-get experiment :grader-quality "?")
+                      (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
+                      (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
+                      (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
                       truncated-output))
       (write-region (point-min) (point-max) file))))
 
@@ -2689,7 +2696,7 @@ Adapts max-experiments based on API error rate."
          (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
          (threshold gptel-auto-experiment-no-improvement-threshold)
          (results nil)
-         (best-score (or (plist-get baseline :eight-keys) 0.0))
+         (best-score (gptel-auto-workflow--plist-get baseline :eight-keys 0.0))
          (no-improvement-count 0))
     (message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
              target best-score max-exp)
@@ -2709,7 +2716,7 @@ Adapts max-experiments based on API error rate."
                         ;; Will be cleaned up at START of next workflow run
                         (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
                                  target (length results)
-                                 (or best-score 0))
+                                 best-score)
                         (funcall callback (nreverse results)))
                     (gptel-auto-experiment-run
                      target exp-id max-exp
@@ -2719,11 +2726,11 @@ Adapts max-experiments based on API error rate."
                      (lambda (result)
                        (push result results)
                        (gptel-auto-workflow--update-progress)  ; Update watchdog
-                       (let ((score-after (plist-get result :score-after)))
-                         (when (and score-after (> score-after (or best-score 0)))
+                       (let ((score-after (gptel-auto-workflow--plist-get result :score-after 0)))
+                         (when (and score-after (> score-after best-score))
                            (setq best-score score-after
                                  no-improvement-count 0))
-                         (when (and score-after (<= score-after (or best-score 0)))
+                         (when (and score-after (<= score-after best-score))
                            (cl-incf no-improvement-count)))
                        (run-next (1+ exp-id)))))))
       (run-next 1))))
@@ -2973,9 +2980,9 @@ Returns (nil . nil) if safe to run."
   "Return current workflow status as plist.
 Returns (:running :kept :total :phase :results)."
   (list :running gptel-auto-workflow--running
-        :kept (or (plist-get gptel-auto-workflow--stats :kept) 0)
-        :total (or (plist-get gptel-auto-workflow--stats :total) 0)
-        :phase (or (plist-get gptel-auto-workflow--stats :phase) "idle")
+        :kept (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :kept 0)
+        :total (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :total 0)
+        :phase (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :phase "idle")
         :results (format "var/tmp/experiments/%s/results.tsv"
                          (format-time-string "%Y-%m-%d"))))
 
@@ -3401,33 +3408,33 @@ Returns formatted string with key names and signals."
              (score-before nil)
              (score-after nil))
         (dolist (r results)
-          (let* ((hypothesis (or (plist-get r :hypothesis) ""))
+          (let* ((hypothesis (gptel-auto-workflow--plist-get r :hypothesis ""))
                  (mutation (gptel-auto-workflow-detect-mutation hypothesis))
-                 (kept (plist-get r :kept))
-                 (delta (or (plist-get r :delta) 0)))
+                 (kept (gptel-auto-workflow--plist-get r :kept nil))
+                 (delta (gptel-auto-workflow--plist-get r :delta 0)))
             (when (and kept (> delta best-delta))
               (setq best-delta delta
                     best-hypothesis hypothesis))
             (when kept (cl-incf total-kept))
             (unless score-before
-              (setq score-before (plist-get r :score-before)))
-            (when (and kept (plist-get r :score-after))
-              (setq score-after (plist-get r :score-after)))
+              (setq score-before (gptel-auto-workflow--plist-get r :score-before nil)))
+            (when (and kept (gptel-auto-workflow--plist-get r :score-after nil))
+              (setq score-after (gptel-auto-workflow--plist-get r :score-after nil)))
             (puthash mutation (cons r (gethash mutation by-mutation)) by-mutation)))
         (maphash
          (lambda (mutation mutation-results)
-           (let* ((kept-count (cl-count-if (lambda (r) (plist-get r :kept)) mutation-results))
+           (let* ((kept-count (cl-count-if (lambda (r) (gptel-auto-workflow--plist-get r :kept nil)) mutation-results))
                   (total (length mutation-results))
                   (success-rate (if (> total 0) (/ (* 100 kept-count) total) 0))
-                  (kept-results (cl-remove-if-not (lambda (r) (plist-get r :kept)) mutation-results))
+                  (kept-results (cl-remove-if-not (lambda (r) (gptel-auto-workflow--plist-get r :kept nil)) mutation-results))
                   (avg-delta (if kept-results
-                                 (/ (apply #'+ (mapcar (lambda (r) (or (plist-get r :delta) 0)) kept-results))
+                                 (/ (apply #'+ (mapcar (lambda (r) (gptel-auto-workflow--plist-get r :delta 0)) kept-results))
                                     (length kept-results))
                                0))
                   (best (car (sort kept-results (lambda (a b)
-                                                  (> (or (plist-get a :delta) 0)
-                                                     (or (plist-get b :delta) 0))))))
-                  (best-hyp (when best (plist-get best :hypothesis))))
+                                                  (> (gptel-auto-workflow--plist-get a :delta 0)
+                                                     (gptel-auto-workflow--plist-get b :delta 0))))))
+                  (best-hyp (when best (gptel-auto-workflow--plist-get best :hypothesis ""))))
              (if (>= success-rate 50)
                  (push (list mutation success-rate avg-delta best-hyp) successful)
                (when (< success-rate 50)
@@ -3490,24 +3497,24 @@ Returns formatted string with key names and signals."
       (let* ((content (gptel-auto-workflow--read-file-contents file))
              (relevant (cl-remove-if-not
                         (lambda (r)
-                          (let ((hyp (or (plist-get r :hypothesis) "")))
+                          (let ((hyp (gptel-auto-workflow--plist-get r :hypothesis "")))
                             (eq (gptel-auto-workflow-detect-mutation hyp)
                                 (intern mutation-type))))
                         all-results))
-             (kept-relevant (cl-remove-if-not (lambda (r) (plist-get r :kept)) relevant))
+             (kept-relevant (cl-remove-if-not (lambda (r) (gptel-auto-workflow--plist-get r :kept nil)) relevant))
              (total (length relevant))
              (kept-count (length kept-relevant))
              (success-rate (if (> total 0) (/ (* 100 kept-count) total) 0))
              (avg-delta (if kept-relevant
-                            (/ (apply #'+ (mapcar (lambda (r) (or (plist-get r :delta) 0)) kept-relevant))
+                            (/ (apply #'+ (mapcar (lambda (r) (gptel-auto-workflow--plist-get r :delta 0)) kept-relevant))
                                (length kept-relevant))
                           0))
              (history-rows '()))
         (dolist (r kept-relevant)
-          (push (list (plist-get r :target)
+          (push (list (gptel-auto-workflow--plist-get r :target "")
                       (format-time-string "%Y-%m-%d")
-                      (plist-get r :hypothesis)
-                      (plist-get r :delta))
+                      (gptel-auto-workflow--plist-get r :hypothesis "")
+                      (gptel-auto-workflow--plist-get r :delta 0))
                 history-rows))
         (with-temp-buffer
           (insert content)
@@ -3546,19 +3553,19 @@ Returns formatted string with key names and signals."
         (insert (format "---\ntitle: Auto-Workflow %s\ndate: %s\n---\n\n" run-id run-id))
         (insert (format "# Auto-Workflow: %s\n\n" run-id))
         (insert "## Summary\n\n")
-        (let ((kept (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
+        (let ((kept (cl-count-if (lambda (r) (gptel-auto-workflow--plist-get r :kept nil)) all-results))
               (total (length all-results)))
           (insert (format "- Experiments: %d\n" total))
           (insert (format "- Kept: %d\n" kept))
           (insert (format "- Discarded: %d\n\n" (- total kept))))
         (insert "## Key Learnings\n\n")
-        (dolist (r (cl-remove-if-not (lambda (r) (plist-get r :kept)) all-results))
+        (dolist (r (cl-remove-if-not (lambda (r) (gptel-auto-workflow--plist-get r :kept nil)) all-results))
           (insert (format "- **%s**: %s\n"
-                          (plist-get r :target)
-                          (or (plist-get r :hypothesis) "unknown"))))))
+                          (gptel-auto-workflow--plist-get r :target "")
+                          (gptel-auto-workflow--plist-get r :hypothesis "unknown"))))))
     (message "[autonomous] Memory: mementum/memories/auto-workflow-%s.md" run-id)
     (dolist (r all-results)
-      (let ((target (plist-get r :target)))
+      (let ((target (gptel-auto-workflow--plist-get r :target "")))
         (puthash target (cons r (gethash target by-target)) by-target)))
     (maphash
      (lambda (target results)
@@ -3567,7 +3574,7 @@ Returns formatted string with key names and signals."
     (let ((mutation-types '()))
       (dolist (r all-results)
         (let ((mutation (gptel-auto-workflow-detect-mutation
-                         (or (plist-get r :hypothesis) ""))))
+                         (gptel-auto-workflow--plist-get r :hypothesis ""))))
           (when (not (member mutation mutation-types))
             (push mutation mutation-types))))
       (dolist (mutation-type mutation-types)
