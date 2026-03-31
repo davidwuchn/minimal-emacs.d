@@ -686,14 +686,19 @@ Returns t for \"true\" or t, nil for \"false\", nil, or any other value."
   "Escape XML special characters in TEXT.
 Prevents XML injection when inserting file contents into context tags.
 Escapes &, <, >, \", and ' per XML spec.
-Optimized: single-pass replacement instead of 5 buffer passes."
-  (let ((result text))
-    (setq result (replace-regexp-in-string "&" "&amp;" result t t))
-    (setq result (replace-regexp-in-string "<" "&lt;" result t t))
-    (setq result (replace-regexp-in-string ">" "&gt;" result t t))
-    (setq result (replace-regexp-in-string "\"" "&quot;" result t t))
-    (setq result (replace-regexp-in-string "'" "&apos;" result t t))
-    result))
+Optimized: single-pass character-by-character replacement."
+  (if (not (stringp text))
+      ""
+    (apply #'string
+           (mapcar (lambda (c)
+                     (pcase c
+                       (?& "&amp;")
+                       (?< "&lt;")
+                       (?> "&gt;")
+                       (?\" "&quot;")
+                       (?' "&apos;")
+                       (_ (string c))))
+                   (string-to-list text)))))
 
 (defun my/gptel--sanitize-for-logging (text &optional max-len)
   "Sanitize TEXT for safe logging to Messages buffer.
@@ -2464,19 +2469,19 @@ BASELINE-CODE-QUALITY is the initial code quality score."
          (let* ((patterns (when analysis (plist-get analysis :patterns)))
                 (prompt (gptel-auto-experiment-build-prompt
                          target experiment-id max-experiments analysis baseline)))
-(setq timeout-timer
-                  (run-with-timer gptel-auto-experiment-time-budget nil
-                                  (lambda ()
-                                    (unless finished
-                                      (setq finished t)
-                                      (message "[auto-exp] Experiment timed out after %ds, aborting"
-                                               gptel-auto-experiment-time-budget)
-                                      (when (fboundp 'gptel-abort)
-                                        (ignore-errors (gptel-abort (current-buffer))))
-                                      (funcall callback
-                                               (list :target target
-                                                     :id experiment-id
-                                                     :error "timeout"))))))
+           (setq timeout-timer
+                 (run-with-timer gptel-auto-experiment-time-budget nil
+                                 (lambda ()
+                                   (unless finished
+                                     (setq finished t)
+                                     (message "[auto-exp] Experiment timed out after %ds, aborting"
+                                              gptel-auto-experiment-time-budget)
+                                     (when (fboundp 'gptel-abort)
+                                       (ignore-errors (gptel-abort (current-buffer))))
+                                     (funcall callback
+                                              (list :target target
+                                                    :id experiment-id
+                                                    :error "timeout"))))))
            ;; Routing handled by gptel-auto-workflow--advice-task-override
            (my/gptel--run-agent-tool
             (lambda (agent-output)
