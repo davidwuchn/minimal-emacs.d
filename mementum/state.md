@@ -6,12 +6,13 @@
 
 1895 commits total. 32 experiments run today.
 
-### Recent Fixes (Last 42)
+### Recent Fixes (Last 43)
 
 | # | File | Fix |
 |---|------|-----|
-| 169 | gptel-tools-agent.el | Commit executor changes before Eight Keys scoring (fixes "Winner: tie" discards) |
-| 168 | gptel-tools-agent.el | Route subagent overlays to correct buffer (dynamic variable + fallback) |
+| 170 | gptel-benchmark-subagent.el | Enhanced code quality: docstrings + function length + complexity |
+| 169 | gptel-tools-agent.el | Combined formula: 60/40 split, 0.005 threshold, 3 decimal precision |
+| 168 | gptel-tools-agent.el | Commit executor changes before Eight Keys scoring (fixes "Winner: tie" discards) |
 | 167 | gptel-tools-agent.el | Sanitize multi-line output in log messages (fixes "Unknown message" errors) |
 | 166 | gptel-tools-agent.el | Fixed 4 substring args-out-of-range errors (commit-hash, orphan, staging/main, date parsing) |
 | 165 | gptel-tools-agent.el | Validation retry: Added type checking (stringp validation-error) and length check |
