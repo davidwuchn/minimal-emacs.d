@@ -592,15 +592,53 @@ This wrapper ensures the overlay is created in the correct buffer."
                       ;; Integer case: try to get parent buffer from FSM
                       ((integerp where)
                        (let* ((parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
-                              (info (and parent-fsm (gptel-fsm-info parent-fsm))))
-                         (when info (plist-get info :buffer))))
-                      (t nil)))
+                              (info (and parent-fsm (gptel-fsm-info parent-fsm)))
+                              (buf (and info (plist-get info :buffer))))
+                         (or buf
+                             ;; Fallback: use origin buffer from dynamic variable
+                             my/gptel--subagent-origin-buffer)))
+                      ;; No position: use origin buffer
+                      (t my/gptel--subagent-origin-buffer)))
          (result
           (if (and target-buf (buffer-live-p target-buf))
               (with-current-buffer target-buf
                 (funcall orig where agent-type description))
-            (funcall orig where agent-type description))))
+            ;; Last resort: check if current buffer is *scratch* or *Messages*
+            ;; and try to find a gptel buffer
+            (let ((fallback-buf (my/gptel--find-gptel-buffer)))
+              (if fallback-buf
+                  (with-current-buffer fallback-buf
+                    (funcall orig where agent-type description))
+                (funcall orig where agent-type description))))))
     result))
+
+(defun my/gptel--find-gptel-buffer ()
+  "Find a suitable gptel buffer for overlay placement.
+Returns nil if no suitable buffer found."
+  (catch 'found
+    (dolist (buf (buffer-list))
+      (when (and (buffer-live-p buf)
+                 (buffer-local-value 'gptel-mode buf)
+                 (not (string-match-p "^\\*\\(scratch\\|Messages\\|server\\)" (buffer-name buf))))
+        (throw 'found buf)))
+    nil))
+
+(defun my/gptel-cleanup-stray-overlays ()
+  "Remove gptel-agent overlays from buffers that shouldn't have them.
+Cleans *scratch*, *Messages*, and *server* buffers."
+  (interactive)
+  (let ((cleaned 0))
+    (dolist (buf-name '("*scratch*" "*Messages*" " *server*"))
+      (when-let ((buf (get-buffer buf-name)))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf
+            (dolist (ov (overlays-in (point-min) (point-max)))
+              (when (overlay-get ov 'gptel-agent)
+                (delete-overlay ov)
+                (cl-incf cleaned)))))))
+    (when (> cleaned 0)
+      (message "[gptel] Cleaned %d stray overlay(s) from system buffers" cleaned))
+    cleaned))
 
 (defun my/gptel--around-agent-update (orig &rest args)
   "Wrap `gptel-agent-update' to handle our deregistration of \"Agent\".
@@ -766,6 +804,11 @@ Values are plist: (:done :timeout-timer :progress-timer).")
 (defvar my/gptel--agent-task-counter 0
   "Counter for generating unique task IDs.")
 
+(defvar my/gptel--subagent-origin-buffer nil
+  "Buffer where subagent task was initiated.
+Used by overlay advice to route overlays to correct buffer.
+Dynamic variable, let-bound around gptel-agent--task calls.")
+
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
 CALLBACK is called with the result or a timeout error.
@@ -828,12 +871,13 @@ Uses hash table keyed by task-id to support parallel execution."
                                                      description agent-type my/gptel-agent-task-timeout))))))))))
         (let ((state (gethash task-id my/gptel--agent-task-state)))
           (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
-    (unwind-protect
-        (gptel-agent--task wrapped-cb agent-type description packaged-prompt)
-      (let ((state (gethash task-id my/gptel--agent-task-state)))
-        (when (and state (not (plist-get state :done)) (buffer-live-p origin-buf))
-          (with-current-buffer origin-buf
-            (setq-local gptel--fsm-last parent-fsm)))))))
+    (let ((my/gptel--subagent-origin-buffer origin-buf))
+      (unwind-protect
+          (gptel-agent--task wrapped-cb agent-type description packaged-prompt)
+        (let ((state (gethash task-id my/gptel--agent-task-state)))
+          (when (and state (not (plist-get state :done)) (buffer-live-p origin-buf))
+            (with-current-buffer origin-buf
+              (setq-local gptel--fsm-last parent-fsm))))))))
 
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.
