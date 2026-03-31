@@ -94,6 +94,14 @@ Handles plists by converting to alists."
     (mapcar #'gptel-benchmark--to-json-format data))
    (t data)))
 
+(defun gptel-benchmark--keyword-to-alist-key (key)
+  "Convert KEY (keyword or symbol) to alist key symbol.
+For keywords like :score, returns \\='score.
+For non-keywords, returns KEY unchanged."
+  (if (keywordp key)
+      (intern (substring (symbol-name key) 1))
+    key))
+
 (defun gptel-benchmark--plist-to-alist (plist)
   "Convert PLIST to alist format for JSON encoding."
   (let (alist)
@@ -101,7 +109,7 @@ Handles plists by converting to alists."
       (let ((key (car plist))
             (val (cadr plist)))
         (when (keywordp key)
-          (setq key (intern (substring (symbol-name key) 1))))
+          (setq key (gptel-benchmark--keyword-to-alist-key key)))
         (push (cons key (gptel-benchmark--to-json-format val)) alist)
         (setq plist (cddr plist))))
     (reverse alist)))
@@ -116,9 +124,7 @@ JSON parsing returns vectors for arrays; this normalizes to lists."
 FIELD should be a keyword like :score.
 For alist lookup, converts :score to \\='score symbol."
   (or (plist-get obj field)
-      (let ((alist-key (if (keywordp field)
-                           (intern (substring (symbol-name field) 1))
-                         field)))
+      (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
         (cdr (assq alist-key obj)))))
 
 ;;; Historical Tracking
