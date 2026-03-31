@@ -229,30 +229,63 @@ Returns list of (hash exp-id target) for truly orphaned commits."
 
 (defun gptel-auto-workflow--cherry-pick-orphan (commit-hash)
   "Cherry-pick COMMIT-HASH to staging branch for recovery.
-Returns t on success, nil on failure. Skips if already applied."
+Returns t on success, nil on failure. Uses layered fallback strategy."
   (interactive "sCommit hash: ")
   (let ((default-directory (or (gptel-auto-workflow--project-root)
-                               (expand-file-name "~/.emacs.d/"))))
+                               (expand-file-name "~/.emacs.d/")))
+        (result))
     (gptel-auto-workflow--git-cmd "git stash")
     (gptel-auto-workflow--git-cmd "git checkout staging")
-    (let ((result (gptel-auto-workflow--git-cmd
-                   (format "git cherry-pick %s 2>&1" commit-hash))))
+    (setq result (gptel-auto-workflow--git-cmd
+                  (format "git cherry-pick %s 2>&1" commit-hash)))
+    (cond
+     ((string-match-p "already applied\\|empty" result)
+      (message "[auto-workflow] %s already in staging, skip" commit-hash)
+      (gptel-auto-workflow--git-cmd "git cherry-pick --skip 2>/dev/null || git cherry-pick --abort 2>/dev/null")
+      (gptel-auto-workflow--git-cmd "git checkout main")
+      t)
+     ((string-match-p "CONFLICT\\|conflict" result)
+      (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
+      (message "[auto-workflow] %s conflict, try theirs..." commit-hash)
+      (setq result (gptel-auto-workflow--git-cmd
+                    (format "git cherry-pick -X theirs %s 2>&1" commit-hash)))
       (cond
-       ((string-match-p "already applied\\|empty" result)
-        (message "[auto-workflow] Commit %s already in staging, skipping" commit-hash)
-        (gptel-auto-workflow--git-cmd "git cherry-pick --skip 2>/dev/null || git cherry-pick --abort 2>/dev/null")
+       ((string-match-p "CONFLICT\\|conflict" result)
+        (message "[auto-workflow] %s still conflicted, log+skip" commit-hash)
+        (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
+        (gptel-auto-workflow--log-conflict commit-hash result)
         (gptel-auto-workflow--git-cmd "git checkout main")
-        t)
-       ((string-match-p "error\\|CONFLICT\\|conflict" result)
-        (message "[auto-workflow] Cherry-pick failed: %s" result)
-        (gptel-auto-workflow--git-cmd "git cherry-pick --abort")
+        nil)
+       ((string-match-p "error:" result)
+        (message "[auto-workflow] %s error: %s" commit-hash (substring result 0 80))
+        (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
         (gptel-auto-workflow--git-cmd "git checkout main")
         nil)
        (t
-        (message "[auto-workflow] Recovered %s to staging" commit-hash)
+        (message "[auto-workflow] %s recovered with theirs" commit-hash)
         (gptel-auto-workflow--git-cmd "git checkout main")
-        t)))))
+        t)))
+     ((string-match-p "error:" result)
+      (message "[auto-workflow] %s error: %s" commit-hash (substring result 0 80))
+      (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
+      (gptel-auto-workflow--git-cmd "git checkout main")
+      nil)
+     (t
+      (message "[auto-workflow] %s recovered to staging" commit-hash)
+      (gptel-auto-workflow--git-cmd "git checkout main")
+      t))))
 
+(defun gptel-auto-workflow--log-conflict (commit-hash conflict-output)
+  "Log CONFLICT-OUTPUT for COMMIT-HASH to file for later review."
+  (let ((log-file (expand-file-name "var/log/cherry-pick-conflicts.log"
+                                    (or (gptel-auto-workflow--project-root)
+                                        (expand-file-name "~/.emacs.d/"))))
+        (timestamp (format-time-string "%Y-%m-%d %H:%M:%S"))
+        (msg (substring conflict-output 0 (min 400 (length conflict-output)))))
+    (make-directory (file-name-directory log-file) t)
+    (with-temp-buffer
+      (insert (format "[%s] %s\n%s\n\n" timestamp commit-hash msg))
+      (append-to-file (point-min) (point-max) log-file))))
 (defun gptel-auto-workflow-recover-all-orphans (&optional no-push)
   "Recover all orphan commits from today to staging branch.
 If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
