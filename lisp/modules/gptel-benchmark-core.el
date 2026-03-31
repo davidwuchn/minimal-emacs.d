@@ -278,13 +278,12 @@ RESULTS should contain :eight-keys-scores in each entry."
     (dolist (r results)
       (let ((eight-keys (gptel-benchmark--get-score r :eight-keys-scores)))
         (when eight-keys
-          (cl-loop for key across key-names
-                   for i from 0
-                   for score = (plist-get eight-keys key)
-                   when (numberp score)
-                   do (progn
-                        (aset key-totals i (+ (aref key-totals i) score))
-                        (aset key-counts i (1+ (aref key-counts i))))))))
+          (dotimes (i 8)
+            (let* ((key (aref key-names i))
+                   (score (plist-get eight-keys key)))
+              (when (numberp score)
+                (aset key-totals i (+ (aref key-totals i) score))
+                (aset key-counts i (1+ (aref key-counts i)))))))))
     (let ((breakdown '()))
       (dotimes (i 8)
         (let* ((key (aref key-names i))
@@ -351,10 +350,12 @@ RESULTS should contain :eight-keys-scores in each entry."
          ((< overall threshold) (cl-incf low-scores))
          ((>= overall 0.9) (cl-incf high-scores)))
         (when scores
-          (cl-loop for (score-type . issue-type) in gptel-benchmark--score-type-map
-                   for score = (plist-get scores score-type)
-                   when (and score (< score threshold))
-                   do (puthash issue-type (1+ (gethash issue-type issues 0)) issues)))))
+          (dolist (mapping gptel-benchmark--score-type-map)
+            (let* ((score-type (car mapping))
+                   (issue-type (cdr mapping))
+                   (score (plist-get scores score-type)))
+              (when (and score (< score threshold))
+                (puthash issue-type (1+ (gethash issue-type issues 0)) issues)))))))
     (when (> low-scores 0)
       (push (format "Review %d tests with low scores (< 70%%)" low-scores) recommendations))
     (when (= high-scores total)
