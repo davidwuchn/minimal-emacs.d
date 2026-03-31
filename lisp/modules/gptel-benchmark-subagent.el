@@ -199,28 +199,106 @@ Passes if score >= 80% of total (not requiring perfect score)."
 ;;; Code Quality Scoring
 
 (defun gptel-benchmark--code-quality-score (code)
-  "Score CODE quality based on docstring coverage.
+  "Score CODE quality based on multiple metrics.
 Returns a score from 0.0 to 1.0.
-- 1.0 = all functions have docstrings
-- 0.5 = half of functions have docstrings
-- 0.0 = no functions have docstrings"
-  (let* ((funcs (with-temp-buffer
-                  (insert code)
-                  (goto-char (point-min))
-                  (let ((count 0))
-                    (while (re-search-forward "(defun\\s-+" nil t)
-                      (cl-incf count))
-                    count)))
-         (docstrings (with-temp-buffer
-                       (insert code)
-                       (goto-char (point-min))
-                       (let ((count 0))
-                         ;; Match docstring on same line or next line after args
-                         (while (re-search-forward "(defun\\s-+\\S-+\\s-*(.*)\\s-*\n?\\s-*\"" nil t)
-                           (cl-incf count))
-                         count)))
-         (coverage (if (> funcs 0) (/ (float docstrings) funcs) 1.0)))
-    coverage))
+
+Metrics (weighted):
+- Docstring coverage (40%): % of functions with docstrings
+- Function length (30%): shorter functions score higher
+- Cyclomatic complexity (30%): fewer conditionals score higher
+
+Perfect score (1.0) = all functions have docstrings, all under 20 lines,
+simple control flow with ≤2 branches per function."
+  (let* ((func-data (gptel-benchmark--extract-function-data code))
+         (func-count (length func-data)))
+    (if (= func-count 0)
+        0.5
+      (let* ((docstring-score (gptel-benchmark--docstring-coverage func-data))
+             (length-score (gptel-benchmark--function-length-score func-data))
+             (complexity-score (gptel-benchmark--complexity-score code func-count)))
+        (+ (* 0.40 docstring-score)
+           (* 0.30 length-score)
+           (* 0.30 complexity-score))))))
+
+(defun gptel-benchmark--extract-function-data (code)
+  "Extract function data from CODE.
+Returns list of plists: (:name :start :end :has-docstring :length)."
+  (with-temp-buffer
+    (insert code)
+    (goto-char (point-min))
+    (let ((results '()))
+      (while (re-search-forward "^(defun\\s-+\\(\\S-+\\)\\s-*" nil t)
+        (let* ((name (match-string 1))
+               (start (match-beginning 0))
+               (has-docstring (save-excursion
+                                (forward-sexp)  ; skip args
+                                (skip-chars-forward " \t\n")
+                                (eq (char-after) ?\")))
+               (func-end (save-excursion
+                           (goto-char start)
+                           (forward-list)
+                           (point)))
+               (length (count-lines start func-end)))
+          (push (list :name name
+                      :start start
+                      :end func-end
+                      :has-docstring has-docstring
+                      :length length)
+                results)))
+      (nreverse results))))
+
+(defun gptel-benchmark--docstring-coverage (func-data)
+  "Calculate docstring coverage from FUNC-DATA.
+Returns 0.0-1.0."
+  (if (null func-data)
+      1.0
+    (let ((with-doc (cl-count-if (lambda (f) (plist-get f :has-docstring)) func-data)))
+      (/ (float with-doc) (length func-data)))))
+
+(defun gptel-benchmark--function-length-score (func-data)
+  "Score function lengths from FUNC-DATA.
+Shorter functions score higher.
+- ≤10 lines: 1.0
+- ≤20 lines: 0.8
+- ≤30 lines: 0.6
+- ≤50 lines: 0.4
+- >50 lines: 0.2"
+  (if (null func-data)
+      0.5
+    (let ((total-score 0.0))
+      (dolist (f func-data)
+        (let ((len (plist-get f :length)))
+          (cl-incf total-score
+                   (cond
+                    ((<= len 10) 1.0)
+                    ((<= len 20) 0.8)
+                    ((<= len 30) 0.6)
+                    ((<= len 50) 0.4)
+                    (t 0.2)))))
+      (/ total-score (length func-data)))))
+
+(defun gptel-benchmark--complexity-score (code func-count)
+  "Estimate cyclomatic complexity from CODE.
+Counts conditionals (if, cond, when, unless, pcase, etc.).
+Returns 0.0-1.0 where 1.0 = simple code (≤2 branches per function avg)."
+  (if (= func-count 0)
+      0.5
+    (let* ((conditionals (with-temp-buffer
+                           (insert code)
+                           (goto-char (point-min))
+                           (let ((count 0))
+                             (while (re-search-forward
+                                     "(\\(if\\|cond\\|when\\|unless\\|pcase\\|cl-case\\|cond\\)\\>" nil t)
+                               (cl-incf count))
+                             count)))
+           (avg-complexity (/ (float conditionals) func-count)))
+      (cond
+       ((<= avg-complexity 1.0) 1.0)
+       ((<= avg-complexity 2.0) 0.9)
+       ((<= avg-complexity 3.0) 0.7)
+       ((<= avg-complexity 5.0) 0.5)
+       ((<= avg-complexity 8.0) 0.3)
+       (t 0.1)))))
 
 ;;; LLM Quality Detection
 

@@ -1968,27 +1968,27 @@ The comparator subagent overlay will appear in the current buffer at time of cal
          (score-after (plist-get after :score))
          (quality-before (or (plist-get before :code-quality) 0.5))
          (quality-after (or (plist-get after :code-quality) 0.5))
-         (combined-before (+ (* 0.5 score-before) (* 0.5 quality-before)))
-         (combined-after (+ (* 0.5 score-after) (* 0.5 quality-after))))
+         (combined-before (+ (* 0.6 score-before) (* 0.4 quality-before)))
+         (combined-after (+ (* 0.6 score-after) (* 0.4 quality-after))))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (let ((compare-prompt (format "Compare these two experiment results and decide which is better.
 
 RESULT A (before):
-- Eight Keys Score: %.2f
-- Code Quality: %.2f
-- Combined Score: %.2f
+- Eight Keys Score: %.3f
+- Code Quality: %.3f
+- Combined Score: %.3f
 
 RESULT B (after):
-- Eight Keys Score: %.2f
-- Code Quality: %.2f
-- Combined Score: %.2f
+- Eight Keys Score: %.3f
+- Code Quality: %.3f
+- Combined Score: %.3f
 
 DECISION CRITERIA:
-- Combined score = 50%% Eight Keys + 50%% Code Quality
-- B should win if combined score improved
-- A should win if combined score decreased
-- Tie if equal
+- Combined score = 60%% Eight Keys + 40%% Code Quality
+- B should win if combined score improved by ≥0.005
+- A should win if combined score decreased by ≥0.005
+- Tie if difference < 0.005
 
 Output ONLY a single line: \"A\" or \"B\" or \"tie\"
 
