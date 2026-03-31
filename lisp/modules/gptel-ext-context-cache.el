@@ -523,7 +523,7 @@ Runs asynchronously; returns nil immediately."
         (message "OpenRouter context-window: fetch already in progress")
         nil)
        (t
-(my/gptel--openrouter-fetch-with-callback
+        (my/gptel--openrouter-fetch-with-callback
          url
          (lambda (data)
            (let ((entry (seq-find (lambda (e)
@@ -540,6 +540,39 @@ Runs asynchronously; returns nil immediately."
          my/gptel-openrouter-models-connect-timeout
          my/gptel-openrouter-models-max-time)
         nil)))))
+                   :noquery t
+                   :connection-type 'pipe
+                   :sentinel
+                   (lambda (p _event)
+                     (when (memq (process-status p) '(exit signal))
+                       (setq my/gptel--openrouter-context-window-fetch-inflight nil)
+                       (unwind-protect
+                           (if (not (= (process-exit-status p) 0))
+                               (message "OpenRouter context-window: fetch failed (exit %d)" (process-exit-status p))
+                             (with-current-buffer buf
+                               (goto-char (point-min))
+                               (condition-case err
+                                   (let* ((json-object-type 'alist)
+                                          (json-array-type 'list)
+                                          (json-key-type 'symbol)
+                                          (obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
+                                          (data (alist-get 'data obj))
+                                          (entry (seq-find (lambda (e)
+                                                             (let ((id (alist-get 'id e)))
+                                                               (and (stringp id) (string= id model-id))))
+                                                           data))
+                                          (cw (and entry (alist-get 'context_length entry))))
+                                     (if (and (integerp cw) (> cw 0))
+                                         (progn
+                                           (my/gptel--cache-put-context-window model-id cw)
+                                           (message "OpenRouter context-window cached: %s -> %d" model-id cw))
+                                       (message "OpenRouter context-window: model not found or missing context_length: %s" model-id)))
+                                 (error
+                                  (message "OpenRouter context-window: parse failed (%s)" (error-message-string err))))))
+                         (when (buffer-live-p buf) (kill-buffer buf))))))))
+            (process-put proc 'my/gptel-managed t)
+            nil)))))))
+>>>>>>> 225c11f (refactor: Extract OpenRouter curl command into helper function)
 
 (defun my/gptel--auto-refresh-context-window-cache-maybe ()
   "Refresh context window cache if stale (non-blocking)."
