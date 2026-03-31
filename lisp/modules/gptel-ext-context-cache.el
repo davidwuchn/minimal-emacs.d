@@ -484,8 +484,8 @@ Runs asynchronously; returns nil immediately."
                                  (error
                                   (message "OpenRouter context-window: parse failed (%s)" (error-message-string err))))))
                          (when (buffer-live-p buf) (kill-buffer buf))))))))
-            (process-put proc 'my/gptel-managed t)
-            nil))))))
+(process-put proc 'my/gptel-managed t)
+             nil)))))))
 
 (defun my/gptel--auto-refresh-context-window-cache-maybe ()
   "Refresh context window cache if stale (non-blocking)."
@@ -719,7 +719,7 @@ Use `my/gptel-show-provider-contract' to query.")
       (when ctx-windows
         (princ "\nKnown Context Windows:\n")
         (dolist (cw ctx-windows)
-          (princ (format "  %s: %d tokens\n" (car cw) (cdr cw))))))))
+          (princ (format "  %s: %d tokens\n" (car cw) (cdr cw)))))))))
 
 ;;; Public Query API
 

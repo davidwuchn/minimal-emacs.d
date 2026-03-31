@@ -2719,6 +2719,20 @@ Returns t to allow killing modified buffers without asking.
 When not in headless mode, returns t to not interfere with normal behavior."
   (or gptel-auto-workflow--headless t))
 
+(defun gptel-auto-workflow--suppress-kill-buffer-modified (orig-fn &optional buffer-or-name)
+  "Suppress 'Buffer modified; kill anyway?' prompt in headless mode.
+ORIG-FN is the original `kill-buffer'. BUFFER-OR-NAME is the buffer to kill.
+In headless mode, marks buffer as unmodified before killing to bypass prompt."
+  (if gptel-auto-workflow--headless
+      (let ((buf (if buffer-or-name
+                     (get-buffer buffer-or-name)
+                   (current-buffer))))
+        (when (and buf (buffer-live-p buf))
+          (with-current-buffer buf
+            (set-buffer-modified-p nil)))
+        (funcall orig-fn buffer-or-name))
+    (funcall orig-fn buffer-or-name)))
+
 (defun gptel-auto-workflow--enable-headless-suppression ()
   "Enable suppression of interactive prompts for headless operation.
 Also disables auto-revert and uniquify to prevent buffer issues when worktree files change."
@@ -2740,6 +2754,8 @@ Also disables auto-revert and uniquify to prevent buffer issues when worktree fi
               #'gptel-auto-workflow--suppress-yes-or-no-p)
   (advice-add 'y-or-n-p :around 
               #'gptel-auto-workflow--suppress-y-or-n-p)
+  (advice-add 'kill-buffer :around 
+              #'gptel-auto-workflow--suppress-kill-buffer-modified)
   ;; Suppress kill-buffer queries for modified buffers
   (add-hook 'kill-buffer-query-functions 
             #'gptel-auto-workflow--suppress-kill-buffer-query))
@@ -2771,6 +2787,8 @@ Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
                    #'gptel-auto-workflow--suppress-yes-or-no-p)
     (advice-remove 'y-or-n-p 
                    #'gptel-auto-workflow--suppress-y-or-n-p)
+    (advice-remove 'kill-buffer 
+                   #'gptel-auto-workflow--suppress-kill-buffer-modified)
     (remove-hook 'kill-buffer-query-functions 
                  #'gptel-auto-workflow--suppress-kill-buffer-query)))
 

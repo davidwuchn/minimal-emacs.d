@@ -195,34 +195,45 @@ FIELD should be a keyword like :overall-score."
 Returns the new accumulated total."
   (+ total (or score 0)))
 
+(defun gptel-benchmark--accumulate-scores (totals scores-alist)
+  "Accumulate multiple SCORES into TOTALS alist.
+TOTALS is an alist of (score-type . accumulated-value).
+SCORES-ALIST is an alist of (score-type . current-score).
+Returns updated TOTALS alist with all scores accumulated.
+Handles nil scores by treating them as 0."
+  (cl-loop for (type . value) in totals
+           for score = (alist-get type scores-alist)
+           collect (cons type (gptel-benchmark--accumulate-score value score))))
+
 (defun gptel-benchmark-summarize-results (results)
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores."
   (let ((total 0)
-        (sum-overall 0.0)
-        (sum-efficiency 0.0)
-        (sum-completion 0.0)
-        (sum-constraints 0.0)
-        (passed 0))
+        (passed 0)
+        (score-totals '((:overall-score . 0.0)
+                        (:efficiency-score . 0.0)
+                        (:completion-score . 0.0)
+                        (:constraint-score . 0.0))))
     (dolist (r results)
       (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall (and scores (plist-get scores :overall-score)))
-             (efficiency (and scores (plist-get scores :efficiency-score)))
-             (completion (and scores (plist-get scores :completion-score)))
-             (constraints (and scores (plist-get scores :constraint-score))))
+             (overall (and scores (plist-get scores :overall-score))))
         (cl-incf total)
-        (setq sum-overall (gptel-benchmark--accumulate-score sum-overall overall))
-        (setq sum-efficiency (gptel-benchmark--accumulate-score sum-efficiency efficiency))
-        (setq sum-completion (gptel-benchmark--accumulate-score sum-completion completion))
-        (setq sum-constraints (gptel-benchmark--accumulate-score sum-constraints constraints))
+        (when scores
+          (setq score-totals
+                (gptel-benchmark--accumulate-scores
+                 score-totals
+                 (list (cons :overall-score (plist-get scores :overall-score))
+                       (cons :efficiency-score (plist-get scores :efficiency-score))
+                       (cons :completion-score (plist-get scores :completion-score))
+                       (cons :constraint-score (plist-get scores :constraint-score))))))
         (when (>= (or overall 0) 0.7)
           (cl-incf passed))))
     (list :total-tests total
           :passed-tests passed
-          :avg-overall (if (> total 0) (/ sum-overall total) 0.0)
-          :avg-efficiency (if (> total 0) (/ sum-efficiency total) 0.0)
-          :avg-completion (if (> total 0) (/ sum-completion total) 0.0)
-          :avg-constraints (if (> total 0) (/ sum-constraints total) 0.0))))
+          :avg-overall (if (> total 0) (/ (alist-get :overall-score score-totals) total) 0.0)
+          :avg-efficiency (if (> total 0) (/ (alist-get :efficiency-score score-totals) total) 0.0)
+          :avg-completion (if (> total 0) (/ (alist-get :completion-score score-totals) total) 0.0)
+          :avg-constraints (if (> total 0) (/ (alist-get :constraint-score score-totals) total) 0.0))))
 
 ;;; Eight Keys Integration
 
