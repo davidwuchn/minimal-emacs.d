@@ -2694,8 +2694,9 @@ Adapts max-experiments based on API error rate."
 
 (defun gptel-auto-workflow--suppress-kill-buffer-query ()
   "Suppress kill-buffer queries in headless mode.
-Returns t to allow killing modified buffers without asking."
-  (not gptel-auto-workflow--headless))
+Returns t to allow killing modified buffers without asking.
+When not in headless mode, returns t to not interfere with normal behavior."
+  (or gptel-auto-workflow--headless t))
 
 (defun gptel-auto-workflow--enable-headless-suppression ()
   "Enable suppression of interactive prompts for headless operation.
