@@ -422,9 +422,17 @@ Runs asynchronously; returns nil immediately."
   (cl-block my/gptel--openrouter-fetch-context-window
     (let* ((model-id (my/gptel--model-id-string model))
            (url "https://openrouter.ai/api/v1/models"))
-      (when (and (not my/gptel--openrouter-context-window-fetch-inflight)
-                 (stringp model-id)
-                 (executable-find "curl"))
+      (cond
+       ((or (not (stringp model-id)) (string= model-id "nil"))
+        (message "OpenRouter context-window: model not set (gptel-model is nil)")
+        nil)
+       ((not (executable-find "curl"))
+        (message "OpenRouter context-window: curl not found")
+        nil)
+       (my/gptel--openrouter-context-window-fetch-inflight
+        (message "OpenRouter context-window: fetch already in progress")
+        nil)
+       (t
         (setq my/gptel--openrouter-context-window-fetch-inflight t)
         (let* ((key (ignore-errors (gptel-api-key-from-auth-source "api.openrouter.com" "api")))
                (buf (generate-new-buffer " *gptel-openrouter-models*")))
