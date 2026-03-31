@@ -313,6 +313,7 @@ use floats (e.g. 8.192 for 8192 tokens).  OpenRouter's `context_length' is in
 raw tokens."
   (cond
    ((not (numberp n)) nil)
+   ((<= n 0) nil)
    ;; Float values (e.g., 8.192) represent thousands - convert to tokens
    ((floatp n) (round (* n 1000)))
    ;; Small integers (< 1000) likely represent thousands (e.g., 128 -> 128k)
@@ -735,7 +736,8 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
       (catch 'found
         (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
           (when (boundp var)
-            (let ((entry (assq gptel-model (symbol-value var))))
+            (let* ((model-sym (if (symbolp gptel-model) gptel-model (intern gptel-model)))
+                   (entry (assq model-sym (symbol-value var))))
               (when entry
                 (let ((cw (my/gptel--normalize-context-window
                            (plist-get (cdr entry) :context-window))))
