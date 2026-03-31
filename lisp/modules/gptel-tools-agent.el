@@ -58,20 +58,6 @@ Reduces duplication of `(if (>= (length hash) 7) (substring hash 0 7) hash)` pat
         (substring hash 0 len)
       hash)))
 
-(defun gptel-auto-workflow--with-error-handling (operation fn &optional error-prefix)
-  "Execute FN with standardized error handling for OPERATION.
-ERROR-PREFIX defaults to \"[auto-workflow]\".
-Returns FN's result on success, nil on error with logged message.
-Reduces duplication of condition-case error patterns."
-  (condition-case err
-      (funcall fn)
-    (error
-     (message "%s %s failed: %s"
-              (or error-prefix "[auto-workflow]")
-              operation
-              err)
-     nil)))
-
 (defun gptel-auto-workflow--safe-call (operation fn &optional error-prefix)
   "Execute FN for OPERATION, logging errors but continuing execution.
 ERROR-PREFIX defaults to \"[auto-workflow]\".
@@ -87,6 +73,12 @@ Use for non-critical operations that should not halt execution."
      nil)))
 
 (defun gptel-auto-workflow--require-magit-dependencies ()
+  "Require magit-worktree and magit-git dependencies.
+Signals user-error if either dependency fails to load."
+  (unless (require 'magit-worktree nil t)
+    (user-error "magit-worktree is required"))
+  (unless (require 'magit-git nil t)
+    (user-error "magit-git is required")))
   "Require magit-worktree and magit-git dependencies.
 Signals user-error if either dependency fails to load."
   (unless (require 'magit-worktree nil t)
@@ -1606,6 +1598,7 @@ This prevents 'branch already used by worktree' errors."
          (gptel-auto-workflow--git-cmd "git checkout main")
          t)))))
 
+;;;###autoload
 ;;;###autoload
 (defun gptel-auto-workflow--ensure-staging-branch-exists ()
   "Ensure staging branch exists locally and remotely.
