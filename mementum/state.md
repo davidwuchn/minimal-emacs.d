@@ -1,19 +1,39 @@
 # Mementum State
 
-> Last session: 2026-03-31 10:00
+> Last session: 2026-03-31 11:30
 
-## Total Improvements: 170+ Real Code Fixes
+## Total Improvements: 180+ Real Code Fixes
 
-1895 commits total. 32 experiments run today.
+1932 commits total. 59 experiments run today.
 
-### Recent Fixes (Last 46)
+### Session Summary: 2026-03-31
+
+**Commits pushed:** 22+
+**Critical fixes:** 5
+**Workflow status:** Running unattended (no user prompts blocking)
+
+### Key Learnings
+
+| # | Issue | Root Cause | Fix |
+|---|-------|------------|-----|
+| 1 | "Buffer modified; kill anyway?" | Emacs C-level check before kill-buffer-query-functions | Advice around `kill-buffer` sets `buffer-modified-p` to nil in headless |
+| 2 | "File changed, Save anyway?" | Headless suppression disabled after workflow | `gptel-auto-workflow-persistent-headless` keeps suppression on |
+| 3 | kill-buffer-query returns nil | `(not headless)` = nil when headless=t | `(or headless t)` returns t |
+| 4 | All experiments "Winner: tie" | No commit before Eight Keys scoring | Commit executor changes before benchmark |
+| 5 | Code Quality constant 0.50 | Only measured docstrings | Added function length + complexity metrics |
+
+### Recent Fixes (Last 50)
 
 | # | File | Fix |
 |---|------|-----|
-| 173 | gptel-tools-agent.el | Suppress "Buffer modified; kill anyway?" prompt (kill-buffer advice) |
-| 172 | gptel-tools-agent.el | Persistent headless mode for daemon/cron (prevent "Save anyway?" prompts) |
-| 171 | gptel-tools-agent.el | Fixed inverted logic in kill-buffer query suppression |
-| 167 | gptel-tools-agent.el | Sanitize multi-line output in log messages (fixes "Unknown message" errors) |
+| 174 | gptel-benchmark-subagent.el | Enhanced code quality: docstrings (40%) + length (30%) + complexity (30%) |
+| 173 | gptel-tools-agent.el | Combined formula: 60% Eight Keys + 40% Quality, 0.005 threshold, 3 decimals |
+| 172 | gptel-tools-agent.el | Suppress "Buffer modified; kill anyway?" (kill-buffer advice sets modified=nil) |
+| 171 | gptel-tools-agent.el | Persistent headless mode for daemon/cron |
+| 170 | gptel-tools-agent.el | Fixed inverted logic: `(or headless t)` not `(not headless)` |
+| 169 | gptel-tools-agent.el | Commit executor changes before Eight Keys scoring |
+| 168 | gptel-tools-agent.el | Route subagent overlays to correct buffer |
+| 167 | gptel-tools-agent.el | Sanitize multi-line output in log messages |
 | 166 | gptel-tools-agent.el | Fixed 4 substring args-out-of-range errors (commit-hash, orphan, staging/main, date parsing) |
 | 165 | gptel-tools-agent.el | Validation retry: Added type checking (stringp validation-error) and length check |
 | 164 | gptel-tools-agent.el | Fixed syntax error: Separated merged function definitions (shell-command-with-timeout + read-file-contents) |
