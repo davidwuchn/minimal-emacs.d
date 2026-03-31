@@ -49,6 +49,15 @@ Reduces duplication of `(or (plist-get ...) default-value)` patterns."
 Reduces duplication of `(when (and state (not (plist-get state :done)))` patterns."
   (and state (not (plist-get state :done))))
 
+(defun gptel-auto-workflow--truncate-hash (hash &optional length)
+  "Truncate HASH to LENGTH characters (default 7) if longer.
+Returns original hash if shorter than LENGTH.
+Reduces duplication of `(if (>= (length hash) 7) (substring hash 0 7) hash)` patterns."
+  (let ((len (or length 7)))
+    (if (and (stringp hash) (>= (length hash) len))
+        (substring hash 0 len)
+      hash)))
+
 (defun gptel-auto-workflow--with-error-handling (operation fn &optional error-prefix)
   "Execute FN with standardized error handling for OPERATION.
 ERROR-PREFIX defaults to \"[auto-workflow]\".
@@ -84,6 +93,13 @@ Signals user-error if either dependency fails to load."
     (user-error "magit-worktree is required"))
   (unless (require 'magit-git nil t)
     (user-error "magit-git is required")))
+
+(defun gptel-auto-workflow--default-dir ()
+  "Return default directory for git operations.
+Uses `gptel-auto-workflow--project-root' if available, falls back to ~/.emacs.d/.
+Reduces duplication of `(or (gptel-auto-workflow--project-root) (expand-file-name \"~/.emacs.d/\"))` patterns."
+  (or (gptel-auto-workflow--project-root)
+      (expand-file-name "~/.emacs.d/")))
 ;;;###autoload
 (defun gptel-auto-workflow--read-file-contents (filepath)
   "Read contents of FILEPATH as string.
@@ -196,9 +212,7 @@ Returns nil if git command fails or returns invalid hash."
                         (format-time-string "%H:%M:%S")))
         (append-to-file (point-min) (point-max) tracking-file))
       (message "[auto-workflow] Tracked commit %s for exp-%s" 
-               (if (>= (length commit-hash) 7)
-                   (substring commit-hash 0 7)
-                 commit-hash)
+               (gptel-auto-workflow--truncate-hash commit-hash)
                experiment-id)
       commit-hash))))
 
@@ -229,17 +243,11 @@ Returns list of (hash exp-id target) for truly orphaned commits."
                            (string-empty-p in-main))
                   (push (list hash exp-id target) orphans))))))))
     (if orphans
-        (let* ((short-hashes (mapcar (lambda (o) 
-                                       (let ((h (car o)))
-                                         (if (>= (length h) 7) (substring h 0 7) h)))
-                                     orphans))
-               (display-hashes (if (> (length short-hashes) 5)
-                                   (append (seq-take short-hashes 5)
-                                           (list (format "...+%d" (- (length short-hashes) 5))))
-                                 short-hashes)))
-          (message "[auto-workflow] Found %d orphan(s): %s"
-                   (length orphans)
-                   (mapconcat #'identity display-hashes " ")))
+(message "[auto-workflow] Found %d orphan(s): %s"
+                 (length orphans)
+                 (mapconcat (lambda (o) 
+                              (gptel-auto-workflow--truncate-hash (car o))) 
+                            orphans " "))
       (message "[auto-workflow] No orphan commits found"))
     orphans))
 
@@ -350,12 +358,8 @@ All shell commands have timeout protection to prevent deadlocks."
                 (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
                 (message "[auto-workflow] %s %s to %s (%s -> %s)"
                          action-name target-branch source-branch
-                         (if (>= (length target-commit) 7)
-                             (substring target-commit 0 7)
-                           target-commit)
-                         (if (>= (length source-commit) 7)
-                             (substring source-commit 0 7)
-                           source-commit))))))
+                         (gptel-auto-workflow--truncate-hash target-commit)
+                         (gptel-auto-workflow--truncate-hash source-commit))))))
       (error
        (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
        (message "[auto-workflow] Failed to %s %s to %s: %s" (downcase action-name) target-branch source-branch err)
