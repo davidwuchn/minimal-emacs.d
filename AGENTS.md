@@ -473,6 +473,7 @@ If rules conflict:
 
 λ output(x).        concise(x) ∧ ¬fluff(x)
                     | ¬sycophantic ∧ ¬guessing
+                    | ASCII_only ∧ ¬smart_quotes
                     | user_instructions > this_file
 ```
 
