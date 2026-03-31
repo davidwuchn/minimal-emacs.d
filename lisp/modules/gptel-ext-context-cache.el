@@ -719,7 +719,7 @@ Use `my/gptel-show-provider-contract' to query.")
       (when ctx-windows
         (princ "\nKnown Context Windows:\n")
         (dolist (cw ctx-windows)
-          (princ (format "  %s: %d tokens\n" (car cw) (cdr cw)))))))))
+          (princ (format "  %s: %d tokens\n" (car cw) (cdr cw))))))))
 
 ;;; Public Query API
 
@@ -744,13 +744,17 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
       (catch 'found
         (dolist (var '(gptel--openai-models gptel--gemini-models gptel--gh-models gptel--anthropic-models))
           (when (boundp var)
-            (let* ((model-sym (if (symbolp gptel-model) gptel-model (intern gptel-model)))
-                   (entry (assq model-sym (symbol-value var))))
-              (when entry
-                (let ((cw (my/gptel--normalize-context-window
-                           (plist-get (cdr entry) :context-window))))
-                  (when (and (integerp cw) (> cw 0))
-                    (throw 'found cw)))))))
+            (let ((model-sym (cond
+                              ((symbolp gptel-model) gptel-model)
+                              ((stringp gptel-model) (intern gptel-model))
+                              (t nil))))
+              (when model-sym
+                (let ((entry (assq model-sym (symbol-value var))))
+                  (when entry
+                    (let ((cw (my/gptel--normalize-context-window
+                               (plist-get (cdr entry) :context-window))))
+                      (when (and (integerp cw) (> cw 0))
+                        (throw 'found cw)))))))))
         my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
