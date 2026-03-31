@@ -56,85 +56,85 @@ Returns plist with flaky tests, non-discriminating tests, and systematic failure
 
 ;;; Flaky Test Detection
 
+(defun gptel-benchmark--group-by-test-id (data)
+  "Group benchmark DATA by test-id.
+Returns a hash table mapping test-id to list of results."
+  (let ((table (make-hash-table :test 'equal)))
+    (dolist (result data)
+      (let ((test-id (plist-get result :test-id)))
+        (puthash test-id (cons result (gethash test-id table '())) table)))
+    table))
+
+(defun gptel-benchmark--flaky-test-p (results)
+  "Check if RESULTS show inconsistent pass/fail across runs.
+RESULTS is a list of benchmark results for a single test-id."
+  (let ((pass-count 0) (fail-count 0))
+    (dolist (result results)
+      (let* ((grade (plist-get result :grade))
+             (passed (plist-get grade :passed)))
+        (if passed (cl-incf pass-count) (cl-incf fail-count))))
+    (and (> pass-count 0) (> fail-count 0))))
+
 (defun gptel-benchmark-find-flaky-tests (benchmark-file)
   "Identify tests that sometimes pass and sometimes fail in BENCHMARK-FILE."
   (let* ((data (gptel-benchmark-read-json benchmark-file))
+         (test-results (gptel-benchmark--group-by-test-id data))
          (flaky-tests '()))
-    (dolist (result data)
-      (let ((test-id (plist-get result :test-id)))
-        (when (gptel-benchmark-is-flaky-test test-id benchmark-file)
-          (push test-id flaky-tests))))
+    (maphash (lambda (test-id results)
+               (when (gptel-benchmark--flaky-test-p results)
+                 (push test-id flaky-tests)))
+             test-results)
     flaky-tests))
 
-(defun gptel-benchmark-is-flaky-test (test-id benchmark-file)
-  "Check if TEST-ID in BENCHMARK-FILE shows inconsistent pass/fail across runs.
-A test is considered flaky if it has multiple runs with different outcomes."
-  (let* ((data (gptel-benchmark-read-json benchmark-file))
-         (pass-count 0)
-         (fail-count 0)
-         (run-count 0))
-    (dolist (result data)
-      (when (equal (plist-get result :test-id) test-id)
-        (let* ((grade (plist-get result :grade))
-               (passed (plist-get grade :passed)))
-          (cl-incf run-count)
-          (if passed (cl-incf pass-count) (cl-incf fail-count)))))
-    (and (> pass-count 0) (> fail-count 0) (> run-count 1))))
-
 ;;; Non-Discriminating Test Detection
+
+(defun gptel-benchmark--non-discriminating-p (results)
+  "Check if RESULTS don't differentiate skill levels.
+RESULTS is a list of benchmark results for a single test-id."
+  (let ((all-pass t) (all-fail t) (run-count 0))
+    (dolist (result results)
+      (let* ((grade (plist-get result :grade))
+             (passed (plist-get grade :passed)))
+        (cl-incf run-count)
+        (when (not passed) (setq all-pass nil))
+        (when passed (setq all-fail nil))))
+    (and (> run-count 1) (or all-pass all-fail))))
 
 (defun gptel-benchmark-find-non-discriminating (benchmark-file)
   "Find tests that don't effectively differentiate between skill levels."
   (let* ((data (gptel-benchmark-read-json benchmark-file))
+         (test-results (gptel-benchmark--group-by-test-id data))
          (non-discriminating '()))
-    (dolist (result data)
-      (let ((test-id (plist-get result :test-id)))
-        (when (gptel-benchmark-is-non-discriminating-test test-id benchmark-file)
-          (push test-id non-discriminating))))
+    (maphash (lambda (test-id results)
+               (when (gptel-benchmark--non-discriminating-p results)
+                 (push test-id non-discriminating)))
+             test-results)
     non-discriminating))
 
-(defun gptel-benchmark-is-non-discriminating-test (test-id benchmark-file)
-  "Check if TEST-ID in BENCHMARK-FILE doesn't differentiate skill levels.
-A test is non-discriminating if all runs pass or all runs fail."
-  (let* ((data (gptel-benchmark-read-json benchmark-file))
-         (all-pass t)
-         (all-fail t)
-         (run-count 0))
-    (dolist (result data)
-      (when (equal (plist-get result :test-id) test-id)
-        (let* ((grade (plist-get result :grade))
-               (passed (plist-get grade :passed)))
-          (cl-incf run-count)
-          (when (not passed) (setq all-pass nil))
-          (when passed (setq all-fail nil)))))
-    (and (> run-count 1) (or all-pass all-fail))))
-
 ;;; Systematic Failure Detection
+
+(defun gptel-benchmark--systematic-failure-p (results)
+  "Check if RESULTS represent a systematic failure.
+RESULTS is a list of benchmark results for a single test-id."
+  (let ((fail-count 0) (total-count 0))
+    (dolist (result results)
+      (let* ((grade (plist-get result :grade))
+             (passed (plist-get grade :passed)))
+        (cl-incf total-count)
+        (when (not passed) (cl-incf fail-count))))
+    (and (> total-count 1)
+         (> (/ (float fail-count) total-count) 0.8))))
 
 (defun gptel-benchmark-find-systematic-failures (benchmark-file)
   "Identify tests that consistently fail across different skills."
   (let* ((data (gptel-benchmark-read-json benchmark-file))
+         (test-results (gptel-benchmark--group-by-test-id data))
          (systematic-failures '()))
-    (dolist (result data)
-      (let ((test-id (plist-get result :test-id)))
-        (when (gptel-benchmark-is-systematic-failure test-id benchmark-file)
-          (push test-id systematic-failures))))
+    (maphash (lambda (test-id results)
+               (when (gptel-benchmark--systematic-failure-p results)
+                 (push test-id systematic-failures)))
+             test-results)
     systematic-failures))
-
-(defun gptel-benchmark-is-systematic-failure (test-id benchmark-file)
-  "Check if TEST-ID in BENCHMARK-FILE represents a systematic failure.
-A test is a systematic failure if >80% of runs fail."
-  (let* ((data (gptel-benchmark-read-json benchmark-file))
-         (fail-count 0)
-         (total-count 0))
-    (dolist (result data)
-      (when (equal (plist-get result :test-id) test-id)
-        (let* ((grade (plist-get result :grade))
-               (passed (plist-get grade :passed)))
-          (cl-incf total-count)
-          (when (not passed) (cl-incf fail-count)))))
-    (and (> total-count 1)
-         (> (/ (float fail-count) total-count) 0.8))))
 
 ;;; Summary Generation
 
