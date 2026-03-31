@@ -1482,37 +1482,105 @@ INSTRUCTIONS:
                   (funcall callback (cons success response))))))))
       (funcall callback (cons nil "No subagent available")))))
 
-(defun gptel-auto-workflow--merge-to-staging (optimize-branch)
-  "Merge OPTIMIZE-BRANCH to staging.
-Auto-resolves conflicts by preferring incoming changes (theirs).
-Returns t on success, nil on unrecoverable conflict."
+(defun gptel-auto-workflow--ensure-on-main-branch ()
+  "Ensure main repo is on main branch.
+Returns t on success, nil if unable to switch.
+This prevents 'branch already used by worktree' errors."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (current-branch (string-trim 
+                          (or (gptel-auto-workflow--git-cmd 
+                               "git rev-parse --abbrev-ref HEAD 2>/dev/null") 
+                              "main"))))
+    (unless (string= current-branch "main")
+      (message "[auto-workflow] Switching from %s to main branch" current-branch)
+      (condition-case err
+          (progn
+            (gptel-auto-workflow--git-cmd "git checkout main")
+            t)
+        (error
+         (message "[auto-workflow] Failed to switch to main: %s" err)
+         nil)))))
+
+;;;###autoload
+(defun gptel-auto-workflow--ensure-staging-branch-exists ()
+  "Ensure staging branch exists locally and remotely.
+Creates staging from main if it doesn't exist.
+Returns t on success, nil on failure."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
          (staging gptel-auto-workflow-staging-branch))
+    (condition-case err
+        (progn
+          (gptel-auto-workflow--git-cmd "git fetch origin" 180)
+          (let* ((local-exists (string-match-p staging 
+                                   (or (gptel-auto-workflow--git-cmd 
+                                        "git branch --list staging") "")))
+                 (remote-exists (string-match-p staging 
+                                  (or (gptel-auto-workflow--git-cmd 
+                                       "git branch -r --list origin/staging") ""))))
+            (cond
+             ((and local-exists remote-exists)
+              (message "[auto-workflow] Staging branch exists"))
+             ((and (not local-exists) remote-exists)
+              (message "[auto-workflow] Creating local staging from origin/staging")
+              (gptel-auto-workflow--git-cmd "git branch staging origin/staging"))
+             ((and local-exists (not remote-exists))
+              (message "[auto-workflow] Pushing staging to origin")
+              (gptel-auto-workflow--git-cmd "git push origin staging"))
+             (t
+              (message "[auto-workflow] Creating staging branch from main")
+              (gptel-auto-workflow--git-cmd "git branch staging main")
+              (gptel-auto-workflow--git-cmd "git push origin staging")))
+            t))
+      (error
+       (message "[auto-workflow] Failed to ensure staging branch: %s" err)
+       nil))))
+
+;;;###autoload
+
+(defun gptel-auto-workflow--merge-to-staging (optimize-branch)
+  "Merge OPTIMIZE-BRANCH to staging.
+Auto-resolves conflicts by preferring incoming changes (theirs).
+Returns t on success, nil on unrecoverable conflict.
+Ensures main repo stays on main branch throughout."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (staging gptel-auto-workflow-staging-branch)
+         (original-branch (string-trim 
+                           (or (gptel-auto-workflow--git-cmd 
+                                "git rev-parse --abbrev-ref HEAD 2>/dev/null") 
+                               "main"))))
     (message "[auto-workflow] Merging %s to %s" optimize-branch staging)
     (condition-case err
         (progn
-          (magit-git-success "checkout" staging)
+          (gptel-auto-workflow--ensure-on-main-branch)
+          (gptel-auto-workflow--ensure-staging-branch-exists)
+          (gptel-auto-workflow--git-cmd (format "git checkout %s" staging))
           (condition-case merge-err
               (progn
-                (magit-git-success "merge" optimize-branch
-                                   "--no-ff" "-m"
-                                   (format "Merge %s for verification" optimize-branch))
+                (gptel-auto-workflow--git-cmd 
+                 "merge" optimize-branch "--no-ff" "-m"
+                 (format "Merge %s for verification" optimize-branch))
+                (gptel-auto-workflow--git-cmd "git checkout main")
                 t)
             (error
              (if (string-match-p "conflict" (error-message-string merge-err))
                  (progn
                    (message "[auto-workflow] Auto-resolving conflicts with theirs")
-                   (magit-git-success "checkout" "--theirs" ".")
-                   (magit-git-success "add" "-A")
-                   (magit-git-success "commit" "-m"
-                                      (format "Merge %s (auto-resolved conflicts)" optimize-branch))
+                   (gptel-auto-workflow--git-cmd "checkout" "--theirs" ".")
+                   (gptel-auto-workflow--git-cmd "add" "-A")
+                   (gptel-auto-workflow--git-cmd 
+                    "commit" "-m" (format "Merge %s (auto-resolved conflicts)" optimize-branch))
+                   (gptel-auto-workflow--git-cmd "git checkout main")
                    t)
                (message "[auto-workflow] Merge failed: %s" merge-err)
-               (magit-git-success "merge" "--abort")
+               (gptel-auto-workflow--git-cmd "merge" "--abort")
+               (gptel-auto-workflow--git-cmd "git checkout main")
                nil))))
       (error
        (message "[auto-workflow] Failed to merge to staging: %s" err)
+       (gptel-auto-workflow--git-cmd "git checkout main")
        nil))))
 
 (defun gptel-auto-workflow--verify-staging ()
@@ -3006,21 +3074,20 @@ Sets `gptel-auto-workflow-persistent-headless' to prevent interactive prompts."
     (require 'json)
     (unless (featurep 'gptel-tools-agent)
       (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root)))
-    ;; Enable persistent headless mode for daemon/cron
     (setq gptel-auto-workflow-persistent-headless t)
-    ;; Enable headless suppression for async operations
     (gptel-auto-workflow--enable-headless-suppression)
-    ;; Reset API error counter for new run
     (setq gptel-auto-experiment--api-error-count 0)
     (condition-case err
         (progn
           (condition-case err1
               (gptel-auto-workflow--cleanup-stale-state)
             (error (message "[auto-workflow] Cleanup failed (non-critical): %s" err1)))
+          (condition-case err1
+              (gptel-auto-workflow--ensure-on-main-branch)
+            (error (message "[auto-workflow] Ensure main branch failed (non-critical): %s" err1)))
           (condition-case err2
               (gptel-auto-workflow--sync-staging-with-main)
             (error (message "[auto-workflow] Sync staging failed (non-critical): %s" err2)))
-          ;; Auto-recover any orphan commits from previous runs
           (condition-case err3
               (let ((orphans (gptel-auto-workflow--recover-orphans)))
                 (when orphans
@@ -3030,14 +3097,16 @@ Sets `gptel-auto-workflow-persistent-headless' to prevent interactive prompts."
             (error (message "[auto-workflow] Orphan recovery failed (non-critical): %s" err3)))
           (gptel-auto-workflow-run-async--guarded nil
                                                   (lambda (_)
-                                                    ;; Auto-promote kept commits from staging to main
                                                     (condition-case err4
                                                         (gptel-auto-workflow--promote-staging-to-main)
                                                       (error (message "[auto-workflow] Promote staging failed (non-critical): %s" err4)))
-                                                    ;; Disable headless suppression after workflow completes
+                                                    (condition-case err5
+                                                        (gptel-auto-workflow--ensure-on-main-branch)
+                                                      (error (message "[auto-workflow] Final branch check failed: %s" err5)))
                                                     (gptel-auto-workflow--disable-headless-suppression))))
       (error
        (message "[auto-workflow] Cron error: %s" err)
+       (gptel-auto-workflow--ensure-on-main-branch)
        (gptel-auto-workflow--disable-headless-suppression)
        nil))))
 

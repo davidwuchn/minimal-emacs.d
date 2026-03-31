@@ -378,25 +378,29 @@ Returns plist with suggested threshold adjustments."
         (list :status :insufficient-data
               :message (format "Need %d runs, have %d" runs (length history)))
       (let* ((recent (cl-subseq history 0 (min runs (length history))))
-             (avg-scores (mapcar (lambda (h)
+             (raw-scores (mapcar (lambda (h)
                                    (plist-get (plist-get h :summary) :avg-overall))
                                  recent))
-             (avg (apply #'+ avg-scores))
-             (count (length avg-scores))
-             (overall-avg (/ avg count)))
-        (cond
-         ((> overall-avg 0.9)
-          (list :status :increase-difficulty
-                :suggestion "Consider tightening thresholds or adding harder tests"
-                :current-avg overall-avg))
-         ((< overall-avg 0.6)
-          (list :status :decrease-difficulty
-                :suggestion "Consider relaxing thresholds or simplifying tests"
-                :current-avg overall-avg))
-         (t
-          (list :status :stable
-                :message "Thresholds are well-calibrated"
-                :current-avg overall-avg)))))))
+             (avg-scores (cl-remove-if-not #'numberp raw-scores))
+             (count (length avg-scores)))
+        (if (zerop count)
+            (list :status :insufficient-data
+                  :message "No valid scores found in history")
+          (let* ((avg (apply #'+ avg-scores))
+                 (overall-avg (/ avg count)))
+            (cond
+             ((> overall-avg 0.9)
+              (list :status :increase-difficulty
+                    :suggestion "Consider tightening thresholds or adding harder tests"
+                    :current-avg overall-avg))
+             ((< overall-avg 0.6)
+              (list :status :decrease-difficulty
+                    :suggestion "Consider relaxing thresholds or simplifying tests"
+                    :current-avg overall-avg))
+             (t
+              (list :status :stable
+                    :message "Thresholds are well-calibrated"
+                    :current-avg overall-avg)))))))))
 
 ;;; Temp File Helper
 
