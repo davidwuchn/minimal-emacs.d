@@ -361,29 +361,35 @@ with an additional `p' option to permit and remember a tool."
                        (overlay-end prompt-ov))))
     (delete-overlay ov)))
 
-(defun my/gptel--around-accept-tool-calls (orig &optional response ov)
-  "Handle nested Programmatic tool confirmations before normal acceptance."
+(defun my/gptel--extract-programmatic-callback (response ov)
+  "Extract callback from PROGRAMMATIC RESPONSE if valid.
+Returns (callback . is-programmatic) where callback is the function or nil."
   (if (and response
            (= (length response) 1)
            (or (and (overlayp ov) (overlay-get ov 'gptel-programmatic-confirm))
                (functionp (nth 2 (car response)))))
-      (let ((cb (nth 2 (car response))))
-        (when (functionp cb)
-          (funcall cb t))
-        (my/gptel--programmatic-confirm-cleanup-overlay ov))
-    (funcall orig response ov)))
+      (cons (nth 2 (car response)) t)
+    (cons nil nil)))
+
+(defun my/gptel--around-accept-tool-calls (orig &optional response ov)
+  "Handle nested Programmatic tool confirmations before normal acceptance."
+  (pcase-let ((`(,cb . ,programmaticp) (my/gptel--extract-programmatic-callback response ov)))
+    (if programmaticp
+        (progn
+          (when (functionp cb)
+            (funcall cb t))
+          (my/gptel--programmatic-confirm-cleanup-overlay ov))
+      (funcall orig response ov))))
 
 (defun my/gptel--around-reject-tool-calls (orig &optional response ov)
   "Handle nested Programmatic tool rejections before normal cancellation."
-  (if (and response
-           (= (length response) 1)
-           (or (and (overlayp ov) (overlay-get ov 'gptel-programmatic-confirm))
-               (functionp (nth 2 (car response)))))
-      (let ((cb (nth 2 (car response))))
-        (when (functionp cb)
-          (funcall cb nil))
-        (my/gptel--programmatic-confirm-cleanup-overlay ov))
-    (funcall orig response ov)))
+  (pcase-let ((`(,cb . ,programmaticp) (my/gptel--extract-programmatic-callback response ov)))
+    (if programmaticp
+        (progn
+          (when (functionp cb)
+            (funcall cb nil))
+          (my/gptel--programmatic-confirm-cleanup-overlay ov))
+      (funcall orig response ov))))
 
 (advice-add 'gptel--display-tool-calls :override #'my/gptel--display-tool-calls)
 (advice-add 'gptel--accept-tool-calls :around #'my/gptel--around-accept-tool-calls)
