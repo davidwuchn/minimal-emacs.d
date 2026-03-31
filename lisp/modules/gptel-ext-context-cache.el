@@ -442,6 +442,19 @@ Filters to only bound variables."
           (when (and (stringp id) (integerp tokens) (> tokens 0))
             (puthash id tokens my/gptel--context-window-cache)))))))
 
+(defun my/gptel--openrouter-curl-command (url connect-timeout max-time key)
+  "Build curl command list for OpenRouter API request.
+URL is the API endpoint, CONNECT-TIMEOUT and MAX-TIME are in seconds,
+KEY is the API key for authorization."
+  (list "curl"
+        "--silent" "--show-error" "--fail"
+        "--connect-timeout" (number-to-string connect-timeout)
+        "--max-time" (number-to-string max-time)
+        "--http1.1"
+        "-H" (concat "Authorization: Bearer " key)
+        "-H" "Accept: application/json"
+        url))
+
 (cl-defun my/gptel--openrouter-fetch-context-window (&optional model)
   "Fetch context window for MODEL from OpenRouter and cache it.
 
@@ -468,14 +481,11 @@ Runs asynchronously; returns nil immediately."
             (when (buffer-live-p buf) (kill-buffer buf))
             (message "OpenRouter context-window: no API key found in auth-source")
             (cl-return-from my/gptel--openrouter-fetch-context-window nil))
-          (let* ((cmd (list "curl"
-                            "--silent" "--show-error" "--fail"
-                            "--connect-timeout" (number-to-string my/gptel-openrouter-models-connect-timeout)
-                            "--max-time" (number-to-string my/gptel-openrouter-models-max-time)
-                            "--http1.1"
-                            "-H" (concat "Authorization: Bearer " key)
-                            "-H" "Accept: application/json"
-                            url))
+          (let* ((cmd (my/gptel--openrouter-curl-command
+                       url
+                       my/gptel-openrouter-models-connect-timeout
+                       my/gptel-openrouter-models-max-time
+                       key))
                  (proc
                   (make-process
                    :name "gptel-openrouter-models"
@@ -552,14 +562,7 @@ Run asynchronously. Use for bulk cache warming."
               (setq my/gptel--openrouter-context-window-fetch-inflight nil)
               (when (buffer-live-p buf) (kill-buffer buf))
               (message "OpenRouter: no API key found"))
-          (let* ((cmd (list "curl"
-                            "--silent" "--show-error" "--fail"
-                            "--connect-timeout" "10"
-                            "--max-time" "120"
-                            "--http1.1"
-                            "-H" (concat "Authorization: Bearer " key)
-                            "-H" "Accept: application/json"
-                            url))
+          (let* ((cmd (my/gptel--openrouter-curl-command url 10 120 key))
                  (proc
                   (make-process
                    :name "gptel-openrouter-all-models"
