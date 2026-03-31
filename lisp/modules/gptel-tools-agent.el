@@ -757,7 +757,7 @@ FILES are validated against project root for security.
         (when (not (string-empty-p file-context))
           (setq context (concat context "<files>\n" file-context "</files>\n\n")))))
 
-    (when (my/gptel--string-to-bool include-diff)
+    (when include-diff
       (let* ((proj (when (fboundp 'project-current) (project-current)))
              (proj-root (when proj (expand-file-name (project-root proj))))
              (default-directory
@@ -781,7 +781,7 @@ FILES are validated against project root for security.
                                 (my/gptel--xml-escape diff-out)
                                 "\n</git_diff>\n\n")))))
 
-    (when (my/gptel--string-to-bool include-history)
+    (when include-history
       (let* ((src-buf (or (and (buffer-live-p origin-buf) origin-buf)
                           (current-buffer)))
              (history-text (with-current-buffer src-buf
@@ -912,10 +912,14 @@ INCLUDE-HISTORY defaults to `my/gptel-subagent-include-history-default' when nil
     (unless (fboundp 'gptel-agent--task)
       (funcall callback "Error: gptel-agent task runner not available")
       (cl-return-from my/gptel--run-agent-tool))
-    ;; Apply default for include-history when not specified
-    (let ((include-history (or include-history
-                               (when my/gptel-subagent-include-history-default "true"))))
-      (my/gptel--agent-task-with-timeout callback agent-name description prompt files include-history include-diff))))
+    ;; Convert string params to booleans at entry point for cleaner internal API
+    (let ((include-history-bool (my/gptel--string-to-bool include-history))
+          (include-diff-bool (my/gptel--string-to-bool include-diff)))
+      ;; Apply defaults for nil boolean values
+      (when (null include-history-bool)
+        (setq include-history-bool my/gptel-subagent-include-history-default))
+      (my/gptel--agent-task-with-timeout callback agent-name description prompt files
+                                         include-history-bool include-diff-bool))))
 
 ;;; Tool Registration
 
