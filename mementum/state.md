@@ -6,13 +6,13 @@
 
 1895 commits total. 32 experiments run today.
 
-### Recent Fixes (Last 44)
+### Recent Fixes (Last 45)
 
 | # | File | Fix |
 |---|------|-----|
+| 172 | gptel-tools-agent.el | Persistent headless mode for daemon/cron (prevent "Save anyway?" prompts) |
 | 171 | gptel-tools-agent.el | Fixed inverted logic in kill-buffer query suppression |
 | 170 | gptel-benchmark-subagent.el | Enhanced code quality: docstrings + function length + complexity |
-| 169 | gptel-tools-agent.el | Combined formula: 60/40 split, 0.005 threshold, 3 decimal precision |
 | 167 | gptel-tools-agent.el | Sanitize multi-line output in log messages (fixes "Unknown message" errors) |
 | 166 | gptel-tools-agent.el | Fixed 4 substring args-out-of-range errors (commit-hash, orphan, staging/main, date parsing) |
 | 165 | gptel-tools-agent.el | Validation retry: Added type checking (stringp validation-error) and length check |

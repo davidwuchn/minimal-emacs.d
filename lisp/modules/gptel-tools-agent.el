@@ -1175,8 +1175,10 @@ If branch exists locally, deletes it first to avoid conflicts."
   (let* ((proj-root (or (gptel-auto-workflow--project-root)
                         (expand-file-name "~/.emacs.d/")))
          (branch (gptel-auto-workflow--branch-name target experiment-id))
+         (worktree-base-dir (or gptel-auto-workflow-worktree-base
+                                "var/tmp/experiments"))
          (worktree-dir (expand-file-name
-                        (format "%s/%s" gptel-auto-workflow-worktree-base branch)
+                        (format "%s/%s" worktree-base-dir branch)
                         proj-root))
          (stderr-buffer (generate-new-buffer "*git-stderr*")))
     (condition-case err
@@ -1303,11 +1305,14 @@ SAFETY: Never touches main branch."
   "Create isolated worktree for staging verification.
 Never touches project root - all verification happens in worktree.
 Returns worktree path or nil on failure."
-  (let* ((proj-root (gptel-auto-workflow--project-root))
+  (let* ((proj-root (or (gptel-auto-workflow--project-root)
+                        (expand-file-name "~/.emacs.d/")))
          (default-directory proj-root)
          (branch gptel-auto-workflow-staging-branch)
+         (worktree-base-dir (or gptel-auto-workflow-worktree-base
+                                "var/tmp/experiments"))
          (worktree-dir (expand-file-name
-                        (format "%s/staging-verify" gptel-auto-workflow-worktree-base)
+                        (format "%s/staging-verify" worktree-base-dir)
                         proj-root)))
     (condition-case err
         (progn
@@ -2153,9 +2158,12 @@ Example HYPOTHESES:
 
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
   "Append EXPERIMENT to results.tsv for RUN-ID."
-  (let* ((base-dir (gptel-auto-workflow--project-root))
+  (let* ((base-dir (or (gptel-auto-workflow--project-root)
+                       (expand-file-name "~/.emacs.d/")))
+         (worktree-base-dir (or gptel-auto-workflow-worktree-base
+                                "var/tmp/experiments"))
          (file (expand-file-name
-                (format "%s/%s/results.tsv" gptel-auto-workflow-worktree-base run-id)
+                (format "%s/%s/results.tsv" worktree-base-dir run-id)
                 base-dir))
          (agent-output (or (plist-get experiment :agent-output) ""))
          (truncated-output (gptel-auto-experiment--tsv-escape
@@ -2736,26 +2744,35 @@ Also disables auto-revert and uniquify to prevent buffer issues when worktree fi
   (add-hook 'kill-buffer-query-functions 
             #'gptel-auto-workflow--suppress-kill-buffer-query))
 
+(defcustom gptel-auto-workflow-persistent-headless nil
+  "If non-nil, keep headless suppression enabled between runs.
+Set to t when running as daemon/cron to prevent interactive prompts."
+  :type 'boolean
+  :group 'gptel-tools-agent)
+
 (defun gptel-auto-workflow--disable-headless-suppression ()
   "Disable suppression of interactive prompts.
-Restores auto-revert and uniquify if they were enabled before headless operation."
-  (setq gptel-auto-workflow--headless nil)
-  ;; Restore auto-revert
-  (when (and (boundp 'gptel-auto-workflow--auto-revert-was-enabled)
-             gptel-auto-workflow--auto-revert-was-enabled)
-    (global-auto-revert-mode 1))
-  ;; Restore uniquify
-  (when (and (boundp 'gptel-auto-workflow--uniquify-style)
-             gptel-auto-workflow--uniquify-style)
-    (setq uniquify-buffer-name-style gptel-auto-workflow--uniquify-style))
-  (advice-remove 'ask-user-about-supersession-threat 
-                 #'gptel-auto-workflow--suppress-ask-user-about-supersession-threat)
-  (advice-remove 'yes-or-no-p 
-                 #'gptel-auto-workflow--suppress-yes-or-no-p)
-  (advice-remove 'y-or-n-p 
-                 #'gptel-auto-workflow--suppress-y-or-n-p)
-  (remove-hook 'kill-buffer-query-functions 
-               #'gptel-auto-workflow--suppress-kill-buffer-query))
+Restores auto-revert and uniquify if they were enabled before headless operation.
+Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
+  (when (and (not gptel-auto-workflow-persistent-headless)
+             gptel-auto-workflow--headless)
+    (setq gptel-auto-workflow--headless nil)
+    ;; Restore auto-revert
+    (when (and (boundp 'gptel-auto-workflow--auto-revert-was-enabled)
+               gptel-auto-workflow--auto-revert-was-enabled)
+      (global-auto-revert-mode 1))
+    ;; Restore uniquify
+    (when (and (boundp 'gptel-auto-workflow--uniquify-style)
+               gptel-auto-workflow--uniquify-style)
+      (setq uniquify-buffer-name-style gptel-auto-workflow--uniquify-style))
+    (advice-remove 'ask-user-about-supersession-threat 
+                   #'gptel-auto-workflow--suppress-ask-user-about-supersession-threat)
+    (advice-remove 'yes-or-no-p 
+                   #'gptel-auto-workflow--suppress-yes-or-no-p)
+    (advice-remove 'y-or-n-p 
+                   #'gptel-auto-workflow--suppress-y-or-n-p)
+    (remove-hook 'kill-buffer-query-functions 
+                 #'gptel-auto-workflow--suppress-kill-buffer-query)))
 
 (defcustom gptel-auto-workflow-git-timeout 120
   "Timeout in seconds for git commands during auto-workflow.
@@ -2971,7 +2988,8 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
 (defun gptel-auto-workflow-cron-safe ()
   "Run auto-workflow with full cleanup for cron jobs.
 Cancels stale timers, kills orphaned buffers, resets state, then runs.
-Safe to call from cron - handles all edge cases."
+Safe to call from cron - handles all edge cases.
+Sets `gptel-auto-workflow-persistent-headless' to prevent interactive prompts."
   (let ((proj-root (or (gptel-auto-workflow--project-root)
                        (expand-file-name "~/.emacs.d/"))))
     (setq default-directory proj-root)
@@ -2979,6 +2997,8 @@ Safe to call from cron - handles all edge cases."
     (require 'json)
     (unless (featurep 'gptel-tools-agent)
       (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root)))
+    ;; Enable persistent headless mode for daemon/cron
+    (setq gptel-auto-workflow-persistent-headless t)
     ;; Enable headless suppression for async operations
     (gptel-auto-workflow--enable-headless-suppression)
     ;; Reset API error counter for new run
@@ -3027,8 +3047,9 @@ Works across macOS and Linux."
 Called at start of new run to ensure clean state."
   (let* ((proj-root (or (gptel-auto-workflow--project-root)
                         (expand-file-name "~/.emacs.d/")))
-         (worktree-base (expand-file-name
-                         gptel-auto-workflow-worktree-base proj-root))
+         (worktree-base-dir (or gptel-auto-workflow-worktree-base
+                                "var/tmp/experiments"))
+         (worktree-base (expand-file-name worktree-base-dir proj-root))
          (optimize-dir (expand-file-name "optimize" worktree-base))
          (suffix (gptel-auto-workflow--experiment-suffix))
          (pattern (concat suffix "-exp"))
