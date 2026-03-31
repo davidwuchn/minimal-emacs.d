@@ -214,9 +214,12 @@ TOTALS is an alist of (score-type . accumulated-value).
 SCORES-ALIST is an alist of (score-type . current-score).
 Returns updated TOTALS alist with all scores accumulated.
 Handles nil scores by treating them as 0."
-  (cl-loop for (type . value) in totals
-           for score = (alist-get type scores-alist)
-           collect (cons type (gptel-benchmark--accumulate-score value score))))
+  (dolist (pair totals totals)
+    (let ((type (car pair))
+          (value (cdr pair)))
+      (setcdr pair (gptel-benchmark--accumulate-score
+                    value
+                    (alist-get type scores-alist))))))
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract all score types from SCORES as an alist.
