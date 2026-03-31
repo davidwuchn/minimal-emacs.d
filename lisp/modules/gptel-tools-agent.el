@@ -701,16 +701,16 @@ Escapes &, <, >, \", and ' per XML spec.
 Optimized: single-pass character-by-character replacement."
   (if (not (stringp text))
       ""
-    (apply #'string
-           (mapcar (lambda (c)
-                     (pcase c
-                       (?& "&amp;")
-                       (?< "&lt;")
-                       (?> "&gt;")
-                       (?\" "&quot;")
-                       (?' "&apos;")
-                       (_ (string c))))
-                   (string-to-list text)))))
+    (mapconcat (lambda (c)
+                 (pcase c
+                   (?& "&amp;")
+                   (?< "&lt;")
+                   (?> "&gt;")
+                   (?\" "&quot;")
+                   (?' "&apos;")
+                   (_ (string c))))
+               (string-to-list text)
+               "")))
 
 (defun my/gptel--sanitize-for-logging (text &optional max-len)
   "Sanitize TEXT for safe logging to Messages buffer.
