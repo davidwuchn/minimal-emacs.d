@@ -1554,7 +1554,6 @@ This prevents 'branch already used by worktree' errors."
          t)))))
 
 ;;;###autoload
-;;;###autoload
 (defun gptel-auto-workflow--ensure-staging-branch-exists ()
   "Ensure staging branch exists locally and remotely.
 Creates staging from main if it doesn't exist.
