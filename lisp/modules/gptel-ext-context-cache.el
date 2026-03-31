@@ -290,6 +290,18 @@ Matches if the alist key is a prefix of SEARCH-STR."
   (when (and (listp alist) (stringp search-str))
     (let ((search-lower (downcase search-str)))
       (catch 'found
+        (dolist (entry alist)
+          (when (and (consp entry)
+                     (stringp (car entry))
+                     (string-prefix-p (downcase (car entry)) search-lower))
+            (throw 'found (cdr entry))))
+        nil))))
+
+(defun my/gptel--plist-get (plist key &optional default)
+  "Get value from PLIST for KEY, returning DEFAULT if not found.
+Reduces duplication of `(or (plist-get ...) default-value)` patterns."
+  (or (plist-get plist key) default))
+
 
 (defun my/gptel--lookup-context-window-in-gptel-tables (model)
   "Look up context window for MODEL in gptel's built-in model tables.
@@ -308,18 +320,6 @@ Returns the context window in tokens, or nil if not found."
                 (when (and (integerp cw) (> cw 0))
                   (throw 'found cw))))))
         nil))))
-        (dolist (entry alist)
-          (when (and (consp entry)
-                     (stringp (car entry))
-                     (string-prefix-p (downcase (car entry)) search-lower))
-            (throw 'found (cdr entry))))
-        nil))))
-
-(defun my/gptel--plist-get (plist key &optional default)
-  "Get value from PLIST for KEY, returning DEFAULT if not found.
-Reduces duplication of `(or (plist-get ...) default-value)` patterns."
-  (or (plist-get plist key) default))
-
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
