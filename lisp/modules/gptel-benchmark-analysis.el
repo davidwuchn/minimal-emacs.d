@@ -65,14 +65,20 @@ Returns a hash table mapping test-id to list of results."
         (puthash test-id (cons result (gethash test-id table '())) table)))
     table))
 
+(defun gptel-benchmark--result-passed-p (result)
+  "Extract pass/fail status from RESULT.
+Returns t if the result passed, nil otherwise."
+  (let ((grade (plist-get result :grade)))
+    (plist-get grade :passed)))
+
 (defun gptel-benchmark--flaky-test-p (results)
   "Check if RESULTS show inconsistent pass/fail across runs.
 RESULTS is a list of benchmark results for a single test-id."
   (let ((pass-count 0) (fail-count 0))
     (dolist (result results)
-      (let* ((grade (plist-get result :grade))
-             (passed (plist-get grade :passed)))
-        (if passed (cl-incf pass-count) (cl-incf fail-count))))
+      (if (gptel-benchmark--result-passed-p result)
+          (cl-incf pass-count)
+        (cl-incf fail-count)))
     (and (> pass-count 0) (> fail-count 0))))
 
 (defun gptel-benchmark-find-flaky-tests (benchmark-file)
@@ -93,11 +99,10 @@ RESULTS is a list of benchmark results for a single test-id."
 RESULTS is a list of benchmark results for a single test-id."
   (let ((all-pass t) (all-fail t) (run-count 0))
     (dolist (result results)
-      (let* ((grade (plist-get result :grade))
-             (passed (plist-get grade :passed)))
-        (cl-incf run-count)
-        (when (not passed) (setq all-pass nil))
-        (when passed (setq all-fail nil))))
+      (cl-incf run-count)
+      (if (gptel-benchmark--result-passed-p result)
+          (setq all-fail nil)
+        (setq all-pass nil)))
     (and (> run-count 1) (or all-pass all-fail))))
 
 (defun gptel-benchmark-find-non-discriminating (benchmark-file)
@@ -118,10 +123,9 @@ RESULTS is a list of benchmark results for a single test-id."
 RESULTS is a list of benchmark results for a single test-id."
   (let ((fail-count 0) (total-count 0))
     (dolist (result results)
-      (let* ((grade (plist-get result :grade))
-             (passed (plist-get grade :passed)))
-        (cl-incf total-count)
-        (when (not passed) (cl-incf fail-count))))
+      (cl-incf total-count)
+      (unless (gptel-benchmark--result-passed-p result)
+        (cl-incf fail-count)))
     (and (> total-count 1)
          (> (/ (float fail-count) total-count) 0.8))))
 
@@ -143,9 +147,8 @@ RESULTS is a list of benchmark results for a single test-id."
   (let ((total-tests (length data))
         (avg-score 0))
     (dolist (result data)
-      (let* ((grade (plist-get result :grade))
-             (score (plist-get grade :percentage)))
-        (cl-incf avg-score score)))
+      (let ((grade (plist-get result :grade)))
+        (cl-incf avg-score (plist-get grade :percentage))))
     (when (> total-tests 0)
       (setq avg-score (/ avg-score total-tests)))
     (list :total-tests total-tests
