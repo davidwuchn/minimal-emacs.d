@@ -261,7 +261,7 @@ RESULTS is a list of (run . scores) cons cells or plists with :scores."
             :avg-overall (* (alist-get :overall-score score-totals) reciprocal)
             :avg-efficiency (* (alist-get :efficiency-score score-totals) reciprocal)
             :avg-completion (* (alist-get :completion-score score-totals) reciprocal)
-            :avg-constraints (* (alist-get :constraint-score score-totals) reciprocal))))))
+            :avg-constraints (* (alist-get :constraint-score score-totals) reciprocal)))))
 
 ;;; Eight Keys Integration
 
