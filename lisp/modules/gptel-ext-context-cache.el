@@ -315,6 +315,11 @@ Returns the context window in tokens, or nil if not found."
             (throw 'found (cdr entry))))
         nil))))
 
+(defun my/gptel--plist-get (plist key &optional default)
+  "Get value from PLIST for KEY, returning DEFAULT if not found.
+Reduces duplication of `(or (plist-get ...) default-value)` patterns."
+  (or (plist-get plist key) default))
+
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
@@ -613,21 +618,21 @@ Returns plist with :context-window, :pricing-input, :pricing-output, etc."
                           nil nil
                           (my/gptel--model-id-string gptel-model))))
   (let* ((meta (my/gptel-get-model-metadata model-id))
-         (ctx (plist-get meta :context-window))
-         (pi (plist-get meta :pricing-input))
-         (po (plist-get meta :pricing-output))
-         (max-out (plist-get meta :max-output))
-         (desc (plist-get meta :description)))
+         (ctx (my/gptel--plist-get meta :context-window "unknown"))
+         (pi (my/gptel--plist-get meta :pricing-input 0))
+         (po (my/gptel--plist-get meta :pricing-output 0))
+         (max-out (my/gptel--plist-get meta :max-output "unknown"))
+         (desc (my/gptel--plist-get meta :description "N/A")))
     (message "Model: %s
 Context: %s tokens
 Pricing: $%.4f/$%.4f per 1M (in/out)
 Max Output: %s
 Description: %s"
              model-id
-             (or ctx "unknown")
-             (or pi 0) (or po 0)
-             (or max-out "unknown")
-             (or desc "N/A"))))
+             ctx
+             pi po
+             max-out
+             desc)))
 
 ;;; Provider Usage Contracts
 ;; Documentation of rate limits, pricing tiers, and feature constraints per provider
@@ -725,19 +730,19 @@ Use `my/gptel-show-provider-contract' to query.")
                           nil t)))
   (let* ((contract (alist-get (if (stringp provider) (intern provider) provider)
                               my/gptel-provider-contracts))
-         (desc (plist-get contract :description))
-         (rate (plist-get contract :rate-limit))
-         (pricing (plist-get contract :pricing-model))
-         (features (plist-get contract :features))
-         (notes (plist-get contract :notes))
-         (ctx-windows (plist-get contract :context-windows)))
+         (desc (my/gptel--plist-get contract :description "N/A"))
+         (rate (my/gptel--plist-get contract :rate-limit "Unknown"))
+         (pricing (my/gptel--plist-get contract :pricing-model "Unknown"))
+         (features (my/gptel--plist-get contract :features nil))
+         (notes (my/gptel--plist-get contract :notes "None"))
+         (ctx-windows (my/gptel--plist-get contract :context-windows nil)))
     (with-output-to-temp-buffer "*gptel-provider-contract*"
       (princ (format "Provider: %s\n\n" provider))
-      (princ (format "Description: %s\n" (or desc "N/A")))
-      (princ (format "Rate Limit: %s\n" (or rate "Unknown")))
-      (princ (format "Pricing: %s\n" (or pricing "Unknown")))
+      (princ (format "Description: %s\n" desc))
+      (princ (format "Rate Limit: %s\n" rate))
+      (princ (format "Pricing: %s\n" pricing))
       (princ (format "Features: %s\n" (or (and features (mapconcat #'symbol-name features " ")) "Unknown")))
-      (princ (format "\nNotes:\n%s\n" (or notes "None")))
+      (princ (format "\nNotes:\n%s\n" notes))
       (when ctx-windows
         (princ "\nKnown Context Windows:\n")
         (dolist (cw ctx-windows)
