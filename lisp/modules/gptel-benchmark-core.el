@@ -214,11 +214,12 @@ TOTALS is an alist of (score-type . accumulated-value).
 SCORES-ALIST is an alist of (score-type . current-score).
 Returns updated TOTALS alist with all scores accumulated.
 Handles nil scores by treating them as 0."
-  (dolist (entry totals totals)
-    (let ((type (car entry)))
-      (setcdr entry (gptel-benchmark--accumulate-score
-                     (cdr entry)
-                     (alist-get type scores-alist))))))
+  (dolist (pair totals totals)
+    (let ((type (car pair))
+          (value (cdr pair)))
+      (setcdr pair (gptel-benchmark--accumulate-score
+                    value
+                    (alist-get type scores-alist))))))
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract all score types from SCORES as an alist.
@@ -285,12 +286,12 @@ RESULTS should contain :eight-keys-scores in each entry."
                         (aset key-totals i (+ (aref key-totals i) score))
                         (aset key-counts i (1+ (aref key-counts i))))))))
     (let ((breakdown '()))
-      (cl-loop for key across key-names
-               for i from 0
-               for total = (aref key-totals i)
-               for count = (aref key-counts i)
-               for avg = (if (> count 0) (/ total count) 0.0)
-               do (push (cons key avg) breakdown))
+      (dotimes (i 8)
+        (let* ((key (aref key-names i))
+               (total (aref key-totals i))
+               (count (aref key-counts i))
+               (avg (if (> count 0) (/ total count) 0.0)))
+          (push (cons key avg) breakdown)))
       (reverse breakdown))))
 
 (defun gptel-benchmark-show-eight-keys (name results)
