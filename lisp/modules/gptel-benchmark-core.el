@@ -350,10 +350,12 @@ RESULTS should contain :eight-keys-scores in each entry."
          ((< overall threshold) (cl-incf low-scores))
          ((>= overall 0.9) (cl-incf high-scores)))
         (when scores
-          (cl-loop for (score-type . issue-type) in gptel-benchmark--score-type-map
-                   for score = (plist-get scores score-type)
-                   when (and score (< score threshold))
-                   do (puthash issue-type (1+ (gethash issue-type issues 0)) issues)))))
+          (dolist (mapping gptel-benchmark--score-type-map)
+            (let* ((score-type (car mapping))
+                   (issue-type (cdr mapping))
+                   (score (plist-get scores score-type)))
+              (when (and score (< score threshold))
+                (puthash issue-type (1+ (gethash issue-type issues 0)) issues)))))))
     (when (> low-scores 0)
       (push (format "Review %d tests with low scores (< 70%%)" low-scores) recommendations))
     (when (= high-scores total)
