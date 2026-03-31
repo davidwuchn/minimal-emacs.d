@@ -100,6 +100,14 @@ Uses `gptel-auto-workflow--project-root' if available, falls back to ~/.emacs.d/
 Reduces duplication of `(or (gptel-auto-workflow--project-root) (expand-file-name \"~/.emacs.d/\"))` patterns."
   (or (gptel-auto-workflow--project-root)
       (expand-file-name "~/.emacs.d/")))
+
+(defun gptel-auto-workflow--worktree-or-project-dir (&optional target)
+  "Return directory for git operations, preferring worktree if available.
+Priority: 1) worktree dir for TARGET, 2) project root, 3) ~/.emacs.d/.
+Reduces duplication of three-way `or` patterns with worktree fallback."
+  (or (gptel-auto-workflow--get-worktree-dir (or target gptel-auto-workflow--current-target))
+      (gptel-auto-workflow--project-root)
+      (expand-file-name "~/.emacs.d/")))
 ;;;###autoload
 (defun gptel-auto-workflow--read-file-contents (filepath)
   "Read contents of FILEPATH as string.
@@ -255,8 +263,7 @@ Returns list of (hash exp-id target) for truly orphaned commits."
   "Cherry-pick COMMIT-HASH to staging branch for recovery.
 Returns t on success, nil on failure. Uses layered fallback strategy."
   (interactive "sCommit hash: ")
-  (let ((default-directory (or (gptel-auto-workflow--project-root)
-                               (expand-file-name "~/.emacs.d/")))
+(let ((default-directory (gptel-auto-workflow--default-dir))
         (result))
     (gptel-auto-workflow--git-cmd "git stash")
     (gptel-auto-workflow--git-cmd "git checkout staging")
@@ -328,16 +335,14 @@ If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
                  recovered (length orphans))
         (when (> recovered 0)
           (unless no-push
-            (let ((default-directory (or (gptel-auto-workflow--project-root)
-                                         (expand-file-name "~/.emacs.d/"))))
+            (let ((default-directory (gptel-auto-workflow--default-dir)))
               (gptel-auto-workflow--git-cmd "git push origin staging"))))))))
 
 (defun gptel-auto-workflow--sync-branches (source-branch target-branch action-name)
   "Fast-forward TARGET-BRANCH to match SOURCE-BRANCH.
 ACTION-NAME is used in log messages (e.g., \"Synced\", \"Promoted\").
 All shell commands have timeout protection to prevent deadlocks."
-  (let ((default-directory (or (gptel-auto-workflow--project-root)
-                               (expand-file-name "~/.emacs.d/")))
+  (let ((default-directory (gptel-auto-workflow--default-dir))
         (original-branch (gptel-auto-workflow--git-cmd
                           "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
     (condition-case err
@@ -1264,8 +1269,7 @@ Multiple machines can optimize same target without conflicts."
 Stores worktree-dir, current-branch in hash table keyed by TARGET.
 Uses git CLI directly to avoid magit-worktree-branch hangs.
 If branch exists locally, deletes it first to avoid conflicts."
-  (let* ((proj-root (or (gptel-auto-workflow--project-root)
-                        (expand-file-name "~/.emacs.d/")))
+  (let* ((proj-root (gptel-auto-workflow--default-dir))
          (branch (gptel-auto-workflow--branch-name target experiment-id))
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
                                 "var/tmp/experiments"))
@@ -1314,8 +1318,7 @@ Uses git CLI directly to avoid magit issues."
          (worktree-dir (plist-get state :worktree-dir))
          (branch (plist-get state :current-branch)))
     (when (and worktree-dir (file-exists-p worktree-dir))
-      (let ((proj-root (or (gptel-auto-workflow--project-root)
-                           (expand-file-name "~/.emacs.d/"))))
+      (let ((proj-root (gptel-auto-workflow--default-dir)))
         (condition-case err
             (let ((default-directory proj-root))
               ;; Remove worktree
@@ -1397,8 +1400,7 @@ SAFETY: Never touches main branch."
   "Create isolated worktree for staging verification.
 Never touches project root - all verification happens in worktree.
 Returns worktree path or nil on failure."
-  (let* ((proj-root (or (gptel-auto-workflow--project-root)
-                        (expand-file-name "~/.emacs.d/")))
+  (let* ((proj-root (gptel-auto-workflow--default-dir))
          (default-directory proj-root)
          (branch gptel-auto-workflow-staging-branch)
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
@@ -1959,9 +1961,7 @@ NOTE: Nucleus script validation is skipped for experiments because:
 2. Executor already runs verification in worktree context
 3. Full validation happens in staging flow"
   (let* ((start (float-time))
-         (default-directory (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)
-                                (gptel-auto-workflow--project-root)
-                                (expand-file-name "~/.emacs.d/")))
+         (default-directory (gptel-auto-workflow--worktree-or-project-dir))
          (target-file (when gptel-auto-workflow--current-target
                         (expand-file-name gptel-auto-workflow--current-target default-directory)))
          (validation-error (when target-file
@@ -1990,9 +1990,7 @@ NOTE: Nucleus script validation is skipped for experiments because:
   "Get full Eight Keys scores alist from current codebase.
 Scores based on commit message + code diff (not just stat)."
   (when (fboundp 'gptel-benchmark-eight-keys-score)
-    (let* ((worktree (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)
-                         (gptel-auto-workflow--project-root)
-                         (expand-file-name "~/.emacs.d/")))
+    (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
            (worktree-quoted (shell-quote-argument worktree))
            (commit-msg (shell-command-to-string
@@ -2012,9 +2010,7 @@ Scores based on commit message + code diff (not just stat)."
 (defun gptel-auto-experiment--code-quality-score ()
   "Get code quality score from current changes."
   (when (fboundp 'gptel-benchmark--code-quality-score)
-    (let* ((worktree (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)
-                         (gptel-auto-workflow--project-root)
-                         (expand-file-name "~/.emacs.d/")))
+    (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
            (worktree-quoted (shell-quote-argument worktree))
            (changed-files (shell-command-to-string
@@ -2321,8 +2317,7 @@ Example HYPOTHESES:
 
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
   "Append EXPERIMENT to results.tsv for RUN-ID."
-  (let* ((base-dir (or (gptel-auto-workflow--project-root)
-                       (expand-file-name "~/.emacs.d/")))
+  (let* ((base-dir (gptel-auto-workflow--default-dir))
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
                                 "var/tmp/experiments"))
          (file (expand-file-name
@@ -3214,8 +3209,7 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
 Cancels stale timers, kills orphaned buffers, resets state, then runs.
 Safe to call from cron - handles all edge cases.
 Sets `gptel-auto-workflow-persistent-headless' to prevent interactive prompts."
-  (let ((proj-root (or (gptel-auto-workflow--project-root)
-                       (expand-file-name "~/.emacs.d/"))))
+  (let ((proj-root (gptel-auto-workflow--default-dir)))
     (setq default-directory proj-root)
     (require 'magit)
     (require 'json)
@@ -3262,8 +3256,7 @@ Works across macOS and Linux."
   "Remove ALL optimize worktrees and their branches from previous runs.
 Called at start of new run to ensure clean state.
 Only removes worktrees if no gptel processes are running."
-  (let* ((proj-root (or (gptel-auto-workflow--project-root)
-                        (expand-file-name "~/.emacs.d/")))
+  (let* ((proj-root (gptel-auto-workflow--default-dir))
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
                                 "var/tmp/experiments"))
          (worktree-base (expand-file-name worktree-base-dir proj-root))
@@ -3300,8 +3293,7 @@ Only removes worktrees if no gptel processes are running."
 
 (defun gptel-auto-workflow--cleanup-stale-state ()
   "Clean up stale timers, buffers, and state from aborted runs."
-  (let ((proj-root (or (gptel-auto-workflow--project-root)
-                       (expand-file-name "~/.emacs.d/")))
+  (let ((proj-root (gptel-auto-workflow--default-dir))
         (cleaned 0))
     (when proj-root
       (gptel-auto-workflow--cleanup-old-worktrees)
@@ -3333,8 +3325,7 @@ Only removes worktrees if no gptel processes are running."
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
   "Run experiments for TARGETS asynchronously."
   (let* ((run-id (format-time-string "%Y-%m-%d"))
-         (proj-root (or (gptel-auto-workflow--project-root)
-                        (expand-file-name "~/.emacs.d/")))
+         (proj-root (gptel-auto-workflow--default-dir))
          (all-results '())
          (completed-targets 0)
          (kept-count 0))
