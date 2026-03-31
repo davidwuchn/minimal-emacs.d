@@ -485,6 +485,11 @@ this stage of initialization."
 (when minimal-emacs-load-post-early-init
   (minimal-emacs-load-user-init "post-early-init.el"))
 
+;;; Compile-angel exclusion for problematic files
+;; The defcustom sets the default value, we need to add after it's defined
+(eval-after-load 'compile-angel
+  '(add-to-list 'compile-angel-excluded-files "/ai-code-behaviors.el"))
+
 ;; Local variables:
 ;; byte-compile-warnings: (not obsolete free-vars)
 ;; End:
