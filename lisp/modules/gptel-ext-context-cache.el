@@ -455,6 +455,56 @@ KEY is the API key for authorization."
         "-H" "Accept: application/json"
         url))
 
+(defun my/gptel--openrouter-fetch-with-callback (url callback &optional process-name connect-timeout max-time)
+  "Fetch from OpenRouter API URL and call CALLBACK with parsed JSON data.
+
+URL is the API endpoint.
+CALLBACK is a function called with (data) where data is the parsed 'data field.
+PROCESS-NAME defaults to \"gptel-openrouter-fetch\".
+CONNECT-TIMEOUT and MAX-TIME default to 10 and 120 seconds.
+
+Handles API key lookup, process creation, JSON parsing, and error handling."
+  (let ((process-name (or process-name "gptel-openrouter-fetch"))
+        (connect-timeout (or connect-timeout 10))
+        (max-time (or max-time 120)))
+    (unless my/gptel--openrouter-context-window-fetch-inflight
+      (setq my/gptel--openrouter-context-window-fetch-inflight t)
+      (let* ((key (ignore-errors (gptel-api-key-from-auth-source "api.openrouter.com" "api")))
+             (buf (generate-new-buffer (format " *%s*" process-name))))
+        (if (not (and (stringp key) (not (string-empty-p key))))
+            (progn
+              (setq my/gptel--openrouter-context-window-fetch-inflight nil)
+              (when (buffer-live-p buf) (kill-buffer buf))
+              (message "OpenRouter: no API key found"))
+          (let* ((cmd (my/gptel--openrouter-curl-command url connect-timeout max-time key))
+                 (proc
+                  (make-process
+                   :name process-name
+                   :buffer buf
+                   :command cmd
+                   :noquery t
+                   :connection-type 'pipe
+                   :sentinel
+                   (lambda (p _event)
+                     (when (memq (process-status p) '(exit signal))
+                       (setq my/gptel--openrouter-context-window-fetch-inflight nil)
+                       (unwind-protect
+                           (when (= (process-exit-status p) 0)
+                             (with-current-buffer buf
+                               (goto-char (point-min))
+                               (condition-case err
+                                   (let* ((json-object-type 'alist)
+                                          (json-array-type 'list)
+                                          (json-key-type 'symbol)
+                                          (obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
+                                          (data (alist-get 'data obj)))
+                                     (funcall callback data))
+                                 (error
+                                  (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
+                         (when (buffer-live-p buf) (kill-buffer buf))))))))
+            (process-put proc 'my/gptel-managed t)
+            proc))))))
+
 (cl-defun my/gptel--openrouter-fetch-context-window (&optional model)
   "Fetch context window for MODEL from OpenRouter and cache it.
 
@@ -473,56 +523,23 @@ Runs asynchronously; returns nil immediately."
         (message "OpenRouter context-window: fetch already in progress")
         nil)
        (t
-        (setq my/gptel--openrouter-context-window-fetch-inflight t)
-        (let* ((key (ignore-errors (gptel-api-key-from-auth-source "api.openrouter.com" "api")))
-               (buf (generate-new-buffer " *gptel-openrouter-models*")))
-          (unless (and (stringp key) (not (string-empty-p key)))
-            (setq my/gptel--openrouter-context-window-fetch-inflight nil)
-            (when (buffer-live-p buf) (kill-buffer buf))
-            (message "OpenRouter context-window: no API key found in auth-source")
-            (cl-return-from my/gptel--openrouter-fetch-context-window nil))
-          (let* ((cmd (my/gptel--openrouter-curl-command
-                       url
-                       my/gptel-openrouter-models-connect-timeout
-                       my/gptel-openrouter-models-max-time
-                       key))
-                 (proc
-                  (make-process
-                   :name "gptel-openrouter-models"
-                   :buffer buf
-                   :command cmd
-                   :noquery t
-                   :connection-type 'pipe
-                   :sentinel
-                   (lambda (p _event)
-                     (when (memq (process-status p) '(exit signal))
-                       (setq my/gptel--openrouter-context-window-fetch-inflight nil)
-                       (unwind-protect
-                           (if (not (= (process-exit-status p) 0))
-                               (message "OpenRouter context-window: fetch failed (exit %d)" (process-exit-status p))
-                             (with-current-buffer buf
-                               (goto-char (point-min))
-                               (condition-case err
-                                   (let* ((json-object-type 'alist)
-                                          (json-array-type 'list)
-                                          (json-key-type 'symbol)
-                                          (obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
-                                          (data (alist-get 'data obj))
-                                          (entry (seq-find (lambda (e)
-                                                             (let ((id (alist-get 'id e)))
-                                                               (and (stringp id) (string= id model-id))))
-                                                           data))
-                                          (cw (and entry (alist-get 'context_length entry))))
-                                     (if (and (integerp cw) (> cw 0))
-                                         (progn
-                                           (my/gptel--cache-put-context-window model-id cw)
-                                           (message "OpenRouter context-window cached: %s -> %d" model-id cw))
-                                       (message "OpenRouter context-window: model not found or missing context_length: %s" model-id)))
-                                 (error
-                                  (message "OpenRouter context-window: parse failed (%s)" (error-message-string err))))))
-                         (when (buffer-live-p buf) (kill-buffer buf))))))))
-(process-put proc 'my/gptel-managed t)
-            nil)))))))
+(my/gptel--openrouter-fetch-with-callback
+         url
+         (lambda (data)
+           (let ((entry (seq-find (lambda (e)
+                                    (let ((id (alist-get 'id e)))
+                                      (and (stringp id) (string= id model-id))))
+                                  data))
+                 (cw (and entry (alist-get 'context_length entry))))
+             (if (and (integerp cw) (> cw 0))
+                 (progn
+                   (my/gptel--cache-put-context-window model-id cw)
+                   (message "OpenRouter context-window cached: %s -> %d" model-id cw))
+               (message "OpenRouter context-window: model not found or missing context_length: %s" model-id))))
+         "gptel-openrouter-models"
+         my/gptel-openrouter-models-connect-timeout
+         my/gptel-openrouter-models-max-time)
+        nil)))))
 
 (defun my/gptel--auto-refresh-context-window-cache-maybe ()
   "Refresh context window cache if stale (non-blocking)."
@@ -554,56 +571,28 @@ Run asynchronously. Use for bulk cache warming."
   (let ((url "https://openrouter.ai/api/v1/models"))
     (when (and (not my/gptel--openrouter-context-window-fetch-inflight)
                (executable-find "curl"))
-      (setq my/gptel--openrouter-context-window-fetch-inflight t)
-      (let* ((key (ignore-errors (gptel-api-key-from-auth-source "api.openrouter.com" "api")))
-             (buf (generate-new-buffer " *gptel-openrouter-all-models*")))
-        (if (not (and (stringp key) (not (string-empty-p key))))
-            (progn
-              (setq my/gptel--openrouter-context-window-fetch-inflight nil)
-              (when (buffer-live-p buf) (kill-buffer buf))
-              (message "OpenRouter: no API key found"))
-          (let* ((cmd (my/gptel--openrouter-curl-command url 10 120 key))
-                 (proc
-                  (make-process
-                   :name "gptel-openrouter-all-models"
-                   :buffer buf
-                   :command cmd
-                   :noquery t
-                   :connection-type 'pipe
-                   :sentinel
-                   (lambda (p _event)
-                     (when (memq (process-status p) '(exit signal))
-                       (setq my/gptel--openrouter-context-window-fetch-inflight nil)
-                       (unwind-protect
-                           (when (= (process-exit-status p) 0)
-                             (with-current-buffer buf
-                               (goto-char (point-min))
-                               (condition-case err
-                                   (let* ((json-object-type 'alist)
-                                          (json-array-type 'list)
-                                          (json-key-type 'symbol)
-                                          (obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
-                                          (data (alist-get 'data obj))
-                                          (count 0))
-                                     (dolist (entry data)
-                                       (let* ((id (alist-get 'id entry))
-                                              (cw (alist-get 'context_length entry))
-                                              (pricing (alist-get 'pricing entry))
-                                              (input-price (and pricing (alist-get 'prompt pricing)))
-                                              (output-price (and pricing (alist-get 'completion pricing))))
-                                         (when (and (stringp id) (integerp cw) (> cw 0))
-                                           (puthash id cw my/gptel--context-window-cache)
-                                           (puthash id (list :context-window cw
-                                                             :pricing-input (and (numberp input-price) (* input-price 1000000))
-                                                             :pricing-output (and (numberp output-price) (* output-price 1000000)))
-                                                    my/gptel--model-metadata-cache)
-                                           (cl-incf count))))
-                                     (message "OpenRouter: cached %d models" count))
-                                 (error
-                                  (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
-                         (when (buffer-live-p buf) (kill-buffer buf))))))))
-            (process-put proc 'my/gptel-managed t)
-            (message "OpenRouter: fetching all models...")))))))
+      (my/gptel--openrouter-fetch-with-callback
+       url
+       (lambda (data)
+         (let ((count 0))
+           (dolist (entry data)
+             (let* ((id (alist-get 'id entry))
+                    (cw (alist-get 'context_length entry))
+                    (pricing (alist-get 'pricing entry))
+                    (input-price (and pricing (alist-get 'prompt pricing)))
+                    (output-price (and pricing (alist-get 'completion pricing))))
+               (when (and (stringp id) (integerp cw) (> cw 0))
+                 (puthash id cw my/gptel--context-window-cache)
+                 (puthash id (list :context-window cw
+                                   :pricing-input (and (numberp input-price) (* input-price 1000000))
+                                   :pricing-output (and (numberp output-price) (* output-price 1000000)))
+                          my/gptel--model-metadata-cache)
+                 (cl-incf count))))
+           (message "OpenRouter: cached %d models" count)))
+       "gptel-openrouter-all-models"
+       10
+       120)
+      (message "OpenRouter: fetching all models..."))))
 
 (defun my/gptel-get-model-metadata (model-id)
   "Get metadata for MODEL-ID from cache.
