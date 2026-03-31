@@ -141,6 +141,7 @@
 ;; in your home directory. Use GPG to encrypt the authinfo file for enhanced
 ;; security.
 (setq auth-sources (list "~/.authinfo.gpg"))
+(auth-source-forget-all-cached)
 
 ;;; `display-line-numbers-mode'
 
