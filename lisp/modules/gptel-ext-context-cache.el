@@ -749,7 +749,7 @@ Use `my/gptel-show-provider-contract' to query.")
       (when ctx-windows
         (princ "\nKnown Context Windows:\n")
         (dolist (cw ctx-windows)
-          (princ (format "  %s: %d tokens\n" (car cw) (cdr cw)))))))))
+          (princ (format "  %s: %d tokens\n" (car cw) (cdr cw))))))))
 
 ;;; Public Query API
 
@@ -771,7 +771,7 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                                        model-id))))
     (if window
         window
-      (or (my/gptel--lookup-context-window-in-gptel-tables gptel-model)
+(or (my/gptel--lookup-context-window-in-gptel-tables gptel-model)
           my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
