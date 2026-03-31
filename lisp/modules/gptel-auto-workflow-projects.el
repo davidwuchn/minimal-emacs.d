@@ -12,6 +12,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'gptel-tools-agent)
 
 ;; External variables from gptel-tools-agent.el
 (defvar gptel-auto-workflow--worktree-state nil)
