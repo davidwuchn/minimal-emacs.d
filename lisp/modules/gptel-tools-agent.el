@@ -3197,7 +3197,8 @@ Works across macOS and Linux."
 
 (defun gptel-auto-workflow--cleanup-old-worktrees ()
   "Remove ALL optimize worktrees and their branches from previous runs.
-Called at start of new run to ensure clean state."
+Called at start of new run to ensure clean state.
+Only removes worktrees if no gptel processes are running."
   (let* ((proj-root (or (gptel-auto-workflow--project-root)
                         (expand-file-name "~/.emacs.d/")))
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
@@ -3206,8 +3207,14 @@ Called at start of new run to ensure clean state."
          (optimize-dir (expand-file-name "optimize" worktree-base))
          (suffix (gptel-auto-workflow--experiment-suffix))
          (pattern (concat suffix "-exp"))
-         (removed 0))
-    (when (file-exists-p optimize-dir)
+         (removed 0)
+         (active-processes (cl-count-if
+                            (lambda (p)
+                              (and (process-live-p p)
+                                   (string-match-p "gptel" (process-name p))))
+                            (process-list))))
+    (when (and (file-exists-p optimize-dir)
+               (= active-processes 0))
       (let ((dirs (directory-files optimize-dir t pattern)))
         (dolist (dir dirs)
           (when (file-exists-p dir)
