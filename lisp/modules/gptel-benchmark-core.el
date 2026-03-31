@@ -205,6 +205,16 @@ Handles nil scores by treating them as 0."
            for score = (alist-get type scores-alist)
            collect (cons type (gptel-benchmark--accumulate-score value score))))
 
+(defun gptel-benchmark--extract-score-types (scores)
+  "Extract all score types from SCORES as an alist.
+Returns alist of (score-type . value) for all four score types.
+Handles nil values gracefully."
+  (when scores
+    (list (cons :overall-score (plist-get scores :overall-score))
+          (cons :efficiency-score (plist-get scores :efficiency-score))
+          (cons :completion-score (plist-get scores :completion-score))
+          (cons :constraint-score (plist-get scores :constraint-score)))))
+
 (defun gptel-benchmark-summarize-results (results)
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores."
@@ -222,10 +232,7 @@ RESULTS is a list of (run . scores) cons cells or plists with :scores."
           (setq score-totals
                 (gptel-benchmark--accumulate-scores
                  score-totals
-                 (list (cons :overall-score (plist-get scores :overall-score))
-                       (cons :efficiency-score (plist-get scores :efficiency-score))
-                       (cons :completion-score (plist-get scores :completion-score))
-                       (cons :constraint-score (plist-get scores :constraint-score))))))
+                 (gptel-benchmark--extract-score-types scores))))
         (when (>= (or overall 0) 0.7)
           (cl-incf passed))))
     (list :total-tests total
@@ -249,7 +256,7 @@ RESULTS should contain :eight-keys-scores in each entry."
         (when eight-keys
           (cl-loop for key across key-names
                    for i from 0
-                   for score = (alist-get key eight-keys)
+                   for score = (plist-get eight-keys key)
                    when (numberp score)
                    do (progn
                         (aset key-totals i (+ (aref key-totals i) score))
