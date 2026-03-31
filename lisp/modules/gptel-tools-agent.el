@@ -1175,8 +1175,10 @@ If branch exists locally, deletes it first to avoid conflicts."
   (let* ((proj-root (or (gptel-auto-workflow--project-root)
                         (expand-file-name "~/.emacs.d/")))
          (branch (gptel-auto-workflow--branch-name target experiment-id))
+         (worktree-base-dir (or gptel-auto-workflow-worktree-base
+                                "var/tmp/experiments"))
          (worktree-dir (expand-file-name
-                        (format "%s/%s" gptel-auto-workflow-worktree-base branch)
+                        (format "%s/%s" worktree-base-dir branch)
                         proj-root))
          (stderr-buffer (generate-new-buffer "*git-stderr*")))
     (condition-case err
@@ -1303,11 +1305,14 @@ SAFETY: Never touches main branch."
   "Create isolated worktree for staging verification.
 Never touches project root - all verification happens in worktree.
 Returns worktree path or nil on failure."
-  (let* ((proj-root (gptel-auto-workflow--project-root))
+  (let* ((proj-root (or (gptel-auto-workflow--project-root)
+                        (expand-file-name "~/.emacs.d/")))
          (default-directory proj-root)
          (branch gptel-auto-workflow-staging-branch)
+         (worktree-base-dir (or gptel-auto-workflow-worktree-base
+                                "var/tmp/experiments"))
          (worktree-dir (expand-file-name
-                        (format "%s/staging-verify" gptel-auto-workflow-worktree-base)
+                        (format "%s/staging-verify" worktree-base-dir)
                         proj-root)))
     (condition-case err
         (progn
@@ -2153,9 +2158,12 @@ Example HYPOTHESES:
 
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
   "Append EXPERIMENT to results.tsv for RUN-ID."
-  (let* ((base-dir (gptel-auto-workflow--project-root))
+  (let* ((base-dir (or (gptel-auto-workflow--project-root)
+                       (expand-file-name "~/.emacs.d/")))
+         (worktree-base-dir (or gptel-auto-workflow-worktree-base
+                                "var/tmp/experiments"))
          (file (expand-file-name
-                (format "%s/%s/results.tsv" gptel-auto-workflow-worktree-base run-id)
+                (format "%s/%s/results.tsv" worktree-base-dir run-id)
                 base-dir))
          (agent-output (or (plist-get experiment :agent-output) ""))
          (truncated-output (gptel-auto-experiment--tsv-escape
@@ -3039,8 +3047,9 @@ Works across macOS and Linux."
 Called at start of new run to ensure clean state."
   (let* ((proj-root (or (gptel-auto-workflow--project-root)
                         (expand-file-name "~/.emacs.d/")))
-         (worktree-base (expand-file-name
-                         gptel-auto-workflow-worktree-base proj-root))
+         (worktree-base-dir (or gptel-auto-workflow-worktree-base
+                                "var/tmp/experiments"))
+         (worktree-base (expand-file-name worktree-base-dir proj-root))
          (optimize-dir (expand-file-name "optimize" worktree-base))
          (suffix (gptel-auto-workflow--experiment-suffix))
          (pattern (concat suffix "-exp"))
