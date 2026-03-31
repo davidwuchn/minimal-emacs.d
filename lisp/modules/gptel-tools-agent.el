@@ -1045,6 +1045,12 @@ Monthly subscription: LLM selection finds best targets each run."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-experiment-delay-between 3
+  "Seconds to wait between experiments to avoid API rate limits."
+  :type 'integer
+  :safe #'integerp
+  :group 'gptel-tools-agent)
+
 (defcustom gptel-auto-experiment-max-per-target 5
   "Maximum experiments per target.
 Monthly subscription: 5 is optimal (diminishing returns after 3-4)."
@@ -1991,16 +1997,22 @@ Returns nil if valid, or error message string if invalid."
 (defun gptel-auto-experiment-grade (output callback)
   "Grade experiment OUTPUT. LLM decides quality threshold.
 Timeout fails the grade (conservative).
-If OUTPUT is an error message, fails immediately.
+If OUTPUT is an error message, fails immediately with error details.
 Uses hash table keyed by grade-id to support parallel execution.
 The grader subagent overlay will appear in the current buffer at time of call."
   (let ((grade-id (cl-incf gptel-auto-experiment--grade-counter))
-        ;; Capture the current buffer to ensure grader overlay appears in right place
         (grade-buffer (current-buffer)))
     (cl-block gptel-auto-experiment-grade
       (when (gptel-auto-experiment--agent-error-p output)
-        (funcall callback (list :score 0 :passed nil :details "Agent error"))
-        (cl-return-from gptel-auto-experiment-grade))
+        (let* ((error-snippet (if (stringp output)
+                                  (substring output 0 (min 200 (length output)))
+                                "Unknown error"))
+               (error-category (car (gptel-auto-experiment--categorize-error output))))
+          (message "[auto-exp] Executor error detected: %s" error-snippet)
+          (funcall callback (list :score 0 :passed nil 
+                                  :details (format "Agent error: %s" error-snippet)
+                                  :error-category error-category))
+          (cl-return-from gptel-auto-experiment-grade)))
       (puthash grade-id (list :done nil :timer nil) gptel-auto-experiment--grade-state)
       (let ((timeout-timer
              (run-with-timer gptel-auto-experiment-grade-timeout nil
@@ -2276,12 +2288,46 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
     (when (and (stringp agent-output) (> (length agent-output) 0))
       (substring agent-output 0 (min len (length agent-output))))))
 
+(defvar gptel-auto-experiment-max-retries 2
+  "Maximum retries for executor on transient errors.")
+
+(defvar gptel-auto-experiment-retry-delay 5
+  "Seconds to wait between retries.")
+
+(defun gptel-auto-experiment--is-retryable-error-p (error-output)
+  "Check if ERROR-OUTPUT is a transient/retryable error."
+  (and (stringp error-output)
+       (string-match-p "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|temporary\\|overloaded" error-output)))
+
+(defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count)
+  "Run experiment with automatic retry on transient errors.
+RETRY-COUNT tracks current retry attempt."
+  (let ((retries (or retry-count 0)))
+    (gptel-auto-experiment-run
+     target experiment-id max-experiments baseline baseline-code-quality previous-results
+     (lambda (result)
+       (let* ((agent-output (plist-get result :agent-output))
+              (error-type (plist-get result :comparator-reason)))
+         (if (and (< retries gptel-auto-experiment-max-retries)
+                  (or (gptel-auto-experiment--is-retryable-error-p agent-output)
+                      (eq error-type :api-rate-limit)
+                      (eq error-type :timeout)))
+             (progn
+               (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
+                        experiment-id (1+ retries) gptel-auto-experiment-max-retries
+                        gptel-auto-experiment-retry-delay)
+               (run-with-timer gptel-auto-experiment-retry-delay nil
+                               (lambda ()
+                                 (gptel-auto-experiment--run-with-retry
+                                  target experiment-id max-experiments baseline baseline-code-quality
+                                  previous-results callback (1+ retries)))))
+           (funcall callback result)))))))
+
 (defun gptel-auto-experiment--categorize-error (agent-output)
   "Categorize error from AGENT-OUTPUT and return (CATEGORY . DETAILS).
 Categories: :api-rate-limit :api-error :tool-error :timeout :grader-failed :unknown
 Also logs agent-output snippet for debugging when category is :unknown."
   (cond
-   ;; Handle nil or empty output
    ((or (null agent-output) (string= agent-output ""))
     (cons :grader-failed "Grader returned no output"))
    ((string-match-p "throttling\\|rate.limit\\|quota exceeded\\|429" agent-output)
@@ -2296,7 +2342,12 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (cons :tool-error "Tool execution failed"))
    ((string-match-p "could not finish" agent-output)
     (cons :api-error "API request failed"))
-   ;; Check if output looks valid but grader failed
+   ((string-match-p "Error:.*not available\\|Error:.*not found\\|Error:.*empty" agent-output)
+    (cons :tool-error (format "Tool unavailable: %s" (gptel-auto-experiment--error-snippet agent-output))))
+   ((string-match-p "^Error:" agent-output)
+    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
+      (message "[auto-experiment] Executor error: %s" snippet)
+      (cons :tool-error snippet)))
    ((string-match-p "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output)
     (cons :grader-failed "Executor succeeded, grader returned score 0"))
    ((string-match-p "error\\|failed\\|exception" agent-output)
@@ -2704,42 +2755,40 @@ Adapts max-experiments based on API error rate."
          (results nil)
          (best-score (gptel-auto-workflow--plist-get baseline :eight-keys 0.0))
          (no-improvement-count 0))
-    (message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
-             target best-score max-exp)
-    (cl-labels ((run-next (exp-id)
-                  ;; DON'T delete worktree here - keep it for the entire target
-                  ;; Worktree will be cleaned up at START of NEXT workflow run
-                  ;; Check if we should stop early due to too many API errors
-                  (when (and (> gptel-auto-experiment--api-error-count 5)
-                             (< exp-id max-exp))
-                    (message "[auto-workflow] Too many API errors (%d), stopping early for %s"
-                             gptel-auto-experiment--api-error-count target)
-                    (setq max-exp exp-id))
-                  (if (or (> exp-id max-exp)
-                          (>= no-improvement-count threshold))
-                      (progn
-                        ;; Don't delete worktree - keep it for staging merge
-                        ;; Will be cleaned up at START of next workflow run
-                        (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
-                                 target (length results)
-                                 best-score)
-                        (funcall callback (nreverse results)))
-                    (gptel-auto-experiment-run
-                     target exp-id max-exp
-                     best-score
-                     baseline-code-quality
-                     results
-                     (lambda (result)
-                       (push result results)
-                       (gptel-auto-workflow--update-progress)  ; Update watchdog
-                       (let ((score-after (gptel-auto-workflow--plist-get result :score-after 0)))
-                         (when (and score-after (> score-after best-score))
-                           (setq best-score score-after
-                                 no-improvement-count 0))
-                         (when (and score-after (<= score-after best-score))
-                           (cl-incf no-improvement-count)))
-                       (run-next (1+ exp-id)))))))
-      (run-next 1))))
+(message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
+              target best-score max-exp)
+     (cl-labels ((run-next (exp-id)
+                   (when (and (> gptel-auto-experiment--api-error-count 5)
+                              (< exp-id max-exp))
+                     (message "[auto-workflow] Too many API errors (%d), stopping early for %s"
+                              gptel-auto-experiment--api-error-count target)
+                     (setq max-exp exp-id))
+                   (if (or (> exp-id max-exp)
+                           (>= no-improvement-count threshold))
+                       (progn
+                         (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
+                                  target (length results)
+                                  best-score)
+                         (funcall callback (nreverse results)))
+                     (gptel-auto-experiment-run
+                      target exp-id max-exp
+                      best-score
+                      baseline-code-quality
+                      results
+                      (lambda (result)
+                        (push result results)
+                        (gptel-auto-workflow--update-progress)
+                        (let ((score-after (gptel-auto-workflow--plist-get result :score-after 0)))
+                          (when (and score-after (> score-after best-score))
+                            (setq best-score score-after
+                                  no-improvement-count 0))
+                          (when (and score-after (<= score-after best-score))
+                            (cl-incf no-improvement-count)))
+                        (if (> gptel-auto-experiment-delay-between 0)
+                            (run-with-timer gptel-auto-experiment-delay-between nil
+                                            (lambda () (run-next (1+ exp-id))))
+                          (run-next (1+ exp-id))))))))
+       (run-next 1))))
 
 ;;; Main Entry Point
 
