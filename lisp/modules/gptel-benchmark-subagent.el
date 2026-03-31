@@ -172,8 +172,8 @@ SUMMARY: SCORE: X/Y"
 Handles both SCORE: X/Y format and JSON format.
 Passes if score >= 80% of total (not requiring perfect score)."
   (let ((score 0)
-         (total (+ (length expected) (length forbidden)))
-         (details (if (stringp response) response (format "%S" response))))
+        (total (+ (length expected) (length forbidden)))
+        (details (if (stringp response) response (format "%S" response))))
     ;; Try SCORE: X/Y format first
     (if (string-match "SCORE:\\s-*\\([0-9]+\\)/\\([0-9]+\\)" details)
         (setq score (string-to-number (match-string 1 details))
@@ -193,8 +193,8 @@ Passes if score >= 80% of total (not requiring perfect score)."
       (list :score score
             :total (if (> total 0) total (max score 1))
             :percentage percentage
-:passed passed
-             :details details))))
+            :passed passed
+            :details details))))
 
 ;;; Code Quality Scoring
 
@@ -372,19 +372,21 @@ Output as JSON:
      (lambda (result)
        (funcall callback (gptel-benchmark--parse-analysis-response result))))))
 
+(defun gptel-benchmark--parse-json-response (response &optional fallback)
+  "Parse RESPONSE as JSON, returning FALLBACK on error.
+RESPONSE can be string or any type (converted to string if needed).
+FALLBACK defaults to nil if not provided."
+  (condition-case nil
+      (json-read-from-string
+       (if (stringp response) response (format "%S" response)))
+    (error (or fallback nil))))
+
 (defun gptel-benchmark--parse-analysis-response (response)
   "Parse analyzer RESPONSE into plist."
-  (condition-case nil
-      (let ((parsed (json-read-from-string
-                     (if (stringp response) response (format "%S" response)))))
-        (list :patterns (cdr (assq 'patterns parsed))
-              :issues (cdr (assq 'issues parsed))
-              :recommendations (cdr (assq 'recommendations parsed))))
-    (error
-     (list :raw response
-           :patterns nil
-           :issues nil
-           :recommendations nil))))
+  (let ((parsed (gptel-benchmark--parse-json-response response)))
+    (list :patterns (cdr (assq 'patterns parsed))
+          :issues (cdr (assq 'issues parsed))
+          :recommendations (cdr (assq 'recommendations parsed)))))
 
 ;;; Executor Subagent
 
@@ -437,8 +439,8 @@ Uses explorer subagent if available."
 Scope: %s
 
 Return findings with specific file locations and code references."
-            query
-            (or scope "entire codebase"))
+           query
+           (or scope "entire codebase"))
    callback))
 
 ;;; Batch Operations
@@ -481,17 +483,14 @@ Generate:
 4. prompt_suggestions: Improvements to prompts/instructions
 
 Output as JSON."
-                       (format "%S" analysis))))
+                        (format "%S" analysis))))
     (gptel-benchmark-call-subagent
      'analyzer
      "Generate improvement suggestions"
      prompt
      (lambda (result)
        (funcall callback
-                (condition-case nil
-                    (json-read-from-string
-                     (if (stringp result) result (format "%S" result)))
-                  (error (list :raw result))))))))
+                (gptel-benchmark--parse-json-response result '(:raw result)))))))
 
 ;;; Comparator Subagent (A/B Analysis)
 
@@ -533,19 +532,15 @@ Analyze and output JSON:
 
 (defun gptel-benchmark--parse-comparison-response (response)
   "Parse comparator RESPONSE into plist."
-  (condition-case nil
-      (let* ((parsed (json-read-from-string
-                      (if (stringp response) response (format "%S" response))))
-             (winner (cdr (assq 'winner parsed)))
-             (improvement (cdr (assq 'improvement parsed)))
-             (analysis (cdr (assq 'analysis parsed)))
-             (recommendation (cdr (assq 'recommendation parsed))))
-        (list :winner winner
-              :improvement improvement
-              :analysis analysis
-              :recommendation recommendation))
-    (error
-     (list :raw response :winner nil))))
+  (let* ((parsed (gptel-benchmark--parse-json-response response))
+         (winner (cdr (assq 'winner parsed)))
+         (improvement (cdr (assq 'improvement parsed)))
+         (analysis (cdr (assq 'analysis parsed)))
+         (recommendation (cdr (assq 'recommendation parsed))))
+    (list :winner winner
+          :improvement improvement
+          :analysis analysis
+          :recommendation recommendation)))
 
 (defun gptel-benchmark-ab-test (name-a results-a name-b results-b callback)
   "Run A/B test comparing RESULTS-A (name NAME-A) vs RESULTS-B (name NAME-B).
