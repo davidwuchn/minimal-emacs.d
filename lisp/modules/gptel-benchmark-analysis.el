@@ -62,17 +62,16 @@ Returns plist with flaky tests, non-discriminating tests, and systematic failure
          (flaky-tests '()))
     (dolist (result data)
       (let ((test-id (plist-get result :test-id)))
-        (when (gptel-benchmark-is-flaky-test test-id benchmark-file)
+        (when (gptel-benchmark--flaky-test-p test-id data)
           (push test-id flaky-tests))))
     flaky-tests))
 
-(defun gptel-benchmark-is-flaky-test (test-id benchmark-file)
-  "Check if TEST-ID in BENCHMARK-FILE shows inconsistent pass/fail across runs.
+(defun gptel-benchmark--flaky-test-p (test-id data)
+  "Check if TEST-ID in DATA shows inconsistent pass/fail across runs.
 A test is considered flaky if it has multiple runs with different outcomes."
-  (let* ((data (gptel-benchmark-read-json benchmark-file))
-         (pass-count 0)
-         (fail-count 0)
-         (run-count 0))
+  (let ((pass-count 0)
+        (fail-count 0)
+        (run-count 0))
     (dolist (result data)
       (when (equal (plist-get result :test-id) test-id)
         (let* ((grade (plist-get result :grade))
@@ -89,17 +88,16 @@ A test is considered flaky if it has multiple runs with different outcomes."
          (non-discriminating '()))
     (dolist (result data)
       (let ((test-id (plist-get result :test-id)))
-        (when (gptel-benchmark-is-non-discriminating-test test-id benchmark-file)
+        (when (gptel-benchmark--non-discriminating-test-p test-id data)
           (push test-id non-discriminating))))
     non-discriminating))
 
-(defun gptel-benchmark-is-non-discriminating-test (test-id benchmark-file)
-  "Check if TEST-ID in BENCHMARK-FILE doesn't differentiate skill levels.
+(defun gptel-benchmark--non-discriminating-test-p (test-id data)
+  "Check if TEST-ID in DATA doesn't differentiate skill levels.
 A test is non-discriminating if all runs pass or all runs fail."
-  (let* ((data (gptel-benchmark-read-json benchmark-file))
-         (all-pass t)
-         (all-fail t)
-         (run-count 0))
+  (let ((all-pass t)
+        (all-fail t)
+        (run-count 0))
     (dolist (result data)
       (when (equal (plist-get result :test-id) test-id)
         (let* ((grade (plist-get result :grade))
@@ -117,16 +115,15 @@ A test is non-discriminating if all runs pass or all runs fail."
          (systematic-failures '()))
     (dolist (result data)
       (let ((test-id (plist-get result :test-id)))
-        (when (gptel-benchmark-is-systematic-failure test-id benchmark-file)
+        (when (gptel-benchmark--systematic-failure-p test-id data)
           (push test-id systematic-failures))))
     systematic-failures))
 
-(defun gptel-benchmark-is-systematic-failure (test-id benchmark-file)
-  "Check if TEST-ID in BENCHMARK-FILE represents a systematic failure.
+(defun gptel-benchmark--systematic-failure-p (test-id data)
+  "Check if TEST-ID in DATA represents a systematic failure.
 A test is a systematic failure if >80% of runs fail."
-  (let* ((data (gptel-benchmark-read-json benchmark-file))
-         (fail-count 0)
-         (total-count 0))
+  (let ((fail-count 0)
+        (total-count 0))
     (dolist (result data)
       (when (equal (plist-get result :test-id) test-id)
         (let* ((grade (plist-get result :grade))
