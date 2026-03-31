@@ -50,6 +50,20 @@ Reduces duplication of `(or (plist-get ...) default-value)` patterns."
 Reduces duplication of `(when (and state (not (plist-get state :done)))` patterns."
   (and state (not (plist-get state :done))))
 
+(defun gptel-auto-workflow--with-error-handling (operation fn &optional error-prefix)
+  "Execute FN with standardized error handling for OPERATION.
+ERROR-PREFIX defaults to \"[auto-workflow]\".
+Returns FN's result on success, nil on error with logged message.
+Reduces duplication of condition-case error patterns."
+  (condition-case err
+      (funcall fn)
+    (error
+     (message "%s %s failed: %s"
+              (or error-prefix "[auto-workflow]")
+              operation
+              err)
+     nil)))
+
 (defun gptel-auto-workflow--require-magit-dependencies ()
   "Require magit-worktree and magit-git dependencies.
 Signals user-error if either dependency fails to load."
@@ -1341,20 +1355,18 @@ Returns worktree path or nil on failure."
          (worktree-dir (expand-file-name
                         (format "%s/staging-verify" worktree-base-dir)
                         proj-root)))
-    (condition-case err
-        (progn
-          (when (file-exists-p worktree-dir)
-            (delete-directory worktree-dir t))
-          (make-directory (file-name-directory worktree-dir) t)
-          ;; Use magit-worktree-checkout for existing branch
-          ;; magit-worktree-branch is for creating NEW branches (fails if branch exists)
-          (magit-worktree-checkout worktree-dir branch)
-          (setq gptel-auto-workflow--staging-worktree-dir worktree-dir)
-          (message "[auto-workflow] Created staging worktree: %s" worktree-dir)
-          worktree-dir)
-      (error
-       (message "[auto-workflow] Failed to create staging worktree: %s" err)
-       nil))))
+    (gptel-auto-workflow--with-error-handling
+     "create staging worktree"
+     (lambda ()
+       (when (file-exists-p worktree-dir)
+         (delete-directory worktree-dir t))
+       (make-directory (file-name-directory worktree-dir) t)
+       ;; Use magit-worktree-checkout for existing branch
+       ;; magit-worktree-branch is for creating NEW branches (fails if branch exists)
+       (magit-worktree-checkout worktree-dir branch)
+       (setq gptel-auto-workflow--staging-worktree-dir worktree-dir)
+       (message "[auto-workflow] Created staging worktree: %s" worktree-dir)
+       worktree-dir))))
 
 (defun gptel-auto-workflow--delete-staging-worktree ()
   "Delete staging verification worktree.
@@ -1362,11 +1374,11 @@ NOTE: Staging BRANCH is never deleted, only the worktree."
   (when (and gptel-auto-workflow--staging-worktree-dir
              (file-exists-p gptel-auto-workflow--staging-worktree-dir))
     (let ((proj-root (gptel-auto-workflow--project-root)))
-      (condition-case err
-          (let ((default-directory proj-root))
-            (magit-worktree-delete gptel-auto-workflow--staging-worktree-dir))
-        (error
-         (message "[auto-workflow] Failed to delete staging worktree: %s" err)))))
+      (gptel-auto-workflow--with-error-handling
+       "delete staging worktree"
+       (lambda ()
+         (let ((default-directory proj-root))
+           (magit-worktree-delete gptel-auto-workflow--staging-worktree-dir))))))
   (setq gptel-auto-workflow--staging-worktree-dir nil))
 
 (defun gptel-auto-workflow--review-changes (optimize-branch callback)
@@ -1532,16 +1544,16 @@ This prevents 'branch already used by worktree' errors."
                           (or (gptel-auto-workflow--git-cmd 
                                "git rev-parse --abbrev-ref HEAD 2>/dev/null") 
                               "main"))))
-    (unless (string= current-branch "main")
+    (if (string= current-branch "main")
+        t
       (message "[auto-workflow] Switching from %s to main branch" current-branch)
-      (condition-case err
-          (progn
-            (gptel-auto-workflow--git-cmd "git checkout main")
-            t)
-        (error
-         (message "[auto-workflow] Failed to switch to main: %s" err)
-         nil)))))
+      (gptel-auto-workflow--with-error-handling
+       "switch to main branch"
+       (lambda ()
+         (gptel-auto-workflow--git-cmd "git checkout main")
+         t)))))
 
+;;;###autoload
 ;;;###autoload
 (defun gptel-auto-workflow--ensure-staging-branch-exists ()
   "Ensure staging branch exists locally and remotely.
@@ -1550,32 +1562,30 @@ Returns t on success, nil on failure."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
          (staging gptel-auto-workflow-staging-branch))
-    (condition-case err
-        (progn
-          (gptel-auto-workflow--git-cmd "git fetch origin" 180)
-          (let* ((local-exists (string-match-p staging 
-                                               (or (gptel-auto-workflow--git-cmd 
-                                                    "git branch --list staging") "")))
-                 (remote-exists (string-match-p staging 
-                                                (or (gptel-auto-workflow--git-cmd 
-                                                     "git branch -r --list origin/staging") ""))))
-            (cond
-             ((and local-exists remote-exists)
-              (message "[auto-workflow] Staging branch exists"))
-             ((and (not local-exists) remote-exists)
-              (message "[auto-workflow] Creating local staging from origin/staging")
-              (gptel-auto-workflow--git-cmd "git branch staging origin/staging"))
-             ((and local-exists (not remote-exists))
-              (message "[auto-workflow] Pushing staging to origin")
-              (gptel-auto-workflow--git-cmd "git push origin staging"))
-             (t
-              (message "[auto-workflow] Creating staging branch from main")
-              (gptel-auto-workflow--git-cmd "git branch staging main")
-              (gptel-auto-workflow--git-cmd "git push origin staging")))
-            t))
-      (error
-       (message "[auto-workflow] Failed to ensure staging branch: %s" err)
-       nil))))
+    (gptel-auto-workflow--with-error-handling
+     "ensure staging branch exists"
+     (lambda ()
+       (gptel-auto-workflow--git-cmd "git fetch origin" 180)
+       (let* ((local-exists (string-match-p staging 
+                                            (or (gptel-auto-workflow--git-cmd 
+                                                 "git branch --list staging") "")))
+              (remote-exists (string-match-p staging 
+                                             (or (gptel-auto-workflow--git-cmd 
+                                                  "git branch -r --list origin/staging") ""))))
+         (cond
+          ((and local-exists remote-exists)
+           (message "[auto-workflow] Staging branch exists"))
+          ((and (not local-exists) remote-exists)
+           (message "[auto-workflow] Creating local staging from origin/staging")
+           (gptel-auto-workflow--git-cmd "git branch staging origin/staging"))
+          ((and local-exists (not remote-exists))
+           (message "[auto-workflow] Pushing staging to origin")
+           (gptel-auto-workflow--git-cmd "git push origin staging"))
+          (t
+           (message "[auto-workflow] Creating staging branch from main")
+           (gptel-auto-workflow--git-cmd "git branch staging main")
+           (gptel-auto-workflow--git-cmd "git push origin staging")))
+         t)))))
 
 ;;;###autoload
 
