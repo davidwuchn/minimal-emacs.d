@@ -153,30 +153,31 @@ the rolling history stored in :doom-loop-fingerprints.  When the last N
 fingerprints are identical, the turn is forcibly advanced to DONE.
 
 This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
-  (when-let* ((info (and (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
-              (tool-use (plist-get info :tool-use)))
-    ;; Append fingerprints for this cycle's tool calls.
-    (let* ((fps (or (plist-get info :doom-loop-fingerprints) '()))
-           (new-fps (mapcar #'my/gptel--tool-call-fingerprint tool-use))
-           (fps (append fps new-fps)))
-      (plist-put info :doom-loop-fingerprints fps)
-      ;; Check whether every tool call in this cycle is a doom-loop repeat.
-      (dolist (fp new-fps)
-        (let* ((n my/gptel-doom-loop-threshold)
-               ;; Count consecutive trailing occurrences of this fingerprint.
-               (tail (reverse fps))
-               (run (length (seq-take-while (lambda (f) (equal f fp)) tail))))
-          (when (>= run n)
-            (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
-                     (car (split-string fp ":")) run)
-            (funcall (plist-get info :callback)
-                     (format "gptel: doom-loop aborted — tool \"%s\" called %d consecutive times \
+  (cl-block my/gptel--detect-doom-loop
+    (when-let* ((info (and (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
+                (tool-use (plist-get info :tool-use)))
+      ;; Append fingerprints for this cycle's tool calls.
+      (let* ((fps (or (plist-get info :doom-loop-fingerprints) '()))
+             (new-fps (mapcar #'my/gptel--tool-call-fingerprint tool-use))
+             (fps (append fps new-fps)))
+        (plist-put info :doom-loop-fingerprints fps)
+        ;; Check whether every tool call in this cycle is a doom-loop repeat.
+        (dolist (fp new-fps)
+          (let* ((n my/gptel-doom-loop-threshold)
+                 ;; Count consecutive trailing occurrences of this fingerprint.
+                 (tail (reverse fps))
+                 (run (length (seq-take-while (lambda (f) (equal f fp)) tail))))
+            (when (>= run n)
+              (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
+                       (car (split-string fp ":")) run)
+              (funcall (plist-get info :callback)
+                       (format "gptel: doom-loop aborted — tool \"%s\" called %d consecutive times \
 with identical arguments.  Try a different approach or break the task into smaller steps."
-                             (car (split-string fp ":")) run)
-                     info)
-            (gptel--fsm-transition fsm 'DONE)
-            ;; Return immediately — transition already fired.
-            (cl-return-from my/gptel--detect-doom-loop)))))))
+                               (car (split-string fp ":")) run)
+                       info)
+              (gptel--fsm-transition fsm 'DONE)
+              ;; Return immediately — transition already fired.
+              (cl-return-from my/gptel--detect-doom-loop))))))))
 
 ;; --- Duplicate Tool Name Guard ---
 ;; gptel--parse-tools maps gptel-tools directly to JSON without deduplication.
