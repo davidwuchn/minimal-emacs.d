@@ -1,6 +1,6 @@
 # Mementum State
 
-> Last session: 2026-03-31 16:00
+> Last session: 2026-03-31 19:15
 
 ## Total Improvements: 182+ Real Code Fixes
 
@@ -25,6 +25,8 @@
 | 7 | Executor subagent fails with nil description | `format` with nil description | `(or description "unknown")` |
 | 8 | `string-trim-right` on nil API key | API key function returns nil | Check if result is string before trimming |
 | 9 | API key function returns nil | Auth source lookup fails | Configuration issue - ensure all backends have keys |
+| 10 | `void-variable r` at startup | Byte-compiled .elc had OLD macro expansion | Recompile after macro fix + restart daemon |
+| 11 | "gptel-agent integration enabled" N times | File loaded multiple times, symbol property guard failed | Use defvar guard (defvar only initializes if unbound) |
 
 ### Recent Fixes (Last 50)
 
@@ -109,6 +111,7 @@
 λ auto-revert-conflict. Worktree file writes trigger revert on main buffer → disable during workflow
 λ uniquify-buffer-names. Multiple same-name files get prefixes like .emacs.d/ → disable during workflow
 λ substring-safety. (if (>= (length s) n) (substring s 0 n) s) | never assume string length
+λ byte-compile-cache. Macro changes → .elc has old expansion → recompile OR delete .elc
 λ grader-behaviors. Expected: "improves code" (bug/perf/clarity/testability), not just "fixes bug"
 λ grader-forbidden. "replaces working code WITHOUT improvement" (not all refactoring forbidden)
 λ verification-flexible. "verification attempted" (byte-compile/nucleus/tests/manual) vs "tests pass"
