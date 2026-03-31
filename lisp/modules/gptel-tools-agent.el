@@ -485,8 +485,8 @@ large-result truncation, and result caching."
                  (tracking-marker (let ((m (copy-marker where t)))
                                     (set-marker m (marker-position where) parent-buf)
                                     m))
-(partial (format "%s result for task: %s\n\n"
-                                 (capitalize (or agent-type "agent")) (or description "unknown"))))
+                 (partial (format "%s result for task: %s\n\n"
+                                  (capitalize (or agent-type "agent")) (or description "unknown"))))
             (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
             (gptel-request prompt
               :context (gptel-agent--task-overlay where agent-type description)
@@ -2188,6 +2188,13 @@ Example HYPOTHESES:
 (defvar gptel-auto-experiment--api-error-threshold 3
   "Threshold of API errors before reducing experiment count.")
 
+(defun gptel-auto-experiment--error-snippet (agent-output &optional max-len)
+  "Extract safe snippet from AGENT-OUTPUT for logging.
+MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
+  (let ((len (max-len (or max-len 200))))
+    (when (and (stringp agent-output) (> (length agent-output) 0))
+      (substring agent-output 0 (min len (length agent-output))))))
+
 (defun gptel-auto-experiment--categorize-error (agent-output)
   "Categorize error from AGENT-OUTPUT and return (CATEGORY . DETAILS).
 Categories: :api-rate-limit :api-error :tool-error :timeout :grader-failed :unknown
@@ -2212,11 +2219,11 @@ Also logs agent-output snippet for debugging when category is :unknown."
    ((string-match-p "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output)
     (cons :grader-failed "Executor succeeded, grader returned score 0"))
    ((string-match-p "error\\|failed\\|exception" agent-output)
-    (let ((snippet (substring agent-output 0 (min 200 (length agent-output)))))
+    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
       (message "[auto-experiment] Unknown error snippet: %s" (my/gptel--sanitize-for-logging snippet))
       (cons :unknown (format "Error pattern: %s" snippet))))
    (t 
-    (let ((snippet (substring agent-output 0 (min 200 (length agent-output)))))
+    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
       (message "[auto-experiment] No error pattern found, snippet: %s" (my/gptel--sanitize-for-logging snippet))
       (cons :unknown "Unknown error")))))
 
