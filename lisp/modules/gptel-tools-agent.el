@@ -728,14 +728,14 @@ Optimized: single-pass character-by-character replacement."
 
 (defun my/gptel--sanitize-for-logging (text &optional max-len)
   "Sanitize TEXT for safe logging to Messages buffer.
-Replaces newlines and control chars with escaped representations.
+Replaces newlines, control chars, and backslashes with escaped representations.
 Optional MAX-LEN truncates output (default: no truncation).
 Returns sanitized string, or \"nil\" if TEXT is nil."
   (if (not (stringp text))
       "nil"
     (let ((result (replace-regexp-in-string
-                   "[\n\r\t]" 
-                   (lambda (m) (pcase m ("\n" "\\n") ("\r" "\\r") ("\t" "\\t")))
+                   "[\n\r\t\\]" 
+                   (lambda (m) (pcase m ("\n" "\\n") ("\r" "\\r") ("\t" "\\t") ("\\" "\\\\")))
                    text t t)))
       (if max-len
           (truncate-string-to-width result max-len nil nil "...")
