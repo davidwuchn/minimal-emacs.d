@@ -1815,10 +1815,11 @@ Always returns absolute path."
           (file-name-directory (directory-file-name git-dir))))))
    
    ;; 3. project.el detection (preferred method)
-   ((and (fboundp 'project-current)
-         (fboundp 'project-root)
-         (project-current nil))
-    (expand-file-name (project-root (project-current nil))))
+   ((let ((proj (and (fboundp 'project-current)
+                     (fboundp 'project-root)
+                     (project-current nil))))
+      (when proj
+        (expand-file-name (project-root proj)))))
    
    ;; 4. Git toplevel (fallback)
    ((let ((git-root (string-trim
