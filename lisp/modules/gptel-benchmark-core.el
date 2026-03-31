@@ -103,16 +103,19 @@ For non-keywords, returns KEY unchanged."
     key))
 
 (defun gptel-benchmark--plist-to-alist (plist)
-  "Convert PLIST to alist format for JSON encoding."
-  (let (alist)
-    (while plist
-      (let ((key (car plist))
-            (val (cadr plist)))
-        (when (keywordp key)
-          (setq key (gptel-benchmark--keyword-to-alist-key key)))
-        (push (cons key (gptel-benchmark--to-json-format val)) alist)
-        (setq plist (cddr plist))))
-    (reverse alist)))
+  "Convert PLIST to alist format for JSON encoding.
+Validates that PLIST has even number of elements.
+Returns nil for empty or malformed input."
+  (when (and plist (zerop (mod (length plist) 2)))
+    (let (alist)
+      (while plist
+        (let ((key (car plist))
+              (val (cadr plist)))
+          (when (keywordp key)
+            (setq key (intern (substring (symbol-name key) 1))))
+          (push (cons key (gptel-benchmark--to-json-format val)) alist)
+          (setq plist (cddr plist))))
+      (reverse alist))))
 
 (defun gptel-benchmark--ensure-list (data)
   "Ensure DATA is a list, converting vectors if necessary.
