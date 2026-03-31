@@ -2367,10 +2367,10 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                    :kept nil
                                                    :duration (- (float-time) start-time)
                                                    :grader-quality grade-score
-                                                   :grader-reason grade-details
-                                                   :comparator-reason (symbol-name error-category)
-                                                   :analyzer-patterns (format "%s" patterns)
-:agent-output agent-output)))
+:grader-reason grade-details
+                                                    :comparator-reason (symbol-name error-category)
+                                                    :analyzer-patterns (format "%s" patterns)
+                                                    :agent-output agent-output)))
                               (gptel-auto-experiment-log-tsv
                                (format-time-string "%Y-%m-%d") exp-result)
                               (funcall callback exp-result)))
