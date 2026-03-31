@@ -255,12 +255,13 @@ RESULTS is a list of (run . scores) cons cells or plists with :scores."
                  (gptel-benchmark--extract-score-types scores))))
         (when (>= (or overall 0) 0.7)
           (cl-incf passed))))
-    (list :total-tests total
-          :passed-tests passed
-          :avg-overall (gptel-benchmark--calculate-average score-totals :overall-score total)
-          :avg-efficiency (gptel-benchmark--calculate-average score-totals :efficiency-score total)
-          :avg-completion (gptel-benchmark--calculate-average score-totals :completion-score total)
-          :avg-constraints (gptel-benchmark--calculate-average score-totals :constraint-score total))))
+    (let ((reciprocal (if (> total 0) (/ 1.0 (float total)) 0.0)))
+      (list :total-tests total
+            :passed-tests passed
+            :avg-overall (* (alist-get :overall-score score-totals) reciprocal)
+            :avg-efficiency (* (alist-get :efficiency-score score-totals) reciprocal)
+            :avg-completion (* (alist-get :completion-score score-totals) reciprocal)
+            :avg-constraints (* (alist-get :constraint-score score-totals) reciprocal))))))
 
 ;;; Eight Keys Integration
 
