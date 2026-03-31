@@ -23,6 +23,8 @@
 | 5 | Code Quality constant 0.50 | Only measured docstrings | Added function length + complexity metrics |
 | 6 | `(wrong-type-argument stringp nil)` in subagent | `capitalize` called on nil `agent-type` | `(capitalize (or agent-type "agent"))` |
 | 7 | Executor subagent fails with nil description | `format` with nil description | `(or description "unknown")` |
+| 8 | `string-trim-right` on nil API key | API key function returns nil | Check if result is string before trimming |
+| 9 | API key function returns nil | Auth source lookup fails | Configuration issue - ensure all backends have keys |
 
 ### Recent Fixes (Last 50)
 
