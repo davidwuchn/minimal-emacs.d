@@ -2370,16 +2370,22 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                    :grader-reason grade-details
                                                    :comparator-reason (symbol-name error-category)
                                                    :analyzer-patterns (format "%s" patterns)
-                                                   :agent-output agent-output)))
-                             (gptel-auto-experiment-log-tsv
-                              (format-time-string "%Y-%m-%d") exp-result)
-                             (funcall callback exp-result)))
-                       ;; Grader passed - run benchmark and validation
-                       (let* ((bench (gptel-auto-experiment-benchmark t))
-                              (passed (plist-get bench :passed))
-                              (validation-error (plist-get bench :validation-error))
-                              (tests-passed (plist-get bench :tests-passed))
-                              (score-after (plist-get bench :eight-keys)))
+:agent-output agent-output)))
+                              (gptel-auto-experiment-log-tsv
+                               (format-time-string "%Y-%m-%d") exp-result)
+                              (funcall callback exp-result)))
+                        ;; Grader passed - commit changes, then run benchmark
+                        (let ((commit-dir (or (gptel-auto-workflow--get-worktree-dir target)
+                                              (gptel-auto-workflow--project-root))))
+                          (when commit-dir
+                            (let ((default-directory commit-dir))
+                              (magit-git-success "add" "-A")
+                              (magit-git-success "commit" "-m" (format "WIP: experiment %s" target)))))
+                        (let* ((bench (gptel-auto-experiment-benchmark t))
+                               (passed (plist-get bench :passed))
+                               (validation-error (plist-get bench :validation-error))
+                               (tests-passed (plist-get bench :tests-passed))
+                               (score-after (plist-get bench :eight-keys)))
                          (if (not passed)
                              ;; Check if validation error is teachable and we should retry
                              (if (and validation-error
