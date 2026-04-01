@@ -298,6 +298,8 @@ Decision logic: **70% grader + 30% code quality**
 
 Install: `./scripts/install-cron.sh`
 
+Cron runs through `./scripts/run-auto-workflow-cron.sh`, which uses a dedicated `copilot-auto-workflow` Emacs daemon and writes a fast status snapshot to `var/tmp/cron/auto-workflow-status.sexp`.
+
 ### Usage
 
 ```
@@ -327,6 +329,14 @@ RunAgent("code", "optimize gptel-ext-context.el following docs/auto-workflow.md"
 ;; Researcher
 (gptel-auto-workflow-run-research)     ; Run researcher now
 (gptel-auto-workflow-research-status)  ; Researcher status
+```
+
+```bash
+# Cron-style manual run
+./scripts/run-auto-workflow-cron.sh auto-workflow
+
+# Fast snapshot-based status
+./scripts/run-auto-workflow-cron.sh status
 ```
 
 ### Config Options

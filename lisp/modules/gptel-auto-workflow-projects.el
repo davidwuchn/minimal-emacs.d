@@ -17,9 +17,12 @@
 ;; External variables from gptel-tools-agent.el
 (defvar gptel-auto-workflow--worktree-state nil)
 (defvar gptel-auto-workflow-worktree-base nil)
+(defvar gptel-auto-workflow--current-target nil)
 
 ;; Forward declarations for functions defined in gptel-tools-agent.el
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent")
+(declare-function gptel-auto-workflow--get-worktree-dir "gptel-tools-agent")
+(declare-function gptel-auto-workflow--persist-status "gptel-tools-agent")
 (declare-function gptel-auto-workflow-cron-safe "gptel-tools-agent")
 (declare-function gptel-auto-workflow-run-async--guarded "gptel-tools-agent")
 (declare-function gptel-auto-workflow-run-research "gptel-auto-workflow-strategic")
@@ -40,6 +43,12 @@ Customize this variable to add more projects.")
 
 (defvar gptel-auto-workflow--current-project nil
   "Currently active project root for subagent context.")
+
+(defvar gptel-auto-workflow--cron-job-running nil
+  "Non-nil while a queued cron job is executing.")
+
+(defvar gptel-auto-workflow--stats nil
+  "Current run statistics shared with `gptel-tools-agent'.")
 
 (defvar mementum-root nil
   "Root directory for mementum. Set per-project.")
@@ -171,6 +180,59 @@ then runs workflow for that project."
                         results ", "))
     results))
 
+(defun gptel-auto-workflow--queue-cron-job (label fn)
+  "Queue FN for LABEL and return immediately.
+This keeps `emacsclient --eval' callers from monopolizing the daemon."
+  (if gptel-auto-workflow--cron-job-running
+      (progn
+        (message "[%s] Job already running; skipping new request" label)
+        (when (fboundp 'gptel-auto-workflow--persist-status)
+          (gptel-auto-workflow--persist-status))
+        'already-running)
+    (setq gptel-auto-workflow--cron-job-running t)
+    (setq gptel-auto-workflow--stats
+          (list :phase (format "%s-queued" label)
+                :total (or (plist-get gptel-auto-workflow--stats :total) 0)
+                :kept (or (plist-get gptel-auto-workflow--stats :kept) 0)))
+    (when (fboundp 'gptel-auto-workflow--persist-status)
+      (gptel-auto-workflow--persist-status))
+    (message "[%s] Queued background job" label)
+    (run-at-time
+     0 nil
+     (lambda ()
+       (let ((errored nil))
+         (setq gptel-auto-workflow--stats
+               (plist-put gptel-auto-workflow--stats :phase label))
+         (when (fboundp 'gptel-auto-workflow--persist-status)
+           (gptel-auto-workflow--persist-status))
+         (condition-case err
+             (funcall fn)
+           (error
+            (setq errored err)
+            (setq gptel-auto-workflow--stats
+                  (plist-put gptel-auto-workflow--stats :phase "error"))
+            (message "[%s] Job failed: %s" label err)))
+         (setq gptel-auto-workflow--cron-job-running nil)
+         (let ((phase (plist-get gptel-auto-workflow--stats :phase)))
+           (when (and (not errored)
+                      (not (bound-and-true-p gptel-auto-workflow--running))
+                      (member phase (list label
+                                          (format "%s-queued" label)
+                                          "selecting"
+                                          "running")))
+             (setq gptel-auto-workflow--stats
+                   (plist-put gptel-auto-workflow--stats :phase "idle"))))
+         (when (fboundp 'gptel-auto-workflow--persist-status)
+           (gptel-auto-workflow--persist-status)))))
+    'queued))
+
+(defun gptel-auto-workflow-queue-all-projects ()
+  "Queue `gptel-auto-workflow-run-all-projects' and return immediately."
+  (interactive)
+  (gptel-auto-workflow--queue-cron-job
+   "auto-workflow"
+   #'gptel-auto-workflow-run-all-projects))
+
 ;;; Per-Project Subagent Buffer Support
 
 (defvar gptel-auto-workflow--persist-executor-overlays nil
@@ -228,15 +290,24 @@ Also handles caching and result truncation from old advice."
       (let* ((in-auto-workflow gptel-auto-workflow--current-project)
              (proj-context (gptel-auto-workflow--get-project-for-context))
              (project-root (car proj-context))
-             (worktree-base-expanded (when gptel-auto-workflow-worktree-base
-                                       (expand-file-name gptel-auto-workflow-worktree-base project-root)))
-             (worktree-dir (when (and in-auto-workflow
-                                      worktree-base-expanded
-                                      (string-match-p worktree-base-expanded default-directory))
-                             default-directory))
+             (worktree-base-expanded
+              (expand-file-name (or gptel-auto-workflow-worktree-base
+                                    "var/tmp/experiments")
+                                project-root))
+             (target-worktree-dir
+              (when (and in-auto-workflow
+                         gptel-auto-workflow--current-target
+                         (fboundp 'gptel-auto-workflow--get-worktree-dir))
+                (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)))
+             (current-dir (file-name-as-directory (expand-file-name default-directory)))
+             (worktree-base-dir (file-name-as-directory worktree-base-expanded))
+             (worktree-dir (or target-worktree-dir
+                               (when (and in-auto-workflow
+                                          (string-prefix-p worktree-base-dir current-dir))
+                                 current-dir)))
              (target-buf (if worktree-dir
-                             (gptel-auto-workflow--get-worktree-buffer worktree-dir)
-                           (cdr proj-context))))
+                              (gptel-auto-workflow--get-worktree-buffer worktree-dir)
+                            (cdr proj-context))))
         ;; CRITICAL: Validate worktree exists before proceeding
         (if (and worktree-dir (not (file-exists-p worktree-dir)))
             (progn
@@ -420,9 +491,16 @@ then runs researcher for that project."
            (message "[research] ✗ Failed: %s - %s" project-root err))))
       (setq gptel-auto-workflow--current-project nil))
     (message "[research] All projects processed: %s" 
-             (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
-                        results ", "))
+              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
+                         results ", "))
     results))
+
+(defun gptel-auto-workflow-queue-all-research ()
+  "Queue `gptel-auto-workflow-run-all-research' and return immediately."
+  (interactive)
+  (gptel-auto-workflow--queue-cron-job
+   "research"
+   #'gptel-auto-workflow-run-all-research))
 
 ;;; Research Cache Management
 
@@ -500,6 +578,13 @@ To be called from cron - runs mementum maintenance for each project."
                         results ", "))
     results))
 
+(defun gptel-auto-workflow-queue-all-mementum ()
+  "Queue `gptel-auto-workflow-run-all-mementum' and return immediately."
+  (interactive)
+  (gptel-auto-workflow--queue-cron-job
+   "mementum"
+   #'gptel-auto-workflow-run-all-mementum))
+
 ;;; Instincts (Benchmark) Multi-Project Support
 
 (defun gptel-auto-workflow-run-instincts-for-project (project-root)
@@ -543,6 +628,13 @@ To be called from cron - runs instincts evolution for each project."
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                         results ", "))
     results))
+
+(defun gptel-auto-workflow-queue-all-instincts ()
+  "Queue `gptel-auto-workflow-run-all-instincts' and return immediately."
+  (interactive)
+  (gptel-auto-workflow--queue-cron-job
+   "instincts"
+   #'gptel-auto-workflow-run-all-instincts))
 
 (provide 'gptel-auto-workflow-projects)
 ;;; gptel-auto-workflow-projects.el ends here

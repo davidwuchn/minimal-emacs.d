@@ -11,9 +11,17 @@
 ;; ═══════════════════════════════════════════════════════════════════════════
 ;; Check if another daemon is already running before this one fully starts.
 ;; This prevents the "server did not start correctly" error and resource waste.
+(defconst my/secondary-daemon-env "MINIMAL_EMACS_ALLOW_SECOND_DAEMON"
+  "Environment variable that allows a dedicated secondary daemon to start.")
+
+(defun my/secondary-daemon-allowed-p ()
+  "Return non-nil when startup explicitly allows a second daemon."
+  (string= (getenv my/secondary-daemon-env) "1"))
+
 (when (daemonp)
   (require 'server)
-  (when (server-running-p)
+  (when (and (not (my/secondary-daemon-allowed-p))
+             (server-running-p))
     (message "[daemon] Another Emacs daemon is already running, exiting this one")
     (kill-emacs 0)))
 

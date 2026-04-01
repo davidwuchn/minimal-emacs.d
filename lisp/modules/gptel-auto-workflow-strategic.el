@@ -76,37 +76,46 @@ Findings stored in var/tmp/research-findings.md for analyzer."
           (unless (or (string-match-p "-test\\.el$" file)
                       (string-match-p "-disabled\\.el$" file)
                       (string-match-p "/test/" file))
-            (push rel-path targets)))))
+             (push rel-path targets)))))
     (reverse targets)))
+
+(defun gptel-auto-workflow--target-in-root-repo-p (abs-path proj-root)
+  "Return non-nil when ABS-PATH belongs to the same git repo as PROJ-ROOT."
+  (let ((project-git-root (locate-dominating-file proj-root ".git"))
+        (target-git-root (locate-dominating-file abs-path ".git")))
+    (and project-git-root
+         target-git-root
+         (file-equal-p (expand-file-name project-git-root)
+                       (expand-file-name target-git-root)))))
 
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
-Scans both lisp/modules/ and packages/ (forked packages)."
+Scans only root-repo targets that can be integrated into staging."
   (let* ((proj-root (or (gptel-auto-workflow--project-root)
                         (expand-file-name "~/.emacs.d/")))
-         (safe-root (shell-quote-argument proj-root)))
+          (safe-root (shell-quote-argument proj-root)))
     (list :git-history (shell-command-to-string
-                        (format "cd %s && git log --oneline -30 -- lisp/modules/ packages/ 2>/dev/null"
+                        (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
                                 safe-root))
           :file-sizes (shell-command-to-string
-                       (format "cd %s && find lisp/modules packages -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
+                       (format "cd %s && find lisp/modules -name '*.el' -type f -exec wc -l {} + 2>/dev/null | sort -rn | head -20"
                                safe-root))
           :todos (shell-command-to-string
-                  (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ packages/ 2>/dev/null | head -30"
+                  (format "cd %s && grep -rn 'TODO\\|FIXME\\|BUG\\|HACK' lisp/modules/ 2>/dev/null | head -30"
                           safe-root))
           :file-list (shell-command-to-string
-                      (format "cd %s && find lisp/modules packages -name '*.el' -type f 2>/dev/null"
+                      (format "cd %s && find lisp/modules -name '*.el' -type f 2>/dev/null"
                               safe-root)))))
 
 (defun gptel-auto-workflow--research-patterns (callback)
   "Research code patterns.
 CALLBACK receives research findings string.
 Tells LLM how to use git grep for context."
-  (let ((research-prompt "Analyze lisp/modules/ and packages/ for code issues.
+  (let ((research-prompt "Analyze root-repo files under lisp/modules/ for code issues.
 
 Use Bash tool to run:
-  git grep -n 'cl-return-from' -- lisp/modules/ packages/ | head -20
-  git grep -n 'ignore-errors' -- lisp/modules/ packages/ | head -20
+  git grep -n 'cl-return-from' -- lisp/modules/ | head -20
+  git grep -n 'ignore-errors' -- lisp/modules/ | head -20
 
 Report actionable issues only. Skip cleanup code, benchmarks, tests.
 Format: file:line | issue | fix
@@ -156,13 +165,14 @@ KNOWN ISSUES (TODOs/FIXMEs):
 RESEARCH FINDINGS:
 %s
 
-TASK: Select exactly %d files from lisp/modules/ or packages/ to optimize.
+TASK: Select exactly %d files from lisp/modules/ to optimize.
+Do NOT choose files from packages/ or any nested git repo. Those are optimized separately and cannot be merged into the root staging branch by this workflow.
 
 OUTPUT JSON ONLY:
-{\"targets\": [{\"file\": \"lisp/modules/xxx.el\" or \"packages/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
-          (or (plist-get context :file-list) "")
-          (or (plist-get context :git-history) "")
-          (or (plist-get context :file-sizes) "")
+{\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
+           (or (plist-get context :file-list) "")
+           (or (plist-get context :git-history) "")
+           (or (plist-get context :file-sizes) "")
           (or (plist-get context :todos) "")
           (if (or (null research-findings) (string-empty-p research-findings))
               "Not available (research disabled)"
@@ -199,11 +209,12 @@ Returns updated targets list."
                         file
                       (expand-file-name file proj-root))))
       (if (and (file-exists-p abs-path)
-               (string-prefix-p proj-root abs-path))
-          (let ((rel-path (file-relative-name abs-path proj-root)))
-            (if (member rel-path targets)
-                targets
-              (cons rel-path targets)))
+               (string-prefix-p proj-root abs-path)
+               (gptel-auto-workflow--target-in-root-repo-p abs-path proj-root))
+           (let ((rel-path (file-relative-name abs-path proj-root)))
+             (if (member rel-path targets)
+                 targets
+               (cons rel-path targets)))
         targets)))))
 
 (defun gptel-auto-workflow--normalize-response (response)
@@ -275,7 +286,7 @@ Returns list of validated file paths."
     (insert response)
     (goto-char (point-min))
     (let ((candidates '()))
-      (while (re-search-forward "\\(lisp/modules\\|packages\\)/[a-zA-Z0-9_/.-]+\\.el" nil t)
+      (while (re-search-forward "lisp/modules/[a-zA-Z0-9_/.-]+\\.el" nil t)
         (push (match-string 0) candidates))
       (gptel-auto-workflow--filter-valid-targets
        (nreverse candidates) proj-root max-targets))))
@@ -285,16 +296,23 @@ Returns list of validated file paths."
 CALLBACK receives list of target files.
 LLM decides if available, otherwise uses static list."
   (when (functionp callback)
-    (if gptel-auto-workflow-strategic-selection
+    (let* ((proj-root (or (gptel-auto-workflow--project-root)
+                          (expand-file-name "~/.emacs.d/")))
+           (static-targets
+            (gptel-auto-workflow--filter-valid-targets
+             gptel-auto-workflow-targets
+             proj-root
+             gptel-auto-workflow-max-targets-per-run)))
+      (if gptel-auto-workflow-strategic-selection
         (gptel-auto-workflow--ask-analyzer-for-targets
          (lambda (targets)
            (if targets
                (progn
-                 (message "[auto-workflow] Analyzer selected: %s" targets)
-                 (funcall callback targets))
-             (message "[auto-workflow] Using static targets")
-             (funcall callback gptel-auto-workflow-targets))))
-      (funcall callback gptel-auto-workflow-targets))))
+                  (message "[auto-workflow] Analyzer selected: %s" targets)
+                  (funcall callback targets))
+              (message "[auto-workflow] Using static targets")
+              (funcall callback static-targets))))
+        (funcall callback static-targets)))))
 
 ;;; Periodic Research
 

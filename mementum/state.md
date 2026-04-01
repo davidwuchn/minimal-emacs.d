@@ -1,12 +1,37 @@
 # Mementum State
 
-> Last session: 2026-03-31 19:15
+> Last session: 2026-03-31 22:45
 
 ## Total Improvements: 182+ Real Code Fixes
 
 1934 commits total. 59 experiments run today.
 
-### Session Summary: 2026-03-31
+### Session Summary: 2026-03-31 (Evening)
+
+**Action:** Reviewed and reset staging branch
+**Result:** Discarded 20+ problematic optimization commits
+**Status:** ✅ Staging reset to main, all breaking changes removed
+
+**Problems Found in Staging:**
+1. **Breaking function references** - Functions removed but callers not updated
+2. **Signature mismatches** - `gptel-benchmark--calculate-average` renamed but callers unchanged
+3. **Missing functions** - `gptel-agent-loop--build-final-result` and others removed but still called
+4. **Git pager regression** - `--no-pager` flag removed (risk of blocking)
+
+**Cleanup Performed:**
+- ✅ Reset staging to main (`git reset --hard main`)
+- ✅ Force pushed to origin
+- ✅ Removed 16 experiment worktrees
+- ✅ Deleted 20+ experiment branches
+- ✅ Canceled hanging subagent executors
+- ✅ Committed submodule sync (ai-code, gptel)
+- ✅ Restarted Emacs daemon via launchctl
+
+**Key Learning:** Incomplete refactoring is worse than no refactoring. Always verify all callers are updated when removing/renaming functions.
+
+---
+
+### Session Summary: 2026-03-31 (Earlier)
 
 **Commits pushed:** 24+
 **Critical fixes:** 7
@@ -115,6 +140,12 @@
 λ grader-behaviors. Expected: "improves code" (bug/perf/clarity/testability), not just "fixes bug"
 λ grader-forbidden. "replaces working code WITHOUT improvement" (not all refactoring forbidden)
 λ verification-flexible. "verification attempted" (byte-compile/nucleus/tests/manual) vs "tests pass"
+λ staging-review. Review staging with `git diff main..staging` before merge - catch breaking changes early
+λ incomplete-refactoring. Removing functions without updating callers = runtime crashes
+λ reset-vs-fix. Reset staging when multiple breaking changes; fix when single isolated issue
+λ cron-path-apple-silicon. macOS ARM64 needs /opt/homebrew/bin in PATH for emacsclient
+λ launchctl-daemon. Use `launchctl start org.gnu.emacs.daemon` not manual `emacs --daemon`
+λ single-daemon. Only ONE daemon should run - managed by launchctl, PPID=1
 ```
 
 ---
@@ -169,11 +200,14 @@
 
 ## Current Status
 
-- **Main branch**: `04948b5` (substring safety fixes)
-- **Staging branch**: synced
-- **Auto-workflow**: 114 experiments, 12 kept (10.5% success rate)
-- **Daemon**: Single instance stable (110+ seconds)
-- **Cron errors**: Fixed args-out-of-range (4 locations)
+- **Main branch**: `481bb00` (submodule sync)
+- **Staging branch**: `dde7775` (reset to match main)
+- **Auto-workflow**: Running, last run completed successfully
+- **Daemon**: Single instance via launchctl (PID 58125)
+- **Cron**: PATH fixed for macOS (`/opt/homebrew/bin` added)
+- **Worktrees**: Cleaned (only main repository)
+- **Branches**: No experiment branches remaining
+- **Repository**: Clean, synced with origin
 
 ### Bugs Fixed Today
 

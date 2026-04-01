@@ -1,7 +1,7 @@
 # Auto-Workflow: Unified Cron Configuration
 #
 # INSTALL:
-#   crontab cron.d/auto-workflow
+#   ./scripts/install-cron.sh
 #
 # Select the appropriate section for your machine:
 #   - Pi5/Linux (systemd): uncomment the PI5 section
@@ -13,9 +13,9 @@
 # PREREQUISITES:
 #   - Emacs daemon running: systemctl --user start emacs (Linux)
 #   - Or start at login: launchctl (macOS)
-#   - Verify: emacsclient -e 't'
+#   - Verify: ./scripts/run-auto-workflow-cron.sh status
 #
-# STATUS: emacsclient -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-status))'
+# STATUS: ./scripts/run-auto-workflow-cron.sh status
 
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
@@ -27,42 +27,33 @@ PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin
 # Ensure log directory exists
 @reboot mkdir -p $HOME/.emacs.d/var/tmp/cron
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # PI5: Linux systemd (24/7 headless) - SECTION: pi5
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # Socket: /run/user/1000/emacs/server (explicit path prevents duplicates)
 # Schedule: 11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6 runs/day)
-#
-# ACTIVE-USE PROTECTION: Skips if unsaved buffers, recent input, magit open
 
-#0 23,3,7,11,15,19 * * * emacsclient -a '' -s /run/user/1000/emacs/server -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-projects))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
-#0 */4 * * * emacsclient -a '' -s /run/user/1000/emacs/server -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
-#0 4 * * 0 emacsclient -a '' -s /run/user/1000/emacs/server -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-mementum))' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
-#0 5 * * 0 emacsclient -a '' -s /run/user/1000/emacs/server -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-instincts))' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
+#0 23,3,7,11,15,19 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh auto-workflow >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+#0 */4 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh research >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
+#0 4 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
+#0 5 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # MACOS: Daylight hours (interactive use) - SECTION: macos
-# ─────────────────────────────────────────────────────────────
-# Socket: TMPDIR/emacs${UID}/server (default location)
+# -----------------------------------------------------------------
 # Schedule: 10AM, 2PM, 6PM (3 runs/day, when user typically active)
-# Uses emacsclient -a '' to auto-start daemon if not running
-# Multi-project support: runs workflow for all configured projects
-#
-# For parallel setup with Pi5: use MACOS here + PI5 on Pi5 machine
-# Total: 9 runs/day across both machines
 
-#0 10,14,18 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-projects))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
-#0 */4 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
-#0 4 * * 0 emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-mementum))' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
-#0 5 * * 0 emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-instincts))' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
+#0 10,14,18 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh auto-workflow >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+#0 */4 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh research >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
+#0 4 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
+#0 5 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
 
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # SINGLE: Single machine (any OS) - SECTION: single
-# ─────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------
 # Schedule: Every 4 hours
-# Uses emacsclient -a '' to auto-start daemon if not running
 
-#0 */4 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-projects))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
-#0 */6 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
-#0 4 * * 0 emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-mementum))' >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
-#0 5 * * 0 emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-projects.el") (gptel-auto-workflow-run-all-instincts))' >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
+#0 */4 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh auto-workflow >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+#0 */6 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh research >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
+#0 4 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
+#0 5 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
