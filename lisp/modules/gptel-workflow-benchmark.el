@@ -831,11 +831,11 @@ Returns plist with :patterns, :issues, and :recommendations."
             (cl-incf low-efficiency)))
         (when metrics
           (let ((tools (plist-get metrics :tool_calls)))
-            (when (vectorp tools)
-              (dolist (tc (append tools nil))
+            (when tools
+              (dolist (tc (gptel-workflow--ensure-list tools))
                 (let ((tool (plist-get tc :tool)))
                   (when tool
-                    (puthash tool (1+ (gethash tool tool-usage 0)) tool-usage)))))))))
+                    (puthash tool (1+ (gethash tool tool-usage 0)) tool-usage))))))))
     (when (> low-completion 0)
       (push (list :type 'low-completion
                   :count low-completion
