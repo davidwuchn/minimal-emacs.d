@@ -72,6 +72,20 @@ Use for non-critical operations that should not halt execution."
               err)
      nil)))
 
+
+(defun gptel-auto-workflow--with-error-handling (operation fn &optional error-prefix)
+  "Execute FN for OPERATION, logging any error and returning nil.
+ERROR-PREFIX defaults to \"[auto-workflow]\"."
+  (condition-case err
+      (funcall fn)
+    (error
+     (message "%s Failed to %s: %s"
+              (or error-prefix "[auto-workflow]")
+              operation
+              err)
+     nil)))
+
+
 (defun gptel-auto-workflow--require-magit-dependencies ()
   "Require magit-worktree and magit-git dependencies.
 Signals user-error if either dependency fails to load."
@@ -245,52 +259,41 @@ Returns list of (hash exp-id target) for truly orphaned commits."
       (message "[auto-workflow] No orphan commits found"))
     orphans))
 
+
 (defun gptel-auto-workflow--cherry-pick-orphan (commit-hash)
   "Cherry-pick COMMIT-HASH to staging branch for recovery.
-Returns t on success, nil on failure. Uses layered fallback strategy."
+Returns t on success, nil on failure. Uses the staging worktree only."
   (interactive "sCommit hash: ")
-(let ((default-directory (gptel-auto-workflow--default-dir))
-        (result))
-    (gptel-auto-workflow--git-cmd "git stash")
-    (gptel-auto-workflow--git-cmd "git checkout staging")
-    (setq result (gptel-auto-workflow--git-cmd
-                  (format "git cherry-pick %s 2>&1" commit-hash)))
-    (cond
-     ((string-match-p "already applied\\|empty" result)
-      (message "[auto-workflow] %s already in staging, skip" commit-hash)
-      (gptel-auto-workflow--git-cmd "git cherry-pick --skip 2>/dev/null || git cherry-pick --abort 2>/dev/null")
-      (gptel-auto-workflow--git-cmd "git checkout main")
-      t)
-     ((string-match-p "CONFLICT\\|conflict" result)
-      (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
-      (message "[auto-workflow] %s conflict, try theirs..." commit-hash)
-      (setq result (gptel-auto-workflow--git-cmd
-                    (format "git cherry-pick -X theirs %s 2>&1" commit-hash)))
-      (cond
-       ((string-match-p "CONFLICT\\|conflict" result)
-        (message "[auto-workflow] %s still conflicted, log+skip" commit-hash)
-        (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
-        (gptel-auto-workflow--log-conflict commit-hash result)
-        (gptel-auto-workflow--git-cmd "git checkout main")
-        nil)
-       ((string-match-p "error:" result)
-        (message "[auto-workflow] %s error: %s" commit-hash (substring result 0 80))
-        (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
-        (gptel-auto-workflow--git-cmd "git checkout main")
-        nil)
-       (t
-        (message "[auto-workflow] %s recovered with theirs" commit-hash)
-        (gptel-auto-workflow--git-cmd "git checkout main")
-        t)))
-     ((string-match-p "error:" result)
-      (message "[auto-workflow] %s error: %s" commit-hash (substring result 0 80))
-      (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
-      (gptel-auto-workflow--git-cmd "git checkout main")
-      nil)
-     (t
-      (message "[auto-workflow] %s recovered to staging" commit-hash)
-      (gptel-auto-workflow--git-cmd "git checkout main")
-      t))))
+  (gptel-auto-workflow--with-staging-worktree
+   (lambda ()
+     (let* ((result (gptel-auto-workflow--git-result
+                     (format "git cherry-pick -X theirs %s"
+                             (shell-quote-argument commit-hash))
+                     180))
+            (output (car result))
+            (exit-code (cdr result)))
+       (cond
+        ((eq exit-code 0)
+         (message "[auto-workflow] %s recovered to %s"
+                  (gptel-auto-workflow--truncate-hash commit-hash)
+                  gptel-auto-workflow-staging-branch)
+         t)
+        ((string-match-p "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
+                         output)
+         (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --skip" 60))
+         (message "[auto-workflow] %s already in %s, skipping"
+                  (gptel-auto-workflow--truncate-hash commit-hash)
+                  gptel-auto-workflow-staging-branch)
+         t)
+        (t
+         (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+         (when (string-match-p "CONFLICT\\|conflict" output)
+           (gptel-auto-workflow--log-conflict commit-hash output))
+         (message "[auto-workflow] %s recovery failed: %s"
+                  (gptel-auto-workflow--truncate-hash commit-hash)
+                  (my/gptel--sanitize-for-logging output 160))
+         nil))))))
+
 
 (defun gptel-auto-workflow--log-conflict (commit-hash conflict-output)
   "Log CONFLICT-OUTPUT for COMMIT-HASH to file for later review."
@@ -303,6 +306,7 @@ Returns t on success, nil on failure. Uses layered fallback strategy."
     (with-temp-buffer
       (insert (format "[%s] %s\n%s\n\n" timestamp commit-hash msg))
       (append-to-file (point-min) (point-max) log-file))))
+
 (defun gptel-auto-workflow-recover-all-orphans (&optional no-push)
   "Recover all orphan commits from today to staging branch.
 If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
@@ -319,10 +323,9 @@ If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
               (cl-incf failed))))
         (message "[auto-workflow] Recovered %d/%d orphans to staging"
                  recovered (length orphans))
-        (when (> recovered 0)
-          (unless no-push
-            (let ((default-directory (gptel-auto-workflow--default-dir)))
-              (gptel-auto-workflow--git-cmd "git push origin staging"))))))))
+        (when (and (> recovered 0) (not no-push))
+          (gptel-auto-workflow--push-staging))))))
+
 
 (defun gptel-auto-workflow--sync-branches (source-branch target-branch action-name)
   "Fast-forward TARGET-BRANCH to match SOURCE-BRANCH.
@@ -357,18 +360,20 @@ All shell commands have timeout protection to prevent deadlocks."
        nil))))
 
 ;;;###autoload
+
 (defun gptel-auto-workflow--sync-staging-with-main ()
   "Fast-forward staging branch to match main.
-Ensures experiments run against latest code.
-All shell commands have timeout protection to prevent deadlocks."
-  (gptel-auto-workflow--sync-branches "main" "staging" "Synced"))
+Ensures experiments run against latest code without touching the root worktree."
+  (gptel-auto-workflow--sync-staging-from-main))
+
 
 ;;;###autoload
+
 (defun gptel-auto-workflow--promote-staging-to-main ()
-  "Fast-forward main branch to match staging if staging has new commits.
-Automatically promotes kept experiment commits from staging to main.
-All shell commands have timeout protection to prevent deadlocks."
-  (gptel-auto-workflow--sync-branches "staging" "main" "Promoted"))
+  "Leave staging promotion to a human reviewer."
+  (message "[auto-workflow] Auto-promotion to main is disabled; merge staging manually")
+  nil)
+
 
 ;;; Customization
 
@@ -1355,38 +1360,49 @@ Call this before any git operation that might modify branches."
     (or (member branch (magit-list-local-branch-names))
         (member (concat "origin/" branch) (magit-list-remote-branch-names)))))
 
+
 (defun gptel-auto-workflow--sync-staging-from-main ()
   "Sync staging branch from main at workflow start.
-ASSUMPTION: Staging branch exists or will be created.
-BEHAVIOR: Hard resets staging to match main.
-EDGE CASE: Creates staging from main if it doesn't exist.
-TEST: Verify staging matches main after sync.
-SAFETY: Never touches main branch."
-  (gptel-auto-workflow--assert-main-untouched)
+Creates a fresh staging worktree and never checks out staging in the root repo."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
          (staging gptel-auto-workflow-staging-branch))
     (message "[auto-workflow] Syncing staging from main")
-    (condition-case err
-        (progn
-          (cond
-           ((gptel-auto-workflow--staging-branch-exists-p)
-            (magit-git-success "checkout" staging)
-            (magit-git-success "reset" "--hard" "main")
-            (magit-git-success "push" "--force" "origin" staging))
-           (t
-            (message "[auto-workflow] Creating staging branch from main")
-            (magit-git-success "branch" staging "main")
-            (magit-git-success "push" "-u" "origin" staging)))
-          (message "[auto-workflow] ✓ Staging synced from main")
-          t)
-      (error
-       (message "[auto-workflow] Failed to sync staging: %s" err)
-       nil))))
+    (if (not (gptel-auto-workflow--ensure-staging-branch-exists))
+        nil
+      (let ((worktree (gptel-auto-workflow--create-staging-worktree)))
+        (if (not worktree)
+            nil
+          (let ((default-directory worktree))
+            (let* ((results (list
+                             (gptel-auto-workflow--git-result "git fetch origin" 180)
+                             (gptel-auto-workflow--git-result
+                              (format "git checkout %s" (shell-quote-argument staging))
+                              60)
+                             (gptel-auto-workflow--git-result
+                              "git reset --hard origin/main"
+                              180)
+                             (gptel-auto-workflow--git-result
+                              "git submodule update --init --recursive"
+                              300)
+                             (gptel-auto-workflow--git-result
+                              (format "git push --force origin %s"
+                                      (shell-quote-argument staging))
+                              180)))
+                   (failed (cl-find-if (lambda (item) (/= 0 (cdr item))) results)))
+              (if failed
+                  (progn
+                    (message "[auto-workflow] Failed to sync staging: %s"
+                             (my/gptel--sanitize-for-logging (car failed) 160))
+                    nil)
+                (message "[auto-workflow] ✓ Staging synced from main")
+                t))))))))
+
+
 
 (defun gptel-auto-workflow--create-staging-worktree ()
   "Create isolated worktree for staging verification.
-Never touches project root - all verification happens in worktree.
+Never touches project root - all verification happens in the worktree.
 Returns worktree path or nil on failure."
   (let* ((proj-root (gptel-auto-workflow--default-dir))
          (default-directory proj-root)
@@ -1395,32 +1411,62 @@ Returns worktree path or nil on failure."
                                 "var/tmp/experiments"))
          (worktree-dir (expand-file-name
                         (format "%s/staging-verify" worktree-base-dir)
-                        proj-root)))
+                        proj-root))
+         (worktree-q (shell-quote-argument worktree-dir))
+         (branch-q (shell-quote-argument branch)))
     (gptel-auto-workflow--with-error-handling
      "create staging worktree"
      (lambda ()
-       (when (file-exists-p worktree-dir)
-         (delete-directory worktree-dir t))
+       (unless (gptel-auto-workflow--ensure-staging-branch-exists)
+         (error "staging branch %s is unavailable" branch))
+       (when (or (file-exists-p worktree-dir)
+                 (string-match-p (regexp-quote worktree-dir)
+                                 (gptel-auto-workflow--git-cmd "git worktree list" 60)))
+         (ignore-errors
+           (gptel-auto-workflow--git-cmd
+            (format "git worktree remove --force %s" worktree-q)
+            180))
+         (ignore-errors (delete-directory worktree-dir t)))
        (make-directory (file-name-directory worktree-dir) t)
-       ;; Use magit-worktree-checkout for existing branch
-       ;; magit-worktree-branch is for creating NEW branches (fails if branch exists)
-       (magit-worktree-checkout worktree-dir branch)
+       (let ((add-result
+              (gptel-auto-workflow--git-result
+               (format "git worktree add --force %s %s" worktree-q branch-q)
+               180)))
+         (unless (= 0 (cdr add-result))
+           (error "git worktree add failed: %s" (car add-result))))
+       (let ((default-directory worktree-dir))
+         (let ((submodules
+                (gptel-auto-workflow--git-result
+                 "git submodule update --init --recursive"
+                 300)))
+           (unless (= 0 (cdr submodules))
+             (message "[auto-workflow] Staging submodule update failed: %s"
+                      (my/gptel--sanitize-for-logging (car submodules) 160)))))
        (setq gptel-auto-workflow--staging-worktree-dir worktree-dir)
        (message "[auto-workflow] Created staging worktree: %s" worktree-dir)
        worktree-dir))))
 
+
+
 (defun gptel-auto-workflow--delete-staging-worktree ()
   "Delete staging verification worktree.
-NOTE: Staging BRANCH is never deleted, only the worktree."
-  (when (and gptel-auto-workflow--staging-worktree-dir
-             (file-exists-p gptel-auto-workflow--staging-worktree-dir))
-    (let ((proj-root (gptel-auto-workflow--project-root)))
+NOTE: Staging branch is never deleted, only the worktree."
+  (when gptel-auto-workflow--staging-worktree-dir
+    (let* ((proj-root (gptel-auto-workflow--project-root))
+           (default-directory proj-root)
+           (worktree gptel-auto-workflow--staging-worktree-dir))
       (gptel-auto-workflow--with-error-handling
        "delete staging worktree"
        (lambda ()
-         (let ((default-directory proj-root))
-           (magit-worktree-delete gptel-auto-workflow--staging-worktree-dir))))))
-  (setq gptel-auto-workflow--staging-worktree-dir nil))
+         (ignore-errors
+           (gptel-auto-workflow--git-cmd
+            (format "git worktree remove --force %s"
+                    (shell-quote-argument worktree))
+            180))
+         (when (file-exists-p worktree)
+           (ignore-errors (delete-directory worktree t))))))
+    (setq gptel-auto-workflow--staging-worktree-dir nil)))
+
 
 (defun gptel-auto-workflow--review-changes (optimize-branch callback)
   "Review changes in OPTIMIZE-BRANCH before merging to staging.
@@ -1596,94 +1642,118 @@ This prevents 'branch already used by worktree' errors."
 
 ;;;###autoload
 ;;;###autoload
+
 (defun gptel-auto-workflow--ensure-staging-branch-exists ()
   "Ensure staging branch exists locally and remotely.
 Creates staging from main if it doesn't exist.
 Returns t on success, nil on failure."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
-         (staging gptel-auto-workflow-staging-branch))
+         (staging gptel-auto-workflow-staging-branch)
+         (staging-q (shell-quote-argument staging))
+         (remote-staging (format "refs/remotes/origin/%s" staging))
+         (remote-staging-q (shell-quote-argument remote-staging)))
     (gptel-auto-workflow--with-error-handling
      "ensure staging branch exists"
      (lambda ()
        (gptel-auto-workflow--git-cmd "git fetch origin" 180)
-       (let* ((local-exists (string-match-p staging 
-                                            (or (gptel-auto-workflow--git-cmd 
-                                                 "git branch --list staging") "")))
-              (remote-exists (string-match-p staging 
-                                             (or (gptel-auto-workflow--git-cmd 
-                                                  "git branch -r --list origin/staging") ""))))
+       (let* ((local-exists
+               (= 0 (cdr (gptel-auto-workflow--git-result
+                          (format "git rev-parse --verify %s" staging-q)
+                          60))))
+              (remote-exists
+               (= 0 (cdr (gptel-auto-workflow--git-result
+                          (format "git rev-parse --verify %s" remote-staging-q)
+                          60)))))
          (cond
           ((and local-exists remote-exists)
-           (message "[auto-workflow] Staging branch exists"))
+           (message "[auto-workflow] %s branch exists" staging)
+           t)
           ((and (not local-exists) remote-exists)
-           (message "[auto-workflow] Creating local staging from origin/staging")
-           (gptel-auto-workflow--git-cmd "git branch staging origin/staging"))
+           (message "[auto-workflow] Creating local %s from origin/%s" staging staging)
+           (= 0 (cdr (gptel-auto-workflow--git-result
+                      (format "git branch %s %s" staging-q remote-staging-q)
+                      180))))
           ((and local-exists (not remote-exists))
-           (message "[auto-workflow] Pushing staging to origin")
-           (gptel-auto-workflow--git-cmd "git push origin staging"))
+           (message "[auto-workflow] Pushing %s to origin" staging)
+           (= 0 (cdr (gptel-auto-workflow--git-result
+                      (format "git push -u origin %s" staging-q)
+                      180))))
           (t
-           (message "[auto-workflow] Creating staging branch from main")
-           (gptel-auto-workflow--git-cmd "git branch staging main")
-           (gptel-auto-workflow--git-cmd "git push origin staging")))
-         t)))))
+           (message "[auto-workflow] Creating %s branch from origin/main" staging)
+           (let ((create-result
+                  (gptel-auto-workflow--git-result
+                   (format "git branch %s %s"
+                           staging-q
+                           (shell-quote-argument "origin/main"))
+                   180)))
+             (when (/= 0 (cdr create-result))
+               (setq create-result
+                     (gptel-auto-workflow--git-result
+                      (format "git branch %s %s"
+                              staging-q
+                              (shell-quote-argument "main"))
+                      180)))
+             (and (= 0 (cdr create-result))
+                  (= 0 (cdr (gptel-auto-workflow--git-result
+                             (format "git push -u origin %s" staging-q)
+                             180))))))))))))
+
 
 ;;;###autoload
+
 
 (defun gptel-auto-workflow--merge-to-staging (optimize-branch)
   "Merge OPTIMIZE-BRANCH to staging.
 Auto-resolves conflicts by preferring incoming changes (theirs).
 Returns t on success, nil on unrecoverable conflict.
-Ensures main repo stays on main branch throughout."
-  (let* ((proj-root (gptel-auto-workflow--project-root))
-         (default-directory proj-root)
-         (staging gptel-auto-workflow-staging-branch)
-         (original-branch (string-trim 
-                           (or (gptel-auto-workflow--git-cmd 
-                                "git rev-parse --abbrev-ref HEAD 2>/dev/null") 
-                               "main"))))
+Uses the staging worktree instead of switching branches in the root repo."
+  (let* ((staging gptel-auto-workflow-staging-branch)
+         (staging-q (shell-quote-argument staging))
+         (optimize-ref (format "origin/%s" optimize-branch))
+         (optimize-q (shell-quote-argument optimize-ref))
+         (merge-message (shell-quote-argument
+                         (format "Merge %s for verification" optimize-branch))))
     (message "[auto-workflow] Merging %s to %s" optimize-branch staging)
-    (condition-case err
-        (progn
-          (gptel-auto-workflow--ensure-on-main-branch)
-          (gptel-auto-workflow--ensure-staging-branch-exists)
-          (gptel-auto-workflow--git-cmd (format "git checkout %s" staging))
-          (condition-case merge-err
-              (progn
-                (gptel-auto-workflow--git-cmd 
-                 (format "git merge %s --no-ff -m \"Merge %s for verification\""
-                         optimize-branch optimize-branch))
-                (gptel-auto-workflow--git-cmd "git checkout main")
-                t)
-            (error
-             (if (string-match-p "conflict" (error-message-string merge-err))
-                 (progn
-                   (message "[auto-workflow] Auto-resolving conflicts with theirs")
-                   (gptel-auto-workflow--git-cmd "git checkout --theirs .")
-                   (gptel-auto-workflow--git-cmd "git add -A")
-                   (gptel-auto-workflow--git-cmd 
-                    (format "git commit -m \"Merge %s (auto-resolved conflicts)\""
-                            optimize-branch))
-                   (gptel-auto-workflow--git-cmd "git checkout main")
-                   t)
-               (message "[auto-workflow] Merge failed: %s" merge-err)
-               (gptel-auto-workflow--git-cmd "git merge --abort")
-               (gptel-auto-workflow--git-cmd "git checkout main")
-               nil))))
-      (error
-       (message "[auto-workflow] Failed to merge to staging: %s" err)
-       (gptel-auto-workflow--git-cmd "git checkout main")
-       nil))))
+    (if (not (gptel-auto-workflow--ensure-staging-branch-exists))
+        nil
+      (gptel-auto-workflow--with-staging-worktree
+       (lambda ()
+         (let* ((setup-results (list
+                                (gptel-auto-workflow--git-result "git fetch origin" 180)
+                                (gptel-auto-workflow--git-result
+                                 (format "git checkout %s" staging-q)
+                                 60)))
+                (failed-setup (cl-find-if (lambda (item) (/= 0 (cdr item)))
+                                          setup-results)))
+           (if failed-setup
+               (progn
+                 (message "[auto-workflow] Failed to prepare staging merge: %s"
+                          (my/gptel--sanitize-for-logging (car failed-setup) 160))
+                 nil)
+             (let* ((merge-result
+                     (gptel-auto-workflow--git-result
+                      (format "git merge -X theirs %s --no-ff -m %s"
+                              optimize-q merge-message)
+                      180))
+                    (merge-output (car merge-result)))
+               (cond
+                ((eq 0 (cdr merge-result)) t)
+                ((string-match-p "Already up[ -]to[- ]date" merge-output) t)
+                (t
+                 (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))
+                 (message "[auto-workflow] Merge to staging failed: %s"
+                          (my/gptel--sanitize-for-logging merge-output 160))
+                 nil))))))))))
+
+
 
 (defun gptel-auto-workflow--verify-staging ()
-  "Run tests on staging worktree.
-Returns (success-p . output) plist.
-ASSUMPTION: Staging worktree exists.
-BEHAVIOR: Runs run-tests.sh in staging worktree.
-EDGE CASE: Returns nil if worktree doesn't exist."
+  "Run verification in the staging worktree.
+Returns (success-p . output)."
   (let* ((worktree gptel-auto-workflow--staging-worktree-dir)
-         (test-script (expand-file-name "scripts/run-tests.sh" worktree))
-         (verify-script (expand-file-name "scripts/verify-nucleus.sh" worktree))
+         (test-script (and worktree (expand-file-name "scripts/run-tests.sh" worktree)))
+         (verify-script (and worktree (expand-file-name "scripts/verify-nucleus.sh" worktree)))
          (output-buffer (generate-new-buffer "*staging-verify*"))
          result)
     (if (not (and worktree (file-exists-p worktree)))
@@ -1691,27 +1761,48 @@ EDGE CASE: Returns nil if worktree doesn't exist."
           (message "[auto-workflow] Staging worktree not found")
           (cons nil "Staging worktree not found"))
       (message "[auto-workflow] Verifying staging...")
-      (let* ((test-result (when (file-exists-p test-script)
-                            (call-process test-script nil output-buffer nil)))
-             (verify-result (when (file-exists-p verify-script)
-                              (call-process verify-script nil output-buffer nil)))
-             (test-pass (or (not (file-exists-p test-script))
-                            (eq test-result 0)))
-             (verify-pass (or (not (file-exists-p verify-script))
-                              (eq verify-result 0)))
+      (let* ((default-directory worktree)
+             (submodules (gptel-auto-workflow--git-result
+                          "git submodule update --init --recursive"
+                          300))
+             (submodule-pass (= 0 (cdr submodules)))
+             (_ (unless submodule-pass
+                  (with-current-buffer output-buffer
+                    (insert (car submodules) "\n"))))
+             (test-result (when (and submodule-pass test-script (file-exists-p test-script))
+                            (call-process "bash" nil output-buffer nil test-script)))
+             (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
+                              (call-process "bash" nil output-buffer nil verify-script)))
+             (test-pass (and submodule-pass
+                             (or (not (and test-script (file-exists-p test-script)))
+                                 (eq test-result 0))))
+             (verify-pass (and submodule-pass
+                               (or (not (and verify-script (file-exists-p verify-script)))
+                                   (eq verify-result 0))))
              (output (with-current-buffer output-buffer (buffer-string))))
         (kill-buffer output-buffer)
         (setq result (and test-pass verify-pass))
         (message "[auto-workflow] Staging verification: %s" (if result "PASS" "FAIL"))
         (cons result output)))))
 
+
+
 (defun gptel-auto-workflow--push-staging ()
   "Push staging branch to origin after successful verification."
-  (let* ((proj-root (gptel-auto-workflow--project-root))
-         (default-directory proj-root)
-         (staging gptel-auto-workflow-staging-branch))
+  (let ((staging gptel-auto-workflow-staging-branch))
     (message "[auto-workflow] Pushing staging to origin")
-    (magit-git-success "push" "origin" staging)))
+    (gptel-auto-workflow--with-staging-worktree
+     (lambda ()
+       (let ((push-result
+              (gptel-auto-workflow--git-result
+               (format "git push origin %s" (shell-quote-argument staging))
+               180)))
+         (if (= 0 (cdr push-result))
+             t
+           (message "[auto-workflow] Failed to push staging: %s"
+                    (my/gptel--sanitize-for-logging (car push-result) 160))
+           nil))))))
+
 
 (defun gptel-auto-workflow--staging-flow (optimize-branch)
   "Run staging verification flow for OPTIMIZE-BRANCH.
@@ -1739,6 +1830,7 @@ NOTE: Human must manually merge staging to main after review."
    optimize-branch
    (lambda (review-result)
      (gptel-auto-workflow--staging-flow-after-review optimize-branch review-result))))
+
 
 (defun gptel-auto-workflow--staging-flow-after-review (optimize-branch review-result)
   "Continue staging flow after review for OPTIMIZE-BRANCH.
@@ -1794,9 +1886,7 @@ REVIEW-RESULT is (approved-p . review-output)."
                    :comparator-reason (truncate-string-to-width review-output 200)
                    :analyzer-patterns ""
                    :agent-output review-output))))
-      (let* ((proj-root (gptel-auto-workflow--project-root))
-             (default-directory proj-root)
-             (merge-success (gptel-auto-workflow--merge-to-staging optimize-branch)))
+      (let ((merge-success (gptel-auto-workflow--merge-to-staging optimize-branch)))
         (if (not merge-success)
             (progn
               (message "[auto-workflow] ✗ Merge to staging failed, aborting")
@@ -1814,32 +1904,66 @@ REVIEW-RESULT is (approved-p . review-output)."
                      :comparator-reason (format "Failed to merge %s to staging" optimize-branch)
                      :analyzer-patterns ""
                      :agent-output "")))
-          (let* ((worktree (gptel-auto-workflow--create-staging-worktree))
-                 (verification (when worktree (gptel-auto-workflow--verify-staging)))
-                 (tests-passed (car verification))
-                 (output (cdr verification)))
-            (if (not tests-passed)
+          (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
+                              (gptel-auto-workflow--create-staging-worktree))))
+            (if (not worktree)
                 (progn
-                  (message "[auto-workflow] ✗ Staging verification FAILED")
-                  (gptel-auto-workflow--delete-staging-worktree)
+                  (message "[auto-workflow] ✗ Failed to create staging worktree")
                   (gptel-auto-experiment-log-tsv
                    (format-time-string "%Y-%m-%d")
-                   (list :target "staging-verification"
+                   (list :target "staging-worktree"
                          :id 0
-                         :hypothesis "Staging verification"
+                         :hypothesis "Staging worktree"
                          :score-before 0
                          :score-after 0
                          :kept nil
                          :duration 0
                          :grader-quality 0
-                         :grader-reason "staging-verification-failed"
-                         :comparator-reason (truncate-string-to-width output 200)
+                         :grader-reason "staging-worktree-failed"
+                         :comparator-reason "Failed to create staging worktree"
                          :analyzer-patterns ""
-                         :agent-output output)))
-              (message "[auto-workflow] ✓ Staging verification PASSED")
-              (gptel-auto-workflow--delete-staging-worktree)
-              (gptel-auto-workflow--push-staging)
-              (message "[auto-workflow] ✓ Staging pushed. Human must merge to main."))))))))
+                         :agent-output "")))
+              (let* ((verification (gptel-auto-workflow--verify-staging))
+                     (tests-passed (car verification))
+                     (output (or (cdr verification) "")))
+                (if (not tests-passed)
+                    (progn
+                      (message "[auto-workflow] ✗ Staging verification FAILED")
+                      (gptel-auto-experiment-log-tsv
+                       (format-time-string "%Y-%m-%d")
+                       (list :target "staging-verification"
+                             :id 0
+                             :hypothesis "Staging verification"
+                             :score-before 0
+                             :score-after 0
+                             :kept nil
+                             :duration 0
+                             :grader-quality 0
+                             :grader-reason "staging-verification-failed"
+                             :comparator-reason (truncate-string-to-width output 200)
+                             :analyzer-patterns ""
+                             :agent-output output)))
+                  (message "[auto-workflow] ✓ Staging verification PASSED")
+                  (if (gptel-auto-workflow--push-staging)
+                      (progn
+                        (gptel-auto-workflow--delete-staging-worktree)
+                        (message "[auto-workflow] ✓ Staging pushed. Human must merge to main."))
+                    (message "[auto-workflow] ✗ Staging push FAILED")
+                    (gptel-auto-experiment-log-tsv
+                     (format-time-string "%Y-%m-%d")
+                     (list :target "staging-push"
+                           :id 0
+                           :hypothesis "Staging push"
+                           :score-before 0
+                           :score-after 0
+                           :kept nil
+                           :duration 0
+                           :grader-quality 0
+                           :grader-reason "staging-push-failed"
+                           :comparator-reason "Failed to push staging"
+                           :analyzer-patterns ""
+                           :agent-output output))))))))))))
+
 
 ;;; Multi-Project Support
 
@@ -3002,6 +3126,27 @@ Automatically adds --no-pager to prevent blocking on pager output."
                    cmd)))
     (gptel-auto-workflow--shell-command-string git-cmd (or timeout gptel-auto-workflow-git-timeout))))
 
+
+(defun gptel-auto-workflow--git-result (cmd &optional timeout)
+  "Run git command CMD with TIMEOUT and return (OUTPUT . EXIT-CODE).
+Automatically adds --no-pager to prevent blocking on pager output."
+  (let ((git-cmd (if (string-match-p "^git " cmd)
+                     (concat "git --no-pager " (substring cmd 4))
+                   cmd)))
+    (gptel-auto-workflow--shell-command-with-timeout
+     git-cmd
+     (or timeout gptel-auto-workflow-git-timeout))))
+
+(defun gptel-auto-workflow--with-staging-worktree (fn)
+  "Run FN with `default-directory' bound to the staging worktree.
+Creates the worktree on demand and returns nil if unavailable."
+  (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
+                      (gptel-auto-workflow--create-staging-worktree))))
+    (when (and worktree (file-exists-p worktree))
+      (let ((default-directory worktree))
+        (funcall fn)))))
+
+
 (defun gptel-auto-workflow--watchdog-check ()
   "Check if workflow is stuck and force-stop if necessary.
 Prevents workflow from hanging indefinitely due to callback failures."
@@ -3117,18 +3262,31 @@ Returns (:running :kept :total :phase :results)."
         :results (format "var/tmp/experiments/%s/results.tsv"
                          (format-time-string "%Y-%m-%d"))))
 
+
 (defun gptel-auto-workflow--sanitize-unicode (str)
   "Sanitize Unicode characters in STR for safe display.
-Replaces curly quotes, dashes, and other problematic characters
-with their ASCII equivalents in a single pass for performance."
+Replaces curly quotes, dashes, and zero-width characters with ASCII equivalents."
   (let ((clean str))
-    (setq clean (replace-regexp-in-string "['`]" "'" clean))
-    (setq clean (replace-regexp-in-string "[\"\"]" "\"" clean))
-    (setq clean (replace-regexp-in-string (string ?\u2013 ?\u2014) "-" clean))
+    (setq clean (replace-regexp-in-string
+                 (regexp-opt (mapcar #'char-to-string '(?\u2018 ?\u2019 ?\u0060)))
+                 "'"
+                 clean))
+    (setq clean (replace-regexp-in-string
+                 (regexp-opt (mapcar #'char-to-string '(?\u201C ?\u201D)))
+                 "\""
+                 clean))
+    (setq clean (replace-regexp-in-string
+                 (regexp-opt (mapcar #'char-to-string '(?\u2013 ?\u2014)))
+                 "-"
+                 clean))
     (setq clean (replace-regexp-in-string (string ?\u2026) "..." clean))
     (setq clean (replace-regexp-in-string (string ?\u00A0) " " clean))
-    (setq clean (replace-regexp-in-string (string ?\u200B ?\u200C ?\u200D) "" clean))
+    (setq clean (replace-regexp-in-string
+                 (regexp-opt (mapcar #'char-to-string '(?\u200B ?\u200C ?\u200D)))
+                 ""
+                 clean))
     clean))
+
 
 (defun gptel-auto-workflow-log ()
   "Return recent workflow log lines as a list (filtered, sanitized).
@@ -3192,6 +3350,7 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
         (throw 'skip-workflow nil)))
     (gptel-auto-workflow-run-async targets completion-callback)))
 
+
 (defun gptel-auto-workflow-cron-safe ()
   "Run auto-workflow with full cleanup for cron jobs.
 Cancels stale timers, kills orphaned buffers, resets state, then runs.
@@ -3209,7 +3368,6 @@ Sets `gptel-auto-workflow-persistent-headless' to prevent interactive prompts."
     (condition-case err
         (progn
           (gptel-auto-workflow--safe-call "Cleanup" #'gptel-auto-workflow--cleanup-stale-state)
-          (gptel-auto-workflow--safe-call "Ensure main branch" #'gptel-auto-workflow--ensure-on-main-branch)
           (gptel-auto-workflow--safe-call "Sync staging" #'gptel-auto-workflow--sync-staging-with-main)
           (gptel-auto-workflow--safe-call
            "Orphan recovery"
@@ -3221,14 +3379,12 @@ Sets `gptel-auto-workflow-persistent-headless' to prevent interactive prompts."
                  (gptel-auto-workflow-recover-all-orphans t)))))
           (gptel-auto-workflow-run-async--guarded nil
                                                   (lambda (_)
-                                                    (gptel-auto-workflow--safe-call "Promote staging" #'gptel-auto-workflow--promote-staging-to-main)
-                                                    (gptel-auto-workflow--safe-call "Final branch check" #'gptel-auto-workflow--ensure-on-main-branch)
                                                     (gptel-auto-workflow--disable-headless-suppression))))
       (error
        (message "[auto-workflow] Cron error: %s" err)
-       (gptel-auto-workflow--ensure-on-main-branch)
        (gptel-auto-workflow--disable-headless-suppression)
        nil))))
+
 
 (defun gptel-auto-workflow--experiment-suffix ()
   "Get experiment suffix based on hostname.

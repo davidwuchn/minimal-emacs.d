@@ -3,63 +3,77 @@
 # verify-nucleus.sh
 # Runs nucleus validation checks in batch mode.
 # Can be used as a pre-commit hook or in CI.
-#
-# Loads early-init.el (for package paths) but NOT init.el/post-init.el,
-# avoiding unrelated packages (evil, eca, etc.) that may break in batch.
-#
-# Prerequisites: Packages installed in var/elpa/ (gptel, gptel-agent, ai-code).
 
-set -e
+set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EMACS=${EMACS:-emacs}
+ROOT_ELISP=$(printf '%s' "$DIR" | sed 's/\\/\\\\/g; s/"/\\"/g')
+TMP_ELISP=$(mktemp "${TMPDIR:-/tmp}/verify-nucleus.XXXXXX.el")
+
+cleanup() {
+    rm -f "$TMP_ELISP"
+}
+trap cleanup EXIT
 
 echo "Running Nucleus Tool Validations..."
 
+cat >"$TMP_ELISP" <<EOF
+(setq package-archives nil)
+(package-initialize 'no-activate)
+(let* ((root "$ROOT_ELISP")
+       (elpa-dir (expand-file-name "var/elpa" root))
+       (paths (list
+               (expand-file-name "gptel" elpa-dir)
+               (expand-file-name "gptel-agent" elpa-dir)
+               (expand-file-name "ai-code" elpa-dir)
+               (expand-file-name "packages/gptel" root)
+               (expand-file-name "packages/gptel-agent" root)
+               (expand-file-name "packages/ai-code" root)
+               (expand-file-name "packages/magit/lisp" root)
+               (expand-file-name "lisp" root)
+               (expand-file-name "lisp/modules" root))))
+  (dolist (path paths)
+    (when (file-directory-p path)
+      (add-to-list 'load-path path))))
+(require 'cl-lib)
+(require 'gptel-config)
+(require 'gptel-agent-tools)
+(message "\\n[1/3] Verifying Agent Tool Contracts...")
+(require 'nucleus-presets)
+(condition-case err
+    (progn
+      (nucleus--validate-agent-tool-contracts)
+      (message "✓ Agent tool contracts are valid."))
+  (error
+   (message "✗ Agent tool contracts validation failed: %s" (error-message-string err))
+   (kill-emacs 1)))
+
+(message "\\n[2/3] Verifying Tool Registrations...")
+(require 'nucleus-tools-verify)
+(let ((missing (cl-loop for item in (nucleus--verify-tools)
+                        when (not (eq (cdr item) 'registered))
+                        collect (car item))))
+  (if missing
+      (progn
+        (message "✗ Tool registration validation failed. Missing/Duplicate tools: %s"
+                 (mapconcat #'identity missing ", "))
+        (kill-emacs 1))
+    (message "✓ All tools correctly registered.")))
+
+(message "\\n[3/3] Verifying Tool Signatures...")
+(require 'nucleus-tools-validate)
+(let* ((results (nucleus--validate-all-tools))
+       (errors (cl-loop for (_ . (status . _)) in results count (eq status 'error))))
+  (if (> errors 0)
+      (progn
+        (message "✗ Tool signature validation failed. Run 'M-x nucleus-validate-tool-signatures' for details.")
+        (kill-emacs 1))
+    (message "✓ All tool signatures are valid.")))
+EOF
+
 $EMACS -Q --batch \
        -l "$DIR/early-init.el" \
-       --eval "(progn
-         ;; Skip package archive operations (packages pre-installed via git clone)
-         (setq package-archives nil)
-         (package-initialize 'no-activate)
-         ;; Add gptel and gptel-agent to load-path
-         (let ((elpa-dir (expand-file-name \"var/elpa\" \"$DIR\")))
-           (add-to-list 'load-path (expand-file-name \"gptel\" elpa-dir))
-           (add-to-list 'load-path (expand-file-name \"gptel-agent\" elpa-dir)))
-         (add-to-list 'load-path (expand-file-name \"lisp\" \"$DIR\"))
-         (add-to-list 'load-path (expand-file-name \"lisp/modules\" \"$DIR\"))
-         (require 'gptel-config)
-         ;; Ensure gptel-agent-tools is loaded so Skill/Agent/RunAgent are registered
-         (require 'gptel-agent-tools)
-         (message \"\\n[1/3] Verifying Agent Tool Contracts...\")
-         (require 'nucleus-presets)
-         (condition-case err
-             (progn
-               (nucleus--validate-agent-tool-contracts)
-               (message \"✓ Agent tool contracts are valid.\"))
-           (error
-            (message \"✗ Agent tool contracts validation failed: %s\" (error-message-string err))
-            (kill-emacs 1)))
-
-         (message \"\\n[2/3] Verifying Tool Registrations...\")
-         (require 'nucleus-tools-verify)
-         (let ((missing (cl-loop for item in (nucleus--verify-tools)
-                                 when (not (eq (cdr item) 'registered))
-                                 collect (car item))))
-           (if missing
-               (progn
-                 (message \"✗ Tool registration validation failed. Missing/Duplicate tools: %s\" (mapconcat 'identity missing \", \"))
-                 (kill-emacs 1))
-             (message \"✓ All tools correctly registered.\")))
-
-         (message \"\\n[3/3] Verifying Tool Signatures...\")
-         (require 'nucleus-tools-validate)
-         (let* ((results (nucleus--validate-all-tools))
-                (errors (cl-loop for (_ . (status . _)) in results count (eq status 'error))))
-           (if (> errors 0)
-               (progn
-                 (message \"✗ Tool signature validation failed. Run 'M-x nucleus-validate-tool-signatures' for details.\")
-                 (kill-emacs 1))
-             (message \"✓ All tool signatures are valid.\"))))"
+       -l "$TMP_ELISP"
 
 echo -e "\nAll Nucleus validations passed successfully! ✓"

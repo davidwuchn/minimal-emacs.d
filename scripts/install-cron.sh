@@ -1,26 +1,16 @@
 #!/usr/bin/env bash
 
-# install-cron.sh
-# Install cron jobs for autonomous operation (Cross-Platform)
-#
-# Usage:
-#   ./scripts/install-cron.sh [--dry-run]
-#
-# Options:
-#   --dry-run    Show what would be installed without modifying crontab
-#
-# Auto-detects machine and configures appropriate section in cron.d/auto-workflow
-# Supports: macOS, Linux (Pi5/systemd), and generic single machine
-
-set -e
+set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CRON_FILE="$DIR/cron.d/auto-workflow"
+MODE="${1:-install}"
 
 detect_machine() {
-    local hostname=$(hostname -s 2>/dev/null || hostname)
-    local os=$(uname -s)
-    
+    local hostname os
+    hostname=$(hostname -s 2>/dev/null || hostname)
+    os=$(uname -s)
+
     if [ "$os" = "Darwin" ]; then
         echo "macos"
     elif echo "$hostname" | grep -qiE "pi5|raspberrypi|onepi"; then
@@ -32,79 +22,29 @@ detect_machine() {
     fi
 }
 
-MACHINE=$(detect_machine)
-HOSTNAME=$(hostname -s 2>/dev/null || hostname)
-
-echo "=== Installing Cron Jobs for Autonomous Operation ==="
-echo ""
-echo "Detected: $HOSTNAME ($MACHINE)"
-echo ""
-
-mkdir -p "$DIR/var/tmp/cron"
-mkdir -p "$DIR/var/tmp/experiments"
-echo "Created: var/tmp/cron/ var/tmp/experiments/"
-echo ""
-
-case "$MACHINE" in
-    pi5|linux)
-        PLATFORM="Linux"
-        SCHEDULE="11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6 runs/day)"
-        DAEMON_CMD="systemctl --user start emacs"
-        ;;
-    macos)
-        PLATFORM="macOS"
-        SCHEDULE="10AM, 2PM, 6PM (3 runs/day) + weekly instincts"
-        DAEMON_CMD="launchctl start emacs (or start Emacs.app)"
-        ;;
-    single)
-        PLATFORM="Generic"
-        SCHEDULE="Every 4 hours"
-        DAEMON_CMD="emacs --daemon (or start Emacs GUI)"
-        ;;
-esac
-
-if [ "$1" = "--dry-run" ]; then
-    echo "DRY RUN - Would:"
-    echo "  1. Comment out all job lines in all sections"
-    echo "  2. Uncomment only $MACHINE section"
-    echo "  3. Set platform-specific environment variables"
-    echo ""
-    echo "Active jobs would be:"
-    grep "SECTION: $MACHINE" -A20 "$CRON_FILE" | grep "^#0 " | head -4 | sed 's/^#0/0/' || echo "  (no jobs found)"
-    echo ""
-    echo "To install for real, run:"
-    echo "  ./scripts/install-cron.sh"
-else
-    TMP_FILE=$(mktemp)
-    
-    # Build crontab from scratch (skip original env/@reboot to avoid duplicates)
+render_crontab() {
+    local machine="$1"
     {
-        # Header comment block (lines 1-19, before SHELL/PATH)
         sed -n '1,19p' "$CRON_FILE"
-        
-        # Environment variables (platform-specific, replaces original lines 20-21)
         echo "SHELL=/bin/bash"
-        if [ "$MACHINE" = "macos" ]; then
+        if [ "$machine" = "macos" ]; then
             echo "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin"
         else
             echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin"
         fi
-        if [ "$MACHINE" = "pi5" ] || [ "$MACHINE" = "linux" ]; then
-            echo "XDG_RUNTIME_DIR=/run/user/1000"
+        if [ "$machine" = "pi5" ] || [ "$machine" = "linux" ]; then
+            echo "XDG_RUNTIME_DIR=/run/user/$(id -u)"
         fi
-        echo ""
-        
-        # Log directory creation (replaces original line 28)
+        echo
         echo "# Ensure log directory exists"
         echo "@reboot mkdir -p $HOME/.emacs.d/var/tmp/cron"
-        echo ""
-        
-        # Process sections starting from line 30 (skip original env lines 20-29)
-        # This avoids duplicating SHELL/PATH and @reboot
-        awk -v machine="$MACHINE" '
+        echo
+        awk -v machine="$machine" '
             /^# .* SECTION: / {
                 current_section = $NF
                 in_selected = (current_section == machine)
+                print
+                next
             }
             /^#0 / {
                 if (in_selected) {
@@ -114,32 +54,83 @@ else
                 }
                 next
             }
-            /^SHELL=/ || /^PATH=/ || /^@reboot mkdir/ {
-                # Skip original environment/reboot lines (we add fresh ones above)
-                next
-            }
+            /^SHELL=/ || /^PATH=/ || /^XDG_RUNTIME_DIR=/ || /^@reboot mkdir/ { next }
             { print }
         ' "$CRON_FILE" | sed -n '30,$p'
-    } > "$TMP_FILE"
-    
-    # Install crontab
-    crontab "$TMP_FILE"
-    rm -f "$TMP_FILE"
-    
-    echo "Installed crontab with $PLATFORM schedule"
-    echo ""
-    echo "Active jobs:"
-    crontab -l | grep "^0 " || echo "  (no active jobs)"
-    echo ""
-    echo "Schedule: $SCHEDULE"
+    }
+}
+
+MACHINE=$(detect_machine)
+HOSTNAME=$(hostname -s 2>/dev/null || hostname)
+
+case "$MACHINE" in
+    pi5|linux)
+        PLATFORM="Linux"
+        SCHEDULE="11PM, 3AM, 7AM, 11AM, 3PM, 7PM (6 runs/day)"
+        DAEMON_CMD="systemctl --user start emacs"
+        MACHINE_RENDER="pi5"
+        ;;
+    macos)
+        PLATFORM="macOS"
+        SCHEDULE="10AM, 2PM, 6PM (3 runs/day) + weekly instincts"
+        DAEMON_CMD="launchctl start emacs (or start Emacs.app)"
+        MACHINE_RENDER="macos"
+        ;;
+    single)
+        PLATFORM="Generic"
+        SCHEDULE="Every 4 hours"
+        DAEMON_CMD="emacs --daemon (or start Emacs GUI)"
+        MACHINE_RENDER="single"
+        ;;
+esac
+
+if [ "$MACHINE" = "linux" ] || [ "$MACHINE" = "pi5" ]; then
+    MACHINE_RENDER="pi5"
 fi
 
-echo ""
-echo "=== Prerequisites ==="
-echo ""
-echo "1. Emacs daemon running: $DAEMON_CMD"
-echo "2. Verify: emacsclient -e 't'"
-echo "3. Check status: emacsclient -e '(gptel-auto-workflow-status)'"
-echo "4. View logs: tail -f var/tmp/cron/*.log"
-echo ""
-echo "Done."
+mkdir -p "$DIR/var/tmp/cron" "$DIR/var/tmp/experiments"
+
+case "$MODE" in
+    --render)
+        render_crontab "$MACHINE_RENDER"
+        exit 0
+        ;;
+    --dry-run)
+        echo "=== Installing Cron Jobs for Autonomous Operation ==="
+        echo
+        echo "Detected: $HOSTNAME ($MACHINE)"
+        echo
+        echo "DRY RUN - Rendered crontab:"
+        render_crontab "$MACHINE_RENDER"
+        exit 0
+        ;;
+    install)
+        echo "=== Installing Cron Jobs for Autonomous Operation ==="
+        echo
+        echo "Detected: $HOSTNAME ($MACHINE)"
+        echo
+        tmp_file=$(mktemp)
+        render_crontab "$MACHINE_RENDER" > "$tmp_file"
+        crontab "$tmp_file"
+        rm -f "$tmp_file"
+        echo "Installed crontab with $PLATFORM schedule"
+        echo
+        echo "Active jobs:"
+        crontab -l | grep -E '^[0-9*@]' || echo "  (no active jobs)"
+        echo
+        echo "Schedule: $SCHEDULE"
+        echo
+        echo "=== Prerequisites ==="
+        echo
+        echo "1. Emacs daemon running: $DAEMON_CMD"
+        echo "2. Verify: ./scripts/run-auto-workflow-cron.sh status"
+        echo "3. Check logs: tail -f var/tmp/cron/*.log"
+        echo
+        echo "Done."
+        exit 0
+        ;;
+    *)
+        echo "Usage: $0 [--dry-run|--render]" >&2
+        exit 2
+        ;;
+esac

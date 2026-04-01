@@ -97,6 +97,44 @@
       (when (timerp gptel-auto-workflow--watchdog-timer)
         (cancel-timer gptel-auto-workflow--watchdog-timer)))))
 
+
+
+(ert-deftest regression/auto-workflow/sanitize-unicode-regex-classes ()
+  "Unicode sanitizer should normalize individual dash and zero-width characters."
+  (should (equal (gptel-auto-workflow--sanitize-unicode "a–b—c") "a-b-c"))
+  (should (equal (gptel-auto-workflow--sanitize-unicode "x​y‌z‍w") "xyzw")))
+
+(ert-deftest regression/auto-workflow/cron-safe-skips-main-promotion ()
+  "Cron-safe should sync staging and run the workflow without touching main."
+  (let ((ops nil)
+        (disabled nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'require)
+               (lambda (&rest _) t))
+              ((symbol-function 'featurep)
+               (lambda (_) t))
+              ((symbol-function 'load-file)
+               (lambda (&rest _) t))
+              ((symbol-function 'gptel-auto-workflow--enable-headless-suppression)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--disable-headless-suppression)
+               (lambda () (setq disabled t)))
+              ((symbol-function 'gptel-auto-workflow--cleanup-stale-state)
+               (lambda () (push "cleanup" ops)))
+              ((symbol-function 'gptel-auto-workflow--sync-staging-with-main)
+               (lambda () (push "sync" ops) t))
+              ((symbol-function 'gptel-auto-workflow--recover-orphans)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow-run-async--guarded)
+               (lambda (_ callback)
+                 (push "run" ops)
+                 (funcall callback nil)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-workflow-cron-safe)
+      (should (equal (reverse ops) '("cleanup" "sync" "run")))
+      (should disabled))))
 (provide 'test-gptel-tools-agent-regressions)
 
 ;;; test-gptel-tools-agent-regressions.el ends here

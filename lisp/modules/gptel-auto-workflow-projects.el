@@ -43,6 +43,9 @@ Customize this variable to add more projects.")
 (defvar gptel-auto-workflow--current-project nil
   "Currently active project root for subagent context.")
 
+(defvar gptel-auto-workflow--cron-job-running nil
+  "Non-nil while a queued cron job is executing.")
+
 (defvar mementum-root nil
   "Root directory for mementum. Set per-project.")
 
@@ -172,6 +175,30 @@ then runs workflow for that project."
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                         results ", "))
     results))
+
+(defun gptel-auto-workflow--queue-cron-job (label fn)
+  "Queue FN for LABEL and return immediately.
+This keeps `emacsclient --eval' callers from monopolizing the daemon."
+  (if gptel-auto-workflow--cron-job-running
+      (progn
+        (message "[%s] Job already running; skipping new request" label)
+        'already-running)
+    (setq gptel-auto-workflow--cron-job-running t)
+    (message "[%s] Queued background job" label)
+    (run-at-time
+     0 nil
+     (lambda ()
+       (unwind-protect
+           (funcall fn)
+         (setq gptel-auto-workflow--cron-job-running nil))))
+    'queued))
+
+(defun gptel-auto-workflow-queue-all-projects ()
+  "Queue `gptel-auto-workflow-run-all-projects' and return immediately."
+  (interactive)
+  (gptel-auto-workflow--queue-cron-job
+   "auto-workflow"
+   #'gptel-auto-workflow-run-all-projects))
 
 ;;; Per-Project Subagent Buffer Support
 
@@ -431,9 +458,16 @@ then runs researcher for that project."
            (message "[research] ✗ Failed: %s - %s" project-root err))))
       (setq gptel-auto-workflow--current-project nil))
     (message "[research] All projects processed: %s" 
-             (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
-                        results ", "))
+              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
+                         results ", "))
     results))
+
+(defun gptel-auto-workflow-queue-all-research ()
+  "Queue `gptel-auto-workflow-run-all-research' and return immediately."
+  (interactive)
+  (gptel-auto-workflow--queue-cron-job
+   "research"
+   #'gptel-auto-workflow-run-all-research))
 
 ;;; Research Cache Management
 
@@ -511,6 +545,13 @@ To be called from cron - runs mementum maintenance for each project."
                         results ", "))
     results))
 
+(defun gptel-auto-workflow-queue-all-mementum ()
+  "Queue `gptel-auto-workflow-run-all-mementum' and return immediately."
+  (interactive)
+  (gptel-auto-workflow--queue-cron-job
+   "mementum"
+   #'gptel-auto-workflow-run-all-mementum))
+
 ;;; Instincts (Benchmark) Multi-Project Support
 
 (defun gptel-auto-workflow-run-instincts-for-project (project-root)
@@ -554,6 +595,13 @@ To be called from cron - runs instincts evolution for each project."
              (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                         results ", "))
     results))
+
+(defun gptel-auto-workflow-queue-all-instincts ()
+  "Queue `gptel-auto-workflow-run-all-instincts' and return immediately."
+  (interactive)
+  (gptel-auto-workflow--queue-cron-job
+   "instincts"
+   #'gptel-auto-workflow-run-all-instincts))
 
 (provide 'gptel-auto-workflow-projects)
 ;;; gptel-auto-workflow-projects.el ends here
