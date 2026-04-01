@@ -84,7 +84,11 @@ else
         
         # Environment variables (platform-specific, replaces original lines 20-21)
         echo "SHELL=/bin/bash"
-        echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin"
+        if [ "$MACHINE" = "macos" ]; then
+            echo "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin"
+        else
+            echo "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin"
+        fi
         if [ "$MACHINE" = "pi5" ] || [ "$MACHINE" = "linux" ]; then
             echo "XDG_RUNTIME_DIR=/run/user/1000"
         fi
