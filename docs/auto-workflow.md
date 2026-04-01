@@ -80,16 +80,19 @@ gptel-auto-workflow-research-before-fix   ; default nil
 
 ```bash
 # Install cron jobs (macOS: 10AM, 2PM, 6PM; Pi5: 11PM, 3AM, 7AM, 11AM, 3PM, 7PM)
-crontab cron.d/auto-workflow
+./scripts/install-cron.sh
 
-# Manual run (starts daemon if needed)
-emacsclient -a '' -e '(gptel-auto-workflow-run-async)'
+# Manual cron-style run (uses the dedicated worker daemon)
+./scripts/run-auto-workflow-cron.sh auto-workflow
+
+# Fast status check (reads persisted snapshot)
+./scripts/run-auto-workflow-cron.sh status
 
 # Or from Emacs
 M-x gptel-auto-workflow-run-async
 ```
 
-**Note:** Uses `-a ''` flag to start Emacs daemon automatically if not running.
+**Note:** Cron no longer targets the interactive Emacs daemon. The wrapper starts or reuses a dedicated `copilot-auto-workflow` daemon and persists status to `var/tmp/cron/auto-workflow-status.sexp`, so `status` stays responsive even while a run is active.
 
 ## Architecture
 
@@ -318,13 +321,16 @@ Auto-workflow skips when Emacs is in active use:
 
 ```bash
 # Install cron jobs
-crontab cron.d/auto-workflow
+./scripts/install-cron.sh
 
-# Cron command (with -a '' to start daemon if needed)
-emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async--guarded))'
+# Cron wrapper (starts/uses the dedicated worker daemon)
+./scripts/run-auto-workflow-cron.sh auto-workflow
+
+# Status snapshot
+./scripts/run-auto-workflow-cron.sh status
 ```
 
-**Note:** Uses `gptel-auto-workflow-run-async--guarded` which skips when Emacs is in active use.
+**Note:** The wrapper dispatches into `gptel-auto-workflow-run-async--guarded` inside the worker daemon, so the interactive daemon stays isolated from long workflow runs.
 
 **Schedule:**
 - **macOS**: 10:00 AM, 2:00 PM, 6:00 PM (daylight hours)
@@ -335,8 +341,8 @@ emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (loa
 ```elisp
 M-x gptel-auto-workflow-run-async
 
-;; Or from shell (starts daemon if needed)
-emacsclient -a '' -e '(gptel-auto-workflow-run-async)'
+;; Or from shell (direct interactive daemon path)
+emacsclient -e '(gptel-auto-workflow-run-async)'
 ```
 
 ### Morning Review
@@ -903,22 +909,18 @@ crontab cron.d/auto-workflow
 
 ```cron
 # macOS (this machine)
-0 10,14,18 * * * emacsclient -a '' -e '(progn (require (quote magit)) (require (quote json)) (load-file "~/.emacs.d/lisp/modules/gptel-tools-agent.el") (gptel-auto-workflow-run-async))' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+0 10,14,18 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh auto-workflow >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 
 # Researcher (every 4 hours)
-0 */4 * * * emacsclient -a '' -e '(progn (load-file "~/.emacs.d/lisp/modules/gptel-auto-workflow-strategic.el") (gptel-auto-workflow-run-research))' >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
+0 */4 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh research >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
 ```
 
 **Note:** Uses `$HOME` (not `$LOGDIR`) for proper variable expansion in cron.
 
 ### Prerequisites
 
-1. **Emacs daemon auto-start:** The `-a ''` flag starts daemon automatically if not running.
-
-2. **Or start daemon at boot:**
-   ```cron
-   @reboot emacs --daemon
-   ```
+1. **Interactive daemon is optional for cron:** the wrapper starts a dedicated `copilot-auto-workflow` daemon on demand.
+2. **Status snapshot:** `./scripts/run-auto-workflow-cron.sh status` reads `var/tmp/cron/auto-workflow-status.sexp` without querying a busy daemon.
 
 ### Logs
 
@@ -932,6 +934,9 @@ $HOME/.emacs.d/var/tmp/cron/researcher.log
 View logs:
 ```bash
 tail -f $HOME/.emacs.d/var/tmp/cron/auto-workflow.log
+
+# Current workflow snapshot
+cat $HOME/.emacs.d/var/tmp/cron/auto-workflow-status.sexp
 ```
 
 ### Configure Targets
@@ -1015,22 +1020,25 @@ Install scheduled jobs for autonomous operation:
 
 | Schedule | Function | Purpose |
 |----------|----------|---------|
-| Daily 2:00 AM | `gptel-auto-workflow-run-async--guarded` | Overnight optimization experiments |
-| Weekly Sun 4:00 AM | `gptel-mementum-weekly-job` | Synthesis + decay |
-| Weekly Sun 5:00 AM | `gptel-benchmark-instincts-weekly-job` | Evolution batch commit |
+| Daily scheduled run | `./scripts/run-auto-workflow-cron.sh auto-workflow` | Optimization experiments in the dedicated worker daemon |
+| Weekly Sun 4:00 AM | `./scripts/run-auto-workflow-cron.sh mementum` | Synthesis + decay |
+| Weekly Sun 5:00 AM | `./scripts/run-auto-workflow-cron.sh instincts` | Evolution batch commit |
 
 Logs: `var/tmp/cron/*.log`
 
 ### Cron Integration
 
 ```cron
-# Weekly: instincts evolution + mementum optimization
-0 3 * * 0 emacsclient -e '(gptel-benchmark-instincts-weekly-job)'
+# Wrapper-managed worker daemon
+0 10,14,18 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh auto-workflow >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+0 */4 * * * $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh research >> $HOME/.emacs.d/var/tmp/cron/researcher.log 2>&1
+0 4 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh mementum >> $HOME/.emacs.d/var/tmp/cron/mementum.log 2>&1
+0 5 * * 0 $HOME/.emacs.d/scripts/run-auto-workflow-cron.sh instincts >> $HOME/.emacs.d/var/tmp/cron/instincts.log 2>&1
 ```
 
 ---
 
-**Document Version:** 1.9  
-**Last Updated:** 2026-03-27  
-**Release:** v2026.03.27  
-**Changes:** Added active-use protection, 30 min inactivity timeout, guarded cron entry point
+**Document Version:** 2.0  
+**Last Updated:** 2026-04-01  
+**Release:** v2026.04.01  
+**Changes:** Switched cron to the dedicated `copilot-auto-workflow` daemon, documented persisted status snapshots, and updated wrapper/E2E instructions

@@ -8,7 +8,7 @@ Auto-workflow now supports multiple projects using:
 
 ## How It Works
 
-1. **Cron job** calls `gptel-auto-workflow-run-all-projects`
+1. **Cron wrapper** calls `./scripts/run-auto-workflow-cron.sh auto-workflow`
 2. **For each project**:
    - Changes to project directory (loads `.dir-locals.el` automatically)
    - Clears previous project state
@@ -70,8 +70,10 @@ M-x gptel-auto-workflow-list-projects
 
 The same cron job runs all projects:
 - 10:00 AM, 2:00 PM, 6:00 PM daily
+- Uses the dedicated `copilot-auto-workflow` Emacs daemon
 - Processes all projects in sequence
 - Logs to `~/.emacs.d/var/tmp/cron/auto-workflow.log`
+- Persists status to `~/.emacs.d/var/tmp/cron/auto-workflow-status.sexp`
 
 ## Project Isolation
 
