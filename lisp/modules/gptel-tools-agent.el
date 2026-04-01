@@ -79,12 +79,6 @@ Signals user-error if either dependency fails to load."
     (user-error "magit-worktree is required"))
   (unless (require 'magit-git nil t)
     (user-error "magit-git is required")))
-  "Require magit-worktree and magit-git dependencies.
-Signals user-error if either dependency fails to load."
-  (unless (require 'magit-worktree nil t)
-    (user-error "magit-worktree is required"))
-  (unless (require 'magit-git nil t)
-    (user-error "magit-git is required")))
 
 (defun gptel-auto-workflow--default-dir ()
   "Return default directory for git operations.
