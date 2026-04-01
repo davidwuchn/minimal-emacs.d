@@ -858,7 +858,7 @@ Returns plist with :patterns, :issues, and :recommendations."
           :issues issues
           :recommendations (delete-dups recommendations)
           :total-tests total
-          :analysis-timestamp (format-time-string "%Y-%m-%dT%H:%M:%S"))))
+          :analysis-timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")))))
 
 (defun gptel-workflow--save-feedback (workflow-name analysis)
   "Save ANALYSIS for WORKFLOW-NAME to feedback file."
