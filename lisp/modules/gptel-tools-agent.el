@@ -3004,6 +3004,9 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--current-target nil
   "Current target file being processed by auto-workflow.")
 
+(defvar gptel-auto-workflow--cron-job-running nil
+  "Non-nil while a queued cron job is executing.")
+
 (defvar gptel-auto-workflow--watchdog-timer nil
   "Watchdog timer to prevent workflow from getting stuck.")
 
@@ -3012,6 +3015,55 @@ Adapts max-experiments based on API error rate."
 
 (defvar gptel-auto-workflow--max-stuck-minutes 30
   "Maximum minutes workflow can be stuck before auto-stopping.")
+
+(defcustom gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.sexp"
+  "Path to the persisted auto-workflow status snapshot.
+Relative paths are resolved from the project root."
+  :type 'file
+  :group 'gptel)
+
+(defun gptel-auto-workflow--status-file ()
+  "Return absolute path to the persisted workflow status snapshot."
+  (if (file-name-absolute-p gptel-auto-workflow-status-file)
+      gptel-auto-workflow-status-file
+    (expand-file-name gptel-auto-workflow-status-file
+                      (gptel-auto-workflow--default-dir))))
+
+(defun gptel-auto-workflow--status-plist ()
+  "Return current workflow status as a plist."
+  (list :running (or gptel-auto-workflow--running
+                     (bound-and-true-p gptel-auto-workflow--cron-job-running))
+        :kept (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :kept 0)
+        :total (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :total 0)
+        :phase (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :phase "idle")
+        :results (format "var/tmp/experiments/%s/results.tsv"
+                         (format-time-string "%Y-%m-%d"))))
+
+(defun gptel-auto-workflow--persist-status ()
+  "Persist current workflow status for non-blocking cron health checks."
+  (let* ((file (gptel-auto-workflow--status-file))
+         (dir (file-name-directory file))
+         (status (gptel-auto-workflow--status-plist)))
+    (when dir
+      (make-directory dir t))
+    (with-temp-file file
+      (let ((print-length nil)
+            (print-level nil))
+        (prin1 status (current-buffer))
+        (insert "\n")))))
+
+(defun gptel-auto-workflow-read-persisted-status ()
+  "Read the persisted workflow status snapshot, or nil if unavailable."
+  (let ((file (gptel-auto-workflow--status-file)))
+    (when (file-readable-p file)
+      (condition-case err
+          (with-temp-buffer
+            (insert-file-contents file)
+            (goto-char (point-min))
+            (read (current-buffer)))
+        (error
+         (message "[auto-workflow] Failed to read status snapshot: %s" err)
+         nil)))))
 
 (defun gptel-auto-workflow--suppress-ask-user-about-supersession-threat (orig-fn &rest args)
   "Suppress supersession threat prompts in headless mode."
@@ -3154,18 +3206,19 @@ Prevents workflow from hanging indefinitely due to callback failures."
     (let ((stuck-minutes (and gptel-auto-workflow--last-progress-time
                               (/ (float-time (time-subtract (current-time) gptel-auto-workflow--last-progress-time))
                                  60))))
-      (if (and stuck-minutes (> stuck-minutes gptel-auto-workflow--max-stuck-minutes))
-          (progn
-            (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
-                     stuck-minutes)
-            (setq gptel-auto-workflow--running nil)
-            (setq gptel-auto-workflow--stats
-                  (plist-put gptel-auto-workflow--stats :phase "idle"))
-            (when gptel-auto-workflow--watchdog-timer
-              (cancel-timer gptel-auto-workflow--watchdog-timer)
-              (setq gptel-auto-workflow--watchdog-timer nil)))
-        ;; Still running normally, check again in 5 minutes
-        t))))
+        (if (and stuck-minutes (> stuck-minutes gptel-auto-workflow--max-stuck-minutes))
+            (progn
+              (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
+                       stuck-minutes)
+              (setq gptel-auto-workflow--running nil)
+              (setq gptel-auto-workflow--stats
+                    (plist-put gptel-auto-workflow--stats :phase "idle"))
+              (gptel-auto-workflow--persist-status)
+              (when gptel-auto-workflow--watchdog-timer
+                (cancel-timer gptel-auto-workflow--watchdog-timer)
+                (setq gptel-auto-workflow--watchdog-timer nil)))
+          ;; Still running normally, check again in 5 minutes
+          t))))
 
 (defun gptel-auto-workflow--update-progress ()
   "Update progress timestamp for watchdog tracking."
@@ -3178,6 +3231,7 @@ Interactive command to recover from hung workflow state."
   (setq gptel-auto-workflow--running nil)
   (setq gptel-auto-workflow--stats
         (plist-put gptel-auto-workflow--stats :phase "idle"))
+  (gptel-auto-workflow--persist-status)
   (when gptel-auto-workflow--watchdog-timer
     (cancel-timer gptel-auto-workflow--watchdog-timer)
     (setq gptel-auto-workflow--watchdog-timer nil))
@@ -3255,12 +3309,12 @@ Returns (nil . nil) if safe to run."
 (defun gptel-auto-workflow-status ()
   "Return current workflow status as plist.
 Returns (:running :kept :total :phase :results)."
-  (list :running gptel-auto-workflow--running
-        :kept (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :kept 0)
-        :total (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :total 0)
-        :phase (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :phase "idle")
-        :results (format "var/tmp/experiments/%s/results.tsv"
-                         (format-time-string "%Y-%m-%d"))))
+  (or (and (or gptel-auto-workflow--running
+               (bound-and-true-p gptel-auto-workflow--cron-job-running)
+               gptel-auto-workflow--stats)
+           (gptel-auto-workflow--status-plist))
+      (gptel-auto-workflow-read-persisted-status)
+      (gptel-auto-workflow--status-plist)))
 
 
 (defun gptel-auto-workflow--sanitize-unicode (str)
@@ -3320,12 +3374,16 @@ Usage:
       (error "[auto-workflow] Already running. Check status first."))
     (let ((active (gptel-auto-workflow--active-use-p)))
       (when (car active)
+        (setq gptel-auto-workflow--stats
+              (list :phase "skipped" :total 0 :kept 0))
+        (gptel-auto-workflow--persist-status)
         (message "[auto-workflow] Skipping: %s" (string-join (car active) ", "))
         (cl-return-from gptel-auto-workflow-run-async nil)))
     (gptel-auto-workflow--require-magit-dependencies)
     (setq gptel-auto-workflow--running t
           gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
           gptel-auto-workflow--last-progress-time (current-time))
+    (gptel-auto-workflow--persist-status)
     ;; Start watchdog timer
     (when gptel-auto-workflow--watchdog-timer
       (cancel-timer gptel-auto-workflow--watchdog-timer))
@@ -3336,7 +3394,8 @@ Usage:
       (require 'gptel-auto-workflow-strategic)
       (gptel-auto-workflow-select-targets
        (lambda (selected-targets)
-         (gptel-auto-workflow--run-with-targets selected-targets completion-callback))))))
+         (gptel-auto-workflow--run-with-targets selected-targets completion-callback))))
+    'started))
 
 (defun gptel-auto-workflow-run-async--guarded (&optional targets completion-callback)
   "Run auto-workflow with active-use guard using catch/throw.
@@ -3372,18 +3431,26 @@ Sets `gptel-auto-workflow-persistent-headless' to prevent interactive prompts."
           (gptel-auto-workflow--safe-call
            "Orphan recovery"
            (lambda ()
-             (let ((orphans (gptel-auto-workflow--recover-orphans)))
-               (when orphans
-                 (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
-                          (length orphans))
-                 (gptel-auto-workflow-recover-all-orphans t)))))
-          (gptel-auto-workflow-run-async--guarded nil
-                                                  (lambda (_)
-                                                    (gptel-auto-workflow--disable-headless-suppression))))
+              (let ((orphans (gptel-auto-workflow--recover-orphans)))
+                (when orphans
+                  (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
+                           (length orphans))
+                  (gptel-auto-workflow-recover-all-orphans t)))))
+          (let ((started
+                 (gptel-auto-workflow-run-async--guarded
+                  nil
+                  (lambda (_)
+                    (gptel-auto-workflow--disable-headless-suppression)))))
+            (unless started
+              (gptel-auto-workflow--disable-headless-suppression))
+            started))
       (error
-       (message "[auto-workflow] Cron error: %s" err)
-       (gptel-auto-workflow--disable-headless-suppression)
-       nil))))
+        (message "[auto-workflow] Cron error: %s" err)
+        (setq gptel-auto-workflow--stats
+              (list :phase "error" :total 0 :kept 0))
+        (gptel-auto-workflow--persist-status)
+        (gptel-auto-workflow--disable-headless-suppression)
+        nil))))
 
 
 (defun gptel-auto-workflow--experiment-suffix ()
@@ -3458,10 +3525,13 @@ Only removes worktrees if no gptel processes are running."
             (when (and (stringp default-directory)
                        (string-match-p (format "optimize/.*-%s" (gptel-auto-workflow--experiment-suffix)) default-directory)
                        (not (file-exists-p default-directory)))
-              (kill-buffer buf)
-              (cl-incf cleaned)))))
+               (kill-buffer buf)
+               (cl-incf cleaned)))))
       (setq gptel-auto-workflow--running nil
             gptel-auto-workflow--current-target nil)
+      (setq gptel-auto-workflow--stats
+            (plist-put gptel-auto-workflow--stats :phase "idle"))
+      (gptel-auto-workflow--persist-status)
       (clrhash gptel-auto-workflow--worktree-state))
     (when (> cleaned 0)
       (message "[auto-workflow] Cleaned %d stale items" cleaned))))
@@ -3480,17 +3550,19 @@ Only removes worktrees if no gptel processes are running."
           (plist-put gptel-auto-workflow--stats :total (length targets)))
     (setq gptel-auto-workflow--stats
           (plist-put gptel-auto-workflow--stats :kept 0))
+    (gptel-auto-workflow--persist-status)
     (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
     (cl-labels
         ((finish ()
            (setq gptel-auto-workflow--running nil
-                 gptel-auto-workflow--current-target nil)
-           (setq gptel-auto-workflow--stats
-                 (plist-put gptel-auto-workflow--stats :phase "complete"))
-           (message "[auto-workflow] Complete: %d experiments, %d kept"
-                    (length all-results) kept-count)
-           (when completion-callback
-             (funcall completion-callback all-results)))
+                  gptel-auto-workflow--current-target nil)
+            (setq gptel-auto-workflow--stats
+                  (plist-put gptel-auto-workflow--stats :phase "complete"))
+            (gptel-auto-workflow--persist-status)
+            (message "[auto-workflow] Complete: %d experiments, %d kept"
+                     (length all-results) kept-count)
+            (when completion-callback
+              (funcall completion-callback all-results)))
          (run-next (remaining-targets)
            (if (null remaining-targets)
                (finish)
@@ -3498,13 +3570,14 @@ Only removes worktrees if no gptel processes are running."
                (setq gptel-auto-workflow--current-target target)
                (gptel-auto-experiment-loop
                 target
-                (lambda (results)
-                  (setq all-results (append all-results results))
-                  (setq kept-count
-                        (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
-                  (setq gptel-auto-workflow--stats
-                        (plist-put gptel-auto-workflow--stats :kept kept-count))
-                  (run-next (cdr remaining-targets))))))))
+                 (lambda (results)
+                   (setq all-results (append all-results results))
+                   (setq kept-count
+                         (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
+                   (setq gptel-auto-workflow--stats
+                         (plist-put gptel-auto-workflow--stats :kept kept-count))
+                   (gptel-auto-workflow--persist-status)
+                   (run-next (cdr remaining-targets))))))))
       (run-next targets))))
 
 (defun gptel-auto-workflow-run (&optional targets)

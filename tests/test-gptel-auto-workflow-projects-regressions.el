@@ -61,8 +61,10 @@
         (scheduled nil))
     (cl-letf (((symbol-function 'run-at-time)
                (lambda (_secs _repeat fn)
-                 (setq scheduled fn)
-                 'fake-timer)))
+                  (setq scheduled fn)
+                  'fake-timer))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda (&rest _) nil)))
       (should
        (eq (gptel-auto-workflow--queue-cron-job
             "auto-workflow"
@@ -81,8 +83,10 @@
         (scheduled nil))
     (cl-letf (((symbol-function 'run-at-time)
                (lambda (&rest _)
-                 (setq scheduled t)
-                 'fake-timer)))
+                  (setq scheduled t)
+                  'fake-timer))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda (&rest _) nil)))
       (should
        (eq (gptel-auto-workflow--queue-cron-job
             "auto-workflow"

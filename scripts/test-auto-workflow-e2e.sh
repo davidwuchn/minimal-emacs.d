@@ -4,9 +4,18 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNNER="$DIR/scripts/run-auto-workflow-cron.sh"
-ELISP_LOAD_AGENT=$(printf '(progn (load-file "%s/lisp/modules/gptel-tools-agent.el") t)' "$DIR")
-ELISP_CHECK_ENTRYPOINT=$(printf "(progn (load-file \"%s/lisp/modules/gptel-auto-workflow-projects.el\") (fboundp 'gptel-auto-workflow-cron-safe))" "$DIR")
 cd "$DIR"
+
+run_batch_bootstrap() {
+    emacs --batch -Q \
+        -L "$DIR" \
+        -L "$DIR/lisp" \
+        -L "$DIR/lisp/modules" \
+        -L "$DIR/packages/gptel" \
+        -L "$DIR/packages/gptel-agent" \
+        -l "$DIR/scripts/test-auto-workflow-batch.el" \
+        -f test-auto-workflow-batch-run
+}
 
 echo "=== Auto-Workflow E2E Test ==="
 echo
@@ -25,11 +34,11 @@ fi
 echo "  ✓ emacsclient is resolvable"
 
 echo
-echo "[2/7] Checking Emacs access..."
-if "$RUNNER" status >/dev/null 2>&1; then
-    echo "  ✓ wrapper can reach Emacs"
+echo "[2/7] Checking wrapper status..."
+if "$RUNNER" status | grep -q ':phase'; then
+    echo "  ✓ wrapper returns a workflow status snapshot"
 else
-    echo "  ✗ wrapper status failed"
+    echo "  ✗ wrapper status did not return workflow data"
     exit 1
 fi
 
@@ -67,25 +76,18 @@ for dir in var/tmp/cron var/tmp/experiments; do
 done
 
 echo
-echo "[6/7] Testing module loading..."
-if emacsclient --eval "$ELISP_LOAD_AGENT" >/dev/null 2>&1; then
-    echo "  ✓ gptel-tools-agent.el loads successfully"
+echo "[6/7] Testing batch module loading..."
+if run_batch_bootstrap >/dev/null 2>&1; then
+    echo "  ✓ auto-workflow modules load successfully in batch mode"
 else
-    echo "  ✗ Failed to load gptel-tools-agent.el"
+    echo "  ✗ Failed to load auto-workflow modules in batch mode"
     exit 1
 fi
 
 echo
 echo "[7/7] Checking workflow entrypoints..."
-if emacsclient --eval "$ELISP_CHECK_ENTRYPOINT" 2>/dev/null | grep -q "t"; then
-    echo "  ✓ gptel-auto-workflow-cron-safe function exists"
-else
-    echo "  ✗ gptel-auto-workflow-cron-safe not found"
-    exit 1
-fi
-
 if "$RUNNER" status | grep -q ':phase'; then
-    echo "  ✓ wrapper status returns workflow data"
+    echo "  ✓ wrapper status remains responsive"
 else
     echo "  ✗ wrapper status did not return workflow data"
     exit 1

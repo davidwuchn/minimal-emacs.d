@@ -22,6 +22,7 @@
 ;; Forward declarations for functions defined in gptel-tools-agent.el
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent")
 (declare-function gptel-auto-workflow--get-worktree-dir "gptel-tools-agent")
+(declare-function gptel-auto-workflow--persist-status "gptel-tools-agent")
 (declare-function gptel-auto-workflow-cron-safe "gptel-tools-agent")
 (declare-function gptel-auto-workflow-run-async--guarded "gptel-tools-agent")
 (declare-function gptel-auto-workflow-run-research "gptel-auto-workflow-strategic")
@@ -45,6 +46,9 @@ Customize this variable to add more projects.")
 
 (defvar gptel-auto-workflow--cron-job-running nil
   "Non-nil while a queued cron job is executing.")
+
+(defvar gptel-auto-workflow--stats nil
+  "Current run statistics shared with `gptel-tools-agent'.")
 
 (defvar mementum-root nil
   "Root directory for mementum. Set per-project.")
@@ -182,15 +186,44 @@ This keeps `emacsclient --eval' callers from monopolizing the daemon."
   (if gptel-auto-workflow--cron-job-running
       (progn
         (message "[%s] Job already running; skipping new request" label)
+        (when (fboundp 'gptel-auto-workflow--persist-status)
+          (gptel-auto-workflow--persist-status))
         'already-running)
     (setq gptel-auto-workflow--cron-job-running t)
+    (setq gptel-auto-workflow--stats
+          (list :phase (format "%s-queued" label)
+                :total (or (plist-get gptel-auto-workflow--stats :total) 0)
+                :kept (or (plist-get gptel-auto-workflow--stats :kept) 0)))
+    (when (fboundp 'gptel-auto-workflow--persist-status)
+      (gptel-auto-workflow--persist-status))
     (message "[%s] Queued background job" label)
     (run-at-time
      0 nil
      (lambda ()
-       (unwind-protect
-           (funcall fn)
-         (setq gptel-auto-workflow--cron-job-running nil))))
+       (let ((errored nil))
+         (setq gptel-auto-workflow--stats
+               (plist-put gptel-auto-workflow--stats :phase label))
+         (when (fboundp 'gptel-auto-workflow--persist-status)
+           (gptel-auto-workflow--persist-status))
+         (condition-case err
+             (funcall fn)
+           (error
+            (setq errored err)
+            (setq gptel-auto-workflow--stats
+                  (plist-put gptel-auto-workflow--stats :phase "error"))
+            (message "[%s] Job failed: %s" label err)))
+         (setq gptel-auto-workflow--cron-job-running nil)
+         (let ((phase (plist-get gptel-auto-workflow--stats :phase)))
+           (when (and (not errored)
+                      (not (bound-and-true-p gptel-auto-workflow--running))
+                      (member phase (list label
+                                          (format "%s-queued" label)
+                                          "selecting"
+                                          "running")))
+             (setq gptel-auto-workflow--stats
+                   (plist-put gptel-auto-workflow--stats :phase "idle"))))
+         (when (fboundp 'gptel-auto-workflow--persist-status)
+           (gptel-auto-workflow--persist-status)))))
     'queued))
 
 (defun gptel-auto-workflow-queue-all-projects ()

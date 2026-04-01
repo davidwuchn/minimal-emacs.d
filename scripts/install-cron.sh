@@ -122,7 +122,7 @@ case "$MODE" in
         echo
         echo "=== Prerequisites ==="
         echo
-        echo "1. Emacs daemon running: $DAEMON_CMD"
+        echo "1. No manual cron daemon setup is required; the wrapper starts a dedicated auto-workflow daemon on demand."
         echo "2. Verify: ./scripts/run-auto-workflow-cron.sh status"
         echo "3. Check logs: tail -f var/tmp/cron/*.log"
         echo

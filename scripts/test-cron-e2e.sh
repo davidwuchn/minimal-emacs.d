@@ -8,7 +8,6 @@ RUNNER="$DIR/scripts/run-auto-workflow-cron.sh"
 INSTALLER="$DIR/scripts/install-cron.sh"
 LOGDIR="$DIR/var/tmp/cron"
 FULL_TEST="${1:-}"
-ELISP_LOAD_WORKFLOW=$(printf '(progn (load-file "%s/lisp/modules/gptel-auto-workflow-projects.el") (load-file "%s/lisp/modules/gptel-auto-workflow-strategic.el") t)' "$DIR" "$DIR")
 
 RED='[0;31m'
 GREEN='[0;32m'
@@ -23,6 +22,17 @@ pass() { echo -e "${GREEN}✓${NC} $1"; PASS=$((PASS + 1)); }
 fail() { echo -e "${RED}✗${NC} $1"; FAIL=$((FAIL + 1)); }
 skip() { echo -e "${YELLOW}○${NC} $1"; SKIP=$((SKIP + 1)); }
 section() { echo; echo "=== $1 ==="; }
+
+run_batch_bootstrap() {
+    emacs --batch -Q \
+        -L "$DIR" \
+        -L "$DIR/lisp" \
+        -L "$DIR/lisp/modules" \
+        -L "$DIR/packages/gptel" \
+        -L "$DIR/packages/gptel-agent" \
+        -l "$DIR/scripts/test-auto-workflow-batch.el" \
+        -f test-auto-workflow-batch-run
+}
 
 section "Cron Template"
 if [ -f "$CRON_FILE" ]; then
@@ -98,33 +108,18 @@ else
     fail "Wrapper missing or not executable: $RUNNER"
 fi
 
-if "$RUNNER" status >/dev/null 2>&1; then
-    pass "Wrapper can reach Emacs"
+if "$RUNNER" status | grep -q ':phase'; then
+    pass "Wrapper returns a workflow status snapshot"
 else
     fail "Wrapper status failed"
 fi
 
 section "Cron Functions"
-if emacsclient --eval "$ELISP_LOAD_WORKFLOW" >/dev/null 2>&1; then
-    pass "Workflow modules load in the daemon"
+if run_batch_bootstrap >/dev/null 2>&1; then
+    pass "Workflow modules and cron entrypoints load in batch mode"
 else
-    fail "Workflow modules failed to load in the daemon"
+    fail "Workflow modules or cron entrypoints failed to load in batch mode"
 fi
-
-check_function() {
-    local func="$1"
-    if emacsclient --eval "(fboundp '$func)" 2>/dev/null | grep -q 't'; then
-        pass "Function defined: $func"
-    else
-        fail "Function NOT defined: $func"
-    fi
-}
-
-check_function 'gptel-auto-workflow-cron-safe'
-check_function 'gptel-auto-workflow-run-all-projects'
-check_function 'gptel-auto-workflow-run-all-research'
-check_function 'gptel-auto-workflow-run-all-mementum'
-check_function 'gptel-auto-workflow-run-all-instincts'
 
 section "Log File Writability"
 TEST_LOG="$LOGDIR/test-write-$$.log"
@@ -167,7 +162,7 @@ check_log instincts.log
 
 if [ "$FULL_TEST" = "--full" ]; then
     section "Full Function Test"
-    if "$RUNNER" status >/dev/null 2>&1; then
+    if "$RUNNER" status | grep -q ':phase'; then
         pass "Wrapper status executed successfully"
     else
         fail "Wrapper status failed"
