@@ -109,10 +109,8 @@ Returns nil for empty or malformed input."
   (when (and plist (zerop (mod (length plist) 2)))
     (let (alist)
       (while plist
-        (let ((key (car plist))
+        (let ((key (gptel-benchmark--keyword-to-alist-key (car plist)))
               (val (cadr plist)))
-          (when (keywordp key)
-            (setq key (intern (substring (symbol-name key) 1))))
           (push (cons key (gptel-benchmark--to-json-format val)) alist)
           (setq plist (cddr plist))))
       (reverse alist))))

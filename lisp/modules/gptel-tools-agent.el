@@ -2538,26 +2538,26 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                     :error "timeout"))))))
            ;; Routing handled by gptel-auto-workflow--advice-task-override
            (my/gptel--run-agent-tool
-(lambda (agent-output)
-               (message "[auto-exp] Agent output (first 150 chars): %s"
-                        (my/gptel--sanitize-for-logging agent-output 150))
-               (when timeout-timer (cancel-timer timeout-timer))
-               (unless finished
-                 (gptel-auto-experiment-grade
-                  agent-output
-                  (lambda (grade)
-                    (let* ((grade-score (plist-get grade :score))
-                           (grade-total (plist-get grade :total))
-                           (grade-passed (plist-get grade :passed))
-                           (grade-details (plist-get grade :details))
-                           (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
-                      (message "[auto-exp] Grade result: score=%s/%s passed=%s"
-                               grade-score grade-total grade-passed)
-                      (when (and agent-output (> (length agent-output) 0))
-                        (message "[auto-exp] Agent preview: %s"
-                                 (my/gptel--sanitize-for-logging agent-output 100)))
-                      ;; Check if grader passed
-                      (if (not grade-passed)
+            (lambda (agent-output)
+              (message "[auto-exp] Agent output (first 150 chars): %s"
+                       (my/gptel--sanitize-for-logging agent-output 150))
+              (when timeout-timer (cancel-timer timeout-timer))
+              (unless finished
+                (gptel-auto-experiment-grade
+                 agent-output
+                 (lambda (grade)
+                   (let* ((grade-score (plist-get grade :score))
+                          (grade-total (plist-get grade :total))
+                          (grade-passed (plist-get grade :passed))
+                          (grade-details (plist-get grade :details))
+                          (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
+                     (message "[auto-exp] Grade result: score=%s/%s passed=%s"
+                              grade-score grade-total grade-passed)
+                     (when (and agent-output (> (length agent-output) 0))
+                       (message "[auto-exp] Agent preview: %s"
+                                (my/gptel--sanitize-for-logging agent-output 100)))
+                     ;; Check if grader passed
+                     (if (not grade-passed)
                          ;; Grader failed - categorize the error
                          (let* ((error-info (gptel-auto-experiment--categorize-error agent-output))
                                 (error-category (car error-info))
@@ -3111,22 +3111,14 @@ Returns (:running :kept :total :phase :results)."
 (defun gptel-auto-workflow--sanitize-unicode (str)
   "Sanitize Unicode characters in STR for safe display.
 Replaces curly quotes, dashes, and other problematic characters
-with their ASCII equivalents."
+with their ASCII equivalents in a single pass for performance."
   (let ((clean str))
-    (dolist (pair '(("RIGHT SINGLE QUOTATION MARK" . "'")
-                    ("LEFT SINGLE QUOTATION MARK" . "'")
-                    ("RIGHT DOUBLE QUOTATION MARK" . "\"")
-                    ("LEFT DOUBLE QUOTATION MARK" . "\"")
-                    ("EN DASH" . "-")
-                    ("EM DASH" . "-")
-                    ("HORIZONTAL ELLIPSIS" . "...")
-                    ("NON-BREAKING SPACE" . " ")
-                    ("ZERO WIDTH SPACE" . "")
-                    ("ZERO WIDTH NON-JOINER" . "")
-                    ("ZERO WIDTH JOINER" . "")))
-      (let ((char (char-from-name (car pair))))
-        (when char
-          (setq clean (replace-regexp-in-string (string char) (cdr pair) clean)))))
+    (setq clean (replace-regexp-in-string "['`]" "'" clean))
+    (setq clean (replace-regexp-in-string "[\"\"]" "\"" clean))
+    (setq clean (replace-regexp-in-string (string ?\u2013 ?\u2014) "-" clean))
+    (setq clean (replace-regexp-in-string (string ?\u2026) "..." clean))
+    (setq clean (replace-regexp-in-string (string ?\u00A0) " " clean))
+    (setq clean (replace-regexp-in-string (string ?\u200B ?\u200C ?\u200D) "" clean))
     clean))
 
 (defun gptel-auto-workflow-log ()
