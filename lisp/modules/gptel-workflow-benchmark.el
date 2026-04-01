@@ -43,35 +43,15 @@
   (mapcar (lambda (tc) (plist-get tc :tool))
           (gptel-workflow--tool-calls-list run)))
 
-(defun gptel-workflow--ensure-list (data)
-  "Convert DATA to list if it is a vector.
-ASSUMPTION: Data is either a vector or list.
-BEHAVIOR: Returns list representation of vector, or original if already list."
-  (if (vectorp data) (append data nil) data))
-
-(defun gptel-workflow--read-json-safe (file)
-  "Read JSON from FILE, returning nil on error.
-ASSUMPTION: File may not exist or may contain invalid JSON.
-BEHAVIOR: Returns parsed JSON or nil on any error."
-  (when (file-exists-p file)
-    (condition-case nil
-        (gptel-workflow--read-json file)
-      (error nil))))
-
-(defun gptel-workflow--ensure-dir (dir)
-  "Ensure directory DIR exists, creating it if necessary.
-ASSUMPTION: DIR is a valid directory path.
-BEHAVIOR: Creates DIR and parents if they don't exist."
-  (unless (file-exists-p dir)
-    (make-directory dir t)))
-
-(defun gptel-workflow--calculate-duration (start-time end-time)
-  "Calculate duration between START-TIME and END-TIME.
-ASSUMPTION: Times are float-time values or nil.
-BEHAVIOR: Returns difference in seconds, or 0 if either is nil."
-  (if (and start-time end-time)
-      (- end-time start-time)
-    0))
+(defun gptel-workflow--tool-present-p (tool-name tools)
+  "Check if TOOL-NAME is present in TOOLS list.
+Handles both symbol and string representations.
+Returns non-nil if found."
+  (or (memq tool-name tools)
+      (memq (intern (capitalize (symbol-name tool-name))) tools)
+      (cl-member (symbol-name tool-name) tools
+                 :test #'equal
+                 :key (lambda (tool) (if (symbolp tool) (symbol-name tool) tool)))))
 
 ;;; Customization
 
@@ -256,26 +236,22 @@ Indicators: plan file mentioned, Updates in output, or edit tools used."
   (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
     (when (or (string-match-p "[Pp]lan" output)
               (string-match-p "[Uu]pdates" output)
-              (memq 'edit tools)
-              (memq 'Edit tools)
-              (cl-member "edit" tools :test #'equal :key #'symbol-name))
+              (gptel-workflow--tool-present-p 'edit tools))
       (list :phase 'P2
             :entered t
             :timestamp (float-time)
             :indicators (delq nil
                               (list (when (string-match-p "[Pp]lan" output) "plan-mentioned")
                                     (when (string-match-p "[Uu]pdates" output) "updates-mentioned")
-                                    (when (memq 'edit tools) "edit-used")))))))
+                                    (when (gptel-workflow--tool-present-p 'edit tools) "edit-used")))))))
 
 (defun gptel-workflow--detect-p3 (tool-calls)
   "Detect P3 phase from TOOL-CALLS.
 P3 = preview (preview_file_change tool called)
 Indicators: preview tool used."
   (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
-    (when (or (memq 'preview_file_change tools)
-              (memq 'Preview tools)
-              (cl-member "preview" tools :test #'equal :key #'symbol-name)
-              (cl-member "preview_file_change" tools :test #'equal :key #'symbol-name))
+    (when (or (gptel-workflow--tool-present-p 'preview_file_change tools)
+              (gptel-workflow--tool-present-p 'preview tools))
       (list :phase 'P3
             :entered t
             :timestamp (float-time)))))
