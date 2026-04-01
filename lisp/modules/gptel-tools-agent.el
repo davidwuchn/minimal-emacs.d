@@ -535,52 +535,53 @@ Returns t on success, nil on failure. Uses layered fallback strategy.
 ;; EDGE CASE: All error paths restore to main via helper
 ;; TEST: Verify branch is main after cherry-pick completes or fails"
   (interactive "sCommit hash: ")
-  (let ((default-directory (or (gptel-auto-workflow--project-root)
-                               (expand-file-name "~/.emacs.d/"))))
-    (gptel-auto-workflow--with-branch-restoration
-     (lambda ()
-       (gptel-auto-workflow--git-cmd "git stash")
-       (gptel-auto-workflow--git-cmd "git checkout staging")
-       (let ((result (gptel-auto-workflow--git-cmd
-                      (format "git cherry-pick %s 2>&1" commit-hash))))
-         (cond
-          ((string-match-p "already applied\\|empty" result)
-           (message "[auto-workflow] %s already in staging, skip" commit-hash)
-           (gptel-auto-workflow--git-cmd "git cherry-pick --skip 2>/dev/null || git cherry-pick --abort 2>/dev/null")
-           t)
-          ((string-match-p "CONFLICT\\|conflict" result)
-           (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
-           (message "[auto-workflow] %s conflict, try theirs..." commit-hash)
-           (setq result (gptel-auto-workflow--git-cmd
-                         (format "git cherry-pick -X theirs %s 2>&1" commit-hash)))
-           (cond
-            ((string-match-p "CONFLICT\\|conflict" result)
-             (message "[auto-workflow] %s still conflicted, log+skip" commit-hash)
-             (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
-             (gptel-auto-workflow--log-conflict commit-hash result)
-             nil)
-            ((string-match-p "error:" result)
-             (message "[auto-workflow] %s error: %s" commit-hash (substring result 0 80))
-             (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
-             nil)
-            (t
-             (message "[auto-workflow] %s recovered with theirs" commit-hash)
-             t)))
-          ((string-match-p "error:" result)
-           (message "[auto-workflow] %s error: %s" commit-hash (substring result 0 80))
-           (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
-           nil)
-          (t
-           (message "[auto-workflow] %s recovered to staging" commit-hash)
-           t)))))
-     t
-     "[auto-workflow]")))
+  (let ((default-directory (gptel-auto-workflow--project-root))
+        (result))
+    (gptel-auto-workflow--git-cmd "git stash")
+    (gptel-auto-workflow--git-cmd "git checkout staging")
+    (setq result (gptel-auto-workflow--git-cmd
+                  (format "git cherry-pick %s 2>&1" commit-hash)))
+    (cond
+     ((string-match-p "already applied\\|empty" result)
+      (message "[auto-workflow] %s already in staging, skip" commit-hash)
+      (gptel-auto-workflow--git-cmd "git cherry-pick --skip 2>/dev/null || git cherry-pick --abort 2>/dev/null")
+      (gptel-auto-workflow--git-cmd "git checkout main")
+      t)
+     ((string-match-p "CONFLICT\\|conflict" result)
+      (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
+      (message "[auto-workflow] %s conflict, try theirs..." commit-hash)
+      (setq result (gptel-auto-workflow--git-cmd
+                    (format "git cherry-pick -X theirs %s 2>&1" commit-hash)))
+      (cond
+       ((string-match-p "CONFLICT\\|conflict" result)
+        (message "[auto-workflow] %s still conflicted, log+skip" commit-hash)
+        (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
+        (gptel-auto-workflow--log-conflict commit-hash result)
+        (gptel-auto-workflow--git-cmd "git checkout main")
+        nil)
+       ((string-match-p "error:" result)
+        (message "[auto-workflow] %s error: %s" commit-hash (substring result 0 80))
+        (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
+        (gptel-auto-workflow--git-cmd "git checkout main")
+        nil)
+       (t
+        (message "[auto-workflow] %s recovered with theirs" commit-hash)
+        (gptel-auto-workflow--git-cmd "git checkout main")
+        t)))
+     ((string-match-p "error:" result)
+      (message "[auto-workflow] %s error: %s" commit-hash (substring result 0 80))
+      (gptel-auto-workflow--git-cmd "git cherry-pick --abort 2>/dev/null")
+      (gptel-auto-workflow--git-cmd "git checkout main")
+      nil)
+     (t
+      (message "[auto-workflow] %s recovered to staging" commit-hash)
+      (gptel-auto-workflow--git-cmd "git checkout main")
+      t))))
 
 (defun gptel-auto-workflow--log-conflict (commit-hash conflict-output)
   "Log CONFLICT-OUTPUT for COMMIT-HASH to file for later review."
   (let ((log-file (expand-file-name "var/log/cherry-pick-conflicts.log"
-                                    (or (gptel-auto-workflow--project-root)
-                                        (expand-file-name "~/.emacs.d/"))))
+                                    (gptel-auto-workflow--project-root)))
         (timestamp (format-time-string "%Y-%m-%d %H:%M:%S"))
         (msg (substring conflict-output 0 (min 400 (length conflict-output)))))
     (make-directory (file-name-directory log-file) t)
@@ -611,50 +612,46 @@ If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
                (cl-incf failed)))))
         (message "[auto-workflow] Recovered %d/%d orphans to staging"
                  recovered (length orphans))
-        (when (> conflicted 0)
-          (message "[auto-workflow] Untracked %d conflicted orphan(s); see cherry-pick conflict log"
-                   conflicted))
-        (when (> failed 0)
-          (message "[auto-workflow] Left %d orphan(s) tracked for retry"
-                   failed))
-        (when (and (> recovered 0) (not no-push))
-          (gptel-auto-workflow--push-staging))))))
-
+        (when (> recovered 0)
+          (unless no-push
+            (let ((default-directory (gptel-auto-workflow--project-root)))
+              (gptel-auto-workflow--git-cmd "git push origin staging"))))))))
 
 (defun gptel-auto-workflow--sync-branches (source-branch target-branch action-name)
   "Fast-forward TARGET-BRANCH to match SOURCE-BRANCH.
 ACTION-NAME is used in log messages (e.g., \"Synced\", \"Promoted\").
-All shell commands have timeout protection to prevent deadlocks.
-
-;; ASSUMPTION: Branch must be restored after sync operation
-;; BEHAVIOR: Uses with-branch-restoration to ensure cleanup
-;; EDGE CASE: Error during sync still restores branch
-;; TEST: Verify branch is restored after sync completes or fails"
-  (gptel-auto-workflow--with-branch-restoration
-   (lambda ()
-     (gptel-auto-workflow--git-cmd "git fetch origin" 180)
-     (let* ((source-commit (gptel-auto-workflow--git-cmd
-                            (format "git rev-parse origin/%s" source-branch)))
-            (target-commit (gptel-auto-workflow--git-cmd
-                            (format "git rev-parse origin/%s 2>/dev/null || echo \"none\"" target-branch)))
-            (source-commit (or source-commit "none"))
-            (target-commit (or target-commit "none")))
-       (if (string= source-commit target-commit)
-           (message "[auto-workflow] %s already in sync with %s" target-branch source-branch)
-         (progn
-           (gptel-auto-workflow--git-cmd (format "git checkout %s" target-branch))
-           (gptel-auto-workflow--git-cmd (format "git merge origin/%s --ff-only" source-branch))
-           (gptel-auto-workflow--git-cmd (format "git push origin %s" target-branch))
-           (message "[auto-workflow] %s %s to %s (%s -> %s)"
-                    action-name target-branch source-branch
-                    (if (>= (length target-commit) 7)
-                        (substring target-commit 0 7)
-                      target-commit)
-                    (if (>= (length source-commit) 7)
-                        (substring source-commit 0 7)
-                      source-commit))))))
-   nil
-   "[auto-workflow]"))
+All shell commands have timeout protection to prevent deadlocks."
+  (let ((default-directory (gptel-auto-workflow--project-root))
+        (original-branch (gptel-auto-workflow--git-cmd
+                          "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
+    (condition-case err
+        (progn
+          (gptel-auto-workflow--git-cmd "git fetch origin" 180)
+          (let* ((source-commit (gptel-auto-workflow--git-cmd
+                                 (format "git rev-parse origin/%s" source-branch)))
+                 (target-commit (gptel-auto-workflow--git-cmd
+                                 (format "git rev-parse origin/%s 2>/dev/null || echo \"none\"" target-branch)))
+                 (source-commit (or source-commit "none"))
+                 (target-commit (or target-commit "none")))
+            (if (string= source-commit target-commit)
+                (message "[auto-workflow] %s already in sync with %s" target-branch source-branch)
+              (progn
+                (gptel-auto-workflow--git-cmd (format "git checkout %s" target-branch))
+                (gptel-auto-workflow--git-cmd (format "git merge origin/%s --ff-only" source-branch))
+                (gptel-auto-workflow--git-cmd (format "git push origin %s" target-branch))
+                (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+                (message "[auto-workflow] %s %s to %s (%s -> %s)"
+                         action-name target-branch source-branch
+                         (if (>= (length target-commit) 7)
+                             (substring target-commit 0 7)
+                           target-commit)
+                         (if (>= (length source-commit) 7)
+                             (substring source-commit 0 7)
+                           source-commit))))))
+      (error
+       (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
+       (message "[auto-workflow] Failed to %s %s to %s: %s" (downcase action-name) target-branch source-branch err)
+       nil))))
 
 ;;;###autoload
 
@@ -2001,7 +1998,7 @@ Each item is a plist with keys :branch and :path."
 Stores worktree-dir, current-branch in hash table keyed by TARGET.
 Uses git CLI directly to avoid magit-worktree-branch hangs.
 If branch exists locally, deletes it first to avoid conflicts."
-  (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
+  (let* ((proj-root (gptel-auto-workflow--project-root))
          (branch (gptel-auto-workflow--branch-name target experiment-id))
          (base-ref nil)
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
@@ -2071,7 +2068,7 @@ Uses git CLI directly to avoid magit issues."
          (worktree-dir (plist-get state :worktree-dir))
          (branch (plist-get state :current-branch)))
     (when (and worktree-dir (file-exists-p worktree-dir))
-      (let ((proj-root (gptel-auto-workflow--worktree-base-root)))
+      (let ((proj-root (gptel-auto-workflow--project-root)))
         (condition-case err
             (let ((default-directory proj-root))
               ;; Remove worktree
@@ -2217,7 +2214,7 @@ Creates a fresh staging worktree and never checks out staging in the root repo."
   "Create isolated worktree for staging verification.
 Never touches project root - all verification happens in the worktree.
 Returns worktree path or nil on failure."
-  (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
+  (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
          (branch gptel-auto-workflow-staging-branch)
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
@@ -3706,8 +3703,13 @@ Example HYPOTHESES:
       (replace-regexp-in-string "[\t\n\r]+" " | " s))))
 
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
-  "Append EXPERIMENT to results.tsv for RUN-ID or the current workflow run."
-  (let* ((file (gptel-auto-workflow--results-file run-id))
+  "Append EXPERIMENT to results.tsv for RUN-ID."
+  (let* ((base-dir (gptel-auto-workflow--project-root))
+         (worktree-base-dir (or gptel-auto-workflow-worktree-base
+                                "var/tmp/experiments"))
+         (file (expand-file-name
+                (format "%s/%s/results.tsv" worktree-base-dir run-id)
+                base-dir))
          (agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
          (truncated-output (gptel-auto-experiment--tsv-escape
                             (truncate-string-to-width agent-output 500 nil nil "..."))))
@@ -4868,15 +4870,8 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
   "Run auto-workflow with full cleanup for cron jobs.
 Cancels stale timers, kills orphaned buffers, resets state, then runs.
 Safe to call from cron - handles all edge cases.
-Sets `gptel-auto-workflow-persistent_headless' to prevent interactive prompts.
-When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
-  (let* ((proj-root (gptel-auto-workflow--default-dir))
-         (finish
-          (gptel-auto-workflow--make-idempotent-callback
-           (lambda (&optional results)
-             (gptel-auto-workflow--disable-headless-suppression)
-             (when completion-callback
-               (funcall completion-callback results))))))
+Sets `gptel-auto-workflow-persistent-headless' to prevent interactive prompts."
+  (let ((proj-root (gptel-auto-workflow--project-root)))
     (setq default-directory proj-root)
     (require 'magit)
     (require 'json)
@@ -4928,7 +4923,7 @@ Works across macOS and Linux."
   "Remove ALL optimize worktrees and their branches from previous runs.
 Called at start of new run to ensure clean state.
 Only removes worktrees if no gptel processes are running."
-  (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
+  (let* ((proj-root (gptel-auto-workflow--project-root))
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
                                 "var/tmp/experiments"))
          (worktree-base (expand-file-name worktree-base-dir proj-root))
@@ -4977,7 +4972,7 @@ Only removes worktrees if no gptel processes are running."
 
 (defun gptel-auto-workflow--cleanup-stale-state ()
   "Clean up stale timers, buffers, and state from aborted runs."
-  (let ((proj-root (gptel-auto-workflow--default-dir))
+  (let ((proj-root (gptel-auto-workflow--project-root))
         (cleaned 0))
     (when proj-root
       (my/gptel--reset-agent-task-state)
@@ -5015,11 +5010,9 @@ Only removes worktrees if no gptel processes are running."
       (message "[auto-workflow] Cleaned %d stale items" cleaned))))
 
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
-  "Run experiments for TARGETS sequentially."
-  (let* ((run-id (or gptel-auto-workflow--run-id
-                     (gptel-auto-workflow--make-run-id)))
-         (proj-root (gptel-auto-workflow--default-dir))
-         (run-buffer (current-buffer))
+  "Run experiments for TARGETS asynchronously."
+  (let* ((run-id (format-time-string "%Y-%m-%d"))
+         (proj-root (gptel-auto-workflow--project-root))
          (all-results '())
          (kept-target-count 0)
          (finish
