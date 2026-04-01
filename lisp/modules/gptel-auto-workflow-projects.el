@@ -17,9 +17,11 @@
 ;; External variables from gptel-tools-agent.el
 (defvar gptel-auto-workflow--worktree-state nil)
 (defvar gptel-auto-workflow-worktree-base nil)
+(defvar gptel-auto-workflow--current-target nil)
 
 ;; Forward declarations for functions defined in gptel-tools-agent.el
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent")
+(declare-function gptel-auto-workflow--get-worktree-dir "gptel-tools-agent")
 (declare-function gptel-auto-workflow-cron-safe "gptel-tools-agent")
 (declare-function gptel-auto-workflow-run-async--guarded "gptel-tools-agent")
 (declare-function gptel-auto-workflow-run-research "gptel-auto-workflow-strategic")
@@ -228,15 +230,24 @@ Also handles caching and result truncation from old advice."
       (let* ((in-auto-workflow gptel-auto-workflow--current-project)
              (proj-context (gptel-auto-workflow--get-project-for-context))
              (project-root (car proj-context))
-             (worktree-base-expanded (when gptel-auto-workflow-worktree-base
-                                       (expand-file-name gptel-auto-workflow-worktree-base project-root)))
-             (worktree-dir (when (and in-auto-workflow
-                                      worktree-base-expanded
-                                      (string-match-p worktree-base-expanded default-directory))
-                             default-directory))
+             (worktree-base-expanded
+              (expand-file-name (or gptel-auto-workflow-worktree-base
+                                    "var/tmp/experiments")
+                                project-root))
+             (target-worktree-dir
+              (when (and in-auto-workflow
+                         gptel-auto-workflow--current-target
+                         (fboundp 'gptel-auto-workflow--get-worktree-dir))
+                (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)))
+             (current-dir (file-name-as-directory (expand-file-name default-directory)))
+             (worktree-base-dir (file-name-as-directory worktree-base-expanded))
+             (worktree-dir (or target-worktree-dir
+                               (when (and in-auto-workflow
+                                          (string-prefix-p worktree-base-dir current-dir))
+                                 current-dir)))
              (target-buf (if worktree-dir
-                             (gptel-auto-workflow--get-worktree-buffer worktree-dir)
-                           (cdr proj-context))))
+                              (gptel-auto-workflow--get-worktree-buffer worktree-dir)
+                            (cdr proj-context))))
         ;; CRITICAL: Validate worktree exists before proceeding
         (if (and worktree-dir (not (file-exists-p worktree-dir)))
             (progn

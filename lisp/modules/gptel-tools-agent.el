@@ -619,7 +619,9 @@ large-result truncation, and result caching."
 (defun my/gptel--deliver-subagent-result (callback result)
   "Deliver RESULT to CALLBACK, truncating large results to a temp file."
   (if (> (length result) my/gptel-subagent-result-limit)
-      (let* ((temp-file (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt"))
+      (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
+                            (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt")
+                          (make-temp-file "gptel-subagent-result-" nil ".txt")))
              (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
                                 (substring result 0 my/gptel-subagent-result-limit)
                                 temp-file))
@@ -2563,19 +2565,20 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                 (error-category (car error-info))
                                 (error-details (cdr error-info)))
                            (setq finished t)
-                           ;; Track API errors for adaptive reduction
-                           (when (memq error-category '(:api-rate-limit :api-error))
-                             (cl-incf gptel-auto-experiment--api-error-count)
-                             (message "[auto-workflow] API error #%d: %s"
-                                      gptel-auto-experiment--api-error-count error-category)
-                             ;; Reduce max experiments if too many API errors
-                             (when (>= gptel-auto-experiment--api-error-count 3)
-                               (setq max-exp (max 2 (/ max-exp 2)))
-                               (message "[auto-workflow] Reduced max experiments to %d due to API errors" max-exp)))
-                           ;; Log the failure
-                           (let ((exp-result (list :target target
-                                                   :id experiment-id
-                                                   :hypothesis hypothesis
+                            ;; Track API errors for adaptive reduction
+                            (when (memq error-category '(:api-rate-limit :api-error))
+                              (cl-incf gptel-auto-experiment--api-error-count)
+                              (message "[auto-workflow] API error #%d: %s"
+                                       gptel-auto-experiment--api-error-count error-category)
+                              ;; The outer experiment loop owns max-exp and will
+                              ;; adapt or stop early based on the shared error count.
+                              (when (>= gptel-auto-experiment--api-error-count 3)
+                                (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
+                                         target)))
+                            ;; Log the failure
+                            (let ((exp-result (list :target target
+                                                    :id experiment-id
+                                                    :hypothesis hypothesis
                                                    :score-before baseline
                                                    :score-after 0
                                                    :kept nil
@@ -3011,7 +3014,8 @@ Prevents workflow from hanging indefinitely due to callback failures."
             (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
                      stuck-minutes)
             (setq gptel-auto-workflow--running nil)
-            (plist-put gptel-auto-workflow--stats :phase "idle")
+            (setq gptel-auto-workflow--stats
+                  (plist-put gptel-auto-workflow--stats :phase "idle"))
             (when gptel-auto-workflow--watchdog-timer
               (cancel-timer gptel-auto-workflow--watchdog-timer)
               (setq gptel-auto-workflow--watchdog-timer nil)))
@@ -3027,7 +3031,8 @@ Prevents workflow from hanging indefinitely due to callback failures."
 Interactive command to recover from hung workflow state."
   (interactive)
   (setq gptel-auto-workflow--running nil)
-  (plist-put gptel-auto-workflow--stats :phase "idle")
+  (setq gptel-auto-workflow--stats
+        (plist-put gptel-auto-workflow--stats :phase "idle"))
   (when gptel-auto-workflow--watchdog-timer
     (cancel-timer gptel-auto-workflow--watchdog-timer)
     (setq gptel-auto-workflow--watchdog-timer nil))
@@ -3306,32 +3311,45 @@ Only removes worktrees if no gptel processes are running."
       (message "[auto-workflow] Cleaned %d stale items" cleaned))))
 
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
-  "Run experiments for TARGETS asynchronously."
+  "Run experiments for TARGETS sequentially."
   (let* ((run-id (format-time-string "%Y-%m-%d"))
          (proj-root (gptel-auto-workflow--default-dir))
          (all-results '())
-         (completed-targets 0)
          (kept-count 0))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root)
-    (plist-put gptel-auto-workflow--stats :phase "running")
-    (plist-put gptel-auto-workflow--stats :total (length targets))
+    (setq gptel-auto-workflow--stats
+          (plist-put gptel-auto-workflow--stats :phase "running"))
+    (setq gptel-auto-workflow--stats
+          (plist-put gptel-auto-workflow--stats :total (length targets)))
+    (setq gptel-auto-workflow--stats
+          (plist-put gptel-auto-workflow--stats :kept 0))
     (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
-    (dolist (target targets)
-      (gptel-auto-experiment-loop
-       target
-       (lambda (results)
-         (setq all-results (append all-results results))
-         (cl-incf completed-targets)
-         (setq kept-count (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
-         (plist-put gptel-auto-workflow--stats :kept kept-count)
-         (when (= completed-targets (length targets))
-           (setq gptel-auto-workflow--running nil)
-           (plist-put gptel-auto-workflow--stats :phase "complete")
+    (cl-labels
+        ((finish ()
+           (setq gptel-auto-workflow--running nil
+                 gptel-auto-workflow--current-target nil)
+           (setq gptel-auto-workflow--stats
+                 (plist-put gptel-auto-workflow--stats :phase "complete"))
            (message "[auto-workflow] Complete: %d experiments, %d kept"
                     (length all-results) kept-count)
            (when completion-callback
-             (funcall completion-callback all-results))))))))
+             (funcall completion-callback all-results)))
+         (run-next (remaining-targets)
+           (if (null remaining-targets)
+               (finish)
+             (let ((target (car remaining-targets)))
+               (setq gptel-auto-workflow--current-target target)
+               (gptel-auto-experiment-loop
+                target
+                (lambda (results)
+                  (setq all-results (append all-results results))
+                  (setq kept-count
+                        (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
+                  (setq gptel-auto-workflow--stats
+                        (plist-put gptel-auto-workflow--stats :kept kept-count))
+                  (run-next (cdr remaining-targets))))))))
+      (run-next targets))))
 
 (defun gptel-auto-workflow-run (&optional targets)
   "Run auto-workflow asynchronously.
