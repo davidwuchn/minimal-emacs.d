@@ -4779,26 +4779,15 @@ Returns (:running :kept :total :phase :run-id :results)."
 
 (defun gptel-auto-workflow--sanitize-unicode (str)
   "Sanitize Unicode characters in STR for safe display.
-Replaces curly quotes, dashes, and zero-width characters with ASCII equivalents."
+Replaces curly quotes, dashes, and other problematic characters
+with their ASCII equivalents in a single pass for performance."
   (let ((clean str))
-    (setq clean (replace-regexp-in-string
-                 (regexp-opt (mapcar #'char-to-string '(?\u2018 ?\u2019 ?\u0060)))
-                 "'"
-                 clean))
-    (setq clean (replace-regexp-in-string
-                 (regexp-opt (mapcar #'char-to-string '(?\u201C ?\u201D)))
-                 "\""
-                 clean))
-    (setq clean (replace-regexp-in-string
-                 (regexp-opt (mapcar #'char-to-string '(?\u2013 ?\u2014)))
-                 "-"
-                 clean))
+    (setq clean (replace-regexp-in-string "['`]" "'" clean))
+    (setq clean (replace-regexp-in-string "[\"\"]" "\"" clean))
+    (setq clean (replace-regexp-in-string (string ?\u2013 ?\u2014) "-" clean))
     (setq clean (replace-regexp-in-string (string ?\u2026) "..." clean))
     (setq clean (replace-regexp-in-string (string ?\u00A0) " " clean))
-    (setq clean (replace-regexp-in-string
-                 (regexp-opt (mapcar #'char-to-string '(?\u200B ?\u200C ?\u200D)))
-                 ""
-                 clean))
+    (setq clean (replace-regexp-in-string (string ?\u200B ?\u200C ?\u200D) "" clean))
     clean))
 
 
