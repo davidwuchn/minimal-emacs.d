@@ -66,10 +66,10 @@ Each worktree gets its own isolated buffer for subagent overlays.")
   "Get or create a gptel-agent buffer for WORKTREE-DIR.
 Each worktree gets its own isolated buffer for subagent overlays."
   (let* ((root (file-name-as-directory (expand-file-name worktree-dir)))
-         ;; Use worktree path to create unique buffer name
-         (worktree-name (file-name-nondirectory (directory-file-name root)))
-         (buf-name (format "*gptel-agent:%s*" worktree-name))
-         (existing (gethash root gptel-auto-workflow--worktree-buffers)))
+          ;; Use worktree path to create unique buffer name
+          (worktree-name (file-name-nondirectory (directory-file-name root)))
+          (buf-name (format "*gptel-agent:%s*" worktree-name))
+          (existing (gethash root gptel-auto-workflow--worktree-buffers)))
     ;; Check if existing buffer is still live
     (if (and existing (buffer-live-p existing))
         existing
@@ -96,6 +96,21 @@ Each worktree gets its own isolated buffer for subagent overlays."
           (setq-local default-directory root)
           ;; Load .dir-locals.el for project configuration
           (hack-dir-local-variables-non-file-buffer)
+          ;; Create initial FSM for agent tasks
+          ;; This prevents "Wrong type argument: gptel-fsm, nil" error
+          ;; when gptel-agent--task tries to access gptel--fsm-last
+          (when (and (fboundp 'gptel-make-fsm)
+                     (or (not (boundp 'gptel--fsm-last))
+                         (not gptel--fsm-last)))
+            (setq-local gptel--fsm-last
+                        (gptel-make-fsm
+                         :table (when (boundp 'gptel-send--transitions)
+                                  gptel-send--transitions)
+                         :handlers (when (boundp 'gptel-agent-request--handlers)
+                                     gptel-agent-request--handlers)
+                         :info (list :buffer buf
+                                     :position (point-max-marker)
+                                     :tracking-marker (point-max-marker)))))
           ;; Protect buffer from being killed during experiments
           (setq-local kill-buffer-query-functions
                       (cons (lambda ()
