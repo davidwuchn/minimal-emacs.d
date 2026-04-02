@@ -11,8 +11,9 @@
 (require 'gptel-agent)
 (require 'magit-git nil t)
 
-;; Forward declarations for variables defined in gptel-auto-workflow-projects.el
+;; Forward declarations for variables defined elsewhere
 (defvar gptel-auto-workflow--project-buffers nil)
+(defvar gptel--tool-preview-alist nil)  ; defined in gptel.el
 
 ;;; Shell Command with Timeout
 
@@ -57,20 +58,6 @@ Reduces duplication of `(if (>= (length hash) 7) (substring hash 0 7) hash)` pat
     (if (and (stringp hash) (>= (length hash) len))
         (substring hash 0 len)
       hash)))
-
-(defun gptel-auto-workflow--safe-call (operation fn &optional error-prefix)
-  "Execute FN for OPERATION, logging errors but continuing execution.
-ERROR-PREFIX defaults to \"[auto-workflow]\".
-Returns FN's result on success, nil on error.
-Use for non-critical operations that should not halt execution."
-  (condition-case err
-      (funcall fn)
-    (error
-     (message "%s %s failed (non-critical): %s"
-              (or error-prefix "[auto-workflow]")
-              operation
-              err)
-     nil)))
 
 (defun gptel-auto-workflow--safe-call (operation fn &optional error-prefix)
   "Execute FN for OPERATION, logging errors but continuing execution.
@@ -1414,7 +1401,7 @@ Returns worktree path or nil on failure."
                         proj-root))
          (worktree-q (shell-quote-argument worktree-dir))
          (branch-q (shell-quote-argument branch)))
-    (gptel-auto-workflow--with-error-handling
+    (gptel-auto-workflow--safe-call
      "create staging worktree"
      (lambda ()
        (unless (gptel-auto-workflow--ensure-staging-branch-exists)
@@ -1455,7 +1442,7 @@ NOTE: Staging branch is never deleted, only the worktree."
     (let* ((proj-root (gptel-auto-workflow--project-root))
            (default-directory proj-root)
            (worktree gptel-auto-workflow--staging-worktree-dir))
-      (gptel-auto-workflow--with-error-handling
+      (gptel-auto-workflow--safe-call
        "delete staging worktree"
        (lambda ()
          (ignore-errors
@@ -1634,7 +1621,7 @@ This prevents 'branch already used by worktree' errors."
     (if (string= current-branch "main")
         t
       (message "[auto-workflow] Switching from %s to main branch" current-branch)
-      (gptel-auto-workflow--with-error-handling
+      (gptel-auto-workflow--safe-call
        "switch to main branch"
        (lambda ()
          (gptel-auto-workflow--git-cmd "git checkout main")
@@ -1653,7 +1640,7 @@ Returns t on success, nil on failure."
          (staging-q (shell-quote-argument staging))
          (remote-staging (format "refs/remotes/origin/%s" staging))
          (remote-staging-q (shell-quote-argument remote-staging)))
-    (gptel-auto-workflow--with-error-handling
+    (gptel-auto-workflow--safe-call
      "ensure staging branch exists"
      (lambda ()
        (gptel-auto-workflow--git-cmd "git fetch origin" 180)
