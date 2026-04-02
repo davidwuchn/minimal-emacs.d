@@ -140,19 +140,51 @@ ensure_worker_daemon() {
 
 case "$ACTION" in
     auto-workflow)
-        ELISP="(let ((root \"$ROOT_LISP\")) (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root)) (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-strategic.el\" root)) (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root)) (gptel-auto-workflow-queue-all-projects))"
+        ELISP="(let ((root \"$ROOT_LISP\"))
+                 (setq user-emacs-directory root)
+                 (load-file (expand-file-name \"lisp/modules/nucleus-tools.el\" root))
+                 (load-file (expand-file-name \"lisp/modules/nucleus-prompts.el\" root))
+                 (load-file (expand-file-name \"lisp/modules/nucleus-presets.el\" root))
+                 (when (fboundp 'nucleus--register-gptel-directives)
+                   (nucleus--register-gptel-directives))
+                 (when (fboundp 'nucleus--override-gptel-agent-presets)
+                   (nucleus--override-gptel-agent-presets))
+                 (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
+                 (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-strategic.el\" root))
+                 (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
+                 (gptel-auto-workflow-queue-all-projects))"
         ;;
     research)
-        ELISP="(let ((root \"$ROOT_LISP\")) (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root)) (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-strategic.el\" root)) (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root)) (gptel-auto-workflow-queue-all-research))"
+        ELISP="(let ((root \"$ROOT_LISP\"))
+                 (setq user-emacs-directory root)
+                 (load-file (expand-file-name \"lisp/modules/nucleus-tools.el\" root))
+                 (load-file (expand-file-name \"lisp/modules/nucleus-prompts.el\" root))
+                 (load-file (expand-file-name \"lisp/modules/nucleus-presets.el\" root))
+                 (when (fboundp 'nucleus--register-gptel-directives)
+                   (nucleus--register-gptel-directives))
+                 (when (fboundp 'nucleus--override-gptel-agent-presets)
+                   (nucleus--override-gptel-agent-presets))
+                 (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
+                 (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-strategic.el\" root))
+                 (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
+                 (gptel-auto-workflow-queue-all-research))"
         ;;
     mementum)
-        ELISP="(let ((root \"$ROOT_LISP\")) (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root)) (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root)) (gptel-auto-workflow-queue-all-mementum))"
+        ELISP="(let ((root \"$ROOT_LISP\"))
+                 (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
+                 (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
+                 (gptel-auto-workflow-queue-all-mementum))"
         ;;
     instincts)
-        ELISP="(let ((root \"$ROOT_LISP\")) (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root)) (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root)) (gptel-auto-workflow-queue-all-instincts))"
+        ELISP="(let ((root \"$ROOT_LISP\"))
+                 (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
+                 (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
+                 (gptel-auto-workflow-queue-all-instincts))"
         ;;
     status)
-        ELISP="(let ((root \"$ROOT_LISP\")) (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root)) (gptel-auto-workflow-status))"
+        ELISP="(let ((root \"$ROOT_LISP\"))
+                 (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
+                 (gptel-auto-workflow-status))"
         ;;
     *)
         echo "Usage: $0 {auto-workflow|research|mementum|instincts|status}" >&2
