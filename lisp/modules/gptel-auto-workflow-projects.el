@@ -281,7 +281,7 @@ NEVER allows overlays in *Messages* buffer.
 Also handles caching and result truncation from old advice."
   ;; Check cache first (from old my/gptel-agent--task-override)
   (let ((cached (and (fboundp 'my/gptel--subagent-cache-get)
-                     (my/gptel--subagent-cache-get agent-type prompt))))
+                      (my/gptel--subagent-cache-get agent-type prompt))))
     (if cached
         (progn
           (message "[nucleus] Subagent %s cache hit" agent-type)
@@ -302,58 +302,65 @@ Also handles caching and result truncation from old advice."
              (current-dir (file-name-as-directory (expand-file-name default-directory)))
              (worktree-base-dir (file-name-as-directory worktree-base-expanded))
              (worktree-dir (or target-worktree-dir
-                               (when (and in-auto-workflow
-                                          (string-prefix-p worktree-base-dir current-dir))
-                                 current-dir)))
+                                (when (and in-auto-workflow
+                                           (string-prefix-p worktree-base-dir current-dir))
+                                  current-dir)))
              (target-buf (if worktree-dir
-                              (gptel-auto-workflow--get-worktree-buffer worktree-dir)
-                            (cdr proj-context))))
+                               (gptel-auto-workflow--get-worktree-buffer worktree-dir)
+                             (cdr proj-context))))
         ;; CRITICAL: Validate worktree exists before proceeding
         (if (and worktree-dir (not (file-exists-p worktree-dir)))
             (progn
               (message "[auto-workflow] Worktree deleted, aborting: %s" worktree-dir)
               (funcall main-cb (format "Error: Worktree no longer exists: %s" worktree-dir)))
           (if (and target-buf 
-                   (buffer-live-p target-buf)
-                   (not (string= (buffer-name target-buf) "*Messages*")))
+                    (buffer-live-p target-buf)
+                    (not (string= (buffer-name target-buf) "*Messages*")))
               (with-current-buffer target-buf
+                ;; Ensure FSM exists for agent task
+                (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
+                  ;; Create minimal FSM for agent context
+                  (setq-local gptel--fsm-last 
+                              (gptel-make-fsm 
+                               :table (when (boundp 'gptel-send--transitions) gptel-send--transitions)
+                               :handlers nil)))
                 (let* ((default-directory (or worktree-dir project-root))
-                       (target-marker (point-marker))
-                       (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
-                       (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
-                                 (list :buffer target-buf :position target-marker)))
-                       (modified-info (list :buffer target-buf 
-                                            :position target-marker
-                                            :tracking-marker target-marker))
-                       ;; Wrap callback to cache results
-                       (wrapped-cb (lambda (result)
-                                     (when (and (stringp result)
-                                                (fboundp 'my/gptel--subagent-cache-put))
-                                       (my/gptel--subagent-cache-put agent-type prompt result))
-                                     (funcall main-cb result))))
+                        (target-marker (point-marker))
+                        (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+                        (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
+                                  (list :buffer target-buf :position target-marker)))
+                        (modified-info (list :buffer target-buf 
+                                              :position target-marker
+                                              :tracking-marker target-marker))
+                        ;; Wrap callback to cache results
+                        (wrapped-cb (lambda (result)
+                                      (when (and (stringp result)
+                                                  (fboundp 'my/gptel--subagent-cache-put))
+                                        (my/gptel--subagent-cache-put agent-type prompt result))
+                                      (funcall main-cb result))))
                   (cl-letf (((symbol-function 'gptel-fsm-info)
-                             (lambda (&optional fsm) 
-                               (if (or (eq fsm parent-fsm) (null fsm))
-                                   modified-info 
-                                 info))))
+                              (lambda (&optional fsm) 
+                                (if (or (eq fsm parent-fsm) (null fsm))
+                                    modified-info 
+                                  info))))
                     (if (and gptel-auto-workflow--persist-executor-overlays
-                             (equal agent-type "executor"))
+                              (equal agent-type "executor"))
                         (cl-letf (((symbol-function 'delete-overlay)
-                                   (lambda (&rest _) nil)))
+                                    (lambda (&rest _) nil)))
                           (funcall orig-fun wrapped-cb agent-type description prompt))
                       (funcall orig-fun wrapped-cb agent-type description prompt)))))
-            ;; SAFETY: Never execute in *Messages* buffer - find safe fallback
-            (let ((safe-buffer (cond
-                                ((not (string= (buffer-name) "*Messages*"))
-                                 (current-buffer))
-                                ((get-buffer "*gptel*")
-                                 (get-buffer "*gptel*"))
-                                ((get-buffer "*scratch*")  
-                                 (get-buffer "*scratch*"))
-                                (t
-                                 (get-buffer-create "*gptel-safe-fallback*")))))
-              (with-current-buffer safe-buffer
-                (funcall orig-fun main-cb agent-type description prompt)))))))))
+              ;; SAFETY: Never execute in *Messages* buffer - find safe fallback
+              (let ((safe-buffer (cond
+                                  ((not (string= (buffer-name) "*Messages*"))
+                                    (current-buffer))
+                                  ((get-buffer "*gptel*")
+                                    (get-buffer "*gptel*"))
+                                  ((get-buffer "*scratch*")  
+                                    (get-buffer "*scratch*"))
+                                  (t
+                                    (get-buffer-create "*gptel-safe-fallback*")))))
+                (with-current-buffer safe-buffer
+                  (funcall orig-fun main-cb agent-type description prompt)))))))))
 
 (defun gptel-auto-workflow-enable-per-project-subagents ()
   "Enable per-project subagent buffer support.
