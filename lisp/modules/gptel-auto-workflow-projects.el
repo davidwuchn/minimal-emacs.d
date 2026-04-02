@@ -279,6 +279,9 @@ When in auto-workflow context, routes to per-project buffer.
 Otherwise, passes through to original function (no error).
 NEVER allows overlays in *Messages* buffer.
 Also handles caching and result truncation from old advice."
+  (message "[FSM-DEBUG] Task override called for agent: %s, fsm-last: %s" 
+           agent-type 
+           (and (boundp 'gptel--fsm-last) gptel--fsm-last))
   ;; Check cache first (from old my/gptel-agent--task-override)
   (let ((cached (and (fboundp 'my/gptel--subagent-cache-get)
                       (my/gptel--subagent-cache-get agent-type prompt))))
@@ -308,6 +311,8 @@ Also handles caching and result truncation from old advice."
              (target-buf (if worktree-dir
                                (gptel-auto-workflow--get-worktree-buffer worktree-dir)
                              (cdr proj-context))))
+        (message "[FSM-DEBUG] Target buffer: %s, worktree: %s" 
+                 (and target-buf (buffer-name target-buf)) worktree-dir)
         ;; CRITICAL: Validate worktree exists before proceeding
         (if (and worktree-dir (not (file-exists-p worktree-dir)))
             (progn
@@ -317,13 +322,17 @@ Also handles caching and result truncation from old advice."
                     (buffer-live-p target-buf)
                     (not (string= (buffer-name target-buf) "*Messages*")))
               (with-current-buffer target-buf
+                (message "[FSM-DEBUG] In target buffer, fsm-last before: %s" 
+                         (and (boundp 'gptel--fsm-last) gptel--fsm-last))
                 ;; Ensure FSM exists for agent task
                 (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
+                  (message "[FSM-DEBUG] Creating new FSM in buffer")
                   ;; Create minimal FSM for agent context
                   (setq-local gptel--fsm-last 
                               (gptel-make-fsm 
                                :table (when (boundp 'gptel-send--transitions) gptel-send--transitions)
                                :handlers nil)))
+                (message "[FSM-DEBUG] fsm-last after: %s" gptel--fsm-last)
                 (let* ((default-directory (or worktree-dir project-root))
                         (target-marker (point-marker))
                         (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
@@ -338,6 +347,7 @@ Also handles caching and result truncation from old advice."
                                                   (fboundp 'my/gptel--subagent-cache-put))
                                         (my/gptel--subagent-cache-put agent-type prompt result))
                                       (funcall main-cb result))))
+                  (message "[FSM-DEBUG] Calling original function with agent: %s" agent-type)
                   (cl-letf (((symbol-function 'gptel-fsm-info)
                               (lambda (&optional fsm) 
                                 (if (or (eq fsm parent-fsm) (null fsm))
