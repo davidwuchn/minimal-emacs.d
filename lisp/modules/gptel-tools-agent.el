@@ -72,19 +72,19 @@ Use for non-critical operations that should not halt execution."
               err)
      nil)))
 
-
-(defun gptel-auto-workflow--with-error-handling (operation fn &optional error-prefix)
-  "Execute FN for OPERATION, logging any error and returning nil.
-ERROR-PREFIX defaults to \"[auto-workflow]\"."
+(defun gptel-auto-workflow--safe-call (operation fn &optional error-prefix)
+  "Execute FN for OPERATION, logging errors but continuing execution.
+ERROR-PREFIX defaults to \"[auto-workflow]\".
+Returns FN's result on success, nil on error.
+Use for non-critical operations that should not halt execution."
   (condition-case err
       (funcall fn)
     (error
-     (message "%s Failed to %s: %s"
+     (message "%s %s failed (non-critical): %s"
               (or error-prefix "[auto-workflow]")
               operation
               err)
      nil)))
-
 
 (defun gptel-auto-workflow--require-magit-dependencies ()
   "Require magit-worktree and magit-git dependencies.
@@ -3479,23 +3479,21 @@ Sets `gptel-auto-workflow-persistent-headless' to prevent interactive prompts."
     (condition-case err
         (progn
           (gptel-auto-workflow--safe-call "Cleanup" #'gptel-auto-workflow--cleanup-stale-state)
+          (gptel-auto-workflow--safe-call "Ensure main branch" #'gptel-auto-workflow--ensure-on-main-branch)
           (gptel-auto-workflow--safe-call "Sync staging" #'gptel-auto-workflow--sync-staging-with-main)
           (gptel-auto-workflow--safe-call
            "Orphan recovery"
            (lambda ()
-              (let ((orphans (gptel-auto-workflow--recover-orphans)))
-                (when orphans
-                  (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
-                           (length orphans))
-                  (gptel-auto-workflow-recover-all-orphans t)))))
-          (let ((started
-                 (gptel-auto-workflow-run-async--guarded
-                  nil
-                  (lambda (_)
-                    (gptel-auto-workflow--disable-headless-suppression)))))
-            (unless started
-              (gptel-auto-workflow--disable-headless-suppression))
-            started))
+             (let ((orphans (gptel-auto-workflow--recover-orphans)))
+               (when orphans
+                 (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
+                          (length orphans))
+                 (gptel-auto-workflow-recover-all-orphans t)))))
+          (gptel-auto-workflow-run-async--guarded nil
+                                                  (lambda (_)
+                                                    (gptel-auto-workflow--safe-call "Promote staging" #'gptel-auto-workflow--promote-staging-to-main)
+                                                    (gptel-auto-workflow--safe-call "Final branch check" #'gptel-auto-workflow--ensure-on-main-branch)
+                                                    (gptel-auto-workflow--disable-headless-suppression))))
       (error
         (message "[auto-workflow] Cron error: %s" err)
         (setq gptel-auto-workflow--stats
