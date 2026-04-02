@@ -99,9 +99,11 @@ Each worktree gets its own isolated buffer for subagent overlays."
           ;; Create initial FSM for agent tasks
           ;; This prevents "Wrong type argument: gptel-fsm, nil" error
           ;; when gptel-agent--task tries to access gptel--fsm-last
-          (when (and (fboundp 'gptel-make-fsm)
-                     (or (not (boundp 'gptel--fsm-last))
-                         (not gptel--fsm-last)))
+          (when (fboundp 'gptel-make-fsm)
+            ;; Ensure FSM-related variables are defined
+            (require 'gptel-request nil t)
+            (require 'gptel-agent-tools nil t)
+            ;; Create FSM with proper table and handlers
             (setq-local gptel--fsm-last
                         (gptel-make-fsm
                          :table (when (boundp 'gptel-send--transitions)
@@ -110,7 +112,8 @@ Each worktree gets its own isolated buffer for subagent overlays."
                                      gptel-agent-request--handlers)
                          :info (list :buffer buf
                                      :position (point-max-marker)
-                                     :tracking-marker (point-max-marker)))))
+                                     :tracking-marker (point-max-marker))))
+            (message "[auto-workflow] Created FSM in %s" buf-name))
           ;; Protect buffer from being killed during experiments
           (setq-local kill-buffer-query-functions
                       (cons (lambda ()
