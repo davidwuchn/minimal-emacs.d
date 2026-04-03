@@ -1077,9 +1077,12 @@ Uses hash table keyed by task-id to support parallel execution."
                     (kill-local-variable 'gptel--fsm-last)))))))
           (wrapped-cb
            (lambda (result)
-             (let ((state (gethash task-id my/gptel--agent-task-state)))
-               (when (gptel-auto-workflow--state-active-p state)
-                 (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+             (let* ((state (gethash task-id my/gptel--agent-task-state))
+                    (already-done (plist-get state :done)))
+               ;; Atomic test-and-set: mark done before acting to prevent
+               ;; double-invocation if gptel-abort fires synchronously in timeout.
+               (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+               (unless already-done
                  (when (timerp (plist-get state :timeout-timer))
                    (cancel-timer (plist-get state :timeout-timer)))
                  (when (timerp (plist-get state :progress-timer))
@@ -1090,7 +1093,6 @@ Uses hash table keyed by task-id to support parallel execution."
                  (funcall restore-origin-fsm child-fsm)
                  (funcall callback result)
                  (remhash task-id my/gptel--agent-task-state))))))
-    (puthash task-id (list :done nil :timeout-timer nil :progress-timer nil) my/gptel--agent-task-state)
     (message "[nucleus] Delegating to subagent %s%s..."
              agent-type
              (if task-timeout
@@ -1111,37 +1113,38 @@ Uses hash table keyed by task-id to support parallel execution."
                           (lambda ()
                              (when (buffer-live-p origin-buf)
                                (with-current-buffer origin-buf
-                                 (let ((state (gethash task-id my/gptel--agent-task-state)))
-                                  (when (gptel-auto-workflow--state-active-p state)
-                                    (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                                    (when (timerp (plist-get state :progress-timer))
-                                      (cancel-timer (plist-get state :progress-timer)))
-                                    (message "[nucleus] Subagent %s timed out after %ds, aborting request"
-                                             agent-type task-timeout)
-                                    (when (fboundp 'gptel-abort)
-                                      (ignore-errors (gptel-abort origin-buf)))
-                                      (funcall restore-origin-fsm child-fsm)
-                                      (funcall callback
-                                               (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                                       description agent-type task-timeout))))))))))
+                                 (let* ((state (gethash task-id my/gptel--agent-task-state))
+                                        (already-done (plist-get state :done)))
+                                   ;; Atomic test-and-set: same guard as wrapped-cb.
+                                   (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                                   (unless already-done
+                                     (when (timerp (plist-get state :progress-timer))
+                                       (cancel-timer (plist-get state :progress-timer)))
+                                     (message "[nucleus] Subagent %s timed out after %ds, aborting request"
+                                              agent-type task-timeout)
+                                     (when (fboundp 'gptel-abort)
+                                       (ignore-errors (gptel-abort origin-buf)))
+                                     (funcall restore-origin-fsm child-fsm)
+                                     (funcall callback
+                                              (format "Error: Task \"%s\" (%s) timed out after %ds."
+                                                      description agent-type task-timeout))
+                                     (remhash task-id my/gptel--agent-task-state))))))))))
         (let ((state (gethash task-id my/gptel--agent-task-state)))
           (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
     (let ((my/gptel--subagent-origin-buffer origin-buf))
-      (unwind-protect
-          (let ((request-started nil))
-            (unwind-protect
-                (progn
-                  (my/gptel--call-gptel-agent-task
-                   wrapped-cb agent-type description packaged-prompt)
-                   (setq request-started t)
-                   (when (buffer-live-p origin-buf)
-                     (with-current-buffer origin-buf
-                       (when (local-variable-p 'gptel--fsm-last)
-                         (setq child-fsm gptel--fsm-last)
-                         (my/gptel--disable-auto-retry-for-fsm child-fsm)))))
-               (unless request-started
-                 (funcall restore-origin-fsm))))
-         nil))))
+      (let ((request-started nil))
+        (unwind-protect
+            (progn
+              (my/gptel--call-gptel-agent-task
+               wrapped-cb agent-type description packaged-prompt)
+               (setq request-started t)
+               (when (buffer-live-p origin-buf)
+                 (with-current-buffer origin-buf
+                   (when (local-variable-p 'gptel--fsm-last)
+                     (setq child-fsm gptel--fsm-last)
+                     (my/gptel--disable-auto-retry-for-fsm child-fsm)))))
+          (unless request-started
+            (funcall restore-origin-fsm)))))))
 
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.
