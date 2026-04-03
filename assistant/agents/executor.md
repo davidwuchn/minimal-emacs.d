@@ -5,7 +5,7 @@ model: minimax-m2.5
 max-tokens: 65536
 temperature: 0.1
 steps: 100
-description: Nucleus executor for multi-step tasks (DashScope)
+description: Nucleus executor for multi-step tasks (MiniMax)
 tools:
   - ApplyPatch
   - Bash

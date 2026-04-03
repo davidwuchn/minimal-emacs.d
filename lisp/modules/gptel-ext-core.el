@@ -81,7 +81,7 @@ ORIG is the original function, PATH is the file path."
 ;; PLAIN MODEL CONFIG + MODE HOOK
 ;; ==============================================================================
 
-(defcustom my/gptel-plain-model 'qwen3.5-plus
+(defcustom my/gptel-plain-model 'minimax-m2.5
   "Model for plain `gptel' buffers (no preset / non-agent sessions).
 Set to nil to use the global `gptel-model' default."
   :type '(choice (const :tag "Global default" nil) symbol)
@@ -96,7 +96,7 @@ by `my/gptel--mode-hook-setup' before this runs)."
              (not (bound-and-true-p gptel--preset))
              my/gptel-plain-model)
     (setq-local gptel-model my/gptel-plain-model)
-    (setq-local gptel-backend gptel--dashscope)
+    (setq-local gptel-backend gptel--minimax)
     ))
 
 (defun my/gptel--mode-hook-setup ()

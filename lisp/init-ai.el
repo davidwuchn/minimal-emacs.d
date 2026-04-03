@@ -39,18 +39,16 @@
   (gptel-agent-loop-enable)
   (require 'ai-code-behaviors))
 
-(defcustom my/ai-code-gptel-helper-backend 'gptel--dashscope
+(defcustom my/ai-code-gptel-helper-backend 'gptel--minimax
   "Backend used for ai-code's synchronous gptel helper requests."
   :type 'symbol
   :group 'gptel)
 
-(defcustom my/ai-code-gptel-helper-model 'qwen3-coder-next
+(defcustom my/ai-code-gptel-helper-model 'minimax-m2.5
   "Fast non-reasoning model used for ai-code helper requests.
 
-Uses qwen3-coder-next on DashScope (¥0.3 input) for fast, cheap responses
-on simple tasks like headline generation and prompt classification.
-
-Note: qwen3.5-flash (¥0.2) is not available on the Coding Plan subscription."
+Uses MiniMax M2.5 for fast helper responses on simple tasks like headline
+generation and prompt classification."
   :type 'symbol
   :group 'gptel)
 

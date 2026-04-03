@@ -49,7 +49,7 @@
 (add-to-list 'safe-local-variable-values
              '(gptel-auto-experiment-no-improvement-threshold . 3))
 (add-to-list 'safe-local-variable-values
-             '(gptel-model . qwen3.5-plus))
+             '(gptel-model . minimax-m2.5))
 
 ;; Mark variable names as safe (for future flexibility)
 (dolist (var '(gptel-auto-workflow-projects

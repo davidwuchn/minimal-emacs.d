@@ -4,7 +4,7 @@ backend: MiniMax
 model: minimax-m2.7
 max-tokens: 2048
 temperature: 0.3
-description: Research agent (DashScope)
+description: Research agent (MiniMax)
 tools:
   - Bash
   - Glob

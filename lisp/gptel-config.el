@@ -55,17 +55,17 @@
 
 ;; --- Configuration Defaults ---
 ;; Use setq-default to set the global default values
-(setq-default gptel-backend gptel--dashscope
-              gptel-model 'qwen3.5-plus)
+(setq-default gptel-backend gptel--minimax
+              gptel-model 'minimax-m2.5)
 ;; Also set current values for this buffer
-(setq gptel-backend gptel--dashscope
-      gptel-model 'qwen3.5-plus)
+(setq gptel-backend gptel--minimax
+      gptel-model 'minimax-m2.5)
 
 ;; Safety: Ensure gptel-model is never nil (falls back to default)
 (defun my/gptel--ensure-model-not-nil (orig-fun &rest args)
   "Ensure `gptel-model' is not nil before calling ORIG-FUN."
   (unless gptel-model
-    (setq-local gptel-model 'qwen3.5-plus))
+    (setq-local gptel-model 'minimax-m2.5))
   (apply orig-fun args))
 
 (with-eval-after-load 'gptel

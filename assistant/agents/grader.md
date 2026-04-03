@@ -4,7 +4,7 @@ backend: MiniMax
 model: minimax-m2.7
 max-tokens: 2048
 temperature: 0.1
-description: Evaluate outputs against criteria (DashScope)
+description: Evaluate outputs against criteria (MiniMax)
 tools:
   - Read
   - Glob

@@ -4,7 +4,7 @@ backend: MiniMax
 model: minimax-m2.5
 max-tokens: 4096
 temperature: 0.3
-description: Introspector for Emacs APIs (DashScope)
+description: Introspector for Emacs APIs (MiniMax)
 tools:
   - Bash
   - Eval

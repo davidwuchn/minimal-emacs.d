@@ -4,7 +4,7 @@ backend: MiniMax
 model: minimax-m2.5
 max-tokens: 8192
 temperature: 0.2
-description: Deep codebase analysis subagent. Read-only exploration with high synthesis value (DashScope).
+description: Deep codebase analysis subagent. Read-only exploration with high synthesis value (MiniMax).
 tools:
   - Glob
   - Grep

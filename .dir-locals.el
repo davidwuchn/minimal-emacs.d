@@ -15,6 +15,6 @@
       (gptel-auto-experiment-max-per-target . 5)
       (gptel-auto-experiment-time-budget . 1200)
       (gptel-auto-experiment-no-improvement-threshold . 3)
-      (gptel-model . qwen3.5-plus))))
+      (gptel-model . minimax-m2.5))))
 
 ;;; .dir-locals.el ends here

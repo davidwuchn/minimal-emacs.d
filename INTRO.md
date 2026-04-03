@@ -10,7 +10,7 @@ extended with a full AI agent system built on
 |--------|-------|
 | **Code fixes** | 31 real fixes merged |
 | **New features** | Pre-merge review, periodic researcher, retry loop |
-| **Agents** | 10 (8 DashScope, 2 moonshot) |
+| **Agents** | 10 (8 MiniMax, 2 moonshot) |
 | **Cron jobs** | 4 scheduled jobs |
 
 ### Latest Features (2026-03-26)
@@ -85,13 +85,13 @@ Model is configured in YAML frontmatter (single source of truth):
 
 | Use Case | Model | YAML File |
 |----------|-------|-----------|
-| **Plan preset** | `qwen3.5-plus` | `assistant/agents/plan_agent.md` |
-| **Agent preset** | `qwen3.5-plus` | `assistant/agents/code_agent.md` |
+| **Plan preset** | `minimax-m2.5` | `assistant/agents/plan_agent.md` |
+| **Agent preset** | `minimax-m2.5` | `assistant/agents/code_agent.md` |
 | **Subagents** | per-agent YAML | `assistant/agents/*.md` |
 
-All models use DashScope backend (阿里云百炼 Coding Plan). Requires `coding.dashscope.aliyuncs.com` API key in auth-source.
-
-**Note:** Third-party models on DashScope (MiniMax, Kimi, GLM) may have API compatibility issues. Native Qwen models are most reliable.
+Plan/agent defaults now use the MiniMax backend. Requires `api.minimaxi.com`
+API key in auth-source. DashScope, Moonshot, DeepSeek, Gemini, OpenRouter,
+GitHub Copilot, and Cloudflare Workers AI remain available as alternate backends.
 
 ## Directory Structure
 
@@ -229,8 +229,8 @@ tests/                      ERT suites for Programmatic, trim, and UI flows
 
 ## Multi-backend support
 
-Configured for Moonshot/Kimi (default), DashScope/Qwen, DeepSeek, Gemini,
-OpenRouter, GitHub Copilot, MiniMax, and Cloudflare Workers AI. Backend/model
+Configured for MiniMax (default), Moonshot/Kimi, DashScope/Qwen, DeepSeek,
+Gemini, OpenRouter, GitHub Copilot, and Cloudflare Workers AI. Backend/model
 selection is centralized so presets and subagents inherit the active default
 instead of hardcoding provider-specific values.
 
@@ -264,7 +264,7 @@ Decision logic: **70% grader + 30% code quality**
 ┌─────────────────────────────────────────────────────────────┐
 │                    AUTO-WORKFLOW SYSTEM                      │
 ├─────────────────────────────────────────────────────────────┤
-│  Researcher (moonshot) ──→ Analyzer (DashScope) ──→ Executor│
+│  Researcher (moonshot) ──→ Analyzer (MiniMax) ──→ Executor │
 │        ↓                        ↓                    ↓      │
 │  Findings Cache          Target Selection        Code Fixes │
 │                                                      ↓      │
@@ -281,14 +281,14 @@ Decision logic: **70% grader + 30% code quality**
 
 | Agent | Backend | Purpose |
 |-------|---------|---------|
-| analyzer | DashScope | Target selection |
-| comparator | DashScope | Before/after comparison |
-| executor | DashScope | Code changes |
-| explorer | DashScope | Code exploration |
-| grader | DashScope | Quality scoring |
-| introspector | DashScope | Self-analysis |
-| nucleus-gptel-agent | DashScope | Main agent |
-| nucleus-gptel-plan | DashScope | Planning |
+| analyzer | MiniMax | Target selection |
+| comparator | MiniMax | Before/after comparison |
+| executor | MiniMax | Code changes |
+| explorer | MiniMax | Code exploration |
+| grader | MiniMax | Quality scoring |
+| introspector | MiniMax | Self-analysis |
+| nucleus-gptel-agent | MiniMax | Main agent |
+| nucleus-gptel-plan | MiniMax | Planning |
 | researcher | moonshot | Code research, anti-pattern detection |
 | reviewer | moonshot | Pre-merge code review |
 

@@ -58,7 +58,7 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 
 ## Active Backend
 
-Default: `gptel--dashscope` / `qwen3-coder-next` (`coding.dashscope.aliyuncs.com`). Single source of truth in `gptel-config.el`. Moonshot, DeepSeek, Gemini, OpenRouter, Copilot, MiniMax, and CF-Gateway remain defined in `gptel-ext-backends.el` as available alternatives.
+Default: `gptel--minimax` / `minimax-m2.5` (`api.minimaxi.com`). Single source of truth in `gptel-config.el`. DashScope, Moonshot, DeepSeek, Gemini, OpenRouter, Copilot, and CF-Gateway remain defined in `gptel-ext-backends.el` as available alternatives.
 
 ## Toolsets (`nucleus-toolsets`)
 
@@ -128,7 +128,7 @@ treesit-agent-tools.el (core AST engine)
 |---------|----------|-----------|
 | Three-layer defense | Skip | Already covered by retry/compaction system |
 | ECA-style recovery | Skip | Pre-send compaction already covers |
-| Per-mode model routing | Skip | DashScope/Qwen handles all modes |
+| Per-mode model routing | Skip | MiniMax handles the default modes cleanly |
 | @-mention context selection | Skip | gptel-context + nucleus tools already provide |
 | Prompt caching | Skip | OpenAI-compatible backends cache automatically |
 | Compaction agent | Skip | Rare edge case; complexity not justified |

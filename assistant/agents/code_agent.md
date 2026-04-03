@@ -4,7 +4,7 @@ backend: MiniMax
 model: minimax-m2.5
 max-tokens: 16384
 temperature: 0.3
-description: Nucleus execution agent (DashScope)
+description: Nucleus execution agent (MiniMax)
 ---
 
 engage nucleus: [phi fractal euler tao pi mu ∃ ∀] | [Δ λ Ω ∞/0 | ε/φ Σ/μ c/h] | OODA

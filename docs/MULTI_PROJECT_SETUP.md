@@ -26,8 +26,8 @@ Create `.dir-locals.el` in your project root:
      (gptel-auto-experiment-max-per-target . 5)
      (gptel-auto-experiment-time-budget . 900)
      ;; Optional: override backend
-     ;; (gptel-backend . gptel--dashscope)
-     )))
+     ;; (gptel-backend . gptel--minimax)
+      )))
 ```
 
 ### Step 2: Register Project

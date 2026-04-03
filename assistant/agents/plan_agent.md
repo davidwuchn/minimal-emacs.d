@@ -4,7 +4,7 @@ backend: MiniMax
 model: minimax-m2.5
 max-tokens: 16384
 temperature: 0.3
-description: Nucleus planning agent (read-only, DashScope)
+description: Nucleus planning agent (read-only, MiniMax)
 tools:
   - Bash
   - Eval
