@@ -124,7 +124,7 @@ run_batch_bootstrap() {
         -L "$DIR/lisp/modules" \
         -L "$DIR/packages/gptel" \
         -L "$DIR/packages/gptel-agent" \
-        -l "$DIR/scripts/test-auto-workflow-batch.el" \
+        -l "$DIR/tests/test-auto-workflow-batch.el" \
         -f test-auto-workflow-batch-run
 }
 

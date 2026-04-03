@@ -142,6 +142,27 @@ check_worker_daemon() {
     return 1
 }
 
+daemon_reports_active_workflow() {
+    local elisp="(let ((running (and (boundp 'gptel-auto-workflow--running)
+                                     gptel-auto-workflow--running))
+                       (queued (and (boundp 'gptel-auto-workflow--cron-job-running)
+                                    gptel-auto-workflow--cron-job-running)))
+                   (if (or running queued) t nil))"
+    local output
+    if ! output="$(run_emacsclient_eval "$elisp" 2 2>/dev/null)"; then
+        local rc=$?
+        if [ "$rc" -eq 124 ]; then
+            return 2
+        fi
+        return 1
+    fi
+
+    if printf '%s' "$output" | grep -qx 't'; then
+        return 0
+    fi
+    return 1
+}
+
 clear_stale_running_status() {
     if ! status_indicates_running; then
         return 0
@@ -155,6 +176,14 @@ clear_stale_running_status() {
     fi
 
     if [ "$rc" -eq 0 ]; then
+        if daemon_reports_active_workflow; then
+            return 0
+        else
+            rc=$?
+            if [ "$rc" -eq 1 ]; then
+                rewrite_status_idle
+            fi
+        fi
         return 0
     fi
 
@@ -224,7 +253,15 @@ ensure_worker_daemon() {
 case "$ACTION" in
     auto-workflow)
         ELISP="(let ((root \"$ROOT_LISP\"))
-                 (setq user-emacs-directory root)
+                 (setq minimal-emacs-user-directory root)
+                  (setq user-emacs-directory root)
+                 (dolist (dir (list (expand-file-name \"lisp\" root)
+                                    (expand-file-name \"lisp/modules\" root)
+                                    (expand-file-name \"packages/gptel\" root)
+                                    (expand-file-name \"packages/gptel-agent\" root)
+                                    (expand-file-name \"packages/ai-code\" root)))
+                   (when (file-directory-p dir)
+                     (add-to-list 'load-path dir)))
                  (defvar gptel--tool-preview-alist nil)
                  (load-file (expand-file-name \"lisp/modules/nucleus-tools.el\" root))
                  (load-file (expand-file-name \"lisp/modules/nucleus-prompts.el\" root))
@@ -248,7 +285,15 @@ case "$ACTION" in
         ;;
     research)
         ELISP="(let ((root \"$ROOT_LISP\"))
-                 (setq user-emacs-directory root)
+                 (setq minimal-emacs-user-directory root)
+                  (setq user-emacs-directory root)
+                 (dolist (dir (list (expand-file-name \"lisp\" root)
+                                    (expand-file-name \"lisp/modules\" root)
+                                    (expand-file-name \"packages/gptel\" root)
+                                    (expand-file-name \"packages/gptel-agent\" root)
+                                    (expand-file-name \"packages/ai-code\" root)))
+                   (when (file-directory-p dir)
+                     (add-to-list 'load-path dir)))
                  (defvar gptel--tool-preview-alist nil)
                  (load-file (expand-file-name \"lisp/modules/nucleus-tools.el\" root))
                  (load-file (expand-file-name \"lisp/modules/nucleus-prompts.el\" root))
@@ -272,6 +317,15 @@ case "$ACTION" in
         ;;
     mementum)
         ELISP="(let ((root \"$ROOT_LISP\"))
+                 (setq minimal-emacs-user-directory root)
+                 (setq user-emacs-directory root)
+                 (dolist (dir (list (expand-file-name \"lisp\" root)
+                                    (expand-file-name \"lisp/modules\" root)
+                                    (expand-file-name \"packages/gptel\" root)
+                                    (expand-file-name \"packages/gptel-agent\" root)
+                                    (expand-file-name \"packages/ai-code\" root)))
+                   (when (file-directory-p dir)
+                     (add-to-list 'load-path dir)))
                  (defvar gptel--tool-preview-alist nil)
                  (require 'gptel)
                  (unless (fboundp 'gptel--format-tool-call)
@@ -285,6 +339,15 @@ case "$ACTION" in
         ;;
     instincts)
         ELISP="(let ((root \"$ROOT_LISP\"))
+                 (setq minimal-emacs-user-directory root)
+                 (setq user-emacs-directory root)
+                 (dolist (dir (list (expand-file-name \"lisp\" root)
+                                    (expand-file-name \"lisp/modules\" root)
+                                    (expand-file-name \"packages/gptel\" root)
+                                    (expand-file-name \"packages/gptel-agent\" root)
+                                    (expand-file-name \"packages/ai-code\" root)))
+                   (when (file-directory-p dir)
+                     (add-to-list 'load-path dir)))
                  (defvar gptel--tool-preview-alist nil)
                  (require 'gptel)
                  (unless (fboundp 'gptel--format-tool-call)
@@ -298,6 +361,15 @@ case "$ACTION" in
         ;;
     status)
         ELISP="(let ((root \"$ROOT_LISP\"))
+                 (setq minimal-emacs-user-directory root)
+                 (setq user-emacs-directory root)
+                 (dolist (dir (list (expand-file-name \"lisp\" root)
+                                    (expand-file-name \"lisp/modules\" root)
+                                    (expand-file-name \"packages/gptel\" root)
+                                    (expand-file-name \"packages/gptel-agent\" root)
+                                    (expand-file-name \"packages/ai-code\" root)))
+                   (when (file-directory-p dir)
+                     (add-to-list 'load-path dir)))
                  (defvar gptel--tool-preview-alist nil)
                  (require 'gptel)
                  (unless (fboundp 'gptel--format-tool-call)

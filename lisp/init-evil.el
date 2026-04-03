@@ -2,6 +2,8 @@
 
 (provide 'init-evil)
 
+(defvar undo-fu-session-incompatible-files nil)
+
 (use-package undo-fu
   :ensure t
   :config
@@ -11,6 +13,14 @@
 
 (use-package undo-fu-session
   :ensure t
+  :init
+  (let* ((root-dir (or (and (boundp 'minimal-emacs-user-directory)
+                            minimal-emacs-user-directory)
+                       (file-name-directory
+                        (directory-file-name user-emacs-directory))))
+         (experiments-dir (expand-file-name "var/tmp/experiments/" root-dir)))
+    (add-to-list 'undo-fu-session-incompatible-files
+                 (concat "^" (regexp-quote experiments-dir))))
   :hook (after-init . undo-fu-session-global-mode))
 
 (use-package vundo

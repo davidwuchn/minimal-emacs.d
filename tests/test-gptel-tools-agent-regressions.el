@@ -958,6 +958,48 @@ EXIT-CODE defaults to 1."
        (delete-directory status-dir t)
        (delete-directory fake-bin t))))
 
+(ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status-after-daemon-restart ()
+  "Wrapper auto-workflow should clear stale running status when daemon is alive but idle."
+  (let* ((repo-root "/Users/davidwu/.emacs.d")
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "import sys\n"
+                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    "if expr == 't':\n"
+                    "    print('t')\n"
+                    "elif 'gptel-auto-workflow--cron-job-running' in expr:\n"
+                    "    print('nil')\n"
+                    "else:\n"
+                    "    print('nil')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 0 :total 0 :phase \"error\" :results \"var/tmp/experiments/2026-04-03/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s auto-workflow" script))))
+            (should-not (string-match-p "already-running" output))
+            (with-temp-buffer
+              (insert-file-contents status-file)
+              (should (string-match-p ":running nil" (buffer-string)))
+              (should (string-match-p ":phase \"idle\"" (buffer-string))))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t))))
+
 (ert-deftest regression/auto-workflow/recover-all-orphans-untracks-recovered-commits ()
   "Recovered orphan hashes should be removed from the tracking file."
   (let* ((proj-root (make-temp-file "aw-orphans" t))
@@ -1039,6 +1081,63 @@ EXIT-CODE defaults to 1."
                                  (string-match-p "UseKeychain=yes" elisp)
                                  (string-match-p "AddKeysToAgent=yes" elisp))
                           t)))
+                     elisp-payloads))))
+      (delete-directory status-dir t)
+       (delete-directory fake-bin t)
+       (when (file-exists-p argv-log)
+         (delete-file argv-log)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-seeds-module-load-path ()
+  "Wrapper auto-workflow action should seed repo-local load-path entries."
+  (let* ((repo-root "/Users/davidwu/.emacs.d")
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (fake-emacsclient
+          (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 0))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running nil :kept 0 :total 0 :phase \"idle\" :results \"var/tmp/experiments/2026-04-03/results.tsv\")\n"))
+          (call-process shell-file-name nil nil nil shell-command-switch
+                        (format "%s auto-workflow >/dev/null 2>&1 || true" script))
+          (let* ((entries (with-temp-buffer
+                            (insert-file-contents argv-log)
+                            (mapcar #'json-read-from-string
+                                    (split-string (buffer-string) "\n" t))))
+                 (elisp-payloads
+                  (delq nil
+                        (mapcar (lambda (argv)
+                                  (when (and (vectorp argv)
+                                             (>= (length argv) 5)
+                                             (equal (aref argv 3) "--eval"))
+                                    (aref argv 4)))
+                                entries))))
+            (should (seq-some
+                     (lambda (elisp)
+                       (and (string-match-p
+                             (regexp-quote "(setq minimal-emacs-user-directory root)")
+                             elisp)
+                            (string-match-p
+                             (regexp-quote "(expand-file-name \"lisp/modules\" root)")
+                             elisp)
+                            (string-match-p
+                             (regexp-quote "(expand-file-name \"packages/ai-code\" root)")
+                             elisp)
+                            (string-match-p
+                             (regexp-quote "(add-to-list 'load-path dir)")
+                             elisp)))
                      elisp-payloads))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t)
@@ -1407,8 +1506,36 @@ Submodules are hydrated later during verification, not during merge prep."
             (should-not (car result))
             (should (string-match-p "New staging test failures vs main"
                                     (cdr result))))
-        (when-let ((buf (get-buffer "*test-staging-verify*")))
-          (kill-buffer buf))))))
+         (when-let ((buf (get-buffer "*test-staging-verify*")))
+           (kill-buffer buf))))))
+
+(ert-deftest regression/auto-workflow/staging-baseline-allows-summary-only-failures ()
+  "Baseline comparison should allow matching summary-only failures."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--main-baseline-test-results)
+             (lambda ()
+               '(:ref "main"
+                 :exit-code 1
+                 :failed-tests ("summary:Some ERT tests failed")))))
+    (let ((result
+           (gptel-auto-workflow--staging-tests-match-main-baseline-p
+            "\x1b[0;31m✗\x1b[0m Some ERT tests failed\nSummary: PASS: 26 FAIL: 1 SKIP: 1\n")))
+      (should (car result))
+      (should (string-match-p "No new staging test failures vs main baseline"
+                              (cdr result))))))
+
+(ert-deftest regression/auto-workflow/staging-baseline-detects-new-summary-failures ()
+  "Baseline comparison should reject new summary-only failures."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--main-baseline-test-results)
+             (lambda ()
+               '(:ref "main"
+                 :exit-code 1
+                 :failed-tests ("summary:Some ERT tests failed")))))
+    (let ((result
+           (gptel-auto-workflow--staging-tests-match-main-baseline-p
+            "\x1b[0;31m✗\x1b[0m Some ERT tests failed\n\x1b[0;31m✗\x1b[0m Failed to load auto-workflow modules in batch mode\n")))
+      (should-not (car result))
+      (should (string-match-p "Failed to load auto-workflow modules in batch mode"
+                              (cdr result))))))
 
 (ert-deftest regression/auto-workflow/staging-main-ref-prefers-local-main ()
   "Staging sync should prefer local main when both local and remote refs exist."

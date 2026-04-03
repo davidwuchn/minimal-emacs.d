@@ -1749,17 +1749,28 @@ superproject-managed `.git/modules/...` store."
       (dolist (path (gptel-auto-workflow--staging-submodule-paths root))
         (gptel-auto-workflow--cleanup-staging-submodule-worktree root path)))))
 
+(defun gptel-auto-workflow--strip-ansi-escapes (text)
+  "Return TEXT with ANSI color escape sequences removed."
+  (if (not (stringp text))
+      ""
+    (replace-regexp-in-string "\x1b\\[[0-9;]*[[:alpha:]]" "" text t t)))
+
 (defun gptel-auto-workflow--extract-failed-tests (output)
-  "Return unique FAILED test names parsed from ERT OUTPUT."
+  "Return unique failure signatures parsed from OUTPUT."
   (let (failed)
     (when (stringp output)
       (with-temp-buffer
-        (insert output)
+        (insert (gptel-auto-workflow--strip-ansi-escapes output))
         (goto-char (point-min))
         (while (re-search-forward
                 "^   FAILED[[:space:]]+[0-9]+/[0-9]+[[:space:]]+\\([^[:space:]\n]+\\)"
                 nil t)
-          (push (match-string 1) failed))))
+          (push (match-string 1) failed))
+        (goto-char (point-min))
+        (while (re-search-forward
+                "^[[:space:]]*✗[[:space:]]+\\(.+\\)$"
+                nil t)
+          (push (format "summary:%s" (string-trim (match-string 1))) failed))))
     (nreverse (cl-remove-duplicates failed :test #'string=))))
 
 (defun gptel-auto-workflow--temporary-worktree-path (slug)
@@ -1866,7 +1877,7 @@ superproject-managed `.git/modules/...` store."
   (let ((staging-failures (gptel-auto-workflow--extract-failed-tests staging-output)))
     (cond
      ((null staging-failures)
-      (cons nil "Staging tests failed without parsable FAILED lines"))
+      (cons nil "Staging tests failed without parsable failure signatures"))
      (t
       (let* ((baseline (gptel-auto-workflow--main-baseline-test-results))
              (baseline-error (plist-get baseline :error))
