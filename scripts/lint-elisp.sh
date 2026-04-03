@@ -115,7 +115,7 @@ main() {
         files=(
             early-init.el
             init.el
-            $(find lisp -name "*.el" -type f 2>/dev/null || true)
+            $(find lisp packages -name "*.el" -type f 2>/dev/null || true)
         )
     fi
     

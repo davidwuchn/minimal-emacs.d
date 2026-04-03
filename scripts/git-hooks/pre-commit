@@ -3,4 +3,34 @@
 set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
-exec "$repo_root/scripts/check-submodule-sync.sh" --cached
+
+# Check submodule sync first
+"$repo_root/scripts/check-submodule-sync.sh" --cached
+
+# Byte-compile staged .el files to catch syntax errors (e.g. unbalanced parens)
+staged_el_files=$(git diff --cached --name-only --diff-filter=ACM | grep '\.el$' || true)
+if [[ -n "$staged_el_files" ]]; then
+    echo "pre-commit: byte-compiling staged .el files..."
+    failed=0
+    while IFS= read -r file; do
+        if [[ -f "$repo_root/$file" ]]; then
+            compile_out=$(emacs -Q --batch \
+                -L "$repo_root" -L "$repo_root/lisp" -L "$repo_root/lisp/modules" \
+                --eval "(setq byte-compile-error-on-warn nil)" \
+                -f batch-byte-compile "$repo_root/$file" 2>&1)
+            compile_exit=$?
+            # Print output (hide the "Wrote .elc" noise)
+            echo "$compile_out" | grep -v "^Wrote " || true
+            # Clean up .elc to avoid committing it
+            rm -f "$repo_root/${file}c"
+            if [[ $compile_exit -ne 0 ]]; then
+                echo "  FAIL: $file"
+                failed=1
+            fi
+        fi
+    done <<< "$staged_el_files"
+    if [[ $failed -ne 0 ]]; then
+        echo "pre-commit: .el syntax errors found. Fix before committing."
+        exit 1
+    fi
+fi
