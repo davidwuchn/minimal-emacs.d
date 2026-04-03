@@ -184,9 +184,9 @@ Format as markdown with frontmatter." topic
              (data (json-read-from-string json-string))
              (improvements (cdr (assq 'improvements data))))
         (mapcar (lambda (imp)
-                  (list :element (intern (cdr (assq 'element imp)))
-                        :action (cdr (assq 'action imp))
-                        :rationale (cdr (assq 'rationale imp))))
+                  (list :element (intern (or (cdr (assq 'element imp)) "unknown"))
+                        :action (or (cdr (assq 'action imp)) "No action specified")
+                        :rationale (or (cdr (assq 'rationale imp)) "No rationale")))
                 (if (vectorp improvements) (append improvements nil) improvements)))
     (error
      (message "[llm] Failed to parse suggestions, using fallback")
@@ -244,13 +244,17 @@ Format as markdown with frontmatter." topic
   "Synchronous version of suggest-improvements.
 Returns suggestions directly, blocking until complete."
   (let ((result nil)
-        (done nil))
+        (done nil)
+        (timeout-count 0))
     (gptel-benchmark-llm-suggest-improvements
      name type anti-patterns
      (lambda (suggestions)
        (setq result suggestions done t)))
-    (while (not done)
-      (sit-for 0.1))
+    (while (and (not done) (< timeout-count 600)) ; max 60s at 0.1s intervals
+      (sit-for 0.1)
+      (cl-incf timeout-count))
+    (unless done
+      (message "[llm] Timeout waiting for suggestions after 60s"))
     result))
 
 ;;; Provide

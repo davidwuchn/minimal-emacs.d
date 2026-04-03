@@ -86,7 +86,7 @@
       `((".*" ,(expand-file-name "lockfiles/" user-emacs-directory) t)))
 
 ;; Prevent world-readable backup files (security)
-(setq backup-file-modes '(#o600 #o400))
+;; backup-file-modes does not exist in Emacs; backup permissions follow umask
 
 ;; ==============================================================================
 ;; NO-LITTERING: Keep var/ clean

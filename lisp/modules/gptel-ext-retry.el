@@ -417,7 +417,7 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
         (error-msg (when (listp error-data) (plist-get error-data :message))))
     (or (and (stringp error-data)
              (string-match-p my/gptel--transient-error-string-patterns error-data))
-        (and (numberp status) (memql status my/gptel--transient-http-statuses))
+        (and (numberp status) (memq status my/gptel--transient-http-statuses))
         (and (numberp status)
              (= status 400)
              (listp error-data)

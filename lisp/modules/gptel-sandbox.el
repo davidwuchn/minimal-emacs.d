@@ -108,14 +108,6 @@ gptel preset.")
     (puthash 'nil nil env)
     env))
 
-(defun gptel-sandbox--bind-result (value env &optional symbol)
-  "Bind VALUE in ENV, updating `_` and `it` variables.
-When SYMBOL is non-nil, also bind it to that symbol."
-  (when symbol
-    (puthash symbol value env))
-  (puthash '_ value env)
-  (puthash 'it value env))
-
 (defun gptel-sandbox--copy-env (env)
   "Return a shallow copy of ENV."
   (let ((copy (make-hash-table :test #'eq)))
@@ -536,16 +528,18 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
      (if (and (consp expr) (eq (car expr) 'tool-call))
          (gptel-sandbox--execute-tool
           (lambda (value)
-            (gptel-sandbox--bind-result value env symbol)
+            (gptel-sandbox--bind-result symbol value env)
             (funcall callback (list :continue t :done nil)))
           (nth 1 expr) (cddr expr) env state)
        (let ((value (gptel-sandbox--eval-expr expr env)))
-         (gptel-sandbox--bind-result value env symbol)
+         (gptel-sandbox--bind-result symbol value env)
          (funcall callback (list :continue t :done nil)))))
     (`(tool-call ,tool-name . ,arg-forms)
      (gptel-sandbox--execute-tool
       (lambda (value)
-        (gptel-sandbox--bind-result value env)
+        ;; tool-call without setq: only bind _ and it
+        (puthash (quote _) value env)
+        (puthash (quote it) value env)
         (funcall callback (list :continue t :done nil)))
       tool-name arg-forms env state))
     (`(result ,expr)

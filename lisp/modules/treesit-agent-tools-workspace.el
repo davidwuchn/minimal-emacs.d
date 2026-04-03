@@ -54,11 +54,15 @@ Uses ripgrep to find candidate files, then extracts the exact AST blocks."
       (when (file-readable-p file)
         (condition-case nil
             (with-timeout (2 nil)
-              (with-current-buffer (find-file-noselect file)
-                (treesit-agent--ensure-parser file)
-                (let ((node-text (treesit-agent-extract-node symbol-name)))
-                  (when node-text
-                    (push (format "==== %s ====\n%s" (file-relative-name file root) node-text) results)))))
+              (let ((buf (find-file-noselect file)))
+                (unwind-protect
+                    (with-current-buffer buf
+                      (treesit-agent--ensure-parser file)
+                      (let ((node-text (treesit-agent-extract-node symbol-name)))
+                        (when node-text
+                          (push (format "==== %s ====\n%s" (file-relative-name file root) node-text) results))))
+                  (when (buffer-live-p buf)
+                    (kill-buffer buf)))))
           (error nil))))
     
     (if results

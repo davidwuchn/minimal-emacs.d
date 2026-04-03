@@ -10,6 +10,7 @@ Provides file-local navigation using tree-sitter AST nodes.
 Returns 'treesit-local only if the symbol at point is defined in the local file,
 allowing graceful fallback to dumb-jump for external definitions."
   (when (and (treesit-available-p)
+             (treesit-parser-list)
              (bound-and-true-p treesit-defun-type-regexp))
     (let* ((bounds (bounds-of-thing-at-point 'symbol))
            (identifier (when bounds
@@ -19,7 +20,7 @@ allowing graceful fallback to dumb-jump for external definitions."
                    (let* ((tree (treesit-induce-sparse-tree (treesit-buffer-root-node) treesit-defun-type-regexp))
                           (nodes (treesit-agent--flatten-sparse-tree tree)))
                      (dolist (node nodes)
-                       (when (equal (treesit-defun-name node) identifier)
+                       (when (equal (treesit-agent--get-defun-name node) identifier)
                          (throw 'found t))))))
         'treesit-local))))
 
@@ -33,7 +34,7 @@ allowing graceful fallback to dumb-jump for external definitions."
          (nodes (treesit-agent--flatten-sparse-tree tree))
          (matches nil))
     (dolist (node nodes)
-      (when (equal (treesit-defun-name node) identifier)
+      (when (equal (treesit-agent--get-defun-name node) identifier)
         (let* ((pos (treesit-node-start node))
                (loc (xref-make-buffer-location (current-buffer) pos)))
           (push (xref-make-match identifier loc 0) matches))))

@@ -76,7 +76,8 @@ Returns PID as integer, or nil if no PID file."
       (condition-case err
           (with-temp-buffer
             (insert-file-contents pid-file)
-            (string-to-number (buffer-string)))
+            (let ((pid (string-to-number (string-trim (buffer-string)))))
+              (and (> pid 0) pid)))  ; reject 0: kill -0 0 signals entire process group
         (error nil)))))
 
 (defun eca-security--process-alive-p (pid)
@@ -165,27 +166,29 @@ Security feature: prevents memory exhaustion attacks."
   "Decrypt GPG-FILE with PASSPHRASE.
 Uses --status-fd for machine-readable output.
 Returns decrypted content on success, nil on failure."
+  ;; call-process list-DESTINATION requires a file path for stderr (Emacs 30+).
+  ;; We use a temp file to capture gpg --status-fd 2 output, then read it.
   (let ((output-buffer (generate-new-buffer " *gpg-decrypt-output*"))
-        (status-buffer (generate-new-buffer " *gpg-status*"))
+        (status-file (make-temp-file "eca-gpg-status"))
         (exit-code nil)
         (status-output nil)
         (result nil))
     (unwind-protect
         (progn
-          ;; call-process signature: (call-process PROGRAM &optional INFILE DESTINATION ERROR &rest ARGS)
-          ;; We want stdout -> output-buffer, stderr (status) -> status-buffer
-          (setq exit-code (call-process "gpg" nil output-buffer status-buffer
+          (setq exit-code (call-process "gpg" nil (list output-buffer status-file) nil
                                         "--batch"
                                         "--passphrase" passphrase
                                         "--status-fd" "2"
                                         "-d" gpg-file))
-          (setq status-output (with-current-buffer status-buffer (buffer-string)))
+          (setq status-output (with-temp-buffer
+                                (insert-file-contents status-file)
+                                (buffer-string)))
           ;; Check exit code and look for DECRYPTION_OKAY in status output
           (when (and (zerop exit-code)
                      (string-match-p "DECRYPTION_OKAY" status-output))
             (setq result (with-current-buffer output-buffer (buffer-string)))))
       (kill-buffer output-buffer)
-      (kill-buffer status-buffer))
+      (ignore-errors (delete-file status-file)))
     result))
 
 (defun eca-security--decrypt-gpg-agent (gpg-file)
@@ -231,19 +234,22 @@ Security feature: detects tampering with encrypted credentials."
 (defun eca-security--verify-signature-1 (gpg-file sig-file)
   "Verify GPG signature for GPG-FILE against SIG-FILE.
 Returns non-nil if signature is valid."
-  (let ((status-buffer (generate-new-buffer " *gpg-verify-status*"))
+  ;; call-process list-DESTINATION requires a file path for stderr (Emacs 30+).
+  (let ((status-file (make-temp-file "eca-gpg-verify"))
         (exit-code nil)
         (result nil))
     (unwind-protect
         (progn
-          (setq exit-code (call-process "gpg" nil status-buffer status-buffer
+          (setq exit-code (call-process "gpg" nil (list nil status-file) nil
                                         "--batch"
                                         "--status-fd" "2"
                                         "--verify" sig-file gpg-file))
-          (let ((status-output (with-current-buffer status-buffer (buffer-string))))
+          (let ((status-output (with-temp-buffer
+                                 (insert-file-contents status-file)
+                                 (buffer-string))))
             (setq result (and (zerop exit-code)
                               (string-match-p "GOODSIG" status-output)))))
-      (kill-buffer status-buffer))
+      (ignore-errors (delete-file status-file)))
     (unless result
       (message "[eca-security] Signature verification failed for %s" gpg-file))
     result))

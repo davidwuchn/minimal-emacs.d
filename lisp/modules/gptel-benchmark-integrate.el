@@ -117,8 +117,9 @@ Returns plist with :applied count and :verified boolean."
           (setq verified nil)
           (message "[integrate] No improvement, rolling back...")
           (when checkpoints
-            (gptel-benchmark-rollback-restore-latest 
-             (gptel-benchmark--get-target-file name type))))))
+            (let ((target-file (gptel-benchmark--get-target-file name type)))
+              (when (and target-file (not (string-empty-p target-file)))
+                (gptel-benchmark-rollback-restore-latest target-file)))))))
     (list :applied applied :verified verified)))
 
 (defun gptel-benchmark--run-quick-benchmark (name type)

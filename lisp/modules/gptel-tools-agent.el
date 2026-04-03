@@ -1144,7 +1144,7 @@ Uses hash table keyed by task-id to support parallel execution."
                      (setq child-fsm gptel--fsm-last)
                      (my/gptel--disable-auto-retry-for-fsm child-fsm)))))
           (unless request-started
-            (funcall restore-origin-fsm)))))))
+            (funcall restore-origin-fsm))))))
 
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.

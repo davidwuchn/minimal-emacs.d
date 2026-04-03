@@ -14,8 +14,13 @@ if [[ -n "$staged_el_files" ]]; then
     failed=0
     while IFS= read -r file; do
         if [[ -f "$repo_root/$file" ]]; then
+            pkg_load_args=()
+            for pkg_dir in "$repo_root/packages"/*/; do
+                [[ -d "$pkg_dir" ]] && pkg_load_args+=(-L "$pkg_dir")
+            done
             compile_out=$(emacs -Q --batch \
                 -L "$repo_root" -L "$repo_root/lisp" -L "$repo_root/lisp/modules" \
+                "${pkg_load_args[@]}" \
                 --eval "(setq byte-compile-error-on-warn nil)" \
                 -f batch-byte-compile "$repo_root/$file" 2>&1)
             compile_exit=$?
