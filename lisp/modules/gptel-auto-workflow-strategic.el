@@ -308,7 +308,7 @@ LLM decides if available, otherwise uses static list."
          (lambda (targets)
            (if targets
                (progn
-                  (message "[auto-workflow] Analyzer selected: %s" targets)
+                   (message "[auto-workflow] Analyzer selected %d targets" (length targets))
                   (funcall callback targets))
               (message "[auto-workflow] Using static targets")
               (funcall callback static-targets))))

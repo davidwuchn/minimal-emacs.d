@@ -38,6 +38,13 @@
 Each project should have .dir-locals.el with workflow configuration.
 Customize this variable to add more projects.")
 
+(defun gptel-auto-workflow--fsm-safe-describe (fsm)
+  "Return a safe description of FSM for logging without corrupting *Messages*.
+Avoids %s formatting of complex objects that contain special characters."
+  (when fsm
+    (format "#<fsm:%s>"
+            (type-of fsm))))
+
 (defvar gptel-auto-workflow--project-buffers (make-hash-table :test 'equal)
   "Hash table mapping project roots to their gptel-agent buffers.")
 
@@ -297,9 +304,10 @@ When in auto-workflow context, routes to per-project buffer.
 Otherwise, passes through to original function (no error).
 NEVER allows overlays in *Messages* buffer.
 Also handles caching and result truncation from old advice."
-  (message "[FSM-DEBUG] Task override called for agent: %s, fsm-last: %s" 
+  (message "[FSM-DEBUG] Task override: agent=%s fsm=%s" 
            agent-type 
-           (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+           (gptel-auto-workflow--fsm-safe-describe
+            (and (boundp 'gptel--fsm-last) gptel--fsm-last)))
   ;; Check cache first (from old my/gptel-agent--task-override)
   (let ((cached (and (fboundp 'my/gptel--subagent-cache-get)
                       (my/gptel--subagent-cache-get agent-type prompt))))
@@ -340,8 +348,9 @@ Also handles caching and result truncation from old advice."
                     (buffer-live-p target-buf)
                     (not (string= (buffer-name target-buf) "*Messages*")))
               (with-current-buffer target-buf
-                (message "[FSM-DEBUG] In target buffer, fsm-last before: %s" 
-                         (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+                (message "[FSM-DEBUG] In target buffer, fsm=%s"
+                         (gptel-auto-workflow--fsm-safe-describe
+                          (and (boundp 'gptel--fsm-last) gptel--fsm-last)))
                 ;; Ensure FSM exists for agent task
                 (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
                   (message "[FSM-DEBUG] Creating new FSM in buffer")
@@ -350,7 +359,8 @@ Also handles caching and result truncation from old advice."
                               (gptel-make-fsm 
                                :table (when (boundp 'gptel-send--transitions) gptel-send--transitions)
                                :handlers nil)))
-                (message "[FSM-DEBUG] fsm-last after: %s" gptel--fsm-last)
+                (message "[FSM-DEBUG] fsm=%s (created)"
+                         (gptel-auto-workflow--fsm-safe-describe gptel--fsm-last))
                 (let* ((default-directory (or worktree-dir project-root))
                         (target-marker (point-marker))
                         (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
