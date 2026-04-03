@@ -63,8 +63,11 @@ signal(wrong-type-argument (gptel-backend nil))
 ## Verification
 
 ```bash
-./scripts/run-tests.sh                    # All tests pass
-./scripts/run-tests.sh "pattern"          # Run specific tests
+./scripts/run-tests.sh              # All tests pass
+./scripts/run-tests.sh unit         # ERT unit tests only
+./scripts/run-tests.sh e2e          # E2E workflow tests
+./scripts/run-tests.sh cron         # Cron installation tests
+./scripts/run-tests.sh evolve       # Auto-evolve tests
 ```
 
 ## Related

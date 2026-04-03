@@ -16,7 +16,7 @@ Running on Debian Linux (Pi5 aarch64), not macOS.
 
 ## Files Fixed
 
-- `scripts/test-mementum-integration.sh` - fallback to `$HOME/.emacs.d`
+- `scripts/run-tests.sh` - unified test runner (unit/e2e/cron/evolve)
 - `scripts/verify-integration.sh` - fallback to `$HOME/.emacs.d/scripts`
 - `AGENTS.md` - nucleus reference uses `$HOME/workspace/nucleus/AGENTS.md`
 
