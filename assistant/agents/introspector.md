@@ -1,7 +1,7 @@
 ---
 name: introspector
-backend: DashScope
-model: qwen3.5-plus
+backend: MiniMax
+model: minimax-m2.5
 max-tokens: 4096
 temperature: 0.3
 description: Introspector for Emacs APIs (DashScope)

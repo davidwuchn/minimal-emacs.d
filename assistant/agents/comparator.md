@@ -1,7 +1,7 @@
 ---
 name: comparator
-backend: DashScope
-model: kimi-k2.5
+backend: MiniMax
+model: minimax-m2.5
 max-tokens: 2048
 temperature: 0.1
 description: Perform blind A/B comparison (DashScope)

@@ -1,7 +1,7 @@
 ---
 name: explorer
-backend: DashScope
-model: qwen3.5-plus
+backend: MiniMax
+model: minimax-m2.5
 max-tokens: 8192
 temperature: 0.2
 description: Deep codebase analysis subagent. Read-only exploration with high synthesis value (DashScope).

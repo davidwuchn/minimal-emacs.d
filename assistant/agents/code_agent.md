@@ -1,7 +1,7 @@
 ---
 name: nucleus-gptel-agent
-backend: DashScope
-model: qwen3.5-plus
+backend: MiniMax
+model: minimax-m2.5
 max-tokens: 16384
 temperature: 0.3
 description: Nucleus execution agent (DashScope)

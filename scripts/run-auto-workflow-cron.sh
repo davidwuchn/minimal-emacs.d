@@ -142,6 +142,7 @@ case "$ACTION" in
     auto-workflow)
         ELISP="(let ((root \"$ROOT_LISP\"))
                  (setq user-emacs-directory root)
+                 (defvar gptel--tool-preview-alist nil)
                  (load-file (expand-file-name \"lisp/modules/nucleus-tools.el\" root))
                  (load-file (expand-file-name \"lisp/modules/nucleus-prompts.el\" root))
                  (load-file (expand-file-name \"lisp/modules/nucleus-presets.el\" root))
@@ -149,6 +150,12 @@ case "$ACTION" in
                    (nucleus--register-gptel-directives))
                  (when (fboundp 'nucleus--override-gptel-agent-presets)
                    (nucleus--override-gptel-agent-presets))
+                 (require 'gptel)
+                 (unless (fboundp 'gptel--format-tool-call)
+                   (defun gptel--format-tool-call (name arg-values)
+                     (format \"(%s %s)\n\"
+                             (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
+                             (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
                  (require 'gptel-request)
                  (require 'gptel-agent-tools)
                  (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
@@ -159,6 +166,7 @@ case "$ACTION" in
     research)
         ELISP="(let ((root \"$ROOT_LISP\"))
                  (setq user-emacs-directory root)
+                 (defvar gptel--tool-preview-alist nil)
                  (load-file (expand-file-name \"lisp/modules/nucleus-tools.el\" root))
                  (load-file (expand-file-name \"lisp/modules/nucleus-prompts.el\" root))
                  (load-file (expand-file-name \"lisp/modules/nucleus-presets.el\" root))
@@ -166,6 +174,12 @@ case "$ACTION" in
                    (nucleus--register-gptel-directives))
                  (when (fboundp 'nucleus--override-gptel-agent-presets)
                    (nucleus--override-gptel-agent-presets))
+                 (require 'gptel)
+                 (unless (fboundp 'gptel--format-tool-call)
+                   (defun gptel--format-tool-call (name arg-values)
+                     (format \"(%s %s)\n\"
+                             (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
+                             (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
                  (require 'gptel-request)
                  (require 'gptel-agent-tools)
                  (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
@@ -175,18 +189,39 @@ case "$ACTION" in
         ;;
     mementum)
         ELISP="(let ((root \"$ROOT_LISP\"))
+                 (defvar gptel--tool-preview-alist nil)
+                 (require 'gptel)
+                 (unless (fboundp 'gptel--format-tool-call)
+                   (defun gptel--format-tool-call (name arg-values)
+                     (format \"(%s %s)\n\"
+                             (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
+                             (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
                  (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
                  (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
                  (gptel-auto-workflow-queue-all-mementum))"
         ;;
     instincts)
         ELISP="(let ((root \"$ROOT_LISP\"))
+                 (defvar gptel--tool-preview-alist nil)
+                 (require 'gptel)
+                 (unless (fboundp 'gptel--format-tool-call)
+                   (defun gptel--format-tool-call (name arg-values)
+                     (format \"(%s %s)\n\"
+                             (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
+                             (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
                  (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
                  (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
                  (gptel-auto-workflow-queue-all-instincts))"
         ;;
     status)
         ELISP="(let ((root \"$ROOT_LISP\"))
+                 (defvar gptel--tool-preview-alist nil)
+                 (require 'gptel)
+                 (unless (fboundp 'gptel--format-tool-call)
+                   (defun gptel--format-tool-call (name arg-values)
+                     (format \"(%s %s)\n\"
+                             (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
+                             (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
                  (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
                  (gptel-auto-workflow-status))"
         ;;

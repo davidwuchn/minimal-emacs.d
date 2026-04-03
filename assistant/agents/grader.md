@@ -1,7 +1,7 @@
 ---
 name: grader
-backend: DashScope
-model: qwen3-max-2026-01-23
+backend: MiniMax
+model: minimax-m2.7
 max-tokens: 2048
 temperature: 0.1
 description: Evaluate outputs against criteria (DashScope)
