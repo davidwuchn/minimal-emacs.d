@@ -1128,7 +1128,7 @@ Uses hash table keyed by task-id to support parallel execution."
                                      (funcall callback
                                               (format "Error: Task \"%s\" (%s) timed out after %ds."
                                                       description agent-type task-timeout))
-                                     (remhash task-id my/gptel--agent-task-state))))))))))
+                                     (remhash task-id my/gptel--agent-task-state)))))))))
         (let ((state (gethash task-id my/gptel--agent-task-state)))
           (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
     (let ((my/gptel--subagent-origin-buffer origin-buf))
@@ -1144,7 +1144,7 @@ Uses hash table keyed by task-id to support parallel execution."
                      (setq child-fsm gptel--fsm-last)
                      (my/gptel--disable-auto-retry-for-fsm child-fsm)))))
           (unless request-started
-            (funcall restore-origin-fsm))))))
+            (funcall restore-origin-fsm)))))))
 
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.
