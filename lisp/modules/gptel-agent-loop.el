@@ -46,6 +46,7 @@ Defined in gptel-tools-agent.el.")
 
 (defvar gptel--fsm-last nil)
 (defvar gptel-agent--agents)
+(defvar gptel-agent-request--handlers)
 (defvar gptel-agent-loop--bypass nil
   "When non-nil, bypass loop control and call the safe task override directly.")
 (defvar gptel--preset nil)
