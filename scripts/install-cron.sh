@@ -25,7 +25,8 @@ detect_machine() {
 render_crontab() {
     local machine="$1"
     {
-        sed -n '1,19p' "$CRON_FILE"
+        # Header: all comment lines before the first SHELL= line
+        awk '/^SHELL=/{exit} {print}' "$CRON_FILE"
         echo "SHELL=/bin/bash"
         if [ "$machine" = "macos" ]; then
             echo "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:$HOME/.emacs.d/bin"
@@ -39,7 +40,10 @@ render_crontab() {
         echo "# Ensure log directory exists"
         echo "@reboot mkdir -p $HOME/.emacs.d/var/tmp/cron"
         echo
+        # Sections: start from first '---' separator; strip env vars already emitted above
         awk -v machine="$machine" '
+            /^# -{5,}/ { found=1 }
+            !found { next }
             /^# .* SECTION: / {
                 current_section = $NF
                 in_selected = (current_section == machine)
@@ -56,7 +60,7 @@ render_crontab() {
             }
             /^SHELL=/ || /^PATH=/ || /^XDG_RUNTIME_DIR=/ || /^@reboot mkdir/ { next }
             { print }
-        ' "$CRON_FILE" | sed -n '30,$p'
+        ' "$CRON_FILE"
     }
 }
 
@@ -84,12 +88,6 @@ case "$MACHINE" in
         ;;
 esac
 
-if [ "$MACHINE" = "linux" ] || [ "$MACHINE" = "pi5" ]; then
-    MACHINE_RENDER="pi5"
-fi
-
-mkdir -p "$DIR/var/tmp/cron" "$DIR/var/tmp/experiments"
-
 case "$MODE" in
     --render)
         render_crontab "$MACHINE_RENDER"
@@ -105,11 +103,13 @@ case "$MODE" in
         exit 0
         ;;
     install)
+        mkdir -p "$DIR/var/tmp/cron" "$DIR/var/tmp/experiments"
         echo "=== Installing Cron Jobs for Autonomous Operation ==="
         echo
         echo "Detected: $HOSTNAME ($MACHINE)"
         echo
         tmp_file=$(mktemp)
+        trap 'rm -f "$tmp_file"' EXIT
         render_crontab "$MACHINE_RENDER" > "$tmp_file"
         crontab "$tmp_file"
         rm -f "$tmp_file"
@@ -130,7 +130,7 @@ case "$MODE" in
         exit 0
         ;;
     *)
-        echo "Usage: $0 [--dry-run|--render]" >&2
+        echo "Usage: $0 [install|--dry-run|--render]" >&2
         exit 2
         ;;
 esac
