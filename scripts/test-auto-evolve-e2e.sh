@@ -15,26 +15,7 @@
 
 set -e
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$DIR"
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-PASS=0
-FAIL=0
-SKIP=0
-
-pass() { echo -e "${GREEN}✓${NC} $1"; PASS=$((PASS + 1)); }
-fail() { echo -e "${RED}✗${NC} $1"; FAIL=$((FAIL + 1)); }
-skip() { echo -e "${YELLOW}○${NC} $1"; SKIP=$((SKIP + 1)); }
-section() { echo ""; echo "=== $1 ==="; }
-
-echo "═══════════════════════════════════════════════════════════════"
-echo "         AUTO-EVOLVE E2E TEST"
-echo "═══════════════════════════════════════════════════════════════"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/common.bash"
 
 ORIGINAL_BRANCH=$(git branch --show-current)
 
@@ -164,16 +145,9 @@ else
     skip "Use --full to run actual auto-evolve cycle"
 fi
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Summary
-# ═══════════════════════════════════════════════════════════════════════════
+print_summary
 
-echo ""
-echo "═══════════════════════════════════════════════════════════════"
-echo -e "Summary: ${GREEN}PASS: $PASS${NC} ${RED}FAIL: $FAIL${NC} ${YELLOW}SKIP: $SKIP${NC}"
-echo "═══════════════════════════════════════════════════════════════"
-
-if [ $FAIL -gt 0 ]; then
+if [ "$FAIL" -gt 0 ]; then
     echo ""
     echo "Fix failures before auto-evolve will work."
     exit 1

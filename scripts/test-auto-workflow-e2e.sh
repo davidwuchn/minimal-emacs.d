@@ -2,20 +2,9 @@
 
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUNNER="$DIR/scripts/run-auto-workflow-cron.sh"
-cd "$DIR"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/common.bash"
 
-run_batch_bootstrap() {
-    emacs --batch -Q \
-        -L "$DIR" \
-        -L "$DIR/lisp" \
-        -L "$DIR/lisp/modules" \
-        -L "$DIR/packages/gptel" \
-        -L "$DIR/packages/gptel-agent" \
-        -l "$DIR/scripts/test-auto-workflow-batch.el" \
-        -f test-auto-workflow-batch-run
-}
+RUNNER="$DIR/scripts/run-auto-workflow-cron.sh"
 
 echo "=== Auto-Workflow E2E Test ==="
 echo
@@ -27,10 +16,10 @@ if [ ! -x "$RUNNER" ]; then
 fi
 echo "  ✓ wrapper exists: $RUNNER"
 
-if ! command -v emacsclient >/dev/null 2>&1 && [ ! -x /opt/homebrew/bin/emacsclient ] && [ ! -x /usr/local/bin/emacsclient ]; then
+EMACSCLIENT="$(resolve_emacsclient)" || {
     echo "  ✗ emacsclient not found"
     exit 1
-fi
+}
 echo "  ✓ emacsclient is resolvable"
 
 echo
@@ -45,7 +34,7 @@ fi
 echo
 echo "[3/7] Checking required modules..."
 for module in gptel-tools-agent.el gptel-auto-workflow-projects.el gptel-auto-workflow-strategic.el; do
-    if [ -f "lisp/modules/$module" ]; then
+    if [ -f "$DIR/lisp/modules/$module" ]; then
         echo "  ✓ $module exists"
     else
         echo "  ✗ $module missing"
@@ -67,11 +56,11 @@ fi
 echo
 echo "[5/7] Checking required directories..."
 for dir in var/tmp/cron var/tmp/experiments; do
-    if [ -d "$dir" ]; then
+    if [ -d "$DIR/$dir" ]; then
         echo "  ✓ $dir exists"
     else
         echo "  ⚠ $dir missing, creating..."
-        mkdir -p "$dir"
+        mkdir -p "$DIR/$dir"
     fi
 done
 

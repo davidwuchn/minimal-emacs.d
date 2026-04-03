@@ -24,6 +24,8 @@ lisp/modules/*.elc
 !tests/*.el
 !scripts/
 !scripts/*.sh
+!scripts/lib/
+!scripts/lib/**
 !scripts/*.py
 !scripts/*.clj
 !scripts/git-hooks/

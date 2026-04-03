@@ -2,37 +2,13 @@
 
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/common.bash"
+
 CRON_FILE="$DIR/cron.d/auto-workflow"
 RUNNER="$DIR/scripts/run-auto-workflow-cron.sh"
 INSTALLER="$DIR/scripts/install-cron.sh"
 LOGDIR="$DIR/var/tmp/cron"
 FULL_TEST="${1:-}"
-
-RED='[0;31m'
-GREEN='[0;32m'
-YELLOW='[1;33m'
-NC='[0m'
-
-PASS=0
-FAIL=0
-SKIP=0
-
-pass() { echo -e "${GREEN}✓${NC} $1"; PASS=$((PASS + 1)); }
-fail() { echo -e "${RED}✗${NC} $1"; FAIL=$((FAIL + 1)); }
-skip() { echo -e "${YELLOW}○${NC} $1"; SKIP=$((SKIP + 1)); }
-section() { echo; echo "=== $1 ==="; }
-
-run_batch_bootstrap() {
-    emacs --batch -Q \
-        -L "$DIR" \
-        -L "$DIR/lisp" \
-        -L "$DIR/lisp/modules" \
-        -L "$DIR/packages/gptel" \
-        -L "$DIR/packages/gptel-agent" \
-        -l "$DIR/scripts/test-auto-workflow-batch.el" \
-        -f test-auto-workflow-batch-run
-}
 
 section "Cron Template"
 if [ -f "$CRON_FILE" ]; then
@@ -174,10 +150,7 @@ fi
 
 rm -f "$RENDERED"
 
-echo
-echo "═══════════════════════════════════════════════════════════════"
-echo -e "Summary: ${GREEN}PASS: $PASS${NC} ${RED}FAIL: $FAIL${NC} ${YELLOW}SKIP: $SKIP${NC}"
-echo "═══════════════════════════════════════════════════════════════"
+print_summary
 
 if [ "$FAIL" -gt 0 ]; then
     echo

@@ -1,44 +1,339 @@
 #!/usr/bin/env bash
 
-# run-tests.sh
-# Run all ERT tests in tests/ directory
+# run-tests.sh - Unified test runner for Emacs.d
 #
 # Usage:
 #   ./scripts/run-tests.sh              # Run all tests
-#   ./scripts/run-tests.sh grader       # Run tests matching pattern
+#   ./scripts/run-tests.sh unit         # Run ERT unit tests only
+#   ./scripts/run-tests.sh e2e         # Run E2E tests only
+#   ./scripts/run-tests.sh cron         # Run cron installation tests only
+#   ./scripts/run-tests.sh evolve        # Run auto-evolve tests only
+#   ./scripts/run-tests.sh all          # Run everything
 #
 # Returns 0 if all tests pass, 1 if any fail.
 
-set -e
+set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$DIR"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/common.bash"
 
-PATTERN="${1:-t}"
+SUBCOMMAND="${1:-all}"
 
-echo "Running ERT tests (pattern: $PATTERN)..."
+# ═══════════════════════════════════════════════════════════════════════════
+# ERT Unit Tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+run_unit_tests() {
+    local PATTERN="${1:-t}"
+    
+    section "Unit Tests (ERT)"
+    
+    echo "Running ERT tests (pattern: $PATTERN)..."
+    echo ""
+    
+    local output
+    output=$(emacs --batch -Q \
+        -L "$DIR" \
+        -L "$DIR/lisp" \
+        -L "$DIR/lisp/modules" \
+        -L "$DIR/packages/gptel" \
+        -L "$DIR/packages/gptel-agent" \
+        -L "$DIR/packages/magit/lisp" \
+        -L "$DIR/tests" \
+        -l ert \
+        $(find tests -name "test-*.el" -exec echo "-l {}" \;) \
+        --eval "(ert-run-tests-batch-and-exit \"$PATTERN\")" 2>&1) || true
+    
+    echo "$output" | head -50
+    
+    if echo "$output" | grep -q "0 unexpected"; then
+        pass "All ERT tests passed"
+        return 0
+    else
+        fail "Some ERT tests failed"
+        return 1
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Auto-Workflow E2E Tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+run_e2e_tests() {
+    local RUNNER="$DIR/scripts/run-auto-workflow-cron.sh"
+    
+    section "Auto-Workflow E2E"
+    
+    # Prerequisites
+    echo "Checking prerequisites..."
+    if [ ! -x "$RUNNER" ]; then
+        fail "wrapper missing or not executable: $RUNNER"
+        return 1
+    fi
+    pass "wrapper exists: $RUNNER"
+    
+    EMACSCLIENT="$(resolve_emacsclient)" || {
+        fail "emacsclient not found"
+        return 1
+    }
+    pass "emacsclient is resolvable"
+    
+    # Wrapper status
+    echo ""
+    echo "Checking wrapper status..."
+    if "$RUNNER" status | grep -q ':phase'; then
+        pass "wrapper returns a workflow status snapshot"
+    else
+        fail "wrapper status did not return workflow data"
+        return 1
+    fi
+    
+    # Required modules
+    echo ""
+    echo "Checking required modules..."
+    for module in gptel-tools-agent.el gptel-auto-workflow-projects.el gptel-auto-workflow-strategic.el; do
+        if [ -f "$DIR/lisp/modules/$module" ]; then
+            pass "$module exists"
+        else
+            fail "$module missing"
+            return 1
+        fi
+    done
+    
+    # Cron configuration
+    echo ""
+    echo "Checking cron configuration..."
+    if crontab -l 2>/dev/null | grep -Eq '^[0-9*@].*run-auto-workflow-cron\.sh auto-workflow'; then
+        pass "Auto-workflow cron job installed"
+    else
+        fail "Wrapper-based auto-workflow cron job not found"
+        return 1
+    fi
+    
+    # Required directories
+    echo ""
+    echo "Checking required directories..."
+    for dir in var/tmp/cron var/tmp/experiments; do
+        if [ -d "$DIR/$dir" ]; then
+            pass "$dir exists"
+        else
+            mkdir -p "$DIR/$dir"
+            pass "$dir created"
+        fi
+    done
+    
+    # Batch bootstrap
+    echo ""
+    echo "Testing batch module loading..."
+    if run_batch_bootstrap >/dev/null 2>&1; then
+        pass "auto-workflow modules load successfully in batch mode"
+    else
+        fail "Failed to load auto-workflow modules in batch mode"
+        return 1
+    fi
+    
+    # Entrypoints
+    echo ""
+    echo "Checking workflow entrypoints..."
+    if "$RUNNER" status | grep -q ':phase'; then
+        pass "wrapper status remains responsive"
+    else
+        fail "wrapper status did not return workflow data"
+        return 1
+    fi
+    
+    return 0
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Cron Installation Tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+run_cron_tests() {
+    local CRON_FILE="$DIR/cron.d/auto-workflow"
+    local RUNNER="$DIR/scripts/run-auto-workflow-cron.sh"
+    local INSTALLER="$DIR/scripts/install-cron.sh"
+    local LOGDIR="$DIR/var/tmp/cron"
+    
+    section "Cron Installation"
+    
+    # Cron template
+    if [ -f "$CRON_FILE" ]; then
+        pass "Crontab template exists: $CRON_FILE"
+    else
+        fail "Crontab template missing: $CRON_FILE"
+        return 1
+    fi
+    
+    if grep -q 'SHELL=/bin/bash' "$CRON_FILE"; then
+        pass "SHELL=/bin/bash is set"
+    else
+        fail "SHELL not set to /bin/bash"
+    fi
+    
+    if grep -q 'run-auto-workflow-cron.sh auto-workflow' "$CRON_FILE"; then
+        pass "Template uses wrapper for auto-workflow"
+    else
+        fail "Template does not use wrapper for auto-workflow"
+    fi
+    
+    # Rendered crontab
+    local RENDERED
+    RENDERED=$(mktemp)
+    "$INSTALLER" --render > "$RENDERED"
+    
+    if grep -Eq '^[0-9*@]' "$RENDERED"; then
+        pass "Rendered crontab contains active schedules"
+    else
+        fail "Rendered crontab has no active schedules"
+        rm -f "$RENDERED"
+        return 1
+    fi
+    
+    if crontab -l >/dev/null 2>&1; then
+        pass "User crontab is installed"
+    else
+        skip "No user crontab installed"
+    fi
+    
+    # Log directory
+    if [ -d "$LOGDIR" ]; then
+        pass "Log directory exists: $LOGDIR"
+    else
+        fail "Log directory missing: $LOGDIR"
+    fi
+    
+    # Cron daemon
+    if systemctl is-active --quiet cron 2>/dev/null; then
+        pass "Cron daemon is running (systemd)"
+    elif service cron status >/dev/null 2>&1; then
+        pass "Cron daemon is running (service)"
+    elif pgrep -x "cron" >/dev/null; then
+        pass "Cron daemon is running (pgrep)"
+    else
+        fail "Cron daemon is NOT running"
+    fi
+    
+    # Log writability
+    local TEST_LOG="$LOGDIR/test-write-$$.log"
+    if touch "$TEST_LOG" 2>/dev/null; then
+        pass "Can create log files in $LOGDIR"
+        rm -f "$TEST_LOG"
+    else
+        fail "Cannot create log files in $LOGDIR"
+    fi
+    
+    rm -f "$RENDERED"
+    return 0
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Auto-Evolve Tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+run_evolve_tests() {
+    local ORIGINAL_BRANCH
+    ORIGINAL_BRANCH=$(git branch --show-current)
+    
+    section "Auto-Evolve"
+    
+    # Emacs server
+    echo "Checking Emacs server..."
+    if emacsclient --eval "t" >/dev/null 2>&1; then
+        pass "Emacs server is running"
+    else
+        fail "Emacs server not running"
+        return 1
+    fi
+    
+    # Function exists
+    echo "Checking function..."
+    if emacsclient --eval "(fboundp 'gptel-auto-evolve-run)" 2>/dev/null | grep -q "t"; then
+        pass "gptel-auto-evolve-run is defined"
+    else
+        skip "gptel-auto-evolve-run is NOT defined (may not be loaded)"
+    fi
+    
+    # Git configuration
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        pass "In git repository"
+    else
+        fail "Not in git repository"
+        return 1
+    fi
+    
+    if [ -n "$ORIGINAL_BRANCH" ]; then
+        pass "Current branch: $ORIGINAL_BRANCH"
+    else
+        fail "Could not detect current branch"
+    fi
+    
+    # Verify script
+    local VERIFY_SCRIPT="$DIR/scripts/verify-nucleus.sh"
+    if [ -x "$VERIFY_SCRIPT" ]; then
+        pass "Verify script exists and is executable"
+    else
+        skip "Verify script not found or not executable"
+    fi
+    
+    # Target files
+    echo "Checking target files..."
+    for target in "gptel-ext-retry.el" "gptel-ext-context.el" "gptel-tools-code.el"; do
+        if [ -f "$DIR/lisp/modules/$target" ]; then
+            pass "Target exists: $target"
+        else
+            fail "Target missing: $target"
+        fi
+    done
+    
+    return 0
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Main
+# ═══════════════════════════════════════════════════════════════════════════
+
+reset_counters
+FAILED=0
+
+case "$SUBCOMMAND" in
+    unit|u)
+        run_unit_tests || FAILED=1
+        ;;
+    e2e|e)
+        run_e2e_tests || FAILED=1
+        ;;
+    cron|c)
+        run_cron_tests || FAILED=1
+        ;;
+    evolve|ev)
+        run_evolve_tests || FAILED=1
+        ;;
+    all|a)
+        run_unit_tests || FAILED=1
+        echo ""
+        run_e2e_tests || FAILED=1
+        echo ""
+        run_cron_tests || FAILED=1
+        echo ""
+        run_evolve_tests || FAILED=1
+        ;;
+    *)
+        echo "Usage: $0 {unit|e2e|cron|evolve|all}"
+        echo ""
+        echo "  unit, u   - ERT unit tests only"
+        echo "  e2e, e    - Auto-workflow E2E tests only"
+        echo "  cron, c   - Cron installation tests only"
+        echo "  evolve, ev - Auto-evolve tests only"
+        echo "  all, a    - Run all tests (default)"
+        exit 1
+        ;;
+esac
+
 echo ""
+print_summary
 
-# Run tests and capture output
-emacs --batch -Q \
-  -L "$DIR" \
-  -L "$DIR/lisp" \
-  -L "$DIR/lisp/modules" \
-  -L "$DIR/packages/gptel" \
-  -L "$DIR/packages/gptel-agent" \
-  -L "$DIR/packages/magit/lisp" \
-  -L "$DIR/tests" \
-  -l ert \
-  $(find tests -name "test-*.el" -exec echo "-l {}" \;) \
-  --eval "(ert-run-tests-batch-and-exit \"$PATTERN\")" 2>&1 | tee /tmp/ert-output.txt
-
-# Check for success
-if grep -q "0 unexpected" /tmp/ert-output.txt 2>/dev/null; then
-    echo ""
-    echo "✓ All tests passed"
-    exit 0
-else
-    echo ""
-    echo "✗ Some tests failed or unexpected results"
+if [ "$FAIL" -gt 0 ] || [ "$FAILED" -gt 0 ]; then
     exit 1
 fi
+
+exit 0
