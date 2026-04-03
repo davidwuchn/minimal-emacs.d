@@ -157,6 +157,20 @@ EXIT-CODE defaults to 1."
     (should (equal snippet "line1 line2 line3"))
     (should-not (string-match-p "\n" snippet))))
 
+(ert-deftest regression/auto-experiment/curl-exit-28-is-retryable ()
+  "Curl exit code 28 should be treated as a transient timeout."
+  (should
+   (gptel-auto-experiment--is-retryable-error-p
+    "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 28. See Curl manpage for details.\"")))
+
+(ert-deftest regression/auto-experiment/curl-exit-28-categorizes-as-timeout ()
+  "Curl exit code 28 should categorize as a timeout, not a hard tool failure."
+  (should
+   (equal
+    (gptel-auto-experiment--categorize-error
+     "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 28. See Curl manpage for details.\"")
+    '(:timeout . "Experiment timed out"))))
+
 (ert-deftest regression/auto-experiment/failed-verification-does-not-fall-through ()
   "Verification failures should not invoke comparator or complete twice."
   (let ((callback-count 0)
