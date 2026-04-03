@@ -694,7 +694,8 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
             (message "gptel: Payload %dKB exceeds %dKB limit, compacting..."
                      (/ bytes 1024) (/ limit 1024))
             ;; Pass 1: trim tool results (keep 2 recent)
-            (let ((my/gptel-retry-keep-recent-tool-results 2))
+            (let ((my/gptel-retry-keep-recent-tool-results 
+                   (or my/gptel-retry-keep-recent-tool-results 2)))
               (let ((n (my/gptel--trim-tool-results-for-retry info 1)))
                 (cl-incf trimmed-total n)
                 (setq bytes (my/gptel--estimate-payload-bytes info))
