@@ -166,14 +166,5 @@ emacsclient_eval() {
         return 1
     }
     
-    "$EMACSCLIENT" -s "$server_name" --eval "$elisp" &
-    local pid=$!
-    
-    sleep "$timeout"
-    if kill -0 "$pid" 2>/dev/null; then
-        kill "$pid" 2>/dev/null
-        return 124
-    fi
-    
-    wait "$pid"
+    timeout "$timeout" "$EMACSCLIENT" -s "$server_name" --eval "$elisp"
 }

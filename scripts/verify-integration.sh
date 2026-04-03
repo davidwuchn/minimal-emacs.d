@@ -15,7 +15,7 @@ else
 fi
 
 if [[ -n "$SCRIPT_PATH" && -f "$SCRIPT_PATH" ]]; then
-    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" pwd 2>/dev/null || echo "")"
+    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd 2>/dev/null || echo "")"
 else
     SCRIPT_DIR=""
 fi
@@ -50,7 +50,7 @@ run_test() {
     
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
     
-    if eval "$cmd"; then
+    if bash -c "$cmd"; then
         PASSED_TESTS=$((PASSED_TESTS + 1))
         echo "✓ $name PASSED"
     else

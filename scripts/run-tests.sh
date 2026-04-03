@@ -179,6 +179,7 @@ run_cron_tests() {
     # Rendered crontab
     local RENDERED
     RENDERED=$(mktemp)
+    trap 'rm -f "$RENDERED"' RETURN
     "$INSTALLER" --render > "$RENDERED"
     
     if grep -Eq '^[0-9*@]' "$RENDERED"; then
