@@ -6,8 +6,14 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ACTION="${1:-auto-workflow}"
 shift || true
 SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-copilot-auto-workflow}"
-STATUS_FILE="$DIR/var/tmp/cron/auto-workflow-status.sexp"
+STATUS_FILE="${AUTO_WORKFLOW_STATUS_FILE:-$DIR/var/tmp/cron/auto-workflow-status.sexp}"
 DAEMON_LOG="$DIR/var/tmp/cron/auto-workflow-daemon.log"
+MESSAGES_FILE="${AUTO_WORKFLOW_MESSAGES_FILE:-$DIR/var/tmp/cron/auto-workflow-messages-tail.txt}"
+MESSAGES_CHARS="${AUTO_WORKFLOW_MESSAGES_CHARS:-16000}"
+
+lisp_escape() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
 
 resolve_emacsclient() {
     if command -v emacsclient >/dev/null 2>&1; then
@@ -55,7 +61,8 @@ EMACS="$(resolve_emacs)" || {
     exit 1
 }
 
-ROOT_LISP=$(printf '%s' "$DIR" | sed 's/\\/\\\\/g; s/"/\\"/g')
+ROOT_LISP=$(lisp_escape "$DIR")
+MESSAGES_LISP=$(lisp_escape "$MESSAGES_FILE")
 mkdir -p "$DIR/var/tmp/cron" "$DIR/var/tmp/experiments"
 
 default_status() {
@@ -72,6 +79,27 @@ print_status() {
 
 status_indicates_running() {
     [ -r "$STATUS_FILE" ] && grep -q ':running t' "$STATUS_FILE"
+}
+
+rewrite_status_idle() {
+    if [ ! -s "$STATUS_FILE" ]; then
+        default_status >"$STATUS_FILE"
+        return 0
+    fi
+
+    python3 - "$STATUS_FILE" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+text = re.sub(r':running\s+t', ':running nil', text, count=1)
+text = re.sub(r':phase\s+"[^"]*"', ':phase "idle"', text, count=1)
+if not text.endswith("\n"):
+    text += "\n"
+path.write_text(text, encoding="utf-8")
+PY
 }
 
 run_emacsclient_eval() {
@@ -114,20 +142,75 @@ check_worker_daemon() {
     return 1
 }
 
-ensure_worker_daemon() {
-    if check_worker_daemon; then
+clear_stale_running_status() {
+    if ! status_indicates_running; then
         return 0
     fi
-    local rc=$?
+
+    local rc
+    if check_worker_daemon; then
+        rc=0
+    else
+        rc=$?
+    fi
+
+    if [ "$rc" -eq 0 ]; then
+        return 0
+    fi
+
+    if [ "$rc" -eq 1 ]; then
+        rewrite_status_idle
+    fi
+    return 0
+}
+
+wrap_emacs_eval() {
+    local body="$1"
+    local env_elisp=""
+    local ssh_auth_sock="${SSH_AUTH_SOCK:-}"
+    local git_ssh_command="${GIT_SSH_COMMAND:-}"
+
+    if [ -n "$ssh_auth_sock" ]; then
+        env_elisp="$env_elisp (setenv \"SSH_AUTH_SOCK\" \"$(lisp_escape "$ssh_auth_sock")\")"
+    fi
+
+    if [ -z "$git_ssh_command" ] && [ "$(uname -s)" = "Darwin" ] && [ -n "$ssh_auth_sock" ]; then
+        git_ssh_command='ssh -o BatchMode=yes -o IdentitiesOnly=yes -o UseKeychain=yes -o AddKeysToAgent=yes'
+    fi
+
+    if [ -n "$git_ssh_command" ]; then
+        env_elisp="$env_elisp (setenv \"GIT_SSH_COMMAND\" \"$(lisp_escape "$git_ssh_command")\")"
+    fi
+
+    printf '(with-current-buffer (get-buffer-create "*copilot-auto-workflow-eval*")%s %s)' \
+           "$env_elisp" "$body"
+}
+
+ensure_worker_daemon() {
+    local rc
+    if check_worker_daemon; then
+        rc=0
+    else
+        rc=$?
+    fi
+
+    if [ "$rc" -eq 0 ]; then
+        return 0
+    fi
     if [ "$rc" -eq 2 ]; then
         return 0
     fi
     MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 "$EMACS" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
     for _ in $(seq 1 50); do
         if check_worker_daemon; then
+            rc=0
+        else
+            rc=$?
+        fi
+
+        if [ "$rc" -eq 0 ]; then
             return 0
         fi
-        rc=$?
         if [ "$rc" -eq 2 ]; then
             return 0
         fi
@@ -222,20 +305,45 @@ case "$ACTION" in
                      (format \"(%s %s)\n\"
                              (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
                              (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
-                 (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
-                 (gptel-auto-workflow-status))"
+                  (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
+                  (gptel-auto-workflow-status))"
+        ;;
+    messages)
+        ELISP="(let ((outfile \"$MESSAGES_LISP\")
+                     (max-chars $MESSAGES_CHARS))
+                 (with-current-buffer (get-buffer-create \"*Messages*\")
+                   (write-region (max (point-min) (- (point-max) max-chars))
+                                 (point-max)
+                                 outfile nil 'silent))
+                 outfile)"
         ;;
     *)
-        echo "Usage: $0 {auto-workflow|research|mementum|instincts|status}" >&2
+        echo "Usage: $0 {auto-workflow|research|mementum|instincts|status|messages}" >&2
         exit 2
         ;;
 esac
 
+EVAL_ELISP="$(wrap_emacs_eval "$ELISP")"
+
 cd "$DIR"
 if [ "$ACTION" = "status" ]; then
+    clear_stale_running_status
     print_status
     exit 0
 fi
+
+if [ "$ACTION" = "messages" ]; then
+    ensure_worker_daemon
+    if run_emacsclient_eval "$EVAL_ELISP" 10 >/dev/null; then
+        if [ -r "$MESSAGES_FILE" ]; then
+            cat "$MESSAGES_FILE"
+        fi
+        exit 0
+    fi
+    exit $?
+fi
+
+clear_stale_running_status
 
 if status_indicates_running; then
     echo "already-running"
@@ -249,7 +357,7 @@ if status_indicates_running; then
     exit 0
 fi
 
-if run_emacsclient_eval "$ELISP" 10; then
+if run_emacsclient_eval "$EVAL_ELISP" 10; then
     exit 0
 fi
 

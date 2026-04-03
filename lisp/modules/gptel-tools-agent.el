@@ -54,6 +54,14 @@ Reduces duplication of `(or (plist-get ...) default-value)` patterns."
 Reduces duplication of `(when (and state (not (plist-get state :done)))` patterns."
   (and state (not (plist-get state :done))))
 
+(defun gptel-auto-workflow--make-idempotent-callback (callback)
+  "Return a wrapper that invokes CALLBACK at most once."
+  (let ((called nil))
+    (lambda (&rest args)
+      (unless called
+        (setq called t)
+        (apply callback args)))))
+
 (defun gptel-auto-workflow--truncate-hash (hash &optional length)
   "Truncate HASH to LENGTH characters (default 7) if longer.
 Returns original hash if shorter than LENGTH.
@@ -74,7 +82,7 @@ Use for non-critical operations that should not halt execution."
      (message "%s %s failed (non-critical): %s"
               (or error-prefix "[auto-workflow]")
               operation
-              err)
+              (my/gptel--sanitize-for-logging (error-message-string err) 160))
      nil)))
 
 
@@ -87,7 +95,7 @@ ERROR-PREFIX defaults to \"[auto-workflow]\"."
      (message "%s Failed to %s: %s"
               (or error-prefix "[auto-workflow]")
               operation
-              err)
+              (my/gptel--sanitize-for-logging (error-message-string err) 160))
      nil)))
 
 
@@ -235,7 +243,8 @@ On timeout or error, returns empty string and logs warning."
   (let ((result (gptel-auto-workflow--shell-command-with-timeout command timeout)))
     (if (eq (cdr result) -1)
         (progn
-          (message "[auto-workflow] %s" (car result))
+          (message "[auto-workflow] %s"
+                   (my/gptel--sanitize-for-logging (car result) 160))
           "")
       (string-trim (car result)))))
 
@@ -1027,21 +1036,21 @@ Uses hash table keyed by task-id to support parallel execution."
                   (if parent-fsm-local-p
                       (setq-local gptel--fsm-last parent-fsm)
                     (kill-local-variable 'gptel--fsm-last)))))))
-         (wrapped-cb
-          (lambda (result)
-            (let ((state (gethash task-id my/gptel--agent-task-state)))
-              (when (gptel-auto-workflow--state-active-p state)
-                (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                (when (timerp (plist-get state :timeout-timer))
-                  (cancel-timer (plist-get state :timeout-timer)))
-                (when (timerp (plist-get state :progress-timer))
-                  (cancel-timer (plist-get state :progress-timer)))
+          (wrapped-cb
+           (lambda (result)
+             (let ((state (gethash task-id my/gptel--agent-task-state)))
+               (when (gptel-auto-workflow--state-active-p state)
+                 (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                 (when (timerp (plist-get state :timeout-timer))
+                   (cancel-timer (plist-get state :timeout-timer)))
+                 (when (timerp (plist-get state :progress-timer))
+                   (cancel-timer (plist-get state :progress-timer)))
                  (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
                           agent-type (float-time (time-since start-time))
-                          (if (stringp result) (length result) 0)))
-              (funcall restore-origin-fsm child-fsm))
-            (funcall callback result)
-            (remhash task-id my/gptel--agent-task-state))))
+                          (if (stringp result) (length result) 0))
+                 (funcall restore-origin-fsm child-fsm)
+                 (funcall callback result)
+                 (remhash task-id my/gptel--agent-task-state))))))
     (puthash task-id (list :done nil :timeout-timer nil :progress-timer nil) my/gptel--agent-task-state)
     (message "[nucleus] Delegating to subagent %s%s..."
              agent-type
@@ -1407,17 +1416,18 @@ If branch exists locally, deletes it first to avoid conflicts."
             ;; Delete branch if it exists locally (stale from previous run)
             (call-process "git" nil nil stderr-buffer "branch" "-D" branch)
             ;; Create worktree with new branch
-            (let ((exit-code (call-process "git" nil nil stderr-buffer
-                                           "worktree" "add" "-b" branch
-                                           worktree-dir "main"))
-                  (stderr-output (when (buffer-live-p stderr-buffer)
-                                   (with-current-buffer stderr-buffer
-                                     (buffer-string)))))
+            (let* ((exit-code (call-process "git" nil nil stderr-buffer
+                                            "worktree" "add" "-b" branch
+                                            worktree-dir "main"))
+                   (stderr-output (when (buffer-live-p stderr-buffer)
+                                    (with-current-buffer stderr-buffer
+                                      (buffer-string))))
+                   (stderr-preview (my/gptel--sanitize-for-logging stderr-output 200)))
               (unless (eq exit-code 0)
                 (when stderr-output
-                  (message "[auto-workflow] Git stderr: %s" stderr-output))
-                (error "git worktree add failed with exit code %s: %s" 
-                       exit-code (or stderr-output "no output")))))
+                  (message "[auto-workflow] Git stderr: %s" stderr-preview))
+                (error "git worktree add failed with exit code %s: %s"
+                       exit-code (or stderr-preview "no output")))))
           (kill-buffer stderr-buffer)
           (message "[auto-workflow] Created: %s" branch)
           (puthash target (list :worktree-dir worktree-dir :current-branch branch)
@@ -2296,27 +2306,32 @@ TEST: Verify main is never touched by auto-workflow.
 SAFETY: Asserts main branch is not current before any operation.
 
 NOTE: Human must manually merge staging to main after review."
-  (gptel-auto-workflow--assert-main-untouched)
-  (setq gptel-auto-workflow--review-retry-count 0)
-  (message "[auto-workflow] Starting staging flow for %s" optimize-branch)
-  (gptel-auto-workflow--review-changes
-   optimize-branch
-   (lambda (review-result)
-      (gptel-auto-workflow--staging-flow-after-review
-       optimize-branch
-       review-result
-       completion-callback))))
+  (let ((completion-callback
+         (when completion-callback
+           (gptel-auto-workflow--make-idempotent-callback completion-callback))))
+    (gptel-auto-workflow--assert-main-untouched)
+    (setq gptel-auto-workflow--review-retry-count 0)
+    (message "[auto-workflow] Starting staging flow for %s" optimize-branch)
+    (gptel-auto-workflow--review-changes
+     optimize-branch
+     (lambda (review-result)
+       (gptel-auto-workflow--staging-flow-after-review
+        optimize-branch
+        review-result
+        completion-callback)))))
 
 
 (defun gptel-auto-workflow--staging-flow-after-review (optimize-branch review-result &optional completion-callback)
   "Continue staging flow after review for OPTIMIZE-BRANCH.
 REVIEW-RESULT is (approved-p . review-output).
 When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
-  (let ((approved (car review-result))
-        (review-output (cdr review-result)))
-    (cl-labels ((finish (success)
-                  (when completion-callback
-                    (funcall completion-callback success))))
+  (let* ((approved (car review-result))
+         (review-output (cdr review-result))
+         (finish (gptel-auto-workflow--make-idempotent-callback
+                  (lambda (success)
+                    (when completion-callback
+                      (funcall completion-callback success))))))
+    (cl-labels ()
       (if (not approved)
           (if (< gptel-auto-workflow--review-retry-count
                  gptel-auto-workflow--review-max-retries)
@@ -2352,11 +2367,11 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                               :duration 0
                               :grader-quality 0
                               :grader-reason "fix-failed"
-                              :comparator-reason
-                              (truncate-string-to-width fix-output 200)
-                              :analyzer-patterns ""
-                              :agent-output review-output))
-                       (finish nil))))))
+                               :comparator-reason
+                               (truncate-string-to-width fix-output 200)
+                               :analyzer-patterns ""
+                               :agent-output review-output))
+                        (funcall finish nil))))))
             (message "[auto-workflow] ✗ Review BLOCKED (max retries): %s"
                      (my/gptel--sanitize-for-logging review-output 200))
             (gptel-auto-experiment-log-tsv
@@ -2370,11 +2385,11 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                    :duration 0
                    :grader-quality 0
                    :grader-reason "review-blocked-max-retries"
-                   :comparator-reason
-                   (truncate-string-to-width review-output 200)
-                   :analyzer-patterns ""
-                   :agent-output review-output))
-            (finish nil))
+                    :comparator-reason
+                    (truncate-string-to-width review-output 200)
+                    :analyzer-patterns ""
+                    :agent-output review-output))
+            (funcall finish nil))
         (let ((merge-success
                (gptel-auto-workflow--merge-to-staging optimize-branch)))
           (if (not merge-success)
@@ -2391,11 +2406,11 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                        :duration 0
                        :grader-quality 0
                        :grader-reason "staging-merge-failed"
-                       :comparator-reason
-                       (format "Failed to merge %s to staging" optimize-branch)
-                       :analyzer-patterns ""
-                       :agent-output ""))
-                (finish nil))
+                        :comparator-reason
+                        (format "Failed to merge %s to staging" optimize-branch)
+                        :analyzer-patterns ""
+                        :agent-output ""))
+                (funcall finish nil))
             (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
                                 (gptel-auto-workflow--create-staging-worktree))))
               (if (not worktree)
@@ -2411,11 +2426,11 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                            :kept nil
                            :duration 0
                            :grader-quality 0
-                           :grader-reason "staging-worktree-failed"
-                           :comparator-reason "Failed to create staging worktree"
-                           :analyzer-patterns ""
-                           :agent-output ""))
-                    (finish nil))
+                            :grader-reason "staging-worktree-failed"
+                            :comparator-reason "Failed to create staging worktree"
+                            :analyzer-patterns ""
+                            :agent-output ""))
+                    (funcall finish nil))
                 (let* ((verification (gptel-auto-workflow--verify-staging))
                        (tests-passed (car verification))
                        (output (or (cdr verification) "")))
@@ -2433,17 +2448,17 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                                :duration 0
                                :grader-quality 0
                                :grader-reason "staging-verification-failed"
-                               :comparator-reason
-                               (truncate-string-to-width output 200)
-                               :analyzer-patterns ""
-                               :agent-output output))
-                        (finish nil))
+                                :comparator-reason
+                                (truncate-string-to-width output 200)
+                                :analyzer-patterns ""
+                                :agent-output output))
+                        (funcall finish nil))
                     (message "[auto-workflow] ✓ Staging verification PASSED")
                     (if (gptel-auto-workflow--push-staging)
                         (progn
                           (gptel-auto-workflow--delete-staging-worktree)
                           (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")
-                          (finish t))
+                          (funcall finish t))
                       (message "[auto-workflow] ✗ Staging push FAILED")
                       (gptel-auto-experiment-log-tsv
                        (format-time-string "%Y-%m-%d")
@@ -2455,11 +2470,11 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                              :kept nil
                              :duration 0
                              :grader-quality 0
-                             :grader-reason "staging-push-failed"
-                             :comparator-reason "Failed to push staging"
-                             :analyzer-patterns ""
-                             :agent-output output))
-                      (finish nil))))))))))))
+                              :grader-reason "staging-push-failed"
+                              :comparator-reason "Failed to push staging"
+                              :analyzer-patterns ""
+                              :agent-output output))
+                      (funcall finish nil))))))))))))
 
 
 ;;; Multi-Project Support
@@ -2578,7 +2593,8 @@ NOTE: Nucleus script validation is skipped for experiments because:
                              (gptel-auto-experiment--validate-code target-file))))
     (if validation-error
         (progn
-          (message "[auto-exp] ✗ Validation failed: %s" validation-error)
+          (message "[auto-exp] ✗ Validation failed: %s"
+                   (my/gptel--sanitize-for-logging validation-error 200))
           (list :passed nil
                 :validation-error validation-error
                 :time (- (float-time) start)))
@@ -2977,9 +2993,8 @@ Example HYPOTHESES:
 (defun gptel-auto-experiment--error-snippet (agent-output &optional max-len)
   "Extract safe snippet from AGENT-OUTPUT for logging.
 MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
-  (let ((len (max-len (or max-len 200))))
-    (when (and (stringp agent-output) (> (length agent-output) 0))
-      (substring agent-output 0 (min len (length agent-output))))))
+  (when (and (stringp agent-output) (> (length agent-output) 0))
+    (my/gptel--sanitize-for-logging agent-output (or max-len 200))))
 
 (defvar gptel-auto-experiment-max-retries 2
   "Maximum retries for executor on transient errors.")
@@ -3117,9 +3132,11 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
             (when result
               (message "[auto-experiment] Success on attempt %d/%d" attempts max)))
         (error
-         (message "[auto-experiment] Attempt %d/%d failed: %s" attempts max err)
-         (when (< attempts max)
-           (sit-for 1)))))  ; Brief pause before retry
+         (message "[auto-experiment] Attempt %d/%d failed: %s"
+                  attempts max
+                  (my/gptel--sanitize-for-logging (error-message-string err) 160))
+          (when (< attempts max)
+            (sit-for 1)))))  ; Brief pause before retry
     result))
 
 ;;; Single Experiment
@@ -3278,10 +3295,11 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 			    0)))
 			(default-directory experiment-worktree)
 			(finalize
-			 (lambda ()
-			   (gptel-auto-experiment-log-tsv
-			    (format-time-string "%Y-%m-%d") exp-result)
-			   (funcall callback exp-result))))
+			 (gptel-auto-workflow--make-idempotent-callback
+			  (lambda (&rest _)
+			    (gptel-auto-experiment-log-tsv
+			     (format-time-string "%Y-%m-%d") exp-result)
+			    (funcall callback exp-result)))))
 		   (gptel-auto-workflow--assert-main-untouched)
 		   (message "[auto-experiment] ✓ Committing improvement for %s" target)
 		   (magit-git-success "add" "-A")
@@ -3298,8 +3316,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 			 (if gptel-auto-workflow-use-staging
 			     (gptel-auto-workflow--staging-flow
 			      experiment-branch
-			      (lambda (&rest _)
-				(funcall finalize)))
+			      finalize)
 			   (funcall finalize)))
 		     (funcall finalize)))
 	       (let ((default-directory experiment-worktree))
@@ -4017,7 +4034,13 @@ Cancels stale timers, kills orphaned buffers, resets state, then runs.
 Safe to call from cron - handles all edge cases.
 Sets `gptel-auto-workflow-persistent_headless' to prevent interactive prompts.
 When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
-  (let ((proj-root (gptel-auto-workflow--default-dir)))
+  (let* ((proj-root (gptel-auto-workflow--default-dir))
+         (finish
+          (gptel-auto-workflow--make-idempotent-callback
+           (lambda (&optional results)
+             (gptel-auto-workflow--disable-headless-suppression)
+             (when completion-callback
+               (funcall completion-callback results))))))
     (setq default-directory proj-root)
     (require 'magit)
     (require 'json)
@@ -4038,22 +4061,20 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                   (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
                            (length orphans))
                   (gptel-auto-workflow-recover-all-orphans t)))))
-          (let ((started
-                 (gptel-auto-workflow-run-async--guarded
-                  nil
-                  (lambda (results)
-                    (gptel-auto-workflow--disable-headless-suppression)
-                    (when completion-callback
-                      (funcall completion-callback results))))))
+           (let ((started
+                  (gptel-auto-workflow-run-async--guarded
+                   nil
+                   finish)))
             (unless started
-              (gptel-auto-workflow--disable-headless-suppression))
+              (funcall finish nil))
             started))
       (error
-        (message "[auto-workflow] Cron error: %s" err)
+        (message "[auto-workflow] Cron error: %s"
+                 (my/gptel--sanitize-for-logging (error-message-string err) 160))
         (setq gptel-auto-workflow--stats
               (list :phase "error" :total 0 :kept 0))
         (gptel-auto-workflow--persist-status)
-        (gptel-auto-workflow--disable-headless-suppression)
+        (funcall finish nil)
         nil))))
 
 
@@ -4149,7 +4170,20 @@ Only removes worktrees if no gptel processes are running."
   (let* ((run-id (format-time-string "%Y-%m-%d"))
          (proj-root (gptel-auto-workflow--default-dir))
          (all-results '())
-         (kept-count 0))
+         (kept-count 0)
+         (finish
+          (gptel-auto-workflow--make-idempotent-callback
+           (lambda ()
+             (setq gptel-auto-workflow--running nil
+                   gptel-auto-workflow--current-target nil
+                   gptel-auto-workflow--current-project nil)
+             (setq gptel-auto-workflow--stats
+                   (plist-put gptel-auto-workflow--stats :phase "complete"))
+             (gptel-auto-workflow--persist-status)
+             (message "[auto-workflow] Complete: %d experiments, %d kept"
+                      (length all-results) kept-count)
+             (when completion-callback
+               (funcall completion-callback all-results))))))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root)
     (setq gptel-auto-workflow--stats
@@ -4161,36 +4195,28 @@ Only removes worktrees if no gptel processes are running."
     (gptel-auto-workflow--persist-status)
     (message "[auto-workflow] Starting %s with %d targets" run-id (length targets))
     (cl-labels
-        ((finish ()
-           (setq gptel-auto-workflow--running nil
-                  gptel-auto-workflow--current-target nil
-                  gptel-auto-workflow--current-project nil)
-            (setq gptel-auto-workflow--stats
-                  (plist-put gptel-auto-workflow--stats :phase "complete"))
-            (gptel-auto-workflow--persist-status)
-            (message "[auto-workflow] Complete: %d experiments, %d kept"
-                     (length all-results) kept-count)
-            (when completion-callback
-              (funcall completion-callback all-results)))
+        ((finish-run ()
+           (funcall finish))
          (run-next (remaining-targets)
            (if (null remaining-targets)
-               (finish)
-             (let ((target (car remaining-targets)))
-               (setq gptel-auto-workflow--current-target target)
-               (gptel-auto-experiment-loop
-                target
-                  (lambda (results)
-                    (setq all-results (append all-results results))
-                    (setq kept-count
-                          (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
-                    (setq gptel-auto-workflow--stats
-                          (plist-put gptel-auto-workflow--stats :kept kept-count))
-                    (gptel-auto-workflow--persist-status)
-                    (if gptel-auto-experiment--quota-exhausted
-                        (progn
-                          (message "[auto-workflow] Provider quota exhausted; stopping remaining targets")
-                          (finish))
-                      (run-next (cdr remaining-targets)))))))))
+                (finish-run)
+              (let ((target (car remaining-targets)))
+                (setq gptel-auto-workflow--current-target target)
+                (let ((target-complete
+                       (gptel-auto-workflow--make-idempotent-callback
+                        (lambda (results)
+                          (setq all-results (append all-results results))
+                          (setq kept-count
+                                (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
+                          (setq gptel-auto-workflow--stats
+                                (plist-put gptel-auto-workflow--stats :kept kept-count))
+                          (gptel-auto-workflow--persist-status)
+                          (if gptel-auto-experiment--quota-exhausted
+                              (progn
+                                (message "[auto-workflow] Provider quota exhausted; stopping remaining targets")
+                                (finish-run))
+                            (run-next (cdr remaining-targets)))))))
+                  (gptel-auto-experiment-loop target target-complete))))))
       (run-next targets))))
 
 (defun gptel-auto-workflow-run (&optional targets)

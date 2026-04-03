@@ -69,6 +69,13 @@ Avoids %s formatting of complex objects that contain special characters."
 Key: worktree directory, Value: buffer.
 Each worktree gets its own isolated buffer for subagent overlays.")
 
+(defun gptel-auto-workflow--normalized-projects ()
+  "Return configured project roots as unique expanded directory names."
+  (delete-dups
+   (mapcar (lambda (project-root)
+             (file-name-as-directory (expand-file-name project-root)))
+           gptel-auto-workflow-projects)))
+
 (defun gptel-auto-workflow--get-worktree-buffer (worktree-dir)
   "Get or create a gptel-agent buffer for WORKTREE-DIR.
 Each worktree gets its own isolated buffer for subagent overlays."
@@ -165,45 +172,67 @@ Interactively prompts for directory."
   "Display list of configured projects."
   (interactive)
   (message "Auto-workflow projects:\n%s"
-           (mapconcat (lambda (p) (format "  - %s" p))
-                      gptel-auto-workflow-projects
-                      "\n")))
+            (mapconcat (lambda (p) (format "  - %s" p))
+                       (gptel-auto-workflow--normalized-projects)
+                       "\n")))
 
 (defun gptel-auto-workflow-run-all-projects ()
   "Run auto-workflow for all configured projects.
 To be called from cron - visits each project directory (loading .dir-locals.el),
 then runs workflow for that project."
   (interactive)
-  (message "[auto-workflow] Running for %d projects..." 
-           (length gptel-auto-workflow-projects))
-  (let ((results nil))
-    (dolist (project-root gptel-auto-workflow-projects)
-      (message "[auto-workflow] Processing project: %s" project-root)
-      (let* ((default-directory project-root)
-             (project-buf (gptel-auto-workflow--get-project-buffer project-root)))
-        (condition-case err
-            (progn
-              ;; Set current project context for subagents
-              (setq gptel-auto-workflow--current-project project-root)
-              ;; Clear per-project state
-              (when (hash-table-p gptel-auto-workflow--worktree-state)
-                (clrhash gptel-auto-workflow--worktree-state))
-              
-              ;; Run workflow for this project in its dedicated buffer
-              (with-current-buffer project-buf
-                ;; Ensure .dir-locals.el is loaded for this project
-                (hack-dir-local-variables-non-file-buffer)
-                (gptel-auto-workflow-cron-safe))
-              (push (cons project-root 'success) results)
-              (message "[auto-workflow] ✓ Completed: %s" project-root))
-          (error
-           (push (cons project-root (format "error: %s" err)) results)
-           (message "[auto-workflow] ✗ Failed: %s - %s" project-root err)))))
-    (setq gptel-auto-workflow--current-project nil)
-    (message "[auto-workflow] All projects processed: %s" 
-             (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
-                        results ", "))
-    results))
+  (let ((projects (gptel-auto-workflow--normalized-projects)))
+    (message "[auto-workflow] Running for %d projects..."
+             (length projects))
+    (let* ((results nil)
+           (remaining projects)
+           (finish
+            (gptel-auto-workflow--make-idempotent-callback
+             (lambda ()
+               (setq gptel-auto-workflow--current-project nil)
+               (message "[auto-workflow] All projects processed: %s"
+                        (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
+                                   (nreverse results) ", "))
+               (nreverse results)))))
+      (cl-labels
+          ((run-next ()
+             (if (null remaining)
+                 (funcall finish)
+               (let* ((project-root (car remaining))
+                      (default-directory project-root)
+                      (project-buf (gptel-auto-workflow--get-project-buffer project-root)))
+                 (setq remaining (cdr remaining))
+                 (message "[auto-workflow] Processing project: %s" project-root)
+                 (condition-case err
+                     (progn
+                       (setq gptel-auto-workflow--current-project project-root)
+                       (when (hash-table-p gptel-auto-workflow--worktree-state)
+                         (clrhash gptel-auto-workflow--worktree-state))
+                       (with-current-buffer project-buf
+                         (hack-dir-local-variables-non-file-buffer)
+                         (let ((mark-project
+                                (gptel-auto-workflow--make-idempotent-callback
+                                 (lambda (status log-line)
+                                   (push (cons project-root status) results)
+                                   (message "%s" log-line)
+                                   (run-next)))))
+                           (let ((started
+                                  (gptel-auto-workflow-cron-safe
+                                   (lambda (&rest _workflow-results)
+                                     (funcall mark-project
+                                              'success
+                                              (format "[auto-workflow] ✓ Completed: %s"
+                                                      project-root))))))
+                             (unless started
+                               (funcall mark-project
+                                        'skipped
+                                        (format "[auto-workflow] - Skipped: %s"
+                                                project-root)))))))
+                   (error
+                    (push (cons project-root (format "error: %s" err)) results)
+                    (message "[auto-workflow] ✗ Failed: %s - %s" project-root err)
+                    (run-next)))))))
+        (run-next)))))
 
 (defun gptel-auto-workflow--queue-cron-job (label fn)
   "Queue FN for LABEL and return immediately.
