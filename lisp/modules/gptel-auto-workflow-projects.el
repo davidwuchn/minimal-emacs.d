@@ -169,10 +169,12 @@ Interactively prompts for directory."
                        (gptel-auto-workflow--normalized-projects)
                        "\n")))
 
-(defun gptel-auto-workflow-run-all-projects ()
+(defun gptel-auto-workflow-run-all-projects (&optional completion-callback)
   "Run auto-workflow for all configured projects.
 To be called from cron - visits each project directory (loading .dir-locals.el),
-then runs workflow for that project."
+then runs workflow for that project.
+When COMPLETION-CALLBACK is non-nil, call it after all project workflows
+finish."
   (interactive)
   (let ((projects (gptel-auto-workflow--normalized-projects)))
     (message "[auto-workflow] Running for %d projects..."
@@ -182,15 +184,18 @@ then runs workflow for that project."
            (finish
             (gptel-auto-workflow--make-idempotent-callback
              (lambda ()
-               (setq gptel-auto-workflow--current-project nil)
-               (message "[auto-workflow] All projects processed: %s"
-                        (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
-                                   (nreverse results) ", "))
-               (nreverse results)))))
+               (let ((final-results (nreverse results)))
+                 (setq gptel-auto-workflow--current-project nil)
+                 (message "[auto-workflow] All projects processed: %s"
+                          (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
+                                     final-results ", "))
+                 (when completion-callback
+                   (funcall completion-callback final-results))
+                 final-results)))))
       (cl-labels
           ((run-next ()
              (if (null remaining)
-                 (funcall finish)
+                  (funcall finish)
                (let* ((project-root (car remaining))
                       (default-directory project-root)
                       (project-buf (gptel-auto-workflow--get-project-buffer project-root)))
@@ -227,9 +232,27 @@ then runs workflow for that project."
                     (run-next)))))))
         (run-next)))))
 
-(defun gptel-auto-workflow--queue-cron-job (label fn)
+(defun gptel-auto-workflow--finish-queued-cron-job (label &optional errored)
+  "Clear queued cron state after LABEL completes.
+When ERRORED is non-nil, preserve the existing error phase."
+  (setq gptel-auto-workflow--cron-job-running nil)
+  (let ((phase (plist-get gptel-auto-workflow--stats :phase)))
+    (when (and (not errored)
+               (not (bound-and-true-p gptel-auto-workflow--running))
+               (member phase (list label
+                                   (format "%s-queued" label)
+                                   "selecting"
+                                   "running")))
+      (setq gptel-auto-workflow--stats
+            (plist-put gptel-auto-workflow--stats :phase "idle"))))
+  (when (fboundp 'gptel-auto-workflow--persist-status)
+    (gptel-auto-workflow--persist-status)))
+
+(cl-defun gptel-auto-workflow--queue-cron-job (label fn &key async)
   "Queue FN for LABEL and return immediately.
-This keeps `emacsclient --eval' callers from monopolizing the daemon."
+This keeps `emacsclient --eval' callers from monopolizing the daemon.
+When ASYNC is non-nil, FN must accept a completion callback and invoke it when
+the queued job actually finishes."
   (if gptel-auto-workflow--cron-job-running
       (progn
         (message "[%s] Job already running; skipping new request" label)
@@ -239,38 +262,33 @@ This keeps `emacsclient --eval' callers from monopolizing the daemon."
     (setq gptel-auto-workflow--cron-job-running t)
     (setq gptel-auto-workflow--stats
           (list :phase (format "%s-queued" label)
-                :total (or (plist-get gptel-auto-workflow--stats :total) 0)
-                :kept (or (plist-get gptel-auto-workflow--stats :kept) 0)))
+                :total 0
+                :kept 0))
     (when (fboundp 'gptel-auto-workflow--persist-status)
       (gptel-auto-workflow--persist-status))
     (message "[%s] Queued background job" label)
     (run-at-time
      0 nil
      (lambda ()
-       (let ((errored nil))
+       (let ((finish-job
+              (gptel-auto-workflow--make-idempotent-callback
+               (lambda (&optional errored)
+                 (gptel-auto-workflow--finish-queued-cron-job label errored)))))
          (setq gptel-auto-workflow--stats
                (plist-put gptel-auto-workflow--stats :phase label))
          (when (fboundp 'gptel-auto-workflow--persist-status)
            (gptel-auto-workflow--persist-status))
          (condition-case err
-             (funcall fn)
+             (if async
+                 (funcall fn finish-job)
+               (progn
+                 (funcall fn)
+                 (funcall finish-job)))
            (error
-            (setq errored err)
             (setq gptel-auto-workflow--stats
                   (plist-put gptel-auto-workflow--stats :phase "error"))
-            (message "[%s] Job failed: %s" label err)))
-         (setq gptel-auto-workflow--cron-job-running nil)
-         (let ((phase (plist-get gptel-auto-workflow--stats :phase)))
-           (when (and (not errored)
-                      (not (bound-and-true-p gptel-auto-workflow--running))
-                      (member phase (list label
-                                          (format "%s-queued" label)
-                                          "selecting"
-                                          "running")))
-             (setq gptel-auto-workflow--stats
-                   (plist-put gptel-auto-workflow--stats :phase "idle"))))
-         (when (fboundp 'gptel-auto-workflow--persist-status)
-           (gptel-auto-workflow--persist-status)))))
+            (message "[%s] Job failed: %s" label err)
+            (funcall finish-job err))))))
     'queued))
 
 (defun gptel-auto-workflow-queue-all-projects ()
@@ -278,7 +296,9 @@ This keeps `emacsclient --eval' callers from monopolizing the daemon."
   (interactive)
   (gptel-auto-workflow--queue-cron-job
    "auto-workflow"
-   #'gptel-auto-workflow-run-all-projects))
+   (lambda (completion-callback)
+     (gptel-auto-workflow-run-all-projects completion-callback))
+   :async t))
 
 ;;; Per-Project Subagent Buffer Support
 

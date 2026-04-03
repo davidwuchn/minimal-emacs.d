@@ -81,6 +81,21 @@ status_indicates_running() {
     [ -r "$STATUS_FILE" ] && grep -q ':running t' "$STATUS_FILE"
 }
 
+status_phase_indicates_activity() {
+    [ -r "$STATUS_FILE" ] || return 1
+    python3 - "$STATUS_FILE" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+match = re.search(r':phase\s+"([^"]+)"', text)
+phase = match.group(1) if match else ""
+active = {"auto-workflow", "research", "mementum", "instincts", "selecting", "running"}
+raise SystemExit(0 if phase in active or phase.endswith("-queued") else 1)
+PY
+}
+
 rewrite_status_idle() {
     if [ ! -s "$STATUS_FILE" ]; then
         default_status >"$STATUS_FILE"
@@ -164,7 +179,7 @@ daemon_reports_active_workflow() {
 }
 
 clear_stale_running_status() {
-    if ! status_indicates_running; then
+    if ! status_indicates_running && ! status_phase_indicates_activity; then
         return 0
     fi
 
@@ -400,6 +415,13 @@ EVAL_ELISP="$(wrap_emacs_eval "$ELISP")"
 cd "$DIR"
 if [ "$ACTION" = "status" ]; then
     clear_stale_running_status
+    if check_worker_daemon; then
+        live_status="$(run_emacsclient_eval "$EVAL_ELISP" 5 2>/dev/null || true)"
+        if printf '%s' "$live_status" | grep -q ':phase'; then
+            printf '%s\n' "$live_status"
+            exit 0
+        fi
+    fi
     print_status
     exit 0
 fi

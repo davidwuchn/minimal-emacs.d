@@ -149,11 +149,11 @@
         (job-ran nil)
         (scheduled nil))
     (cl-letf (((symbol-function 'run-at-time)
-               (lambda (_secs _repeat fn)
-                  (setq scheduled fn)
-                  'fake-timer))
+               (lambda (_secs _repeat fn &rest _args)
+                   (setq scheduled fn)
+                   'fake-timer))
               ((symbol-function 'gptel-auto-workflow--persist-status)
-               (lambda (&rest _) nil)))
+                (lambda (&rest _) nil)))
       (should
        (eq (gptel-auto-workflow--queue-cron-job
             "auto-workflow"
@@ -162,9 +162,58 @@
       (should gptel-auto-workflow--cron-job-running)
       (should-not job-ran)
       (should (functionp scheduled))
+       (funcall scheduled)
+       (should job-ran)
+       (should-not gptel-auto-workflow--cron-job-running))))
+
+(ert-deftest regression/auto-workflow-projects/queue-helper-keeps-running-until-async-finish ()
+  "Async queued jobs should stay marked running until their completion callback fires."
+  (let ((gptel-auto-workflow--cron-job-running nil)
+        (scheduled nil)
+        (finish-job nil))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (_secs _repeat fn &rest _args)
+                  (setq scheduled fn)
+                  'fake-timer))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+                (lambda (&rest _) nil)))
+      (should
+       (eq (gptel-auto-workflow--queue-cron-job
+            "auto-workflow"
+            (lambda (callback)
+              (setq finish-job callback))
+            :async t)
+           'queued))
+      (should gptel-auto-workflow--cron-job-running)
+      (should (functionp scheduled))
       (funcall scheduled)
-      (should job-ran)
+      (should gptel-auto-workflow--cron-job-running)
+      (should (functionp finish-job))
+      (funcall finish-job)
       (should-not gptel-auto-workflow--cron-job-running))))
+
+(ert-deftest regression/auto-workflow-projects/queue-helper-resets-stale-stats ()
+  "Queued jobs should start from clean stats instead of leaking prior run counts."
+  (let ((gptel-auto-workflow--cron-job-running nil)
+        (gptel-auto-workflow--stats '(:phase "complete" :total 7 :kept 2))
+        (scheduled nil))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (_secs _repeat fn &rest _args)
+                 (setq scheduled fn)
+                 'fake-timer))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda (&rest _) nil)))
+      (should
+       (eq (gptel-auto-workflow--queue-cron-job
+            "auto-workflow"
+            (lambda ())
+            :async nil)
+           'queued))
+      (should (equal gptel-auto-workflow--stats
+                     '(:phase "auto-workflow-queued" :total 0 :kept 0)))
+      (funcall scheduled)
+      (should (equal gptel-auto-workflow--stats
+                     '(:phase "idle" :total 0 :kept 0)))))) 
 
 (ert-deftest regression/auto-workflow-projects/queue-helper-rejects-overlap ()
   "A second cron request should return immediately when one is already queued."
@@ -186,7 +235,6 @@
 
 (ert-deftest regression/auto-workflow-projects/run-all-projects-waits-for-async-completion ()
   "Project results should be recorded when async completion fires, not at start."
-  (ert-skip "Flaky test - async completion mocking issues")
   (let ((gptel-auto-workflow-projects '("/tmp/project-a" "/tmp/project-a"))
         (callbacks nil)
         (messages nil))
@@ -212,11 +260,10 @@
                         messages))
       (should (seq-some (lambda (msg)
                           (string-match-p "\\[auto-workflow\\] All projects processed: /tmp/project-a/:success" msg))
-                        messages)))))
+                         messages)))))
 
 (ert-deftest regression/auto-workflow-projects/run-all-projects-ignores-duplicate-completion ()
   "Late duplicate project completions should not re-log completion or finish twice."
-  (ert-skip "Flaky test - duplicate completion mocking issues")
   (let ((gptel-auto-workflow-projects '("/tmp/project-a"))
         (callbacks nil)
         (messages nil))

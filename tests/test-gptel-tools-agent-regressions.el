@@ -1045,10 +1045,80 @@ EXIT-CODE defaults to 1."
             (insert "(:running t :kept 0 :total 3 :phase \"running\" :results \"var/tmp/experiments/2026-04-02/results.tsv\")\n"))
           (let ((output (shell-command-to-string (format "%s status" script))))
             (should (string-match-p ":running nil" output))
-            (should (string-match-p ":phase \"idle\"" output))
-             (should (string-match-p "2026-04-02/results.tsv" output))))
+             (should (string-match-p ":phase \"idle\"" output))
+              (should (string-match-p "2026-04-02/results.tsv" output))))
        (delete-directory status-dir t)
-       (delete-directory fake-bin t))))
+        (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-active-phase-without-running-flag ()
+  "Wrapper status should reset stale active phases even when :running is already nil."
+  (let* ((repo-root "/Users/davidwu/.emacs.d")
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient
+          (test-auto-workflow--write-shell-script "fake-emacsclient" "exit 1"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running nil :kept 0 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-04/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running nil" output))
+            (should (string-match-p ":phase \"idle\"" output))
+            (should (string-match-p "2026-04-04/results.tsv" output))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-status-prefers-live-daemon-status ()
+  "Wrapper status should prefer the live daemon snapshot when available."
+  (let* ((repo-root "/Users/davidwu/.emacs.d")
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "import sys\n"
+                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    "if expr == 't':\n"
+                    "    print('t')\n"
+                    "elif 'gptel-auto-workflow-status' in expr:\n"
+                    "    print('(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-04/results.tsv\")')\n"
+                    "else:\n"
+                    "    print('nil')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running nil :kept 0 :total 0 :phase \"idle\" :results \"var/tmp/experiments/2026-04-04/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
+            (should (string-match-p ":kept 1" output))
+            (should (string-match-p ":total 5" output))
+            (should (string-match-p ":phase \"running\"" output))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status-after-daemon-restart ()
   "Wrapper auto-workflow should clear stale running status when daemon is alive but idle."
