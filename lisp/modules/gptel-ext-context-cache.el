@@ -127,6 +127,7 @@ under `lexical-binding: t'.")
     ("deepseek-reasoner" . 163840)
     ("deepseek-coder" . 16384)
     ;; MiniMax
+    ("minimax-m2.7" . 196608)
     ("MiniMax-M2.5" . 196608)
     ("minimax-m2.1" . 196608)
     ;; Kimi/Moonshot
@@ -229,6 +230,11 @@ Sources:
      :max-output 8192
      :description "DeepSeek R1 - reasoning model")
     ;; MiniMax
+    ("minimax-m2.7"
+     :context-window 196608
+     :pricing-input 0.27 :pricing-output 0.95
+     :max-output 16384
+     :description "MiniMax M2.7 - 196k context, advanced agent workflows")
     ("MiniMax-M2.5"
      :context-window 196608
      :pricing-input 0.27 :pricing-output 0.95

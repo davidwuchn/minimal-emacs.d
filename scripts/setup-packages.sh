@@ -49,13 +49,20 @@ if [ "$FORCE" = true ]; then
 fi
 
 # Initialize and update submodules
+git submodule sync --recursive
+
 if [ "$UPDATE" = true ] || [ "$CLEAN" = true ]; then
     echo "Updating submodules to latest from tracked branches..."
-    git submodule update --init --recursive
-    git submodule update --remote --merge
+    git submodule update --init --recursive --remote --merge
 else
     echo "Initializing submodules..."
     git submodule update --init --recursive
+fi
+
+if [ "$UPDATE" = true ] || [ "$CLEAN" = true ]; then
+    echo ""
+    echo "Verifying local submodule checkouts..."
+    "$DIR/scripts/check-submodule-sync.sh" --working-tree
 fi
 
 # Generate autoloads for each submodule package
@@ -93,6 +100,7 @@ echo ""
 echo "Done. Packages are in packages/"
 echo "Use './scripts/setup-packages.sh --update' to update to latest versions."
 echo "Use './scripts/setup-packages.sh --update --force' to discard local changes first."
+echo "Use './scripts/check-submodule-sync.sh' to verify committed gitlinks stay on tracked remote heads."
 
 # Install git hooks
 if [ -f "$DIR/scripts/install-git-hooks.sh" ]; then

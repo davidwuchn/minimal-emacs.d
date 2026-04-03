@@ -63,9 +63,14 @@ This fork uses **Git main branches** for `gptel` and `gptel-agent` (44 commits
 ahead of ELPA) to get the latest features:
 
 ```bash
-./scripts/setup-packages.sh          # Install if missing
-./scripts/setup-packages.sh --force  # Reinstall
+./scripts/setup-packages.sh           # Install if missing
+./scripts/setup-packages.sh --update  # Sync submodules to tracked remote heads
+./scripts/setup-packages.sh --force   # Reinstall
+./scripts/check-submodule-sync.sh     # Verify gitlinks match tracked remote heads
 ```
+
+Git hooks and CI now fail if a committed submodule gitlink is either missing on
+its configured remote or behind the branch head declared in `.gitmodules`.
 
 This clones to `var/elpa/`:
 - `gptel` - Chat engine and FSM-based tool execution

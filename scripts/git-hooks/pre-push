@@ -1,84 +1,16 @@
-#!/bin/bash
-#
-# Pre-push hook: Auto-push submodule updates before pushing parent.
-# Ensures submodule commits exist on remote before parent push.
-#
+#!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-remote="$1"
-url="$2"
+repo_root="$(git rev-parse --show-toplevel)"
+check_script="$repo_root/scripts/check-submodule-sync.sh"
 
-if [[ "$remote" != "origin" ]]; then
-    exit 0
-fi
+while read -r local_ref local_sha remote_ref remote_sha; do
+    if [[ -z "${local_sha:-}" || "$local_sha" == "0000000000000000000000000000000000000000" ]]; then
+        continue
+    fi
 
-while read local_ref local_sha remote_ref remote_sha; do
-    branch=$(echo "$remote_ref" | sed 's|refs/heads/||')
-    
-    git config --file .gitmodules --get-regexp path | while read key path; do
-        submodule_path=$(echo "$path")
-        
-        if [[ -z "$remote_sha" || "$remote_sha" == "0000000000000000000000000000000000000000" ]]; then
-            base_sha=$(git rev-parse origin/main 2>/dev/null || echo "")
-        else
-            base_sha="$remote_sha"
-        fi
-        
-        if [[ -n "$base_sha" ]]; then
-            old_commit=$(git ls-tree "$base_sha" "$submodule_path" 2>/dev/null | awk '{print $3}')
-            new_commit=$(git ls-tree "$local_sha" "$submodule_path" 2>/dev/null | awk '{print $3}')
-            
-            if [[ -n "$new_commit" && "$old_commit" != "$new_commit" ]]; then
-                submodule_url=$(git config --file .gitmodules --get "submodule.$submodule_path.url")
-                
-                if [[ -n "$submodule_url" ]]; then
-                    cd "$submodule_path" 2>/dev/null || continue
-                    
-                    git fetch origin 2>/dev/null || true
-                    
-                    default_branch="main"
-                    if ! git rev-parse --verify "origin/main" >/dev/null 2>&1; then
-                        if git rev-parse --verify "origin/master" >/dev/null 2>&1; then
-                            default_branch="master"
-                        fi
-                    fi
-                    
-                    if ! git merge-base --is-ancestor "$new_commit" "origin/$default_branch" 2>/dev/null; then
-                        echo ""
-                        echo "Submodule $submodule_path has new commits not on remote."
-                        echo "Auto-pushing submodule to origin/$default_branch..."
-                        
-                        if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
-                            echo "  Stashing uncommitted changes..."
-                            git stash push -m "auto-stash by pre-push hook" 2>/dev/null || true
-                        fi
-                        
-                        push_output=$(git push origin HEAD:"$default_branch" 2>&1)
-                        push_exit=$?
-                        
-                        if [[ $push_exit -eq 0 ]]; then
-                            if echo "$push_output" | grep -q "Everything up-to-date"; then
-                                echo "  ✓ Submodule already up-to-date"
-                            else
-                                echo "  ✓ Submodule pushed successfully"
-                            fi
-                        else
-                            echo ""
-                            echo "ERROR: Failed to push submodule $submodule_path"
-                            echo "       Push output: $push_output"
-                            echo "       Please push manually: cd $submodule_path && git push origin HEAD:$default_branch"
-                            echo ""
-                            cd - > /dev/null
-                            exit 1
-                        fi
-                    fi
-                    
-                    cd - > /dev/null
-                fi
-            fi
-        fi
-    done
+    "$check_script" --treeish "$local_sha"
 done
 
 exit 0

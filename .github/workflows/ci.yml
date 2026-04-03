@@ -28,6 +28,12 @@ jobs:
           - 29.4
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify submodule gitlinks
+        run: |
+          ./scripts/check-submodule-sync.sh
 
       - uses: purcell/setup-emacs@master
         with:
@@ -67,6 +73,8 @@ jobs:
     steps:
       # Cask
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: purcell/setup-emacs@master
         with:
           version: ${{ matrix.emacs-version }}
