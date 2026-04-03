@@ -481,7 +481,11 @@ Handles API key lookup, process creation, JSON parsing, and error handling."
         (max-time (or max-time 120)))
     (unless my/gptel--openrouter-context-window-fetch-inflight
       (setq my/gptel--openrouter-context-window-fetch-inflight t)
-      (let* ((key (ignore-errors (gptel-api-key-from-auth-source "api.openrouter.com" "api")))
+      (let* ((key (condition-case err
+                       (gptel-api-key-from-auth-source "api.openrouter.com" "api")
+                     (error
+                      (message "OpenRouter: failed to get API key: %s" (error-message-string err))
+                      nil)))
              (buf (generate-new-buffer (format " *%s*" process-name))))
         (if (not (and (stringp key) (not (string-empty-p key))))
             (progn
