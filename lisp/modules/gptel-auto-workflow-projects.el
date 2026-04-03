@@ -390,32 +390,38 @@ Also handles caching and result truncation from old advice."
                                :handlers nil)))
                 (message "[FSM-DEBUG] fsm=%s (created)"
                          (gptel-auto-workflow--fsm-safe-describe gptel--fsm-last))
-                (let* ((default-directory (or worktree-dir project-root))
-                        (target-marker (point-marker))
-                        (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
-                        (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
-                                  (list :buffer target-buf :position target-marker)))
-                        (modified-info (list :buffer target-buf 
-                                              :position target-marker
-                                              :tracking-marker target-marker))
-                        ;; Wrap callback to cache results
-                        (wrapped-cb (lambda (result)
-                                      (when (and (stringp result)
-                                                  (fboundp 'my/gptel--subagent-cache-put))
-                                        (my/gptel--subagent-cache-put agent-type prompt result))
-                                      (funcall main-cb result))))
-                  (message "[FSM-DEBUG] Calling original function with agent: %s" agent-type)
+                 (let* ((default-directory (or worktree-dir project-root))
+                         (target-marker (point-marker))
+                         (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+                         (orig-gptel-fsm-info (symbol-function 'gptel-fsm-info))
+                         (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
+                                   (list :buffer target-buf :position target-marker)))
+                         (modified-info (list :buffer target-buf
+                                               :position target-marker
+                                               :tracking-marker target-marker))
+                         ;; Wrap callback to cache results
+                         (wrapped-cb (lambda (result)
+                                       (when (and (stringp result)
+                                                   (fboundp 'my/gptel--subagent-cache-put))
+                                         (my/gptel--subagent-cache-put agent-type prompt result))
+                                       (funcall main-cb result)))
+                         (task-runner (if (fboundp 'my/gptel-agent--task-override)
+                                          #'my/gptel-agent--task-override
+                                        orig-fun)))
+                  (message "[FSM-DEBUG] Calling task runner with agent: %s" agent-type)
                   (cl-letf (((symbol-function 'gptel-fsm-info)
-                              (lambda (&optional fsm) 
-                                (if (or (eq fsm parent-fsm) (null fsm))
-                                    modified-info 
-                                  info))))
+                              (lambda (&optional fsm)
+                                (cond
+                                 ((or (eq fsm parent-fsm) (null fsm))
+                                   modified-info)
+                                  (t
+                                   (funcall orig-gptel-fsm-info fsm))))))
                     (if (and gptel-auto-workflow--persist-executor-overlays
-                              (equal agent-type "executor"))
+                                (equal agent-type "executor"))
                         (cl-letf (((symbol-function 'delete-overlay)
                                     (lambda (&rest _) nil)))
-                          (funcall orig-fun wrapped-cb agent-type description prompt))
-                      (funcall orig-fun wrapped-cb agent-type description prompt)))))
+                          (funcall task-runner wrapped-cb agent-type description prompt))
+                      (funcall task-runner wrapped-cb agent-type description prompt)))))
               ;; SAFETY: Never execute in *Messages* buffer - find safe fallback
               (let ((safe-buffer (cond
                                   ((not (string= (buffer-name) "*Messages*"))

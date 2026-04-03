@@ -14,6 +14,7 @@
 (require 'gptel-request)
 (require 'gptel-agent-loop)
 (require 'gptel-benchmark-subagent)
+(require 'gptel-ext-retry)
 (require 'gptel-ext-fsm)
 (require 'gptel-ext-fsm-utils)
 (require 'gptel-tools-agent)
@@ -773,8 +774,123 @@ EXIT-CODE defaults to 1."
                                 (null (plist-get timer :repeat))))
                          scheduled-timers)))
           (should timeout-timer)
-          (funcall (plist-get timeout-timer :fn)))
-        (should (string-match-p "timed out after 42s" callback-result))))))
+           (funcall (plist-get timeout-timer :fn)))
+         (should (string-match-p "timed out after 42s" callback-result))))))
+
+(ert-deftest regression/auto-workflow/subagent-wrapper-marks-child-fsm-no-retry ()
+  "Wrapped subagent FSMs should disable the global auto-retry advice."
+  (let ((my/gptel-agent-task-timeout nil)
+        (captured-fsm nil))
+    (with-temp-buffer
+      (setq-local gptel--fsm-last 'parent-fsm)
+      (cl-letf (((symbol-function 'my/gptel--build-subagent-context)
+                 (lambda (prompt &rest _) prompt))
+                ((symbol-function 'my/gptel--call-gptel-agent-task)
+                 (lambda (_callback _agent-type _description _prompt)
+                   (setq-local gptel--fsm-last (gptel-make-fsm))
+                   (setq captured-fsm gptel--fsm-last)
+                   (setf (gptel-fsm-info captured-fsm)
+                         (list :buffer (current-buffer)
+                               :position (point-marker)
+                               :tracking-marker (point-marker)))))
+                ((symbol-function 'message) (lambda (&rest _) nil)))
+        (my/gptel--agent-task-with-timeout
+         #'ignore
+         "executor" "desc" "prompt")
+        (should (gptel-fsm-p captured-fsm))
+        (should (plist-get (gptel-fsm-info captured-fsm) :disable-auto-retry))))))
+
+(ert-deftest regression/auto-workflow/safe-task-override-marks-request-fsm-before-send ()
+  "Safe task override should mark request FSMs no-retry before dispatch."
+  (let ((gptel-agent--agents '(("executor" . nil)))
+        (captured-flag nil)
+        (request-called nil))
+    (with-temp-buffer
+      (setq-local gptel--fsm-last
+                  (gptel-make-fsm :info (list :buffer (current-buffer)
+                                              :position (point-marker)
+                                              :tracking-marker (point-marker))))
+      (cl-letf (((symbol-function 'gptel--preset-syms) (lambda (&rest _) nil))
+                ((symbol-function 'gptel--apply-preset) (lambda (&rest _) nil))
+                ((symbol-function 'gptel--update-status) (lambda (&rest _) nil))
+                ((symbol-function 'gptel-agent--task-overlay) (lambda (&rest _) nil))
+                ((symbol-function 'gptel-request)
+                 (lambda (_prompt &rest args)
+                   (let* ((fsm (plist-get args :fsm))
+                          (transforms (plist-get args :transforms))
+                          (info (list :buffer (current-buffer)
+                                      :position (point-marker)
+                                      :tracking-marker (point-marker)
+                                      :data (current-buffer))))
+                     (setf (gptel-fsm-info fsm) info)
+                     (dolist (transform transforms)
+                       (when (eq transform #'my/gptel--disable-auto-retry-transform)
+                         (funcall transform fsm)))
+                     (setq request-called t
+                           captured-flag
+                           (plist-get (gptel-fsm-info fsm) :disable-auto-retry)))))
+                ((symbol-function 'message) (lambda (&rest _) nil)))
+        (my/gptel-agent--task-override #'ignore "executor" "desc" "prompt")
+        (should request-called)
+        (should captured-flag)))))
+
+(ert-deftest regression/auto-workflow/auto-retry-skips-marked-fsms ()
+  "FSMs marked no-retry should fail immediately without scheduling backoff."
+  (let ((scheduled nil)
+        (transition-state nil)
+        (gptel-agent-request--handlers '(agent-handler)))
+    (let ((fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)))
+      (setf (gptel-fsm-info fsm)
+            (list :error '(:message "Too many requests")
+                  :http-status 429
+                  :retries 0
+                  :disable-auto-retry t))
+      (cl-letf (((symbol-function 'run-at-time)
+                 (lambda (&rest _args)
+                   (setq scheduled t)
+                   :fake-timer))
+                ((symbol-function 'message) (lambda (&rest _) nil)))
+        (should (eq (my/gptel-auto-retry
+                     (lambda (_machine &optional state)
+                       (setq transition-state state)
+                       :orig)
+                     fsm
+                     'ERRS)
+                    :orig))
+         (should (eq transition-state 'ERRS))
+         (should-not scheduled)))))
+
+(ert-deftest regression/auto-workflow/auto-retry-skips-headless-agent-buffers ()
+  "Headless auto-workflow agent buffers should fail immediately without backoff."
+  (let ((scheduled nil)
+        (transition-state nil)
+        (gptel-auto-workflow--headless t)
+        (gptel-auto-workflow-persistent-headless t)
+        (gptel-agent-request--handlers '(agent-handler))
+        (buf (get-buffer-create "*gptel-agent:test*")))
+    (unwind-protect
+        (let ((fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)))
+          (setf (gptel-fsm-info fsm)
+                (list :error '(:message "Too many requests")
+                      :http-status 429
+                      :retries 0
+                      :buffer buf))
+          (cl-letf (((symbol-function 'run-at-time)
+                     (lambda (&rest _args)
+                       (setq scheduled t)
+                       :fake-timer))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (should (eq (my/gptel-auto-retry
+                         (lambda (_machine &optional state)
+                           (setq transition-state state)
+                           :orig)
+                         fsm
+                         'ERRS)
+                        :orig))
+            (should (eq transition-state 'ERRS))
+            (should-not scheduled)))
+      (when (buffer-live-p buf)
+        (kill-buffer buf)))))
 
 (ert-deftest regression/auto-workflow/validate-code-ignores-trailing-whitespace ()
   "Code validation should not treat trailing whitespace/newlines as EOF syntax errors."
@@ -834,9 +950,36 @@ EXIT-CODE defaults to 1."
           (let ((output (shell-command-to-string (format "%s status" script))))
             (should (string-match-p ":running nil" output))
             (should (string-match-p ":phase \"idle\"" output))
-            (should (string-match-p "2026-04-02/results.tsv" output))))
+             (should (string-match-p "2026-04-02/results.tsv" output))))
        (delete-directory status-dir t)
        (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/recover-all-orphans-untracks-recovered-commits ()
+  "Recovered orphan hashes should be removed from the tracking file."
+  (let* ((proj-root (make-temp-file "aw-orphans" t))
+         (tracking-file (expand-file-name
+                         (format "var/tmp/experiments/%s/commits.txt"
+                                 (format-time-string "%Y-%m-%d"))
+                         proj-root)))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory tracking-file) t)
+          (with-temp-file tracking-file
+            (insert "abc1234 exp1 target.el 00:00:00\n")
+            (insert "def5678 exp2 other.el 00:00:01\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                     (lambda () proj-root))
+                    ((symbol-function 'gptel-auto-workflow--recover-orphans)
+                     (lambda () '(("abc1234" "exp1" "target.el"))))
+                    ((symbol-function 'gptel-auto-workflow--cherry-pick-orphan)
+                     (lambda (_hash) t))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (gptel-auto-workflow-recover-all-orphans t)
+            (with-temp-buffer
+              (insert-file-contents tracking-file)
+              (should-not (string-match-p "^abc1234 " (buffer-string)))
+              (should (string-match-p "^def5678 " (buffer-string))))))
+      (delete-directory proj-root t))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-runs-elisp-in-safe-buffer ()
   "Wrapper should evaluate daemon ELisp inside a guaranteed live fallback buffer."

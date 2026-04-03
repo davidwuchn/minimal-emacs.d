@@ -240,14 +240,49 @@ Logs when fallback to regex parsing is used."
                        (expand-file-name "~/.emacs.d/")))
         (max-targets gptel-auto-workflow-max-targets-per-run)
         (normalized-response (gptel-auto-workflow--normalize-response response)))
-    (let ((targets (gptel-auto-workflow--parse-json-targets
-                    normalized-response proj-root max-targets)))
-      (if targets
-          targets
-        (progn
-          (message "[auto-workflow] JSON parse failed, using regex fallback")
-          (gptel-auto-workflow--parse-regex-targets
-           normalized-response proj-root max-targets))))))
+    (cond
+     ((gptel-auto-experiment--quota-exhausted-p normalized-response)
+      (setq gptel-auto-experiment--quota-exhausted t)
+      (message "[auto-workflow] Analyzer quota exhausted during target selection")
+      nil)
+     (t
+      (let ((targets (gptel-auto-workflow--parse-json-targets
+                      normalized-response proj-root max-targets)))
+        (if targets
+            targets
+          (progn
+            (message "[auto-workflow] JSON parse failed, using regex fallback")
+            (gptel-auto-workflow--parse-regex-targets
+             normalized-response proj-root max-targets))))))))
+
+(defun gptel-auto-workflow--json-object-p (value)
+  "Return non-nil when VALUE looks like a JSON object alist."
+  (and (consp value)
+       (consp (car value))
+       (symbolp (caar value))))
+
+(defun gptel-auto-workflow--normalize-target-candidate (candidate)
+  "Normalize parsed target CANDIDATE to a repo-relative path when possible."
+  (cond
+   ((not (stringp candidate)) nil)
+   ((or (file-name-absolute-p candidate)
+        (string-match-p "/" candidate))
+    candidate)
+   ((string-match-p "\\.el\\'" candidate)
+    (concat "lisp/modules/" candidate))
+   (t candidate)))
+
+(defun gptel-auto-workflow--json-target-file (item)
+  "Extract a target file path from parsed JSON ITEM."
+  (cond
+   ((stringp item)
+    (gptel-auto-workflow--normalize-target-candidate item))
+   ((gptel-auto-workflow--json-object-p item)
+    (gptel-auto-workflow--normalize-target-candidate
+     (or (alist-get 'file item)
+         (alist-get 'path item)
+         (alist-get 'target item))))
+   (t nil)))
 
 (defun gptel-auto-workflow--parse-json-targets (response proj-root max-targets)
   "Parse JSON from RESPONSE to extract targets.
@@ -257,21 +292,29 @@ Logs parsing failures for debugging."
       (with-temp-buffer
         (insert response)
         (goto-char (point-min))
-        (when (re-search-forward "{" nil t)
+        (when (re-search-forward "[{[]" nil t)
           (goto-char (match-beginning 0))
-          (let* ((data (json-read))
-                 (target-list (alist-get 'targets data)))
-            (when (listp target-list)
-              (let ((candidates
-                     (cl-remove-if
-                      (lambda (item)
-                        (or (not (listp item))
-                            (not (alist-get 'file item))))
-                      target-list)))
-                (when candidates
-                  (gptel-auto-workflow--filter-valid-targets
-                   (mapcar (lambda (item) (alist-get 'file item)) candidates)
-                   proj-root max-targets)))))))
+          (let* ((json-array-type 'list)
+                 (json-object-type 'alist)
+                 (json-key-type 'symbol)
+                  (data (json-read))
+                  (target-list
+                   (cond
+                    ((gptel-auto-workflow--json-object-p data)
+                     (or (alist-get 'targets data)
+                         (alist-get 'files data)
+                         (alist-get 'paths data)
+                         (and (gptel-auto-workflow--json-target-file data)
+                              (list data))))
+                    ((listp data) data)))
+                  (candidates
+                   (and (listp target-list)
+                        (delq nil
+                              (mapcar #'gptel-auto-workflow--json-target-file
+                                      target-list)))))
+            (when candidates
+              (gptel-auto-workflow--filter-valid-targets
+               candidates proj-root max-targets)))))
     (json-error
      (message "[auto-workflow] JSON parse error: %s" (error-message-string err))
      nil)
@@ -303,16 +346,22 @@ LLM decides if available, otherwise uses static list."
              gptel-auto-workflow-targets
              proj-root
              gptel-auto-workflow-max-targets-per-run)))
-      (if gptel-auto-workflow-strategic-selection
-        (gptel-auto-workflow--ask-analyzer-for-targets
-         (lambda (targets)
-           (if targets
-               (progn
-                   (message "[auto-workflow] Analyzer selected %d targets" (length targets))
-                  (funcall callback targets))
+       (if gptel-auto-workflow-strategic-selection
+         (gptel-auto-workflow--ask-analyzer-for-targets
+          (lambda (targets)
+            (cond
+             ((and gptel-auto-experiment--quota-exhausted
+                   (null targets))
+              (message "[auto-workflow] Skipping static fallback after analyzer quota exhaustion")
+              (funcall callback nil))
+             (targets
+                (progn
+                    (message "[auto-workflow] Analyzer selected %d targets" (length targets))
+                   (funcall callback targets)))
+             (t
               (message "[auto-workflow] Using static targets")
-              (funcall callback static-targets))))
-        (funcall callback static-targets)))))
+              (funcall callback static-targets)))))
+         (funcall callback static-targets)))))
 
 ;;; Periodic Research
 

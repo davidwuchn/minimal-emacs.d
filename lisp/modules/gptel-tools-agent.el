@@ -250,6 +250,35 @@ On timeout or error, returns empty string and logs warning."
 
 ;;; Orphan Commit Tracking
 
+(defun gptel-auto-workflow--tracking-file (&optional date)
+  "Return orphan commit tracking file path for DATE or today."
+  (expand-file-name
+   (format "var/tmp/experiments/%s/commits.txt"
+           (or date (format-time-string "%Y-%m-%d")))
+   (gptel-auto-workflow--project-root)))
+
+(defun gptel-auto-workflow--untrack-commit (commit-hash &optional date)
+  "Remove COMMIT-HASH from the tracking file for DATE or today.
+Returns non-nil when at least one entry was removed."
+  (when (gptel-auto-workflow--non-empty-string-p commit-hash)
+    (let ((tracking-file (gptel-auto-workflow--tracking-file date)))
+      (when (file-exists-p tracking-file)
+        (with-temp-buffer
+          (insert-file-contents tracking-file)
+          (let* ((lines (split-string (buffer-string) "\n" t))
+                 (remaining
+                  (cl-remove-if
+                   (lambda (line)
+                     (string-prefix-p (concat commit-hash " ") line))
+                   lines)))
+            (unless (= (length remaining) (length lines))
+              (if remaining
+                  (with-temp-file tracking-file
+                    (insert (mapconcat #'identity remaining "\n"))
+                    (insert "\n"))
+                (delete-file tracking-file))
+              t)))))))
+
 (defun gptel-auto-workflow--track-commit (experiment-id &optional target worktree-dir)
   "Save current commit hash to tracking file for EXPERIMENT-ID.
 TARGET is optional description. Enables recovery if workflow interrupted.
@@ -258,10 +287,7 @@ Returns nil if git command fails or returns invalid hash."
                                 (gptel-auto-workflow--get-worktree-dir (or target gptel-auto-workflow--current-target))
                                 (gptel-auto-workflow--project-root)))
          (commit-hash (gptel-auto-workflow--git-cmd "git rev-parse HEAD"))
-         (date (format-time-string "%Y-%m-%d"))
-         (tracking-file (expand-file-name
-                         (format "var/tmp/experiments/%s/commits.txt" date)
-                         (gptel-auto-workflow--project-root)))
+         (tracking-file (gptel-auto-workflow--tracking-file))
          (tracking-dir (file-name-directory tracking-file)))
     (cond
      ((string-empty-p commit-hash)
@@ -290,10 +316,7 @@ Returns nil if git command fails or returns invalid hash."
 An orphan is a commit that exists but is not reachable from staging or main.
 Returns list of (hash exp-id target) for truly orphaned commits."
   (interactive)
-  (let* ((date (format-time-string "%Y-%m-%d"))
-         (tracking-file (expand-file-name
-                         (format "var/tmp/experiments/%s/commits.txt" date)
-                         (gptel-auto-workflow--project-root)))
+  (let* ((tracking-file (gptel-auto-workflow--tracking-file))
          (orphans nil))
     (when (file-exists-p tracking-file)
       (with-temp-buffer
@@ -308,14 +331,14 @@ Returns list of (hash exp-id target) for truly orphaned commits."
                                  (format "git merge-base --is-ancestor %s staging 2>/dev/null && echo yes" hash)))
                     (in-main (gptel-auto-workflow--git-cmd
                               (format "git merge-base --is-ancestor %s main 2>/dev/null && echo yes" hash))))
-                (when (and (string-empty-p in-staging)
-                           (string-empty-p in-main))
-                  (push (list hash exp-id target) orphans))))))))
+                 (when (and (string-empty-p in-staging)
+                            (string-empty-p in-main))
+                   (push (list hash exp-id target) orphans))))))))
     (if orphans
-(message "[auto-workflow] Found %d orphan(s): %s"
+        (message "[auto-workflow] Found %d orphan(s): %s"
                  (length orphans)
-                 (mapconcat (lambda (o) 
-                              (gptel-auto-workflow--truncate-hash (car o))) 
+                 (mapconcat (lambda (o)
+                              (gptel-auto-workflow--truncate-hash (car o)))
                             orphans " "))
       (message "[auto-workflow] No orphan commits found"))
     orphans))
@@ -380,7 +403,9 @@ If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
         (dolist (orphan orphans)
           (let ((hash (car orphan)))
             (if (gptel-auto-workflow--cherry-pick-orphan hash)
-                (cl-incf recovered)
+                (progn
+                  (gptel-auto-workflow--untrack-commit hash)
+                  (cl-incf recovered))
               (cl-incf failed))))
         (message "[auto-workflow] Recovered %d/%d orphans to staging"
                  recovered (length orphans))
@@ -673,7 +698,8 @@ large-result truncation, and result caching."
                     (gptel-request prompt
                       :context (gptel-agent--task-overlay where agent-type description)
                       :fsm child-fsm
-                      :transforms (list #'gptel--transform-add-context)
+                      :transforms (list #'my/gptel--disable-auto-retry-transform
+                                        #'gptel--transform-add-context)
                       :position tracking-marker
                       :buffer parent-buf
                       :in-place t
@@ -716,6 +742,7 @@ large-result truncation, and result caching."
                               main-cb
                               (format "Error: Task \"%s\" was aborted by the user. \n%s could not finish."
                                       description agent-type)))))))
+                    (my/gptel--disable-auto-retry-for-fsm child-fsm)
                     (setq request-started t))
                 (unless request-started
                   (with-current-buffer parent-buf
@@ -1014,6 +1041,18 @@ its async continuation layer in the worker daemon."
           (funcall #'gptel-agent--task callback agent-type description prompt))
       (funcall #'gptel-agent--task callback agent-type description prompt))))
 
+(defun my/gptel--disable-auto-retry-for-fsm (fsm)
+  "Mark FSM so global auto-retry advice will not reschedule it."
+  (when (and fsm (fboundp 'gptel-fsm-info))
+    (when-let* ((info (ignore-errors (gptel-fsm-info fsm)))
+                ((listp info)))
+      (plist-put info :disable-auto-retry t)
+      t)))
+
+(defun my/gptel--disable-auto-retry-transform (fsm)
+  "Mark FSM as no-retry before request dispatch."
+  (my/gptel--disable-auto-retry-for-fsm fsm))
+
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
 CALLBACK is called with the result or a timeout error.
@@ -1094,14 +1133,15 @@ Uses hash table keyed by task-id to support parallel execution."
                 (progn
                   (my/gptel--call-gptel-agent-task
                    wrapped-cb agent-type description packaged-prompt)
-                  (setq request-started t)
-                  (when (buffer-live-p origin-buf)
-                    (with-current-buffer origin-buf
-                      (when (local-variable-p 'gptel--fsm-last)
-                        (setq child-fsm gptel--fsm-last)))))
-              (unless request-started
-                (funcall restore-origin-fsm))))
-        nil))))
+                   (setq request-started t)
+                   (when (buffer-live-p origin-buf)
+                     (with-current-buffer origin-buf
+                       (when (local-variable-p 'gptel--fsm-last)
+                         (setq child-fsm gptel--fsm-last)
+                         (my/gptel--disable-auto-retry-for-fsm child-fsm)))))
+               (unless request-started
+                 (funcall restore-origin-fsm))))
+         nil))))
 
 (cl-defun my/gptel--run-agent-tool (callback agent-name description prompt &optional files include-history include-diff)
   "Run a gptel-agent agent by name.

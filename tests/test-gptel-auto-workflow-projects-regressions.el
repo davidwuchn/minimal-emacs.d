@@ -19,14 +19,20 @@
          (gptel-auto-workflow--current-target "packages/gptel/gptel-request.el")
          (gptel-auto-workflow-worktree-base nil)
          (captured-default-directory nil)
-         (captured-buffer nil))
+         (captured-buffer nil)
+         (used-safe-override nil))
     (unwind-protect
         (progn
           (make-directory worktree-dir t)
           (cl-letf (((symbol-function 'my/gptel--subagent-cache-get) (lambda (&rest _) nil))
+                    ((symbol-function 'my/gptel-agent--task-override)
+                     (lambda (_main-cb _agent-type _description _prompt)
+                       (setq used-safe-override t
+                             captured-default-directory default-directory
+                             captured-buffer (current-buffer))))
                     ((symbol-function 'gptel-auto-workflow--get-project-for-context)
                      (lambda ()
-                       (cons project-root (get-buffer-create "*aw-project-root*"))))
+                        (cons project-root (get-buffer-create "*aw-project-root*"))))
                     ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
                      (lambda (_target) worktree-dir))
                     ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
@@ -37,17 +43,97 @@
                          buf)))
                     ((symbol-function 'gptel-fsm-info)
                      (lambda (&optional _fsm) nil)))
+             (gptel-auto-workflow--advice-task-override
+              (lambda (&rest _args)
+                (error "orig task runner should not be used when safe override is available"))
+              (lambda (_result) nil)
+              "executor"
+              "desc"
+              "prompt")
+             (should used-safe-override)
+             (should (equal (file-name-as-directory captured-default-directory)
+                            (file-name-as-directory worktree-dir)))
+             (should (equal (buffer-name captured-buffer) "*aw-worktree*"))))
+       (delete-directory project-root t)
+       (when (get-buffer "*aw-project-root*")
+        (kill-buffer "*aw-project-root*"))
+       (when (get-buffer "*aw-worktree*")
+         (kill-buffer "*aw-worktree*")))))
+
+(ert-deftest regression/auto-workflow-projects/task-routing-preserves-child-fsm-info ()
+  "Per-project routing should preserve real child FSM info for nested request code."
+  (let* ((project-root (make-temp-file "aw-project" t))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/foo-exp1" project-root))
+         (gptel-auto-workflow--current-project project-root)
+         (gptel-auto-workflow--current-target "lisp/modules/foo.el")
+         (observed-child-info nil)
+         parent-fsm
+         child-fsm)
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (setq parent-fsm (gptel-make-fsm :info (list :buffer (current-buffer)
+                                                       :position (point-marker))))
+          (setq child-fsm (gptel-make-fsm :info (list :buffer :child-buffer
+                                                      :disable-auto-retry t)))
+          (cl-letf (((symbol-function 'my/gptel--subagent-cache-get) (lambda (&rest _) nil))
+                    ((symbol-function 'my/gptel-agent--task-override)
+                     (lambda (_main-cb _agent-type _description _prompt)
+                       (setq observed-child-info (gptel-fsm-info child-fsm))))
+                    ((symbol-function 'gptel-auto-workflow--get-project-for-context)
+                     (lambda ()
+                       (cons project-root (get-buffer-create "*aw-project-root*"))))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                     (lambda (_target) worktree-dir))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                     (lambda (_dir) (get-buffer-create "*aw-worktree*")))
+                    ((symbol-function 'gptel-fsm-info)
+                     (lambda (&optional fsm)
+                       (cond
+                        ((eq fsm parent-fsm) (list :buffer :parent-buffer))
+                        ((eq fsm child-fsm) (list :buffer :child-buffer
+                                                  :disable-auto-retry t))
+                        (t nil)))))
+            (with-current-buffer (get-buffer-create "*aw-worktree*")
+              (setq-local gptel--fsm-last parent-fsm))
             (gptel-auto-workflow--advice-task-override
-             (lambda (_main-cb _agent-type _description _prompt)
-               (setq captured-default-directory default-directory
-                     captured-buffer (current-buffer)))
+             (lambda (&rest _args)
+               (error "orig task runner should not be used when safe override is available"))
              (lambda (_result) nil)
              "executor"
              "desc"
              "prompt")
-            (should (equal (file-name-as-directory captured-default-directory)
-                           (file-name-as-directory worktree-dir)))
-            (should (equal (buffer-name captured-buffer) "*aw-worktree*"))))
+            (should (equal (plist-get observed-child-info :buffer) :child-buffer))
+            (should (plist-get observed-child-info :disable-auto-retry))))
+      (delete-directory project-root t)
+      (when (get-buffer "*aw-project-root*")
+        (kill-buffer "*aw-project-root*"))
+      (when (get-buffer "*aw-worktree*")
+        (kill-buffer "*aw-worktree*")))))
+
+(ert-deftest regression/auto-workflow-projects/task-routing-prefers-safe-task-override ()
+  "Per-project routing should prefer the safe task override when available."
+  (let* ((project-root (make-temp-file "aw-project" t))
+         (gptel-auto-workflow--current-project project-root)
+         (called nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'my/gptel--subagent-cache-get) (lambda (&rest _) nil))
+                  ((symbol-function 'my/gptel-agent--task-override)
+                   (lambda (&rest _args) (setq called 'safe)))
+                  ((symbol-function 'gptel-auto-workflow--get-project-for-context)
+                   (lambda ()
+                     (cons project-root (get-buffer-create "*aw-project-root*"))))
+                  ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                   (lambda (_dir) (get-buffer-create "*aw-worktree*")))
+                  ((symbol-function 'gptel-fsm-info)
+                   (lambda (&optional _fsm) nil)))
+          (gptel-auto-workflow--advice-task-override
+           (lambda (&rest _args) (setq called 'orig))
+           (lambda (_result) nil)
+           "analyzer"
+           "desc"
+           "prompt")
+          (should (eq called 'safe)))
       (delete-directory project-root t)
       (when (get-buffer "*aw-project-root*")
         (kill-buffer "*aw-project-root*"))

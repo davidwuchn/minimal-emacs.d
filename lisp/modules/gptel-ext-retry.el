@@ -45,6 +45,8 @@
 
 (defvar gptel-send--handlers)
 (defvar gptel-request--handlers)
+(defvar gptel-auto-workflow--headless)
+(defvar gptel-auto-workflow-persistent-headless)
 
 (declare-function my/gptel--trim-context-images "gptel-ext-context-images")
 
@@ -452,6 +454,14 @@ start <= tracking to avoid corrupting the buffer."
         (format "HTTP %s" http-status)
       "Transient API Error")))
 
+(defun my/gptel--headless-auto-workflow-agent-buffer-p (info)
+  "Return non-nil when INFO belongs to a headless auto-workflow agent buffer."
+  (let ((buf (and (listp info) (plist-get info :buffer))))
+    (and (bound-and-true-p gptel-auto-workflow--headless)
+         (bound-and-true-p gptel-auto-workflow-persistent-headless)
+         (buffer-live-p buf)
+         (string-prefix-p "*gptel-agent:" (buffer-name buf)))))
+
 (defun my/gptel-auto-retry (orig-fn machine &optional new-state)
   "Intercept FSM transitions to ERRS and retry the request if transient.
 
@@ -491,6 +501,9 @@ TEST: Verify with network failure simulation — should retry 3 times with
   increasing delays, then fail. Check message buffer for retry logs."
   (unless new-state (setq new-state (gptel--fsm-next machine)))
   (let* ((info (gptel-fsm-info machine))
+         (disable-auto-retry (plist-get info :disable-auto-retry))
+         (headless-agent-buffer-p
+          (my/gptel--headless-auto-workflow-agent-buffer-p info))
          (error-data (plist-get info :error))
          (http-status (plist-get info :http-status))
          (retries (or (plist-get info :retries) 0))
@@ -506,6 +519,8 @@ TEST: Verify with network failure simulation — should retry 3 times with
                               (and (boundp 'gptel-agent-request--handlers)
                                    (eq handlers gptel-agent-request--handlers))))))
     (if (and (eq new-state 'ERRS)
+             (not disable-auto-retry)
+             (not headless-agent-buffer-p)
              (not subagent-p)
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
              (my/gptel--transient-error-p error-data http-status))

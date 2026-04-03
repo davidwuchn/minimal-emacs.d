@@ -36,9 +36,13 @@
 (declare-function gptel-benchmark-summarize-results "gptel-benchmark-core")
 (declare-function gptel-benchmark-load-history "gptel-benchmark-core")
 (defvar gptel-benchmark-default-dir)
+(defvar my/gptel-agent-task-timeout)
 
 (declare-function gptel-agent--task "gptel-tools-agent")
 (declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent")
+(declare-function my/gptel--agent-task-with-timeout "gptel-tools-agent"
+                  (callback agent-type description prompt
+                            &optional files include-history include-diff))
 
 ;;; Customization
 
@@ -84,18 +88,26 @@ When nil, falls back to local evaluation."
 
 ;;; Core Dispatch
 
-(defun gptel-benchmark-call-subagent (type description prompt callback &optional _timeout)
+(defun gptel-benchmark-call-subagent (type description prompt callback &optional timeout)
   "Call subagent of TYPE with DESCRIPTION and PROMPT.
 Calls CALLBACK with result when complete.
-_TIMEOUT is reserved for future use."
+TIMEOUT overrides the default benchmark subagent timeout."
   (if (and gptel-benchmark-use-subagents
            (fboundp 'gptel-agent--task))
       (let ((agent-type (symbol-name type)))
-        (gptel-agent--task
-         callback
-         agent-type
-         description
-         prompt))
+        (if (fboundp 'my/gptel--agent-task-with-timeout)
+            (let ((my/gptel-agent-task-timeout
+                   (or timeout gptel-benchmark-subagent-timeout)))
+              (my/gptel--agent-task-with-timeout
+               callback
+               agent-type
+               description
+               prompt))
+          (gptel-agent--task
+           callback
+           agent-type
+           description
+           prompt)))
     (funcall callback (format "[MOCK] %s: %s"
                               type
                               (truncate-string-to-width prompt 100 nil nil "...")))))

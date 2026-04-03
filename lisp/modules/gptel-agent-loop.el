@@ -34,6 +34,8 @@
 
 (declare-function my/gptel--coerce-fsm "gptel-ext-fsm-utils")
 (declare-function my/gptel--deliver-subagent-result "gptel-tools-agent")
+(declare-function my/gptel-agent--task-override "gptel-tools-agent"
+                  (main-cb agent-type description prompt))
 (declare-function my/gptel--subagent-cache-get "gptel-tools-agent")
 (declare-function my/gptel--subagent-cache-put "gptel-tools-agent")
 (declare-function my/gptel--transient-error-p "gptel-ext-retry")
@@ -45,6 +47,8 @@ Defined in gptel-tools-agent.el.")
 (defvar gptel--fsm-last nil)
 (defvar gptel-agent--agents)
 (defvar gptel-agent-request--handlers nil)
+(defvar gptel-agent-loop--bypass nil
+  "When non-nil, bypass loop control and call the safe task override directly.")
 (defvar gptel--preset nil)
 
 (defgroup gptel-agent-loop nil
@@ -646,31 +650,34 @@ PROMPT is the full task instructions.
 
 This mirrors OpenCode SessionPrompt.loop behavior.
 Reads `steps' from agent YAML to set max-steps per agent."
-  (let* ((agent-config (cdr (assoc agent-type gptel-agent--agents)))
-         (agent-steps (plist-get agent-config :steps))
-         (effective-max-steps (or agent-steps gptel-agent-loop-max-steps))
-         (state (gptel-agent-loop--remember-state
-                 (gptel-agent-loop--task-create
-                  :id (gensym "gptel-agent-loop-")
-                  :agent-type agent-type
-                  :description description
-                  :prompt prompt
-                  :main-cb main-cb
-                  :step-count 0
-                  :retries 0
-                  :aborted nil
-                  :timeout-timer nil
-                  :max-steps effective-max-steps
-                  :max-steps-reached nil
-                  :summary-requested nil
-                  :accumulated-output nil
-                  :tracking-marker nil
-                  :parent-buffer nil
-                  :finished nil
-                  :continuation-count 0))))
-    (setf (gptel-agent-loop--task-timeout-timer state)
-          (gptel-agent-loop--make-timeout-timer state))
-    (gptel-agent-loop--request state prompt t t)))
+  (if (and gptel-agent-loop--bypass
+           (fboundp 'my/gptel-agent--task-override))
+      (my/gptel-agent--task-override main-cb agent-type description prompt)
+    (let* ((agent-config (cdr (assoc agent-type gptel-agent--agents)))
+           (agent-steps (plist-get agent-config :steps))
+           (effective-max-steps (or agent-steps gptel-agent-loop-max-steps))
+           (state (gptel-agent-loop--remember-state
+                   (gptel-agent-loop--task-create
+                    :id (gensym "gptel-agent-loop-")
+                    :agent-type agent-type
+                    :description description
+                    :prompt prompt
+                    :main-cb main-cb
+                    :step-count 0
+                    :retries 0
+                    :aborted nil
+                    :timeout-timer nil
+                    :max-steps effective-max-steps
+                    :max-steps-reached nil
+                    :summary-requested nil
+                    :accumulated-output nil
+                    :tracking-marker nil
+                    :parent-buffer nil
+                    :finished nil
+                    :continuation-count 0))))
+      (setf (gptel-agent-loop--task-timeout-timer state)
+            (gptel-agent-loop--make-timeout-timer state))
+      (gptel-agent-loop--request state prompt t t))))
 
 (defun gptel-agent-loop-enable ()
   "Enable RunAgent loop control by advising `gptel-agent--task'."
