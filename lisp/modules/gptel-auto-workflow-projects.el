@@ -38,13 +38,6 @@
 Each project should have .dir-locals.el with workflow configuration.
 Customize this variable to add more projects.")
 
-(defun gptel-auto-workflow--fsm-safe-describe (fsm)
-  "Return a safe description of FSM for logging without corrupting *Messages*.
-Avoids %s formatting of complex objects that contain special characters."
-  (when fsm
-    (format "#<fsm:%s>"
-            (type-of fsm))))
-
 (defvar gptel-auto-workflow--project-buffers (make-hash-table :test 'equal)
   "Hash table mapping project roots to their gptel-agent buffers.")
 
@@ -333,13 +326,9 @@ When in auto-workflow context, routes to per-project buffer.
 Otherwise, passes through to original function (no error).
 NEVER allows overlays in *Messages* buffer.
 Also handles caching and result truncation from old advice."
-  (message "[FSM-DEBUG] Task override: agent=%s fsm=%s" 
-           agent-type 
-           (gptel-auto-workflow--fsm-safe-describe
-            (and (boundp 'gptel--fsm-last) gptel--fsm-last)))
   ;; Check cache first (from old my/gptel-agent--task-override)
   (let ((cached (and (fboundp 'my/gptel--subagent-cache-get)
-                      (my/gptel--subagent-cache-get agent-type prompt))))
+                     (my/gptel--subagent-cache-get agent-type prompt))))
     (if cached
         (progn
           (message "[nucleus] Subagent %s cache hit" agent-type)
@@ -366,30 +355,22 @@ Also handles caching and result truncation from old advice."
              (target-buf (if worktree-dir
                                (gptel-auto-workflow--get-worktree-buffer worktree-dir)
                              (cdr proj-context))))
-        (message "[FSM-DEBUG] Target buffer: %s, worktree: %s" 
-                 (and target-buf (buffer-name target-buf)) worktree-dir)
         ;; CRITICAL: Validate worktree exists before proceeding
         (if (and worktree-dir (not (file-exists-p worktree-dir)))
             (progn
               (message "[auto-workflow] Worktree deleted, aborting: %s" worktree-dir)
               (funcall main-cb (format "Error: Worktree no longer exists: %s" worktree-dir)))
           (if (and target-buf 
-                    (buffer-live-p target-buf)
-                    (not (string= (buffer-name target-buf) "*Messages*")))
+                   (buffer-live-p target-buf)
+                   (not (string= (buffer-name target-buf) "*Messages*")))
               (with-current-buffer target-buf
-                (message "[FSM-DEBUG] In target buffer, fsm=%s"
-                         (gptel-auto-workflow--fsm-safe-describe
-                          (and (boundp 'gptel--fsm-last) gptel--fsm-last)))
                 ;; Ensure FSM exists for agent task
                 (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
-                  (message "[FSM-DEBUG] Creating new FSM in buffer")
                   ;; Create minimal FSM for agent context
                   (setq-local gptel--fsm-last 
                               (gptel-make-fsm 
                                :table (when (boundp 'gptel-send--transitions) gptel-send--transitions)
                                :handlers nil)))
-                (message "[FSM-DEBUG] fsm=%s (created)"
-                         (gptel-auto-workflow--fsm-safe-describe gptel--fsm-last))
                  (let* ((default-directory (or worktree-dir project-root))
                          (target-marker (point-marker))
                          (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
@@ -400,15 +381,14 @@ Also handles caching and result truncation from old advice."
                                                :position target-marker
                                                :tracking-marker target-marker))
                          ;; Wrap callback to cache results
-                         (wrapped-cb (lambda (result)
-                                       (when (and (stringp result)
+                          (wrapped-cb (lambda (result)
+                                        (when (and (stringp result)
                                                    (fboundp 'my/gptel--subagent-cache-put))
-                                         (my/gptel--subagent-cache-put agent-type prompt result))
-                                       (funcall main-cb result)))
-                         (task-runner (if (fboundp 'my/gptel-agent--task-override)
-                                          #'my/gptel-agent--task-override
-                                        orig-fun)))
-                  (message "[FSM-DEBUG] Calling task runner with agent: %s" agent-type)
+                                          (my/gptel--subagent-cache-put agent-type prompt result))
+                                        (funcall main-cb result)))
+                          (task-runner (if (fboundp 'my/gptel-agent--task-override)
+                                           #'my/gptel-agent--task-override
+                                         orig-fun)))
                   (cl-letf (((symbol-function 'gptel-fsm-info)
                               (lambda (&optional fsm)
                                 (cond

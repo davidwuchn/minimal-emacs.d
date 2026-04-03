@@ -140,6 +140,48 @@
       (when (get-buffer "*aw-worktree*")
         (kill-buffer "*aw-worktree*")))))
 
+(ert-deftest regression/auto-workflow-projects/task-routing-does-not-log-fsm-debug-noise ()
+  "Per-project routing should not emit leftover FSM debug messages."
+  (let* ((project-root (make-temp-file "aw-project" t))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/foo-exp1" project-root))
+         (gptel-auto-workflow--current-project project-root)
+         (gptel-auto-workflow--current-target "lisp/modules/foo.el")
+         (logged-messages nil))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (cl-letf (((symbol-function 'my/gptel--subagent-cache-get) (lambda (&rest _) nil))
+                    ((symbol-function 'my/gptel-agent--task-override)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'gptel-auto-workflow--get-project-for-context)
+                     (lambda ()
+                       (cons project-root (get-buffer-create "*aw-project-root*"))))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                     (lambda (_target) worktree-dir))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                     (lambda (_dir) (get-buffer-create "*aw-worktree*")))
+                    ((symbol-function 'gptel-fsm-info)
+                     (lambda (&optional _fsm) nil))
+                    ((symbol-function 'message)
+                     (lambda (fmt &rest args)
+                       (push (apply #'format fmt args) logged-messages))))
+            (gptel-auto-workflow--advice-task-override
+             (lambda (&rest _args)
+               (error "orig task runner should not be used when safe override is available"))
+             (lambda (_result) nil)
+             "executor"
+             "desc"
+             "prompt")
+            (should-not
+             (cl-some (lambda (entry)
+                        (string-match-p "\\[FSM-DEBUG\\]" entry))
+                      logged-messages))))
+      (delete-directory project-root t)
+      (when (get-buffer "*aw-project-root*")
+        (kill-buffer "*aw-project-root*"))
+      (when (get-buffer "*aw-worktree*")
+        (kill-buffer "*aw-worktree*")))))
+
 (ert-deftest regression/auto-workflow-projects/queue-helper-returns-before-job-runs ()
   "Queued cron work should not run inline in the `emacsclient' request."
   (let ((gptel-auto-workflow--cron-job-running nil)
