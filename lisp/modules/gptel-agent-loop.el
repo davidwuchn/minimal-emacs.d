@@ -446,6 +446,11 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
                    (gptel-agent-loop--task-description state)
                    (gptel-agent-loop--task-retries state)
                    gptel-agent-loop-max-retries)
+          ;; Reset timeout so each retry gets a full window
+          (when (timerp (gptel-agent-loop--task-timeout-timer state))
+            (cancel-timer (gptel-agent-loop--task-timeout-timer state)))
+          (setf (gptel-agent-loop--task-timeout-timer state)
+                (gptel-agent-loop--make-timeout-timer state))
           (gptel-agent-loop--schedule
            2.0
            (lambda ()
@@ -613,9 +618,12 @@ Cache behavior:
                               (with-current-buffer parent-buf (point-marker))))
                    (tracking-marker
                     (or (gptel-agent-loop--task-tracking-marker state)
-                        (let ((m (copy-marker where t)))
-                          (set-marker m (marker-position where) parent-buf)
-                          m)))
+                        ;; If where is already in parent-buf, use it directly.
+                        ;; If it's from a foreign buffer (fsm-info), don't copy
+                        ;; its position across buffers — create a fresh marker instead.
+                        (if (eq (marker-buffer where) parent-buf)
+                            where
+                          (with-current-buffer parent-buf (point-marker)))))
                    (callback (gptel-agent-loop--make-callback state prompt use-tools)))
               (setf (gptel-agent-loop--task-parent-buffer state) parent-buf
                     (gptel-agent-loop--task-tracking-marker state) tracking-marker)
@@ -697,8 +705,12 @@ Reads `steps' from agent YAML to set max-steps per agent."
   (interactive)
   (advice-remove 'gptel-agent--task #'gptel-agent-loop-task)
   (maphash (lambda (_id state)
-             (setf (gptel-agent-loop--task-finished state) t)
-             (gptel-agent-loop--cleanup-state state))
+              (let ((marker (gptel-agent-loop--task-tracking-marker state)))
+                (when (and marker (markerp marker) (marker-buffer marker))
+                  (set-marker marker nil)))
+              (setf (gptel-agent-loop--task-tracking-marker state) nil
+                    (gptel-agent-loop--task-finished state) t)
+              (gptel-agent-loop--cleanup-state state))
            gptel-agent-loop--active-tasks)
   (clrhash gptel-agent-loop--active-tasks)
   (setq gptel-agent-loop--state nil)
