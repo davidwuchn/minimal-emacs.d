@@ -1299,17 +1299,18 @@ Uses hash table keyed by task-id to support parallel execution."
                   ;; Atomic test-and-set: mark done before acting to prevent
                   ;; double-invocation if gptel-abort fires synchronously in timeout.
                   (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                  (unless already-done
-                    (when (timerp (plist-get state :timeout-timer))
-                      (cancel-timer (plist-get state :timeout-timer)))
-                    (when (timerp (plist-get state :progress-timer))
-                      (cancel-timer (plist-get state :progress-timer)))
-                    (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
-                             agent-type (float-time (time-since start-time))
-                             (if (stringp result) (length result) 0))
-                    (funcall restore-origin-fsm child-fsm)
-                    (funcall callback result)
-                    (remhash task-id my/gptel--agent-task-state)))))))
+                   (unless already-done
+                     (when (timerp (plist-get state :timeout-timer))
+                       (cancel-timer (plist-get state :timeout-timer)))
+                     (when (timerp (plist-get state :progress-timer))
+                       (cancel-timer (plist-get state :progress-timer)))
+                     (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
+                              agent-type (float-time (time-since start-time))
+                              (if (stringp result) (length result) 0))
+                     (funcall restore-origin-fsm child-fsm)
+                     (unwind-protect
+                         (funcall callback result)
+                       (remhash task-id my/gptel--agent-task-state))))))))
     (message "[nucleus] Delegating to subagent %s%s..."
              agent-type
              (if task-timeout
@@ -1343,16 +1344,17 @@ Uses hash table keyed by task-id to support parallel execution."
                                       (unless already-done
                                          (when (timerp (plist-get state :progress-timer))
                                            (cancel-timer (plist-get state :progress-timer)))
-                                         (message "[nucleus] Subagent %s timed out after %ds, aborting request"
-                                                  agent-type task-timeout)
-                                         (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
-                                                     ((fboundp 'gptel-abort)))
-                                           (ignore-errors (gptel-abort request-buf)))
-                                         (funcall restore-origin-fsm child-fsm)
-                                         (funcall callback
-                                                  (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                                          description agent-type task-timeout))
-                                         (remhash task-id my/gptel--agent-task-state))))))))))
+                                       (message "[nucleus] Subagent %s timed out after %ds, aborting request"
+                                                agent-type task-timeout)
+                                       (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
+                                                   ((fboundp 'gptel-abort)))
+                                         (ignore-errors (gptel-abort request-buf)))
+                                       (funcall restore-origin-fsm child-fsm)
+                                       (unwind-protect
+                                           (funcall callback
+                                                    (format "Error: Task \"%s\" (%s) timed out after %ds."
+                                                            description agent-type task-timeout))
+                                         (remhash task-id my/gptel--agent-task-state)))))))))))
         (let ((state (gethash task-id my/gptel--agent-task-state)))
           (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
     (let ((my/gptel--current-agent-task-id task-id)
@@ -2987,6 +2989,23 @@ NOTE: Nucleus script validation is skipped for experiments because:
               :eight-keys (when scores (alist-get 'overall scores))
               :eight-keys-scores scores)))))
 
+(defun gptel-auto-experiment--safe-benchmark (&optional skip-tests)
+  "Run benchmark, converting unexpected errors into a failed result."
+  (condition-case err
+      (gptel-auto-experiment-benchmark skip-tests)
+    (error
+     (let ((reason
+            (format "callback-error:%s"
+                    (my/gptel--sanitize-for-logging
+                     (error-message-string err) 200))))
+       (message "[auto-experiment] Benchmark failed unexpectedly: %s" reason)
+       (list :passed nil
+             :nucleus-passed nil
+             :tests-passed nil
+             :validation-error reason
+             :time 0
+             :eight-keys 0)))))
+
 (defun gptel-auto-experiment--eight-keys-scores ()
   "Get full Eight Keys scores alist from current codebase.
 Scores based on commit message + code diff (not just stat)."
@@ -3691,11 +3710,11 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                            (let ((default-directory commit-dir))
                              (magit-git-success "add" "-A")
                              (magit-git-success "commit" "-m" (format "WIP: experiment %s" target)))))
-                       (let* ((bench (gptel-auto-experiment-benchmark t))
-                              (passed (plist-get bench :passed))
-                              (validation-error (plist-get bench :validation-error))
-                              (tests-passed (plist-get bench :tests-passed))
-                              (score-after (plist-get bench :eight-keys)))
+                        (let* ((bench (gptel-auto-experiment--safe-benchmark t))
+                               (passed (plist-get bench :passed))
+                               (validation-error (plist-get bench :validation-error))
+                               (tests-passed (plist-get bench :tests-passed))
+                               (score-after (plist-get bench :eight-keys)))
                          (if passed
     (let
 	((code-quality
@@ -3784,7 +3803,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                       retry-output
                                       (lambda (retry-grade)
                                         (if (plist-get retry-grade :passed)
-                                            (let ((retry-bench (gptel-auto-experiment-benchmark t)))
+                                            (let ((retry-bench (gptel-auto-experiment--safe-benchmark t)))
                                               (if (plist-get retry-bench :passed)
                                                   (let ((retry-score (plist-get retry-bench :eight-keys))
                                                         (retry-quality
