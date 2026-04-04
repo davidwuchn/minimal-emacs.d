@@ -104,7 +104,6 @@
 
 (ert-deftest grader/uses-subagent-when-available ()
   "Grader should call subagent when gptel-agent--task is available."
-  (ert-skip "Flaky test - subagent mocking issues")
   (require 'gptel-benchmark-subagent)
   (let* ((call-count 0)
          (gptel-benchmark-use-subagents t)

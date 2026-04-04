@@ -163,8 +163,13 @@ Search backward for PROPERTY equal to VALUE, optionally filtering with PREDICATE
         (test-tool-confirm--accepted nil)
         (gptel-backend (gptel--make-backend :name "test")))
     (with-temp-buffer
-      (insert "assistant response")
-      (add-text-properties (point-min) (point-max) '(gptel response))
+      ;; Real gptel buffers have user text (no gptel property) before the
+      ;; response so that text-property-search-backward 'gptel 'response
+      ;; (nil predicate = "not equal") finds a preceding non-response region.
+      (insert "User: please do this\n")
+      (let ((response-start (point)))
+        (insert "assistant response")
+        (add-text-properties response-start (point-max) '(gptel response)))
       (goto-char (point-max))
       (my/gptel--programmatic-aggregate-confirm
        (list (list :tool-name "Edit" :summary "Edit path=a.el diffp=t")

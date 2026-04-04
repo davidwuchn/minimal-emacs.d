@@ -551,7 +551,6 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/subagent/late-callback-after-timeout-is-ignored ()
   "Late subagent callback should not fire after timeout already completed the task."
-  (ert-skip "Flaky test - callback timing issues")
   (let ((my/gptel-agent-task-timeout 42)
         (my/gptel-subagent-progress-interval 10)
         (callback-results nil)
@@ -1556,7 +1555,6 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/subagent-timeout-timer-captures-call-timeout ()
   "Subagent timeout callbacks should use the per-call timeout, not a later global value."
-  (ert-skip "Flaky test - timer/callback issues")
   (let ((my/gptel-agent-task-timeout 42)
         (gptel--fsm-last 'parent-fsm)
         (scheduled-timers nil)
@@ -1590,7 +1588,6 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/subagent-wrapper-marks-child-fsm-no-retry ()
   "Wrapped subagent FSMs should disable the global auto-retry advice."
-  (ert-skip "Flaky test - FSM marking issues")
   (let ((my/gptel-agent-task-timeout nil)
         (captured-fsm nil))
     (with-temp-buffer
@@ -1614,7 +1611,6 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/safe-task-override-marks-request-fsm-before-send ()
   "Safe task override should mark request FSMs no-retry before dispatch."
-  (ert-skip "Flaky test - FSM marking issues")
   (let ((gptel-agent--agents '(("executor" . nil)))
         (captured-flag nil)
         (request-called nil))
@@ -2324,7 +2320,6 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/timeout-wrapper-keeps-child-fsm-after-async-launch ()
   "Timeout wrapper should not restore the parent FSM after async startup."
-  (ert-skip "Flaky test - FSM async issues")
   (let ((my/gptel-agent-task-timeout nil)
         (captured-fsm nil)
         (callback-result nil))
@@ -2349,7 +2344,6 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/agent-handlers-remain-installed-after-local-load ()
   "Local modules should not nil out upstream agent WAIT handlers."
-  (ert-skip "Flaky test - handler state issues")
   (let ((wait-handlers (alist-get 'WAIT gptel-agent-request--handlers)))
     (should (consp wait-handlers))
     (should (memq #'gptel--handle-wait wait-handlers))))
@@ -2634,7 +2628,6 @@ Submodules are hydrated later during verification, not during merge prep."
 
 (ert-deftest regression/auto-workflow/create-worktree-uses-safe-main-ref ()
   "Experiment worktrees should use the selected safe main ref, not hard-coded main."
-  (ert-skip "Flaky test - mocking issues with call-process")
   (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (calls nil))
     (cl-letf (((symbol-function 'system-name) (lambda () "riven"))
@@ -2671,7 +2664,6 @@ Submodules are hydrated later during verification, not during merge prep."
 
 (ert-deftest regression/auto-workflow/create-worktree-removes-stale-branch-worktrees ()
   "Experiment worktree creation should remove stale branch worktrees first."
-  (ert-skip "Flaky test - mocking issues with call-process")
   (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (calls nil)
         (stale-worktree
@@ -2761,7 +2753,6 @@ Submodules are hydrated later during verification, not during merge prep."
 
 (ert-deftest regression/auto-workflow/create-worktree-removes-stale-unattached-directory ()
   "Experiment worktree creation should delete stale plain directories too."
-  (ert-skip "Flaky test - mocking issues with call-process")
   (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (calls nil)
         (deleted nil)
@@ -2807,7 +2798,6 @@ Submodules are hydrated later during verification, not during merge prep."
 
 (ert-deftest regression/auto-workflow/create-worktree-prefers-current-project-root ()
   "Experiment worktree paths should stay anchored to the active project root."
-  (ert-skip "Flaky test - mocking issues with call-process")
   (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (gptel-auto-workflow--current-project "/tmp/project")
         (calls nil))
@@ -2845,7 +2835,6 @@ Submodules are hydrated later during verification, not during merge prep."
 
 (ert-deftest regression/auto-workflow/create-worktree-prefers-run-project-root-over-drifted-context ()
   "Experiment worktree paths should stay anchored to the stable run root."
-  (ert-skip "Flaky test - mocking issues with call-process")
   (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (gptel-auto-workflow--run-project-root "/tmp/project")
         (gptel-auto-workflow--current-project
