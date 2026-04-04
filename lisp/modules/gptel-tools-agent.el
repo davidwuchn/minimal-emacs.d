@@ -3579,9 +3579,12 @@ BASELINE-CODE-QUALITY is the initial code quality score."
          (gptel-tools-preview-enabled nil)
          ;; Disable tool confirmations for headless auto-workflow
          (gptel-confirm-tool-calls nil)
-         ;; CRITICAL: Use experiment time budget as agent task timeout
-          ;; This ensures the gptel request times out before the outer timer
-          (my/gptel-agent-task-timeout gptel-auto-experiment-time-budget)
+          ;; Capture the experiment timeout lexically because later analyzer
+          ;; callbacks run after this outer let frame exits.
+          (experiment-timeout gptel-auto-experiment-time-budget)
+          ;; CRITICAL: Use experiment time budget as agent task timeout
+           ;; This ensures the gptel request times out before the outer timer
+           (my/gptel-agent-task-timeout experiment-timeout)
            (start-time (float-time))
            (timeout-timer nil)
            (finished nil)
@@ -3597,22 +3600,23 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                     (prompt (gptel-auto-experiment-build-prompt
                              target experiment-id max-experiments analysis baseline)))
                (setq executor-prompt prompt)
-               (setq timeout-timer
-                     (run-with-timer gptel-auto-experiment-time-budget nil
-                                     (lambda ()
-                                       (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
-                                         (unless finished
-                                           (setq finished t)
-                                           (message "[auto-exp] Experiment timed out after %ds, aborting"
-                                                    gptel-auto-experiment-time-budget)
-                                           (when (fboundp 'gptel-abort)
-                                             (ignore-errors (gptel-abort (current-buffer))))
-                                           (funcall callback
-                                                    (list :target target
-                                                          :id experiment-id
-                                                          :error "timeout")))))))
-               ;; Routing handled by gptel-auto-workflow--advice-task-override
-               (my/gptel--run-agent-tool
+                (setq timeout-timer
+                      (run-with-timer experiment-timeout nil
+                                      (lambda ()
+                                        (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
+                                          (unless finished
+                                            (setq finished t)
+                                            (message "[auto-exp] Experiment timed out after %ds, aborting"
+                                                     experiment-timeout)
+                                            (when (fboundp 'gptel-abort)
+                                              (ignore-errors (gptel-abort (current-buffer))))
+                                            (funcall callback
+                                                     (list :target target
+                                                           :id experiment-id
+                                                           :error "timeout")))))))
+                ;; Routing handled by gptel-auto-workflow--advice-task-override
+                (let ((my/gptel-agent-task-timeout experiment-timeout))
+                  (my/gptel--run-agent-tool
                 (lambda (agent-output)
                   (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
                     (message "[auto-exp] Agent output (first 150 chars): %s"
@@ -3762,56 +3766,57 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                 (message "[auto-experiment] ✗ %s"
                                          (my/gptel--sanitize-for-logging validation-error 200))
                                 (magit-git-success "checkout" "--" ".")
-                                (my/gptel--run-agent-tool
-                                 (lambda (retry-output)
-                                   (gptel-auto-experiment-grade
-                                    retry-output
-                                    (lambda (retry-grade)
-                                      (if (plist-get retry-grade :passed)
-                                          (let ((retry-bench (gptel-auto-experiment-benchmark t)))
-                                            (if (plist-get retry-bench :passed)
-                                                (let ((retry-score (plist-get retry-bench :eight-keys))
-                                                      (retry-quality
-                                                       (or (gptel-auto-experiment--code-quality-score) 0.5)))
-                                                  (message "[auto-experiment] ✓ Retry succeeded")
-                                                  (gptel-auto-experiment-decide
-                                                   (list :score baseline
-                                                         :code-quality baseline-code-quality)
-                                                   (list :score retry-score
-                                                         :code-quality retry-quality
-                                                         :output retry-output)
-                                                   (lambda (decision)
-                                                     (unless finished
-                                                       (let ((keep (plist-get decision :keep)))
-                                                         (when keep
-                                                           (let ((default-directory experiment-worktree)
-                                                                 (msg (format "◈ Retry: fix validation in %s"
-                                                                              target)))
-                                                             (magit-git-success "add" "-A")
-                                                             (magit-git-success "commit" "-m" msg)))
-                                                         (funcall callback
-                                                                  (list :target target
-                                                                        :id experiment-id
-                                                                        :score-after retry-score
-                                                                        :kept keep
-                                                                        :retries 1)))))))
-                                              (setq finished t)
-                                              (message "[auto-experiment] ✗ Retry still failed validation")
-                                              (funcall callback
-                                                       (list :target target
-                                                             :id experiment-id
-                                                             :kept nil
-                                                             :validation-error
-                                                             (plist-get retry-bench :validation-error)))))
-                                        (setq finished t)
-                                        (funcall callback
-                                                 (list :target target
-                                                       :id experiment-id
-                                                       :kept nil))))))
-                                 "executor"
-                                 (format "Retry: fix validation error in %s" target)
-                                 (gptel-auto-experiment--make-retry-prompt
-                                  target validation-error executor-prompt)))
+                                (let ((my/gptel-agent-task-timeout experiment-timeout))
+                                  (my/gptel--run-agent-tool
+                                   (lambda (retry-output)
+                                     (gptel-auto-experiment-grade
+                                      retry-output
+                                      (lambda (retry-grade)
+                                        (if (plist-get retry-grade :passed)
+                                            (let ((retry-bench (gptel-auto-experiment-benchmark t)))
+                                              (if (plist-get retry-bench :passed)
+                                                  (let ((retry-score (plist-get retry-bench :eight-keys))
+                                                        (retry-quality
+                                                         (or (gptel-auto-experiment--code-quality-score) 0.5)))
+                                                    (message "[auto-experiment] ✓ Retry succeeded")
+                                                    (gptel-auto-experiment-decide
+                                                     (list :score baseline
+                                                           :code-quality baseline-code-quality)
+                                                     (list :score retry-score
+                                                           :code-quality retry-quality
+                                                           :output retry-output)
+                                                     (lambda (decision)
+                                                       (unless finished
+                                                         (let ((keep (plist-get decision :keep)))
+                                                           (when keep
+                                                             (let ((default-directory experiment-worktree)
+                                                                   (msg (format "◈ Retry: fix validation in %s"
+                                                                                target)))
+                                                               (magit-git-success "add" "-A")
+                                                               (magit-git-success "commit" "-m" msg)))
+                                                           (funcall callback
+                                                                    (list :target target
+                                                                          :id experiment-id
+                                                                          :score-after retry-score
+                                                                          :kept keep
+                                                                          :retries 1)))))))
+                                                (setq finished t)
+                                                (message "[auto-experiment] ✗ Retry still failed validation")
+                                                (funcall callback
+                                                         (list :target target
+                                                               :id experiment-id
+                                                               :kept nil
+                                                               :validation-error
+                                                               (plist-get retry-bench :validation-error)))))
+                                          (setq finished t)
+                                          (funcall callback
+                                                   (list :target target
+                                                         :id experiment-id
+                                                         :kept nil))))))
+                                   "executor"
+                                   (format "Retry: fix validation error in %s" target)
+                                   (gptel-auto-experiment--make-retry-prompt
+                                    target validation-error executor-prompt))))
                             (let ((default-directory experiment-worktree))
                               (setq finished t)
                               (magit-git-success "checkout" "--" ".")
@@ -3839,10 +3844,10 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                  (format-time-string "%Y-%m-%d") exp-result)
                                 (funcall callback exp-result))))))
 ))))))))
-            "executor"
-            (format "Experiment %d: optimize %s" experiment-id target)
-            executor-prompt
-            nil "false" nil))))))))
+                   "executor"
+                   (format "Experiment %d: optimize %s" experiment-id target)
+                   executor-prompt
+                   nil "false" nil)))))))))
     )
 
 
