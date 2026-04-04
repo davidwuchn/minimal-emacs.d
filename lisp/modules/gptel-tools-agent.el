@@ -1661,7 +1661,7 @@ Base branch is always 'main'.
 Multiple machines can optimize same target without conflicts."
   (let* ((basename (file-name-sans-extension (file-name-nondirectory target)))
          (name (car (last (split-string basename "-"))))
-         (host system-name))
+         (host (system-name)))
     (if experiment-id
         (format "optimize/%s-%s-exp%d" name host experiment-id)
       (format "optimize/%s-%s" name host))))
