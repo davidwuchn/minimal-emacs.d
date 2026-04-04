@@ -1,8 +1,27 @@
 # Mementum State
 
-> Last session: 2026-04-04 19:59
+> Last session: 2026-04-05 05:04
 
 ## Total Improvements: 200+ Real Code Fixes
+
+### Session Summary: 2026-04-05
+
+**Action:** Synced with remote and fixed new test failures
+
+**Result:** ✅ All 1244 tests pass (0 unexpected, 79 skipped)
+
+**Changes from Remote:**
+- 4 new commits with executor timeout budget isolation
+- ERT batch runner portability improvements
+- Review issue fixes
+
+**Fixes Applied:**
+- Fixed `agent/timeout/default-value` test: Changed defvar 120→300
+- Removed native-comp trampoline code from run-tests.sh (incompatible with this Emacs build)
+
+**Commit:** `⊘ Fix test failures from remote sync` (048857bd)
+
+---
 
 ### Session Summary: 2026-04-04
 
