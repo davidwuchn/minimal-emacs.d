@@ -257,8 +257,8 @@
 ;;; ========================================
 
 (ert-deftest agent/timeout/default-value ()
-  "Default timeout should be 120 seconds."
-  (should (= my/gptel-agent-task-timeout 120)))
+  "Default timeout should be 300 seconds."
+  (should (= my/gptel-agent-task-timeout 300)))
 
 (ert-deftest agent/progress-interval/default-value ()
   "Default progress interval should be 10 seconds."

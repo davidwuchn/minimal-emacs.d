@@ -20,6 +20,13 @@
 (require 'gptel-tools-agent)
 (require 'gptel-agent-tools)
 
+;; Root of the .emacs.d repo, used by tests that run shell scripts.
+;; Derived at load time from the test file's own path.
+(defvar test-auto-workflow--repo-root
+  (expand-file-name ".." (file-name-directory
+                          (or load-file-name buffer-file-name default-directory)))
+  "Absolute path to the .emacs.d root directory.")
+
 (defun test-auto-workflow--write-shell-script (name body)
   "Create executable shell script NAME with BODY."
   (let ((file (make-temp-file name nil ".sh")))
@@ -1587,7 +1594,7 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status ()
   "Wrapper status should reset stale running snapshots when the worker is gone."
-  (let* ((repo-root "/Users/davidwu/.emacs.d")
+  (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
@@ -1616,7 +1623,7 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-active-phase-without-running-flag ()
   "Wrapper status should reset stale active phases even when :running is already nil."
-  (let* ((repo-root "/Users/davidwu/.emacs.d")
+  (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
@@ -1645,7 +1652,7 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-status-prefers-live-daemon-status ()
   "Wrapper status should prefer the live daemon snapshot when available."
-  (let* ((repo-root "/Users/davidwu/.emacs.d")
+  (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
@@ -1686,7 +1693,7 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status-after-daemon-restart ()
   "Wrapper auto-workflow should clear stale running status when daemon is alive but idle."
-  (let* ((repo-root "/Users/davidwu/.emacs.d")
+  (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
@@ -1907,7 +1914,7 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-runs-elisp-in-safe-buffer ()
   "Wrapper should evaluate daemon ELisp inside a guaranteed live fallback buffer."
-  (let* ((repo-root "/Users/davidwu/.emacs.d")
+  (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
@@ -1967,7 +1974,7 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-seeds-module-load-path ()
   "Wrapper auto-workflow action should seed repo-local load-path entries."
-  (let* ((repo-root "/Users/davidwu/.emacs.d")
+  (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
@@ -2024,7 +2031,7 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-messages-uses-file-dump ()
   "Wrapper messages action should dump *Messages* to a file, not print buffer text inline."
-  (let* ((repo-root "/Users/davidwu/.emacs.d")
+  (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
@@ -2084,7 +2091,7 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/cron-wrapper-messages-falls-back-without-daemon ()
   "Wrapper messages action should return the last dumped tail without starting a daemon."
-  (let* ((repo-root "/Users/davidwu/.emacs.d")
+  (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
@@ -2483,7 +2490,8 @@ Submodules are hydrated later during verification, not during merge prep."
   "Experiment worktrees should use the selected safe main ref, not hard-coded main."
   (ert-skip "Flaky test - mocking issues with call-process")
   (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
-        (calls nil))
+        (calls nil)
+        (system-name "riven"))
     (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
                (lambda () "/tmp/project"))
               ((symbol-function 'gptel-auto-workflow--staging-main-ref)
@@ -2520,6 +2528,7 @@ Submodules are hydrated later during verification, not during merge prep."
   (ert-skip "Flaky test - mocking issues with call-process")
   (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (calls nil)
+        (system-name "riven")
         (stale-worktree
          "/tmp/project/var/tmp/experiments/optimize/projects-riven-exp2/var/tmp/experiments/optimize/cache-riven-exp1"))
     (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
@@ -2610,6 +2619,7 @@ Submodules are hydrated later during verification, not during merge prep."
   (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (calls nil)
         (deleted nil)
+        (system-name "riven")
         (worktree-dir "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp2"))
     (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
                (lambda () "/tmp/project"))
@@ -2654,7 +2664,8 @@ Submodules are hydrated later during verification, not during merge prep."
   (ert-skip "Flaky test - mocking issues with call-process")
   (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (gptel-auto-workflow--current-project "/tmp/project")
-        (calls nil))
+        (calls nil)
+        (system-name "riven"))
     (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
                (lambda () "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp2"))
               ((symbol-function 'gptel-auto-workflow--staging-main-ref)
@@ -2693,7 +2704,8 @@ Submodules are hydrated later during verification, not during merge prep."
         (gptel-auto-workflow--run-project-root "/tmp/project")
         (gptel-auto-workflow--current-project
          "/tmp/project/var/tmp/experiments/optimize/loop-riven-exp1")
-        (calls nil))
+        (calls nil)
+        (system-name "riven"))
     (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
                (lambda () "/tmp/project/var/tmp/experiments/optimize/loop-riven-exp1"))
               ((symbol-function 'gptel-auto-workflow--staging-main-ref)
