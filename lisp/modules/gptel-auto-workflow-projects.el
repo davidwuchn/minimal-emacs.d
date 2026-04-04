@@ -44,6 +44,9 @@ Customize this variable to add more projects.")
 (defvar gptel-auto-workflow--current-project nil
   "Currently active project root for subagent context.")
 
+(defvar gptel-auto-workflow--run-project-root nil
+  "Stable project root captured for the active workflow run.")
+
 (defvar gptel-auto-workflow--cron-job-running nil
   "Non-nil while a queued cron job is executing.")
 
@@ -62,25 +65,53 @@ Customize this variable to add more projects.")
 Key: worktree directory, Value: buffer.
 Each worktree gets its own isolated buffer for subagent overlays.")
 
+(defun gptel-auto-workflow--ensure-buffer-tables ()
+  "Ensure shared project/worktree buffer tables are initialized."
+  (unless (hash-table-p gptel-auto-workflow--project-buffers)
+    (setq gptel-auto-workflow--project-buffers (make-hash-table :test 'equal)))
+  (unless (hash-table-p gptel-auto-workflow--worktree-buffers)
+    (setq gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal))))
+
 (defun gptel-auto-workflow--normalized-projects ()
   "Return configured project roots as unique expanded directory names."
   (delete-dups
    (mapcar (lambda (project-root)
              (file-name-as-directory (expand-file-name project-root)))
-           gptel-auto-workflow-projects)))
+            gptel-auto-workflow-projects)))
+
+(defun gptel-auto-workflow--normalize-worktree-dir (worktree-dir &optional project-root)
+  "Return WORKTREE-DIR as an absolute directory name.
+Relative worktree paths are anchored to PROJECT-ROOT or the active workflow
+project instead of the current buffer's `default-directory'."
+  (when (and (stringp worktree-dir)
+             (> (length worktree-dir) 0))
+    (file-name-as-directory
+     (expand-file-name
+      worktree-dir
+      (or project-root
+          gptel-auto-workflow--current-project
+          (and (boundp 'gptel-auto-workflow--project-root-override)
+               gptel-auto-workflow--project-root-override)
+          (ignore-errors (gptel-auto-workflow--project-root))
+          default-directory)))))
 
 (defun gptel-auto-workflow--get-worktree-buffer (worktree-dir)
   "Get or create a gptel-agent buffer for WORKTREE-DIR.
 Each worktree gets its own isolated buffer for subagent overlays."
   (unless worktree-dir (error "WORKTREE-DIR cannot be nil"))
-  (let* ((root (file-name-as-directory (expand-file-name worktree-dir)))
-          ;; Use worktree path to create unique buffer name
+  (gptel-auto-workflow--ensure-buffer-tables)
+  (let* ((root (gptel-auto-workflow--normalize-worktree-dir worktree-dir))
           (worktree-name (file-name-nondirectory (directory-file-name root)))
-          (buf-name (format "*gptel-agent:%s*" worktree-name))
-          (existing (gethash root gptel-auto-workflow--worktree-buffers)))
+          (buf-name (format "*gptel-agent:%s@%s*"
+                            worktree-name
+                            (substring (md5 root) 0 8)))
+           (existing (gethash root gptel-auto-workflow--worktree-buffers)))
     ;; Check if existing buffer is still live
     (if (and existing (buffer-live-p existing))
-        existing
+        (progn
+          (with-current-buffer existing
+            (setq-local default-directory root))
+          existing)
       ;; Create new buffer (or recreate if previous was killed)
       (let ((buf (get-buffer-create buf-name)))
         (with-current-buffer buf
@@ -186,9 +217,10 @@ finish."
            (finish
             (gptel-auto-workflow--make-idempotent-callback
              (lambda ()
-               (let ((final-results (nreverse results)))
-                 (setq gptel-auto-workflow--current-project nil)
-                 (message "[auto-workflow] All projects processed: %s"
+                (let ((final-results (nreverse results)))
+                  (setq gptel-auto-workflow--run-project-root nil)
+                  (setq gptel-auto-workflow--current-project nil)
+                  (message "[auto-workflow] All projects processed: %s"
                           (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
                                      final-results ", "))
                  (when completion-callback
@@ -204,30 +236,45 @@ finish."
                  (setq remaining (cdr remaining))
                  (message "[auto-workflow] Processing project: %s" project-root)
                  (condition-case err
-                     (progn
-                       (setq gptel-auto-workflow--current-project project-root)
-                       (when (hash-table-p gptel-auto-workflow--worktree-state)
-                         (clrhash gptel-auto-workflow--worktree-state))
-                       (with-current-buffer project-buf
-                         (hack-dir-local-variables-non-file-buffer)
-                         (let ((mark-project
-                                (gptel-auto-workflow--make-idempotent-callback
-                                 (lambda (status log-line)
-                                   (push (cons project-root status) results)
-                                   (message "%s" log-line)
-                                   (run-next)))))
-                           (let ((started
-                                  (gptel-auto-workflow-cron-safe
-                                   (lambda (&rest _workflow-results)
-                                     (funcall mark-project
-                                              'success
-                                              (format "[auto-workflow] ✓ Completed: %s"
-                                                      project-root))))))
-                             (unless started
-                               (funcall mark-project
-                                        'skipped
-                                        (format "[auto-workflow] - Skipped: %s"
-                                                project-root)))))))
+                      (progn
+                        (setq gptel-auto-workflow--current-project project-root)
+                        (setq gptel-auto-workflow--run-project-root project-root)
+                        (when (hash-table-p gptel-auto-workflow--worktree-state)
+                          (clrhash gptel-auto-workflow--worktree-state))
+                        (with-current-buffer project-buf
+                          (hack-dir-local-variables-non-file-buffer)
+                          (let ((mark-project
+                                 (gptel-auto-workflow--make-idempotent-callback
+                                  (lambda (status log-line)
+                                    (push (cons project-root status) results)
+                                    (message "%s" log-line)
+                                    (run-next))))
+                                (project-completion
+                                 (lambda ()
+                                   (cond
+                                    (gptel-auto-experiment--quota-exhausted
+                                     (cons 'quota-exhausted
+                                           (format "[auto-workflow] ! Quota exhausted: %s"
+                                                   project-root)))
+                                    ((equal (plist-get gptel-auto-workflow--stats :phase) "error")
+                                     (cons 'error
+                                           (format "[auto-workflow] ✗ Failed: %s"
+                                                   project-root)))
+                                    (t
+                                     (cons 'success
+                                           (format "[auto-workflow] ✓ Completed: %s"
+                                                   project-root)))))))
+                            (let ((started
+                                   (gptel-auto-workflow-cron-safe
+                                    (lambda (&rest _workflow-results)
+                                      (pcase-let ((`(,status . ,log-line)
+                                                   (funcall project-completion)))
+                                        (funcall mark-project status log-line))))))
+                              (unless started
+                                (funcall mark-project
+                                         'skipped
+                                         (format "[auto-workflow] - Skipped: %s"
+                                                 project-root)))))))
                    (error
                     (push (cons project-root (format "error: %s" err)) results)
                     (message "[auto-workflow] ✗ Failed: %s - %s" project-root err)
@@ -359,20 +406,25 @@ Also handles caching and result truncation from old advice."
       ;; Not cached - determine routing
       (let* ((in-auto-workflow gptel-auto-workflow--current-project)
              (proj-context (gptel-auto-workflow--get-project-for-context))
-             (project-root (or (car proj-context)
-                              (expand-file-name
-                               (if (bound-and-true-p minimal-emacs-user-directory)
-                                   minimal-emacs-user-directory
-                                 "~/.emacs.d"))))
+             (project-root
+              (file-name-as-directory
+               (expand-file-name
+                (or (car proj-context)
+                    (if (bound-and-true-p minimal-emacs-user-directory)
+                        minimal-emacs-user-directory
+                      "~/.emacs.d")))))
              (worktree-base-expanded
-              (expand-file-name (or gptel-auto-workflow-worktree-base
-                                    "var/tmp/experiments")
-                                project-root))
+               (expand-file-name (or gptel-auto-workflow-worktree-base
+                                     "var/tmp/experiments")
+                                 project-root))
              (target-worktree-dir
-              (when (and in-auto-workflow
-                         gptel-auto-workflow--current-target
-                         (fboundp 'gptel-auto-workflow--get-worktree-dir))
-                (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)))
+               (when (and in-auto-workflow
+                          gptel-auto-workflow--current-target
+                          (fboundp 'gptel-auto-workflow--get-worktree-dir))
+                 (gptel-auto-workflow--normalize-worktree-dir
+                  (gptel-auto-workflow--get-worktree-dir
+                   gptel-auto-workflow--current-target)
+                  project-root)))
              (current-dir (file-name-as-directory (expand-file-name default-directory)))
              (worktree-base-dir (file-name-as-directory worktree-base-expanded))
              (worktree-dir (or target-worktree-dir
@@ -391,55 +443,65 @@ Also handles caching and result truncation from old advice."
           (if (and target-buf 
                    (buffer-live-p target-buf)
                    (not (string= (buffer-name target-buf) "*Messages*")))
-              (with-current-buffer target-buf
-                ;; Ensure FSM exists for agent task
-                (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
-                  ;; Create minimal FSM for agent context
-                  (setq-local gptel--fsm-last 
-                              (gptel-make-fsm 
-                               :table (when (boundp 'gptel-send--transitions) gptel-send--transitions)
-                               :handlers nil)))
-                 (let* ((default-directory (or worktree-dir project-root))
-                         (target-marker (point-marker))
-                         (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
-                         (orig-gptel-fsm-info (symbol-function 'gptel-fsm-info))
-                         (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
-                                   (list :buffer target-buf :position target-marker)))
-                         (modified-info (list :buffer target-buf
-                                               :position target-marker
-                                               :tracking-marker target-marker))
-                         ;; Wrap callback to cache results
-                          (wrapped-cb (lambda (result)
-                                        (when (and (stringp result)
-                                                   (fboundp 'my/gptel--subagent-cache-put))
-                                          (my/gptel--subagent-cache-put agent-type prompt result))
-                                        (funcall main-cb result)))
-                          (task-runner (if (fboundp 'my/gptel-agent--task-override)
-                                           #'my/gptel-agent--task-override
-                                         orig-fun)))
-                  (cl-letf (((symbol-function 'gptel-fsm-info)
-                              (lambda (&optional fsm)
-                                (cond
-                                 ((or (eq fsm parent-fsm) (null fsm))
-                                   modified-info)
-                                  (t
-                                   (funcall orig-gptel-fsm-info fsm))))))
-                    (if (and gptel-auto-workflow--persist-executor-overlays
-                                (equal agent-type "executor"))
-                        (cl-letf (((symbol-function 'delete-overlay)
-                                    (lambda (&rest _) nil)))
-                          (funcall task-runner wrapped-cb agent-type description prompt))
-                      (funcall task-runner wrapped-cb agent-type description prompt)))))
-              ;; SAFETY: Never execute in *Messages* buffer - find safe fallback
-              (let ((safe-buffer (cond
-                                  ((not (string= (buffer-name) "*Messages*"))
-                                    (current-buffer))
+              (progn
+                (when (fboundp 'my/gptel--register-agent-task-buffer)
+                  (my/gptel--register-agent-task-buffer target-buf))
+                (with-current-buffer target-buf
+                  ;; Ensure FSM exists for agent task
+                  (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
+                    ;; Create minimal FSM for agent context
+                    (setq-local gptel--fsm-last 
+                                (gptel-make-fsm 
+                                 :table (when (boundp 'gptel-send--transitions) gptel-send--transitions)
+                                 :handlers nil)))
+                   (let* ((default-directory (or worktree-dir project-root))
+                           (target-marker (point-marker))
+                           (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+                           (orig-gptel-fsm-info (symbol-function 'gptel-fsm-info))
+                           (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
+                                     (list :buffer target-buf :position target-marker)))
+                           (modified-info (list :buffer target-buf
+                                                 :position target-marker
+                                                 :tracking-marker target-marker))
+                           ;; Wrap callback to cache results
+                            (wrapped-cb (lambda (result)
+                                          (when (and (stringp result)
+                                                     (fboundp 'my/gptel--subagent-cache-put))
+                                            (my/gptel--subagent-cache-put agent-type prompt result))
+                                          (funcall main-cb result)))
+                            (task-runner (if (fboundp 'my/gptel-agent--task-override)
+                                             #'my/gptel-agent--task-override
+                                           orig-fun)))
+                    (cl-letf (((symbol-function 'gptel-fsm-info)
+                                (lambda (&optional fsm)
+                                  (let ((active-fsm
+                                         (or fsm
+                                             (and (boundp 'gptel--fsm-last)
+                                                  gptel--fsm-last))))
+                                    (cond
+                                     ((eq active-fsm parent-fsm)
+                                      modified-info)
+                                     (active-fsm
+                                      (funcall orig-gptel-fsm-info active-fsm))
+                                     (t nil))))))
+                      (if (and gptel-auto-workflow--persist-executor-overlays
+                                  (equal agent-type "executor"))
+                          (cl-letf (((symbol-function 'delete-overlay)
+                                      (lambda (&rest _) nil)))
+                            (funcall task-runner wrapped-cb agent-type description prompt))
+                        (funcall task-runner wrapped-cb agent-type description prompt))))))
+               ;; SAFETY: Never execute in *Messages* buffer - find safe fallback
+               (let ((safe-buffer (cond
+                                   ((not (string= (buffer-name) "*Messages*"))
+                                     (current-buffer))
                                   ((get-buffer "*gptel*")
                                     (get-buffer "*gptel*"))
-                                  ((get-buffer "*scratch*")  
-                                    (get-buffer "*scratch*"))
-                                  (t
-                                    (get-buffer-create "*gptel-safe-fallback*")))))
+                                   ((get-buffer "*scratch*")  
+                                     (get-buffer "*scratch*"))
+                                   (t
+                                     (get-buffer-create "*gptel-safe-fallback*")))))
+                (when (fboundp 'my/gptel--register-agent-task-buffer)
+                  (my/gptel--register-agent-task-buffer safe-buffer))
                 (with-current-buffer safe-buffer
                   (funcall orig-fun main-cb agent-type description prompt)))))))))
 

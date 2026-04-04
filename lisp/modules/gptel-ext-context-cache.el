@@ -127,6 +127,7 @@ under `lexical-binding: t'.")
     ("deepseek-reasoner" . 163840)
     ("deepseek-coder" . 16384)
     ;; MiniMax
+    ("minimax-m2.7-highspeed" . 196608)
     ("minimax-m2.7" . 196608)
     ("MiniMax-M2.5" . 196608)
     ("minimax-m2.1" . 196608)
@@ -230,6 +231,11 @@ Sources:
      :max-output 8192
      :description "DeepSeek R1 - reasoning model")
     ;; MiniMax
+    ("minimax-m2.7-highspeed"
+     :context-window 196608
+     :pricing-input 0.60 :pricing-output 2.40
+     :max-output 131072
+     :description "MiniMax M2.7 Highspeed - 196k context, lower-latency agent workflows")
     ("minimax-m2.7"
      :context-window 196608
      :pricing-input 0.27 :pricing-output 0.95
@@ -709,13 +715,15 @@ Description: %s"
       (gemini-2.5-flash . 1048576)))
 
     (minimax
-     :description "MiniMax - M2.5 models"
+     :description "MiniMax - M2.x models"
      :rate-limit "Check console"
      :pricing-model "Per-token, competitive pricing"
      :features (streaming tools)
-     :notes "M2.5: 196k context, 80.2% SWE-Bench. Good for coding."
+     :notes "M2.5/M2.7/M2.7-highspeed: 196k context. Highspeed favors lower-latency agent workflows."
      :context-windows
-     ((minimax-m2.5 . 196608))))
+     ((minimax-m2.7-highspeed . 196608)
+      (minimax-m2.7 . 196608)
+      (minimax-m2.5 . 196608))))
 
   "Provider usage contracts: rate limits, pricing models, features, and notes.
 Use `my/gptel-show-provider-contract' to query.")

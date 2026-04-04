@@ -63,6 +63,11 @@
     (dolist (tool reviewer)
       (should (member tool readonly)))))
 
+(ert-deftest test-nucleus-toolsets-analyzer-has-live-runtime-tools ()
+  "Test that analyzer keeps the live runtime tools required by the daemon."
+  (let ((analyzer (alist-get :analyzer nucleus-toolsets)))
+    (should (equal analyzer '("Bash" "Read" "Glob" "Grep" "Code_Map")))))
+
 (ert-deftest test-nucleus-toolsets-executor-is-nucleus-minus-runagent ()
   "Test that :executor matches :nucleus except for RunAgent." 
   (let* ((executor (alist-get :executor nucleus-toolsets))
@@ -140,8 +145,9 @@
                    (:researcher . 17)
                    (:nucleus . 28)
                    (:executor . 27)
-                   (:explorer . 5)
-                   (:reviewer . 4))))
+                    (:explorer . 5)
+                    (:reviewer . 4)
+                    (:analyzer . 5))))
     (dolist (entry counts)
       (let ((tools (alist-get (car entry) nucleus-toolsets)))
         (should (= (length tools) (cdr entry)))))))

@@ -1,15 +1,17 @@
 ---
 name: analyzer
 backend: MiniMax
-model: minimax-m2.5
+model: minimax-m2.7-highspeed
 max-tokens: 8192
 temperature: 0.3
 steps: 50
 description: Analyzer for target selection (MiniMax)
 tools:
+  - Bash
   - Read
   - Glob
   - Grep
+  - Code_Map
 ---
 
 <role_and_behavior>

@@ -29,6 +29,7 @@
     "deepseek-chat"
     "deepseek-coder"
     "kimi-k2.5"
+    "minimax-m2.7-highspeed"
     "minimax-m2.7"
     "minimax-m2.5")
   "List of known model names for validation.")

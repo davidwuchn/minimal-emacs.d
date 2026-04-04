@@ -77,9 +77,10 @@ Make minimal, targeted changes.
 
 ## Instructions
 1. First, write your HYPOTHESIS: What change might improve the score? Why?
-2. Read the target file using its full path
-3. Implement the change minimally using Edit tool with the full path
-4. Run tests to verify
+2. Use Code_Map or Grep to find the relevant function/section in the target file first
+3. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
+4. Implement the change minimally using Edit tool with the full path
+5. Run tests to verify
 
 Format your hypothesis at the start as:
 HYPOTHESIS: [your hypothesis here]"
@@ -180,7 +181,8 @@ HYPOTHESIS: [your hypothesis here]"
          (gptel-auto-workflow--skills nil)
          (prompt (test-auto-workflow--build-prompt "test.el" 1 1 nil 0.5)))
     (should (string-match-p "Edit tool with the full path" prompt))
-    (should (string-match-p "Read the target file using its full path" prompt))))
+    (should (string-match-p "Use Code_Map or Grep to find the relevant function/section" prompt))
+    (should (string-match-p "Read only focused line ranges from the target file using its full path" prompt))))
 
 ;;; Path Format Tests
 
