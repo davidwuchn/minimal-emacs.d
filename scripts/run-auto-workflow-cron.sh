@@ -427,14 +427,22 @@ if [ "$ACTION" = "status" ]; then
 fi
 
 if [ "$ACTION" = "messages" ]; then
-    ensure_worker_daemon
-    if run_emacsclient_eval "$EVAL_ELISP" 10 >/dev/null; then
+    if check_worker_daemon; then
+        rc=0
+    else
+        rc=$?
+    fi
+    if { [ "${rc:-1}" -eq 0 ] || [ "${rc:-1}" -eq 2 ]; } && run_emacsclient_eval "$EVAL_ELISP" 10 >/dev/null 2>&1; then
         if [ -r "$MESSAGES_FILE" ]; then
             cat "$MESSAGES_FILE"
         fi
         exit 0
     fi
-    exit $?
+    if [ -r "$MESSAGES_FILE" ]; then
+        cat "$MESSAGES_FILE"
+        exit 0
+    fi
+    exit "${rc:-1}"
 fi
 
 clear_stale_running_status

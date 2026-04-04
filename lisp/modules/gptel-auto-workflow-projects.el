@@ -72,6 +72,7 @@ Each worktree gets its own isolated buffer for subagent overlays.")
 (defun gptel-auto-workflow--get-worktree-buffer (worktree-dir)
   "Get or create a gptel-agent buffer for WORKTREE-DIR.
 Each worktree gets its own isolated buffer for subagent overlays."
+  (unless worktree-dir (error "WORKTREE-DIR cannot be nil"))
   (let* ((root (file-name-as-directory (expand-file-name worktree-dir)))
           ;; Use worktree path to create unique buffer name
           (worktree-name (file-name-nondirectory (directory-file-name root)))
@@ -130,6 +131,7 @@ Each worktree gets its own isolated buffer for subagent overlays."
                                 nil))
                             kill-buffer-query-functions)))
         (puthash root buf gptel-auto-workflow--worktree-buffers)
+        (puthash root buf gptel-auto-workflow--project-buffers)
         buf))))
 
 (defun gptel-auto-workflow--get-project-buffer (project-root)
@@ -333,9 +335,10 @@ Returns (project-root . project-buffer) or nil if can't determine."
       (cons proj (gptel-auto-workflow--get-project-buffer proj))))
    ;; Case 4: Try to detect project from default-directory
    (t
-    (let* ((proj (condition-case nil
-                   (gptel-auto-workflow--project-root)
-                 (error default-directory)))
+    (let* ((proj (or (condition-case nil
+                        (gptel-auto-workflow--project-root)
+                      (error default-directory))
+                    default-directory))
            (expanded-proj (expand-file-name proj)))
       (cons expanded-proj (gptel-auto-workflow--get-project-buffer expanded-proj))))))
 
@@ -356,7 +359,11 @@ Also handles caching and result truncation from old advice."
       ;; Not cached - determine routing
       (let* ((in-auto-workflow gptel-auto-workflow--current-project)
              (proj-context (gptel-auto-workflow--get-project-for-context))
-             (project-root (car proj-context))
+             (project-root (or (car proj-context)
+                              (expand-file-name
+                               (if (bound-and-true-p minimal-emacs-user-directory)
+                                   minimal-emacs-user-directory
+                                 "~/.emacs.d"))))
              (worktree-base-expanded
               (expand-file-name (or gptel-auto-workflow-worktree-base
                                     "var/tmp/experiments")
@@ -374,11 +381,12 @@ Also handles caching and result truncation from old advice."
                                   current-dir)))
              (target-buf (if worktree-dir
                                (gptel-auto-workflow--get-worktree-buffer worktree-dir)
-                             (cdr proj-context))))
-        ;; CRITICAL: Validate worktree exists before proceeding
-        (if (and worktree-dir (not (file-exists-p worktree-dir)))
-            (progn
-              (message "[auto-workflow] Worktree deleted, aborting: %s" worktree-dir)
+                             (or (cdr proj-context)
+                                  (gptel-auto-workflow--get-worktree-buffer project-root)))))
+         ;; CRITICAL: Validate worktree exists before proceeding
+         (if (and worktree-dir (not (file-exists-p worktree-dir)))
+             (progn
+               (message "[auto-workflow] Worktree deleted, aborting: %s" worktree-dir)
               (funcall main-cb (format "Error: Worktree no longer exists: %s" worktree-dir)))
           (if (and target-buf 
                    (buffer-live-p target-buf)

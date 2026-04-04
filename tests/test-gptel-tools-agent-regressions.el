@@ -192,6 +192,12 @@ EXIT-CODE defaults to 1."
      "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 28. See Curl manpage for details.\"")
      '(:timeout . "Experiment timed out"))))
 
+(ert-deftest regression/auto-experiment/usage-limit-exceeded-counts-as-quota-exhaustion ()
+  "Live provider usage-limit errors should trip hard quota detection."
+  (should
+   (gptel-auto-experiment--quota-exhausted-p
+    "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")))
+
 (ert-deftest regression/auto-experiment/run-with-retry-retries-string-timeout-category ()
   "Retry helper should honor string-shaped timeout categories from experiment results."
   (let ((runs 0)
@@ -221,6 +227,36 @@ EXIT-CODE defaults to 1."
       (should (= runs 2))
       (should (equal (plist-get final-result :agent-output)
                      "Executor result for task: retry success")))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-skips-hard-quota-retries ()
+  "Retry helper should not reschedule experiments once quota is exhausted."
+  (let ((runs 0)
+        (scheduled-retry nil)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-experiment--quota-exhausted nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+                 (cl-incf runs)
+                 (funcall callback
+                          (list :agent-output
+                                "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"
+                                :comparator-reason ":api-rate-limit"))))
+              ((symbol-function 'run-with-timer)
+               (lambda (&rest _args)
+                 (setq scheduled-retry t)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 1))
+      (should-not scheduled-retry)
+      (should gptel-auto-experiment--quota-exhausted)
+      (should (string-match-p "usage limit exceeded" (plist-get final-result :agent-output))))))
 
 (ert-deftest regression/auto-experiment-loop/uses-run-with-retry-helper ()
   "Experiment loop should route live runs through the retry helper."
@@ -624,8 +660,31 @@ EXIT-CODE defaults to 1."
           (should-not gptel-auto-workflow--current-project)
           (should-not gptel-auto-workflow--current-target)
           (should (equal (plist-get gptel-auto-workflow--stats :phase) "idle")))
-      (when (timerp gptel-auto-workflow--watchdog-timer)
-        (cancel-timer gptel-auto-workflow--watchdog-timer)))))
+       (when (timerp gptel-auto-workflow--watchdog-timer)
+         (cancel-timer gptel-auto-workflow--watchdog-timer)))))
+
+(ert-deftest regression/auto-workflow/force-stop-invalidates-stale-subagent-callbacks ()
+  "Late subagent completions after force-stop should be ignored."
+  (let ((captured-callback nil)
+        (outer-results nil)
+        (my/gptel-agent-task-timeout nil)
+        (gptel-auto-workflow--stats '(:phase "running")))
+    (clrhash my/gptel--agent-task-state)
+    (cl-letf (((symbol-function 'my/gptel--call-gptel-agent-task)
+               (lambda (callback &rest _args)
+                 (setq captured-callback callback)))
+              ((symbol-function 'gptel-auto-workflow--persist-status) (lambda (&rest _) nil))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (with-temp-buffer
+        (my/gptel--agent-task-with-timeout
+         (lambda (result) (push result outer-results))
+         "executor" "desc" "prompt"))
+      (should captured-callback)
+      (should (> (hash-table-count my/gptel--agent-task-state) 0))
+      (gptel-auto-workflow-force-stop)
+      (funcall captured-callback "late result")
+      (should-not outer-results)
+      (should (= (hash-table-count my/gptel--agent-task-state) 0)))))
 
 
 
@@ -797,10 +856,30 @@ EXIT-CODE defaults to 1."
         (gptel-auto-workflow--current-project "/tmp/project")
         (gptel-agent-loop--bypass nil)
         (observed-bypass nil))
-    (cl-letf (((symbol-function 'gptel-agent--task)
-               (lambda (&rest _args)
-                 (setq observed-bypass gptel-agent-loop--bypass))))
+    (cl-letf (((symbol-function 'my/gptel-agent--task-override)
+                (lambda (&rest _args)
+                  (setq observed-bypass gptel-agent-loop--bypass))))
       (my/gptel--call-gptel-agent-task #'ignore "executor" "desc" "prompt")
+      (should observed-bypass))))
+
+(ert-deftest regression/auto-workflow/headless-subagents-prefer-safe-task-override ()
+  "Headless auto-workflow subagents should prefer the safe override."
+  (let ((gptel-auto-workflow--headless t)
+        (gptel-auto-workflow-persistent-headless t)
+        (gptel-auto-workflow--current-project "/tmp/project")
+        (gptel-agent-loop--bypass nil)
+        (called nil)
+        (observed-bypass nil))
+    (cl-letf (((symbol-function 'my/gptel-agent--task-override)
+               (lambda (&rest _args)
+                 (setq called 'override
+                       observed-bypass gptel-agent-loop--bypass)))
+              ((symbol-function 'gptel-agent--task)
+               (lambda (&rest _args)
+                 (setq called 'raw-task
+                       observed-bypass gptel-agent-loop--bypass))))
+      (my/gptel--call-gptel-agent-task #'ignore "executor" "desc" "prompt")
+      (should (eq called 'override))
       (should observed-bypass))))
 
 (ert-deftest regression/auto-workflow/runagent-bypass-prefers-safe-task-override ()
@@ -1185,8 +1264,160 @@ EXIT-CODE defaults to 1."
             (gptel-auto-workflow-recover-all-orphans t)
             (with-temp-buffer
               (insert-file-contents tracking-file)
+                (should-not (string-match-p "^abc1234 " (buffer-string)))
+                (should (string-match-p "^def5678 " (buffer-string))))))
+      (delete-directory proj-root t))))
+
+(ert-deftest regression/auto-workflow/recover-all-orphans-untracks-conflicted-commits ()
+  "Conflicted orphan hashes should be untracked after logging the conflict."
+  (let* ((proj-root (make-temp-file "aw-orphans" t))
+         (tracking-file (expand-file-name
+                         (format "var/tmp/experiments/%s/commits.txt"
+                                 (format-time-string "%Y-%m-%d"))
+                         proj-root)))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory tracking-file) t)
+          (with-temp-file tracking-file
+            (insert "abc1234 exp1 target.el 00:00:00\n")
+            (insert "def5678 exp2 other.el 00:00:01\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                     (lambda () proj-root))
+                    ((symbol-function 'gptel-auto-workflow--recover-orphans)
+                     (lambda () '(("abc1234" "exp1" "target.el"))))
+                    ((symbol-function 'gptel-auto-workflow--cherry-pick-orphan)
+                     (lambda (_hash) 'conflict))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (gptel-auto-workflow-recover-all-orphans t)
+            (with-temp-buffer
+              (insert-file-contents tracking-file)
               (should-not (string-match-p "^abc1234 " (buffer-string)))
               (should (string-match-p "^def5678 " (buffer-string))))))
+      (delete-directory proj-root t))))
+
+(ert-deftest regression/auto-workflow/cherry-pick-orphan-detects-localized-conflicts ()
+  "Cherry-pick conflict detection should rely on unmerged files, not English-only text."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--with-staging-worktree)
+             (lambda (fn) (funcall fn)))
+            ((symbol-function 'gptel-auto-workflow--git-result)
+             (lambda (&rest _)
+               (cons "自动合并 lisp/modules/gptel-tools-agent.el" 1)))
+            ((symbol-function 'gptel-auto-workflow--git-cmd)
+             (lambda (command &optional _timeout)
+               (cond
+                ((string-match-p "diff --name-only --diff-filter=U" command)
+                 "lisp/modules/gptel-tools-agent.el\ntests/test-gptel-tools-agent-regressions.el")
+                ((string-match-p "cherry-pick --abort" command) "")
+                (t ""))))
+            ((symbol-function 'gptel-auto-workflow--log-conflict)
+             (lambda (&rest _) nil))
+            ((symbol-function 'message) (lambda (&rest _) nil)))
+    (should (eq (gptel-auto-workflow--cherry-pick-orphan "abc1234") 'conflict))))
+
+(ert-deftest regression/auto-workflow/cherry-pick-orphan-detects-localized-empty-picks ()
+  "Localized empty cherry-picks should be treated as already-applied commits."
+  (let ((commands nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--with-staging-worktree)
+               (lambda (fn) (funcall fn)))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (&rest _)
+                 (cons "之前的拣选操作现在是一个空提交" 1)))
+              ((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (command &optional _timeout)
+                 (push command commands)
+                 (cond
+                  ((string-match-p "rev-parse -q --verify CHERRY_PICK_HEAD" command)
+                   "abc1234")
+                  ((string-match-p "diff --name-only --diff-filter=U" command)
+                   "")
+                  ((string-match-p "status --porcelain" command)
+                   "")
+                  ((string-match-p "cherry-pick --skip" command)
+                   "")
+                  (t ""))))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (should (eq (gptel-auto-workflow--cherry-pick-orphan "abc1234") t))
+      (should (seq-some (lambda (command)
+                          (string-match-p "cherry-pick --skip" command))
+                        commands)))))
+
+(ert-deftest regression/auto-workflow/track-commit-avoids-duplicate-hashes ()
+  "Tracking the same commit twice should not append duplicate tracking lines."
+  (let* ((proj-root (make-temp-file "aw-track" t))
+         (tracking-file (expand-file-name
+                         (format "var/tmp/experiments/%s/commits.txt"
+                                 (format-time-string "%Y-%m-%d"))
+                         proj-root)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                   (lambda () proj-root))
+                  ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                   (lambda (&rest _) proj-root))
+                  ((symbol-function 'gptel-auto-workflow--git-cmd)
+                   (lambda (&rest _) "abc1234"))
+                  ((symbol-function 'message) (lambda (&rest _) nil)))
+          (should (equal (gptel-auto-workflow--track-commit "1" "target.el" proj-root)
+                         "abc1234"))
+          (should (equal (gptel-auto-workflow--track-commit "1" "target.el" proj-root)
+                         "abc1234"))
+          (with-temp-buffer
+            (insert-file-contents tracking-file)
+            (should (= (cl-count ?\n (buffer-string)) 1))
+            (should (string-match-p "^abc1234 1 target\\.el " (buffer-string)))))
+      (delete-directory proj-root t))))
+
+(ert-deftest regression/auto-workflow/recover-orphans-deduplicates-tracked-hashes ()
+  "Duplicate tracking lines should yield only one orphan recovery attempt."
+  (let* ((proj-root (make-temp-file "aw-orphans" t))
+         (tracking-file (expand-file-name
+                         (format "var/tmp/experiments/%s/commits.txt"
+                                 (format-time-string "%Y-%m-%d"))
+                         proj-root))
+         (orphans nil))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory tracking-file) t)
+          (with-temp-file tracking-file
+            (insert "abc1234 exp1 target.el 00:00:00\n")
+            (insert "abc1234 exp1 target.el 00:00:01\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                     (lambda () proj-root))
+                    ((symbol-function 'gptel-auto-workflow--commit-exists-p)
+                     (lambda (_hash) t))
+                    ((symbol-function 'gptel-auto-workflow--commit-patch-equivalent-p)
+                     (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-workflow--git-cmd)
+                     (lambda (&rest _) ""))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (setq orphans (gptel-auto-workflow--recover-orphans))
+            (should (= (length orphans) 1))
+            (should (equal (caar orphans) "abc1234"))))
+      (delete-directory proj-root t))))
+
+(ert-deftest regression/auto-workflow/recover-orphans-untracks-patch-equivalent-commits ()
+  "Patch-equivalent orphan records should be removed instead of re-cherry-picked forever."
+  (let* ((proj-root (make-temp-file "aw-orphans" t))
+         (tracking-file (expand-file-name
+                         (format "var/tmp/experiments/%s/commits.txt"
+                                 (format-time-string "%Y-%m-%d"))
+                         proj-root)))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory tracking-file) t)
+          (with-temp-file tracking-file
+            (insert "abc1234 exp1 target.el 00:00:00\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                     (lambda () proj-root))
+                    ((symbol-function 'gptel-auto-workflow--commit-exists-p)
+                     (lambda (_hash) t))
+                    ((symbol-function 'gptel-auto-workflow--commit-patch-equivalent-p)
+                     (lambda (_hash branch)
+                       (equal branch "main")))
+                    ((symbol-function 'gptel-auto-workflow--git-cmd)
+                     (lambda (&rest _) ""))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (should-not (gptel-auto-workflow--recover-orphans))
+            (should-not (file-exists-p tracking-file))))
       (delete-directory proj-root t))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-runs-elisp-in-safe-buffer ()
@@ -1363,6 +1594,50 @@ EXIT-CODE defaults to 1."
       (delete-directory fake-bin t)
       (when (file-exists-p argv-log)
         (delete-file argv-log))
+      (when (file-exists-p messages-file)
+        (delete-file messages-file)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-messages-falls-back-without-daemon ()
+  "Wrapper messages action should return the last dumped tail without starting a daemon."
+  (let* ((repo-root "/Users/davidwu/.emacs.d")
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (messages-file (make-temp-file "aw-messages-tail"))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (fake-emacsclient
+          (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 1))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "echo emacs-invoked >> %s\nexit 1" (shell-quote-argument emacs-log))))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" messages-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running nil :kept 0 :total 0 :phase \"idle\" :results \"var/tmp/experiments/2026-04-03/results.tsv\")\n"))
+          (with-temp-file messages-file
+            (insert "safe dumped messages\n"))
+          (let ((output (shell-command-to-string (format "%s messages" script))))
+            (should (string-match-p "safe dumped messages" output)))
+          (with-temp-buffer
+            (insert-file-contents emacs-log)
+            (should (string-empty-p (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log))
+      (when (file-exists-p emacs-log)
+        (delete-file emacs-log))
       (when (file-exists-p messages-file)
         (delete-file messages-file)))))
 
@@ -1721,7 +1996,6 @@ Submodules are hydrated later during verification, not during merge prep."
 
 (ert-deftest regression/auto-workflow/create-worktree-uses-safe-main-ref ()
   "Experiment worktrees should use the selected safe main ref, not hard-coded main."
-  (ert-skip "Flaky test - worktree ref issues")
   (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (calls nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
@@ -1746,12 +2020,58 @@ Submodules are hydrated later during verification, not during merge prep."
                       "lisp/modules/gptel-tools-agent.el" 2)
                      "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp2"))
       (should
+        (cl-some
+         (lambda (args)
+           (equal (last args 6)
+                  '("worktree" "add" "-b"
+                    "optimize/agent-riven-exp2"
+                    "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp2"
+                    "origin/main")))
+         calls)))))
+
+(ert-deftest regression/auto-workflow/create-worktree-removes-stale-branch-worktrees ()
+  "Experiment worktree creation should remove stale branch worktrees first."
+  (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+        (calls nil)
+        (stale-worktree
+         "/tmp/project/var/tmp/experiments/optimize/projects-riven-exp2/var/tmp/experiments/optimize/cache-riven-exp1"))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--staging-main-ref)
+               (lambda () "origin/main"))
+              ((symbol-function 'gptel-auto-workflow--branch-worktree-paths)
+               (lambda (_branch _proj-root)
+                 (list stale-worktree)))
+              ((symbol-function 'generate-new-buffer)
+               (lambda (&rest _) (get-buffer-create " *git-stderr-test*")))
+              ((symbol-function 'kill-buffer)
+               (lambda (&rest _) nil))
+              ((symbol-function 'make-directory)
+               (lambda (&rest _) t))
+              ((symbol-function 'file-exists-p)
+               (lambda (_path) nil))
+              ((symbol-function 'call-process)
+               (lambda (&rest args)
+                 (push args calls)
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (equal (gptel-auto-workflow-create-worktree
+                      "lisp/modules/gptel-ext-context-cache.el" 1)
+                     "/tmp/project/var/tmp/experiments/optimize/cache-riven-exp1"))
+      (should
+       (cl-some
+        (lambda (args)
+          (equal (last args 4)
+                 `("worktree" "remove" "-f" ,stale-worktree)))
+        calls))
+      (should
        (cl-some
         (lambda (args)
           (equal (last args 6)
                  '("worktree" "add" "-b"
-                   "optimize/agent-riven-exp2"
-                   "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp2"
+                   "optimize/cache-riven-exp1"
+                   "/tmp/project/var/tmp/experiments/optimize/cache-riven-exp1"
                    "origin/main")))
         calls)))))
 

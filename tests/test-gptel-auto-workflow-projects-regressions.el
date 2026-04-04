@@ -168,7 +168,6 @@
 
 (ert-deftest regression/auto-workflow-projects/queue-helper-keeps-running-until-async-finish ()
   "Async queued jobs should stay marked running until their completion callback fires."
-  (ert-skip "Flaky test - cron job state issues")
   (let ((gptel-auto-workflow--cron-job-running nil)
         (scheduled nil)
         (finish-job nil))
@@ -195,7 +194,6 @@
 
 (ert-deftest regression/auto-workflow-projects/queue-helper-resets-stale-stats ()
   "Queued jobs should start from clean stats instead of leaking prior run counts."
-  (ert-skip "Flaky test - stats leaking issues")
   (let ((gptel-auto-workflow--cron-job-running nil)
         (gptel-auto-workflow--stats '(:phase "complete" :total 7 :kept 2))
         (scheduled nil))
@@ -237,7 +235,6 @@
 
 (ert-deftest regression/auto-workflow-projects/run-all-projects-waits-for-async-completion ()
   "Project results should be recorded when async completion fires, not at start."
-  (ert-skip "Flaky test - async completion mocking issues")
   (let ((gptel-auto-workflow-projects '("/tmp/project-a" "/tmp/project-a"))
         (callbacks nil)
         (messages nil))
@@ -267,7 +264,6 @@
 
 (ert-deftest regression/auto-workflow-projects/run-all-projects-ignores-duplicate-completion ()
   "Late duplicate project completions should not re-log completion or finish twice."
-  (ert-skip "Flaky test - duplicate completion issues")
   (let ((gptel-auto-workflow-projects '("/tmp/project-a"))
         (callbacks nil)
         (messages nil))
