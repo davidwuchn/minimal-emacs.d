@@ -12,6 +12,8 @@ tools:
   - Glob
   - Grep
   - Code_Map
+  - Diagnostics
+  - Programmatic
 ---
 
 <role_and_behavior>

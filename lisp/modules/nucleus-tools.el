@@ -68,7 +68,7 @@ When enabled, validates:
                   "Code_Map" "Code_Inspect" "Code_Replace" "Diagnostics" "Code_Usages"))
     (:explorer . ("Glob" "Grep" "Read" "Code_Map" "Code_Inspect"))
     (:reviewer . ("Glob" "Grep" "Read" "Diagnostics"))
-    (:analyzer . ("Bash" "Read" "Glob" "Grep" "Code_Map"))
+    (:analyzer . ("Bash" "Read" "Glob" "Grep" "Code_Map" "Diagnostics" "Programmatic"))
     (:comparator . ("Read" "Glob" "Grep"))
     (:grader . ("Read" "Glob" "Grep" "Bash" "Eval")))
   "Canonical toolset definitions for nucleus.
@@ -79,7 +79,7 @@ When enabled, validates:
 :executor — Subagent execution tools (27 tools): No RunAgent (prevent recursive delegation)
 :explorer — Codebase exploration (5 tools): Glob, Grep, Read, Code_Map, Code_Inspect
 :reviewer — Code review (4 tools): Read-only + Diagnostics
-:analyzer — Benchmark analysis (5 tools): Bash, Read, Glob, Grep, Code_Map
+:analyzer — Benchmark analysis (7 tools): Bash, Read, Glob, Grep, Code_Map, Diagnostics, Programmatic
 :comparator — A/B comparison (3 tools): Read, Glob, Grep
 :grader — Assertion grading (5 tools): Read, Glob, Grep, Bash, Eval
 
@@ -91,7 +91,7 @@ Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   introspector → :readonly    (18 tools) - Emacs introspection + web search
   explorer     → :explorer     (5 tools) - codebase exploration + Code tools
   reviewer     → :reviewer     (4 tools) - code review + Diagnostics
-  analyzer     → :analyzer     (5 tools) - benchmark result analysis
+  analyzer     → :analyzer     (7 tools) - benchmark result analysis
   comparator   → :comparator   (3 tools) - blind A/B comparison
   grader       → :grader       (5 tools) - assertion grading")
 

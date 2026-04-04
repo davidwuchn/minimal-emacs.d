@@ -158,11 +158,79 @@ EXIT-CODE defaults to 1."
           (should (eq (plist-get grade-context :buffer) exp2-buf))
           (should (equal (plist-get grade-context :default-directory)
                          (file-name-as-directory exp2-dir))))
-      (when (buffer-live-p exp1-buf)
-        (kill-buffer exp1-buf))
-       (when (buffer-live-p exp2-buf)
-         (kill-buffer exp2-buf))
-       (delete-directory project-root t))))
+       (when (buffer-live-p exp1-buf)
+         (kill-buffer exp1-buf))
+        (when (buffer-live-p exp2-buf)
+          (kill-buffer exp2-buf))
+        (delete-directory project-root t))))
+
+(ert-deftest regression/auto-experiment/async-analysis-preserves-executor-timeout ()
+  "Async analyzer callbacks should keep the full experiment timeout for executor."
+  (let* ((temp-dir (make-temp-file "exp-worktree" t))
+         (captured-timeout nil)
+         (analyze-callback nil)
+         (result nil)
+         (gptel-auto-experiment-time-budget 600)
+         (my/gptel-agent-task-timeout 300))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                     (lambda (_target _experiment-id) temp-dir))
+                    ((symbol-function 'gptel-auto-experiment-analyze)
+                     (lambda (_previous-results cb)
+                       (setq analyze-callback
+                             (lambda (analysis)
+                               (let ((my/gptel-agent-task-timeout 60))
+                                 (funcall cb analysis))))))
+                    ((symbol-function 'gptel-auto-experiment-build-prompt)
+                     (lambda (&rest _args) "prompt"))
+                    ((symbol-function 'run-with-timer)
+                     (lambda (&rest _args) :fake-timer))
+                    ((symbol-function 'cancel-timer)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'my/gptel--run-agent-tool)
+                     (lambda (cb &rest _args)
+                       (setq captured-timeout my/gptel-agent-task-timeout)
+                       (funcall cb "Error: Task timed out after 600s")))
+                    ((symbol-function 'gptel-auto-experiment-grade)
+                     (lambda (_output cb)
+                       (funcall cb '(:score 0 :total 9 :passed nil :details "timeout"))))
+                    ((symbol-function 'gptel-auto-experiment--categorize-error)
+                     (lambda (_output)
+                       '(:timeout . "Experiment timed out")))
+                    ((symbol-function 'gptel-auto-experiment-log-tsv)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'message)
+                     (lambda (&rest _args) nil)))
+            (gptel-auto-experiment-run
+             "lisp/modules/gptel-tools-agent.el" 2 5 0.4 0.5 '((:id 1))
+             (lambda (exp-result)
+               (setq result exp-result)))
+            (should analyze-callback)
+            (funcall analyze-callback '(:patterns nil))
+            (should (= captured-timeout 600))
+            (should (equal (plist-get result :comparator-reason) ":timeout"))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest regression/subagent/run-agent-tool-with-timeout-overrides-and-restores ()
+  "Timeout helper should override the shared timeout only for one dispatch."
+  (let ((gptel-agent--agents '(("executor")))
+        (my/gptel-agent-task-timeout 300)
+        (captured-timeout nil))
+    (cl-letf (((symbol-function 'my/gptel--agent-task-with-timeout)
+               (lambda (_callback _agent-type _description _prompt
+                        &optional _files _include-history _include-diff)
+                 (setq captured-timeout my/gptel-agent-task-timeout)))
+              ((symbol-function 'gptel-agent--task)
+               (lambda (&rest _) nil)))
+      (my/gptel--run-agent-tool-with-timeout
+       42
+       #'ignore
+       "executor"
+       "desc"
+       "prompt")
+      (should (= captured-timeout 42))
+      (should (= my/gptel-agent-task-timeout 300)))))
 
 (ert-deftest regression/auto-experiment/context-binds-stable-run-root ()
   "Experiment callbacks should keep the workflow root stable inside worktrees."
@@ -318,7 +386,10 @@ EXIT-CODE defaults to 1."
           (should (equal (nth 1 runagent-calls)
                          '("executor"
                            "Retry: fix validation error in lisp/modules/gptel-tools-agent.el"
-                           "retry:Dangerous pattern:prompt"))))
+                           "retry:Dangerous pattern:prompt"
+                           nil
+                           nil
+                           nil))))
       (when (buffer-live-p worktree-buf)
         (kill-buffer worktree-buf))
       (delete-directory project-root t))))
@@ -1391,10 +1462,11 @@ EXIT-CODE defaults to 1."
 (ert-deftest regression/auto-workflow/benchmark-subagent-uses-timeout-wrapper ()
   "Benchmark subagents should use the timeout wrapper when available."
   (let ((gptel-benchmark-use-subagents t)
+        (my/gptel-agent-task-timeout 7)
         (captured nil))
     (cl-letf (((symbol-function 'my/gptel--agent-task-with-timeout)
                (lambda (callback agent-type description prompt
-                                 &optional _files _include-history _include-diff)
+                                &optional _files _include-history _include-diff)
                  (setq captured (list :timeout my/gptel-agent-task-timeout
                                       :agent agent-type
                                       :description description
@@ -2785,6 +2857,26 @@ Submodules are hydrated later during verification, not during merge prep."
       (goto-char (point-min))
       (should (re-search-forward "^tools:$" nil t))
       (should (re-search-forward "^  - Code_Map$" nil t)))))
+
+(ert-deftest regression/auto-workflow/analyzer-agent-declares-diagnostics-tool ()
+  "Analyzer agent should declare Diagnostics for live preset/runtime parity."
+  (let ((file (expand-file-name "assistant/agents/analyzer.md"
+                                (gptel-auto-workflow--project-root))))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (should (re-search-forward "^tools:$" nil t))
+      (should (re-search-forward "^  - Diagnostics$" nil t)))))
+
+(ert-deftest regression/auto-workflow/analyzer-agent-declares-programmatic-tool ()
+  "Analyzer agent should declare Programmatic for live preset/runtime parity."
+  (let ((file (expand-file-name "assistant/agents/analyzer.md"
+                                (gptel-auto-workflow--project-root))))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (should (re-search-forward "^tools:$" nil t))
+      (should (re-search-forward "^  - Programmatic$" nil t)))))
 
 (ert-deftest regression/auto-workflow/analyzer-agent-uses-highspeed-model ()
   "Analyzer agent should stay on the configured highspeed MiniMax model."

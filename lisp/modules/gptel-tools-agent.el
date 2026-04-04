@@ -1416,6 +1416,17 @@ INCLUDE-HISTORY defaults to `my/gptel-subagent-include-history-default' when nil
       (my/gptel--agent-task-with-timeout callback agent-name description prompt files
                                          include-history-bool include-diff-bool))))
 
+(defun my/gptel--run-agent-tool-with-timeout (timeout callback agent-name description prompt
+                                                      &optional files include-history include-diff)
+  "Run `my/gptel--run-agent-tool' with TIMEOUT forced for this one dispatch."
+  (let ((previous-timeout my/gptel-agent-task-timeout))
+    (unwind-protect
+        (progn
+          (setq my/gptel-agent-task-timeout timeout)
+          (my/gptel--run-agent-tool callback agent-name description prompt
+                                    files include-history include-diff))
+      (setq my/gptel-agent-task-timeout previous-timeout))))
+
 ;;; Tool Registration
 
 (defun gptel-tools-agent-register ()
@@ -3615,9 +3626,9 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                            :id experiment-id
                                                            :error "timeout")))))))
                 ;; Routing handled by gptel-auto-workflow--advice-task-override
-                (let ((my/gptel-agent-task-timeout experiment-timeout))
-                  (my/gptel--run-agent-tool
-                (lambda (agent-output)
+                (my/gptel--run-agent-tool-with-timeout
+                 experiment-timeout
+                 (lambda (agent-output)
                   (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
                     (message "[auto-exp] Agent output (first 150 chars): %s"
                              (my/gptel--sanitize-for-logging agent-output 150))
@@ -3766,9 +3777,9 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                 (message "[auto-experiment] ✗ %s"
                                          (my/gptel--sanitize-for-logging validation-error 200))
                                 (magit-git-success "checkout" "--" ".")
-                                (let ((my/gptel-agent-task-timeout experiment-timeout))
-                                  (my/gptel--run-agent-tool
-                                   (lambda (retry-output)
+                                (my/gptel--run-agent-tool-with-timeout
+                                 experiment-timeout
+                                 (lambda (retry-output)
                                      (gptel-auto-experiment-grade
                                       retry-output
                                       (lambda (retry-grade)
@@ -3816,7 +3827,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                    "executor"
                                    (format "Retry: fix validation error in %s" target)
                                    (gptel-auto-experiment--make-retry-prompt
-                                    target validation-error executor-prompt))))
+                                    target validation-error executor-prompt)))
                             (let ((default-directory experiment-worktree))
                               (setq finished t)
                               (magit-git-success "checkout" "--" ".")
@@ -3847,7 +3858,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                    "executor"
                    (format "Experiment %d: optimize %s" experiment-id target)
                    executor-prompt
-                   nil "false" nil)))))))))
+                   nil "false" nil))))))))
     )
 
 
