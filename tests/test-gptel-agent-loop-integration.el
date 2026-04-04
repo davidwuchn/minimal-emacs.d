@@ -26,9 +26,10 @@
 
 (ert-deftest gptel-agent-loop-integration-test-state-uses-struct-and-active-table ()
   (let ((gptel-agent--agents '(("executor" :steps 2)))
+        (my/gptel-subagent-cache-ttl 0)   ; prevent cache pollution across tests
         callback)
     (with-temp-buffer
-      (setq gptel--fsm-last
+      (setq-local gptel--fsm-last           ; was setq -- leaked global state
             (gptel-make-fsm :info (list :buffer (current-buffer)
                                         :position (point-marker))))
       (cl-letf (((symbol-function 'gptel-request)
