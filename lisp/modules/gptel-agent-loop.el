@@ -609,21 +609,14 @@ Cache behavior:
                                    (when (buffer-live-p (plist-get fsm-info :buffer))
                                      (plist-get fsm-info :buffer))
                                    (current-buffer)))
-                   (where (or (let ((tm (gptel-agent-loop--task-tracking-marker state)))
-                                (and (markerp tm) (marker-position tm) tm))
-                              (let ((tm (plist-get fsm-info :tracking-marker)))
-                                (and (markerp tm) (marker-position tm) tm))
-                              (let ((pos (plist-get fsm-info :position)))
-                                (and (markerp pos) (marker-position pos) pos))
-                              (with-current-buffer parent-buf (point-marker))))
                    (tracking-marker
                     (or (gptel-agent-loop--task-tracking-marker state)
-                        ;; If where is already in parent-buf, use it directly.
-                        ;; If it's from a foreign buffer (fsm-info), don't copy
-                        ;; its position across buffers — create a fresh marker instead.
-                        (if (eq (marker-buffer where) parent-buf)
-                            where
-                          (with-current-buffer parent-buf (point-marker)))))
+                        (let ((tm (or (plist-get fsm-info :tracking-marker)
+                                      (plist-get fsm-info :position))))
+                          (if (and (markerp tm) (marker-position tm)
+                                   (eq (marker-buffer tm) parent-buf))
+                              tm
+                            (with-current-buffer parent-buf (point-marker))))))
                    (callback (gptel-agent-loop--make-callback state prompt use-tools)))
               (setf (gptel-agent-loop--task-parent-buffer state) parent-buf
                     (gptel-agent-loop--task-tracking-marker state) tracking-marker)
