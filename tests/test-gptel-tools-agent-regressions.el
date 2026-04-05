@@ -208,8 +208,44 @@ EXIT-CODE defaults to 1."
                (setq result exp-result)))
             (should analyze-callback)
             (funcall analyze-callback '(:patterns nil))
-            (should (= captured-timeout 600))
-            (should (equal (plist-get result :comparator-reason) ":timeout"))))
+             (should (= captured-timeout 600))
+             (should (equal (plist-get result :comparator-reason) ":timeout"))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest regression/auto-experiment/executor-timeout-owned-by-subagent-wrapper ()
+  "Experiment runner should not add a second wall-clock timeout around executor."
+  (let* ((temp-dir (make-temp-file "exp-worktree" t))
+         (captured-timeout nil)
+         (scheduled-timers nil)
+         (gptel-auto-experiment-time-budget 600))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (lambda (_target _experiment-id) temp-dir))
+                  ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                   (lambda (_worktree) (current-buffer)))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results cb)
+                     (funcall cb nil)))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _args) "prompt"))
+                  ((symbol-function 'run-with-timer)
+                   (lambda (secs repeat fn &rest _args)
+                     (push (list secs repeat fn) scheduled-timers)
+                     :fake-timer))
+                  ((symbol-function 'cancel-timer)
+                   (lambda (&rest _) nil))
+                  ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                   (lambda (timeout _callback _agent-name _description _prompt
+                            &optional _files _include-history _include-diff)
+                     (setq captured-timeout timeout)))
+                  ((symbol-function 'message)
+                   (lambda (&rest _) nil)))
+          (with-temp-buffer
+            (gptel-auto-experiment-run
+             "lisp/modules/gptel-tools-agent.el" 1 2 0.4 0.5 nil
+             #'ignore))
+          (should (= captured-timeout 600))
+          (should-not scheduled-timers))
       (delete-directory temp-dir t))))
 
 (ert-deftest regression/subagent/run-agent-tool-with-timeout-overrides-and-restores ()
@@ -1475,8 +1511,63 @@ EXIT-CODE defaults to 1."
               (should (= (length callback-results) 1))
                (should (string-match-p "timed out after 42s" (car callback-results)))
                (should (= (hash-table-count my/gptel--agent-task-state) 0))))
-         (when (buffer-live-p request-buf)
-           (kill-buffer request-buf))))))
+          (when (buffer-live-p request-buf)
+            (kill-buffer request-buf))))))
+
+(ert-deftest regression/subagent/request-buffer-activity-rearms-timeout ()
+  "Request-buffer activity should reset the inactivity timeout window."
+  (let ((my/gptel-agent-task-timeout 42)
+        (my/gptel-subagent-progress-interval 10)
+        (scheduled-timeouts nil)
+        (progress-callback nil)
+        (cancelled-timers nil))
+    (clrhash my/gptel--agent-task-state)
+    (let ((request-buf (generate-new-buffer " *gptel-request-activity*")))
+      (unwind-protect
+          (cl-letf (((symbol-function 'run-at-time)
+                     (lambda (secs repeat fn &rest _args)
+                       (cond
+                        ((and repeat (= secs my/gptel-subagent-progress-interval))
+                         (setq progress-callback fn)
+                         :fake-progress)
+                        ((and (null repeat) (= secs my/gptel-agent-task-timeout))
+                         (let ((timer (list :timeout (1+ (length scheduled-timeouts)))))
+                           (setq scheduled-timeouts
+                                 (append scheduled-timeouts (list timer)))
+                           timer))
+                        (t :fake-timer))))
+                    ((symbol-function 'timerp)
+                     (lambda (obj)
+                       (and (consp obj) (eq (car obj) :timeout))))
+                    ((symbol-function 'cancel-timer)
+                     (lambda (timer)
+                       (push timer cancelled-timers)))
+                    ((symbol-function 'gptel-auto-workflow--state-active-p)
+                     (lambda (state)
+                       (and state (not (plist-get state :done)))))
+                    ((symbol-function 'my/gptel--call-gptel-agent-task)
+                     (lambda (&rest _args)
+                       (my/gptel--register-agent-task-buffer request-buf)))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (with-current-buffer request-buf
+              (erase-buffer)
+              (insert "initial activity"))
+            (with-temp-buffer
+              (my/gptel--agent-task-with-timeout
+               #'ignore
+               "executor" "desc" "prompt"))
+            (should (= (length scheduled-timeouts) 1))
+            (should (functionp progress-callback))
+            (with-current-buffer request-buf
+              (goto-char (point-max))
+              (insert " more activity"))
+            (funcall progress-callback)
+            (should (= (length scheduled-timeouts) 2))
+            (should (equal cancelled-timers
+                           (list (car scheduled-timeouts)))))
+        (when (buffer-live-p request-buf)
+          (kill-buffer request-buf))))))
 
 (ert-deftest regression/subagent/timeout-aborts-routed-request-buffer-with-dead-origin ()
   "Timeout abort should still target the live request buffer after origin buffer dies."
