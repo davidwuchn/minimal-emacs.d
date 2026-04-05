@@ -1,10 +1,34 @@
 # Mementum State
 
-> Last session: 2026-04-05 08:12
+> Last session: 2026-04-05 11:30
 
 ## Total Improvements: 200+ Real Code Fixes
 
-### Session Summary: 2026-04-05 (continued)
+### Session Summary: 2026-04-05 (Submodule Sync)
+
+**Action:** Synced all git submodules to latest commits
+
+**Result:** ✅ All 4 submodules updated, all 1253 tests pass
+
+**Submodules Updated:**
+| Submodule | From | To | Commits |
+|-----------|------|-----|---------|
+| `packages/ai-behaviors` | b874da5 | 4e5d09d | 2 new |
+| `packages/ai-code` | 3594cc0 | b75f63e | 5 new |
+| `packages/gptel` | 1ecb06f | 9409fd3 | 5 new |
+| `packages/gptel-agent` | 4965295 | 9cb3a9a | 2 new |
+
+**Key improvements in submodules:**
+- Buffer validation and safety fixes
+- TTL cache helper extraction
+- Error handling improvements
+- Marker extraction refactoring
+
+**Commit:** `⚒ Update submodules to latest commits` (e83abe9d)
+
+---
+
+### Session Summary: 2026-04-05 (Part 2)
 
 **Action:** ERT skip cleanup + sync with remote scoring/validation fixes + restored missing ert-skips
 
@@ -38,7 +62,7 @@
 
 ---
 
-### Session Summary: 2026-04-05 (earlier)
+### Session Summary: 2026-04-05 (Part 1)
 
 **Action:** Synced with remote and fixed new test failures
 
@@ -83,12 +107,14 @@
 λ ert-skip-pattern. Tests that mock async behavior often fail intermittently
 λ commit-review. Check what ert-skips are being removed before approving
 λ merge-conflict. Combine both local and remote state changes when resolving
+λ submodule-sync. Update submodules regularly for latest fixes and features
 ```
 
 ---
 
 ## Current Status
 
-- **Main branch:** 17ee45bf (restored ert-skips)
+- **Main branch:** e83abe9d (submodule updates)
 - **Tests:** 1253 total, 1179 passed, 74 skipped, 0 failed
 - **All ERT tests:** PASSING ✅
+- **Submodules:** All synced to latest commits ✅
