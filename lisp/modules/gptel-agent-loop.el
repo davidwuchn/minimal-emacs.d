@@ -611,12 +611,11 @@ Cache behavior:
                                    (current-buffer)))
                    (tracking-marker
                     (or (gptel-agent-loop--task-tracking-marker state)
-                        (let ((tm (or (plist-get fsm-info :tracking-marker)
-                                      (plist-get fsm-info :position))))
-                          (if (and (markerp tm) (marker-position tm)
-                                   (eq (marker-buffer tm) parent-buf))
-                              tm
-                            (with-current-buffer parent-buf (point-marker))))))
+                        (and where
+                             (markerp where)
+                             (eq (marker-buffer where) parent-buf)
+                             where)
+                        (with-current-buffer parent-buf (point-marker))))
                    (callback (gptel-agent-loop--make-callback state prompt use-tools)))
               (setf (gptel-agent-loop--task-parent-buffer state) parent-buf
                     (gptel-agent-loop--task-tracking-marker state) tracking-marker)
