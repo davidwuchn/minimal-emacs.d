@@ -1341,33 +1341,37 @@ Uses hash table keyed by task-id to support parallel execution."
                              :origin-buf origin-buf
                              :request-buf nil)
                my/gptel--agent-task-state))
-    (when task-timeout
-      (let ((timeout-timer
-             (run-at-time task-timeout nil
-                          (lambda ()
-                             (when (buffer-live-p origin-buf)
-                               (with-current-buffer origin-buf
-                              (let* ((state (gethash task-id my/gptel--agent-task-state))
-                                     (already-done (plist-get state :done)))
-                                    (when state
-                                      ;; Atomic test-and-set: same guard as wrapped-cb.
-                                      (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                                      (unless already-done
-                                         (when (timerp (plist-get state :progress-timer))
-                                           (cancel-timer (plist-get state :progress-timer)))
-                                       (message "[nucleus] Subagent %s timed out after %ds, aborting request"
-                                                agent-type task-timeout)
-                                       (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
-                                                   ((fboundp 'gptel-abort)))
-                                         (ignore-errors (gptel-abort request-buf)))
-                                       (funcall restore-origin-fsm child-fsm)
+     (when task-timeout
+       (let ((timeout-timer
+              (run-at-time task-timeout nil
+                           (lambda ()
+                             (let* ((state (gethash task-id my/gptel--agent-task-state))
+                                    (already-done (plist-get state :done)))
+                               (when state
+                                 ;; Atomic test-and-set: same guard as wrapped-cb.
+                                 (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                                 (unless already-done
+                                   (when (timerp (plist-get state :progress-timer))
+                                     (cancel-timer (plist-get state :progress-timer)))
+                                   (message "[nucleus] Subagent %s timed out after %ds, aborting request"
+                                            agent-type task-timeout)
+                                   (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
+                                               ((fboundp 'gptel-abort)))
+                                     (ignore-errors (gptel-abort request-buf)))
+                                   (let ((timeout-result
+                                          (format "Error: Task \"%s\" (%s) timed out after %ds."
+                                                  description agent-type task-timeout)))
+                                     (funcall restore-origin-fsm child-fsm)
+                                     (if (buffer-live-p origin-buf)
+                                         (with-current-buffer origin-buf
+                                           (unwind-protect
+                                               (funcall callback timeout-result)
+                                             (remhash task-id my/gptel--agent-task-state)))
                                        (unwind-protect
-                                           (funcall callback
-                                                    (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                                            description agent-type task-timeout))
+                                           (funcall callback timeout-result)
                                          (remhash task-id my/gptel--agent-task-state)))))))))))
-        (let ((state (gethash task-id my/gptel--agent-task-state)))
-          (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
+         (let ((state (gethash task-id my/gptel--agent-task-state)))
+           (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
     (let ((my/gptel--current-agent-task-id task-id)
           (my/gptel--subagent-origin-buffer origin-buf))
       (let ((request-started nil))
