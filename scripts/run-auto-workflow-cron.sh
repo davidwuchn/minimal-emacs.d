@@ -245,26 +245,45 @@ ensure_worker_daemon() {
         return 0
     fi
 
+    local lock_file="$DIR/var/tmp/cron/daemon-start.lock"
+    mkdir -p "$DIR/var/tmp/cron"
+    
+    local lock_acquired=0
+    for _ in $(seq 1 10); do
+        if (set -C; echo "$$" > "$lock_file") 2>/dev/null; then
+            lock_acquired=1
+            break
+        fi
+        sleep 0.2
+    done
+    
+    if [ "$lock_acquired" -eq 0 ]; then
+        for _ in $(seq 1 30); do
+            if check_worker_daemon; then
+                return 0
+            fi
+            sleep 0.5
+        done
+        echo "daemon startup blocked by another process, waited 15s" >&2
+        return 1
+    fi
+    
+    trap 'rm -f "$lock_file"' EXIT
+    
+    check_worker_daemon && return 0
+    
     "$EMACS" --eval "(server-force-delete \"$SERVER_NAME\")" >>"$DAEMON_LOG" 2>&1 || true
     sleep 0.5
     MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 "$EMACS" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
     for _ in $(seq 1 50); do
         if check_worker_daemon; then
-            rc=0
-        else
-            rc=$?
-        fi
-
-        if [ "$rc" -eq 0 ]; then
-            return 0
-        fi
-        if [ "$rc" -eq 2 ]; then
             return 0
         fi
         sleep 0.2
     done
     echo "failed to start worker daemon: $SERVER_NAME" >&2
     tail -n 40 "$DAEMON_LOG" >&2 || true
+    rm -f "$lock_file"
     return 1
 }
 
@@ -449,6 +468,13 @@ if [ "$ACTION" = "messages" ]; then
 fi
 
 clear_stale_running_status
+
+if status_indicates_running; then
+    echo "already-running"
+    exit 0
+fi
+
+sleep 0.3
 
 if status_indicates_running; then
     echo "already-running"
