@@ -402,7 +402,7 @@ LLM decides if available, otherwise uses static list."
                 (progn
                   (message "[auto-workflow] Analyzer selected %d targets" (length targets))
                   (funcall callback targets)))
-             (t
+              (t
               (message "[auto-workflow] Using static targets")
               (funcall callback static-targets)))))
          (funcall callback static-targets)))))
