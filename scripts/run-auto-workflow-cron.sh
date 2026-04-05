@@ -244,6 +244,9 @@ ensure_worker_daemon() {
     if [ "$rc" -eq 2 ]; then
         return 0
     fi
+
+    "$EMACS" --eval "(server-force-delete \"$SERVER_NAME\")" >>"$DAEMON_LOG" 2>&1 || true
+    sleep 0.5
     MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 "$EMACS" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
     for _ in $(seq 1 50); do
         if check_worker_daemon; then

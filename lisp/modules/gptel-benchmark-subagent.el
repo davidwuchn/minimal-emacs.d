@@ -129,9 +129,10 @@ TIMEOUT overrides default."
 
 ;;; Grader Subagent
 
-(defun gptel-benchmark-grade (output expected forbidden callback)
+(defun gptel-benchmark-grade (output expected forbidden callback &optional timeout)
   "Grade OUTPUT against EXPECTED and FORBIDDEN behaviors.
 Calls CALLBACK with grade plist: (:score :total :percentage :passed :details).
+Optional TIMEOUT overrides default subagent timeout.
 Uses grader subagent - no local fallback (fail if subagent unavailable)."
   (let ((grading-prompt (gptel-benchmark--make-grading-prompt output expected forbidden))
         (total (+ (length expected) (length forbidden))))
@@ -143,7 +144,8 @@ Uses grader subagent - no local fallback (fail if subagent unavailable)."
          "Grade output"
          grading-prompt
          (lambda (result)
-           (funcall callback (gptel-benchmark--parse-grade-response result expected forbidden))))
+           (funcall callback (gptel-benchmark--parse-grade-response result expected forbidden)))
+         timeout)
       ;; No local fallback - fail the grade
       (funcall callback (list :score 0 
                               :total total
