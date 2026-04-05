@@ -1666,6 +1666,22 @@ EXIT-CODE defaults to 1."
                          '(:running t :kept 1 :total 2 :phase "running" :results "x"))))
       (delete-file tmp-file))))
 
+(ert-deftest regression/auto-workflow/status-prefers-active-persisted-snapshot-over-idle-placeholder ()
+  "An idle local placeholder should not hide an active persisted snapshot."
+  (let* ((tmp-file (make-temp-file "aw-status"))
+         (gptel-auto-workflow-status-file tmp-file)
+         (gptel-auto-workflow--running nil)
+         (gptel-auto-workflow--cron-job-running nil)
+         (gptel-auto-workflow--stats '(:phase "idle" :total 0 :kept 0)))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp-file
+            (prin1 '(:running t :kept 0 :total 5 :phase "running" :results "x")
+                   (current-buffer)))
+          (should (equal (gptel-auto-workflow-status)
+                         '(:running t :kept 0 :total 5 :phase "running" :results "x"))))
+      (delete-file tmp-file))))
+
 (ert-deftest regression/auto-workflow/cleanup-preserves-queued-phase ()
   "Cleanup should not overwrite queued/run phases while a cron job is active."
   (let ((gptel-auto-workflow--running nil)
@@ -2219,6 +2235,52 @@ EXIT-CODE defaults to 1."
           (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
           (with-temp-file status-file
             (insert "(:running t :kept 0 :total 0 :phase \"error\" :results \"var/tmp/experiments/2026-04-03/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s auto-workflow" script))))
+            (should-not (string-match-p "already-running" output))
+            (with-temp-buffer
+              (insert-file-contents status-file)
+              (should (string-match-p ":running nil" (buffer-string)))
+              (should (string-match-p ":phase \"idle\"" (buffer-string))))))
+       (delete-directory status-dir t)
+       (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-ignores-stale-local-running-flags ()
+  "Wrapper auto-workflow should ignore stale current-buffer workflow locals."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "import sys\n"
+                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    "if expr == 't':\n"
+                    "    print('t')\n"
+                    "elif 'default-value' in expr and 'gptel-auto-workflow--cron-job-running' in expr:\n"
+                    "    print('nil')\n"
+                    "elif 'gptel-auto-workflow--cron-job-running' in expr or 'gptel-auto-workflow--running' in expr:\n"
+                    "    print('t')\n"
+                    "elif 'gptel-auto-workflow-queue-all-projects' in expr:\n"
+                    "    print('started')\n"
+                    "else:\n"
+                    "    print('nil')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 2 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-05/results.tsv\")\n"))
           (let ((output (shell-command-to-string (format "%s auto-workflow" script))))
             (should-not (string-match-p "already-running" output))
             (with-temp-buffer

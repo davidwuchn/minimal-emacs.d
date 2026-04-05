@@ -4157,6 +4157,23 @@ Relative paths are resolved from the project root."
          (message "[auto-workflow] Failed to read status snapshot: %s" err)
          nil)))))
 
+(defun gptel-auto-workflow--status-active-p (status)
+  "Return non-nil when STATUS represents active workflow work."
+  (let ((phase (gptel-auto-workflow--plist-get status :phase "idle")))
+    (or (plist-get status :running)
+        (and (stringp phase)
+             (or (member phase '("auto-workflow" "research" "mementum"
+                                 "instincts" "selecting" "running"))
+                 (string-suffix-p "-queued" phase))))))
+
+(defun gptel-auto-workflow--status-placeholder-p (status)
+  "Return non-nil when STATUS is just the empty idle placeholder."
+  (and status
+       (not (plist-get status :running))
+       (= (gptel-auto-workflow--plist-get status :kept 0) 0)
+       (= (gptel-auto-workflow--plist-get status :total 0) 0)
+       (equal (gptel-auto-workflow--plist-get status :phase "idle") "idle")))
+
 (defun gptel-auto-workflow--kept-target-count (results)
   "Return the number of distinct targets kept in RESULTS."
   (length
@@ -4436,12 +4453,19 @@ Returns (nil . nil) if safe to run."
 (defun gptel-auto-workflow-status ()
   "Return current workflow status as plist.
 Returns (:running :kept :total :phase :results)."
-  (or (and (or gptel-auto-workflow--running
-               (bound-and-true-p gptel-auto-workflow--cron-job-running)
-               gptel-auto-workflow--stats)
-           (gptel-auto-workflow--status-plist))
-      (gptel-auto-workflow-read-persisted-status)
-      (gptel-auto-workflow--status-plist)))
+  (let* ((live
+          (and (or gptel-auto-workflow--running
+                   (bound-and-true-p gptel-auto-workflow--cron-job-running)
+                   gptel-auto-workflow--stats)
+               (gptel-auto-workflow--status-plist)))
+         (persisted (gptel-auto-workflow-read-persisted-status)))
+    (cond
+     ((gptel-auto-workflow--status-active-p live) live)
+     ((gptel-auto-workflow--status-active-p persisted) persisted)
+     ((gptel-auto-workflow--status-placeholder-p live) (or persisted live))
+     (live live)
+     (persisted persisted)
+     (t (gptel-auto-workflow--status-plist)))))
 
 
 (defun gptel-auto-workflow--sanitize-unicode (str)
