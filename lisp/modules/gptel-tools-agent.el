@@ -3894,10 +3894,10 @@ TEST: (gptel-auto-experiment--categorize-error \"throttling\") => (:api-rate-lim
 (defun gptel-auto-experiment--adaptive-max-experiments (original-max)
   "Return adjusted experiment count based on API error rate."
   (if (gptel-auto-experiment--should-reduce-experiments-p)
-      (progn
+      (let ((new-max (max 1 (floor original-max 2))))
         (message "[auto-workflow] Reducing experiments from %d to %d due to API errors"
-                 original-max (max 1 (/ original-max 2)))
-        (max 1 (/ original-max 2)))
+                 original-max new-max)
+        new-max)
     original-max))
 
 (defun gptel-auto-experiment--log-failure-analysis (target error-category error-details)
