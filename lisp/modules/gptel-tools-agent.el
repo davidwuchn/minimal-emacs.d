@@ -196,7 +196,7 @@ Returns nil if file doesn't exist or isn't readable."
       (cl-labels ((collect (parent)
                     (dolist (candidate (list-system-processes))
                       (let* ((attrs (ignore-errors (process-attributes candidate)))
-                             (ppid (cdr (assq 'ppid attrs))))
+                             (ppid (and attrs (cdr (assq 'ppid attrs)))))
                         (when (and (integerp ppid)
                                    (= ppid parent)
                                    (not (memq candidate descendants)))
