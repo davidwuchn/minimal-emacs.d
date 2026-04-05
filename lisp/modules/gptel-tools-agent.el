@@ -168,6 +168,17 @@ Reduces duplication of three-way `or` patterns with worktree fallback."
   (or (gptel-auto-workflow--get-worktree-dir (or target gptel-auto-workflow--current-target))
       (gptel-auto-workflow--project-root)
       (expand-file-name "~/.emacs.d/")))
+
+(defvar gptel-auto-experiment--scoring-root-override nil
+  "Project root to use for benchmark and code-quality scoring when non-nil.")
+
+(defun gptel-auto-experiment--scoring-dir (&optional target)
+  "Return directory to use for benchmark and code-quality scoring."
+  (if (and (stringp gptel-auto-experiment--scoring-root-override)
+           (> (length gptel-auto-experiment--scoring-root-override) 0))
+      (file-name-as-directory
+       (expand-file-name gptel-auto-experiment--scoring-root-override))
+    (gptel-auto-workflow--worktree-or-project-dir target)))
 ;;;###autoload
 (defun gptel-auto-workflow--read-file-contents (filepath)
   "Read contents of FILEPATH as string.
@@ -2963,7 +2974,7 @@ NOTE: Nucleus script validation is skipped for experiments because:
 2. Executor already runs verification in worktree context
 3. Full validation happens in staging flow"
   (let* ((start (float-time))
-         (default-directory (gptel-auto-workflow--worktree-or-project-dir))
+         (default-directory (gptel-auto-experiment--scoring-dir))
          (target-file (when gptel-auto-workflow--current-target
                         (expand-file-name gptel-auto-workflow--current-target default-directory)))
          (validation-error (when target-file
@@ -3010,7 +3021,7 @@ NOTE: Nucleus script validation is skipped for experiments because:
   "Get full Eight Keys scores alist from current codebase.
 Scores based on commit message + code diff (not just stat)."
   (when (fboundp 'gptel-benchmark-eight-keys-score)
-    (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir))
+    (let* ((worktree (gptel-auto-experiment--scoring-dir))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
            (worktree-quoted (shell-quote-argument worktree))
            (commit-msg (shell-command-to-string
@@ -3030,7 +3041,7 @@ Scores based on commit message + code diff (not just stat)."
 (defun gptel-auto-experiment--code-quality-score ()
   "Get code quality score from current changes."
   (when (fboundp 'gptel-benchmark--code-quality-score)
-    (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir))
+    (let* ((worktree (gptel-auto-experiment--scoring-dir))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
            (worktree-quoted (shell-quote-argument worktree))
            (changed-files (shell-command-to-string
@@ -3045,9 +3056,27 @@ Scores based on commit message + code diff (not just stat)."
               (when content
                 (cl-incf total-score (gptel-benchmark--code-quality-score content))
                 (cl-incf file-count))))
-          (if (> file-count 0)
-              (/ total-score file-count)
-            0.5))))))
+           (if (> file-count 0)
+               (/ total-score file-count)
+             0.5))))))
+
+(defun gptel-auto-experiment--safe-code-quality-score ()
+  "Get code quality score, falling back to a neutral value on errors."
+  (condition-case err
+      (or (gptel-auto-experiment--code-quality-score) 0.5)
+    (error
+     (message "[auto-experiment] Code quality scoring failed unexpectedly: %s"
+              (my/gptel--sanitize-for-logging (error-message-string err) 200))
+     0.5)))
+
+(defun gptel-auto-experiment--baseline-metrics (target)
+  "Return baseline benchmark and code-quality metrics for TARGET.
+Always score against the checked-in project root, not an existing experiment worktree."
+  (let ((gptel-auto-experiment--scoring-root-override
+         (gptel-auto-workflow--project-root))
+        (gptel-auto-workflow--current-target target))
+    (list :benchmark (gptel-auto-experiment-benchmark t)
+          :code-quality (gptel-auto-experiment--safe-code-quality-score))))
 
 ;;; Subagent Integrations
 
@@ -3095,18 +3124,20 @@ Default 120s (2 min) allows grader to process complex outputs.")
 Returns nil if valid, or error message string if invalid."
   (when (and (stringp file) (file-exists-p file) (string-suffix-p ".el" file))
     (let ((content (gptel-auto-workflow--read-file-contents file)))
-      (condition-case err
-          (with-temp-buffer
-            (insert content)
-            (goto-char (point-min))
-            (while (progn
-                     (skip-chars-forward " \t\r\n")
-                     (< (point) (point-max)))
-              (read (current-buffer))))
-        (error (format "Syntax error in %s: %s" file err)))
-      (when (and (string-match-p "(cl-return-from\\_>" content)
-                 (not (string-match-p "(cl-block\\_>" content)))
-        (format "Dangerous pattern in %s: cl-return-from without cl-block" file)))))
+      (or (condition-case err
+              (with-temp-buffer
+                (insert content)
+                (set-syntax-table emacs-lisp-mode-syntax-table)
+                (goto-char (point-min))
+                (while (progn
+                         (forward-comment (point-max))
+                         (< (point) (point-max)))
+                  (read (current-buffer)))
+                nil)
+            (error (format "Syntax error in %s: %s" file err)))
+          (when (and (string-match-p "(cl-return-from\\_>" content)
+                     (not (string-match-p "(cl-block\\_>" content)))
+            (format "Dangerous pattern in %s: cl-return-from without cl-block" file))))))
 
 (defun gptel-auto-experiment-grade (output callback)
   "Grade experiment OUTPUT. LLM decides quality threshold.
@@ -3718,7 +3749,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                          (if passed
     (let
 	((code-quality
-	  (or (gptel-auto-experiment--code-quality-score) 0.5)))
+	  (gptel-auto-experiment--safe-code-quality-score)))
       (gptel-auto-experiment-decide
        (list :score baseline :code-quality baseline-code-quality)
        (list :score score-after :code-quality code-quality :output
@@ -3807,7 +3838,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                               (if (plist-get retry-bench :passed)
                                                   (let ((retry-score (plist-get retry-bench :eight-keys))
                                                         (retry-quality
-                                                         (or (gptel-auto-experiment--code-quality-score) 0.5)))
+                                                         (gptel-auto-experiment--safe-code-quality-score)))
                                                     (message "[auto-experiment] ✓ Retry succeeded")
                                                     (gptel-auto-experiment-decide
                                                      (list :score baseline
@@ -3955,8 +3986,9 @@ This skill teaches dangerous Elisp patterns including cl-return-from requirement
   "Run experiments for TARGET until stop condition. Call CALLBACK with results.
 Uses local state captured in closure for parallel execution safety.
 Adapts max-experiments based on API error rate."
-  (let* ((baseline (gptel-auto-experiment-benchmark t))
-         (baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5))
+  (let* ((baseline-metrics (gptel-auto-experiment--baseline-metrics target))
+         (baseline (plist-get baseline-metrics :benchmark))
+         (baseline-code-quality (plist-get baseline-metrics :code-quality))
          (original-max gptel-auto-experiment-max-per-target)
          (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
          (threshold gptel-auto-experiment-no-improvement-threshold)
@@ -3998,14 +4030,20 @@ Adapts max-experiments based on API error rate."
                                   no-improvement-count 0))
                           (when (and score-after (<= score-after best-score))
                             (cl-incf no-improvement-count)))
-                        (let ((continue
-                               (lambda ()
-                                 (gptel-auto-workflow--call-in-run-context
-                                  workflow-root
-                                  (lambda () (run-next (1+ exp-id)))
-                                  loop-buffer
-                                  workflow-root))))
-                          (if (> gptel-auto-experiment-delay-between 0)
+                        (let* ((next-exp-id (1+ exp-id))
+                               (terminal-step
+                                (or gptel-auto-experiment--quota-exhausted
+                                    (>= no-improvement-count threshold)
+                                    (>= exp-id max-exp)))
+                               (continue
+                                (lambda ()
+                                  (gptel-auto-workflow--call-in-run-context
+                                   workflow-root
+                                   (lambda () (run-next next-exp-id))
+                                   loop-buffer
+                                   workflow-root))))
+                          (if (and (> gptel-auto-experiment-delay-between 0)
+                                   (not terminal-step))
                               (run-with-timer gptel-auto-experiment-delay-between nil
                                               continue)
                             (funcall continue))))))))
@@ -4098,6 +4136,16 @@ Relative paths are resolved from the project root."
         (error
          (message "[auto-workflow] Failed to read status snapshot: %s" err)
          nil)))))
+
+(defun gptel-auto-workflow--kept-target-count (results)
+  "Return the number of distinct targets kept in RESULTS."
+  (length
+   (delete-dups
+    (delq nil
+          (mapcar (lambda (result)
+                    (when (plist-get result :kept)
+                      (plist-get result :target)))
+                  results)))))
 
 (defun gptel-auto-workflow--suppress-ask-user-about-supersession-threat (orig-fn &rest args)
   "Suppress supersession threat prompts in headless mode."
@@ -4629,7 +4677,7 @@ Only removes worktrees if no gptel processes are running."
          (proj-root (gptel-auto-workflow--default-dir))
          (run-buffer (current-buffer))
          (all-results '())
-         (kept-count 0)
+         (kept-target-count 0)
          (finish
           (gptel-auto-workflow--make-idempotent-callback
            (lambda ()
@@ -4640,13 +4688,13 @@ Only removes worktrees if no gptel processes are running."
                       gptel-auto-workflow--run-project-root nil
                       gptel-auto-workflow--current-target nil
                       gptel-auto-workflow--current-project nil)
-               (setq gptel-auto-workflow--stats
-                     (plist-put gptel-auto-workflow--stats :phase final-phase))
-               (gptel-auto-workflow--persist-status)
-               (message "[auto-workflow] Complete: %d experiments, %d kept"
-                        (length all-results) kept-count)
-               (when completion-callback
-                 (funcall completion-callback all-results)))))))
+                (setq gptel-auto-workflow--stats
+                      (plist-put gptel-auto-workflow--stats :phase final-phase))
+                (gptel-auto-workflow--persist-status)
+                (message "[auto-workflow] Complete: %d experiments, %d targets improved"
+                         (length all-results) kept-target-count)
+                (when completion-callback
+                  (funcall completion-callback all-results)))))))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root
           gptel-auto-workflow--run-project-root proj-root)
@@ -4670,10 +4718,10 @@ Only removes worktrees if no gptel processes are running."
                        (gptel-auto-workflow--make-idempotent-callback
                         (lambda (results)
                           (setq all-results (append all-results results))
-                          (setq kept-count
-                                (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
+                          (setq kept-target-count
+                                (gptel-auto-workflow--kept-target-count all-results))
                           (setq gptel-auto-workflow--stats
-                                (plist-put gptel-auto-workflow--stats :kept kept-count))
+                                (plist-put gptel-auto-workflow--stats :kept kept-target-count))
                            (gptel-auto-workflow--persist-status)
                            (if gptel-auto-experiment--quota-exhausted
                                (progn

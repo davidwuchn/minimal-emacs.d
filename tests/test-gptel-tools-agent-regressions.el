@@ -490,10 +490,41 @@ EXIT-CODE defaults to 1."
               (funcall scheduled-next))
             (let ((second (car invocation-contexts)))
               (should (equal (plist-get second :exp-id) 2))
-              (should (equal (plist-get second :default-directory) project-root))
-              (should (equal (plist-get second :current-project) project-root))
-              (should (equal (plist-get second :run-project-root) project-root)))))
+               (should (equal (plist-get second :default-directory) project-root))
+               (should (equal (plist-get second :current-project) project-root))
+               (should (equal (plist-get second :run-project-root) project-root)))))
       (delete-directory project-root t))))
+
+(ert-deftest regression/auto-experiment/terminal-step-skips-delay-timer ()
+  "Final target completion should not depend on the inter-experiment delay timer."
+  (let ((gptel-auto-experiment-delay-between 5)
+        (gptel-auto-experiment-max-per-target 1)
+        (gptel-auto-experiment-no-improvement-threshold 99)
+        (scheduled-next nil)
+        (results nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+               (lambda (&rest _) '(:eight-keys 0.4)))
+              ((symbol-function 'gptel-auto-experiment--code-quality-score)
+               (lambda () 0.5))
+              ((symbol-function 'run-with-timer)
+               (lambda (&rest _args)
+                 (setq scheduled-next t)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-auto-experiment--run-with-retry)
+               (lambda (_target exp-id _max-exp _baseline _baseline-code-quality _previous-results cb &optional _retry-count)
+                 (funcall cb (list :target "target"
+                                   :id exp-id
+                                   :score-after 0.4
+                                   :kept nil
+                                   :agent-output "no-op")))))
+      (gptel-auto-experiment-loop
+       "target"
+       (lambda (loop-results)
+         (setq results loop-results)))
+      (should (equal results '((:target "target" :id 1 :score-after 0.4 :kept nil :agent-output "no-op"))))
+      (should-not scheduled-next))))
 
 (ert-deftest regression/gptel-agent/truncate-buffer-prefixes-modeline-temp-artifacts ()
   "Temp read artifacts should not start with a raw Emacs modeline."
@@ -548,6 +579,40 @@ EXIT-CODE defaults to 1."
       (should (= runs 1))
        (should (= (length results) 1))
        (should gptel-auto-experiment--quota-exhausted))))
+
+(ert-deftest regression/auto-experiment/baseline-metrics-use-project-root-override ()
+  "Baseline scoring should ignore stale attached worktrees for the current target."
+  (let* ((project-root (make-temp-file "baseline-project-root" t))
+         (stale-worktree (make-temp-file "baseline-stale-worktree" t))
+         (benchmark-override nil)
+         (benchmark-target nil)
+         (code-quality-override nil)
+         (code-quality-target nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                   (lambda () project-root))
+                  ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                   (lambda (&optional _target) stale-worktree))
+                  ((symbol-function 'gptel-auto-experiment-benchmark)
+                   (lambda (&optional _skip-tests)
+                     (setq benchmark-override gptel-auto-experiment--scoring-root-override
+                           benchmark-target gptel-auto-workflow--current-target)
+                     '(:passed t :eight-keys 0.4)))
+                  ((symbol-function 'gptel-auto-experiment--safe-code-quality-score)
+                   (lambda ()
+                     (setq code-quality-override gptel-auto-experiment--scoring-root-override
+                           code-quality-target gptel-auto-workflow--current-target)
+                     0.7)))
+          (let ((metrics (gptel-auto-experiment--baseline-metrics
+                          "lisp/modules/gptel-ext-retry.el")))
+            (should (equal benchmark-override project-root))
+            (should (equal benchmark-target "lisp/modules/gptel-ext-retry.el"))
+            (should (equal code-quality-override project-root))
+            (should (equal code-quality-target "lisp/modules/gptel-ext-retry.el"))
+            (should (equal (plist-get (plist-get metrics :benchmark) :eight-keys) 0.4))
+            (should (= (plist-get metrics :code-quality) 0.7))))
+      (delete-directory project-root t)
+      (delete-directory stale-worktree t))))
 
 (ert-deftest regression/subagent/late-callback-after-timeout-is-ignored ()
   "Late subagent callback should not fire after timeout already completed the task."
@@ -802,7 +867,83 @@ EXIT-CODE defaults to 1."
           (should-not (plist-get result :kept))
           (should (string-match-p "^callback-error:" (plist-get result :comparator-reason)))
           (should (= log-count 1))
-          (should (member '("checkout" "--" ".") git-calls))))
+           (should (member '("checkout" "--" ".") git-calls))))
+      (delete-directory temp-dir t)))
+
+(ert-deftest regression/auto-experiment/retry-code-quality-errors-fall-back-neutral ()
+  "Retry path should tolerate code-quality scorer errors without hanging."
+  (let ((callback-count 0)
+        (decide-after nil)
+        (result nil)
+        (executor-call-count 0)
+        (benchmark-call-count 0)
+        (temp-dir (make-temp-file "exp-worktree" t)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (lambda (_target _experiment-id) temp-dir))
+                  ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                   (lambda (_target) temp-dir))
+                  ((symbol-function 'gptel-auto-workflow--project-root)
+                   (lambda () temp-dir))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results cb)
+                     (funcall cb '(:patterns nil))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _args) "prompt"))
+                  ((symbol-function 'run-with-timer)
+                   (lambda (&rest _args) :fake-timer))
+                  ((symbol-function 'cancel-timer)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'my/gptel--run-agent-tool)
+                   (lambda (cb &rest _args)
+                     (cl-incf executor-call-count)
+                     (funcall cb (if (= executor-call-count 1)
+                                     "initial executor output"
+                                   "retry executor output"))))
+                  ((symbol-function 'gptel-auto-experiment-grade)
+                   (lambda (_output cb)
+                     (funcall cb '(:score 8 :total 8 :passed t :details "grade passed"))))
+                  ((symbol-function 'gptel-auto-experiment-benchmark)
+                   (lambda (&rest _args)
+                     (cl-incf benchmark-call-count)
+                     (if (= benchmark-call-count 1)
+                         '(:passed nil
+                           :nucleus-passed t
+                           :tests-passed t
+                           :validation-error "Dangerous pattern in temp.el: cl-return-from without cl-block")
+                       '(:passed t
+                         :nucleus-passed t
+                         :tests-passed t
+                         :eight-keys 0.6))))
+                  ((symbol-function 'gptel-auto-experiment--code-quality-score)
+                   (lambda ()
+                     (signal 'scan-error '("Unbalanced parentheses" 22328 38030))))
+                  ((symbol-function 'gptel-auto-experiment-decide)
+                   (lambda (_before after cb)
+                     (setq decide-after after)
+                     (funcall cb '(:keep t :reasoning "Winner: retry"))))
+                  ((symbol-function 'gptel-auto-experiment-log-tsv)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-workflow--track-commit)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-workflow--assert-main-untouched)
+                   (lambda () t))
+                  ((symbol-function 'magit-git-success)
+                   (lambda (&rest _args) t))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (gptel-auto-experiment-run
+           "lisp/modules/gptel-ext-retry.el" 2 5 0.4 0.5 nil
+           (lambda (exp-result)
+             (cl-incf callback-count)
+             (setq result exp-result)))
+          (should (= callback-count 1))
+          (should result)
+          (should (plist-get result :kept))
+          (should decide-after)
+          (should (= executor-call-count 2))
+          (should (= benchmark-call-count 2))
+          (should (= (plist-get decide-after :code-quality) 0.5))))
       (delete-directory temp-dir t)))
 
 (ert-deftest regression/auto-experiment/decision-callback-is-idempotent ()
@@ -1038,9 +1179,44 @@ EXIT-CODE defaults to 1."
       (funcall (cdr (assoc "two" callbacks)) '((:target "two" :kept nil)))
       (should (equal completed '((:target "one" :kept t)
                                  (:target "two" :kept nil))))
-       (should (equal (plist-get gptel-auto-workflow--stats :phase) "complete"))
-       (should-not gptel-auto-workflow--running)
-       (should-not gptel-auto-workflow--current-target))))
+        (should (equal (plist-get gptel-auto-workflow--stats :phase) "complete"))
+        (should-not gptel-auto-workflow--running)
+        (should-not gptel-auto-workflow--current-target))))
+
+(ert-deftest regression/auto-workflow/run-with-targets-kept-counts-unique-targets ()
+  "Status should count improved targets instead of kept experiments."
+  (let ((gptel-auto-workflow--stats nil)
+        (gptel-auto-workflow--running t)
+        (gptel-auto-workflow--current-target nil)
+        (started '())
+        (callbacks '())
+        (completed nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-auto-experiment-loop)
+               (lambda (target cb)
+                 (push target started)
+                 (push (cons target cb) callbacks))))
+      (gptel-auto-workflow--run-with-targets
+       '("one" "two")
+       (lambda (results)
+         (setq completed results)))
+      (funcall (cdr (assoc "one" callbacks))
+               '((:target "one" :id 1 :kept t)
+                 (:target "one" :id 2 :kept t)))
+      (should (equal (nreverse started) '("one" "two")))
+      (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
+      (funcall (cdr (assoc "two" callbacks))
+               '((:target "two" :id 1 :kept nil)))
+      (should (equal completed '((:target "one" :id 1 :kept t)
+                                 (:target "one" :id 2 :kept t)
+                                 (:target "two" :id 1 :kept nil))))
+      (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
+      (should (equal (plist-get gptel-auto-workflow--stats :phase) "complete"))
+      (should-not gptel-auto-workflow--running)
+      (should-not gptel-auto-workflow--current-target))))
 
 (ert-deftest regression/auto-workflow/run-with-targets-stops-on-quota-exhaustion ()
   "Workflow should stop remaining targets once provider quota is exhausted."
@@ -1720,6 +1896,49 @@ EXIT-CODE defaults to 1."
             (insert "(message \"hi\")\n\n"))
           (should-not (gptel-auto-experiment--validate-code file)))
       (delete-file file))))
+
+(ert-deftest regression/auto-workflow/validate-code-ignores-trailing-comments ()
+  "Code validation should not treat trailing comments as EOF syntax errors."
+  (let ((file (make-temp-file "validate-code" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(message \"hi\")\n")
+            (insert ";;; valid trailing comment\n"))
+          (should-not (gptel-auto-experiment--validate-code file)))
+      (delete-file file))))
+
+(ert-deftest regression/auto-workflow/validate-code-reports-syntax-errors ()
+  "Code validation should surface malformed Elisp instead of ignoring it."
+  (let ((file (make-temp-file "validate-code" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun broken ()\n")
+            (insert "  (message \"oops\")\n"))
+          (should (string-match-p
+                   "Syntax error in"
+                   (gptel-auto-experiment--validate-code file))))
+      (delete-file file))))
+
+(ert-deftest regression/auto-experiment/benchmark-fails-on-syntax-invalid-elisp ()
+  "Benchmark should fail early when the target Elisp file is malformed."
+  (let* ((temp-dir (make-temp-file "benchmark-invalid-elisp" t))
+         (file (expand-file-name "bad.el" temp-dir)))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun broken ()\n")
+            (insert "  (message \"oops\")\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                     (lambda (&optional _target) temp-dir)))
+            (let* ((gptel-auto-workflow--current-target "bad.el")
+                   (benchmark (gptel-auto-experiment-benchmark t)))
+              (should-not (plist-get benchmark :passed))
+              (should (string-match-p
+                       "Syntax error in"
+                       (plist-get benchmark :validation-error))))))
+      (delete-directory temp-dir t))))
 
 (ert-deftest regression/auto-workflow/validate-code-ignores-cl-return-from-in-docs ()
   "Code validation should ignore cl-return-from mentions in comments and strings."
