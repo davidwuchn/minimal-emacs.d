@@ -399,9 +399,9 @@ LLM decides if available, otherwise uses static list."
                 (message "[auto-workflow] Analyzer quota exhausted; using static targets")
                 (funcall callback static-targets))
                (targets
-                 (progn
-                     (message "[auto-workflow] Analyzer selected %d targets" (length targets))
-                    (funcall callback targets)))
+                (progn
+                  (message "[auto-workflow] Analyzer selected %d targets" (length targets))
+                  (funcall callback targets)))
              (t
               (message "[auto-workflow] Using static targets")
               (funcall callback static-targets)))))
