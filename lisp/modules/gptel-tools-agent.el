@@ -2363,13 +2363,14 @@ Maximum response: 1000 characters."
            'reviewer
            "Review changes before merge"
            review-prompt
-           (lambda (result)
-             (let* ((response (if (stringp result) result (format "%S" result)))
-                    (approved (string-match-p "^APPROVED" response)))
-               (message "[auto-workflow] Review %s: %s"
-                        (if approved "PASSED" "BLOCKED")
-                        (my/gptel--sanitize-for-logging response 100))
-               (funcall callback (cons approved response)))))
+            (lambda (result)
+              (let* ((response (if (stringp result) result (format "%S" result)))
+                     (blocked (string-match-p "^BLOCKED:" response))
+                     (approved (not blocked)))
+                (message "[auto-workflow] Review %s: %s"
+                         (if approved "PASSED" "BLOCKED")
+                         (my/gptel--sanitize-for-logging response 100))
+                (funcall callback (cons approved response)))))
         (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
 
 (defun gptel-auto-workflow--fix-review-issues (optimize-branch review-output callback)
