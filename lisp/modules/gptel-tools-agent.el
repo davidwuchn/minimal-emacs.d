@@ -196,7 +196,7 @@ Returns nil if file doesn't exist or isn't readable."
       (cl-labels ((collect (parent)
                     (dolist (candidate (list-system-processes))
                       (let* ((attrs (ignore-errors (process-attributes candidate)))
-                             (ppid (cdr (assq 'ppid attrs))))
+                             (ppid (and attrs (cdr (assq 'ppid attrs)))))
                         (when (and (integerp ppid)
                                    (= ppid parent)
                                    (not (memq candidate descendants)))
@@ -3600,8 +3600,7 @@ RETRY-COUNT tracks current retry attempt."
                   (or gptel-auto-experiment--quota-exhausted
                       (gptel-auto-experiment--quota-exhausted-p agent-output)))
                  (retryable-category
-                  (or (memq error-type '(:api-rate-limit :timeout))
-                      (member error-type '(":api-rate-limit" ":timeout"))))
+                  (or (member error-type '("api-rate-limit" "timeout"))))
                  (retryable-failure
                   (or retryable-category
                       (and raw-error
