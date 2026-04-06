@@ -47,7 +47,7 @@ EXIT-CODE defaults to 1."
               "import json, sys\n"
               (format "with Path(%S).open('a', encoding='utf-8') as handle:\n" log-file)
               "    handle.write(json.dumps(sys.argv) + \"\\n\")\n"
-               (format "raise SystemExit(%d)\n" (or exit-code 1))))
+              (format "raise SystemExit(%d)\n" (or exit-code 1))))
     (set-file-modes file #o755)
     file))
 
@@ -111,6 +111,56 @@ EXIT-CODE defaults to 1."
     (should-not (plist-get result :passed))
     (should (equal (plist-get result :details) "timeout"))
     (should (zerop (plist-get outcome :remaining-state)))))
+
+(ert-deftest regression/auto-experiment/grade-success-callback-errors-still-clean-state ()
+  "Successful grade callbacks should always remove grade state."
+  (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment-use-subagents t)
+        grader-callback)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (&rest _args) :fake-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (&rest args)
+                 (setq grader-callback (nth 3 args))))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-grade
+         "HYPOTHESIS: grade cleanup probe"
+         (lambda (_result)
+           (error "grade callback boom"))))
+      (should (functionp grader-callback))
+      (should-error
+       (funcall grader-callback '(:score 9 :passed t :details "graded")))
+      (should (zerop (hash-table-count gptel-auto-experiment--grade-state))))))
+
+(ert-deftest regression/auto-experiment/grade-timeout-callback-errors-still-clean-state ()
+  "Timeout grade callbacks should always remove grade state."
+  (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment-use-subagents t)
+        timeout-callback)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (setq timeout-callback (lambda () (apply fn args)))
+                 :fake-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-grade
+         "HYPOTHESIS: timeout cleanup probe"
+         (lambda (_result)
+           (error "grade timeout callback boom"))))
+      (should (functionp timeout-callback))
+      (should-error (funcall timeout-callback))
+      (should (zerop (hash-table-count gptel-auto-experiment--grade-state))))))
 
 (ert-deftest regression/auto-experiment/api-errors-do-not-touch-loop-state ()
   "API failures should not try to mutate outer loop state from a callback."
