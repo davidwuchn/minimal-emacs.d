@@ -193,18 +193,21 @@ Returns list of (hash exp-id target) for truly orphaned commits."
                                  (format "git merge-base --is-ancestor %s staging 2>/dev/null && echo yes" hash)))
                     (in-main (gptel-auto-workflow--git-cmd
                               (format "git merge-base --is-ancestor %s main 2>/dev/null && echo yes" hash))))
-                (when (and (string-empty-p in-staging)
+(when (and (string-empty-p in-staging)
                            (string-empty-p in-main))
                   (push (list hash exp-id target) orphans))))))))
     (if orphans
-        (message "[auto-workflow] Found %d orphan(s): %s"
-                 (length orphans)
-                 (mapconcat (lambda (o) 
-                              (let ((hash (car o)))
-                                (if (>= (length hash) 7)
-                                    (substring hash 0 7)
-                                  hash))) 
-                            orphans " "))
+        (let* ((short-hashes (mapcar (lambda (o) 
+                                       (let ((h (car o)))
+                                         (if (>= (length h) 7) (substring h 0 7) h)))
+                                     orphans))
+               (display-hashes (if (> (length short-hashes) 5)
+                                   (append (seq-take short-hashes 5)
+                                           (list (format "...+%d" (- (length short-hashes) 5))))
+                                 short-hashes)))
+          (message "[auto-workflow] Found %d orphan(s): %s"
+                   (length orphans)
+                   (mapconcat #'identity display-hashes " ")))
       (message "[auto-workflow] No orphan commits found"))
     orphans))
 
