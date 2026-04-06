@@ -81,6 +81,14 @@ status_indicates_running() {
     [ -r "$STATUS_FILE" ] && grep -q ':running t' "$STATUS_FILE"
 }
 
+status_indicates_active_phase() {
+    [ -r "$STATUS_FILE" ] && grep -Eq ':phase "(running|queued)"' "$STATUS_FILE"
+}
+
+status_looks_active() {
+    status_indicates_running || status_indicates_active_phase
+}
+
 rewrite_status_idle() {
     if [ ! -s "$STATUS_FILE" ]; then
         default_status >"$STATUS_FILE"
@@ -144,9 +152,9 @@ check_worker_daemon() {
 
 daemon_reports_active_workflow() {
     local elisp="(let ((running (and (boundp 'gptel-auto-workflow--running)
-                                     gptel-auto-workflow--running))
+                                     (default-value 'gptel-auto-workflow--running)))
                        (queued (and (boundp 'gptel-auto-workflow--cron-job-running)
-                                    gptel-auto-workflow--cron-job-running)))
+                                    (default-value 'gptel-auto-workflow--cron-job-running))))
                    (if (or running queued) t nil))"
     local output
     if ! output="$(run_emacsclient_eval "$elisp" 2 2>/dev/null)"; then
@@ -164,7 +172,7 @@ daemon_reports_active_workflow() {
 }
 
 clear_stale_running_status() {
-    if ! status_indicates_running; then
+    if ! status_looks_active; then
         return 0
     fi
 
@@ -399,20 +407,39 @@ EVAL_ELISP="$(wrap_emacs_eval "$ELISP")"
 
 cd "$DIR"
 if [ "$ACTION" = "status" ]; then
+    if output="$(run_emacsclient_eval "$EVAL_ELISP" 5 2>/dev/null)" &&
+       printf '%s' "$output" | grep -q ':phase '; then
+        printf '%s\n' "$output"
+        exit 0
+    fi
     clear_stale_running_status
     print_status
     exit 0
 fi
 
 if [ "$ACTION" = "messages" ]; then
-    ensure_worker_daemon
+    if ! check_worker_daemon; then
+        rc=$?
+        if [ -r "$MESSAGES_FILE" ]; then
+            cat "$MESSAGES_FILE"
+            exit 0
+        fi
+        if [ "$rc" -eq 1 ]; then
+            ensure_worker_daemon
+        fi
+    fi
     if run_emacsclient_eval "$EVAL_ELISP" 10 >/dev/null; then
         if [ -r "$MESSAGES_FILE" ]; then
             cat "$MESSAGES_FILE"
         fi
         exit 0
     fi
-    exit $?
+    rc=$?
+    if [ -r "$MESSAGES_FILE" ]; then
+        cat "$MESSAGES_FILE"
+        exit 0
+    fi
+    exit $rc
 fi
 
 clear_stale_running_status
