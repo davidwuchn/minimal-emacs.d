@@ -679,7 +679,7 @@ Context parameters are included to prevent stale cache hits when the same
 prompt is used with different context (files, history, diff).
 Always includes all params to distinguish nil from \"false\"."
   (list agent-type
-        (md5 (concat prompt
+        (md5 (concat (or prompt "")
                      (format "-files:%S" (when files (sort (append files nil) #'string<)))
                      (format "-hist:%s" (or include-history "nil"))
                      (format "-diff:%s" (or include-diff "nil"))))))
