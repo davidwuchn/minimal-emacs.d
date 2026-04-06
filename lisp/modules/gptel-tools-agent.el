@@ -49,9 +49,8 @@ Helper for validation in callback-based functions."
 (defun gptel-auto-workflow--plist-get (plist key &optional default)
   "Get value from PLIST for KEY, returning DEFAULT if not found.
 Reduces duplication of `(or (plist-get ...) default-value)` patterns."
-  (if (plist-member plist key)
-      (plist-get plist key)
-    default))
+  (let ((value (plist-get plist key)))
+    (if (null value) default value)))
 
 (defun gptel-auto-workflow--state-active-p (state)
   "Return t if STATE is non-nil and not marked as done.
@@ -1186,8 +1185,7 @@ FILES are validated against project root for security.
 
 (defvar my/gptel--agent-task-state (make-hash-table :test 'eql)
   "Hash table for per-task state. Keyed by task-id.
-Values are plist: (:done :timeout-timer :progress-timer :origin-buf
-:request-buf :last-buffer-tick).")
+Values are plist: (:done :timeout-timer :progress-timer :origin-buf :request-buf).")
 
 (defvar my/gptel--agent-task-counter 0
   "Counter for generating unique task IDs.")
@@ -1207,12 +1205,6 @@ Dynamic variable, let-bound around gptel-agent--task calls.")
     (cond
      ((buffer-live-p request-buf) request-buf)
      ((buffer-live-p origin-buf) origin-buf))))
-
-(defun my/gptel--agent-task-buffer-tick (buffer)
-  "Return BUFFER's current modification tick when BUFFER is live."
-  (when (buffer-live-p buffer)
-    (with-current-buffer buffer
-      (buffer-chars-modified-tick))))
 
 (defun my/gptel--register-agent-task-buffer (buffer)
   "Record BUFFER as the active request buffer for the current subagent task."
@@ -1308,124 +1300,91 @@ Uses hash table keyed by task-id to support parallel execution."
                   (if parent-fsm-local-p
                       (setq-local gptel--fsm-last parent-fsm)
                     (kill-local-variable 'gptel--fsm-last)))))))
-         (wrapped-cb
-          (lambda (result)
-            (let* ((state (gethash task-id my/gptel--agent-task-state))
-                   (already-done (plist-get state :done)))
-              (if (not state)
-                  (message "[nucleus] Ignoring stale subagent %s callback after reset"
-                           agent-type)
-                ;; Atomic test-and-set: mark done before acting to prevent
-                ;; double-invocation if gptel-abort fires synchronously in timeout.
-                (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                (unless already-done
-                  (when (timerp (plist-get state :timeout-timer))
-                    (cancel-timer (plist-get state :timeout-timer)))
-                  (when (timerp (plist-get state :progress-timer))
-                    (cancel-timer (plist-get state :progress-timer)))
-                  (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
-                           agent-type (float-time (time-since start-time))
-                           (if (stringp result) (length result) 0))
-                  (funcall restore-origin-fsm child-fsm)
-                  (unwind-protect
-                      (funcall callback result)
-                    (remhash task-id my/gptel--agent-task-state))))))))
-    (let (rearm-timeout note-buffer-activity)
-      (setq rearm-timeout
-            (lambda (state)
-              (when task-timeout
-                (when (timerp (plist-get state :timeout-timer))
-                  (cancel-timer (plist-get state :timeout-timer)))
-                (setq state
-                      (plist-put
-                       state :timeout-timer
-                       (run-at-time
-                        task-timeout nil
+          (wrapped-cb
+           (lambda (result)
+              (let* ((state (gethash task-id my/gptel--agent-task-state))
+                     (already-done (plist-get state :done)))
+                (if (not state)
+                    (message "[nucleus] Ignoring stale subagent %s callback after reset"
+                             agent-type)
+                  ;; Atomic test-and-set: mark done before acting to prevent
+                  ;; double-invocation if gptel-abort fires synchronously in timeout.
+                  (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                   (unless already-done
+                     (when (timerp (plist-get state :timeout-timer))
+                       (cancel-timer (plist-get state :timeout-timer)))
+                     (when (timerp (plist-get state :progress-timer))
+                       (cancel-timer (plist-get state :progress-timer)))
+                     (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
+                              agent-type (float-time (time-since start-time))
+                              (if (stringp result) (length result) 0))
+                     (funcall restore-origin-fsm child-fsm)
+                     (unwind-protect
+                         (funcall callback result)
+                       (remhash task-id my/gptel--agent-task-state))))))))
+    (message "[nucleus] Delegating to subagent %s%s..."
+             agent-type
+             (if task-timeout
+                 (format " (timeout: %ds)" task-timeout)
+                ""))
+    (let ((progress-timer
+           (run-at-time my/gptel-subagent-progress-interval
+                        my/gptel-subagent-progress-interval
                         (lambda ()
-                          (let* ((state (gethash task-id my/gptel--agent-task-state))
-                                 (already-done (plist-get state :done)))
-                            (when state
-                              (puthash task-id (plist-put state :done t)
-                                       my/gptel--agent-task-state)
-                              (unless already-done
-                                (when (timerp (plist-get state :progress-timer))
-                                  (cancel-timer (plist-get state :progress-timer)))
-                                (message "[nucleus] Subagent %s timed out after %ds, aborting request"
-                                         agent-type task-timeout)
-                                (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
-                                            ((fboundp 'gptel-abort)))
-                                  (ignore-errors (gptel-abort request-buf)))
-                                (let ((timeout-result
-                                       (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                               description agent-type task-timeout)))
-                                  (funcall restore-origin-fsm child-fsm)
-                                  (if (buffer-live-p origin-buf)
-                                      (with-current-buffer origin-buf
-                                        (unwind-protect
-                                            (funcall callback timeout-result)
-                                          (remhash task-id my/gptel--agent-task-state)))
-                                    (unwind-protect
-                                        (funcall callback timeout-result)
-                                      (remhash task-id my/gptel--agent-task-state)))))))))))
-                (puthash task-id state my/gptel--agent-task-state))
-              state))
-      (setq note-buffer-activity
-            (lambda (state)
-              (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
-                          ((buffer-live-p request-buf)))
-                (let* ((current-tick (my/gptel--agent-task-buffer-tick request-buf))
-                       (last-tick (plist-get state :last-buffer-tick)))
-                  (when (and current-tick (not (equal current-tick last-tick)))
-                    (setq state (plist-put state :last-buffer-tick current-tick))
-                    (setq state (funcall rearm-timeout state)))))
-              state))
-      (message "[nucleus] Delegating to subagent %s%s..."
-               agent-type
-               (if task-timeout
-                   (format " (timeout: %ds)" task-timeout)
-                 ""))
-      (let ((progress-timer
-             (run-at-time my/gptel-subagent-progress-interval
-                          my/gptel-subagent-progress-interval
+                          (let ((state (gethash task-id my/gptel--agent-task-state)))
+                            (when (gptel-auto-workflow--state-active-p state)
+                              (message "[nucleus] Subagent %s still running... (%.1fs elapsed)"
+                                       agent-type (float-time (time-since start-time)))))))))
+      (puthash task-id (list :done nil
+                             :timeout-timer nil
+                             :progress-timer progress-timer
+                             :origin-buf origin-buf
+                             :request-buf nil)
+               my/gptel--agent-task-state))
+    (when task-timeout
+      (let ((timeout-timer
+             (run-at-time task-timeout nil
                           (lambda ()
-                            (let ((state (gethash task-id my/gptel--agent-task-state)))
-                              (when (gptel-auto-workflow--state-active-p state)
-                                (funcall note-buffer-activity state)
-                                (message "[nucleus] Subagent %s still running... (%.1fs elapsed)"
-                                         agent-type (float-time (time-since start-time)))))))))
-        (puthash task-id (list :done nil
-                               :timeout-timer nil
-                               :progress-timer progress-timer
-                               :origin-buf origin-buf
-                               :request-buf nil
-                               :last-buffer-tick nil)
-                 my/gptel--agent-task-state)
-        (when task-timeout
-          (let ((state (gethash task-id my/gptel--agent-task-state)))
-            (funcall rearm-timeout state)))
-        (let ((my/gptel--current-agent-task-id task-id)
-              (my/gptel--subagent-origin-buffer origin-buf))
-          (let ((request-started nil))
-            (unwind-protect
-                (progn
-                  (my/gptel--call-gptel-agent-task
-                   wrapped-cb agent-type description packaged-prompt)
-                  (setq request-started t)
-                  (when-let* ((state (gethash task-id my/gptel--agent-task-state))
-                              (request-buf (my/gptel--agent-task-request-buffer state))
-                              ((buffer-live-p request-buf)))
-                    (with-current-buffer request-buf
-                      (when (local-variable-p 'gptel--fsm-last)
-                        (setq child-fsm gptel--fsm-last)
-                        (my/gptel--disable-auto-retry-for-fsm child-fsm)))
-                    (let* ((state (gethash task-id my/gptel--agent-task-state))
-                           (tick (my/gptel--agent-task-buffer-tick request-buf)))
-                      (when (and state tick)
-                        (puthash task-id
-                                 (plist-put state :last-buffer-tick tick)
-                                 my/gptel--agent-task-state)))))
-              (unless request-started
-                (funcall restore-origin-fsm)))))))))
+                             (when (buffer-live-p origin-buf)
+                               (with-current-buffer origin-buf
+                              (let* ((state (gethash task-id my/gptel--agent-task-state))
+                                     (already-done (plist-get state :done)))
+                                    (when state
+                                      ;; Atomic test-and-set: same guard as wrapped-cb.
+                                      (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                                      (unless already-done
+                                         (when (timerp (plist-get state :progress-timer))
+                                           (cancel-timer (plist-get state :progress-timer)))
+                                       (message "[nucleus] Subagent %s timed out after %ds, aborting request"
+                                                agent-type task-timeout)
+                                       (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
+                                                   ((fboundp 'gptel-abort)))
+                                         (ignore-errors (gptel-abort request-buf)))
+                                       (funcall restore-origin-fsm child-fsm)
+                                       (unwind-protect
+                                           (funcall callback
+                                                    (format "Error: Task \"%s\" (%s) timed out after %ds."
+                                                            description agent-type task-timeout))
+                                         (remhash task-id my/gptel--agent-task-state)))))))))))
+        (let ((state (gethash task-id my/gptel--agent-task-state)))
+          (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
+    (let ((my/gptel--current-agent-task-id task-id)
+          (my/gptel--subagent-origin-buffer origin-buf))
+      (let ((request-started nil))
+        (unwind-protect
+            (progn
+              (my/gptel--call-gptel-agent-task
+               wrapped-cb agent-type description packaged-prompt)
+                (setq request-started t)
+                (when-let* ((state (gethash task-id my/gptel--agent-task-state))
+                            (request-buf (my/gptel--agent-task-request-buffer state))
+                            ((buffer-live-p request-buf)))
+                  (with-current-buffer request-buf
+                    (when (local-variable-p 'gptel--fsm-last)
+                      (setq child-fsm gptel--fsm-last)
+                      (my/gptel--disable-auto-retry-for-fsm child-fsm)))))
+           (unless request-started
+             (funcall restore-origin-fsm)))))))
 
 (cl-defun my/gptel--run-agent-tool (callback &optional agent-name description prompt files include-history include-diff)
   "Run a gptel-agent agent by name.
@@ -3683,11 +3642,12 @@ BASELINE-CODE-QUALITY is the initial code quality score."
          (gptel-confirm-tool-calls nil)
           ;; Capture the experiment timeout lexically because later analyzer
           ;; callbacks run after this outer let frame exits.
-           (experiment-timeout gptel-auto-experiment-time-budget)
-           ;; CRITICAL: Use experiment time budget as agent task timeout
-            ;; This ensures the gptel request times out before the outer timer
+          (experiment-timeout gptel-auto-experiment-time-budget)
+          ;; CRITICAL: Use experiment time budget as agent task timeout
+           ;; This ensures the gptel request times out before the outer timer
            (my/gptel-agent-task-timeout experiment-timeout)
            (start-time (float-time))
+           (timeout-timer nil)
            (finished nil)
            (executor-prompt nil))
     (if (not worktree)
@@ -3700,16 +3660,31 @@ BASELINE-CODE-QUALITY is the initial code quality score."
              (let* ((patterns (when analysis (plist-get analysis :patterns)))
                     (prompt (gptel-auto-experiment-build-prompt
                              target experiment-id max-experiments analysis baseline)))
-                (setq executor-prompt prompt)
-                 ;; Routing handled by gptel-auto-workflow--advice-task-override
-                 (my/gptel--run-agent-tool-with-timeout
-                  experiment-timeout
-                  (lambda (agent-output)
-                   (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
-                     (message "[auto-exp] Agent output (first 150 chars): %s"
-                              (my/gptel--sanitize-for-logging agent-output 150))
-                     (unless finished
-                       (gptel-auto-experiment-grade
+               (setq executor-prompt prompt)
+                (setq timeout-timer
+                      (run-with-timer experiment-timeout nil
+                                      (lambda ()
+                                        (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
+                                          (unless finished
+                                            (setq finished t)
+                                            (message "[auto-exp] Experiment timed out after %ds, aborting"
+                                                     experiment-timeout)
+                                            (when (fboundp 'gptel-abort)
+                                              (ignore-errors (gptel-abort (current-buffer))))
+                                            (funcall callback
+                                                     (list :target target
+                                                           :id experiment-id
+                                                           :error "timeout")))))))
+                ;; Routing handled by gptel-auto-workflow--advice-task-override
+                (my/gptel--run-agent-tool-with-timeout
+                 experiment-timeout
+                 (lambda (agent-output)
+                  (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
+                    (message "[auto-exp] Agent output (first 150 chars): %s"
+                             (my/gptel--sanitize-for-logging agent-output 150))
+                    (when timeout-timer (cancel-timer timeout-timer))
+                    (unless finished
+                      (gptel-auto-experiment-grade
                        agent-output
                        (lambda (grade)
                          (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
@@ -3839,8 +3814,12 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 		 (gptel-auto-experiment-log-tsv
 		  (format-time-string "%Y-%m-%d") exp-result)
 		 (funcall callback exp-result))))))))
-                          (if (and (gptel-auto-experiment--teachable-validation-error-p
-                                    target validation-error)
+                          (if (and validation-error
+                                   (stringp validation-error)
+                                   (> (length validation-error) 0)
+                                   (string-match-p
+                                    "cl-return-from.*without.*cl-block\\|Dangerous pattern"
+                                    validation-error)
                                    (not (bound-and-true-p gptel-auto-experiment--in-retry)))
                               (let ((default-directory experiment-worktree)
                                     (gptel-auto-experiment--in-retry t))
@@ -3977,20 +3956,6 @@ Tries multiple patterns in order:
   "Maximum retries when validation fails due to teachable patterns.
 Executor will be instructed to load relevant skill and regenerate.")
 
-(defun gptel-auto-experiment--teachable-validation-error-p (target validation-error)
-  "Return non-nil when VALIDATION-ERROR should trigger an immediate retry.
-TARGET is the file currently being optimized."
-  (and (stringp validation-error)
-       (> (length validation-error) 0)
-       (not
-        (null
-         (or (string-match-p
-              "cl-return-from.*without.*cl-block\\|Dangerous pattern"
-              validation-error)
-             (and (stringp target)
-                  (string-suffix-p ".el" target)
-                  (string-match-p "\\`Syntax error in " validation-error)))))))
-
 (defun gptel-auto-experiment--make-retry-prompt (target validation-error _original-prompt)
   "Create retry prompt after validation failure.
 TARGET is the file being edited.
@@ -4005,20 +3970,15 @@ IMPORTANT: Before retrying, load the relevant skill for guidance.
 %s
 
 Read the file, understand the error, load the skill if available, and generate corrected code."
-           target
-           validation-error
-           (cond
-            ;; Elisp syntax and dangerous patterns - tell executor to load skill
-            ((and (stringp target)
-                  (string-suffix-p ".el" target)
-                  (or (string-match-p
-                       "cl-return-from.*without.*cl-block\\|Dangerous pattern"
-                       validation-error)
-                      (string-match-p "\\`Syntax error in " validation-error)))
-             "CALL THIS FIRST: Skill(\"elisp-expert\")
-This skill teaches syntax-safe Elisp edits and dangerous patterns including cl-return-from requirements.")
-            ;; Add more skill mappings here as needed
-            (t ""))))
+          target
+          validation-error
+          (cond
+           ;; Elisp dangerous patterns - tell executor to load skill
+           ((string-match-p "cl-return-from.*without.*cl-block\\|Dangerous pattern.*\\.el$" validation-error)
+            "CALL THIS FIRST: Skill(\"elisp-expert\")
+This skill teaches dangerous Elisp patterns including cl-return-from requirements.")
+           ;; Add more skill mappings here as needed
+           (t ""))))
 
 ;;; Experiment Loop
 
@@ -4176,23 +4136,6 @@ Relative paths are resolved from the project root."
         (error
          (message "[auto-workflow] Failed to read status snapshot: %s" err)
          nil)))))
-
-(defun gptel-auto-workflow--status-active-p (status)
-  "Return non-nil when STATUS represents active workflow work."
-  (let ((phase (gptel-auto-workflow--plist-get status :phase "idle")))
-    (or (plist-get status :running)
-        (and (stringp phase)
-             (or (member phase '("auto-workflow" "research" "mementum"
-                                 "instincts" "selecting" "running"))
-                 (string-suffix-p "-queued" phase))))))
-
-(defun gptel-auto-workflow--status-placeholder-p (status)
-  "Return non-nil when STATUS is just the empty idle placeholder."
-  (and status
-       (not (plist-get status :running))
-       (= (gptel-auto-workflow--plist-get status :kept 0) 0)
-       (= (gptel-auto-workflow--plist-get status :total 0) 0)
-       (equal (gptel-auto-workflow--plist-get status :phase "idle") "idle")))
 
 (defun gptel-auto-workflow--kept-target-count (results)
   "Return the number of distinct targets kept in RESULTS."
@@ -4473,19 +4416,12 @@ Returns (nil . nil) if safe to run."
 (defun gptel-auto-workflow-status ()
   "Return current workflow status as plist.
 Returns (:running :kept :total :phase :results)."
-  (let* ((live
-          (and (or gptel-auto-workflow--running
-                   (bound-and-true-p gptel-auto-workflow--cron-job-running)
-                   gptel-auto-workflow--stats)
-               (gptel-auto-workflow--status-plist)))
-         (persisted (gptel-auto-workflow-read-persisted-status)))
-    (cond
-     ((gptel-auto-workflow--status-active-p live) live)
-     ((gptel-auto-workflow--status-active-p persisted) persisted)
-     ((gptel-auto-workflow--status-placeholder-p live) (or persisted live))
-     (live live)
-     (persisted persisted)
-     (t (gptel-auto-workflow--status-plist)))))
+  (or (and (or gptel-auto-workflow--running
+               (bound-and-true-p gptel-auto-workflow--cron-job-running)
+               gptel-auto-workflow--stats)
+           (gptel-auto-workflow--status-plist))
+      (gptel-auto-workflow-read-persisted-status)
+      (gptel-auto-workflow--status-plist)))
 
 
 (defun gptel-auto-workflow--sanitize-unicode (str)
