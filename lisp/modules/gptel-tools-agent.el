@@ -2988,13 +2988,19 @@ Increase if git operations frequently timeout."
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defun gptel-auto-workflow--git-normalize (cmd)
+  "Normalize git command CMD by adding --no-pager.
+If CMD starts with 'git ', strips it and adds 'git --no-pager' prefix.
+Otherwise returns CMD unchanged."
+  (if (string-match-p "^git " cmd)
+      (concat "git --no-pager " (substring cmd 4))
+    cmd))
+
 (defun gptel-auto-workflow--git-cmd (cmd &optional timeout)
   "Run git command CMD with TIMEOUT (default: gptel-auto-workflow-git-timeout).
 Returns command output as string.
 Automatically adds --no-pager to prevent blocking on pager output."
-  (let ((git-cmd (if (string-match-p "^git " cmd)
-                     (concat "git --no-pager " (substring cmd 4))
-                   cmd)))
+  (let ((git-cmd (gptel-auto-workflow--git-normalize cmd)))
     (gptel-auto-workflow--shell-command-string git-cmd (or timeout gptel-auto-workflow-git-timeout))))
 
 (defun gptel-auto-workflow--watchdog-check ()
