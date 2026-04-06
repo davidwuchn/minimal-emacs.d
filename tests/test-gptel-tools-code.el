@@ -590,6 +590,49 @@ FILE-PATH determines the language."
     (should (stringp lang))
     (should (> (length lang) 0))))
 
+(ert-deftest test-gptel-code-validate-replace-args-reports-correct-helper ()
+  "Validation errors should name the helper that raised them."
+  (dolist (case '(("file_path is nil" nil "node" "code")
+                  ("node_name is nil" "/tmp/file.el" nil "code")
+                  ("new_code is nil" "/tmp/file.el" "node" nil)
+                  ("new_code is empty" "/tmp/file.el" "node" "")))
+    (pcase-let ((`(,suffix ,file-path ,node-name ,new-code) case))
+      (let ((msg (condition-case err
+                     (progn
+                       (gptel-tools-code--validate-replace-args
+                        file-path node-name new-code)
+                       nil)
+                   (error (error-message-string err)))))
+        (should (stringp msg))
+        (should (string-prefix-p
+                 "gptel-tools-code--validate-replace-args"
+                 msg))
+        (should (string-match-p (regexp-quote suffix) msg))))))
+
+(ert-deftest test-gptel-code-format-diagnostic-handles-stale-buffer ()
+  "Formatting a stale Flymake diagnostic should not crash."
+  (let ((buf (generate-new-buffer " *stale-diagnostic*")))
+    (unwind-protect
+        (progn
+          (kill-buffer buf)
+          (cl-letf (((symbol-function 'flymake-diagnostic-buffer)
+                     (lambda (_diag) buf))
+                    ((symbol-function 'flymake-diagnostic-text)
+                     (lambda (_diag) "Boom"))
+                    ((symbol-function 'flymake-diagnostic-type)
+                     (lambda (_diag) :error))
+                    ((symbol-function 'flymake-diagnostic-beg)
+                     (lambda (_diag) 42)))
+            (let ((result (gptel-tools-code--format-diagnostic :diag)))
+              (should (string-match-p
+                       "^<buffer unavailable>:\\? \\[:error\\] Boom"
+                       result))
+              (should (string-match-p
+                       "stale diagnostic buffer unavailable"
+                       result)))))
+      (when (buffer-live-p buf)
+        (kill-buffer buf)))))
+
 (provide 'test-gptel-tools-code)
 
 ;;; test-gptel-tools-code.el ends here

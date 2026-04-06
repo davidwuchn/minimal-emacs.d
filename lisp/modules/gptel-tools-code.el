@@ -466,13 +466,13 @@ FILE-PATH, NODE-NAME, and NEW-CODE must all be non-nil strings.
 NEW-CODE must also be non-empty."
   (cond
    ((not file-path)
-    (error "gptel-tools-code--replace-node: file_path is nil"))
+    (error "gptel-tools-code--validate-replace-args: file_path is nil"))
    ((not node-name)
-    (error "gptel-tools-code--replace-node: node_name is nil"))
+    (error "gptel-tools-code--validate-replace-args: node_name is nil"))
    ((not new-code)
-    (error "gptel-tools-code--replace-node: new_code is nil"))
+    (error "gptel-tools-code--validate-replace-args: new_code is nil"))
    ((string-empty-p new-code)
-    (error "gptel-tools-code--replace-node: new_code is empty"))))
+    (error "gptel-tools-code--validate-replace-args: new_code is empty"))))
 
 (defun gptel-tools-code--map-file (file_path)
   "Get a high-level outline of all functions and classes in FILE_PATH.
@@ -574,18 +574,23 @@ Syncs buffer with disk, validates parser, guards against truncation."
         (text (flymake-diagnostic-text d))
         (type (flymake-diagnostic-type d))
         (beg (flymake-diagnostic-beg d)))
-    (with-current-buffer buf
-      (save-excursion
-        (goto-char beg)
-        (let ((line-text
-               (string-trim
-                (buffer-substring-no-properties
-                 (line-beginning-position)
-                 (line-end-position)))))
-          (format "%s:%d [%s] %s\n  %s"
-                  (buffer-file-name buf)
-                  (line-number-at-pos)
-                  type text line-text))))))
+    (if (not (buffer-live-p buf))
+        (format "<buffer unavailable>:? [%s] %s\n  [stale diagnostic buffer unavailable]"
+                type text)
+      (with-current-buffer buf
+        (save-excursion
+          (goto-char (min (max beg (point-min)) (point-max)))
+          (let ((line-text
+                 (string-trim
+                  (buffer-substring-no-properties
+                   (line-beginning-position)
+                   (line-end-position)))))
+            (format "%s:%d [%s] %s\n  %s"
+                    (or (buffer-file-name buf)
+                        (buffer-name buf)
+                        "<buffer>")
+                    (line-number-at-pos)
+                    type text line-text)))))))
 
 (defun gptel-tools-code--diagnostics (&optional all file-path)
   "Collect diagnostics via LSP/Flymake or CLI linters.
