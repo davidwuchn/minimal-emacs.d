@@ -99,8 +99,13 @@ project instead of the current buffer's `default-directory'."
   "Get or create a gptel-agent buffer for WORKTREE-DIR.
 Each worktree gets its own isolated buffer for subagent overlays."
   (unless worktree-dir (error "WORKTREE-DIR cannot be nil"))
+<<<<<<< HEAD
   (gptel-auto-workflow--ensure-buffer-tables)
   (let* ((root (gptel-auto-workflow--normalize-worktree-dir worktree-dir))
+=======
+  (let* ((root (file-name-as-directory (expand-file-name worktree-dir)))
+          ;; Use worktree path to create unique buffer name
+>>>>>>> 54a7fbe2 (fix: harden live workflow runtime paths)
           (worktree-name (file-name-nondirectory (directory-file-name root)))
           (buf-name (format "*gptel-agent:%s@%s*"
                             worktree-name
@@ -413,6 +418,7 @@ Also handles caching and result truncation from old advice."
       ;; Not cached - determine routing
       (let* ((in-auto-workflow gptel-auto-workflow--current-project)
              (proj-context (gptel-auto-workflow--get-project-for-context))
+<<<<<<< HEAD
              (project-root
               (file-name-as-directory
                (expand-file-name
@@ -420,6 +426,13 @@ Also handles caching and result truncation from old advice."
                     (if (bound-and-true-p minimal-emacs-user-directory)
                         minimal-emacs-user-directory
                       "~/.emacs.d")))))
+=======
+             (project-root (or (car proj-context)
+                              (expand-file-name
+                               (if (bound-and-true-p minimal-emacs-user-directory)
+                                   minimal-emacs-user-directory
+                                 "~/.emacs.d"))))
+>>>>>>> 54a7fbe2 (fix: harden live workflow runtime paths)
              (worktree-base-expanded
                (expand-file-name (or gptel-auto-workflow-worktree-base
                                      "var/tmp/experiments")
