@@ -3366,31 +3366,58 @@ The grader subagent overlay will appear in the current buffer at time of call."
                (fboundp 'gptel-benchmark-grade))
           ;; Ensure grader runs in the captured buffer context so overlay appears in right place
           (with-current-buffer grade-buffer
-            (gptel-benchmark-grade
-             output
-             '("change clearly described"
-               "change is minimal and focused"
-               "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
-               "verification attempted (byte-compile, nucleus, tests, or manual)")
-             '("large refactor unrelated to stated improvement"
-               "changed security files without review"
-               "no description or unclear purpose"
-               "style-only change without functional impact"
-               "replaces working code without clear improvement")
-             (lambda (result)
-               (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
-                 (when (gptel-auto-workflow--state-active-p state)
-                   (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
-                   (when (timerp (plist-get state :timer))
-                     (cancel-timer (plist-get state :timer)))
-                   (funcall callback result)
-                   (remhash grade-id gptel-auto-experiment--grade-state))))))
+            (let ((gptel-benchmark-subagent-timeout gptel-auto-experiment-grade-timeout))
+              (gptel-benchmark-grade
+               output
+               '("change clearly described"
+                 "change is minimal and focused"
+                 "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
+                 "verification attempted (byte-compile, nucleus, tests, or manual)")
+               '("large refactor unrelated to stated improvement"
+                 "changed security files without review"
+                 "no description or unclear purpose"
+                 "style-only change without functional impact"
+                 "replaces working code without clear improvement")
+               (lambda (result)
+                 (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
+                   (when (gptel-auto-workflow--state-active-p state)
+                     (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
+                     (when (timerp (plist-get state :timer))
+                       (cancel-timer (plist-get state :timer)))
+                     (funcall callback result)
+                     (remhash grade-id gptel-auto-experiment--grade-state)))))))
         (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
           (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
           (when (timerp (plist-get state :timer))
             (cancel-timer (plist-get state :timer)))
           (funcall callback (list :score 100 :passed t))
           (remhash grade-id gptel-auto-experiment--grade-state))))))
+
+(defcustom gptel-auto-experiment-min-quality-gain-on-score-tie 0.10
+  "Minimum code-quality gain required to keep a tied Eight Keys score."
+  :type 'number
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-experiment--decision-gate (score-before score-after quality-before quality-after combined-before combined-after)
+  "Return policy gate plist for comparing BEFORE and AFTER metrics."
+  (let ((score-delta (- score-after score-before))
+        (quality-delta (- quality-after quality-before)))
+    (cond
+     ((< score-delta -1e-6)
+      (list :keep nil
+            :reason "Rejected: score regressed"))
+     ((< (abs score-delta) 1e-6)
+      (let ((keep (and (>= quality-delta gptel-auto-experiment-min-quality-gain-on-score-tie)
+                       (> combined-after combined-before))))
+        (list :keep keep
+              :reason (unless keep
+                        (format "Rejected: tied score needs >= %.2f quality gain"
+                                gptel-auto-experiment-min-quality-gain-on-score-tie)))))
+     (t
+      (let ((keep (> combined-after combined-before)))
+        (list :keep keep
+              :reason (unless keep
+                        "Rejected: combined score did not improve")))))))
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
@@ -3404,7 +3431,11 @@ The comparator subagent overlay will appear in the current buffer at time of cal
          (quality-before (gptel-auto-workflow--plist-get before :code-quality 0.5))
          (quality-after (gptel-auto-workflow--plist-get after :code-quality 0.5))
          (combined-before (+ (* 0.6 score-before) (* 0.4 quality-before)))
-         (combined-after (+ (* 0.6 score-after) (* 0.4 quality-after))))
+         (combined-after (+ (* 0.6 score-after) (* 0.4 quality-after)))
+         (gate (gptel-auto-experiment--decision-gate
+                score-before score-after
+                quality-before quality-after
+                combined-before combined-after)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (let ((compare-prompt (format "Compare these two experiment results and decide which is better.
@@ -3421,47 +3452,58 @@ RESULT B (after):
 
 DECISION CRITERIA:
 - Combined score = 60%% Eight Keys + 40%% Code Quality
-- B should win if combined score improved by ≥0.005
-- A should win if combined score decreased by ≥0.005
-- Tie if difference < 0.005
+- Never choose B if the Eight Keys score regressed
+- On tied Eight Keys scores, only choose B if code quality improved by at least %.2f and combined score improved
+- If Eight Keys improved, B should win only when the combined score also improved
+- Otherwise choose A
 
 Output ONLY a single line: \"A\" or \"B\" or \"tie\"
 
 Then on a new line, briefly explain why (1 sentence)."
-                                      score-before quality-before combined-before
-                                      score-after quality-after combined-after)))
+                                       score-before quality-before combined-before
+                                       score-after quality-after combined-after
+                                       gptel-auto-experiment-min-quality-gain-on-score-tie)))
           (with-current-buffer decide-buffer
             (gptel-benchmark-call-subagent
              'comparator
              "Compare experiment results"
              compare-prompt
              (lambda (result)
-               (let* ((response (if (stringp result) result (format "%S" result)))
-                      (winner (cond
-                               ((string-match "^\\s-*A\\b" response) "A")
-                               ((string-match "^\\s-*B\\b" response) "B")
-                               ((string-match "^\\s-*tie\\b" response) "tie")
-                               (t "B")))
-                      (keep (string= winner "B")))
-                 (funcall callback
-                          (list :keep keep
-                                :reasoning (format "Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                                   winner score-before score-after
-                                                   quality-before quality-after
-                                                   combined-before combined-after)
-                                :improvement (list :score (- score-after score-before)
-                                                   :quality (- quality-after quality-before)
-                                                   :combined (- combined-after combined-before)))))))))
-      (let ((keep (> combined-after combined-before)))
+                (let* ((response (if (stringp result) result (format "%S" result)))
+                       (winner (cond
+                                ((string-match "^\\s-*A\\b" response) "A")
+                                ((string-match "^\\s-*B\\b" response) "B")
+                                ((string-match "^\\s-*tie\\b" response) "tie")
+                                (t "B")))
+                       (keep (and (string= winner "B")
+                                  (plist-get gate :keep)))
+                       (gate-reason (plist-get gate :reason)))
+                  (funcall callback
+                           (list :keep keep
+                                 :reasoning (format "Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
+                                                    winner score-before score-after
+                                                    quality-before quality-after
+                                                    combined-before combined-after
+                                                    (if gate-reason
+                                                        (format " | %s" gate-reason)
+                                                      ""))
+                                 :improvement (list :score (- score-after score-before)
+                                                    :quality (- quality-after quality-before)
+                                                    :combined (- combined-after combined-before)))))))))
+      (let ((keep (plist-get gate :keep))
+            (gate-reason (plist-get gate :reason)))
         (funcall callback
                  (list :keep keep
-                       :reasoning (format "Local: Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                          score-before score-after
-                                          quality-before quality-after
-                                          combined-before combined-after)
-                       :improvement (list :score (- score-after score-before)
-                                          :quality (- quality-after quality-before)
-                                          :combined (- combined-after combined-before))))))))
+                        :reasoning (format "Local: Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
+                                           score-before score-after
+                                           quality-before quality-after
+                                           combined-before combined-after
+                                           (if gate-reason
+                                               (format " | %s" gate-reason)
+                                             ""))
+                        :improvement (list :score (- score-after score-before)
+                                           :quality (- quality-after quality-before)
+                                           :combined (- combined-after combined-before))))))))
 
 ;;; Prompt Building
 

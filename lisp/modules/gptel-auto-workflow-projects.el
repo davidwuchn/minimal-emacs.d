@@ -460,9 +460,12 @@ Also handles caching and result truncation from old advice."
                            (orig-gptel-fsm-info (symbol-function 'gptel-fsm-info))
                            (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
                                      (list :buffer target-buf :position target-marker)))
-                           (modified-info (list :buffer target-buf
-                                                 :position target-marker
-                                                 :tracking-marker target-marker))
+                           (modified-info (let ((updated-info (copy-sequence info)))
+                                            (setq updated-info
+                                                  (plist-put updated-info :buffer target-buf))
+                                            (setq updated-info
+                                                  (plist-put updated-info :position target-marker))
+                                            (plist-put updated-info :tracking-marker target-marker)))
                            ;; Wrap callback to cache results
                             (wrapped-cb (lambda (result)
                                           (when (and (stringp result)

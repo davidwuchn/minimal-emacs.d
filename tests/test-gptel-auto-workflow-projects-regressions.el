@@ -2,6 +2,8 @@
 
 ;;; Code:
 
+(setq load-prefer-newer t)
+
 (require 'ert)
 (require 'cl-lib)
 
@@ -113,6 +115,67 @@
         (kill-buffer "*aw-project-root*"))
       (when (get-buffer "*aw-worktree*")
         (kill-buffer "*aw-worktree*")))))
+
+
+(ert-deftest regression/auto-workflow-projects/task-routing-preserves-parent-fsm-metadata ()
+  "Per-project routing should keep parent FSM metadata while retargeting buffer markers."
+  (let* ((project-root (make-temp-file "aw-project" t))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/foo-exp1" project-root))
+         (gptel-auto-workflow--current-project project-root)
+         (gptel-auto-workflow--current-target "lisp/modules/foo.el")
+         (observed-parent-info nil)
+         (parent-info (list :buffer :parent-buffer
+                            :position :parent-pos
+                            :tools '("Read" "Bash" "Edit")
+                            :preset 'nucleus-gptel-agent))
+         parent-fsm
+         target-buf)
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (setq parent-fsm (gptel-make-fsm :info parent-info))
+          (setq target-buf (get-buffer-create "*aw-worktree*"))
+          (with-current-buffer target-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir))
+            (setq-local gptel--fsm-last parent-fsm))
+          (cl-letf (((symbol-function 'my/gptel--subagent-cache-get) (lambda (&rest _) nil))
+                    ((symbol-function 'my/gptel-agent--task-override)
+                     (lambda (_main-cb _agent-type _description _prompt)
+                       (setq observed-parent-info
+                             (funcall (symbol-function 'gptel-fsm-info) parent-fsm))))
+                    ((symbol-function 'gptel-auto-workflow--get-project-for-context)
+                     (lambda ()
+                       (cons project-root (get-buffer-create "*aw-project-root*"))))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                     (lambda (_target) worktree-dir))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                     (lambda (_dir) target-buf))
+                    ((symbol-function 'gptel-fsm-info)
+                     (lambda (&optional fsm)
+                       (when (eq fsm parent-fsm)
+                         parent-info))))
+            (with-current-buffer target-buf
+              (gptel-auto-workflow--advice-task-override
+               (lambda (&rest _args)
+                 (error "orig task runner should not be used when safe override is available"))
+               (lambda (_result) nil)
+               "executor"
+               "desc"
+               "prompt"))
+            (should (equal (plist-get observed-parent-info :tools)
+                           '("Read" "Bash" "Edit")))
+            (should (eq (plist-get observed-parent-info :preset)
+                        'nucleus-gptel-agent))
+            (should (eq (plist-get observed-parent-info :buffer) target-buf))
+            (should (eq (marker-buffer (plist-get observed-parent-info :position))
+                        target-buf))
+            (should (eq (marker-buffer (plist-get observed-parent-info :tracking-marker))
+                        target-buf))))
+      (delete-directory project-root t)
+      (when (get-buffer "*aw-project-root*")
+        (kill-buffer "*aw-project-root*"))
+      (when (buffer-live-p target-buf)
+        (kill-buffer target-buf)))))
 
 
 (ert-deftest regression/auto-workflow-projects/task-routing-nil-fsm-info-follows-child-fsm ()

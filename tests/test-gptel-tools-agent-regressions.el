@@ -855,10 +855,58 @@ EXIT-CODE defaults to 1."
        "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
        (lambda (result)
          (setq final-result result)))
-      (should (= runs 1))
-      (should-not scheduled-retry)
-      (should gptel-auto-experiment--quota-exhausted)
-      (should (string-match-p "usage limit exceeded" (plist-get final-result :agent-output))))))
+       (should (= runs 1))
+       (should-not scheduled-retry)
+       (should gptel-auto-experiment--quota-exhausted)
+       (should (string-match-p "usage limit exceeded" (plist-get final-result :agent-output))))))
+
+(ert-deftest regression/auto-experiment/decide-rejects-score-regression-even-when-comparator-picks-b ()
+  "Comparator keeps should be vetoed when the benchmark score regresses."
+  (let ((gptel-auto-experiment-use-subagents t)
+        (decision nil))
+    (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _desc _prompt cb)
+                 (funcall cb "B\ncombined looks better"))))
+      (with-temp-buffer
+        (gptel-auto-experiment-decide
+         '(:score 0.41 :code-quality 0.77)
+         '(:score 0.40 :code-quality 0.93)
+         (lambda (result)
+           (setq decision result)))))
+    (should decision)
+    (should-not (plist-get decision :keep))
+    (should (string-match-p "Rejected: score regressed"
+                            (plist-get decision :reasoning)))))
+
+(ert-deftest regression/auto-experiment/decide-rejects-score-tie-with-small-quality-gain ()
+  "Tied benchmark scores should need a meaningful quality gain to be kept."
+  (let ((gptel-auto-experiment-use-subagents nil)
+        (gptel-auto-experiment-min-quality-gain-on-score-tie 0.10)
+        (decision nil))
+    (with-temp-buffer
+      (gptel-auto-experiment-decide
+       '(:score 0.40 :code-quality 0.77)
+       '(:score 0.40 :code-quality 0.83)
+       (lambda (result)
+         (setq decision result))))
+    (should decision)
+    (should-not (plist-get decision :keep))
+    (should (string-match-p "Rejected: tied score needs >= 0.10 quality gain"
+                            (plist-get decision :reasoning)))))
+
+(ert-deftest regression/auto-experiment/decide-keeps-score-tie-with-large-quality-gain ()
+  "Tied benchmark scores may still be kept after a clearly meaningful quality gain."
+  (let ((gptel-auto-experiment-use-subagents nil)
+        (gptel-auto-experiment-min-quality-gain-on-score-tie 0.10)
+        (decision nil))
+    (with-temp-buffer
+      (gptel-auto-experiment-decide
+       '(:score 0.40 :code-quality 0.70)
+       '(:score 0.40 :code-quality 0.82)
+       (lambda (result)
+         (setq decision result))))
+    (should decision)
+    (should (plist-get decision :keep))))
 
 (ert-deftest regression/auto-experiment-loop/uses-run-with-retry-helper ()
   "Experiment loop should route live runs through the retry helper."
@@ -992,8 +1040,36 @@ EXIT-CODE defaults to 1."
           (should-not (plist-get result :kept))
           (should (string-match-p "^callback-error:" (plist-get result :comparator-reason)))
           (should (= log-count 1))
-           (should (member '("checkout" "--" ".") git-calls))))
+            (should (member '("checkout" "--" ".") git-calls))))
       (delete-directory temp-dir t)))
+
+(ert-deftest regression/auto-experiment/grade-rebinds-configured-timeout-for-grader ()
+  "Grade helper should rebind the benchmark timeout for the grader subagent."
+  (let ((gptel-auto-experiment-use-subagents t)
+        (gptel-auto-experiment-grade-timeout 120)
+        (gptel-benchmark-subagent-timeout 60)
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (captured-timeout nil)
+        (result nil))
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (&rest _args) :fake-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (_output _expected _forbidden cb)
+                 (setq captured-timeout gptel-benchmark-subagent-timeout)
+                 (funcall cb '(:score 9 :total 9 :passed t :details "ok"))))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment-grade
+       "executor output"
+       (lambda (grade)
+         (setq result grade)))
+      (should (= captured-timeout 120))
+      (should result)
+      (should (plist-get result :passed))
+      (should-not (gethash 1 gptel-auto-experiment--grade-state)))))
 
 (ert-deftest regression/auto-experiment/grade-immediate-timeout-does-not-double-call ()
   "Immediate grade timeout should not deliver the final callback twice."
@@ -1010,8 +1086,8 @@ EXIT-CODE defaults to 1."
               ((symbol-function 'cancel-timer)
                (lambda (&rest _args) nil))
               ((symbol-function 'gptel-benchmark-grade)
-               (lambda (_output _expected _forbidden cb)
-                 (setq captured-grade-callback cb)))
+               (lambda (_output _expected _forbidden cb &optional _timeout)
+                  (setq captured-grade-callback cb)))
               ((symbol-function 'message)
                (lambda (&rest _args) nil)))
       (gptel-auto-experiment-grade
