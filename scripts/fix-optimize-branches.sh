@@ -33,8 +33,7 @@ echo
 PUSHED=0
 FAILED=0
 
-while IFS= read -r branch; do
-    [[ -z "$branch" ]] && continue
+for branch in $BRANCHES; do
     echo -n "  $branch ... "
     
     # Try normal push first
@@ -51,7 +50,7 @@ while IFS= read -r branch; do
             ((FAILED++)) || true
         fi
     fi
-done <<< "$BRANCHES"
+done
 
 echo
 echo "=== Summary ==="
