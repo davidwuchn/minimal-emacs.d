@@ -391,8 +391,89 @@ EXIT-CODE defaults to 1."
                            nil
                            nil))))
       (when (buffer-live-p worktree-buf)
+       (kill-buffer worktree-buf))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/auto-experiment/elisp-syntax-errors-trigger-validation-retry ()
+  "Elisp syntax validation failures should retry with elisp-expert guidance."
+  (let* ((project-root (make-temp-file "aw-project" t))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/retry-riven-exp1" project-root))
+         (worktree-buf (get-buffer-create "*aw-syntax-retry*"))
+         (runagent-calls nil)
+         (benchmark-calls 0)
+         (syntax-error "Syntax error in /tmp/worktree/gptel-tools-agent.el: (end-of-file)")
+         result)
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer worktree-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir)))
+          (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                     (lambda (_target _experiment-id) worktree-dir))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                     (lambda (_worktree-dir) worktree-buf))
+                    ((symbol-function 'gptel-auto-experiment-analyze)
+                     (lambda (_previous-results cb)
+                       (funcall cb nil)))
+                    ((symbol-function 'gptel-auto-experiment-build-prompt)
+                     (lambda (&rest _args) "prompt"))
+                    ((symbol-function 'run-with-timer)
+                     (lambda (&rest _args) :fake-timer))
+                    ((symbol-function 'cancel-timer)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'my/gptel--run-agent-tool)
+                     (lambda (cb &rest args)
+                       (push args runagent-calls)
+                       (funcall cb "HYPOTHESIS: fix validation path")))
+                    ((symbol-function 'gptel-auto-experiment-grade)
+                     (lambda (_output cb)
+                       (funcall cb '(:score 9 :total 9 :passed t :details "ok"))))
+                    ((symbol-function 'gptel-auto-experiment-benchmark)
+                     (lambda (&optional _full)
+                       (cl-incf benchmark-calls)
+                       (if (= benchmark-calls 1)
+                           (list :passed nil :validation-error syntax-error)
+                         '(:passed nil :validation-error "still bad"))))
+                    ((symbol-function 'magit-git-success)
+                     (lambda (&rest _args) t))
+                    ((symbol-function 'gptel-auto-experiment-log-tsv)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'message)
+                     (lambda (&rest _args) nil)))
+            (with-current-buffer worktree-buf
+              (gptel-auto-experiment-run
+               "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+               (lambda (exp-result)
+                 (setq result exp-result)))))
+          (setq runagent-calls (nreverse runagent-calls))
+          (should result)
+          (should (= (length runagent-calls) 2))
+          (let ((retry-call (nth 1 runagent-calls)))
+            (should (equal (nth 0 retry-call) "executor"))
+            (should (equal (nth 1 retry-call)
+                           "Retry: fix validation error in lisp/modules/gptel-tools-agent.el"))
+            (should (string-match-p (regexp-quote syntax-error)
+                                    (nth 2 retry-call)))
+            (should (string-match-p (regexp-quote "Skill(\"elisp-expert\")")
+                                    (nth 2 retry-call)))))
+      (when (buffer-live-p worktree-buf)
         (kill-buffer worktree-buf))
       (delete-directory project-root t))))
+
+(ert-deftest regression/auto-experiment/teachable-validation-errors-return-boolean ()
+  "Teachable validation detection should normalize matches to booleans."
+  (should (eq t
+              (gptel-auto-experiment--teachable-validation-error-p
+               "lisp/modules/gptel-tools-agent.el"
+               "Syntax error in /tmp/worktree/gptel-tools-agent.el: (end-of-file)")))
+  (should (eq t
+              (gptel-auto-experiment--teachable-validation-error-p
+               "lisp/modules/gptel-tools-agent.el"
+               "Dangerous pattern in temp.el: cl-return-from without cl-block")))
+  (should-not
+   (gptel-auto-experiment--teachable-validation-error-p
+    "notes.txt"
+    "Syntax error in /tmp/worktree/notes.txt: unexpected indent")))
 
 (ert-deftest regression/runagent/malformed-call-with-no-args-reports-error ()
   "RunAgent should return a normal tool error when no mapped args were supplied."
