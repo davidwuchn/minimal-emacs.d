@@ -301,11 +301,10 @@ All shell commands have timeout protection to prevent deadlocks."
   "Subagent delegation for gptel-agent."
   :group 'gptel)
 
-(defcustom my/gptel-agent-task-timeout 1200
-  "Seconds before a delegated Agent/RunAgent task is force-stopped.
-Default 1200s (20 min) handles complex experiments with multiple LLM calls.
-Set to nil for no timeout (not recommended for auto-workflow)."
-  :type '(choice (const :tag "No timeout" nil) integer)
+(defcustom my/gptel-agent-task-timeout 300
+  "Timeout in seconds for gptel-agent task calls.
+Default 300s (5 min). Set lower to catch stuck requests faster."
+  :type 'integer
   :group 'gptel-tools-agent)
 
 (defcustom my/gptel-subagent-result-limit 4000
@@ -2460,16 +2459,19 @@ BASELINE-CODE-QUALITY is the initial code quality score."
          (let* ((patterns (when analysis (plist-get analysis :patterns)))
                 (prompt (gptel-auto-experiment-build-prompt
                          target experiment-id max-experiments analysis baseline)))
-           (setq timeout-timer
-                 (run-with-timer gptel-auto-experiment-time-budget nil
-                                 (lambda ()
-                                   (unless finished
-                                     (setq finished t)
-                                     ;; Don't delete worktree - will be cleaned up by run-next
-                                     (funcall callback
-                                              (list :target target
-                                                    :id experiment-id
-                                                    :error "timeout"))))))
+(setq timeout-timer
+                  (run-with-timer gptel-auto-experiment-time-budget nil
+                                  (lambda ()
+                                    (unless finished
+                                      (setq finished t)
+                                      (message "[auto-exp] Experiment timed out after %ds, aborting"
+                                               gptel-auto-experiment-time-budget)
+                                      (when (fboundp 'gptel-abort)
+                                        (ignore-errors (gptel-abort (current-buffer))))
+                                      (funcall callback
+                                               (list :target target
+                                                     :id experiment-id
+                                                     :error "timeout"))))))
            ;; Routing handled by gptel-auto-workflow--advice-task-override
            (my/gptel--run-agent-tool
             (lambda (agent-output)
