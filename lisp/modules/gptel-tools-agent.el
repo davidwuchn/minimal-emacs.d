@@ -1651,8 +1651,12 @@ Returns nil if hash table is invalid or TARGET not found."
     (plist-get (gethash target gptel-auto-workflow--worktree-state) key)))
 
 (defun gptel-auto-workflow--get-worktree-dir (target)
-  "Get worktree-dir for TARGET from hash table."
-  (gptel-auto-workflow--get-worktree-state target :worktree-dir))
+  "Get worktree-dir for TARGET from hash table.
+Returns nil if directory doesn't exist or state is invalid."
+  (when-let* ((dir (gptel-auto-workflow--get-worktree-state target :worktree-dir))
+              ((stringp dir))
+              ((file-directory-p dir)))
+    dir))
 
 (defun gptel-auto-workflow--get-current-branch (target)
   "Get current-branch for TARGET from hash table."
