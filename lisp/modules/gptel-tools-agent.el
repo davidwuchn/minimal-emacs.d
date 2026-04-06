@@ -193,7 +193,7 @@ Returns list of (hash exp-id target) for truly orphaned commits."
                                  (format "git merge-base --is-ancestor %s staging 2>/dev/null && echo yes" hash)))
                     (in-main (gptel-auto-workflow--git-cmd
                               (format "git merge-base --is-ancestor %s main 2>/dev/null && echo yes" hash))))
-(when (and (string-empty-p in-staging)
+                (when (and (string-empty-p in-staging)
                            (string-empty-p in-main))
                   (push (list hash exp-id target) orphans))))))))
     (if orphans
