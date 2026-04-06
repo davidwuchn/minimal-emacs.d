@@ -406,6 +406,7 @@ Returns list of (hash exp-id target) for truly orphaned commits."
                   (exp-id (cadr parts))
                   (target (caddr parts)))
             (when (and hash
+                       (>= (length parts) 3)
                        (string-match-p "^[a-f0-9]+$" hash)
                        (not (gethash hash seen)))
               (puthash hash t seen)
@@ -504,7 +505,10 @@ Uses the staging worktree only."
                                     (or (gptel-auto-workflow--project-root)
                                         (expand-file-name "~/.emacs.d/"))))
         (timestamp (format-time-string "%Y-%m-%d %H:%M:%S"))
-        (msg (substring conflict-output 0 (min 400 (length conflict-output)))))
+        (msg (if (and (stringp conflict-output)
+                      (> (length conflict-output) 0))
+                 (substring conflict-output 0 (min 400 (length conflict-output)))
+               "")))
     (make-directory (file-name-directory log-file) t)
     (with-temp-buffer
       (insert (format "[%s] %s\n%s\n\n" timestamp commit-hash msg))
