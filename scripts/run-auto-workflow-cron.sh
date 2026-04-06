@@ -114,6 +114,82 @@ check_worker_daemon() {
     return 1
 }
 
+<<<<<<< HEAD
+=======
+daemon_reports_active_workflow() {
+    local elisp="(let ((running (and (boundp 'gptel-auto-workflow--running)
+                                     (default-value 'gptel-auto-workflow--running)))
+                       (queued (and (boundp 'gptel-auto-workflow--cron-job-running)
+                                    (default-value 'gptel-auto-workflow--cron-job-running))))
+                    (if (or running queued) t nil))"
+    local output
+    if ! output="$(run_emacsclient_eval "$(wrap_emacs_eval "$elisp")" 2 2>/dev/null)"; then
+        local rc=$?
+        if [ "$rc" -eq 124 ]; then
+            return 2
+        fi
+        return 1
+    fi
+
+    if printf '%s' "$output" | grep -qx 't'; then
+        return 0
+    fi
+    return 1
+}
+
+clear_stale_running_status() {
+    if ! status_indicates_running && ! status_phase_indicates_activity; then
+        return 0
+    fi
+
+    local rc
+    if check_worker_daemon; then
+        rc=0
+    else
+        rc=$?
+    fi
+
+    if [ "$rc" -eq 0 ]; then
+        if daemon_reports_active_workflow; then
+            return 0
+        else
+            rc=$?
+            if [ "$rc" -eq 1 ]; then
+                rewrite_status_idle
+            fi
+        fi
+        return 0
+    fi
+
+    if [ "$rc" -eq 1 ]; then
+        rewrite_status_idle
+    fi
+    return 0
+}
+
+wrap_emacs_eval() {
+    local body="$1"
+    local env_elisp=""
+    local ssh_auth_sock="${SSH_AUTH_SOCK:-}"
+    local git_ssh_command="${GIT_SSH_COMMAND:-}"
+
+    if [ -n "$ssh_auth_sock" ]; then
+        env_elisp="$env_elisp (setenv \"SSH_AUTH_SOCK\" \"$(lisp_escape "$ssh_auth_sock")\")"
+    fi
+
+    if [ -z "$git_ssh_command" ] && [ "$(uname -s)" = "Darwin" ] && [ -n "$ssh_auth_sock" ]; then
+        git_ssh_command='ssh -o BatchMode=yes -o IdentitiesOnly=yes -o UseKeychain=yes -o AddKeysToAgent=yes'
+    fi
+
+    if [ -n "$git_ssh_command" ]; then
+        env_elisp="$env_elisp (setenv \"GIT_SSH_COMMAND\" \"$(lisp_escape "$git_ssh_command")\")"
+    fi
+
+    printf '(with-current-buffer (get-buffer-create "*copilot-auto-workflow-eval*")%s %s)' \
+           "$env_elisp" "$body"
+}
+
+>>>>>>> 468d96f4 (⊘ fix live auto-workflow status reconciliation)
 ensure_worker_daemon() {
     if check_worker_daemon; then
         return 0
