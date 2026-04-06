@@ -2494,6 +2494,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
          ;; Get project buffer for overlay routing (ensure hash table exists)
          (project-buf (when (and (boundp 'gptel-auto-workflow--current-project)
                                  gptel-auto-workflow--current-project
+                                  (boundp 'gptel-auto-workflow--project-buffers)
                                  (hash-table-p gptel-auto-workflow--project-buffers))
                         (gethash (expand-file-name gptel-auto-workflow--current-project)
                                  gptel-auto-workflow--project-buffers)))
