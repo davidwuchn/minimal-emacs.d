@@ -389,8 +389,11 @@ Returns list of validated file paths."
 CALLBACK receives list of target files.
 LLM decides if available, otherwise uses static list."
   (when (functionp callback)
+<<<<<<< HEAD
     (setq gptel-auto-workflow--analyzer-transient-failure nil)
     (setq gptel-auto-workflow--analyzer-quota-exhausted nil)
+=======
+>>>>>>> e0b94550 (perf: Replace blocking sleep-for with timer in session initialization)
     (let* ((proj-root (or (gptel-auto-workflow--project-root)
                           (expand-file-name "~/.emacs.d/")))
            (static-targets
@@ -398,6 +401,7 @@ LLM decides if available, otherwise uses static list."
              gptel-auto-workflow-targets
              proj-root
              gptel-auto-workflow-max-targets-per-run)))
+<<<<<<< HEAD
        (if gptel-auto-workflow-strategic-selection
 <<<<<<< HEAD
           (gptel-auto-workflow--ask-analyzer-for-targets
@@ -440,6 +444,18 @@ LLM decides if available, otherwise uses static list."
               (message "[auto-workflow] Using static targets")
               (funcall callback static-targets)))))
          (funcall callback static-targets)))))
+=======
+      (if gptel-auto-workflow-strategic-selection
+        (gptel-auto-workflow--ask-analyzer-for-targets
+         (lambda (targets)
+           (if targets
+               (progn
+                  (message "[auto-workflow] Analyzer selected: %s" targets)
+                  (funcall callback targets))
+              (message "[auto-workflow] Using static targets")
+              (funcall callback static-targets))))
+        (funcall callback static-targets)))))
+>>>>>>> e0b94550 (perf: Replace blocking sleep-for with timer in session initialization)
 
 ;;; Periodic Research
 

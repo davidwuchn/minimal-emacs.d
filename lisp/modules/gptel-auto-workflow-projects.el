@@ -22,7 +22,10 @@
 ;; Forward declarations for functions defined in gptel-tools-agent.el
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent")
 (declare-function gptel-auto-workflow--get-worktree-dir "gptel-tools-agent")
+<<<<<<< HEAD
 (declare-function gptel-auto-workflow--persist-status "gptel-tools-agent")
+=======
+>>>>>>> e0b94550 (perf: Replace blocking sleep-for with timer in session initialization)
 (declare-function gptel-auto-workflow-cron-safe "gptel-tools-agent")
 (declare-function gptel-auto-workflow-run-async--guarded "gptel-tools-agent")
 (declare-function gptel-auto-workflow-run-research "gptel-auto-workflow-strategic")
@@ -465,6 +468,7 @@ Also handles caching and result truncation from old advice."
       (let* ((in-auto-workflow gptel-auto-workflow--current-project)
              (proj-context (gptel-auto-workflow--get-project-for-context))
 <<<<<<< HEAD
+<<<<<<< HEAD
              (project-root
               (file-name-as-directory
                (expand-file-name
@@ -505,6 +509,31 @@ Also handles caching and result truncation from old advice."
          (if (and worktree-dir (not (file-exists-p worktree-dir)))
              (progn
                (message "[auto-workflow] Worktree deleted, aborting: %s" worktree-dir)
+=======
+             (project-root (car proj-context))
+             (worktree-base-expanded
+              (expand-file-name (or gptel-auto-workflow-worktree-base
+                                    "var/tmp/experiments")
+                                project-root))
+             (target-worktree-dir
+              (when (and in-auto-workflow
+                         gptel-auto-workflow--current-target
+                         (fboundp 'gptel-auto-workflow--get-worktree-dir))
+                (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)))
+             (current-dir (file-name-as-directory (expand-file-name default-directory)))
+             (worktree-base-dir (file-name-as-directory worktree-base-expanded))
+             (worktree-dir (or target-worktree-dir
+                               (when (and in-auto-workflow
+                                          (string-prefix-p worktree-base-dir current-dir))
+                                 current-dir)))
+             (target-buf (if worktree-dir
+                              (gptel-auto-workflow--get-worktree-buffer worktree-dir)
+                            (cdr proj-context))))
+        ;; CRITICAL: Validate worktree exists before proceeding
+        (if (and worktree-dir (not (file-exists-p worktree-dir)))
+            (progn
+              (message "[auto-workflow] Worktree deleted, aborting: %s" worktree-dir)
+>>>>>>> e0b94550 (perf: Replace blocking sleep-for with timer in session initialization)
               (funcall main-cb (format "Error: Worktree no longer exists: %s" worktree-dir)))
           (if (and target-buf 
 <<<<<<< HEAD
