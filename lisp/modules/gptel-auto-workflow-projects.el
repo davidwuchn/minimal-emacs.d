@@ -73,6 +73,7 @@ Key: worktree directory, Value: buffer.
 Each worktree gets its own isolated buffer for subagent overlays.")
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 (defun gptel-auto-workflow--ensure-buffer-tables ()
   "Ensure shared project/worktree buffer tables are initialized."
   (unless (hash-table-p gptel-auto-workflow--project-buffers)
@@ -82,11 +83,14 @@ Each worktree gets its own isolated buffer for subagent overlays.")
 
 =======
 >>>>>>> d1e4a15f (fix: harden auto-workflow completion path)
+=======
+>>>>>>> d1e4a15f (fix: harden auto-workflow completion path)
 (defun gptel-auto-workflow--normalized-projects ()
   "Return configured project roots as unique expanded directory names."
   (delete-dups
    (mapcar (lambda (project-root)
              (file-name-as-directory (expand-file-name project-root)))
+<<<<<<< HEAD
 <<<<<<< HEAD
             gptel-auto-workflow-projects)))
 
@@ -105,6 +109,9 @@ project instead of the current buffer's `default-directory'."
                gptel-auto-workflow--project-root-override)
           (ignore-errors (gptel-auto-workflow--project-root))
           default-directory)))))
+=======
+           gptel-auto-workflow-projects)))
+>>>>>>> d1e4a15f (fix: harden auto-workflow completion path)
 =======
            gptel-auto-workflow-projects)))
 >>>>>>> d1e4a15f (fix: harden auto-workflow completion path)
@@ -244,6 +251,7 @@ finish."
             (gptel-auto-workflow--make-idempotent-callback
              (lambda ()
 <<<<<<< HEAD
+<<<<<<< HEAD
                 (let ((final-results (nreverse results)))
                   (setq gptel-auto-workflow--run-project-root nil)
                   (setq gptel-auto-workflow--current-project nil)
@@ -258,6 +266,8 @@ finish."
              (if (null remaining)
                   (funcall finish)
 =======
+=======
+>>>>>>> d1e4a15f (fix: harden auto-workflow completion path)
                (setq gptel-auto-workflow--current-project nil)
                (message "[auto-workflow] All projects processed: %s"
                         (mapconcat (lambda (r) (format "%s:%s" (car r) (cdr r)))
@@ -267,6 +277,9 @@ finish."
           ((run-next ()
              (if (null remaining)
                  (funcall finish)
+<<<<<<< HEAD
+>>>>>>> d1e4a15f (fix: harden auto-workflow completion path)
+=======
 >>>>>>> d1e4a15f (fix: harden auto-workflow completion path)
                (let* ((project-root (car remaining))
                       (default-directory project-root)
@@ -274,6 +287,7 @@ finish."
                  (setq remaining (cdr remaining))
                  (message "[auto-workflow] Processing project: %s" project-root)
                  (condition-case err
+<<<<<<< HEAD
 <<<<<<< HEAD
                       (progn
                         (setq gptel-auto-workflow--current-project project-root)
@@ -315,6 +329,8 @@ finish."
                                          (format "[auto-workflow] - Skipped: %s"
                                                  project-root)))))))
 =======
+=======
+>>>>>>> d1e4a15f (fix: harden auto-workflow completion path)
                      (progn
                        (setq gptel-auto-workflow--current-project project-root)
                        (when (hash-table-p gptel-auto-workflow--worktree-state)
@@ -339,6 +355,9 @@ finish."
                                         'skipped
                                         (format "[auto-workflow] - Skipped: %s"
                                                 project-root)))))))
+<<<<<<< HEAD
+>>>>>>> d1e4a15f (fix: harden auto-workflow completion path)
+=======
 >>>>>>> d1e4a15f (fix: harden auto-workflow completion path)
                    (error
                     (push (cons project-root (format "error: %s" err)) results)
