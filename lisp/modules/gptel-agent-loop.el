@@ -46,11 +46,7 @@ Defined in gptel-tools-agent.el.")
 
 (defvar gptel--fsm-last nil)
 (defvar gptel-agent--agents)
-<<<<<<< HEAD
 (defvar gptel-agent-request--handlers)
-=======
-(defvar gptel-agent-request--handlers nil)
->>>>>>> af7e5ce5 (fix: harden auto-workflow quota handling)
 (defvar gptel-agent-loop--bypass nil
   "When non-nil, bypass loop control and call the safe task override directly.")
 (defvar gptel--preset nil)
@@ -613,13 +609,21 @@ Cache behavior:
                                    (when (buffer-live-p (plist-get fsm-info :buffer))
                                      (plist-get fsm-info :buffer))
                                    (current-buffer)))
+                   (where (or (let ((tm (gptel-agent-loop--task-tracking-marker state)))
+                                (and (markerp tm) (marker-position tm) tm))
+                              (let ((tm (plist-get fsm-info :tracking-marker)))
+                                (and (markerp tm) (marker-position tm) tm))
+                              (let ((pos (plist-get fsm-info :position)))
+                                (and (markerp pos) (marker-position pos) pos))
+                              (with-current-buffer parent-buf (point-marker))))
                    (tracking-marker
                     (or (gptel-agent-loop--task-tracking-marker state)
-                        (and where
-                             (markerp where)
-                             (eq (marker-buffer where) parent-buf)
-                             where)
-                        (with-current-buffer parent-buf (point-marker))))
+                        ;; If where is already in parent-buf, use it directly.
+                        ;; If it's from a foreign buffer (fsm-info), don't copy
+                        ;; its position across buffers — create a fresh marker instead.
+                        (if (eq (marker-buffer where) parent-buf)
+                            where
+                          (with-current-buffer parent-buf (point-marker)))))
                    (callback (gptel-agent-loop--make-callback state prompt use-tools)))
               (setf (gptel-agent-loop--task-parent-buffer state) parent-buf
                     (gptel-agent-loop--task-tracking-marker state) tracking-marker)
