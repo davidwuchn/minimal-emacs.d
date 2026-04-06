@@ -3103,9 +3103,14 @@ Default 120s (2 min) allows grader to process complex outputs.")
 (defun gptel-auto-experiment--invalid-cl-return-target-in-forms (forms &optional blocks)
   "Return the first invalid `cl-return-from' target in FORMS.
 BLOCKS is the list of block names currently in scope."
-  (cl-some (lambda (form)
-             (gptel-auto-experiment--invalid-cl-return-target form blocks))
-           forms))
+  (cond
+   ((null forms) nil)
+   ((listp forms)
+    (cl-some (lambda (form)
+               (gptel-auto-experiment--invalid-cl-return-target form blocks))
+             forms))
+   (t
+    (gptel-auto-experiment--invalid-cl-return-target forms blocks))))
 
 (defun gptel-auto-experiment--invalid-cl-return-target (form &optional blocks)
   "Return the first invalid `cl-return-from' target in FORM.
@@ -3179,6 +3184,23 @@ Returns nil if valid, or error message string if invalid."
                  (nreverse forms))
             (format "Dangerous pattern in %s: cl-return-from without cl-block" file))))))
 
+(defun gptel-auto-experiment--finish-grade (grade-id callback result
+                                                     &optional cancel-timer)
+  "Finalize GRADE-ID with RESULT, always cleaning grade state.
+CALLBACK receives RESULT.  When CANCEL-TIMER is non-nil, cancel the
+stored timeout timer before invoking CALLBACK."
+  (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
+    (when (gptel-auto-workflow--state-active-p state)
+      (puthash grade-id (plist-put state :done t)
+               gptel-auto-experiment--grade-state)
+      (when (and cancel-timer
+                 (timerp (plist-get state :timer)))
+        (cancel-timer (plist-get state :timer)))
+      (unwind-protect
+          (funcall callback result)
+        (remhash grade-id gptel-auto-experiment--grade-state))
+      t)))
+
 (defun gptel-auto-experiment-grade (output callback)
   "Grade experiment OUTPUT. LLM decides quality threshold.
 Timeout fails the grade (conservative).
@@ -3194,22 +3216,26 @@ The grader subagent overlay will appear in the current buffer at time of call."
                                 "Unknown error"))
                (error-category (car (gptel-auto-experiment--categorize-error output))))
           (message "[auto-exp] Executor error detected: %s" error-snippet)
-          (funcall callback (list :score 0 :passed nil 
+          (funcall callback (list :score 0 :passed nil
                                   :details (format "Agent error: %s" error-snippet)
                                   :error-category error-category))
           (cl-return-from gptel-auto-experiment-grade)))
-      (puthash grade-id (list :done nil :timer nil) gptel-auto-experiment--grade-state)
+      (puthash grade-id (list :done nil :timer nil)
+               gptel-auto-experiment--grade-state)
       (let ((timeout-timer
-             (run-with-timer gptel-auto-experiment-grade-timeout nil
-                             (lambda ()
-                               (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
-                                 (when (gptel-auto-workflow--state-active-p state)
-                                   (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
-                                   (message "[auto-exp] Grading timeout after %ds, failing"
-                                            gptel-auto-experiment-grade-timeout)
-                                   (funcall callback (list :score 0 :passed nil :details "timeout"))
-                                   (remhash grade-id gptel-auto-experiment--grade-state)))))))
-        (puthash grade-id (list :done nil :timer timeout-timer) gptel-auto-experiment--grade-state))
+             (run-with-timer
+              gptel-auto-experiment-grade-timeout nil
+              (lambda ()
+                (let ((state (gethash grade-id
+                                      gptel-auto-experiment--grade-state)))
+                  (when (gptel-auto-workflow--state-active-p state)
+                    (message "[auto-exp] Grading timeout after %ds, failing"
+                             gptel-auto-experiment-grade-timeout)
+                    (gptel-auto-experiment--finish-grade
+                     grade-id callback
+                     (list :score 0 :passed nil :details "timeout"))))))))
+        (puthash grade-id (list :done nil :timer timeout-timer)
+                 gptel-auto-experiment--grade-state))
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-grade))
           ;; Ensure grader runs in the captured buffer context so overlay appears in right place
@@ -3220,25 +3246,16 @@ The grader subagent overlay will appear in the current buffer at time of call."
                "change is minimal and focused"
                "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
                "verification attempted (byte-compile, nucleus, tests, or manual)")
-             '("large refactor unrelated to stated improvement"
-               "changed security files without review"
-               "no description or unclear purpose"
-               "style-only change without functional impact"
-               "replaces working code without clear improvement")
-             (lambda (result)
-               (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
-                 (when (gptel-auto-workflow--state-active-p state)
-                   (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
-                   (when (timerp (plist-get state :timer))
-                     (cancel-timer (plist-get state :timer)))
-                   (funcall callback result)
-                   (remhash grade-id gptel-auto-experiment--grade-state))))))
-        (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
-          (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
-          (when (timerp (plist-get state :timer))
-            (cancel-timer (plist-get state :timer)))
-          (funcall callback (list :score 100 :passed t))
-          (remhash grade-id gptel-auto-experiment--grade-state))))))
+              '("large refactor unrelated to stated improvement"
+                "changed security files without review"
+                "no description or unclear purpose"
+                "style-only change without functional impact"
+                "replaces working code without clear improvement")
+              (lambda (result)
+                (gptel-auto-experiment--finish-grade
+                 grade-id callback result t))))
+        (gptel-auto-experiment--finish-grade
+         grade-id callback (list :score 100 :passed t) t)))))
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.

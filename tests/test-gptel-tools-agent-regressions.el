@@ -51,6 +51,117 @@ EXIT-CODE defaults to 1."
     (set-file-modes file #o755)
     file))
 
+(defun test-auto-workflow--exercise-grade-callback-order (order)
+  "Return grade callback results after exercising ORDER."
+  (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment-use-subagents t)
+        timeout-callback
+        grader-callback
+        results)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (setq timeout-callback (lambda () (apply fn args)))
+                 :fake-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (&rest args)
+                 (setq grader-callback (nth 3 args))))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-grade
+         "HYPOTHESIS: grade race probe"
+         (lambda (result)
+           (push result results)))))
+    (unless (and timeout-callback grader-callback)
+      (error "Grade callbacks were not captured"))
+    (pcase order
+      ('grade-then-timeout
+       (funcall grader-callback '(:score 9 :passed t :details "graded"))
+       (funcall timeout-callback))
+      ('timeout-then-grade
+       (funcall timeout-callback)
+       (funcall grader-callback '(:score 9 :passed t :details "graded")))
+      (_ (error "Unknown grade callback order: %S" order)))
+    (list :results (nreverse results)
+          :remaining-state (hash-table-count gptel-auto-experiment--grade-state))))
+
+(ert-deftest regression/auto-experiment/grade-late-timeout-is-ignored ()
+  "Successful grading should suppress any later timeout callback."
+  (let* ((outcome (test-auto-workflow--exercise-grade-callback-order
+                   'grade-then-timeout))
+         (results (plist-get outcome :results))
+         (result (car results)))
+    (should (= (length results) 1))
+    (should (= (plist-get result :score) 9))
+    (should (eq (plist-get result :passed) t))
+    (should (equal (plist-get result :details) "graded"))
+    (should (zerop (plist-get outcome :remaining-state)))))
+
+(ert-deftest regression/auto-experiment/grade-timeout-ignores-late-grader-callback ()
+  "Timeout completion should ignore any later grader callback."
+  (let* ((outcome (test-auto-workflow--exercise-grade-callback-order
+                   'timeout-then-grade))
+         (results (plist-get outcome :results))
+         (result (car results)))
+    (should (= (length results) 1))
+    (should (zerop (plist-get result :score)))
+    (should-not (plist-get result :passed))
+    (should (equal (plist-get result :details) "timeout"))
+    (should (zerop (plist-get outcome :remaining-state)))))
+
+(ert-deftest regression/auto-experiment/grade-success-callback-errors-still-clean-state ()
+  "Successful grade callbacks should always remove grade state."
+  (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment-use-subagents t)
+        grader-callback)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (&rest _args) :fake-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (&rest args)
+                 (setq grader-callback (nth 3 args))))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-grade
+         "HYPOTHESIS: grade cleanup probe"
+         (lambda (_result)
+           (error "grade callback boom"))))
+      (should (functionp grader-callback))
+      (should-error
+       (funcall grader-callback '(:score 9 :passed t :details "graded")))
+      (should (zerop (hash-table-count gptel-auto-experiment--grade-state))))))
+
+(ert-deftest regression/auto-experiment/grade-timeout-callback-errors-still-clean-state ()
+  "Timeout grade callbacks should always remove grade state."
+  (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment-use-subagents t)
+        timeout-callback)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (setq timeout-callback (lambda () (apply fn args)))
+                 :fake-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-grade
+         "HYPOTHESIS: timeout cleanup probe"
+         (lambda (_result)
+           (error "grade timeout callback boom"))))
+      (should (functionp timeout-callback))
+      (should-error (funcall timeout-callback))
+      (should (zerop (hash-table-count gptel-auto-experiment--grade-state))))))
+
 (ert-deftest regression/auto-experiment/api-errors-do-not-touch-loop-state ()
   "API failures should not try to mutate outer loop state from a callback."
   (let ((gptel-auto-experiment--api-error-count 2)
@@ -1732,6 +1843,22 @@ EXIT-CODE defaults to 1."
           (should (string-match-p
                    "Dangerous pattern"
                    (gptel-auto-experiment--validate-code file))))
+      (delete-file file))))
+
+(ert-deftest regression/auto-workflow/validate-code-allows-cl-loop-dotted-bindings ()
+  "Code validation should handle dotted `cl-loop' bindings without crashing or false positives."
+  (let ((file (make-temp-file "validate-code" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(require 'cl-lib)\n")
+            (insert "(cl-defun validator-loop-binding-ok ()\n")
+            (insert "  (cl-loop for (agent-name . expected-tools)\n")
+            (insert "           in '((executor . (\"Read\" \"Glob\")))\n")
+            (insert "           when expected-tools\n")
+            (insert "           do (cl-return-from validator-loop-binding-ok agent-name))\n")
+            (insert "  nil)\n"))
+          (should-not (gptel-auto-experiment--validate-code file)))
       (delete-file file))))
 
 (ert-deftest regression/subagent-cache/does-not-store-quota-errors ()
