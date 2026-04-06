@@ -3271,7 +3271,8 @@ If OUTPUT is an error message, fails immediately with error details.
 Uses hash table keyed by grade-id to support parallel execution.
 The grader subagent overlay will appear in the current buffer at time of call."
   (let ((grade-id (cl-incf gptel-auto-experiment--grade-counter))
-        (grade-buffer (current-buffer)))
+        (grade-buffer (current-buffer))
+        (state (list :done nil :timer nil)))
     (cl-block gptel-auto-experiment-grade
       (when (gptel-auto-experiment--agent-error-p output)
         (let* ((error-snippet (if (stringp output)
@@ -3283,18 +3284,18 @@ The grader subagent overlay will appear in the current buffer at time of call."
                                   :details (format "Agent error: %s" error-snippet)
                                   :error-category error-category))
           (cl-return-from gptel-auto-experiment-grade)))
-      (puthash grade-id (list :done nil :timer nil) gptel-auto-experiment--grade-state)
       (let ((timeout-timer
              (run-with-timer gptel-auto-experiment-grade-timeout nil
                              (lambda ()
-                               (let ((state (gethash grade-id gptel-auto-experiment--grade-state)))
-                                 (when (gptel-auto-workflow--state-active-p state)
-                                   (puthash grade-id (plist-put state :done t) gptel-auto-experiment--grade-state)
-                                   (message "[auto-exp] Grading timeout after %ds, failing"
-                                            gptel-auto-experiment-grade-timeout)
-                                   (funcall callback (list :score 0 :passed nil :details "timeout"))
-                                   (remhash grade-id gptel-auto-experiment--grade-state)))))))
-        (puthash grade-id (list :done nil :timer timeout-timer) gptel-auto-experiment--grade-state))
+                               (when (gptel-auto-workflow--state-active-p state)
+                                 (setq state (plist-put state :done t))
+                                 (message "[auto-exp] Grading timeout after %ds, failing"
+                                          gptel-auto-experiment-grade-timeout)
+                                 (funcall callback (list :score 0 :passed nil :details "timeout"))
+                                 (remhash grade-id gptel-auto-experiment--grade-state))))))
+        (setq state (plist-put state :timer timeout-timer))
+        (unless (plist-get state :done)
+          (puthash grade-id state gptel-auto-experiment--grade-state)))
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-grade))
           ;; Ensure grader runs in the captured buffer context so overlay appears in right place
