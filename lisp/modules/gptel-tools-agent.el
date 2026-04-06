@@ -1631,22 +1631,23 @@ Ensures main repo stays on main branch throughout."
           (condition-case merge-err
               (progn
                 (gptel-auto-workflow--git-cmd 
-                 "merge" optimize-branch "--no-ff" "-m"
-                 (format "Merge %s for verification" optimize-branch))
+                 (format "git merge %s --no-ff -m \"Merge %s for verification\""
+                         optimize-branch optimize-branch))
                 (gptel-auto-workflow--git-cmd "git checkout main")
                 t)
             (error
              (if (string-match-p "conflict" (error-message-string merge-err))
                  (progn
                    (message "[auto-workflow] Auto-resolving conflicts with theirs")
-                   (gptel-auto-workflow--git-cmd "checkout" "--theirs" ".")
-                   (gptel-auto-workflow--git-cmd "add" "-A")
+                   (gptel-auto-workflow--git-cmd "git checkout --theirs .")
+                   (gptel-auto-workflow--git-cmd "git add -A")
                    (gptel-auto-workflow--git-cmd 
-                    "commit" "-m" (format "Merge %s (auto-resolved conflicts)" optimize-branch))
+                    (format "git commit -m \"Merge %s (auto-resolved conflicts)\""
+                            optimize-branch))
                    (gptel-auto-workflow--git-cmd "git checkout main")
                    t)
                (message "[auto-workflow] Merge failed: %s" merge-err)
-               (gptel-auto-workflow--git-cmd "merge" "--abort")
+               (gptel-auto-workflow--git-cmd "git merge --abort")
                (gptel-auto-workflow--git-cmd "git checkout main")
                nil))))
       (error
