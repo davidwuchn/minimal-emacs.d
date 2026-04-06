@@ -137,9 +137,39 @@ FALLBACK is used before falling back to the ambient `default-directory'."
              gptel-auto-workflow--run-project-root)
         (and (boundp 'gptel-auto-workflow--project-root-override)
              gptel-auto-workflow--project-root-override)
-        fallback
-        (ignore-errors (gptel-auto-workflow--project-root))
-        default-directory))))
+         fallback
+         (ignore-errors (gptel-auto-workflow--project-root))
+         default-directory))))
+
+(defun gptel-auto-workflow--make-run-id ()
+  "Return a unique identifier for a workflow run."
+  (format "%s-%04x"
+          (format-time-string "%Y-%m-%dT%H%M%SZ" (current-time) t)
+          (random #x10000)))
+
+(defun gptel-auto-workflow--current-run-id (&optional fallback)
+  "Return the active workflow run id, FALLBACK, or today's legacy date id."
+  (let ((run-id (and (boundp 'gptel-auto-workflow--run-id)
+                     gptel-auto-workflow--run-id)))
+    (if (and (stringp run-id) (> (length run-id) 0))
+        run-id
+      (or fallback (format-time-string "%Y-%m-%d")))))
+
+(defun gptel-auto-workflow--results-file (&optional run-id)
+  "Return absolute results.tsv path for RUN-ID or the current workflow run."
+  (let* ((base-dir (gptel-auto-workflow--worktree-base-root))
+         (worktree-base-dir (or gptel-auto-workflow-worktree-base
+                                "var/tmp/experiments")))
+    (expand-file-name
+     (format "%s/%s/results.tsv"
+             worktree-base-dir
+             (gptel-auto-workflow--current-run-id run-id))
+     base-dir)))
+
+(defun gptel-auto-workflow--results-relative-path (&optional run-id)
+  "Return workflow results.tsv path relative to the project root."
+  (file-relative-name (gptel-auto-workflow--results-file run-id)
+                      (gptel-auto-workflow--default-dir)))
 
 (defun gptel-auto-workflow--call-in-run-context (run-root fn &optional buffer directory)
   "Call FN with workflow globals rebound to RUN-ROOT.
@@ -309,34 +339,57 @@ On timeout or error, returns empty string and logs warning."
 
 ;;; Orphan Commit Tracking
 
-(defun gptel-auto-workflow--tracking-file (&optional date)
-  "Return orphan commit tracking file path for DATE or today."
+(defun gptel-auto-workflow--tracking-file (&optional run-id)
+  "Return orphan commit tracking file path for RUN-ID or the current workflow run."
   (expand-file-name
    (format "var/tmp/experiments/%s/commits.txt"
-           (or date (format-time-string "%Y-%m-%d")))
+           (gptel-auto-workflow--current-run-id run-id))
    (gptel-auto-workflow--project-root)))
 
-(defun gptel-auto-workflow--untrack-commit (commit-hash &optional date)
-  "Remove COMMIT-HASH from the tracking file for DATE or today.
+(defun gptel-auto-workflow--tracking-files ()
+  "Return readable orphan commit ledgers across legacy and per-run directories."
+  (let* ((base-dir (expand-file-name (or gptel-auto-workflow-worktree-base
+                                         "var/tmp/experiments")
+                                     (gptel-auto-workflow--project-root)))
+         (files nil))
+    (when (file-directory-p base-dir)
+      (dolist (entry (directory-files base-dir t directory-files-no-dot-files-regexp))
+        (when-let* (((file-directory-p entry))
+                    (tracking-file (expand-file-name "commits.txt" entry))
+                    ((file-readable-p tracking-file)))
+          (push tracking-file files))))
+    (delete-dups
+     (sort files
+           (lambda (a b)
+             (time-less-p
+              (file-attribute-modification-time (file-attributes b))
+              (file-attribute-modification-time (file-attributes a))))))))
+
+(defun gptel-auto-workflow--untrack-commit (commit-hash &optional run-id)
+  "Remove COMMIT-HASH from RUN-ID's ledger or all ledgers when RUN-ID is nil.
 Returns non-nil when at least one entry was removed."
   (when (gptel-auto-workflow--non-empty-string-p commit-hash)
-    (let ((tracking-file (gptel-auto-workflow--tracking-file date)))
-      (when (file-exists-p tracking-file)
-        (with-temp-buffer
-          (insert-file-contents tracking-file)
-          (let* ((lines (split-string (buffer-string) "\n" t))
-                 (remaining
-                  (cl-remove-if
-                   (lambda (line)
-                     (string-prefix-p (concat commit-hash " ") line))
-                   lines)))
-            (unless (= (length remaining) (length lines))
-              (if remaining
-                  (with-temp-file tracking-file
-                    (insert (mapconcat #'identity remaining "\n"))
-                    (insert "\n"))
-                 (delete-file tracking-file))
-               t)))))))
+    (let ((removed nil)
+          (tracking-files (if run-id
+                              (list (gptel-auto-workflow--tracking-file run-id))
+                            (gptel-auto-workflow--tracking-files))))
+      (dolist (tracking-file tracking-files removed)
+        (when (file-exists-p tracking-file)
+          (with-temp-buffer
+            (insert-file-contents tracking-file)
+            (let* ((lines (split-string (buffer-string) "\n" t))
+                   (remaining
+                    (cl-remove-if
+                     (lambda (line)
+                       (string-prefix-p (concat commit-hash " ") line))
+                     lines)))
+              (unless (= (length remaining) (length lines))
+                (setq removed t)
+                (if remaining
+                    (with-temp-file tracking-file
+                      (insert (mapconcat #'identity remaining "\n"))
+                      (insert "\n"))
+                  (delete-file tracking-file))))))))))
 
 (defun gptel-auto-workflow--commit-exists-p (commit-hash)
   "Return non-nil when COMMIT-HASH resolves to an existing commit object."
@@ -405,11 +458,11 @@ Returns nil if git command fails or returns invalid hash."
 An orphan is a commit that exists but is not reachable from staging or main.
 Returns list of (hash exp-id target) for truly orphaned commits."
   (interactive)
-  (let* ((tracking-file (gptel-auto-workflow--tracking-file))
+  (let* ((tracking-files (gptel-auto-workflow--tracking-files))
          (orphans nil)
          (seen (make-hash-table :test 'equal))
          (stale-hashes nil))
-    (when (file-exists-p tracking-file)
+    (dolist (tracking-file tracking-files)
       (with-temp-buffer
         (insert-file-contents tracking-file)
         (dolist (line (split-string (buffer-string) "\n" t))
@@ -2877,9 +2930,9 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                                completion-callback))))
                        (message "[auto-workflow] Fix failed: %s"
                                 (my/gptel--sanitize-for-logging fix-output 200))
-                       (gptel-auto-experiment-log-tsv
-                        (format-time-string "%Y-%m-%d")
-                        (list :target "staging-review"
+                        (gptel-auto-experiment-log-tsv
+                         (gptel-auto-workflow--current-run-id)
+                         (list :target "staging-review"
                               :id 0
                               :hypothesis "Staging review fix"
                               :score-before 0
@@ -2895,9 +2948,9 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                         (funcall finish nil))))))
             (message "[auto-workflow] ✗ Review BLOCKED (max retries): %s"
                      (my/gptel--sanitize-for-logging review-output 200))
-            (gptel-auto-experiment-log-tsv
-             (format-time-string "%Y-%m-%d")
-             (list :target "staging-review"
+             (gptel-auto-experiment-log-tsv
+              (gptel-auto-workflow--current-run-id)
+              (list :target "staging-review"
                    :id 0
                    :hypothesis "Staging review"
                    :score-before 0
@@ -2917,7 +2970,7 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
               (progn
                 (message "[auto-workflow] ✗ Merge to staging failed, aborting")
                 (gptel-auto-experiment-log-tsv
-                 (format-time-string "%Y-%m-%d")
+                 (gptel-auto-workflow--current-run-id)
                  (list :target "staging-merge"
                        :id 0
                        :hypothesis "Staging merge"
@@ -2938,7 +2991,7 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                   (progn
                     (message "[auto-workflow] ✗ Failed to create staging worktree")
                     (gptel-auto-experiment-log-tsv
-                     (format-time-string "%Y-%m-%d")
+                     (gptel-auto-workflow--current-run-id)
                      (list :target "staging-worktree"
                            :id 0
                            :hypothesis "Staging worktree"
@@ -2959,7 +3012,7 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                       (progn
                         (message "[auto-workflow] ✗ Staging verification FAILED")
                         (gptel-auto-experiment-log-tsv
-                         (format-time-string "%Y-%m-%d")
+                         (gptel-auto-workflow--current-run-id)
                          (list :target "staging-verification"
                                :id 0
                                :hypothesis "Staging verification"
@@ -2982,7 +3035,7 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                           (funcall finish t))
                       (message "[auto-workflow] ✗ Staging push FAILED")
                       (gptel-auto-experiment-log-tsv
-                       (format-time-string "%Y-%m-%d")
+                       (gptel-auto-workflow--current-run-id)
                        (list :target "staging-push"
                              :id 0
                              :hypothesis "Staging push"
@@ -3522,13 +3575,8 @@ Example HYPOTHESES:
       (replace-regexp-in-string "[\t\n\r]+" " | " s))))
 
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
-  "Append EXPERIMENT to results.tsv for RUN-ID."
-  (let* ((base-dir (gptel-auto-workflow--worktree-base-root))
-         (worktree-base-dir (or gptel-auto-workflow-worktree-base
-                                "var/tmp/experiments"))
-         (file (expand-file-name
-                (format "%s/%s/results.tsv" worktree-base-dir run-id)
-                base-dir))
+  "Append EXPERIMENT to results.tsv for RUN-ID or the current workflow run."
+  (let* ((file (gptel-auto-workflow--results-file run-id))
          (agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
          (truncated-output (gptel-auto-experiment--tsv-escape
                             (truncate-string-to-width agent-output 500 nil nil "..."))))
@@ -3783,10 +3831,11 @@ BASELINE-CODE-QUALITY is the initial code quality score."
            (experiment-timeout gptel-auto-experiment-time-budget)
            ;; CRITICAL: Use experiment time budget as agent task timeout
             ;; This ensures the gptel request times out before the outer timer
-           (my/gptel-agent-task-timeout experiment-timeout)
-           (start-time (float-time))
-           (finished nil)
-           (executor-prompt nil))
+            (my/gptel-agent-task-timeout experiment-timeout)
+            (start-time (float-time))
+            (run-id (gptel-auto-workflow--current-run-id))
+            (finished nil)
+            (executor-prompt nil))
     (if (not worktree)
         (funcall callback (list :target target :error "Failed to create worktree"))
       (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
@@ -3853,9 +3902,9 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                    :comparator-reason (symbol-name error-category)
                                                    :analyzer-patterns (format "%s" patterns)
                                                    :agent-output agent-output)))
-                             (gptel-auto-experiment-log-tsv
-                              (format-time-string "%Y-%m-%d") exp-result)
-                             (funcall callback exp-result)))
+                              (gptel-auto-experiment-log-tsv
+                               run-id exp-result)
+                              (funcall callback exp-result)))
                        ;; Grader passed - commit changes, then run benchmark
                        (let ((commit-dir (or (gptel-auto-workflow--get-worktree-dir target)
                                              (gptel-auto-workflow--project-root))))
@@ -3908,7 +3957,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 			 (gptel-auto-workflow--make-idempotent-callback
 			  (lambda (&rest _)
 			    (gptel-auto-experiment-log-tsv
-			     (format-time-string "%Y-%m-%d") exp-result)
+			     run-id exp-result)
 			    (funcall callback exp-result)))))
 		   (gptel-auto-workflow--assert-main-untouched)
 		   (message "[auto-experiment] ✓ Committing improvement for %s" target)
@@ -3934,7 +3983,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 		 (magit-git-success "checkout" "--" ".")
 		 (cl-incf gptel-auto-experiment--no-improvement-count)
 		 (gptel-auto-experiment-log-tsv
-		  (format-time-string "%Y-%m-%d") exp-result)
+		  run-id exp-result)
 		 (funcall callback exp-result))))))))
                           (if (and (gptel-auto-experiment--teachable-validation-error-p
                                     target validation-error)
@@ -4020,7 +4069,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                             :agent-output agent-output)))
                                 (message "[auto-experiment] ✗ %s for %s" reason target)
                                 (gptel-auto-experiment-log-tsv
-                                 (format-time-string "%Y-%m-%d") exp-result)
+                                 run-id exp-result)
                                 (funcall callback exp-result))))))
 ))))))))
                    "executor"
@@ -4210,6 +4259,9 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--stats nil
   "Current run statistics: (:kept :total :phase).")
 
+(defvar gptel-auto-workflow--run-id nil
+  "Stable identifier for the active or most recent auto-workflow run.")
+
 (defvar gptel-auto-workflow--current-target nil
   "Current target file being processed by auto-workflow.")
 
@@ -4245,8 +4297,8 @@ Relative paths are resolved from the project root."
         :kept (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :kept 0)
         :total (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :total 0)
         :phase (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :phase "idle")
-        :results (format "var/tmp/experiments/%s/results.tsv"
-                         (format-time-string "%Y-%m-%d"))))
+        :run-id (gptel-auto-workflow--current-run-id nil)
+        :results (gptel-auto-workflow--results-relative-path)))
 
 (defun gptel-auto-workflow--persist-status ()
   "Persist current workflow status for non-blocking cron health checks."
@@ -4569,7 +4621,7 @@ Returns (nil . nil) if safe to run."
 
 (defun gptel-auto-workflow-status ()
   "Return current workflow status as plist.
-Returns (:running :kept :total :phase :results)."
+Returns (:running :kept :total :phase :run-id :results)."
   (let* ((live
           (and (or gptel-auto-workflow--running
                    (bound-and-true-p gptel-auto-workflow--cron-job-running)
@@ -4650,6 +4702,7 @@ Usage:
     (gptel-auto-workflow--require-magit-dependencies)
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
+          gptel-auto-workflow--run-id (gptel-auto-workflow--make-run-id)
           gptel-auto-experiment--api-error-count 0
           gptel-auto-experiment--quota-exhausted nil
           gptel-auto-workflow--running t
@@ -4834,7 +4887,8 @@ Only removes worktrees if no gptel processes are running."
 
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
   "Run experiments for TARGETS sequentially."
-  (let* ((run-id (format-time-string "%Y-%m-%d"))
+  (let* ((run-id (or gptel-auto-workflow--run-id
+                     (gptel-auto-workflow--make-run-id)))
          (proj-root (gptel-auto-workflow--default-dir))
          (run-buffer (current-buffer))
          (all-results '())
@@ -4858,7 +4912,8 @@ Only removes worktrees if no gptel processes are running."
                   (funcall completion-callback all-results)))))))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root
-          gptel-auto-workflow--run-project-root proj-root)
+          gptel-auto-workflow--run-project-root proj-root
+          gptel-auto-workflow--run-id run-id)
     (setq gptel-auto-workflow--stats
           (plist-put gptel-auto-workflow--stats :phase "running"))
     (setq gptel-auto-workflow--stats
