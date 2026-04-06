@@ -2583,6 +2583,7 @@ Returns t if all files pass syntax check, nil otherwise."
       (when (file-readable-p file)
         (with-temp-buffer
           (insert-file-contents file)
+          (emacs-lisp-mode)  ; Enable proper syntax parsing for comments
           (goto-char (point-min))
           (condition-case err
               (progn
