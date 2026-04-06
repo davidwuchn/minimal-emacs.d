@@ -265,6 +265,7 @@ Logs when fallback to regex parsing is used."
         (max-targets gptel-auto-workflow-max-targets-per-run)
         (normalized-response (gptel-auto-workflow--normalize-response response)))
     (cond
+<<<<<<< HEAD
       ((gptel-auto-experiment--quota-exhausted-p normalized-response)
        (setq gptel-auto-workflow--analyzer-quota-exhausted t)
        (message "[auto-workflow] Analyzer quota exhausted during target selection")
@@ -283,6 +284,17 @@ Logs when fallback to regex parsing is used."
                        normalized-response proj-root max-targets)))
          (if targets
              targets
+=======
+     ((gptel-auto-experiment--quota-exhausted-p normalized-response)
+      (setq gptel-auto-experiment--quota-exhausted t)
+      (message "[auto-workflow] Analyzer quota exhausted during target selection")
+      nil)
+     (t
+      (let ((targets (gptel-auto-workflow--parse-json-targets
+                      normalized-response proj-root max-targets)))
+        (if targets
+            targets
+>>>>>>> af7e5ce5 (fix: harden auto-workflow quota handling)
           (progn
             (message "[auto-workflow] JSON parse failed, using regex fallback")
             (gptel-auto-workflow--parse-regex-targets
@@ -387,6 +399,7 @@ LLM decides if available, otherwise uses static list."
              proj-root
              gptel-auto-workflow-max-targets-per-run)))
        (if gptel-auto-workflow-strategic-selection
+<<<<<<< HEAD
           (gptel-auto-workflow--ask-analyzer-for-targets
            (lambda (targets)
               (cond
@@ -410,6 +423,20 @@ LLM decides if available, otherwise uses static list."
                     (funcall callback targets)))
              (t
 >>>>>>> 7d589248 (⊘ harden live auto-workflow replays)
+=======
+         (gptel-auto-workflow--ask-analyzer-for-targets
+          (lambda (targets)
+            (cond
+             ((and gptel-auto-experiment--quota-exhausted
+                   (null targets))
+              (message "[auto-workflow] Skipping static fallback after analyzer quota exhaustion")
+              (funcall callback nil))
+             (targets
+                (progn
+                    (message "[auto-workflow] Analyzer selected %d targets" (length targets))
+                   (funcall callback targets)))
+             (t
+>>>>>>> af7e5ce5 (fix: harden auto-workflow quota handling)
               (message "[auto-workflow] Using static targets")
               (funcall callback static-targets)))))
          (funcall callback static-targets)))))

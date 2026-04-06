@@ -461,6 +461,7 @@ Also handles caching and result truncation from old advice."
                (message "[auto-workflow] Worktree deleted, aborting: %s" worktree-dir)
               (funcall main-cb (format "Error: Worktree no longer exists: %s" worktree-dir)))
           (if (and target-buf 
+<<<<<<< HEAD
                    (buffer-live-p target-buf)
                    (not (string= (buffer-name target-buf) "*Messages*")))
               (progn
@@ -523,6 +524,60 @@ Also handles caching and result truncation from old advice."
                (let ((safe-buffer (cond
                                    ((not (string= (buffer-name) "*Messages*"))
                                      (current-buffer))
+=======
+                    (buffer-live-p target-buf)
+                    (not (string= (buffer-name target-buf) "*Messages*")))
+              (with-current-buffer target-buf
+                (message "[FSM-DEBUG] In target buffer, fsm=%s"
+                         (gptel-auto-workflow--fsm-safe-describe
+                          (and (boundp 'gptel--fsm-last) gptel--fsm-last)))
+                ;; Ensure FSM exists for agent task
+                (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
+                  (message "[FSM-DEBUG] Creating new FSM in buffer")
+                  ;; Create minimal FSM for agent context
+                  (setq-local gptel--fsm-last 
+                              (gptel-make-fsm 
+                               :table (when (boundp 'gptel-send--transitions) gptel-send--transitions)
+                               :handlers nil)))
+                (message "[FSM-DEBUG] fsm=%s (created)"
+                         (gptel-auto-workflow--fsm-safe-describe gptel--fsm-last))
+                 (let* ((default-directory (or worktree-dir project-root))
+                         (target-marker (point-marker))
+                         (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+                         (orig-gptel-fsm-info (symbol-function 'gptel-fsm-info))
+                         (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
+                                   (list :buffer target-buf :position target-marker)))
+                         (modified-info (list :buffer target-buf
+                                               :position target-marker
+                                               :tracking-marker target-marker))
+                         ;; Wrap callback to cache results
+                         (wrapped-cb (lambda (result)
+                                       (when (and (stringp result)
+                                                   (fboundp 'my/gptel--subagent-cache-put))
+                                         (my/gptel--subagent-cache-put agent-type prompt result))
+                                       (funcall main-cb result)))
+                         (task-runner (if (fboundp 'my/gptel-agent--task-override)
+                                          #'my/gptel-agent--task-override
+                                        orig-fun)))
+                  (message "[FSM-DEBUG] Calling task runner with agent: %s" agent-type)
+                  (cl-letf (((symbol-function 'gptel-fsm-info)
+                              (lambda (&optional fsm)
+                                (cond
+                                 ((or (eq fsm parent-fsm) (null fsm))
+                                   modified-info)
+                                  (t
+                                   (funcall orig-gptel-fsm-info fsm))))))
+                    (if (and gptel-auto-workflow--persist-executor-overlays
+                                (equal agent-type "executor"))
+                        (cl-letf (((symbol-function 'delete-overlay)
+                                    (lambda (&rest _) nil)))
+                          (funcall task-runner wrapped-cb agent-type description prompt))
+                      (funcall task-runner wrapped-cb agent-type description prompt)))))
+              ;; SAFETY: Never execute in *Messages* buffer - find safe fallback
+              (let ((safe-buffer (cond
+                                  ((not (string= (buffer-name) "*Messages*"))
+                                    (current-buffer))
+>>>>>>> af7e5ce5 (fix: harden auto-workflow quota handling)
                                   ((get-buffer "*gptel*")
                                     (get-buffer "*gptel*"))
                                    ((get-buffer "*scratch*")  
