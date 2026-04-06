@@ -505,7 +505,6 @@ Uses the staging worktree only."
                                     (or (gptel-auto-workflow--project-root)
                                         (expand-file-name "~/.emacs.d/"))))
         (timestamp (format-time-string "%Y-%m-%d %H:%M:%S"))
-        (output-str (if (stringp conflict-output) conflict-output ""))
         (msg (if (and (stringp conflict-output)
                       (> (length conflict-output) 0))
                  (substring conflict-output 0 (min 400 (length conflict-output)))
