@@ -43,16 +43,6 @@
   (mapcar (lambda (tc) (plist-get tc :tool))
           (gptel-workflow--tool-calls-list run)))
 
-(defun gptel-workflow--tool-present-p (tool-name tools)
-  "Check if TOOL-NAME is present in TOOLS list.
-Handles both symbol and string representations.
-Returns non-nil if found."
-  (or (memq tool-name tools)
-      (memq (intern (capitalize (symbol-name tool-name))) tools)
-      (cl-member (symbol-name tool-name) tools
-                 :test #'equal
-                 :key (lambda (tool) (if (symbolp tool) (symbol-name tool) tool)))))
-
 ;;; Customization
 
 (defgroup gptel-workflow-benchmark nil
@@ -236,22 +226,26 @@ Indicators: plan file mentioned, Updates in output, or edit tools used."
   (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
     (when (or (string-match-p "[Pp]lan" output)
               (string-match-p "[Uu]pdates" output)
-              (gptel-workflow--tool-present-p 'edit tools))
+              (memq 'edit tools)
+              (memq 'Edit tools)
+              (cl-member "edit" tools :test #'equal :key #'symbol-name))
       (list :phase 'P2
             :entered t
             :timestamp (float-time)
             :indicators (delq nil
                               (list (when (string-match-p "[Pp]lan" output) "plan-mentioned")
                                     (when (string-match-p "[Uu]pdates" output) "updates-mentioned")
-                                    (when (gptel-workflow--tool-present-p 'edit tools) "edit-used")))))))
+                                    (when (memq 'edit tools) "edit-used")))))))
 
 (defun gptel-workflow--detect-p3 (tool-calls)
   "Detect P3 phase from TOOL-CALLS.
 P3 = preview (preview_file_change tool called)
 Indicators: preview tool used."
   (let ((tools (mapcar (lambda (tc) (plist-get tc :tool)) tool-calls)))
-    (when (or (gptel-workflow--tool-present-p 'preview_file_change tools)
-              (gptel-workflow--tool-present-p 'preview tools))
+    (when (or (memq 'preview_file_change tools)
+              (memq 'Preview tools)
+              (cl-member "preview" tools :test #'equal :key #'symbol-name)
+              (cl-member "preview_file_change" tools :test #'equal :key #'symbol-name))
       (list :phase 'P3
             :entered t
             :timestamp (float-time)))))
@@ -390,9 +384,11 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
   "Score efficiency of RUN against EFFICIENCY-CFG."
   (let* ((steps (or (gptel-workflow-run-step-count run) 0))
          (continuations (or (gptel-workflow-run-continuation-count run) 0))
-         (duration (gptel-workflow--calculate-duration
-                    (gptel-workflow-run-start-time run)
-                    (gptel-workflow-run-end-time run)))
+         (duration (if (and (gptel-workflow-run-start-time run)
+                            (gptel-workflow-run-end-time run))
+                       (- (gptel-workflow-run-end-time run)
+                          (gptel-workflow-run-start-time run))
+                     0))
          (min-steps (or (cdr (assq 'min_steps efficiency-cfg)) 1))
          (max-steps (or (cdr (assq 'max_steps efficiency-cfg)) 50))
          (max-continuations (or (cdr (assq 'max_continuations efficiency-cfg)) 5))
@@ -501,9 +497,11 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
                         :run-id (format-time-string "%Y%m%d-%H%M%S")
                         :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")
                         :metrics (list :duration_seconds
-                                       (gptel-workflow--calculate-duration
-                                        (gptel-workflow-run-start-time run)
-                                        (gptel-workflow-run-end-time run))
+                                       (if (and (gptel-workflow-run-start-time run)
+                                                (gptel-workflow-run-end-time run))
+                                           (- (gptel-workflow-run-end-time run)
+                                              (gptel-workflow-run-start-time run))
+                                         0)
                                        :step_count (gptel-workflow-run-step-count run)
                                        :continuation_count (gptel-workflow-run-continuation-count run)
                                        :completed (gptel-workflow-run-completed-p run)
@@ -513,8 +511,12 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
                                                                             :timestamp (plist-get tc :timestamp)))
                                                                     (reverse (gptel-workflow--tool-calls-list run)))))
                         :scores scores))
-           (existing (gptel-workflow--read-json-safe results-file))
-           (history (gptel-workflow--ensure-list existing)))
+           (existing (when (file-exists-p results-file)
+                       (condition-case nil
+                           (gptel-workflow--read-json results-file)
+                         (error nil))))
+           (history (if (vectorp existing) (append existing nil)
+                      (if (listp existing) existing '()))))
       (gptel-workflow--write-json (cons entry history) results-file)
       entry)))
 
@@ -605,9 +607,11 @@ TEST-ID is the test case ID."
           (princ (format "  Steps: %d\n" (gptel-workflow-run-step-count run)))
           (princ (format "  Continuations: %d\n" (gptel-workflow-run-continuation-count run)))
           (princ (format "  Duration: %.1fs\n"
-                         (gptel-workflow--calculate-duration
-                          (gptel-workflow-run-start-time run)
-                          (gptel-workflow-run-end-time run))))
+                         (if (and (gptel-workflow-run-start-time run)
+                                  (gptel-workflow-run-end-time run))
+                             (- (gptel-workflow-run-end-time run)
+                                (gptel-workflow-run-start-time run))
+                           0)))
           (princ (format "  Tool calls: %d\n" (length (gptel-workflow-run-tool-calls run))))
           (when (gptel-workflow-run-tool-calls run)
             (princ "  Tools: ")
@@ -651,8 +655,9 @@ TEST-ID is the test case ID."
          (entry (list :run-id run-id
                       :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")
                       :summary summary)))
-    (gptel-workflow--ensure-dir gptel-workflow-results-dir)
-    (let ((history (gptel-workflow--ensure-list existing)))
+    (unless (file-exists-p gptel-workflow-results-dir)
+      (make-directory gptel-workflow-results-dir t))
+    (let ((history (if (vectorp existing) (append existing nil) existing)))
       (gptel-workflow--write-json (cons entry history) history-file)
       entry)))
 
@@ -677,7 +682,9 @@ TEST-ID is the test case ID."
   "Load historical benchmark data for WORKFLOW-NAME."
   (let ((history-file (expand-file-name (format "%s-history.json" workflow-name)
                                         gptel-workflow-results-dir)))
-    (gptel-workflow--read-json-safe history-file)))
+    (when (file-exists-p history-file)
+      (let ((data (gptel-workflow--read-json history-file)))
+        (if (vectorp data) (append data nil) data)))))
 
 (defun gptel-workflow-benchmark-trend (workflow-name)
   "Show trend of benchmark scores over time for WORKFLOW-NAME."
@@ -744,7 +751,7 @@ Returns plist with :direction, :velocity, :recommendation."
                     (gptel-workflow--read-json results-file))))
     (if (not results)
         (message "[workflow-bench] No results found for %s" workflow-name)
-      (let* ((results-list (gptel-workflow--ensure-list results))
+      (let* ((results-list (if (vectorp results) (append results nil) results))
              (breakdown (gptel-workflow--eight-keys-breakdown results-list)))
         (with-output-to-temp-buffer (format "*Eight Keys: %s*" workflow-name)
           (princ (format "=== Eight Keys Breakdown: %s ===\n\n" workflow-name))
@@ -800,7 +807,7 @@ Returns plist with :patterns, :issues, and :recommendations."
     (if (not results)
         (message "[workflow-bench] No results to analyze for %s" workflow-name)
       (setq analysis (gptel-workflow--analyze-patterns
-                      (gptel-workflow--ensure-list results)))
+                      (if (vectorp results) (append results nil) results)))
       (gptel-workflow--save-feedback workflow-name analysis)
       (gptel-workflow--display-analysis workflow-name analysis)
       analysis)))
@@ -823,11 +830,12 @@ Returns plist with :patterns, :issues, and :recommendations."
           (when (< (or (plist-get scores :efficiency-score) 1.0) 0.7)
             (cl-incf low-efficiency)))
         (when metrics
-          (let ((tools (gptel-workflow--ensure-list (plist-get metrics :tool_calls))))
-            (dolist (tc tools)
-              (let ((tool (plist-get tc :tool)))
-                (when tool
-                  (puthash tool (1+ (gethash tool tool-usage 0)) tool-usage))))))))
+          (let ((tools (plist-get metrics :tool_calls)))
+            (when (vectorp tools)
+              (dolist (tc (append tools nil))
+                (let ((tool (plist-get tc :tool)))
+                  (when tool
+                    (puthash tool (1+ (gethash tool tool-usage 0)) tool-usage)))))))))
     (when (> low-completion 0)
       (push (list :type 'low-completion
                   :count low-completion
@@ -850,17 +858,22 @@ Returns plist with :patterns, :issues, and :recommendations."
           :issues issues
           :recommendations (delete-dups recommendations)
           :total-tests total
-          :analysis-timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")))))
+          :analysis-timestamp (format-time-string "%Y-%m-%dT%H:%M:%S"))))
 
 (defun gptel-workflow--save-feedback (workflow-name analysis)
   "Save ANALYSIS for WORKFLOW-NAME to feedback file."
   (let* ((feedback-file (expand-file-name "workflow-feedback.json"
                                           gptel-workflow-results-dir))
-         (existing (gptel-workflow--read-json-safe feedback-file))
+         (existing (when (file-exists-p feedback-file)
+                     (condition-case nil
+                         (gptel-workflow--read-json feedback-file)
+                       (error nil))))
          (entry (list :workflow workflow-name
                       :analysis analysis))
-         (history (gptel-workflow--ensure-list existing)))
-    (gptel-workflow--ensure-dir gptel-workflow-results-dir)
+         (history (if (vectorp existing) (append existing nil)
+                    (if (listp existing) existing '()))))
+    (unless (file-exists-p gptel-workflow-results-dir)
+      (make-directory gptel-workflow-results-dir t))
     (gptel-workflow--write-json (cons entry history) feedback-file)))
 
 (defun gptel-workflow--display-analysis (workflow-name analysis)
