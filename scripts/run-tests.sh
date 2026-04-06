@@ -41,10 +41,7 @@ run_unit_tests() {
         -L "$DIR/tests" \
         -l ert \
         --eval "(advice-add (quote startup-redirect-eln-cache) :override (lambda (dir) (push (expand-file-name (file-name-as-directory dir) user-emacs-directory) native-comp-eln-load-path)))" \
-<<<<<<< HEAD
-=======
         --eval "(mapc (lambda (fn) (and (fboundp fn) (subr-primitive-p (symbol-function fn)) (comp-subr-trampoline-install fn))) (quote (file-exists-p call-process kill-buffer message directory-files require featurep process-list process-name system-name)))" \
->>>>>>> 67bbfd7d (◈ fix: use subr-primitive-p guard and system-name function form)
         $(find tests -name "test-*.el" -exec echo "-l {}" \;) \
         --eval "(ert-run-tests-batch-and-exit \"$PATTERN\")" 2>&1) || true
     
@@ -53,7 +50,7 @@ run_unit_tests() {
         echo "$output" | tail -5
     fi
     
-    if echo "$output" | grep -qE "(0 unexpected|results as expected.*0 unexpected)"; then
+    if echo "$output" | grep -q "0 unexpected"; then
         pass "All ERT tests passed"
         return 0
     else
