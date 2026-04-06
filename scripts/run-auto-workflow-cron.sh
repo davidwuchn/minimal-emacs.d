@@ -81,21 +81,6 @@ status_indicates_running() {
     [ -r "$STATUS_FILE" ] && grep -q ':running t' "$STATUS_FILE"
 }
 
-status_phase_indicates_activity() {
-    [ -r "$STATUS_FILE" ] || return 1
-    python3 - "$STATUS_FILE" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-text = Path(sys.argv[1]).read_text(encoding="utf-8")
-match = re.search(r':phase\s+"([^"]+)"', text)
-phase = match.group(1) if match else ""
-active = {"auto-workflow", "research", "mementum", "instincts", "selecting", "running"}
-raise SystemExit(0 if phase in active or phase.endswith("-queued") else 1)
-PY
-}
-
 rewrite_status_idle() {
     if [ ! -s "$STATUS_FILE" ]; then
         default_status >"$STATUS_FILE"
@@ -157,29 +142,8 @@ check_worker_daemon() {
     return 1
 }
 
-daemon_reports_active_workflow() {
-    local elisp="(let ((running (and (boundp 'gptel-auto-workflow--running)
-                                     (default-value 'gptel-auto-workflow--running)))
-                       (queued (and (boundp 'gptel-auto-workflow--cron-job-running)
-                                    (default-value 'gptel-auto-workflow--cron-job-running))))
-                    (if (or running queued) t nil))"
-    local output
-    if ! output="$(run_emacsclient_eval "$(wrap_emacs_eval "$elisp")" 2 2>/dev/null)"; then
-        local rc=$?
-        if [ "$rc" -eq 124 ]; then
-            return 2
-        fi
-        return 1
-    fi
-
-    if printf '%s' "$output" | grep -qx 't'; then
-        return 0
-    fi
-    return 1
-}
-
 clear_stale_running_status() {
-    if ! status_indicates_running && ! status_phase_indicates_activity; then
+    if ! status_indicates_running; then
         return 0
     fi
 
@@ -191,14 +155,6 @@ clear_stale_running_status() {
     fi
 
     if [ "$rc" -eq 0 ]; then
-        if daemon_reports_active_workflow; then
-            return 0
-        else
-            rc=$?
-            if [ "$rc" -eq 1 ]; then
-                rewrite_status_idle
-            fi
-        fi
         return 0
     fi
 
@@ -244,62 +200,31 @@ ensure_worker_daemon() {
     if [ "$rc" -eq 2 ]; then
         return 0
     fi
-
-    mkdir -p "$DIR/var/tmp/cron"
-    LOCK_FILE="$DIR/var/tmp/cron/daemon-start.lock"
-    
-    local lock_acquired=0
-    for _ in $(seq 1 10); do
-        if (set -C; echo "$$" > "$LOCK_FILE") 2>/dev/null; then
-            lock_acquired=1
-            break
-        fi
-        sleep 0.2
-    done
-    
-    if [ "$lock_acquired" -eq 0 ]; then
-        for _ in $(seq 1 30); do
-            if check_worker_daemon; then
-                return 0
-            fi
-            sleep 0.5
-        done
-        echo "daemon startup blocked by another process, waited 15s" >&2
-        return 1
-    fi
-    
-    trap 'rm -f "$LOCK_FILE"' EXIT
-    
-    check_worker_daemon && { rm -f "$LOCK_FILE"; return 0; }
-    
-    "$EMACS" --eval "(server-force-delete \"$SERVER_NAME\")" >>"$DAEMON_LOG" 2>&1 || true
-    sleep 0.5
     MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 "$EMACS" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
     for _ in $(seq 1 50); do
         if check_worker_daemon; then
-            rm -f "$LOCK_FILE"
+            rc=0
+        else
+            rc=$?
+        fi
+
+        if [ "$rc" -eq 0 ]; then
+            return 0
+        fi
+        if [ "$rc" -eq 2 ]; then
             return 0
         fi
         sleep 0.2
     done
     echo "failed to start worker daemon: $SERVER_NAME" >&2
     tail -n 40 "$DAEMON_LOG" >&2 || true
-    rm -f "$LOCK_FILE"
     return 1
 }
 
 case "$ACTION" in
     auto-workflow)
         ELISP="(let ((root \"$ROOT_LISP\"))
-                 (setq minimal-emacs-user-directory root)
-                  (setq user-emacs-directory root)
-                 (dolist (dir (list (expand-file-name \"lisp\" root)
-                                    (expand-file-name \"lisp/modules\" root)
-                                    (expand-file-name \"packages/gptel\" root)
-                                    (expand-file-name \"packages/gptel-agent\" root)
-                                    (expand-file-name \"packages/ai-code\" root)))
-                   (when (file-directory-p dir)
-                     (add-to-list 'load-path dir)))
+                 (setq user-emacs-directory root)
                  (defvar gptel--tool-preview-alist nil)
                  (load-file (expand-file-name \"lisp/modules/nucleus-tools.el\" root))
                  (load-file (expand-file-name \"lisp/modules/nucleus-prompts.el\" root))
@@ -323,15 +248,7 @@ case "$ACTION" in
         ;;
     research)
         ELISP="(let ((root \"$ROOT_LISP\"))
-                 (setq minimal-emacs-user-directory root)
-                  (setq user-emacs-directory root)
-                 (dolist (dir (list (expand-file-name \"lisp\" root)
-                                    (expand-file-name \"lisp/modules\" root)
-                                    (expand-file-name \"packages/gptel\" root)
-                                    (expand-file-name \"packages/gptel-agent\" root)
-                                    (expand-file-name \"packages/ai-code\" root)))
-                   (when (file-directory-p dir)
-                     (add-to-list 'load-path dir)))
+                 (setq user-emacs-directory root)
                  (defvar gptel--tool-preview-alist nil)
                  (load-file (expand-file-name \"lisp/modules/nucleus-tools.el\" root))
                  (load-file (expand-file-name \"lisp/modules/nucleus-prompts.el\" root))
@@ -355,15 +272,6 @@ case "$ACTION" in
         ;;
     mementum)
         ELISP="(let ((root \"$ROOT_LISP\"))
-                 (setq minimal-emacs-user-directory root)
-                 (setq user-emacs-directory root)
-                 (dolist (dir (list (expand-file-name \"lisp\" root)
-                                    (expand-file-name \"lisp/modules\" root)
-                                    (expand-file-name \"packages/gptel\" root)
-                                    (expand-file-name \"packages/gptel-agent\" root)
-                                    (expand-file-name \"packages/ai-code\" root)))
-                   (when (file-directory-p dir)
-                     (add-to-list 'load-path dir)))
                  (defvar gptel--tool-preview-alist nil)
                  (require 'gptel)
                  (unless (fboundp 'gptel--format-tool-call)
@@ -377,15 +285,6 @@ case "$ACTION" in
         ;;
     instincts)
         ELISP="(let ((root \"$ROOT_LISP\"))
-                 (setq minimal-emacs-user-directory root)
-                 (setq user-emacs-directory root)
-                 (dolist (dir (list (expand-file-name \"lisp\" root)
-                                    (expand-file-name \"lisp/modules\" root)
-                                    (expand-file-name \"packages/gptel\" root)
-                                    (expand-file-name \"packages/gptel-agent\" root)
-                                    (expand-file-name \"packages/ai-code\" root)))
-                   (when (file-directory-p dir)
-                     (add-to-list 'load-path dir)))
                  (defvar gptel--tool-preview-alist nil)
                  (require 'gptel)
                  (unless (fboundp 'gptel--format-tool-call)
@@ -399,15 +298,6 @@ case "$ACTION" in
         ;;
     status)
         ELISP="(let ((root \"$ROOT_LISP\"))
-                 (setq minimal-emacs-user-directory root)
-                 (setq user-emacs-directory root)
-                 (dolist (dir (list (expand-file-name \"lisp\" root)
-                                    (expand-file-name \"lisp/modules\" root)
-                                    (expand-file-name \"packages/gptel\" root)
-                                    (expand-file-name \"packages/gptel-agent\" root)
-                                    (expand-file-name \"packages/ai-code\" root)))
-                   (when (file-directory-p dir)
-                     (add-to-list 'load-path dir)))
                  (defvar gptel--tool-preview-alist nil)
                  (require 'gptel)
                  (unless (fboundp 'gptel--format-tool-call)
@@ -438,44 +328,22 @@ EVAL_ELISP="$(wrap_emacs_eval "$ELISP")"
 cd "$DIR"
 if [ "$ACTION" = "status" ]; then
     clear_stale_running_status
-    if check_worker_daemon; then
-        live_status="$(run_emacsclient_eval "$EVAL_ELISP" 5 2>/dev/null || true)"
-        if printf '%s' "$live_status" | grep -q ':phase'; then
-            printf '%s\n' "$live_status"
-            exit 0
-        fi
-    fi
     print_status
     exit 0
 fi
 
 if [ "$ACTION" = "messages" ]; then
-    if check_worker_daemon; then
-        rc=0
-    else
-        rc=$?
-    fi
-    if { [ "${rc:-1}" -eq 0 ] || [ "${rc:-1}" -eq 2 ]; } && run_emacsclient_eval "$EVAL_ELISP" 10 >/dev/null 2>&1; then
+    ensure_worker_daemon
+    if run_emacsclient_eval "$EVAL_ELISP" 10 >/dev/null; then
         if [ -r "$MESSAGES_FILE" ]; then
             cat "$MESSAGES_FILE"
         fi
         exit 0
     fi
-    if [ -r "$MESSAGES_FILE" ]; then
-        cat "$MESSAGES_FILE"
-        exit 0
-    fi
-    exit "${rc:-1}"
+    exit $?
 fi
 
 clear_stale_running_status
-
-if status_indicates_running; then
-    echo "already-running"
-    exit 0
-fi
-
-sleep 0.3
 
 if status_indicates_running; then
     echo "already-running"
