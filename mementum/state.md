@@ -42,6 +42,43 @@
 
 **Commit:** `◈ fix: add nil guard for prompt in subagent-cache-key` (0f16ecc3)
 
+**Docs Consolidated:**
+- Archived 12 redundant docs to `docs/archive/auto-workflow-session-2026-04-02/`
+- Extracted 5 patterns to `mementum/memories/`:
+  - `llm-syntax-error-pattern.md`
+  - `fsm-creation-pattern.md`
+  - `buffer-local-pattern.md`
+  - `module-load-order-pattern.md`
+  - `daemon-persistence-antipattern.md`
+- Created 1 knowledge page: `auto-workflow-multi-project.md`
+- Consolidated status tracking to `mementum/state.md`
+- Reduced active docs from 16 → 8 reference docs
+
+**Final Docs Structure:**
+```
+docs/
+├── auto-workflow.md          # Main auto-workflow doc
+├── CODE_TOOLS.md             # Tool reference
+├── MODULE_ARCHITECTURE.md    # Architecture reference
+├── ORG-MODE-SETUP.md         # Setup guide
+├── ORG-PACKAGES.md           # Package reference
+├── OUROBOROS.md              # Research notes
+├── PERFORMANCE_TUNING.md     # Tuning guide
+├── TROUBLESHOOTING.md        # Troubleshooting
+└── archive/                  # Archived sessions
+    └── auto-workflow-session-2026-04-02/ (12 docs)
+```
+
+**Mementum Structure:**
+```
+mementum/
+├── state.md                  # Session status (single source of truth)
+├── memories/                 # 70+ atomic insights
+└── knowledge/                # 30+ synthesized pages
+```
+
+**Commit:** `◈ docs: consolidate to mementum/*, archive redundant docs` (9bc27e00)
+
 ---
 
 ### Session Summary: 2026-04-05 (Merge Staging to Main)
