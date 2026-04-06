@@ -651,6 +651,12 @@ Default 300s (5 min). Set lower to catch stuck requests faster."
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defvar my/gptel-agent-task-hard-timeout nil
+  "Optional hard wall-clock timeout in seconds for the current subagent task.
+
+When non-nil, inactivity-based timeouts may still rearm on progress, but the
+task cannot exceed this total runtime.")
+
 (defcustom my/gptel-subagent-result-limit 4000
   "Max characters to return inline from a subagent result.
 Results longer than this are truncated and the full text is saved
@@ -1243,6 +1249,91 @@ Dynamic variable, let-bound around gptel-agent--task calls.")
      ((buffer-live-p request-buf) request-buf)
      ((buffer-live-p origin-buf) origin-buf))))
 
+(defun my/gptel--agent-task-buffer-tick (buffer)
+  "Return BUFFER's current modification tick when BUFFER is live."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (buffer-chars-modified-tick))))
+
+(defun my/gptel--agent-task-note-activity (task-id &optional timestamp)
+  "Record fresh activity for TASK-ID at TIMESTAMP or now."
+  (when-let* ((state (gethash task-id my/gptel--agent-task-state)))
+    (puthash task-id
+             (plist-put state :last-activity-time (or timestamp (current-time)))
+             my/gptel--agent-task-state)))
+
+(defun my/gptel--agent-task-uses-idle-timeout-p (agent-type)
+  "Return non-nil when AGENT-TYPE should use inactivity-based timeout extension."
+  (equal agent-type "executor"))
+
+(defun my/gptel--agent-task-note-active-activity (&optional agent-type timestamp)
+  "Record fresh activity for active idle-timeout tasks matching AGENT-TYPE.
+
+When AGENT-TYPE is nil, note activity for every active idle-timeout task."
+  (let ((activity-time (or timestamp (current-time))))
+    (when (> (hash-table-count my/gptel--agent-task-state) 0)
+      (maphash
+       (lambda (task-id state)
+         (when (and (not (plist-get state :done))
+                    (my/gptel--agent-task-uses-idle-timeout-p
+                     (plist-get state :agent-type))
+                    (or (null agent-type)
+                        (equal (plist-get state :agent-type) agent-type)))
+           (my/gptel--agent-task-note-activity task-id activity-time)))
+       my/gptel--agent-task-state))))
+
+(defun my/gptel--path-within-directory-p (path directory)
+  "Return non-nil when PATH is DIRECTORY itself or lives beneath it."
+  (when (and (stringp path) (stringp directory))
+    (let* ((path (expand-file-name path))
+           (directory (expand-file-name directory)))
+      (or (equal path directory)
+          (equal (file-name-as-directory path)
+                 (file-name-as-directory directory))
+          (ignore-errors
+            (file-in-directory-p path directory))))))
+
+(defun my/gptel--agent-task-note-context-activity (&optional directory buffer timestamp)
+  "Record activity for executor tasks active in DIRECTORY or BUFFER.
+
+TIMESTAMP defaults to `current-time'."
+  (let* ((activity-time (or timestamp (current-time)))
+         (dir (and (stringp directory) (expand-file-name directory)))
+         (dir (or dir
+                  (and (stringp default-directory)
+                       (expand-file-name default-directory))))
+         (buf (or buffer (current-buffer)))
+         (file (and (buffer-live-p buf) (buffer-file-name buf))))
+    (when (> (hash-table-count my/gptel--agent-task-state) 0)
+      (maphash
+       (lambda (task-id state)
+         (let ((activity-dir (plist-get state :activity-dir)))
+           (when (and (equal (plist-get state :agent-type) "executor")
+                      (stringp activity-dir)
+                      (or (and dir
+                               (my/gptel--path-within-directory-p dir activity-dir))
+                          (and file
+                               (my/gptel--path-within-directory-p file activity-dir))))
+             (my/gptel--agent-task-note-activity task-id activity-time))))
+       my/gptel--agent-task-state))))
+
+(defun my/gptel--agent-task-note-message-activity (&rest _args)
+  "Treat worktree-context messages as executor activity."
+  (my/gptel--agent-task-note-context-activity))
+
+(unless (advice-member-p #'my/gptel--agent-task-note-message-activity 'message)
+  (advice-add 'message :before #'my/gptel--agent-task-note-message-activity))
+
+(defun my/gptel--agent-task-note-curl-activity (&rest _args)
+  "Treat gptel curl request setup as active subagent progress."
+  (my/gptel--agent-task-note-active-activity))
+
+(with-eval-after-load 'gptel-request
+  (unless (advice-member-p #'my/gptel--agent-task-note-curl-activity
+                           'gptel-curl--get-args)
+    (advice-add 'gptel-curl--get-args :before
+                #'my/gptel--agent-task-note-curl-activity)))
+
 (defun my/gptel--register-agent-task-buffer (buffer)
   "Record BUFFER as the active request buffer for the current subagent task."
   (when (and my/gptel--current-agent-task-id
@@ -1327,7 +1418,9 @@ Uses hash table keyed by task-id to support parallel execution."
          (parent-fsm (and parent-fsm-local-p
                           (buffer-local-value 'gptel--fsm-last origin-buf)))
          (child-fsm nil)
-         (packaged-prompt (my/gptel--build-subagent-context prompt files include-history include-diff origin-buf))
+         (packaged-prompt
+          (my/gptel--build-subagent-context
+           prompt files include-history include-diff origin-buf))
          (restore-origin-fsm
           (lambda (&optional expected-fsm)
             (when (buffer-live-p origin-buf)
@@ -1337,87 +1430,176 @@ Uses hash table keyed by task-id to support parallel execution."
                   (if parent-fsm-local-p
                       (setq-local gptel--fsm-last parent-fsm)
                     (kill-local-variable 'gptel--fsm-last)))))))
-          (wrapped-cb
-           (lambda (result)
-              (let* ((state (gethash task-id my/gptel--agent-task-state))
-                     (already-done (plist-get state :done)))
-                (if (not state)
-                    (message "[nucleus] Ignoring stale subagent %s callback after reset"
-                             agent-type)
-                  ;; Atomic test-and-set: mark done before acting to prevent
-                  ;; double-invocation if gptel-abort fires synchronously in timeout.
-                  (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                  (unless already-done
-                    (when (timerp (plist-get state :timeout-timer))
-                      (cancel-timer (plist-get state :timeout-timer)))
-                    (when (timerp (plist-get state :progress-timer))
-                      (cancel-timer (plist-get state :progress-timer)))
-                    (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
-                             agent-type (float-time (time-since start-time))
-                             (if (stringp result) (length result) 0))
-                    (funcall restore-origin-fsm child-fsm)
-                    (funcall callback result)
-                    (remhash task-id my/gptel--agent-task-state)))))))
-    (message "[nucleus] Delegating to subagent %s%s..."
-             agent-type
-             (if task-timeout
-                 (format " (timeout: %ds)" task-timeout)
-                ""))
-    (let ((progress-timer
-           (run-at-time my/gptel-subagent-progress-interval
-                        my/gptel-subagent-progress-interval
-                        (lambda ()
-                          (let ((state (gethash task-id my/gptel--agent-task-state)))
-                            (when (gptel-auto-workflow--state-active-p state)
-                              (message "[nucleus] Subagent %s still running... (%.1fs elapsed)"
-                                       agent-type (float-time (time-since start-time)))))))))
-      (puthash task-id (list :done nil
-                             :timeout-timer nil
-                             :progress-timer progress-timer
-                             :origin-buf origin-buf
-                             :request-buf nil)
-                my/gptel--agent-task-state))
-    (when task-timeout
-      (let ((timeout-timer
-             (run-at-time task-timeout nil
+         (wrapped-cb
+          (lambda (result)
+            (let* ((state (gethash task-id my/gptel--agent-task-state))
+                   (already-done (plist-get state :done)))
+              (if (not state)
+                  (message "[nucleus] Ignoring stale subagent %s callback after reset"
+                           agent-type)
+                ;; Atomic test-and-set: mark done before acting to prevent
+                ;; double-invocation if gptel-abort fires synchronously in timeout.
+                (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                (unless already-done
+                  (when (timerp (plist-get state :timeout-timer))
+                    (cancel-timer (plist-get state :timeout-timer)))
+                  (when (timerp (plist-get state :progress-timer))
+                    (cancel-timer (plist-get state :progress-timer)))
+                  (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
+                           agent-type (float-time (time-since start-time))
+                           (if (stringp result) (length result) 0))
+                  (funcall restore-origin-fsm child-fsm)
+                  (unwind-protect
+                      (funcall callback result)
+                    (remhash task-id my/gptel--agent-task-state))))))))
+    (let* ((uses-idle-timeout
+            (my/gptel--agent-task-uses-idle-timeout-p agent-type))
+           (hard-timeout
+            (and uses-idle-timeout
+                 (integerp my/gptel-agent-task-hard-timeout)
+                 (> my/gptel-agent-task-hard-timeout 0)
+                 my/gptel-agent-task-hard-timeout))
+           (hard-deadline
+            (and hard-timeout
+                 (time-add start-time (seconds-to-time hard-timeout))))
+           rearm-timeout note-buffer-activity)
+      (setq rearm-timeout
+            (lambda (state)
+              (when task-timeout
+                (when (timerp (plist-get state :timeout-timer))
+                  (cancel-timer (plist-get state :timeout-timer)))
+                (let* ((remaining-hard-seconds
+                        (and hard-deadline
+                             (max 0
+                                  (ceiling
+                                   (float-time
+                                    (time-subtract hard-deadline (current-time)))))))
+                       (next-delay (if remaining-hard-seconds
+                                       (min task-timeout remaining-hard-seconds)
+                                     task-timeout)))
+                  (setq state
+                        (plist-put
+                         state :timeout-timer
+                         (run-at-time
+                          next-delay nil
                           (lambda ()
                             (let* ((state (gethash task-id my/gptel--agent-task-state))
-                                   (already-done (plist-get state :done)))
+                                   (already-done (plist-get state :done))
+                                   (last-activity (plist-get state :last-activity-time))
+                                   (idle-seconds (and last-activity
+                                                      (float-time (time-since last-activity))))
+                                   (remaining-hard
+                                    (and hard-deadline
+                                         (float-time
+                                          (time-subtract hard-deadline (current-time)))))
+                                   (hard-expired (and remaining-hard
+                                                      (<= remaining-hard 0)))
+                                   (timeout-seconds (if hard-expired
+                                                        hard-timeout
+                                                      task-timeout))
+                                   (timeout-suffix (if hard-expired
+                                                       " total runtime"
+                                                     "")))
                               (when state
-                                ;; Atomic test-and-set: same guard as wrapped-cb.
-                                (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                                (unless already-done
+                                (cond
+                                 (already-done nil)
+                                 ((and uses-idle-timeout
+                                       (not hard-expired)
+                                       idle-seconds
+                                       (< idle-seconds task-timeout))
+                                  (funcall rearm-timeout state))
+                                 (t
+                                  (puthash task-id (plist-put state :done t)
+                                           my/gptel--agent-task-state)
                                   (when (timerp (plist-get state :progress-timer))
                                     (cancel-timer (plist-get state :progress-timer)))
-                                  (message "[nucleus] Subagent %s timed out after %ds, aborting request"
-                                           agent-type task-timeout)
+                                  (message "[nucleus] Subagent %s timed out after %ds%s, aborting request"
+                                           agent-type timeout-seconds timeout-suffix)
                                   (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
                                               ((fboundp 'gptel-abort)))
                                     (ignore-errors (gptel-abort request-buf)))
-                                  (funcall restore-origin-fsm child-fsm)
-                                  (funcall callback
-                                           (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                                   description agent-type task-timeout))
-                                  (remhash task-id my/gptel--agent-task-state))))))))
-        (let ((state (gethash task-id my/gptel--agent-task-state)))
-          (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
-    (let ((my/gptel--current-agent-task-id task-id)
-          (my/gptel--subagent-origin-buffer origin-buf))
-      (let ((request-started nil))
-        (unwind-protect
-            (progn
-              (my/gptel--call-gptel-agent-task
-               wrapped-cb agent-type description packaged-prompt)
-                 (setq request-started t)
-                (when-let* ((state (gethash task-id my/gptel--agent-task-state))
-                            (request-buf (my/gptel--agent-task-request-buffer state))
+                                  (let ((timeout-result
+                                         (format "Error: Task \"%s\" (%s) timed out after %ds%s."
+                                                 description agent-type timeout-seconds timeout-suffix)))
+                                    (funcall restore-origin-fsm child-fsm)
+                                    (if (buffer-live-p origin-buf)
+                                        (with-current-buffer origin-buf
+                                          (unwind-protect
+                                              (funcall callback timeout-result)
+                                            (remhash task-id my/gptel--agent-task-state)))
+                                      (unwind-protect
+                                          (funcall callback timeout-result)
+                                        (remhash task-id my/gptel--agent-task-state)))))))))))))
+                  (puthash task-id state my/gptel--agent-task-state))
+                state))
+      (setq note-buffer-activity
+            (lambda (state)
+              (when uses-idle-timeout
+                (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
                             ((buffer-live-p request-buf)))
-                  (with-current-buffer request-buf
-                    (when (local-variable-p 'gptel--fsm-last)
-                       (setq child-fsm gptel--fsm-last)
-                       (my/gptel--disable-auto-retry-for-fsm child-fsm)))))
-           (unless request-started
-             (funcall restore-origin-fsm)))))))
+                  (let* ((current-tick (my/gptel--agent-task-buffer-tick request-buf))
+                         (last-tick (plist-get state :last-buffer-tick)))
+                    (when (and current-tick (not (equal current-tick last-tick)))
+                      (setq state (plist-put state :last-buffer-tick current-tick))
+                      (setq state (plist-put state :last-activity-time (current-time)))
+                      (setq state (funcall rearm-timeout state))))))
+              state))
+      (message "[nucleus] Delegating to subagent %s%s..."
+               agent-type
+               (if task-timeout
+                   (format " (%s: %ds%s)"
+                           (if uses-idle-timeout "idle timeout" "timeout")
+                           task-timeout
+                           (if (and hard-timeout (> hard-timeout task-timeout))
+                               (format ", max runtime: %ds" hard-timeout)
+                             ""))
+                 ""))
+      (let ((progress-timer
+             (run-at-time my/gptel-subagent-progress-interval
+                          my/gptel-subagent-progress-interval
+                          (lambda ()
+                            (let ((state (gethash task-id my/gptel--agent-task-state)))
+                              (when (gptel-auto-workflow--state-active-p state)
+                                (funcall note-buffer-activity state)
+                                (message "[nucleus] Subagent %s still running... (%.1fs elapsed)"
+                                         agent-type (float-time (time-since start-time)))))))))
+        (puthash task-id (list :done nil
+                               :timeout-timer nil
+                               :progress-timer progress-timer
+                               :origin-buf origin-buf
+                               :request-buf nil
+                               :last-buffer-tick nil
+                               :last-activity-time (current-time)
+                               :agent-type agent-type
+                               :activity-dir (and (stringp default-directory)
+                                                  (expand-file-name default-directory)))
+                 my/gptel--agent-task-state)
+        (when task-timeout
+          (let ((state (gethash task-id my/gptel--agent-task-state)))
+            (funcall rearm-timeout state)))
+        (let ((my/gptel--current-agent-task-id task-id)
+              (my/gptel--subagent-origin-buffer origin-buf))
+          (let ((request-started nil))
+            (unwind-protect
+                (progn
+                  (my/gptel--call-gptel-agent-task
+                   wrapped-cb agent-type description packaged-prompt)
+                  (setq request-started t)
+                  (when-let* ((state (gethash task-id my/gptel--agent-task-state))
+                              (request-buf (my/gptel--agent-task-request-buffer state))
+                              ((buffer-live-p request-buf)))
+                    (with-current-buffer request-buf
+                      (when (local-variable-p 'gptel--fsm-last)
+                        (setq child-fsm gptel--fsm-last)
+                        (my/gptel--disable-auto-retry-for-fsm child-fsm)))
+                    (let* ((state (gethash task-id my/gptel--agent-task-state))
+                           (tick (my/gptel--agent-task-buffer-tick request-buf)))
+                      (when (and state tick)
+                        (puthash task-id
+                                 (plist-put state :last-buffer-tick tick)
+                                 my/gptel--agent-task-state)))))
+              (unless request-started
+                (funcall restore-origin-fsm)))))))))
 
 (cl-defun my/gptel--run-agent-tool (callback &optional agent-name description prompt files include-history include-diff)
   "Run a gptel-agent agent by name.
@@ -1465,13 +1647,22 @@ INCLUDE-HISTORY defaults to `my/gptel-subagent-include-history-default' when nil
 (defun my/gptel--run-agent-tool-with-timeout (timeout callback agent-name description prompt
                                                       &optional files include-history include-diff)
   "Run `my/gptel--run-agent-tool' with TIMEOUT forced for this one dispatch."
-  (let ((previous-timeout my/gptel-agent-task-timeout))
+  (let ((previous-timeout my/gptel-agent-task-timeout)
+        (previous-hard-timeout my/gptel-agent-task-hard-timeout))
     (unwind-protect
         (progn
           (setq my/gptel-agent-task-timeout timeout)
+          (setq my/gptel-agent-task-hard-timeout
+                (and (equal agent-name "executor")
+                     (integerp timeout)
+                     (> timeout 0)
+                     (integerp gptel-auto-experiment-active-grace)
+                     (> gptel-auto-experiment-active-grace 0)
+                     (+ timeout gptel-auto-experiment-active-grace)))
           (my/gptel--run-agent-tool callback agent-name description prompt
                                     files include-history include-diff))
-      (setq my/gptel-agent-task-timeout previous-timeout))))
+      (setq my/gptel-agent-task-timeout previous-timeout
+            my/gptel-agent-task-hard-timeout previous-hard-timeout))))
 
 ;;; Tool Registration
 
@@ -1592,6 +1783,16 @@ Monthly subscription: LLM selection finds best targets each run."
 
 (defcustom gptel-auto-experiment-time-budget 600
   "Time budget per experiment in seconds (default: 10 min)."
+  :type 'integer
+  :safe #'integerp
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-experiment-active-grace 300
+  "Extra wall-clock seconds active executor experiments may use beyond budget.
+
+Executor requests still use `gptel-auto-experiment-time-budget' as their idle
+timeout, but active runs may exceed it by this grace period before they are
+forcibly aborted."
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
