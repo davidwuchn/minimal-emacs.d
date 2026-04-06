@@ -208,71 +208,29 @@ EXIT-CODE defaults to 1."
                (setq result exp-result)))
             (should analyze-callback)
             (funcall analyze-callback '(:patterns nil))
-             (should (= captured-timeout 600))
-             (should (equal (plist-get result :comparator-reason) ":timeout"))))
-      (delete-directory temp-dir t))))
-
-(ert-deftest regression/auto-experiment/executor-timeout-owned-by-subagent-wrapper ()
-  "Experiment runner should not add a second wall-clock timeout around executor."
-  (let* ((temp-dir (make-temp-file "exp-worktree" t))
-         (captured-timeout nil)
-         (scheduled-timers nil)
-         (gptel-auto-experiment-time-budget 600))
-    (unwind-protect
-        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
-                  ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
-                   (lambda (_worktree) (current-buffer)))
-                  ((symbol-function 'gptel-auto-experiment-analyze)
-                   (lambda (_previous-results cb)
-                     (funcall cb nil)))
-                  ((symbol-function 'gptel-auto-experiment-build-prompt)
-                   (lambda (&rest _args) "prompt"))
-                  ((symbol-function 'run-with-timer)
-                   (lambda (secs repeat fn &rest _args)
-                     (push (list secs repeat fn) scheduled-timers)
-                     :fake-timer))
-                  ((symbol-function 'cancel-timer)
-                   (lambda (&rest _) nil))
-                  ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
-                   (lambda (timeout _callback _agent-name _description _prompt
-                            &optional _files _include-history _include-diff)
-                     (setq captured-timeout timeout)))
-                  ((symbol-function 'message)
-                   (lambda (&rest _) nil)))
-          (with-temp-buffer
-            (gptel-auto-experiment-run
-             "lisp/modules/gptel-tools-agent.el" 1 2 0.4 0.5 nil
-             #'ignore))
-          (should (= captured-timeout 600))
-          (should-not scheduled-timers))
+            (should (= captured-timeout 600))
+            (should (equal (plist-get result :comparator-reason) ":timeout"))))
       (delete-directory temp-dir t))))
 
 (ert-deftest regression/subagent/run-agent-tool-with-timeout-overrides-and-restores ()
   "Timeout helper should override the shared timeout only for one dispatch."
   (let ((gptel-agent--agents '(("executor")))
-         (my/gptel-agent-task-timeout 300)
-         (my/gptel-agent-task-hard-timeout 7)
-         (gptel-auto-experiment-active-grace 21)
-         (captured-timeout nil)
-         (captured-hard-timeout nil))
+        (my/gptel-agent-task-timeout 300)
+        (captured-timeout nil))
     (cl-letf (((symbol-function 'my/gptel--agent-task-with-timeout)
                (lambda (_callback _agent-type _description _prompt
                         &optional _files _include-history _include-diff)
-                  (setq captured-timeout my/gptel-agent-task-timeout
-                        captured-hard-timeout my/gptel-agent-task-hard-timeout)))
+                 (setq captured-timeout my/gptel-agent-task-timeout)))
               ((symbol-function 'gptel-agent--task)
-                (lambda (&rest _) nil)))
-       (my/gptel--run-agent-tool-with-timeout
-        42
-        #'ignore
+               (lambda (&rest _) nil)))
+      (my/gptel--run-agent-tool-with-timeout
+       42
+       #'ignore
        "executor"
-        "desc"
-        "prompt")
-       (should (= captured-timeout 42))
-       (should (= captured-hard-timeout 63))
-       (should (= my/gptel-agent-task-timeout 300))
-       (should (= my/gptel-agent-task-hard-timeout 7)))))
+       "desc"
+       "prompt")
+      (should (= captured-timeout 42))
+      (should (= my/gptel-agent-task-timeout 300)))))
 
 (ert-deftest regression/auto-experiment/context-binds-stable-run-root ()
   "Experiment callbacks should keep the workflow root stable inside worktrees."
@@ -433,89 +391,8 @@ EXIT-CODE defaults to 1."
                            nil
                            nil))))
       (when (buffer-live-p worktree-buf)
-       (kill-buffer worktree-buf))
-      (delete-directory project-root t))))
-
-(ert-deftest regression/auto-experiment/elisp-syntax-errors-trigger-validation-retry ()
-  "Elisp syntax validation failures should retry with elisp-expert guidance."
-  (let* ((project-root (make-temp-file "aw-project" t))
-         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/retry-riven-exp1" project-root))
-         (worktree-buf (get-buffer-create "*aw-syntax-retry*"))
-         (runagent-calls nil)
-         (benchmark-calls 0)
-         (syntax-error "Syntax error in /tmp/worktree/gptel-tools-agent.el: (end-of-file)")
-         result)
-    (unwind-protect
-        (progn
-          (make-directory worktree-dir t)
-          (with-current-buffer worktree-buf
-            (setq-local default-directory (file-name-as-directory worktree-dir)))
-          (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                     (lambda (_target _experiment-id) worktree-dir))
-                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
-                     (lambda (_worktree-dir) worktree-buf))
-                    ((symbol-function 'gptel-auto-experiment-analyze)
-                     (lambda (_previous-results cb)
-                       (funcall cb nil)))
-                    ((symbol-function 'gptel-auto-experiment-build-prompt)
-                     (lambda (&rest _args) "prompt"))
-                    ((symbol-function 'run-with-timer)
-                     (lambda (&rest _args) :fake-timer))
-                    ((symbol-function 'cancel-timer)
-                     (lambda (&rest _args) nil))
-                    ((symbol-function 'my/gptel--run-agent-tool)
-                     (lambda (cb &rest args)
-                       (push args runagent-calls)
-                       (funcall cb "HYPOTHESIS: fix validation path")))
-                    ((symbol-function 'gptel-auto-experiment-grade)
-                     (lambda (_output cb)
-                       (funcall cb '(:score 9 :total 9 :passed t :details "ok"))))
-                    ((symbol-function 'gptel-auto-experiment-benchmark)
-                     (lambda (&optional _full)
-                       (cl-incf benchmark-calls)
-                       (if (= benchmark-calls 1)
-                           (list :passed nil :validation-error syntax-error)
-                         '(:passed nil :validation-error "still bad"))))
-                    ((symbol-function 'magit-git-success)
-                     (lambda (&rest _args) t))
-                    ((symbol-function 'gptel-auto-experiment-log-tsv)
-                     (lambda (&rest _args) nil))
-                    ((symbol-function 'message)
-                     (lambda (&rest _args) nil)))
-            (with-current-buffer worktree-buf
-              (gptel-auto-experiment-run
-               "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
-               (lambda (exp-result)
-                 (setq result exp-result)))))
-          (setq runagent-calls (nreverse runagent-calls))
-          (should result)
-          (should (= (length runagent-calls) 2))
-          (let ((retry-call (nth 1 runagent-calls)))
-            (should (equal (nth 0 retry-call) "executor"))
-            (should (equal (nth 1 retry-call)
-                           "Retry: fix validation error in lisp/modules/gptel-tools-agent.el"))
-            (should (string-match-p (regexp-quote syntax-error)
-                                    (nth 2 retry-call)))
-            (should (string-match-p (regexp-quote "Skill(\"elisp-expert\")")
-                                    (nth 2 retry-call)))))
-      (when (buffer-live-p worktree-buf)
         (kill-buffer worktree-buf))
       (delete-directory project-root t))))
-
-(ert-deftest regression/auto-experiment/teachable-validation-errors-return-boolean ()
-  "Teachable validation detection should normalize matches to booleans."
-  (should (eq t
-              (gptel-auto-experiment--teachable-validation-error-p
-               "lisp/modules/gptel-tools-agent.el"
-               "Syntax error in /tmp/worktree/gptel-tools-agent.el: (end-of-file)")))
-  (should (eq t
-              (gptel-auto-experiment--teachable-validation-error-p
-               "lisp/modules/gptel-tools-agent.el"
-               "Dangerous pattern in temp.el: cl-return-from without cl-block")))
-  (should-not
-   (gptel-auto-experiment--teachable-validation-error-p
-    "notes.txt"
-    "Syntax error in /tmp/worktree/notes.txt: unexpected indent")))
 
 (ert-deftest regression/runagent/malformed-call-with-no-args-reports-error ()
   "RunAgent should return a normal tool error when no mapped args were supplied."
@@ -740,26 +617,19 @@ EXIT-CODE defaults to 1."
 (ert-deftest regression/subagent/late-callback-after-timeout-is-ignored ()
   "Late subagent callback should not fire after timeout already completed the task."
   (let ((my/gptel-agent-task-timeout 42)
-         (my/gptel-subagent-progress-interval 10)
-         (callback-results nil)
-         (scheduled-timeout nil)
-         (wrapped-callback nil)
-         (now 0))
+        (my/gptel-subagent-progress-interval 10)
+        (callback-results nil)
+        (scheduled-timeout nil)
+        (wrapped-callback nil))
     (cl-letf (((symbol-function 'run-at-time)
-                (lambda (secs _repeat fn &rest _args)
-                  (if (= secs my/gptel-agent-task-timeout)
-                      (setq scheduled-timeout fn)
-                    :fake-progress)))
-               ((symbol-function 'current-time)
-                (lambda ()
-                  (seconds-to-time now)))
-               ((symbol-function 'time-since)
-                (lambda (then)
-                  (seconds-to-time (- now (float-time then)))))
-               ((symbol-function 'cancel-timer)
-                (lambda (&rest _) nil))
-               ((symbol-function 'gptel-auto-workflow--state-active-p)
-                (lambda (state) (not (plist-get state :done))))
+               (lambda (secs _repeat fn &rest _args)
+                 (if (= secs my/gptel-agent-task-timeout)
+                     (setq scheduled-timeout fn)
+                   :fake-progress)))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-auto-workflow--state-active-p)
+               (lambda (state) (not (plist-get state :done))))
               ((symbol-function 'gptel-abort)
                (lambda (&rest _) nil))
               ((symbol-function 'my/gptel--call-gptel-agent-task)
@@ -774,7 +644,6 @@ EXIT-CODE defaults to 1."
          "executor" "desc" "prompt")
         (should (functionp scheduled-timeout))
         (should (functionp wrapped-callback))
-        (setq now 100)
         (funcall scheduled-timeout)
         (funcall wrapped-callback "late success")
         (should (= (length callback-results) 1))
@@ -861,58 +730,10 @@ EXIT-CODE defaults to 1."
        "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
        (lambda (result)
          (setq final-result result)))
-       (should (= runs 1))
-       (should-not scheduled-retry)
-       (should gptel-auto-experiment--quota-exhausted)
-       (should (string-match-p "usage limit exceeded" (plist-get final-result :agent-output))))))
-
-(ert-deftest regression/auto-experiment/decide-rejects-score-regression-even-when-comparator-picks-b ()
-  "Comparator keeps should be vetoed when the benchmark score regresses."
-  (let ((gptel-auto-experiment-use-subagents t)
-        (decision nil))
-    (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
-               (lambda (_agent _desc _prompt cb)
-                 (funcall cb "B\ncombined looks better"))))
-      (with-temp-buffer
-        (gptel-auto-experiment-decide
-         '(:score 0.41 :code-quality 0.77)
-         '(:score 0.40 :code-quality 0.93)
-         (lambda (result)
-           (setq decision result)))))
-    (should decision)
-    (should-not (plist-get decision :keep))
-    (should (string-match-p "Rejected: score regressed"
-                            (plist-get decision :reasoning)))))
-
-(ert-deftest regression/auto-experiment/decide-rejects-score-tie-with-small-quality-gain ()
-  "Tied benchmark scores should need a meaningful quality gain to be kept."
-  (let ((gptel-auto-experiment-use-subagents nil)
-        (gptel-auto-experiment-min-quality-gain-on-score-tie 0.10)
-        (decision nil))
-    (with-temp-buffer
-      (gptel-auto-experiment-decide
-       '(:score 0.40 :code-quality 0.77)
-       '(:score 0.40 :code-quality 0.83)
-       (lambda (result)
-         (setq decision result))))
-    (should decision)
-    (should-not (plist-get decision :keep))
-    (should (string-match-p "Rejected: tied score needs >= 0.10 quality gain"
-                            (plist-get decision :reasoning)))))
-
-(ert-deftest regression/auto-experiment/decide-keeps-score-tie-with-large-quality-gain ()
-  "Tied benchmark scores may still be kept after a clearly meaningful quality gain."
-  (let ((gptel-auto-experiment-use-subagents nil)
-        (gptel-auto-experiment-min-quality-gain-on-score-tie 0.10)
-        (decision nil))
-    (with-temp-buffer
-      (gptel-auto-experiment-decide
-       '(:score 0.40 :code-quality 0.70)
-       '(:score 0.40 :code-quality 0.82)
-       (lambda (result)
-         (setq decision result))))
-    (should decision)
-    (should (plist-get decision :keep))))
+      (should (= runs 1))
+      (should-not scheduled-retry)
+      (should gptel-auto-experiment--quota-exhausted)
+      (should (string-match-p "usage limit exceeded" (plist-get final-result :agent-output))))))
 
 (ert-deftest regression/auto-experiment-loop/uses-run-with-retry-helper ()
   "Experiment loop should route live runs through the retry helper."
@@ -1046,69 +867,8 @@ EXIT-CODE defaults to 1."
           (should-not (plist-get result :kept))
           (should (string-match-p "^callback-error:" (plist-get result :comparator-reason)))
           (should (= log-count 1))
-            (should (member '("checkout" "--" ".") git-calls))))
+           (should (member '("checkout" "--" ".") git-calls))))
       (delete-directory temp-dir t)))
-
-(ert-deftest regression/auto-experiment/grade-rebinds-configured-timeout-for-grader ()
-  "Grade helper should rebind the benchmark timeout for the grader subagent."
-  (let ((gptel-auto-experiment-use-subagents t)
-        (gptel-auto-experiment-grade-timeout 120)
-        (gptel-benchmark-subagent-timeout 60)
-        (gptel-auto-experiment--grade-counter 0)
-        (gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
-        (captured-timeout nil)
-        (result nil))
-    (cl-letf (((symbol-function 'run-with-timer)
-               (lambda (&rest _args) :fake-timer))
-              ((symbol-function 'cancel-timer)
-               (lambda (&rest _args) nil))
-              ((symbol-function 'gptel-benchmark-grade)
-               (lambda (_output _expected _forbidden cb)
-                 (setq captured-timeout gptel-benchmark-subagent-timeout)
-                 (funcall cb '(:score 9 :total 9 :passed t :details "ok"))))
-              ((symbol-function 'message)
-               (lambda (&rest _args) nil)))
-      (gptel-auto-experiment-grade
-       "executor output"
-       (lambda (grade)
-         (setq result grade)))
-      (should (= captured-timeout 120))
-      (should result)
-      (should (plist-get result :passed))
-      (should-not (gethash 1 gptel-auto-experiment--grade-state)))))
-
-(ert-deftest regression/auto-experiment/grade-immediate-timeout-does-not-double-call ()
-  "Immediate grade timeout should not deliver the final callback twice."
-  (let ((callback-count 0)
-        (captured-grade-callback nil)
-        (result nil)
-        (gptel-auto-experiment-use-subagents t)
-        (gptel-auto-experiment--grade-counter 0)
-        (gptel-auto-experiment--grade-state (make-hash-table :test 'eql)))
-    (cl-letf (((symbol-function 'run-with-timer)
-               (lambda (_secs _repeat fn)
-                 (funcall fn)
-                 :fake-timer))
-              ((symbol-function 'cancel-timer)
-               (lambda (&rest _args) nil))
-              ((symbol-function 'gptel-benchmark-grade)
-               (lambda (_output _expected _forbidden cb &optional _timeout)
-                  (setq captured-grade-callback cb)))
-              ((symbol-function 'message)
-               (lambda (&rest _args) nil)))
-      (gptel-auto-experiment-grade
-       "executor output"
-       (lambda (grade)
-         (cl-incf callback-count)
-         (setq result grade)))
-      (should (= callback-count 1))
-      (should (equal (plist-get result :score) 0))
-      (should-not (plist-get result :passed))
-      (should (equal (plist-get result :details) "timeout"))
-      (should captured-grade-callback)
-      (funcall captured-grade-callback '(:score 9 :passed t :details "ok"))
-      (should (= callback-count 1))
-      (should-not (gethash 1 gptel-auto-experiment--grade-state)))))
 
 (ert-deftest regression/auto-experiment/retry-code-quality-errors-fall-back-neutral ()
   "Retry path should tolerate code-quality scorer errors without hanging."
@@ -1601,11 +1361,10 @@ EXIT-CODE defaults to 1."
 (ert-deftest regression/subagent/timeout-aborts-routed-request-buffer ()
   "Timeout abort should target the live routed request buffer."
   (let ((my/gptel-agent-task-timeout 42)
-         (my/gptel-subagent-progress-interval 10)
-         (scheduled-timeout nil)
-         (aborted-buffers nil)
-         (callback-results nil)
-         (now 0))
+        (my/gptel-subagent-progress-interval 10)
+        (scheduled-timeout nil)
+        (aborted-buffers nil)
+        (callback-results nil))
     (clrhash my/gptel--agent-task-state)
     (let ((request-buf (generate-new-buffer " *gptel-request-timeout*")))
       (unwind-protect
@@ -1615,12 +1374,6 @@ EXIT-CODE defaults to 1."
                                 (= secs my/gptel-agent-task-timeout))
                            (setq scheduled-timeout fn)
                          :fake-progress)))
-                    ((symbol-function 'current-time)
-                     (lambda ()
-                       (seconds-to-time now)))
-                    ((symbol-function 'time-since)
-                     (lambda (then)
-                       (seconds-to-time (- now (float-time then)))))
                     ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
                     ((symbol-function 'gptel-auto-workflow--state-active-p)
                      (lambda (state) (and state (not (plist-get state :done)))))
@@ -1636,356 +1389,21 @@ EXIT-CODE defaults to 1."
                (lambda (result) (push result callback-results))
                "executor" "desc" "prompt")
               (should (functionp scheduled-timeout))
-              (setq now 100)
               (funcall scheduled-timeout)
               (should (equal aborted-buffers (list request-buf)))
               (should (= (length callback-results) 1))
-                (should (string-match-p "timed out after 42s" (car callback-results)))
-                (should (= (hash-table-count my/gptel--agent-task-state) 0))))
-          (when (buffer-live-p request-buf)
-            (kill-buffer request-buf))))))
-
-(ert-deftest regression/subagent/request-buffer-activity-rearms-timeout ()
-  "Request-buffer activity should reset the inactivity timeout window."
-  (let ((my/gptel-agent-task-timeout 42)
-        (my/gptel-subagent-progress-interval 10)
-        (scheduled-timeouts nil)
-        (progress-callback nil)
-        (cancelled-timers nil))
-    (clrhash my/gptel--agent-task-state)
-    (let ((request-buf (generate-new-buffer " *gptel-request-activity*")))
-      (unwind-protect
-          (cl-letf (((symbol-function 'run-at-time)
-                     (lambda (secs repeat fn &rest _args)
-                       (cond
-                        ((and repeat (= secs my/gptel-subagent-progress-interval))
-                         (setq progress-callback fn)
-                         :fake-progress)
-                        ((and (null repeat) (= secs my/gptel-agent-task-timeout))
-                         (let ((timer (list :timeout (1+ (length scheduled-timeouts)))))
-                           (setq scheduled-timeouts
-                                 (append scheduled-timeouts (list timer)))
-                           timer))
-                        (t :fake-timer))))
-                    ((symbol-function 'timerp)
-                     (lambda (obj)
-                       (and (consp obj) (eq (car obj) :timeout))))
-                    ((symbol-function 'cancel-timer)
-                     (lambda (timer)
-                       (push timer cancelled-timers)))
-                    ((symbol-function 'gptel-auto-workflow--state-active-p)
-                     (lambda (state)
-                       (and state (not (plist-get state :done)))))
-                    ((symbol-function 'my/gptel--call-gptel-agent-task)
-                     (lambda (&rest _args)
-                       (my/gptel--register-agent-task-buffer request-buf)))
-                    ((symbol-function 'message)
-                     (lambda (&rest _) nil)))
-            (with-current-buffer request-buf
-              (erase-buffer)
-              (insert "initial activity"))
-            (with-temp-buffer
-              (my/gptel--agent-task-with-timeout
-               #'ignore
-               "executor" "desc" "prompt"))
-            (should (= (length scheduled-timeouts) 1))
-            (should (functionp progress-callback))
-            (with-current-buffer request-buf
-              (goto-char (point-max))
-              (insert " more activity"))
-            (funcall progress-callback)
-             (should (= (length scheduled-timeouts) 2))
-              (should (equal cancelled-timers
-                             (list (car scheduled-timeouts)))))
-        (when (buffer-live-p request-buf)
-          (kill-buffer request-buf))))))
-
-(ert-deftest regression/subagent/executor-hard-timeout-bounds-activity-rearm ()
-  "Executor activity should not extend timeout past the hard runtime cap."
-  (let ((my/gptel-agent-task-timeout 42)
-        (my/gptel-agent-task-hard-timeout 63)
-        (my/gptel-subagent-progress-interval 10)
-        (scheduled-timeouts nil)
-        (progress-callback nil)
-        (cancelled-timers nil)
-        (aborted-buffers nil)
-        (callback-results nil)
-        (now 0))
-    (clrhash my/gptel--agent-task-state)
-    (let ((request-buf (generate-new-buffer " *gptel-request-hard-timeout*")))
-      (unwind-protect
-          (cl-letf (((symbol-function 'current-time)
-                     (lambda ()
-                       (seconds-to-time now)))
-                    ((symbol-function 'time-since)
-                     (lambda (then)
-                       (seconds-to-time (- now (float-time then)))))
-                    ((symbol-function 'run-at-time)
-                     (lambda (secs repeat fn &rest _args)
-                       (cond
-                        ((and repeat (= secs my/gptel-subagent-progress-interval))
-                         (setq progress-callback fn)
-                         :fake-progress)
-                        ((and (null repeat) (numberp secs))
-                         (let ((timer (list :timeout secs fn)))
-                           (setq scheduled-timeouts
-                                 (append scheduled-timeouts (list timer)))
-                           timer))
-                        (t :fake-timer))))
-                    ((symbol-function 'timerp)
-                     (lambda (obj)
-                       (and (consp obj) (eq (car obj) :timeout))))
-                    ((symbol-function 'cancel-timer)
-                     (lambda (timer)
-                       (push timer cancelled-timers)))
-                    ((symbol-function 'gptel-auto-workflow--state-active-p)
-                     (lambda (state)
-                       (and state (not (plist-get state :done)))))
-                    ((symbol-function 'gptel-abort)
-                     (lambda (buffer)
-                       (push buffer aborted-buffers)))
-                    ((symbol-function 'my/gptel--call-gptel-agent-task)
-                     (lambda (&rest _args)
-                       (my/gptel--register-agent-task-buffer request-buf)))
-                    ((symbol-function 'message) (lambda (&rest _) nil)))
-            (with-current-buffer request-buf
-              (erase-buffer)
-              (insert "initial activity"))
-            (with-temp-buffer
-              (my/gptel--agent-task-with-timeout
-               (lambda (result) (push result callback-results))
-               "executor" "desc" "prompt"))
-            (should (= (length scheduled-timeouts) 1))
-            (should (= (nth 1 (car scheduled-timeouts)) 42))
-            (should (functionp progress-callback))
-            (setq now 30)
-            (with-current-buffer request-buf
-              (goto-char (point-max))
-              (insert " more activity"))
-            (funcall progress-callback)
-            (should (= (length scheduled-timeouts) 2))
-            (should (= (nth 1 (cadr scheduled-timeouts)) 33))
-            (should (equal cancelled-timers
-                           (list (car scheduled-timeouts))))
-            (setq now 64)
-            (funcall (nth 2 (cadr scheduled-timeouts)))
-            (should (equal aborted-buffers (list request-buf)))
-            (should (= (length callback-results) 1))
-            (should (string-match-p "timed out after 63s total runtime"
-                                    (car callback-results)))
-            (should (= (hash-table-count my/gptel--agent-task-state) 0)))
-        (when (buffer-live-p request-buf)
-          (kill-buffer request-buf))))))
-
-(ert-deftest regression/subagent/non-executor-buffer-activity-does-not-rearm-timeout ()
-  "Non-executor request-buffer activity should not extend a hard timeout."
-  (let ((my/gptel-agent-task-timeout 42)
-        (my/gptel-subagent-progress-interval 10)
-        (scheduled-timeouts nil)
-        (progress-callback nil)
-        (aborted-buffers nil)
-        (callback-results nil)
-        (now 0))
-    (clrhash my/gptel--agent-task-state)
-    (let ((request-buf (generate-new-buffer " *gptel-request-analyzer-activity*")))
-      (unwind-protect
-          (cl-letf (((symbol-function 'current-time)
-                     (lambda ()
-                       (seconds-to-time now)))
-                    ((symbol-function 'time-since)
-                     (lambda (then)
-                       (seconds-to-time (- now (float-time then)))))
-                    ((symbol-function 'run-at-time)
-                     (lambda (secs repeat fn &rest _args)
-                       (cond
-                        ((and repeat (= secs my/gptel-subagent-progress-interval))
-                         (setq progress-callback fn)
-                         :fake-progress)
-                        ((and (null repeat) (= secs my/gptel-agent-task-timeout))
-                         (let ((timer (cons :timeout fn)))
-                           (setq scheduled-timeouts
-                                 (append scheduled-timeouts (list timer)))
-                           timer))
-                        (t :fake-timer))))
-                    ((symbol-function 'timerp)
-                     (lambda (obj)
-                       (and (consp obj) (eq (car obj) :timeout))))
-                    ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
-                    ((symbol-function 'gptel-auto-workflow--state-active-p)
-                     (lambda (state)
-                       (and state (not (plist-get state :done)))))
-                    ((symbol-function 'gptel-abort)
-                     (lambda (buffer)
-                       (push buffer aborted-buffers)))
-                    ((symbol-function 'my/gptel--call-gptel-agent-task)
-                     (lambda (&rest _args)
-                       (my/gptel--register-agent-task-buffer request-buf)))
-                    ((symbol-function 'message) (lambda (&rest _) nil)))
-            (with-current-buffer request-buf
-              (erase-buffer)
-              (insert "initial activity"))
-            (with-temp-buffer
-              (my/gptel--agent-task-with-timeout
-               (lambda (result) (push result callback-results))
-               "analyzer" "desc" "prompt"))
-            (should (= (length scheduled-timeouts) 1))
-            (should (functionp progress-callback))
-            (setq now 30)
-            (with-current-buffer request-buf
-              (goto-char (point-max))
-              (insert " more activity"))
-            (funcall progress-callback)
-            (should (= (length scheduled-timeouts) 1))
-            (setq now 100)
-            (funcall (cdr (car scheduled-timeouts)))
-            (should (equal aborted-buffers (list request-buf)))
-            (should (= (length callback-results) 1))
-            (should (string-match-p "timed out after 42s" (car callback-results)))
-            (should (= (hash-table-count my/gptel--agent-task-state) 0)))
-        (when (buffer-live-p request-buf)
-          (kill-buffer request-buf))))))
-
-(ert-deftest regression/subagent/context-activity-extends-timeout ()
-  "Worktree-context activity should extend executor timeout even when the request buffer is quiet."
-  (let ((my/gptel-agent-task-timeout 42)
-         (my/gptel-subagent-progress-interval 10)
-         (scheduled-timeouts nil)
-        (aborted-buffers nil)
-        (callback-results nil)
-        (now 0))
-    (clrhash my/gptel--agent-task-state)
-    (let ((request-buf (generate-new-buffer " *gptel-request-context-activity*"))
-          (activity-dir (make-temp-file "gptel-task-activity-" t)))
-      (unwind-protect
-          (cl-letf (((symbol-function 'current-time)
-                     (lambda ()
-                       (seconds-to-time now)))
-                    ((symbol-function 'time-since)
-                     (lambda (then)
-                       (seconds-to-time (- now (float-time then)))))
-                    ((symbol-function 'run-at-time)
-                     (lambda (secs repeat fn &rest _args)
-                       (cond
-                        ((and repeat (= secs my/gptel-subagent-progress-interval))
-                         :fake-progress)
-                        ((and (null repeat) (= secs my/gptel-agent-task-timeout))
-                         (let ((timer (cons :timeout fn)))
-                           (setq scheduled-timeouts
-                                 (append scheduled-timeouts (list timer)))
-                           timer))
-                        (t :fake-timer))))
-                    ((symbol-function 'timerp)
-                     (lambda (obj)
-                       (and (consp obj) (eq (car obj) :timeout))))
-                    ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
-                    ((symbol-function 'gptel-auto-workflow--state-active-p)
-                     (lambda (state)
-                       (and state (not (plist-get state :done)))))
-                    ((symbol-function 'gptel-abort)
-                     (lambda (buffer)
-                       (push buffer aborted-buffers)))
-                    ((symbol-function 'my/gptel--call-gptel-agent-task)
-                     (lambda (&rest _args)
-                       (my/gptel--register-agent-task-buffer request-buf)))
-                    ((symbol-function 'message) (lambda (&rest _) nil)))
-            (let ((default-directory activity-dir))
-              (with-temp-buffer
-                (my/gptel--agent-task-with-timeout
-                 (lambda (result) (push result callback-results))
-                 "executor" "desc" "prompt")))
-            (should (= (length scheduled-timeouts) 1))
-            (setq now 30)
-            (with-temp-buffer
-              (let ((default-directory activity-dir))
-                (my/gptel--agent-task-note-message-activity
-                 "Compiling %s...done" "target.el")))
-            (setq now 35)
-            (funcall (cdr (car scheduled-timeouts)))
-            (should (= (length scheduled-timeouts) 2))
-            (should-not aborted-buffers)
-            (should-not callback-results)
-            (setq now 80)
-            (funcall (cdr (cadr scheduled-timeouts)))
-            (should (equal aborted-buffers (list request-buf)))
-            (should (= (length callback-results) 1))
-            (should (string-match-p "timed out after 42s" (car callback-results)))
-            (should (= (hash-table-count my/gptel--agent-task-state) 0)))
-        (when (buffer-live-p request-buf)
-          (kill-buffer request-buf))
-        (when (file-directory-p activity-dir)
-          (delete-directory activity-dir t))))))
-
-(ert-deftest regression/subagent/curl-activity-extends-timeout ()
-  "Internal gptel curl activity should extend timeout even when the request buffer stays quiet."
-  (let ((my/gptel-agent-task-timeout 42)
-         (my/gptel-subagent-progress-interval 10)
-         (scheduled-timeouts nil)
-         (aborted-buffers nil)
-         (callback-results nil)
-         (now 0))
-    (clrhash my/gptel--agent-task-state)
-    (let ((request-buf (generate-new-buffer " *gptel-request-curl-activity*")))
-      (unwind-protect
-          (cl-letf (((symbol-function 'current-time)
-                     (lambda ()
-                       (seconds-to-time now)))
-                    ((symbol-function 'time-since)
-                     (lambda (then)
-                       (seconds-to-time (- now (float-time then)))))
-                    ((symbol-function 'run-at-time)
-                     (lambda (secs repeat fn &rest _args)
-                       (cond
-                        ((and repeat (= secs my/gptel-subagent-progress-interval))
-                         :fake-progress)
-                        ((and (null repeat) (= secs my/gptel-agent-task-timeout))
-                         (let ((timer (cons :timeout fn)))
-                           (setq scheduled-timeouts
-                                 (append scheduled-timeouts (list timer)))
-                           timer))
-                        (t :fake-timer))))
-                    ((symbol-function 'timerp)
-                     (lambda (obj)
-                       (and (consp obj) (eq (car obj) :timeout))))
-                    ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
-                    ((symbol-function 'gptel-auto-workflow--state-active-p)
-                     (lambda (state)
-                       (and state (not (plist-get state :done)))))
-                    ((symbol-function 'gptel-abort)
-                     (lambda (buffer)
-                       (push buffer aborted-buffers)))
-                    ((symbol-function 'my/gptel--call-gptel-agent-task)
-                     (lambda (&rest _args)
-                       (my/gptel--register-agent-task-buffer request-buf)))
-                    ((symbol-function 'message) (lambda (&rest _) nil)))
-            (with-temp-buffer
-              (my/gptel--agent-task-with-timeout
-               (lambda (result) (push result callback-results))
-               "executor" "desc" "prompt"))
-            (should (= (length scheduled-timeouts) 1))
-            (setq now 30)
-            (my/gptel--agent-task-note-curl-activity)
-            (setq now 35)
-            (funcall (cdr (car scheduled-timeouts)))
-            (should (= (length scheduled-timeouts) 2))
-            (should-not aborted-buffers)
-            (should-not callback-results)
-            (setq now 80)
-            (funcall (cdr (cadr scheduled-timeouts)))
-            (should (equal aborted-buffers (list request-buf)))
-            (should (= (length callback-results) 1))
-            (should (string-match-p "timed out after 42s" (car callback-results)))
-            (should (= (hash-table-count my/gptel--agent-task-state) 0)))
-        (when (buffer-live-p request-buf)
-          (kill-buffer request-buf))))))
+               (should (string-match-p "timed out after 42s" (car callback-results)))
+               (should (= (hash-table-count my/gptel--agent-task-state) 0))))
+         (when (buffer-live-p request-buf)
+           (kill-buffer request-buf))))))
 
 (ert-deftest regression/subagent/timeout-aborts-routed-request-buffer-with-dead-origin ()
   "Timeout abort should still target the live request buffer after origin buffer dies."
   (let ((my/gptel-agent-task-timeout 42)
-         (my/gptel-subagent-progress-interval 10)
-         (scheduled-timeout nil)
-         (aborted-buffers nil)
-         (callback-results nil)
-         (now 0))
+        (my/gptel-subagent-progress-interval 10)
+        (scheduled-timeout nil)
+        (aborted-buffers nil)
+        (callback-results nil))
     (clrhash my/gptel--agent-task-state)
     (let ((origin-buf (generate-new-buffer " *gptel-origin-timeout*"))
           (request-buf (generate-new-buffer " *gptel-request-timeout-dead-origin*")))
@@ -1996,12 +1414,6 @@ EXIT-CODE defaults to 1."
                                 (= secs my/gptel-agent-task-timeout))
                            (setq scheduled-timeout fn)
                          :fake-progress)))
-                    ((symbol-function 'current-time)
-                     (lambda ()
-                       (seconds-to-time now)))
-                    ((symbol-function 'time-since)
-                     (lambda (then)
-                       (seconds-to-time (- now (float-time then)))))
                     ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
                     ((symbol-function 'gptel-auto-workflow--state-active-p)
                      (lambda (state) (and state (not (plist-get state :done)))))
@@ -2018,7 +1430,6 @@ EXIT-CODE defaults to 1."
                "executor" "desc" "prompt"))
             (kill-buffer origin-buf)
             (should (functionp scheduled-timeout))
-            (setq now 100)
             (funcall scheduled-timeout)
             (should (equal aborted-buffers (list request-buf)))
             (should (= (length callback-results) 1))
@@ -2173,69 +1584,6 @@ EXIT-CODE defaults to 1."
           (should (equal (gptel-auto-workflow-status)
                          '(:running t :kept 1 :total 2 :phase "running" :results "x"))))
       (delete-file tmp-file))))
-
-(ert-deftest regression/auto-workflow/status-prefers-active-persisted-snapshot-over-idle-placeholder ()
-  "An idle local placeholder should not hide an active persisted snapshot."
-  (let* ((tmp-file (make-temp-file "aw-status"))
-         (gptel-auto-workflow-status-file tmp-file)
-         (gptel-auto-workflow--running nil)
-         (gptel-auto-workflow--cron-job-running nil)
-         (gptel-auto-workflow--stats '(:phase "idle" :total 0 :kept 0)))
-    (unwind-protect
-        (progn
-          (with-temp-file tmp-file
-            (prin1 '(:running t :kept 0 :total 5 :phase "running" :results "x")
-                   (current-buffer)))
-          (should (equal (gptel-auto-workflow-status)
-                          '(:running t :kept 0 :total 5 :phase "running" :results "x"))))
-      (delete-file tmp-file))))
-
-(ert-deftest regression/auto-workflow/run-async-assigns-run-id-before-first-persist ()
-  "Async launch should assign a run id before the first persisted status snapshot."
-  (let ((persisted nil)
-        (run-id-before-targets nil)
-        (proj-root (make-temp-file "aw-run-id" t)))
-    (unwind-protect
-        (cl-letf (((symbol-function 'gptel-auto-workflow--active-use-p)
-                   (lambda () (cons nil nil)))
-                  ((symbol-function 'gptel-auto-workflow--require-magit-dependencies)
-                   (lambda () t))
-                  ((symbol-function 'gptel-auto-workflow--default-dir)
-                   (lambda () proj-root))
-                  ((symbol-function 'gptel-auto-workflow--persist-status)
-                   (lambda ()
-                     (setq persisted (gptel-auto-workflow--status-plist))))
-                  ((symbol-function 'run-with-timer)
-                   (lambda (&rest _) :fake-timer))
-                  ((symbol-function 'gptel-auto-workflow--run-with-targets)
-                   (lambda (_targets _callback)
-                     (setq run-id-before-targets gptel-auto-workflow--run-id)
-                     'started))
-                  ((symbol-function 'message) (lambda (&rest _) nil)))
-          (let ((gptel-auto-workflow--running nil)
-                (gptel-auto-workflow--cron-job-running nil)
-                (gptel-auto-workflow--stats nil)
-                (gptel-auto-workflow--watchdog-timer nil)
-                (gptel-auto-workflow--run-id nil))
-            (should (eq (gptel-auto-workflow-run-async '("target.el") nil) 'started))
-            (should (stringp run-id-before-targets))
-            (should (> (length run-id-before-targets) 0))
-            (should (equal (plist-get persisted :run-id) run-id-before-targets))
-            (should (equal (plist-get persisted :results)
-                           (format "var/tmp/experiments/%s/results.tsv"
-                                   run-id-before-targets)))))
-      (delete-directory proj-root t))))
-
-(ert-deftest regression/auto-workflow/status-plist-uses-active-run-id ()
-  "Live status should expose the active run id and run-specific results path."
-  (let ((gptel-auto-workflow--running t)
-        (gptel-auto-workflow--cron-job-running nil)
-        (gptel-auto-workflow--stats '(:phase "running" :total 5 :kept 1))
-        (gptel-auto-workflow--run-id "2026-04-06T011637Z-abcd"))
-    (should (equal (plist-get (gptel-auto-workflow-status) :run-id)
-                   "2026-04-06T011637Z-abcd"))
-    (should (equal (plist-get (gptel-auto-workflow-status) :results)
-                   "var/tmp/experiments/2026-04-06T011637Z-abcd/results.tsv"))))
 
 (ert-deftest regression/auto-workflow/cleanup-preserves-queued-phase ()
   "Cleanup should not overwrite queued/run phases while a cron job is active."
@@ -2437,43 +1785,35 @@ EXIT-CODE defaults to 1."
 (ert-deftest regression/auto-workflow/subagent-timeout-timer-captures-call-timeout ()
   "Subagent timeout callbacks should use the per-call timeout, not a later global value."
   (let ((my/gptel-agent-task-timeout 42)
-         (gptel--fsm-last 'parent-fsm)
-         (scheduled-timers nil)
-         (callback-result nil)
-         (now 0))
+        (gptel--fsm-last 'parent-fsm)
+        (scheduled-timers nil)
+        (callback-result nil))
     (with-temp-buffer
       (setq-local gptel--fsm-last 'parent-fsm)
       (cl-letf (((symbol-function 'run-at-time)
                  (lambda (delay repeat fn)
                    (push (list :delay delay :repeat repeat :fn fn) scheduled-timers)
                    :fake-timer))
-                 ((symbol-function 'current-time)
-                  (lambda ()
-                    (seconds-to-time now)))
-                 ((symbol-function 'time-since)
-                  (lambda (then)
-                    (seconds-to-time (- now (float-time then)))))
-                 ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
-                 ((symbol-function 'gptel-auto-workflow--state-active-p)
-                  (lambda (state) (and state (not (plist-get state :done)))))
-                 ((symbol-function 'my/gptel--build-subagent-context)
-                  (lambda (prompt &rest _) prompt))
+                ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
+                ((symbol-function 'gptel-auto-workflow--state-active-p)
+                 (lambda (state) (and state (not (plist-get state :done)))))
+                ((symbol-function 'my/gptel--build-subagent-context)
+                 (lambda (prompt &rest _) prompt))
                 ((symbol-function 'my/gptel--call-gptel-agent-task)
                  (lambda (&rest _args) nil))
                  ((symbol-function 'message) (lambda (&rest _) nil)))
         (my/gptel--agent-task-with-timeout
          (lambda (result) (setq callback-result result))
          "executor" "desc" "prompt")
-         (setq my/gptel-agent-task-timeout 300)
-         (let ((timeout-timer
-                (seq-find (lambda (timer)
-                            (and (= (plist-get timer :delay) 42)
-                                 (null (plist-get timer :repeat))))
-                          scheduled-timers)))
-           (should timeout-timer)
-            (setq now 100)
-            (funcall (plist-get timeout-timer :fn)))
-          (should (string-match-p "timed out after 42s" callback-result))))))
+        (setq my/gptel-agent-task-timeout 300)
+        (let ((timeout-timer
+               (seq-find (lambda (timer)
+                           (and (= (plist-get timer :delay) 42)
+                                (null (plist-get timer :repeat))))
+                         scheduled-timers)))
+          (should timeout-timer)
+           (funcall (plist-get timeout-timer :fn)))
+         (should (string-match-p "timed out after 42s" callback-result))))))
 
 (ert-deftest regression/auto-workflow/subagent-wrapper-marks-child-fsm-no-retry ()
   "Wrapped subagent FSMs should disable the global auto-retry advice."
@@ -2804,52 +2144,6 @@ EXIT-CODE defaults to 1."
               (insert-file-contents status-file)
               (should (string-match-p ":running nil" (buffer-string)))
               (should (string-match-p ":phase \"idle\"" (buffer-string))))))
-       (delete-directory status-dir t)
-       (delete-directory fake-bin t))))
-
-(ert-deftest regression/auto-workflow/cron-wrapper-ignores-stale-local-running-flags ()
-  "Wrapper auto-workflow should ignore stale current-buffer workflow locals."
-  (let* ((repo-root test-auto-workflow--repo-root)
-         (status-dir (make-temp-file "aw-status-dir" t))
-         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
-         (fake-bin (make-temp-file "aw-fake-bin" t))
-         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
-         (fake-emacs
-          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
-         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
-         (process-environment
-          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
-                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
-                  process-environment))
-         (default-directory repo-root))
-    (unwind-protect
-        (progn
-          (with-temp-file fake-emacsclient
-            (insert "#!/usr/bin/env python3\n"
-                    "import sys\n"
-                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
-                    "if expr == 't':\n"
-                    "    print('t')\n"
-                    "elif 'default-value' in expr and 'gptel-auto-workflow--cron-job-running' in expr:\n"
-                    "    print('nil')\n"
-                    "elif 'gptel-auto-workflow--cron-job-running' in expr or 'gptel-auto-workflow--running' in expr:\n"
-                    "    print('t')\n"
-                    "elif 'gptel-auto-workflow-queue-all-projects' in expr:\n"
-                    "    print('started')\n"
-                    "else:\n"
-                    "    print('nil')\n"
-                    "raise SystemExit(0)\n"))
-          (set-file-modes fake-emacsclient #o755)
-          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
-          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
-          (with-temp-file status-file
-            (insert "(:running t :kept 2 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-05/results.tsv\")\n"))
-          (let ((output (shell-command-to-string (format "%s auto-workflow" script))))
-            (should-not (string-match-p "already-running" output))
-            (with-temp-buffer
-              (insert-file-contents status-file)
-              (should (string-match-p ":running nil" (buffer-string)))
-              (should (string-match-p ":phase \"idle\"" (buffer-string))))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t))))
 
@@ -2956,7 +2250,6 @@ EXIT-CODE defaults to 1."
 (ert-deftest regression/auto-workflow/track-commit-avoids-duplicate-hashes ()
   "Tracking the same commit twice should not append duplicate tracking lines."
   (let* ((proj-root (make-temp-file "aw-track" t))
-         (gptel-auto-workflow--run-id nil)
          (tracking-file (expand-file-name
                          (format "var/tmp/experiments/%s/commits.txt"
                                  (format-time-string "%Y-%m-%d"))
@@ -2976,29 +2269,6 @@ EXIT-CODE defaults to 1."
           (with-temp-buffer
             (insert-file-contents tracking-file)
             (should (= (cl-count ?\n (buffer-string)) 1))
-             (should (string-match-p "^abc1234 1 target\\.el " (buffer-string)))))
-       (delete-directory proj-root t))))
-
-(ert-deftest regression/auto-workflow/track-commit-uses-active-run-ledger ()
-  "Tracking should write commit hashes into the active run ledger."
-  (let* ((proj-root (make-temp-file "aw-track-run" t))
-         (gptel-auto-workflow--run-id "2026-04-06T011637Z-abcd")
-         (tracking-file (expand-file-name
-                         "var/tmp/experiments/2026-04-06T011637Z-abcd/commits.txt"
-                         proj-root)))
-    (unwind-protect
-        (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
-                   (lambda () proj-root))
-                  ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
-                   (lambda (&rest _) proj-root))
-                  ((symbol-function 'gptel-auto-workflow--git-cmd)
-                   (lambda (&rest _) "abc1234"))
-                  ((symbol-function 'message) (lambda (&rest _) nil)))
-          (should (equal (gptel-auto-workflow--track-commit "1" "target.el" proj-root)
-                         "abc1234"))
-          (should (file-exists-p tracking-file))
-          (with-temp-buffer
-            (insert-file-contents tracking-file)
             (should (string-match-p "^abc1234 1 target\\.el " (buffer-string)))))
       (delete-directory proj-root t))))
 
@@ -3026,41 +2296,8 @@ EXIT-CODE defaults to 1."
                      (lambda (&rest _) ""))
                     ((symbol-function 'message) (lambda (&rest _) nil)))
             (setq orphans (gptel-auto-workflow--recover-orphans))
-             (should (= (length orphans) 1))
-             (should (equal (caar orphans) "abc1234"))))
-       (delete-directory proj-root t))))
-
-(ert-deftest regression/auto-workflow/recover-orphans-scans-run-ledgers ()
-  "Orphan recovery should scan all per-run ledgers, not just today's file."
-  (let* ((proj-root (make-temp-file "aw-orphans-runs" t))
-         (run-a-file (expand-file-name
-                      "var/tmp/experiments/2026-04-06T000001Z-a001/commits.txt"
-                      proj-root))
-         (run-b-file (expand-file-name
-                      "var/tmp/experiments/2026-04-06T000002Z-b002/commits.txt"
-                      proj-root))
-         (orphans nil))
-    (unwind-protect
-        (progn
-          (make-directory (file-name-directory run-a-file) t)
-          (make-directory (file-name-directory run-b-file) t)
-          (with-temp-file run-a-file
-            (insert "abc1234 exp1 target-a.el 00:00:00\n"))
-          (with-temp-file run-b-file
-            (insert "def5678 exp2 target-b.el 00:00:01\n"))
-          (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
-                     (lambda () proj-root))
-                    ((symbol-function 'gptel-auto-workflow--commit-exists-p)
-                     (lambda (_hash) t))
-                    ((symbol-function 'gptel-auto-workflow--commit-patch-equivalent-p)
-                     (lambda (&rest _) nil))
-                    ((symbol-function 'gptel-auto-workflow--git-cmd)
-                     (lambda (&rest _) ""))
-                    ((symbol-function 'message) (lambda (&rest _) nil)))
-            (setq orphans (gptel-auto-workflow--recover-orphans))
-            (should (= (length orphans) 2))
-            (should (equal (sort (mapcar #'car orphans) #'string<)
-                           '("abc1234" "def5678")))))
+            (should (= (length orphans) 1))
+            (should (equal (caar orphans) "abc1234"))))
       (delete-directory proj-root t))))
 
 (ert-deftest regression/auto-workflow/recover-orphans-untracks-patch-equivalent-commits ()
@@ -3642,34 +2879,8 @@ Submodules are hydrated later during verification, not during merge prep."
       (should (string-match-p "Failed to load auto-workflow modules in batch mode"
                               (cdr result))))))
 
-(ert-deftest regression/auto-workflow/staging-main-ref-prefers-clean-local-main-when-ahead ()
-  "Workflow base should use local main when it is clean and only ahead of origin."
-  (let ((commands nil))
-    (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
-               (lambda () "/tmp/project"))
-              ((symbol-function 'gptel-auto-workflow--git-result)
-                (lambda (command &optional _timeout)
-                  (push command commands)
-                  (cond
-                   ((string= command "git rev-parse --verify main")
-                    (cons "8d676d1\n" 0))
-                   ((string= command "git rev-parse --verify origin/main")
-                    (cons "5043dae\n" 0))
-                   ((string= command "git rev-parse --abbrev-ref HEAD")
-                    (cons "main\n" 0))
-                   ((string= command "git status --porcelain --untracked-files=no")
-                    (cons "" 0))
-                   ((string= command "git rev-list --left-right --count origin/main...main")
-                    (cons "0\t1\n" 0))
-                    (t
-                     (cons "" 1)))))
-               ((symbol-function 'message)
-                 (lambda (&rest _) nil)))
-       (should (equal (gptel-auto-workflow--staging-main-ref) "main"))
-       (should (member "git rev-parse --verify main" commands)))))
-
-(ert-deftest regression/auto-workflow/staging-main-ref-prefers-origin-main-when-local-differs-and-dirty ()
-  "Workflow base should still fall back to origin/main when local main is dirty."
+(ert-deftest regression/auto-workflow/staging-main-ref-prefers-origin-main-when-local-differs ()
+  "Workflow base should fall back to origin/main when local main differs."
   (let ((commands nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
                (lambda () "/tmp/project"))
@@ -3679,20 +2890,14 @@ Submodules are hydrated later during verification, not during merge prep."
                  (cond
                   ((string= command "git rev-parse --verify main")
                    (cons "8d676d1\n" 0))
-                  ((string= command "git rev-parse --verify origin/main")
-                   (cons "5043dae\n" 0))
-                  ((string= command "git rev-parse --abbrev-ref HEAD")
-                   (cons "main\n" 0))
-                  ((string= command "git status --porcelain --untracked-files=no")
-                   (cons " M lisp/modules/gptel-tools-agent.el\n" 0))
-                  ((string= command "git rev-list --left-right --count origin/main...main")
-                   (cons "0\t1\n" 0))
-                  (t
-                   (cons "" 1)))))
+                   ((string= command "git rev-parse --verify origin/main")
+                    (cons "5043dae\n" 0))
+                   (t
+                    (cons "" 1)))))
               ((symbol-function 'message)
-               (lambda (&rest _) nil)))
-      (should (equal (gptel-auto-workflow--staging-main-ref) "origin/main"))
-      (should (member "git status --porcelain --untracked-files=no" commands)))))
+                (lambda (&rest _) nil)))
+       (should (equal (gptel-auto-workflow--staging-main-ref) "origin/main"))
+       (should (member "git rev-parse --verify main" commands)))))
 
 (ert-deftest regression/auto-workflow/create-worktree-uses-safe-main-ref ()
   "Experiment worktrees should use the selected safe main ref, not hard-coded main."
