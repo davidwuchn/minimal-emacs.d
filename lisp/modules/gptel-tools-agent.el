@@ -3600,7 +3600,7 @@ RETRY-COUNT tracks current retry attempt."
                   (or gptel-auto-experiment--quota-exhausted
                       (gptel-auto-experiment--quota-exhausted-p agent-output)))
                  (retryable-category
-                  (or (member error-type '("api-rate-limit" "timeout"))))
+                  (member error-type '("api-rate-limit" "timeout")))
                  (retryable-failure
                   (or retryable-category
                       (and raw-error
