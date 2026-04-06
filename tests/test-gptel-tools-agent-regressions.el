@@ -435,6 +435,48 @@ EXIT-CODE defaults to 1."
         (kill-buffer worktree-buf))
       (delete-directory project-root t))))
 
+(ert-deftest regression/auto-experiment/executor-timeout-owned-by-subagent-wrapper ()
+  "Experiment runner should not install a second wall-clock timeout around executor dispatch."
+  (let* ((project-root (make-temp-file "aw-project" t))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1" project-root))
+         (worktree-buf (get-buffer-create "*aw-timeout-owner*"))
+         (scheduled-timers nil)
+         (captured-timeout nil))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer worktree-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir)))
+          (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                     (lambda (_target _experiment-id) worktree-dir))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                     (lambda (_worktree-dir) worktree-buf))
+                    ((symbol-function 'gptel-auto-experiment-analyze)
+                     (lambda (_previous-results cb)
+                       (funcall cb nil)))
+                    ((symbol-function 'gptel-auto-experiment-build-prompt)
+                     (lambda (&rest _args) "prompt"))
+                    ((symbol-function 'run-with-timer)
+                     (lambda (&rest args)
+                       (push args scheduled-timers)
+                       :fake-timer))
+                    ((symbol-function 'cancel-timer)
+                     (lambda (&rest _args) nil))
+                    ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                     (lambda (timeout _callback &rest _args)
+                       (setq captured-timeout timeout)))
+                    ((symbol-function 'message)
+                     (lambda (&rest _args) nil)))
+            (with-current-buffer worktree-buf
+              (gptel-auto-experiment-run
+               "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+               (lambda (&rest _) nil))))
+          (should (= captured-timeout gptel-auto-experiment-time-budget))
+          (should-not scheduled-timers))
+      (when (buffer-live-p worktree-buf)
+        (kill-buffer worktree-buf))
+      (delete-directory project-root t))))
+
 (ert-deftest regression/runagent/malformed-call-with-no-args-reports-error ()
   "RunAgent should return a normal tool error when no mapped args were supplied."
   (let ((result nil)
@@ -1333,9 +1375,52 @@ EXIT-CODE defaults to 1."
               (should (equal aborted-buffers (list request-buf)))
               (should (= (length callback-results) 1))
               (should (string-match-p "timed out after 42s" (car callback-results)))
-              (should (= (hash-table-count my/gptel--agent-task-state) 0))))
+               (should (= (hash-table-count my/gptel--agent-task-state) 0))))
         (when (buffer-live-p request-buf)
           (kill-buffer request-buf))))))
+
+(ert-deftest regression/subagent/timeout-aborts-routed-request-buffer-with-dead-origin ()
+  "Timeout abort should still target the live request buffer after origin buffer death."
+  (let ((my/gptel-agent-task-timeout 42)
+        (my/gptel-subagent-progress-interval 10)
+        (scheduled-timeout nil)
+        (aborted-buffers nil)
+        (callback-results nil))
+    (clrhash my/gptel--agent-task-state)
+    (let ((request-buf (generate-new-buffer " *gptel-request-timeout-dead-origin*"))
+          (origin-buf (generate-new-buffer " *gptel-origin-timeout*")))
+      (unwind-protect
+          (cl-letf (((symbol-function 'run-at-time)
+                     (lambda (secs repeat fn &rest _args)
+                       (if (and (null repeat)
+                                (= secs my/gptel-agent-task-timeout))
+                           (setq scheduled-timeout fn)
+                         :fake-progress)))
+                    ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-workflow--state-active-p)
+                     (lambda (state) (and state (not (plist-get state :done)))))
+                    ((symbol-function 'gptel-abort)
+                     (lambda (buffer)
+                       (push buffer aborted-buffers)))
+                    ((symbol-function 'my/gptel--call-gptel-agent-task)
+                     (lambda (&rest _args)
+                       (my/gptel--register-agent-task-buffer request-buf)))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (with-current-buffer origin-buf
+              (my/gptel--agent-task-with-timeout
+               (lambda (result) (push result callback-results))
+               "executor" "desc" "prompt"))
+            (should (functionp scheduled-timeout))
+            (kill-buffer origin-buf)
+            (funcall scheduled-timeout)
+            (should (equal aborted-buffers (list request-buf)))
+            (should (= (length callback-results) 1))
+            (should (string-match-p "timed out after 42s" (car callback-results)))
+            (should (= (hash-table-count my/gptel--agent-task-state) 0)))
+        (when (buffer-live-p request-buf)
+          (kill-buffer request-buf))
+        (when (buffer-live-p origin-buf)
+          (kill-buffer origin-buf))))))
 
 
 

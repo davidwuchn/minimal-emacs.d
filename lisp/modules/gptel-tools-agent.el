@@ -1376,31 +1376,29 @@ Uses hash table keyed by task-id to support parallel execution."
                              :progress-timer progress-timer
                              :origin-buf origin-buf
                              :request-buf nil)
-               my/gptel--agent-task-state))
+                my/gptel--agent-task-state))
     (when task-timeout
       (let ((timeout-timer
              (run-at-time task-timeout nil
                           (lambda ()
-                             (when (buffer-live-p origin-buf)
-                               (with-current-buffer origin-buf
-                              (let* ((state (gethash task-id my/gptel--agent-task-state))
-                                     (already-done (plist-get state :done)))
-                                    (when state
-                                      ;; Atomic test-and-set: same guard as wrapped-cb.
-                                      (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                                      (unless already-done
-                                         (when (timerp (plist-get state :progress-timer))
-                                           (cancel-timer (plist-get state :progress-timer)))
-                                         (message "[nucleus] Subagent %s timed out after %ds, aborting request"
-                                                  agent-type task-timeout)
-                                         (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
-                                                     ((fboundp 'gptel-abort)))
-                                           (ignore-errors (gptel-abort request-buf)))
-                                         (funcall restore-origin-fsm child-fsm)
-                                         (funcall callback
-                                                  (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                                          description agent-type task-timeout))
-                                         (remhash task-id my/gptel--agent-task-state))))))))))
+                            (let* ((state (gethash task-id my/gptel--agent-task-state))
+                                   (already-done (plist-get state :done)))
+                              (when state
+                                ;; Atomic test-and-set: same guard as wrapped-cb.
+                                (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                                (unless already-done
+                                  (when (timerp (plist-get state :progress-timer))
+                                    (cancel-timer (plist-get state :progress-timer)))
+                                  (message "[nucleus] Subagent %s timed out after %ds, aborting request"
+                                           agent-type task-timeout)
+                                  (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
+                                              ((fboundp 'gptel-abort)))
+                                    (ignore-errors (gptel-abort request-buf)))
+                                  (funcall restore-origin-fsm child-fsm)
+                                  (funcall callback
+                                           (format "Error: Task \"%s\" (%s) timed out after %ds."
+                                                   description agent-type task-timeout))
+                                  (remhash task-id my/gptel--agent-task-state))))))))
         (let ((state (gethash task-id my/gptel--agent-task-state)))
           (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
     (let ((my/gptel--current-agent-task-id task-id)
@@ -1410,14 +1408,14 @@ Uses hash table keyed by task-id to support parallel execution."
             (progn
               (my/gptel--call-gptel-agent-task
                wrapped-cb agent-type description packaged-prompt)
-                (setq request-started t)
+                 (setq request-started t)
                 (when-let* ((state (gethash task-id my/gptel--agent-task-state))
                             (request-buf (my/gptel--agent-task-request-buffer state))
                             ((buffer-live-p request-buf)))
                   (with-current-buffer request-buf
                     (when (local-variable-p 'gptel--fsm-last)
-                      (setq child-fsm gptel--fsm-last)
-                      (my/gptel--disable-auto-retry-for-fsm child-fsm)))))
+                       (setq child-fsm gptel--fsm-last)
+                       (my/gptel--disable-auto-retry-for-fsm child-fsm)))))
            (unless request-started
              (funcall restore-origin-fsm)))))))
 
@@ -3777,13 +3775,11 @@ BASELINE-CODE-QUALITY is the initial code quality score."
           ;; Capture the experiment timeout lexically because later analyzer
           ;; callbacks run after this outer let frame exits.
           (experiment-timeout gptel-auto-experiment-time-budget)
-          ;; CRITICAL: Use experiment time budget as agent task timeout
-           ;; This ensures the gptel request times out before the outer timer
-           (my/gptel-agent-task-timeout experiment-timeout)
-           (start-time (float-time))
-           (timeout-timer nil)
-           (finished nil)
-           (executor-prompt nil))
+          ;; The subagent timeout wrapper owns executor timeout/abort behavior.
+          (my/gptel-agent-task-timeout experiment-timeout)
+          (start-time (float-time))
+          (finished nil)
+          (executor-prompt nil))
     (if (not worktree)
         (funcall callback (list :target target :error "Failed to create worktree"))
       (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
@@ -3795,20 +3791,6 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                     (prompt (gptel-auto-experiment-build-prompt
                              target experiment-id max-experiments analysis baseline)))
                (setq executor-prompt prompt)
-                (setq timeout-timer
-                      (run-with-timer experiment-timeout nil
-                                      (lambda ()
-                                        (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
-                                          (unless finished
-                                            (setq finished t)
-                                            (message "[auto-exp] Experiment timed out after %ds, aborting"
-                                                     experiment-timeout)
-                                            (when (fboundp 'gptel-abort)
-                                              (ignore-errors (gptel-abort (current-buffer))))
-                                            (funcall callback
-                                                     (list :target target
-                                                           :id experiment-id
-                                                           :error "timeout")))))))
                 ;; Routing handled by gptel-auto-workflow--advice-task-override
                 (my/gptel--run-agent-tool-with-timeout
                  experiment-timeout
@@ -3816,7 +3798,6 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                   (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
                     (message "[auto-exp] Agent output (first 150 chars): %s"
                              (my/gptel--sanitize-for-logging agent-output 150))
-                    (when timeout-timer (cancel-timer timeout-timer))
                     (unless finished
                       (gptel-auto-experiment-grade
                        agent-output
