@@ -54,6 +54,47 @@
       (when (get-buffer "*aw-worktree*")
         (kill-buffer "*aw-worktree*")))))
 
+(ert-deftest regression/auto-workflow-projects/queue-helper-returns-before-job-runs ()
+  "Queued cron work should not run inline in the `emacsclient' request."
+  (let ((gptel-auto-workflow--cron-job-running nil)
+        (job-ran nil)
+        (scheduled nil))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (_secs _repeat fn)
+                  (setq scheduled fn)
+                  'fake-timer))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda (&rest _) nil)))
+      (should
+       (eq (gptel-auto-workflow--queue-cron-job
+            "auto-workflow"
+            (lambda () (setq job-ran t)))
+           'queued))
+      (should gptel-auto-workflow--cron-job-running)
+      (should-not job-ran)
+      (should (functionp scheduled))
+      (funcall scheduled)
+      (should job-ran)
+      (should-not gptel-auto-workflow--cron-job-running))))
+
+(ert-deftest regression/auto-workflow-projects/queue-helper-rejects-overlap ()
+  "A second cron request should return immediately when one is already queued."
+  (let ((gptel-auto-workflow--cron-job-running t)
+        (scheduled nil))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (&rest _)
+                  (setq scheduled t)
+                  'fake-timer))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda (&rest _) nil)))
+      (should
+       (eq (gptel-auto-workflow--queue-cron-job
+            "auto-workflow"
+            (lambda ()))
+           'already-running))
+      (should-not scheduled)
+      (should gptel-auto-workflow--cron-job-running))))
+
 (provide 'test-gptel-auto-workflow-projects-regressions)
 
 ;;; test-gptel-auto-workflow-projects-regressions.el ends here
