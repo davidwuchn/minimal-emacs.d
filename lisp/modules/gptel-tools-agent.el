@@ -1855,8 +1855,9 @@ Call this before any git operation that might modify branches."
 
 (defun gptel-auto-workflow--staging-main-ref ()
   "Return the safe main ref staging and experiments should mirror.
-Prefer local `main' only when it matches `origin/main'. Otherwise use
-`origin/main' so unpublished local commits do not leak into workflow branches."
+Prefer local `main' when it either matches `origin/main' or is a clean
+ahead-only tip. Otherwise use `origin/main' so dirty or diverged local
+state does not leak into workflow branches."
   (let ((default-directory (gptel-auto-workflow--default-dir)))
     (let* ((main-result (gptel-auto-workflow--git-result
                          "git rev-parse --verify main"
@@ -1872,8 +1873,33 @@ Prefer local `main' only when it matches `origin/main'. Otherwise use
        ((and have-main have-origin)
         (if (string= main-hash origin-hash)
             "main"
-          (message "[auto-workflow] Local main differs from origin/main; using origin/main as workflow base")
-          "origin/main"))
+          (let* ((status-result (gptel-auto-workflow--git-result
+                                 "git status --porcelain"
+                                 60))
+                 (clean-main (and (= 0 (cdr status-result))
+                                  (string-empty-p (string-trim (car status-result)))))
+                 (ahead-result (and clean-main
+                                    (gptel-auto-workflow--git-result
+                                     "git rev-list --left-right --count origin/main...main"
+                                     60)))
+                 (ahead-counts (and ahead-result
+                                    (= 0 (cdr ahead-result))
+                                    (split-string (string-trim (car ahead-result))
+                                                  "[[:space:]]+" t)))
+                 (behind-count (and (= (length ahead-counts) 2)
+                                    (string-to-number (nth 0 ahead-counts))))
+                 (ahead-count (and (= (length ahead-counts) 2)
+                                   (string-to-number (nth 1 ahead-counts)))))
+            (if (and clean-main
+                     (numberp behind-count)
+                     (numberp ahead-count)
+                     (= behind-count 0)
+                     (> ahead-count 0))
+                (progn
+                  (message "[auto-workflow] Local main is clean and ahead of origin/main; using main as workflow base")
+                  "main")
+              (message "[auto-workflow] Local main differs from origin/main; using origin/main as workflow base")
+              "origin/main"))))
        (have-origin
         "origin/main")
        (have-main
