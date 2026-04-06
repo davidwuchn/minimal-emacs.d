@@ -6,6 +6,17 @@
 
 ;;; Code:
 
+;; ═══════════════════════════════════════════════════════════════════════════
+;; Prevent multiple Emacs daemons
+;; ═══════════════════════════════════════════════════════════════════════════
+;; Check if another daemon is already running before this one fully starts.
+;; This prevents the "server did not start correctly" error and resource waste.
+(when (daemonp)
+  (require 'server)
+  (when (server-running-p)
+    (message "[daemon] Another Emacs daemon is already running, exiting this one")
+    (kill-emacs 0)))
+
 ;; Set tree-sitter grammar directory early, before any tree-sitter modes are loaded
 ;; Note: user-emacs-directory is already set to var/ by pre-early-init.el
 (setq treesit-extra-load-path
