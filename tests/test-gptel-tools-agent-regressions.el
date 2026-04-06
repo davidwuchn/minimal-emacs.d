@@ -1805,6 +1805,14 @@ EXIT-CODE defaults to 1."
           (should-not (gptel-auto-experiment--validate-code file)))
       (delete-file file))))
 
+(ert-deftest regression/auto-workflow/validate-code-flags-missing-target-file ()
+  "Code validation should fail when the target Elisp file is missing."
+  (let ((file (make-temp-file "validate-code-missing" nil ".el")))
+    (delete-file file)
+    (should (string-match-p
+             "Missing target file"
+             (gptel-auto-experiment--validate-code file)))))
+
 (ert-deftest regression/auto-workflow/validate-code-ignores-cl-return-from-in-docs ()
   "Code validation should ignore cl-return-from mentions in comments and strings."
   (let ((file (make-temp-file "validate-code" nil ".el")))

@@ -3170,23 +3170,25 @@ BLOCKS is the list of block names currently in scope."
 (defun gptel-auto-experiment--validate-code (file)
   "Validate code in FILE for syntax and dangerous patterns.
 Returns nil if valid, or error message string if invalid."
-  (when (and (stringp file) (file-exists-p file) (string-suffix-p ".el" file))
-    (let ((content (gptel-auto-workflow--read-file-contents file))
-          forms)
-      (or (condition-case err
-              (with-temp-buffer
-                (insert content)
-                (set-syntax-table emacs-lisp-mode-syntax-table)
-                (goto-char (point-min))
-                (while (progn
-                         (forward-comment (point-max))
-                         (< (point) (point-max)))
-                  (push (read (current-buffer)) forms))
-                nil)
-            (error (format "Syntax error in %s: %s" file err)))
-          (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
-                 (nreverse forms))
-            (format "Dangerous pattern in %s: cl-return-from without cl-block" file))))))
+  (when (and (stringp file) (string-suffix-p ".el" file))
+    (if (not (file-exists-p file))
+        (format "Missing target file: %s" file)
+      (let ((content (gptel-auto-workflow--read-file-contents file))
+            forms)
+        (or (condition-case err
+                (with-temp-buffer
+                  (insert content)
+                  (set-syntax-table emacs-lisp-mode-syntax-table)
+                  (goto-char (point-min))
+                  (while (progn
+                           (forward-comment (point-max))
+                           (< (point) (point-max)))
+                    (push (read (current-buffer)) forms))
+                  nil)
+              (error (format "Syntax error in %s: %s" file err)))
+            (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
+                   (nreverse forms))
+              (format "Dangerous pattern in %s: cl-return-from without cl-block" file)))))))
 
 (defun gptel-auto-experiment--finish-grade (grade-id callback result
                                                      &optional cancel-timer)
