@@ -245,12 +245,12 @@ ensure_worker_daemon() {
         return 0
     fi
 
-    local lock_file="$DIR/var/tmp/cron/daemon-start.lock"
     mkdir -p "$DIR/var/tmp/cron"
+    LOCK_FILE="$DIR/var/tmp/cron/daemon-start.lock"
     
     local lock_acquired=0
     for _ in $(seq 1 10); do
-        if (set -C; echo "$$" > "$lock_file") 2>/dev/null; then
+        if (set -C; echo "$$" > "$LOCK_FILE") 2>/dev/null; then
             lock_acquired=1
             break
         fi
@@ -268,22 +268,23 @@ ensure_worker_daemon() {
         return 1
     fi
     
-    trap 'rm -f "$lock_file"' EXIT
+    trap 'rm -f "$LOCK_FILE"' EXIT
     
-    check_worker_daemon && return 0
+    check_worker_daemon && { rm -f "$LOCK_FILE"; return 0; }
     
     "$EMACS" --eval "(server-force-delete \"$SERVER_NAME\")" >>"$DAEMON_LOG" 2>&1 || true
     sleep 0.5
     MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 "$EMACS" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
     for _ in $(seq 1 50); do
         if check_worker_daemon; then
+            rm -f "$LOCK_FILE"
             return 0
         fi
         sleep 0.2
     done
     echo "failed to start worker daemon: $SERVER_NAME" >&2
     tail -n 40 "$DAEMON_LOG" >&2 || true
-    rm -f "$lock_file"
+    rm -f "$LOCK_FILE"
     return 1
 }
 
