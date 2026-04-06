@@ -168,17 +168,6 @@ Reduces duplication of three-way `or` patterns with worktree fallback."
   (or (gptel-auto-workflow--get-worktree-dir (or target gptel-auto-workflow--current-target))
       (gptel-auto-workflow--project-root)
       (expand-file-name "~/.emacs.d/")))
-
-(defvar gptel-auto-experiment--scoring-root-override nil
-  "Project root to use for benchmark and code-quality scoring when non-nil.")
-
-(defun gptel-auto-experiment--scoring-dir (&optional target)
-  "Return directory to use for benchmark and code-quality scoring."
-  (if (and (stringp gptel-auto-experiment--scoring-root-override)
-           (> (length gptel-auto-experiment--scoring-root-override) 0))
-      (file-name-as-directory
-       (expand-file-name gptel-auto-experiment--scoring-root-override))
-    (gptel-auto-workflow--worktree-or-project-dir target)))
 ;;;###autoload
 (defun gptel-auto-workflow--read-file-contents (filepath)
   "Read contents of FILEPATH as string.
@@ -1310,18 +1299,17 @@ Uses hash table keyed by task-id to support parallel execution."
                   ;; Atomic test-and-set: mark done before acting to prevent
                   ;; double-invocation if gptel-abort fires synchronously in timeout.
                   (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                   (unless already-done
-                     (when (timerp (plist-get state :timeout-timer))
-                       (cancel-timer (plist-get state :timeout-timer)))
-                     (when (timerp (plist-get state :progress-timer))
-                       (cancel-timer (plist-get state :progress-timer)))
-                     (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
-                              agent-type (float-time (time-since start-time))
-                              (if (stringp result) (length result) 0))
-                     (funcall restore-origin-fsm child-fsm)
-                     (unwind-protect
-                         (funcall callback result)
-                       (remhash task-id my/gptel--agent-task-state))))))))
+                  (unless already-done
+                    (when (timerp (plist-get state :timeout-timer))
+                      (cancel-timer (plist-get state :timeout-timer)))
+                    (when (timerp (plist-get state :progress-timer))
+                      (cancel-timer (plist-get state :progress-timer)))
+                    (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
+                             agent-type (float-time (time-since start-time))
+                             (if (stringp result) (length result) 0))
+                    (funcall restore-origin-fsm child-fsm)
+                    (funcall callback result)
+                    (remhash task-id my/gptel--agent-task-state)))))))
     (message "[nucleus] Delegating to subagent %s%s..."
              agent-type
              (if task-timeout
@@ -1355,17 +1343,16 @@ Uses hash table keyed by task-id to support parallel execution."
                                       (unless already-done
                                          (when (timerp (plist-get state :progress-timer))
                                            (cancel-timer (plist-get state :progress-timer)))
-                                       (message "[nucleus] Subagent %s timed out after %ds, aborting request"
-                                                agent-type task-timeout)
-                                       (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
-                                                   ((fboundp 'gptel-abort)))
-                                         (ignore-errors (gptel-abort request-buf)))
-                                       (funcall restore-origin-fsm child-fsm)
-                                       (unwind-protect
-                                           (funcall callback
-                                                    (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                                            description agent-type task-timeout))
-                                         (remhash task-id my/gptel--agent-task-state)))))))))))
+                                         (message "[nucleus] Subagent %s timed out after %ds, aborting request"
+                                                  agent-type task-timeout)
+                                         (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
+                                                     ((fboundp 'gptel-abort)))
+                                           (ignore-errors (gptel-abort request-buf)))
+                                         (funcall restore-origin-fsm child-fsm)
+                                         (funcall callback
+                                                  (format "Error: Task \"%s\" (%s) timed out after %ds."
+                                                          description agent-type task-timeout))
+                                         (remhash task-id my/gptel--agent-task-state))))))))))
         (let ((state (gethash task-id my/gptel--agent-task-state)))
           (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
     (let ((my/gptel--current-agent-task-id task-id)
@@ -1428,17 +1415,6 @@ INCLUDE-HISTORY defaults to `my/gptel-subagent-include-history-default' when nil
         (setq include-history-bool my/gptel-subagent-include-history-default))
       (my/gptel--agent-task-with-timeout callback agent-name description prompt files
                                          include-history-bool include-diff-bool))))
-
-(defun my/gptel--run-agent-tool-with-timeout (timeout callback agent-name description prompt
-                                                      &optional files include-history include-diff)
-  "Run `my/gptel--run-agent-tool' with TIMEOUT forced for this one dispatch."
-  (let ((previous-timeout my/gptel-agent-task-timeout))
-    (unwind-protect
-        (progn
-          (setq my/gptel-agent-task-timeout timeout)
-          (my/gptel--run-agent-tool callback agent-name description prompt
-                                    files include-history include-diff))
-      (setq my/gptel-agent-task-timeout previous-timeout))))
 
 ;;; Tool Registration
 
@@ -2974,7 +2950,7 @@ NOTE: Nucleus script validation is skipped for experiments because:
 2. Executor already runs verification in worktree context
 3. Full validation happens in staging flow"
   (let* ((start (float-time))
-         (default-directory (gptel-auto-experiment--scoring-dir))
+         (default-directory (gptel-auto-workflow--worktree-or-project-dir))
          (target-file (when gptel-auto-workflow--current-target
                         (expand-file-name gptel-auto-workflow--current-target default-directory)))
          (validation-error (when target-file
@@ -3000,28 +2976,11 @@ NOTE: Nucleus script validation is skipped for experiments because:
               :eight-keys (when scores (alist-get 'overall scores))
               :eight-keys-scores scores)))))
 
-(defun gptel-auto-experiment--safe-benchmark (&optional skip-tests)
-  "Run benchmark, converting unexpected errors into a failed result."
-  (condition-case err
-      (gptel-auto-experiment-benchmark skip-tests)
-    (error
-     (let ((reason
-            (format "callback-error:%s"
-                    (my/gptel--sanitize-for-logging
-                     (error-message-string err) 200))))
-       (message "[auto-experiment] Benchmark failed unexpectedly: %s" reason)
-       (list :passed nil
-             :nucleus-passed nil
-             :tests-passed nil
-             :validation-error reason
-             :time 0
-             :eight-keys 0)))))
-
 (defun gptel-auto-experiment--eight-keys-scores ()
   "Get full Eight Keys scores alist from current codebase.
 Scores based on commit message + code diff (not just stat)."
   (when (fboundp 'gptel-benchmark-eight-keys-score)
-    (let* ((worktree (gptel-auto-experiment--scoring-dir))
+    (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
            (worktree-quoted (shell-quote-argument worktree))
            (commit-msg (shell-command-to-string
@@ -3041,7 +3000,7 @@ Scores based on commit message + code diff (not just stat)."
 (defun gptel-auto-experiment--code-quality-score ()
   "Get code quality score from current changes."
   (when (fboundp 'gptel-benchmark--code-quality-score)
-    (let* ((worktree (gptel-auto-experiment--scoring-dir))
+    (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
            (worktree-quoted (shell-quote-argument worktree))
            (changed-files (shell-command-to-string
@@ -3056,27 +3015,9 @@ Scores based on commit message + code diff (not just stat)."
               (when content
                 (cl-incf total-score (gptel-benchmark--code-quality-score content))
                 (cl-incf file-count))))
-           (if (> file-count 0)
-               (/ total-score file-count)
-             0.5))))))
-
-(defun gptel-auto-experiment--safe-code-quality-score ()
-  "Get code quality score, falling back to a neutral value on errors."
-  (condition-case err
-      (or (gptel-auto-experiment--code-quality-score) 0.5)
-    (error
-     (message "[auto-experiment] Code quality scoring failed unexpectedly: %s"
-              (my/gptel--sanitize-for-logging (error-message-string err) 200))
-     0.5)))
-
-(defun gptel-auto-experiment--baseline-metrics (target)
-  "Return baseline benchmark and code-quality metrics for TARGET.
-Always score against the checked-in project root, not an existing experiment worktree."
-  (let ((gptel-auto-experiment--scoring-root-override
-         (gptel-auto-workflow--project-root))
-        (gptel-auto-workflow--current-target target))
-    (list :benchmark (gptel-auto-experiment-benchmark t)
-          :code-quality (gptel-auto-experiment--safe-code-quality-score))))
+          (if (> file-count 0)
+              (/ total-score file-count)
+            0.5))))))
 
 ;;; Subagent Integrations
 
@@ -3124,20 +3065,18 @@ Default 120s (2 min) allows grader to process complex outputs.")
 Returns nil if valid, or error message string if invalid."
   (when (and (stringp file) (file-exists-p file) (string-suffix-p ".el" file))
     (let ((content (gptel-auto-workflow--read-file-contents file)))
-      (or (condition-case err
-              (with-temp-buffer
-                (insert content)
-                (set-syntax-table emacs-lisp-mode-syntax-table)
-                (goto-char (point-min))
-                (while (progn
-                         (forward-comment (point-max))
-                         (< (point) (point-max)))
-                  (read (current-buffer)))
-                nil)
-            (error (format "Syntax error in %s: %s" file err)))
-          (when (and (string-match-p "(cl-return-from\\_>" content)
-                     (not (string-match-p "(cl-block\\_>" content)))
-            (format "Dangerous pattern in %s: cl-return-from without cl-block" file))))))
+      (condition-case err
+          (with-temp-buffer
+            (insert content)
+            (goto-char (point-min))
+            (while (progn
+                     (skip-chars-forward " \t\r\n")
+                     (< (point) (point-max)))
+              (read (current-buffer))))
+        (error (format "Syntax error in %s: %s" file err)))
+      (when (and (string-match-p "(cl-return-from\\_>" content)
+                 (not (string-match-p "(cl-block\\_>" content)))
+        (format "Dangerous pattern in %s: cl-return-from without cl-block" file)))))
 
 (defun gptel-auto-experiment-grade (output callback)
   "Grade experiment OUTPUT. LLM decides quality threshold.
@@ -3676,9 +3615,9 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                            :id experiment-id
                                                            :error "timeout")))))))
                 ;; Routing handled by gptel-auto-workflow--advice-task-override
-                (my/gptel--run-agent-tool-with-timeout
-                 experiment-timeout
-                 (lambda (agent-output)
+                (let ((my/gptel-agent-task-timeout experiment-timeout))
+                  (my/gptel--run-agent-tool
+                (lambda (agent-output)
                   (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
                     (message "[auto-exp] Agent output (first 150 chars): %s"
                              (my/gptel--sanitize-for-logging agent-output 150))
@@ -3741,15 +3680,15 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                            (let ((default-directory commit-dir))
                              (magit-git-success "add" "-A")
                              (magit-git-success "commit" "-m" (format "WIP: experiment %s" target)))))
-                        (let* ((bench (gptel-auto-experiment--safe-benchmark t))
-                               (passed (plist-get bench :passed))
-                               (validation-error (plist-get bench :validation-error))
-                               (tests-passed (plist-get bench :tests-passed))
-                               (score-after (plist-get bench :eight-keys)))
+                       (let* ((bench (gptel-auto-experiment-benchmark t))
+                              (passed (plist-get bench :passed))
+                              (validation-error (plist-get bench :validation-error))
+                              (tests-passed (plist-get bench :tests-passed))
+                              (score-after (plist-get bench :eight-keys)))
                          (if passed
     (let
 	((code-quality
-	  (gptel-auto-experiment--safe-code-quality-score)))
+	  (or (gptel-auto-experiment--code-quality-score) 0.5)))
       (gptel-auto-experiment-decide
        (list :score baseline :code-quality baseline-code-quality)
        (list :score score-after :code-quality code-quality :output
@@ -3827,18 +3766,18 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                 (message "[auto-experiment] ✗ %s"
                                          (my/gptel--sanitize-for-logging validation-error 200))
                                 (magit-git-success "checkout" "--" ".")
-                                (my/gptel--run-agent-tool-with-timeout
-                                 experiment-timeout
-                                 (lambda (retry-output)
+                                (let ((my/gptel-agent-task-timeout experiment-timeout))
+                                  (my/gptel--run-agent-tool
+                                   (lambda (retry-output)
                                      (gptel-auto-experiment-grade
                                       retry-output
                                       (lambda (retry-grade)
                                         (if (plist-get retry-grade :passed)
-                                            (let ((retry-bench (gptel-auto-experiment--safe-benchmark t)))
+                                            (let ((retry-bench (gptel-auto-experiment-benchmark t)))
                                               (if (plist-get retry-bench :passed)
                                                   (let ((retry-score (plist-get retry-bench :eight-keys))
                                                         (retry-quality
-                                                         (gptel-auto-experiment--safe-code-quality-score)))
+                                                         (or (gptel-auto-experiment--code-quality-score) 0.5)))
                                                     (message "[auto-experiment] ✓ Retry succeeded")
                                                     (gptel-auto-experiment-decide
                                                      (list :score baseline
@@ -3877,7 +3816,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                    "executor"
                                    (format "Retry: fix validation error in %s" target)
                                    (gptel-auto-experiment--make-retry-prompt
-                                    target validation-error executor-prompt)))
+                                    target validation-error executor-prompt))))
                             (let ((default-directory experiment-worktree))
                               (setq finished t)
                               (magit-git-success "checkout" "--" ".")
@@ -3908,7 +3847,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                    "executor"
                    (format "Experiment %d: optimize %s" experiment-id target)
                    executor-prompt
-                   nil "false" nil))))))))
+                   nil "false" nil)))))))))
     )
 
 
@@ -3986,9 +3925,8 @@ This skill teaches dangerous Elisp patterns including cl-return-from requirement
   "Run experiments for TARGET until stop condition. Call CALLBACK with results.
 Uses local state captured in closure for parallel execution safety.
 Adapts max-experiments based on API error rate."
-  (let* ((baseline-metrics (gptel-auto-experiment--baseline-metrics target))
-         (baseline (plist-get baseline-metrics :benchmark))
-         (baseline-code-quality (plist-get baseline-metrics :code-quality))
+  (let* ((baseline (gptel-auto-experiment-benchmark t))
+         (baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5))
          (original-max gptel-auto-experiment-max-per-target)
          (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
          (threshold gptel-auto-experiment-no-improvement-threshold)
@@ -4030,20 +3968,14 @@ Adapts max-experiments based on API error rate."
                                   no-improvement-count 0))
                           (when (and score-after (<= score-after best-score))
                             (cl-incf no-improvement-count)))
-                        (let* ((next-exp-id (1+ exp-id))
-                               (terminal-step
-                                (or gptel-auto-experiment--quota-exhausted
-                                    (>= no-improvement-count threshold)
-                                    (>= exp-id max-exp)))
-                               (continue
-                                (lambda ()
-                                  (gptel-auto-workflow--call-in-run-context
-                                   workflow-root
-                                   (lambda () (run-next next-exp-id))
-                                   loop-buffer
-                                   workflow-root))))
-                          (if (and (> gptel-auto-experiment-delay-between 0)
-                                   (not terminal-step))
+                        (let ((continue
+                               (lambda ()
+                                 (gptel-auto-workflow--call-in-run-context
+                                  workflow-root
+                                  (lambda () (run-next (1+ exp-id)))
+                                  loop-buffer
+                                  workflow-root))))
+                          (if (> gptel-auto-experiment-delay-between 0)
                               (run-with-timer gptel-auto-experiment-delay-between nil
                                               continue)
                             (funcall continue))))))))
@@ -4136,16 +4068,6 @@ Relative paths are resolved from the project root."
         (error
          (message "[auto-workflow] Failed to read status snapshot: %s" err)
          nil)))))
-
-(defun gptel-auto-workflow--kept-target-count (results)
-  "Return the number of distinct targets kept in RESULTS."
-  (length
-   (delete-dups
-    (delq nil
-          (mapcar (lambda (result)
-                    (when (plist-get result :kept)
-                      (plist-get result :target)))
-                  results)))))
 
 (defun gptel-auto-workflow--suppress-ask-user-about-supersession-threat (orig-fn &rest args)
   "Suppress supersession threat prompts in headless mode."
@@ -4677,7 +4599,7 @@ Only removes worktrees if no gptel processes are running."
          (proj-root (gptel-auto-workflow--default-dir))
          (run-buffer (current-buffer))
          (all-results '())
-         (kept-target-count 0)
+         (kept-count 0)
          (finish
           (gptel-auto-workflow--make-idempotent-callback
            (lambda ()
@@ -4688,13 +4610,13 @@ Only removes worktrees if no gptel processes are running."
                       gptel-auto-workflow--run-project-root nil
                       gptel-auto-workflow--current-target nil
                       gptel-auto-workflow--current-project nil)
-                (setq gptel-auto-workflow--stats
-                      (plist-put gptel-auto-workflow--stats :phase final-phase))
-                (gptel-auto-workflow--persist-status)
-                (message "[auto-workflow] Complete: %d experiments, %d targets improved"
-                         (length all-results) kept-target-count)
-                (when completion-callback
-                  (funcall completion-callback all-results)))))))
+               (setq gptel-auto-workflow--stats
+                     (plist-put gptel-auto-workflow--stats :phase final-phase))
+               (gptel-auto-workflow--persist-status)
+               (message "[auto-workflow] Complete: %d experiments, %d kept"
+                        (length all-results) kept-count)
+               (when completion-callback
+                 (funcall completion-callback all-results)))))))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root
           gptel-auto-workflow--run-project-root proj-root)
@@ -4718,10 +4640,10 @@ Only removes worktrees if no gptel processes are running."
                        (gptel-auto-workflow--make-idempotent-callback
                         (lambda (results)
                           (setq all-results (append all-results results))
-                          (setq kept-target-count
-                                (gptel-auto-workflow--kept-target-count all-results))
+                          (setq kept-count
+                                (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
                           (setq gptel-auto-workflow--stats
-                                (plist-put gptel-auto-workflow--stats :kept kept-target-count))
+                                (plist-put gptel-auto-workflow--stats :kept kept-count))
                            (gptel-auto-workflow--persist-status)
                            (if gptel-auto-experiment--quota-exhausted
                                (progn
