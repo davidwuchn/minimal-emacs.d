@@ -1222,17 +1222,23 @@ Dynamic variable, let-bound around gptel-agent--task calls.")
              (plist-put state :last-activity-time (or timestamp (current-time)))
              my/gptel--agent-task-state)))
 
+(defun my/gptel--agent-task-uses-idle-timeout-p (agent-type)
+  "Return non-nil when AGENT-TYPE should use inactivity-based timeout extension."
+  (equal agent-type "executor"))
+
 (defun my/gptel--agent-task-note-active-activity (&optional agent-type timestamp)
-  "Record fresh activity for active tasks matching AGENT-TYPE.
-When AGENT-TYPE is nil, note activity for every active task."
+  "Record fresh activity for active idle-timeout tasks matching AGENT-TYPE.
+When AGENT-TYPE is nil, note activity for every active idle-timeout task."
   (let ((activity-time (or timestamp (current-time))))
     (when (> (hash-table-count my/gptel--agent-task-state) 0)
       (maphash
        (lambda (task-id state)
          (when (and (not (plist-get state :done))
-                    (or (null agent-type)
-                        (equal (plist-get state :agent-type) agent-type)))
-           (my/gptel--agent-task-note-activity task-id activity-time)))
+                    (my/gptel--agent-task-uses-idle-timeout-p
+                     (plist-get state :agent-type))
+                     (or (null agent-type)
+                         (equal (plist-get state :agent-type) agent-type)))
+            (my/gptel--agent-task-note-activity task-id activity-time)))
        my/gptel--agent-task-state))))
 
 (defun my/gptel--path-within-directory-p (path directory)
@@ -1401,7 +1407,9 @@ Uses hash table keyed by task-id to support parallel execution."
                   (unwind-protect
                       (funcall callback result)
                     (remhash task-id my/gptel--agent-task-state))))))))
-    (let (rearm-timeout note-buffer-activity)
+    (let ((uses-idle-timeout
+           (my/gptel--agent-task-uses-idle-timeout-p agent-type))
+          rearm-timeout note-buffer-activity)
       (setq rearm-timeout
             (lambda (state)
               (when task-timeout
@@ -1418,15 +1426,17 @@ Uses hash table keyed by task-id to support parallel execution."
                                   (last-activity (plist-get state :last-activity-time))
                                   (idle-seconds (and last-activity
                                                      (float-time (time-since last-activity)))))
-                             (when state
-                               (cond
-                                (already-done nil)
-                                ((and idle-seconds (< idle-seconds task-timeout))
-                                 (funcall rearm-timeout state))
-                                (t
-                                 (puthash task-id (plist-put state :done t)
-                                          my/gptel--agent-task-state)
-                                 (when (timerp (plist-get state :progress-timer))
+                              (when state
+                                (cond
+                                 (already-done nil)
+                                 ((and uses-idle-timeout
+                                       idle-seconds
+                                       (< idle-seconds task-timeout))
+                                  (funcall rearm-timeout state))
+                                 (t
+                                  (puthash task-id (plist-put state :done t)
+                                           my/gptel--agent-task-state)
+                                  (when (timerp (plist-get state :progress-timer))
                                    (cancel-timer (plist-get state :progress-timer)))
                                  (message "[nucleus] Subagent %s timed out after %ds, aborting request"
                                           agent-type task-timeout)
@@ -1445,24 +1455,27 @@ Uses hash table keyed by task-id to support parallel execution."
                                      (unwind-protect
                                          (funcall callback timeout-result)
                                        (remhash task-id my/gptel--agent-task-state))))))))))))
-                 (puthash task-id state my/gptel--agent-task-state))
-               state))
+                  (puthash task-id state my/gptel--agent-task-state))
+                state))
       (setq note-buffer-activity
             (lambda (state)
-              (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
-                          ((buffer-live-p request-buf)))
-                (let* ((current-tick (my/gptel--agent-task-buffer-tick request-buf))
-                       (last-tick (plist-get state :last-buffer-tick)))
-                  (when (and current-tick (not (equal current-tick last-tick)))
-                     (setq state (plist-put state :last-buffer-tick current-tick))
-                     (setq state (plist-put state :last-activity-time (current-time)))
-                     (setq state (funcall rearm-timeout state)))))
+              (when uses-idle-timeout
+                (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
+                            ((buffer-live-p request-buf)))
+                  (let* ((current-tick (my/gptel--agent-task-buffer-tick request-buf))
+                         (last-tick (plist-get state :last-buffer-tick)))
+                    (when (and current-tick (not (equal current-tick last-tick)))
+                      (setq state (plist-put state :last-buffer-tick current-tick))
+                      (setq state (plist-put state :last-activity-time (current-time)))
+                      (setq state (funcall rearm-timeout state))))))
               state))
       (message "[nucleus] Delegating to subagent %s%s..."
                agent-type
                (if task-timeout
-                   (format " (timeout: %ds)" task-timeout)
-                 ""))
+                   (format " (%s: %ds)"
+                           (if uses-idle-timeout "idle timeout" "timeout")
+                           task-timeout)
+                  ""))
       (let ((progress-timer
              (run-at-time my/gptel-subagent-progress-interval
                           my/gptel-subagent-progress-interval
