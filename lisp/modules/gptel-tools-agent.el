@@ -276,29 +276,8 @@ Returns non-nil when at least one entry was removed."
                   (with-temp-file tracking-file
                     (insert (mapconcat #'identity remaining "\n"))
                     (insert "\n"))
-                 (delete-file tracking-file))
-               t)))))))
-
-(defun gptel-auto-workflow--commit-exists-p (commit-hash)
-  "Return non-nil when COMMIT-HASH resolves to an existing commit object."
-  (and (gptel-auto-workflow--non-empty-string-p commit-hash)
-       (eq 0 (cdr (gptel-auto-workflow--git-result
-                   (format "git cat-file -e %s^{commit}"
-                           (shell-quote-argument commit-hash))
-                   30)))))
-
-(defun gptel-auto-workflow--commit-patch-equivalent-p (commit-hash branch)
-  "Return non-nil when COMMIT-HASH's patch is already represented in BRANCH."
-  (and (gptel-auto-workflow--non-empty-string-p commit-hash)
-       (gptel-auto-workflow--non-empty-string-p branch)
-       (string-prefix-p
-        "-"
-        (gptel-auto-workflow--git-cmd
-         (format "git cherry %s %s %s 2>/dev/null"
-                 (shell-quote-argument branch)
-                 (shell-quote-argument commit-hash)
-                 (shell-quote-argument (concat commit-hash "^")))
-         60))))
+                (delete-file tracking-file))
+              t)))))))
 
 (defun gptel-auto-workflow--track-commit (experiment-id &optional target worktree-dir)
   "Save current commit hash to tracking file for EXPERIMENT-ID.
@@ -314,32 +293,23 @@ Returns nil if git command fails or returns invalid hash."
      ((string-empty-p commit-hash)
       (message "[auto-workflow] Failed to track commit: git command returned empty hash")
       nil)
-      ((not (string-match-p "^[a-f0-9]\\{7,40\\}$" commit-hash))
-       (message "[auto-workflow] Failed to track commit: invalid hash format %S" commit-hash)
-       nil)
-      (t
-       (unless (file-exists-p tracking-dir)
-         (make-directory tracking-dir t))
-       (if (and (file-exists-p tracking-file)
-                (with-temp-buffer
-                  (insert-file-contents tracking-file)
-                  (re-search-forward
-                   (format "^%s " (regexp-quote commit-hash))
-                   nil t)))
-           (message "[auto-workflow] Commit %s already tracked for exp-%s"
-                    (gptel-auto-workflow--truncate-hash commit-hash)
-                    experiment-id)
-         (with-temp-buffer
-           (insert (format "%s %s %s %s\n"
-                           commit-hash
-                           experiment-id
-                           (or target "unknown")
-                           (format-time-string "%H:%M:%S")))
-           (append-to-file (point-min) (point-max) tracking-file))
-         (message "[auto-workflow] Tracked commit %s for exp-%s"
-                  (gptel-auto-workflow--truncate-hash commit-hash)
-                  experiment-id))
-       commit-hash))))
+     ((not (string-match-p "^[a-f0-9]\\{7,40\\}$" commit-hash))
+      (message "[auto-workflow] Failed to track commit: invalid hash format %S" commit-hash)
+      nil)
+     (t
+      (unless (file-exists-p tracking-dir)
+        (make-directory tracking-dir t))
+      (with-temp-buffer
+        (insert (format "%s %s %s %s\n"
+                        commit-hash
+                        experiment-id
+                        (or target "unknown")
+                        (format-time-string "%H:%M:%S")))
+        (append-to-file (point-min) (point-max) tracking-file))
+      (message "[auto-workflow] Tracked commit %s for exp-%s" 
+               (gptel-auto-workflow--truncate-hash commit-hash)
+               experiment-id)
+      commit-hash))))
 
 (defun gptel-auto-workflow--recover-orphans ()
   "Check for orphan commits from previous runs.
@@ -347,37 +317,23 @@ An orphan is a commit that exists but is not reachable from staging or main.
 Returns list of (hash exp-id target) for truly orphaned commits."
   (interactive)
   (let* ((tracking-file (gptel-auto-workflow--tracking-file))
-         (orphans nil)
-         (seen (make-hash-table :test 'equal))
-         (stale-hashes nil))
+         (orphans nil))
     (when (file-exists-p tracking-file)
       (with-temp-buffer
         (insert-file-contents tracking-file)
         (dolist (line (split-string (buffer-string) "\n" t))
           (let* ((parts (split-string line))
-                  (hash (car parts))
-                  (exp-id (cadr parts))
-                  (target (caddr parts)))
-            (when (and hash
-                       (string-match-p "^[a-f0-9]+$" hash)
-                       (not (gethash hash seen)))
-              (puthash hash t seen)
-              (if (not (gptel-auto-workflow--commit-exists-p hash))
-                  (push hash stale-hashes)
-                (let ((in-staging (gptel-auto-workflow--git-cmd
-                                   (format "git merge-base --is-ancestor %s staging 2>/dev/null && echo yes" hash)))
-                      (in-main (gptel-auto-workflow--git-cmd
-                                (format "git merge-base --is-ancestor %s main 2>/dev/null && echo yes" hash))))
-                  (if (or (not (string-empty-p in-staging))
-                          (not (string-empty-p in-main))
-                          (gptel-auto-workflow--commit-patch-equivalent-p hash "staging")
-                          (gptel-auto-workflow--commit-patch-equivalent-p hash "main"))
-                      (push hash stale-hashes)
-                    (push (list hash exp-id target) orphans)))))))))
-    (dolist (hash (delete-dups stale-hashes))
-      (when (gptel-auto-workflow--untrack-commit hash)
-        (message "[auto-workflow] Removed stale orphan record %s"
-                 (gptel-auto-workflow--truncate-hash hash))))
+                 (hash (car parts))
+                 (exp-id (cadr parts))
+                 (target (caddr parts)))
+            (when (and hash (string-match-p "^[a-f0-9]+$" hash))
+              (let ((in-staging (gptel-auto-workflow--git-cmd
+                                 (format "git merge-base --is-ancestor %s staging 2>/dev/null && echo yes" hash)))
+                    (in-main (gptel-auto-workflow--git-cmd
+                              (format "git merge-base --is-ancestor %s main 2>/dev/null && echo yes" hash))))
+                 (when (and (string-empty-p in-staging)
+                            (string-empty-p in-main))
+                   (push (list hash exp-id target) orphans))))))))
     (if orphans
         (message "[auto-workflow] Found %d orphan(s): %s"
                  (length orphans)
@@ -390,8 +346,7 @@ Returns list of (hash exp-id target) for truly orphaned commits."
 
 (defun gptel-auto-workflow--cherry-pick-orphan (commit-hash)
   "Cherry-pick COMMIT-HASH to staging branch for recovery.
-Returns t on success, `conflict' on cherry-pick conflicts, nil otherwise.
-Uses the staging worktree only."
+Returns t on success, nil on failure. Uses the staging worktree only."
   (interactive "sCommit hash: ")
   (gptel-auto-workflow--with-staging-worktree
    (lambda ()
@@ -400,31 +355,10 @@ Uses the staging worktree only."
                              (shell-quote-argument commit-hash))
                      180))
             (output (car result))
-            (exit-code (cdr result))
-            (cherry-pick-head (unless (eq exit-code 0)
-                                (gptel-auto-workflow--git-cmd
-                                 "git rev-parse -q --verify CHERRY_PICK_HEAD 2>/dev/null"
-                                 30)))
-            (unmerged-files (unless (eq exit-code 0)
-                              (gptel-auto-workflow--git-cmd
-                               "git diff --name-only --diff-filter=U 2>/dev/null"
-                               30)))
-            (worktree-status (when (and (not (eq exit-code 0))
-                                        (gptel-auto-workflow--non-empty-string-p cherry-pick-head))
-                               (gptel-auto-workflow--git-cmd
-                                "git status --porcelain 2>/dev/null"
-                                30))))
-        (cond
-         ((eq exit-code 0)
-          (message "[auto-workflow] %s recovered to %s"
-                   (gptel-auto-workflow--truncate-hash commit-hash)
-                   gptel-auto-workflow-staging-branch)
-          t)
-        ((and (gptel-auto-workflow--non-empty-string-p cherry-pick-head)
-              (string-empty-p unmerged-files)
-              (string-empty-p worktree-status))
-         (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --skip" 60))
-         (message "[auto-workflow] %s already in %s, skipping"
+            (exit-code (cdr result)))
+       (cond
+        ((eq exit-code 0)
+         (message "[auto-workflow] %s recovered to %s"
                   (gptel-auto-workflow--truncate-hash commit-hash)
                   gptel-auto-workflow-staging-branch)
          t)
@@ -435,20 +369,14 @@ Uses the staging worktree only."
                   (gptel-auto-workflow--truncate-hash commit-hash)
                   gptel-auto-workflow-staging-branch)
          t)
-        ((or (gptel-auto-workflow--non-empty-string-p unmerged-files)
-             (string-match-p "CONFLICT\\|conflict" output))
-         (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
-         (gptel-auto-workflow--log-conflict commit-hash output)
-         (message "[auto-workflow] %s recovery failed: %s"
-                  (gptel-auto-workflow--truncate-hash commit-hash)
-                  (my/gptel--sanitize-for-logging output 160))
-         'conflict)
         (t
          (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+         (when (string-match-p "CONFLICT\\|conflict" output)
+           (gptel-auto-workflow--log-conflict commit-hash output))
          (message "[auto-workflow] %s recovery failed: %s"
                   (gptel-auto-workflow--truncate-hash commit-hash)
                   (my/gptel--sanitize-for-logging output 160))
-          nil))))))
+         nil))))))
 
 
 (defun gptel-auto-workflow--log-conflict (commit-hash conflict-output)
@@ -471,27 +399,16 @@ If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
     (if (not orphans)
         (message "[auto-workflow] No orphans to recover")
       (let ((recovered 0)
-            (conflicted 0)
             (failed 0))
         (dolist (orphan orphans)
           (let ((hash (car orphan)))
-            (pcase (gptel-auto-workflow--cherry-pick-orphan hash)
-              ('conflict
-               (gptel-auto-workflow--untrack-commit hash)
-               (cl-incf conflicted))
-              ((pred identity)
-               (gptel-auto-workflow--untrack-commit hash)
-               (cl-incf recovered))
-              (_
-               (cl-incf failed)))))
+            (if (gptel-auto-workflow--cherry-pick-orphan hash)
+                (progn
+                  (gptel-auto-workflow--untrack-commit hash)
+                  (cl-incf recovered))
+              (cl-incf failed))))
         (message "[auto-workflow] Recovered %d/%d orphans to staging"
                  recovered (length orphans))
-        (when (> conflicted 0)
-          (message "[auto-workflow] Untracked %d conflicted orphan(s); see cherry-pick conflict log"
-                   conflicted))
-        (when (> failed 0)
-          (message "[auto-workflow] Left %d orphan(s) tracked for retry"
-                   failed))
         (when (and (> recovered 0) (not no-push))
           (gptel-auto-workflow--push-staging))))))
 
@@ -1136,17 +1053,6 @@ Values are plist: (:done :timeout-timer :progress-timer).")
 Used by overlay advice to route overlays to correct buffer.
 Dynamic variable, let-bound around gptel-agent--task calls.")
 
-(defun my/gptel--reset-agent-task-state ()
-  "Cancel and clear all tracked subagent task state."
-  (maphash
-   (lambda (_task-id state)
-     (when (timerp (plist-get state :timeout-timer))
-       (cancel-timer (plist-get state :timeout-timer)))
-     (when (timerp (plist-get state :progress-timer))
-       (cancel-timer (plist-get state :progress-timer))))
-   my/gptel--agent-task-state)
-  (clrhash my/gptel--agent-task-state))
-
 (defun my/gptel--call-gptel-agent-task (callback agent-type description prompt)
   "Invoke the active gptel subagent task runner.
 In headless auto-workflow runs, bypass `gptel-agent-loop-task' to avoid
@@ -1154,18 +1060,12 @@ its async continuation layer in the worker daemon."
   (let ((headless-auto-workflow
          (and (bound-and-true-p gptel-auto-workflow--headless)
               (bound-and-true-p gptel-auto-workflow-persistent-headless)
-              (bound-and-true-p gptel-auto-workflow--current-project)))
-        (task-runner nil))
-    (setq task-runner
-          (if (and headless-auto-workflow
-                   (fboundp 'my/gptel-agent--task-override))
-              #'my/gptel-agent--task-override
-            #'gptel-agent--task))
+              (bound-and-true-p gptel-auto-workflow--current-project))))
     (if (and headless-auto-workflow
              (boundp 'gptel-agent-loop--bypass))
         (let ((gptel-agent-loop--bypass t))
-          (funcall task-runner callback agent-type description prompt))
-      (funcall task-runner callback agent-type description prompt))))
+          (funcall #'gptel-agent--task callback agent-type description prompt))
+      (funcall #'gptel-agent--task callback agent-type description prompt))))
 
 (defun my/gptel--disable-auto-retry-for-fsm (fsm)
   "Mark FSM so global auto-retry advice will not reschedule it."
@@ -1203,25 +1103,22 @@ Uses hash table keyed by task-id to support parallel execution."
                     (kill-local-variable 'gptel--fsm-last)))))))
           (wrapped-cb
            (lambda (result)
-              (let* ((state (gethash task-id my/gptel--agent-task-state))
-                     (already-done (plist-get state :done)))
-                (if (not state)
-                    (message "[nucleus] Ignoring stale subagent %s callback after reset"
-                             agent-type)
-                  ;; Atomic test-and-set: mark done before acting to prevent
-                  ;; double-invocation if gptel-abort fires synchronously in timeout.
-                  (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                  (unless already-done
-                    (when (timerp (plist-get state :timeout-timer))
-                      (cancel-timer (plist-get state :timeout-timer)))
-                    (when (timerp (plist-get state :progress-timer))
-                      (cancel-timer (plist-get state :progress-timer)))
-                    (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
-                             agent-type (float-time (time-since start-time))
-                             (if (stringp result) (length result) 0))
-                    (funcall restore-origin-fsm child-fsm)
-                    (funcall callback result)
-                    (remhash task-id my/gptel--agent-task-state)))))))
+             (let* ((state (gethash task-id my/gptel--agent-task-state))
+                    (already-done (plist-get state :done)))
+               ;; Atomic test-and-set: mark done before acting to prevent
+               ;; double-invocation if gptel-abort fires synchronously in timeout.
+               (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+               (unless already-done
+                 (when (timerp (plist-get state :timeout-timer))
+                   (cancel-timer (plist-get state :timeout-timer)))
+                 (when (timerp (plist-get state :progress-timer))
+                   (cancel-timer (plist-get state :progress-timer)))
+                 (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
+                          agent-type (float-time (time-since start-time))
+                          (if (stringp result) (length result) 0))
+                 (funcall restore-origin-fsm child-fsm)
+                 (funcall callback result)
+                 (remhash task-id my/gptel--agent-task-state))))))
     (message "[nucleus] Delegating to subagent %s%s..."
              agent-type
              (if task-timeout
@@ -1242,23 +1139,22 @@ Uses hash table keyed by task-id to support parallel execution."
                           (lambda ()
                              (when (buffer-live-p origin-buf)
                                (with-current-buffer origin-buf
-                              (let* ((state (gethash task-id my/gptel--agent-task-state))
-                                     (already-done (plist-get state :done)))
-                                    (when state
-                                      ;; Atomic test-and-set: same guard as wrapped-cb.
-                                      (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                                      (unless already-done
-                                        (when (timerp (plist-get state :progress-timer))
-                                          (cancel-timer (plist-get state :progress-timer)))
-                                        (message "[nucleus] Subagent %s timed out after %ds, aborting request"
-                                                 agent-type task-timeout)
-                                        (when (fboundp 'gptel-abort)
-                                          (ignore-errors (gptel-abort origin-buf)))
-                                        (funcall restore-origin-fsm child-fsm)
-                                        (funcall callback
-                                                 (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                                         description agent-type task-timeout))
-                                        (remhash task-id my/gptel--agent-task-state))))))))))
+                                 (let* ((state (gethash task-id my/gptel--agent-task-state))
+                                        (already-done (plist-get state :done)))
+                                   ;; Atomic test-and-set: same guard as wrapped-cb.
+                                   (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                                   (unless already-done
+                                     (when (timerp (plist-get state :progress-timer))
+                                       (cancel-timer (plist-get state :progress-timer)))
+                                     (message "[nucleus] Subagent %s timed out after %ds, aborting request"
+                                              agent-type task-timeout)
+                                     (when (fboundp 'gptel-abort)
+                                       (ignore-errors (gptel-abort origin-buf)))
+                                     (funcall restore-origin-fsm child-fsm)
+                                     (funcall callback
+                                              (format "Error: Task \"%s\" (%s) timed out after %ds."
+                                                      description agent-type task-timeout))
+                                     (remhash task-id my/gptel--agent-task-state)))))))))
         (let ((state (gethash task-id my/gptel--agent-task-state)))
           (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
     (let ((my/gptel--subagent-origin-buffer origin-buf))
@@ -1566,25 +1462,6 @@ Multiple machines can optimize same target without conflicts."
         (format "optimize/%s-%s-exp%d" name host experiment-id)
       (format "optimize/%s-%s" name host))))
 
-(defun gptel-auto-workflow--branch-worktree-paths (branch &optional proj-root)
-  "Return attached worktree paths for BRANCH within PROJ-ROOT.
-BRANCH should be the short local branch name, e.g. optimize/foo-exp1."
-  (let ((default-directory (or proj-root (gptel-auto-workflow--default-dir)))
-        (buffer (generate-new-buffer " *git-worktree-list*"))
-        (paths nil)
-        (branch-ref (format "refs/heads/%s" branch)))
-    (unwind-protect
-        (when (eq 0 (call-process "git" nil buffer nil "worktree" "list" "--porcelain"))
-          (with-current-buffer buffer
-            (dolist (entry (split-string (buffer-string) "\n\n+" t))
-              (when (string-match-p (format "^branch %s$" (regexp-quote branch-ref))
-                                    entry)
-                (when (string-match "^worktree \\(.*\\)$" entry)
-                  (push (match-string 1 entry) paths))))))
-      (when (buffer-live-p buffer)
-        (kill-buffer buffer)))
-    (nreverse (delete-dups paths))))
-
 (defun gptel-auto-workflow-create-worktree (target &optional experiment-id)
   "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch.
 Stores worktree-dir, current-branch in hash table keyed by TARGET.
@@ -1606,21 +1483,11 @@ If branch exists locally, deletes it first to avoid conflicts."
             (setq base-ref (gptel-auto-workflow--staging-main-ref))
             (unless base-ref
               (error "missing main ref for experiment worktree"))
-            (call-process "git" nil nil stderr-buffer "worktree" "prune")
-            (dolist (existing-worktree
-                     (gptel-auto-workflow--branch-worktree-paths branch proj-root))
-              (message "[auto-workflow] Removing stale worktree for %s: %s"
-                       branch existing-worktree)
-              (call-process "git" nil nil stderr-buffer
-                            "worktree" "remove" "-f" existing-worktree))
             ;; Remove existing worktree if present (stale from previous run)
             (when (file-exists-p worktree-dir)
               (call-process "git" nil nil stderr-buffer "worktree" "remove" "-f" worktree-dir))
             ;; Delete branch if it exists locally (stale from previous run)
             (call-process "git" nil nil stderr-buffer "branch" "-D" branch)
-            (when (buffer-live-p stderr-buffer)
-              (with-current-buffer stderr-buffer
-                (erase-buffer)))
             ;; Create worktree with new branch
             (let* ((exit-code (call-process "git" nil nil stderr-buffer
                                             "worktree" "add" "-b" branch
@@ -3242,9 +3109,7 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
   "Return non-nil when AGENT-OUTPUT shows provider quota exhaustion."
   (and (stringp agent-output)
        (let ((case-fold-search t))
-         (string-match-p
-          "allocated quota exceeded\\|usage limit exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|hard limit reached"
-          agent-output))))
+         (string-match-p "allocated quota exceeded" agent-output))))
 
 (defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count)
   "Run experiment with automatic retry on transient errors.
@@ -3252,34 +3117,25 @@ RETRY-COUNT tracks current retry attempt."
   (let ((retries (or retry-count 0)))
     (gptel-auto-experiment-run
      target experiment-id max-experiments baseline baseline-code-quality previous-results
-      (lambda (result)
-         (let* ((agent-output (plist-get result :agent-output))
-                (error-type (plist-get result :comparator-reason))
-                (quota-exhausted
-                 (or gptel-auto-experiment--quota-exhausted
-                     (gptel-auto-experiment--quota-exhausted-p agent-output)))
-                (retryable-category
-                 (or (memq error-type '(:api-rate-limit :timeout))
-                     (member error-type '(":api-rate-limit" ":timeout")))))
-           (when quota-exhausted
-             (setq gptel-auto-experiment--quota-exhausted t))
-           (if (and (not quota-exhausted)
-                    (< retries gptel-auto-experiment-max-retries)
-                   (or (gptel-auto-experiment--is-retryable-error-p agent-output)
-                       retryable-category))
-               (progn
-                 (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
-                          experiment-id (1+ retries) gptel-auto-experiment-max-retries
-                          gptel-auto-experiment-retry-delay)
-                 (run-with-timer gptel-auto-experiment-retry-delay nil
-                                (lambda ()
-                                  (gptel-auto-experiment--run-with-retry
-                                   target experiment-id max-experiments baseline baseline-code-quality
-                                   previous-results callback (1+ retries)))))
-             (when quota-exhausted
-               (message "[auto-exp] Quota exhausted during experiment %d; skipping retries"
-                        experiment-id))
-             (funcall callback result)))))))
+     (lambda (result)
+        (let* ((agent-output (plist-get result :agent-output))
+              (error-type (plist-get result :comparator-reason))
+              (retryable-category
+               (or (memq error-type '(:api-rate-limit :timeout))
+                   (member error-type '(":api-rate-limit" ":timeout")))))
+          (if (and (< retries gptel-auto-experiment-max-retries)
+                  (or (gptel-auto-experiment--is-retryable-error-p agent-output)
+                      retryable-category))
+              (progn
+                (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
+                         experiment-id (1+ retries) gptel-auto-experiment-max-retries
+                         gptel-auto-experiment-retry-delay)
+                (run-with-timer gptel-auto-experiment-retry-delay nil
+                               (lambda ()
+                                 (gptel-auto-experiment--run-with-retry
+                                  target experiment-id max-experiments baseline baseline-code-quality
+                                  previous-results callback (1+ retries)))))
+           (funcall callback result)))))))
 (defun gptel-auto-experiment--categorize-error (agent-output)
   "Categorize error from AGENT-OUTPUT and return (CATEGORY . DETAILS).
 Categories: :api-rate-limit :api-error :tool-error :timeout :grader-failed :unknown
@@ -4088,7 +3944,6 @@ Prevents workflow from hanging indefinitely due to callback failures."
   "Force stop a stuck workflow.
 Interactive command to recover from hung workflow state."
   (interactive)
-  (my/gptel--reset-agent-task-state)
   (setq gptel-auto-workflow--running nil
         gptel-auto-workflow--cron-job-running nil
         gptel-auto-workflow--current-project nil
@@ -4381,7 +4236,6 @@ Only removes worktrees if no gptel processes are running."
   (let ((proj-root (gptel-auto-workflow--default-dir))
         (cleaned 0))
     (when proj-root
-      (my/gptel--reset-agent-task-state)
       (gptel-auto-workflow--cleanup-old-worktrees)
       (dolist (timer (copy-sequence timer-list))
         (when (timerp timer)
