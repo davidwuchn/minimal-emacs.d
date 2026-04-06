@@ -3103,9 +3103,14 @@ Default 120s (2 min) allows grader to process complex outputs.")
 (defun gptel-auto-experiment--invalid-cl-return-target-in-forms (forms &optional blocks)
   "Return the first invalid `cl-return-from' target in FORMS.
 BLOCKS is the list of block names currently in scope."
-  (cl-some (lambda (form)
-             (gptel-auto-experiment--invalid-cl-return-target form blocks))
-           forms))
+  (cond
+   ((null forms) nil)
+   ((listp forms)
+    (cl-some (lambda (form)
+               (gptel-auto-experiment--invalid-cl-return-target form blocks))
+             forms))
+   (t
+    (gptel-auto-experiment--invalid-cl-return-target forms blocks))))
 
 (defun gptel-auto-experiment--invalid-cl-return-target (form &optional blocks)
   "Return the first invalid `cl-return-from' target in FORM.

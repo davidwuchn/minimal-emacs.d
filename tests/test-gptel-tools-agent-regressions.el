@@ -1734,6 +1734,22 @@ EXIT-CODE defaults to 1."
                    (gptel-auto-experiment--validate-code file))))
       (delete-file file))))
 
+(ert-deftest regression/auto-workflow/validate-code-allows-cl-loop-dotted-bindings ()
+  "Code validation should handle dotted `cl-loop' bindings without crashing or false positives."
+  (let ((file (make-temp-file "validate-code" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(require 'cl-lib)\n")
+            (insert "(cl-defun validator-loop-binding-ok ()\n")
+            (insert "  (cl-loop for (agent-name . expected-tools)\n")
+            (insert "           in '((executor . (\"Read\" \"Glob\")))\n")
+            (insert "           when expected-tools\n")
+            (insert "           do (cl-return-from validator-loop-binding-ok agent-name))\n")
+            (insert "  nil)\n"))
+          (should-not (gptel-auto-experiment--validate-code file)))
+      (delete-file file))))
+
 (ert-deftest regression/subagent-cache/does-not-store-quota-errors ()
   "Transient quota failures should never poison the subagent cache."
   (let ((my/gptel-subagent-cache-ttl 300)
