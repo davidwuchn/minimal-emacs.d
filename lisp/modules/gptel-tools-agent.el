@@ -457,20 +457,22 @@ Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
   (when (my/gptel--subagent-cache-enabled-p)
     (let ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff)))
       (puthash key (cons (float-time) result) my/gptel--subagent-cache)
-      ;; Evict oldest entries if over limit
+      ;; Evict oldest entries if over limit - evict enough to get under limit
       (when (and (> my/gptel-subagent-cache-max-size 0)
                  (> (hash-table-count my/gptel--subagent-cache)
                     my/gptel-subagent-cache-max-size))
-        (let ((oldest-key nil)
-              (oldest-time most-positive-fixnum))
+        (let ((entries nil))
           (maphash
            (lambda (k v)
-             (when (< (car v) oldest-time)
-               (setq oldest-time (car v)
-                     oldest-key k)))
+             (push (cons (car v) k) entries))
            my/gptel--subagent-cache)
-          (when oldest-key
-            (remhash oldest-key my/gptel--subagent-cache)))))))
+          (setq entries (sort entries (lambda (a b) (< (car a) (car b)))))
+          (let ((evict-count (- (hash-table-count my/gptel--subagent-cache)
+                                my/gptel-subagent-cache-max-size)))
+            (dotimes (_ evict-count)
+              (when entries
+                (remhash (cdr (car entries)) my/gptel--subagent-cache)
+                (pop entries)))))))))
 
 (defun my/gptel--subagent-cache-clear ()
   "Clear all cached subagent results."
