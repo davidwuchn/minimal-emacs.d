@@ -2782,6 +2782,20 @@ Tries multiple patterns in order:
   "Maximum retries when validation fails due to teachable patterns.
 Executor will be instructed to load relevant skill and regenerate.")
 
+(defun gptel-auto-experiment--teachable-validation-error-p (target validation-error)
+  "Return non-nil when VALIDATION-ERROR should trigger an immediate retry.
+TARGET is the file currently being optimized."
+  (and (stringp validation-error)
+       (> (length validation-error) 0)
+       (not
+        (null
+         (or (string-match-p
+              "cl-return-from.*without.*cl-block\\|Dangerous pattern"
+              validation-error)
+             (and (stringp target)
+                  (string-suffix-p ".el" target)
+                  (string-match-p "\\`Syntax error in " validation-error)))))))
+
 (defun gptel-auto-experiment--make-retry-prompt (target validation-error _original-prompt)
   "Create retry prompt after validation failure.
 TARGET is the file being edited.
@@ -2799,11 +2813,14 @@ Read the file, understand the error, load the skill if available, and generate c
           target
           validation-error
           (cond
-           ;; Elisp dangerous patterns - tell executor to load skill
-           ((string-match-p "cl-return-from.*without.*cl-block\\|Dangerous pattern.*\\.el$" validation-error)
+           ((and (stringp target)
+                 (string-suffix-p ".el" target)
+                 (or (string-match-p
+                      "cl-return-from.*without.*cl-block\\|Dangerous pattern"
+                      validation-error)
+                     (string-match-p "\\`Syntax error in " validation-error)))
             "CALL THIS FIRST: Skill(\"elisp-expert\")
-This skill teaches dangerous Elisp patterns including cl-return-from requirements.")
-           ;; Add more skill mappings here as needed
+This skill teaches syntax-safe Elisp edits and dangerous patterns including cl-return-from requirements.")
            (t ""))))
 
 ;;; Experiment Loop
