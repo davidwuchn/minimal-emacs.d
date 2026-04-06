@@ -2573,6 +2573,29 @@ Uses the staging worktree instead of switching branches in the root repo."
 
 
 
+(defun gptel-auto-workflow--check-el-syntax (directory output-buffer)
+  "Check syntax of all .el files in DIRECTORY.
+Writes errors to OUTPUT-BUFFER.
+Returns t if all files pass syntax check, nil otherwise."
+  (let ((errors nil)
+        (files (directory-files-recursively directory "\\.el\\'")))
+    (dolist (file files)
+      (when (file-readable-p file)
+        (with-temp-buffer
+          (insert-file-contents file)
+          (goto-char (point-min))
+          (condition-case err
+              (progn
+                (while (not (eobp)) (forward-sexp)))
+            (error
+             (let ((msg (format "SYNTAX ERROR: %s: %s"
+                                (file-relative-name file directory)
+                                (error-message-string err))))
+               (push msg errors)
+               (with-current-buffer output-buffer
+                 (insert msg "\n"))))))))
+    (null errors)))
+
 (defun gptel-auto-workflow--verify-staging ()
   "Run verification in the staging worktree.
 Returns (success-p . output)."
@@ -2587,8 +2610,9 @@ Returns (success-p . output)."
           (cons nil "Staging worktree not found"))
       (message "[auto-workflow] Verifying staging...")
       (let* ((default-directory worktree)
-             (submodules (gptel-auto-workflow--hydrate-staging-submodules worktree))
-             (submodule-pass (= 0 (cdr submodules)))
+             (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
+             (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
+             (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
               (_ (unless submodule-pass
                     (with-current-buffer output-buffer
                       (insert (car submodules) "\n"))))
@@ -2616,7 +2640,7 @@ Returns (success-p . output)."
               (insert "\n" (cdr baseline-check) "\n"))
             (setq output (with-current-buffer output-buffer (buffer-string)))))
         (kill-buffer output-buffer)
-        (setq result (and test-pass verify-pass))
+        (setq result (and syntax-pass test-pass verify-pass))
         (message "[auto-workflow] Staging verification: %s" (if result "PASS" "FAIL"))
         (cons result output)))))
 
