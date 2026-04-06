@@ -12,16 +12,8 @@ tools:
   - Glob
   - Grep
   - Code_Map
-<<<<<<< HEAD
-<<<<<<< HEAD
   - Diagnostics
   - Programmatic
-=======
->>>>>>> 7d589248 (⊘ harden live auto-workflow replays)
-=======
-  - Diagnostics
-  - Programmatic
->>>>>>> 4071a59d (⊘ isolate executor timeout budget)
 ---
 
 <role_and_behavior>

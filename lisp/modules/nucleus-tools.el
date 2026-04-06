@@ -70,10 +70,14 @@ When enabled, validates:
     (:reviewer . ("Glob" "Grep" "Read" "Diagnostics"))
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     (:analyzer . ("Bash" "Read" "Glob" "Grep" "Code_Map" "Diagnostics" "Programmatic"))
 =======
     (:analyzer . ("Bash" "Read" "Glob" "Grep" "Code_Map"))
 >>>>>>> 7d589248 (⊘ harden live auto-workflow replays)
+=======
+    (:analyzer . ("Bash" "Read" "Glob" "Grep" "Code_Map" "Diagnostics" "Programmatic"))
+>>>>>>> 4071a59d (⊘ isolate executor timeout budget)
 =======
     (:analyzer . ("Bash" "Read" "Glob" "Grep" "Code_Map" "Diagnostics" "Programmatic"))
 >>>>>>> 4071a59d (⊘ isolate executor timeout budget)
@@ -89,10 +93,14 @@ When enabled, validates:
 :reviewer — Code review (4 tools): Read-only + Diagnostics
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 :analyzer — Benchmark analysis (7 tools): Bash, Read, Glob, Grep, Code_Map, Diagnostics, Programmatic
 =======
 :analyzer — Benchmark analysis (5 tools): Bash, Read, Glob, Grep, Code_Map
 >>>>>>> 7d589248 (⊘ harden live auto-workflow replays)
+=======
+:analyzer — Benchmark analysis (7 tools): Bash, Read, Glob, Grep, Code_Map, Diagnostics, Programmatic
+>>>>>>> 4071a59d (⊘ isolate executor timeout budget)
 =======
 :analyzer — Benchmark analysis (7 tools): Bash, Read, Glob, Grep, Code_Map, Diagnostics, Programmatic
 >>>>>>> 4071a59d (⊘ isolate executor timeout budget)
@@ -109,10 +117,14 @@ Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   reviewer     → :reviewer     (4 tools) - code review + Diagnostics
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   analyzer     → :analyzer     (7 tools) - benchmark result analysis
 =======
   analyzer     → :analyzer     (5 tools) - benchmark result analysis
 >>>>>>> 7d589248 (⊘ harden live auto-workflow replays)
+=======
+  analyzer     → :analyzer     (7 tools) - benchmark result analysis
+>>>>>>> 4071a59d (⊘ isolate executor timeout budget)
 =======
   analyzer     → :analyzer     (7 tools) - benchmark result analysis
 >>>>>>> 4071a59d (⊘ isolate executor timeout budget)
