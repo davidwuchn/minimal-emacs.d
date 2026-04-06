@@ -171,8 +171,9 @@ Returns nil if git command fails or returns invalid hash."
       commit-hash))))
 
 (defun gptel-auto-workflow--recover-orphans ()
-  "Check for orphan commits from previous runs and offer to recover.
-An orphan is a commit that exists but is not reachable from any branch."
+  "Check for orphan commits from previous runs.
+An orphan is a commit that exists but is not reachable from staging or main.
+Returns list of (hash exp-id target) for truly orphaned commits."
   (interactive)
   (let* ((date (format-time-string "%Y-%m-%d"))
          (tracking-file (expand-file-name
@@ -188,9 +189,12 @@ An orphan is a commit that exists but is not reachable from any branch."
                  (exp-id (cadr parts))
                  (target (caddr parts)))
             (when (and hash (string-match-p "^[a-f0-9]+$" hash))
-              (let ((in-branch (gptel-auto-workflow--git-cmd
-                                (format "git branch --contains %s 2>/dev/null | head -1" hash))))
-                (when (string-empty-p in-branch)
+              (let ((in-staging (gptel-auto-workflow--git-cmd
+                                 (format "git merge-base --is-ancestor %s staging 2>/dev/null && echo yes" hash)))
+                    (in-main (gptel-auto-workflow--git-cmd
+                              (format "git merge-base --is-ancestor %s main 2>/dev/null && echo yes" hash))))
+                (when (and (string-empty-p in-staging)
+                           (string-empty-p in-main))
                   (push (list hash exp-id target) orphans))))))))
     (if orphans
         (message "[auto-workflow] Found %d orphan(s): %s"
@@ -205,7 +209,8 @@ An orphan is a commit that exists but is not reachable from any branch."
     orphans))
 
 (defun gptel-auto-workflow--cherry-pick-orphan (commit-hash)
-  "Cherry-pick COMMIT-HASH to staging branch for recovery."
+  "Cherry-pick COMMIT-HASH to staging branch for recovery.
+Returns t on success, nil on failure. Skips if already applied."
   (interactive "sCommit hash: ")
   (let ((default-directory (or (gptel-auto-workflow--project-root)
                                (expand-file-name "~/.emacs.d/"))))
@@ -213,14 +218,21 @@ An orphan is a commit that exists but is not reachable from any branch."
     (gptel-auto-workflow--git-cmd "git checkout staging")
     (let ((result (gptel-auto-workflow--git-cmd
                    (format "git cherry-pick %s 2>&1" commit-hash))))
-      (if (string-match-p "error\\|conflict" result)
-          (progn
-            (message "[auto-workflow] Cherry-pick failed: %s" result)
-            (gptel-auto-workflow--git-cmd "git cherry-pick --abort")
-            nil)
+      (cond
+       ((string-match-p "already applied\\|empty" result)
+        (message "[auto-workflow] Commit %s already in staging, skipping" commit-hash)
+        (gptel-auto-workflow--git-cmd "git cherry-pick --skip 2>/dev/null || git cherry-pick --abort 2>/dev/null")
+        (gptel-auto-workflow--git-cmd "git checkout main")
+        t)
+       ((string-match-p "error\\|CONFLICT\\|conflict" result)
+        (message "[auto-workflow] Cherry-pick failed: %s" result)
+        (gptel-auto-workflow--git-cmd "git cherry-pick --abort")
+        (gptel-auto-workflow--git-cmd "git checkout main")
+        nil)
+       (t
         (message "[auto-workflow] Recovered %s to staging" commit-hash)
         (gptel-auto-workflow--git-cmd "git checkout main")
-        t))))
+        t)))))
 
 (defun gptel-auto-workflow-recover-all-orphans (&optional no-push)
   "Recover all orphan commits from today to staging branch.
