@@ -318,7 +318,8 @@ EXIT-CODE defaults to 1."
           (should (equal (nth 1 runagent-calls)
                          '("executor"
                            "Retry: fix validation error in lisp/modules/gptel-tools-agent.el"
-                           "retry:Dangerous pattern:prompt"))))
+                           "retry:Dangerous pattern:prompt"
+                           nil nil nil))))
       (when (buffer-live-p worktree-buf)
         (kill-buffer worktree-buf))
       (delete-directory project-root t))))
@@ -596,9 +597,133 @@ EXIT-CODE defaults to 1."
        (lambda (result)
          (setq final-result result)))
       (should (= runs 1))
-      (should-not scheduled-retry)
-      (should gptel-auto-experiment--quota-exhausted)
-      (should (string-match-p "usage limit exceeded" (plist-get final-result :agent-output))))))
+       (should-not scheduled-retry)
+       (should gptel-auto-experiment--quota-exhausted)
+       (should (string-match-p "usage limit exceeded" (plist-get final-result :agent-output))))))
+
+(ert-deftest regression/auto-experiment/retry-success-preserves-full-result-shape ()
+  "Successful validation retries should keep the normal result/logging shape."
+  (dolist (case '((:keep nil
+                         :score 0.40
+                         :quality 0.83
+                         :reason "Rejected: tie"
+                         :tracked nil
+                         :no-improvement 1)
+                  (:keep t
+                         :score 0.45
+                         :quality 0.91
+                         :reason "Winner: B"
+                         :tracked t
+                         :no-improvement 0)))
+    (let* ((project-root (make-temp-file "aw-project" t))
+           (worktree-dir (expand-file-name "var/tmp/experiments/optimize/retry-riven-exp1" project-root))
+           (worktree-buf (get-buffer-create (format "*aw-retry-shape-%s*" (plist-get case :keep))))
+           (syntax-error "Syntax error in /tmp/worktree/gptel-tools-agent.el: (end-of-file)")
+           (analysis '(:patterns (syntax-retry)))
+           (runagent-call-count 0)
+           (grade-call-count 0)
+           (benchmark-call-count 0)
+           (tracked-commit nil)
+           (logged-result nil)
+           (result nil)
+           (gptel-auto-experiment-auto-push nil)
+           (gptel-auto-workflow-use-staging nil)
+           (gptel-auto-experiment--best-score 0.4)
+           (gptel-auto-experiment--no-improvement-count 0))
+      (unwind-protect
+          (progn
+            (make-directory worktree-dir t)
+            (with-current-buffer worktree-buf
+              (setq-local default-directory (file-name-as-directory worktree-dir)))
+            (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                       (lambda (_target _experiment-id) worktree-dir))
+                      ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                       (lambda (_worktree-dir) worktree-buf))
+                      ((symbol-function 'gptel-auto-experiment-analyze)
+                       (lambda (_previous-results cb)
+                         (funcall cb analysis)))
+                      ((symbol-function 'gptel-auto-experiment-build-prompt)
+                       (lambda (&rest _args) "prompt"))
+                      ((symbol-function 'run-with-timer)
+                       (lambda (&rest _args) :fake-timer))
+                      ((symbol-function 'cancel-timer)
+                       (lambda (&rest _args) nil))
+                      ((symbol-function 'my/gptel--run-agent-tool)
+                       (lambda (cb &rest _args)
+                         (cl-incf runagent-call-count)
+                         (funcall cb
+                                  (if (= runagent-call-count 1)
+                                      "HYPOTHESIS: initial validation fix"
+                                    "HYPOTHESIS: retry path preserves full result"))))
+                      ((symbol-function 'gptel-auto-experiment-grade)
+                       (lambda (_output cb)
+                         (cl-incf grade-call-count)
+                         (funcall cb
+                                  (if (= grade-call-count 1)
+                                      '(:score 9 :total 9 :passed t :details "initial grade")
+                                    '(:score 8 :total 8 :passed t :details "retry grade")))))
+                      ((symbol-function 'gptel-auto-experiment-benchmark)
+                       (lambda (&optional _full)
+                         (cl-incf benchmark-call-count)
+                         (if (= benchmark-call-count 1)
+                             (list :passed nil :validation-error syntax-error)
+                           (list :passed t :eight-keys (plist-get case :score)))))
+                      ((symbol-function 'gptel-auto-experiment--code-quality-score)
+                       (lambda () (plist-get case :quality)))
+                      ((symbol-function 'gptel-auto-experiment-decide)
+                       (lambda (_before _after cb)
+                         (funcall cb
+                                  (list :keep (plist-get case :keep)
+                                        :reasoning (plist-get case :reason)))))
+                      ((symbol-function 'gptel-auto-experiment-log-tsv)
+                       (lambda (_run-id exp-result)
+                         (setq logged-result exp-result)))
+                      ((symbol-function 'gptel-auto-workflow--track-commit)
+                       (lambda (&rest args)
+                         (setq tracked-commit args)
+                         "tracked"))
+                      ((symbol-function 'gptel-auto-workflow--assert-main-untouched)
+                       (lambda () nil))
+                      ((symbol-function 'magit-git-success)
+                       (lambda (&rest _args) t))
+                      ((symbol-function 'message)
+                       (lambda (&rest _args) nil)))
+              (with-current-buffer worktree-buf
+                (gptel-auto-experiment-run
+                 "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+                 (lambda (exp-result)
+                   (setq result exp-result)))))
+            (should result)
+            (should (equal logged-result result))
+            (should (= runagent-call-count 2))
+            (should (= grade-call-count 2))
+            (should (= benchmark-call-count 2))
+            (should (equal (plist-get result :target) "lisp/modules/gptel-tools-agent.el"))
+            (should (= (plist-get result :id) 1))
+            (should (equal (plist-get result :hypothesis)
+                           "retry path preserves full result"))
+            (should (= (plist-get result :score-before) 0.4))
+            (should (= (plist-get result :score-after) (plist-get case :score)))
+            (should (= (plist-get result :code-quality) (plist-get case :quality)))
+            (should (eq (plist-get result :kept) (plist-get case :keep)))
+            (should (numberp (plist-get result :duration)))
+            (should (= (plist-get result :grader-quality) 8))
+            (should (equal (plist-get result :grader-reason) "retry grade"))
+            (should (equal (plist-get result :comparator-reason) (plist-get case :reason)))
+            (should (equal (plist-get result :analyzer-patterns) "(syntax-retry)"))
+            (should (equal (plist-get result :agent-output)
+                           "HYPOTHESIS: retry path preserves full result"))
+            (should (= (plist-get result :retries) 1))
+            (should (= gptel-auto-experiment--no-improvement-count
+                       (plist-get case :no-improvement)))
+            (if (plist-get case :tracked)
+                (progn
+                  (should tracked-commit)
+                  (should (= gptel-auto-experiment--best-score (plist-get case :score))))
+              (should-not tracked-commit)))
+        (when (buffer-live-p worktree-buf)
+          (kill-buffer worktree-buf))
+        (delete-directory project-root t)))))
 
 (ert-deftest regression/auto-experiment-loop/uses-run-with-retry-helper ()
   "Experiment loop should route live runs through the retry helper."
@@ -1581,6 +1706,34 @@ EXIT-CODE defaults to 1."
           (should-not (gptel-auto-experiment--validate-code file)))
       (delete-file file))))
 
+(ert-deftest regression/auto-workflow/validate-code-allows-cl-defun-return-from ()
+  "Code validation should allow `cl-return-from' inside `cl-defun'."
+  (let ((file (make-temp-file "validate-code" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(require 'cl-lib)\n")
+            (insert "(cl-defun validator-valid-return ()\n")
+            (insert "  (when t\n")
+            (insert "    (cl-return-from validator-valid-return :ok))\n")
+            (insert "  :done)\n"))
+          (should-not (gptel-auto-experiment--validate-code file)))
+      (delete-file file))))
+
+(ert-deftest regression/auto-workflow/validate-code-flags-unbound-cl-return-from ()
+  "Code validation should still flag `cl-return-from' without a matching block."
+  (let ((file (make-temp-file "validate-code" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(require 'cl-lib)\n")
+            (insert "(defun validator-invalid-return ()\n")
+            (insert "  (cl-return-from missing-block :bad))\n"))
+          (should (string-match-p
+                   "Dangerous pattern"
+                   (gptel-auto-experiment--validate-code file))))
+      (delete-file file))))
+
 (ert-deftest regression/subagent-cache/does-not-store-quota-errors ()
   "Transient quota failures should never poison the subagent cache."
   (let ((my/gptel-subagent-cache-ttl 300)
@@ -2342,9 +2495,11 @@ Submodules are hydrated later during verification, not during merge prep."
     (cl-letf (((symbol-function 'file-exists-p)
                (lambda (path)
                  (member path (list "/tmp/staging" test-script verify-script))))
+              ((symbol-function 'gptel-auto-workflow--check-el-syntax)
+               (lambda (&rest _) t))
               ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
                (lambda (worktree)
-                 (setq hydrated worktree)
+                  (setq hydrated worktree)
                  (cons "Hydrated submodules: packages/ai-code=7830ce4" 0)))
               ((symbol-function 'generate-new-buffer)
                (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
@@ -2372,9 +2527,11 @@ Submodules are hydrated later during verification, not during merge prep."
     (cl-letf (((symbol-function 'file-exists-p)
                (lambda (path)
                  (member path (list "/tmp/staging" test-script verify-script))))
+              ((symbol-function 'gptel-auto-workflow--check-el-syntax)
+               (lambda (&rest _) t))
               ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
                (lambda (_worktree)
-                 (cons "Hydrated submodules" 0)))
+                  (cons "Hydrated submodules" 0)))
               ((symbol-function 'gptel-auto-workflow--staging-tests-match-main-baseline-p)
                (lambda (_output)
                  (cons t "No new staging test failures vs main baseline")))
@@ -2410,6 +2567,8 @@ Submodules are hydrated later during verification, not during merge prep."
     (cl-letf (((symbol-function 'file-exists-p)
                (lambda (path)
                  (member path (list "/tmp/staging" test-script verify-script))))
+              ((symbol-function 'gptel-auto-workflow--check-el-syntax)
+               (lambda (&rest _) t))
               ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
                (lambda (_worktree)
                  (cons "Hydrated submodules" 0)))

@@ -24,6 +24,10 @@
         (progn
           (make-directory worktree-dir t)
           (cl-letf (((symbol-function 'my/gptel--subagent-cache-get) (lambda (&rest _) nil))
+                    ((symbol-function 'my/gptel-agent--task-override)
+                     (lambda (&rest _)
+                       (setq captured-default-directory default-directory
+                             captured-buffer (current-buffer))))
                     ((symbol-function 'gptel-auto-workflow--get-project-for-context)
                      (lambda ()
                        (cons project-root (get-buffer-create "*aw-project-root*"))))
@@ -37,10 +41,10 @@
                          buf)))
                     ((symbol-function 'gptel-fsm-info)
                      (lambda (&optional _fsm) nil)))
-            (gptel-auto-workflow--advice-task-override
-             (lambda (_main-cb _agent-type _description _prompt)
-               (setq captured-default-directory default-directory
-                     captured-buffer (current-buffer)))
+             (gptel-auto-workflow--advice-task-override
+              (lambda (_main-cb _agent-type _description _prompt)
+                (setq captured-default-directory default-directory
+                      captured-buffer (current-buffer)))
              (lambda (_result) nil)
              "executor"
              "desc"

@@ -40,8 +40,9 @@ run_unit_tests() {
         -L "$DIR/packages/magit/lisp" \
         -L "$DIR/tests" \
         -l ert \
+        --eval "(setq load-prefer-newer t)" \
         --eval "(advice-add (quote startup-redirect-eln-cache) :override (lambda (dir) (push (expand-file-name (file-name-as-directory dir) user-emacs-directory) native-comp-eln-load-path)))" \
-        --eval "(mapc (lambda (fn) (and (fboundp fn) (subr-primitive-p (symbol-function fn)) (comp-subr-trampoline-install fn))) (quote (file-exists-p call-process kill-buffer message directory-files require featurep process-list process-name system-name)))" \
+        --eval "(when (and (boundp 'native-comp-enable-subr-trampolines) native-comp-enable-subr-trampolines (fboundp 'comp-subr-trampoline-install) (fboundp 'subr-primitive-p)) (mapc (lambda (fn) (and (fboundp fn) (subr-primitive-p (symbol-function fn)) (comp-subr-trampoline-install fn))) (quote (file-exists-p call-process kill-buffer message directory-files require featurep process-list process-name system-name))))" \
         $(find tests -name "test-*.el" -exec echo "-l {}" \;) \
         --eval "(ert-run-tests-batch-and-exit \"$PATTERN\")" 2>&1) || true
     
