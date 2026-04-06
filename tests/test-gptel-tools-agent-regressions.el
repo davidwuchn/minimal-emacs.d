@@ -2023,10 +2023,11 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/recover-all-orphans-untracks-recovered-commits ()
   "Recovered orphan hashes should be removed from the tracking file."
-  (let* ((proj-root (make-temp-file "aw-orphans" t))
+  (let* ((gptel-auto-workflow--run-id nil)
+         (proj-root (make-temp-file "aw-orphans" t))
          (tracking-file (expand-file-name
                          (format "var/tmp/experiments/%s/commits.txt"
-                                 (format-time-string "%Y-%m-%d"))
+                                  (format-time-string "%Y-%m-%d"))
                          proj-root)))
     (unwind-protect
         (progn
@@ -2050,10 +2051,11 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/recover-all-orphans-untracks-conflicted-commits ()
   "Conflicted orphan hashes should be untracked after logging the conflict."
-  (let* ((proj-root (make-temp-file "aw-orphans" t))
+  (let* ((gptel-auto-workflow--run-id nil)
+         (proj-root (make-temp-file "aw-orphans" t))
          (tracking-file (expand-file-name
                          (format "var/tmp/experiments/%s/commits.txt"
-                                 (format-time-string "%Y-%m-%d"))
+                                  (format-time-string "%Y-%m-%d"))
                          proj-root)))
     (unwind-protect
         (progn
@@ -2123,10 +2125,11 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/track-commit-avoids-duplicate-hashes ()
   "Tracking the same commit twice should not append duplicate tracking lines."
-  (let* ((proj-root (make-temp-file "aw-track" t))
+  (let* ((gptel-auto-workflow--run-id nil)
+         (proj-root (make-temp-file "aw-track" t))
          (tracking-file (expand-file-name
                          (format "var/tmp/experiments/%s/commits.txt"
-                                 (format-time-string "%Y-%m-%d"))
+                                  (format-time-string "%Y-%m-%d"))
                          proj-root)))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
@@ -2148,10 +2151,11 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/recover-orphans-deduplicates-tracked-hashes ()
   "Duplicate tracking lines should yield only one orphan recovery attempt."
-  (let* ((proj-root (make-temp-file "aw-orphans" t))
+  (let* ((gptel-auto-workflow--run-id nil)
+         (proj-root (make-temp-file "aw-orphans" t))
          (tracking-file (expand-file-name
                          (format "var/tmp/experiments/%s/commits.txt"
-                                 (format-time-string "%Y-%m-%d"))
+                                  (format-time-string "%Y-%m-%d"))
                          proj-root))
          (orphans nil))
     (unwind-protect
@@ -2176,10 +2180,11 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/recover-orphans-untracks-patch-equivalent-commits ()
   "Patch-equivalent orphan records should be removed instead of re-cherry-picked forever."
-  (let* ((proj-root (make-temp-file "aw-orphans" t))
+  (let* ((gptel-auto-workflow--run-id nil)
+         (proj-root (make-temp-file "aw-orphans" t))
          (tracking-file (expand-file-name
                          (format "var/tmp/experiments/%s/commits.txt"
-                                 (format-time-string "%Y-%m-%d"))
+                                  (format-time-string "%Y-%m-%d"))
                          proj-root)))
     (unwind-protect
         (progn
@@ -2198,6 +2203,106 @@ EXIT-CODE defaults to 1."
                     ((symbol-function 'message) (lambda (&rest _) nil)))
             (should-not (gptel-auto-workflow--recover-orphans))
             (should-not (file-exists-p tracking-file))))
+      (delete-directory proj-root t))))
+
+(ert-deftest regression/auto-workflow/status-plist-uses-active-run-id ()
+  "Workflow status should expose the active run id and per-run results path."
+  (let ((gptel-auto-workflow--run-id "2026-04-06T022911Z-0af8")
+        (gptel-auto-workflow--running t)
+        (gptel-auto-workflow--stats '(:phase "selecting" :total 0 :kept 0)))
+    (should (equal (gptel-auto-workflow--status-plist)
+                   '(:running t
+                     :kept 0
+                     :total 0
+                     :phase "selecting"
+                     :run-id "2026-04-06T022911Z-0af8"
+                     :results "var/tmp/experiments/2026-04-06T022911Z-0af8/results.tsv")))))
+
+(ert-deftest regression/auto-workflow/run-async-assigns-run-id-before-first-persist ()
+  "Workflow launch should assign a run id before the first persisted snapshot."
+  (let (persisted-status)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--active-use-p)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--require-magit-dependencies)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda ()
+                 (setq persisted-status (gptel-auto-workflow--status-plist))))
+              ((symbol-function 'gptel-auto-workflow--run-with-targets)
+               (lambda (&rest _) nil))
+              ((symbol-function 'run-with-timer)
+               (lambda (&rest _) 'fake-watchdog))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (let ((gptel-auto-workflow--run-id nil)
+            (gptel-auto-workflow--running nil)
+            (gptel-auto-workflow--stats nil)
+            (gptel-auto-workflow--watchdog-timer nil))
+        (should (eq (gptel-auto-workflow-run-async '("lisp/modules/gptel-tools-agent.el"))
+                    'started))
+        (should (string-match-p
+                 "^[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{6\\}Z-[0-9a-f]\\{4\\}$"
+                 (plist-get persisted-status :run-id)))
+        (should (equal (plist-get persisted-status :results)
+                       (format "var/tmp/experiments/%s/results.tsv"
+                               (plist-get persisted-status :run-id))))))))
+
+(ert-deftest regression/auto-workflow/track-commit-uses-active-run-ledger ()
+  "Tracked commits should go to the active run ledger, not the day ledger."
+  (let* ((gptel-auto-workflow--run-id "2026-04-06T022911Z-0af8")
+         (proj-root (make-temp-file "aw-track-run-id" t))
+         (tracking-file (expand-file-name
+                         "var/tmp/experiments/2026-04-06T022911Z-0af8/commits.txt"
+                         proj-root)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                   (lambda () proj-root))
+                  ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                   (lambda (&rest _) proj-root))
+                  ((symbol-function 'gptel-auto-workflow--git-cmd)
+                   (lambda (&rest _) "abc1234"))
+                  ((symbol-function 'message) (lambda (&rest _) nil)))
+          (should (equal (gptel-auto-workflow--track-commit "1" "target.el" proj-root)
+                         "abc1234"))
+          (should (file-exists-p tracking-file))
+          (with-temp-buffer
+            (insert-file-contents tracking-file)
+            (should (string-match-p "^abc1234 1 target\\.el " (buffer-string)))))
+      (delete-directory proj-root t))))
+
+(ert-deftest regression/auto-workflow/recover-orphans-scans-run-ledgers ()
+  "Orphan recovery should scan both legacy day ledgers and per-run ledgers."
+  (let* ((gptel-auto-workflow--run-id nil)
+         (proj-root (make-temp-file "aw-run-ledgers" t))
+         (legacy-file (expand-file-name
+                       "var/tmp/experiments/2026-04-06/commits.txt"
+                       proj-root))
+         (run-file (expand-file-name
+                    "var/tmp/experiments/2026-04-06T022911Z-0af8/commits.txt"
+                    proj-root))
+         orphans)
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory legacy-file) t)
+          (with-temp-file legacy-file
+            (insert "abc1234 exp1 target-a.el 00:00:00\n"))
+          (make-directory (file-name-directory run-file) t)
+          (with-temp-file run-file
+            (insert "def5678 exp2 target-b.el 00:00:01\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                     (lambda () proj-root))
+                    ((symbol-function 'gptel-auto-workflow--commit-exists-p)
+                     (lambda (_hash) t))
+                    ((symbol-function 'gptel-auto-workflow--commit-patch-equivalent-p)
+                     (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-workflow--git-cmd)
+                     (lambda (&rest _) ""))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (setq orphans (gptel-auto-workflow--recover-orphans))
+            (should (= (length orphans) 2))
+            (should (equal (sort (mapcar #'car orphans) #'string<)
+                           '("abc1234" "def5678")))))
       (delete-directory proj-root t))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-runs-elisp-in-safe-buffer ()
