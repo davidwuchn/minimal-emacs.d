@@ -12,8 +12,11 @@ tools:
   - Glob
   - Grep
   - Code_Map
+<<<<<<< HEAD
   - Diagnostics
   - Programmatic
+=======
+>>>>>>> 7d589248 (⊘ harden live auto-workflow replays)
 ---
 
 <role_and_behavior>

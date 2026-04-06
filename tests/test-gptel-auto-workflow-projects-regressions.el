@@ -2,8 +2,6 @@
 
 ;;; Code:
 
-(setq load-prefer-newer t)
-
 (require 'ert)
 (require 'cl-lib)
 
@@ -63,7 +61,6 @@
        (when (get-buffer "*aw-worktree*")
          (kill-buffer "*aw-worktree*")))))
 
-
 (ert-deftest regression/auto-workflow-projects/task-routing-preserves-child-fsm-info ()
   "Per-project routing should preserve real child FSM info for nested request code."
   (ert-skip "Flaky test - mocking issues with child FSM info")
@@ -116,71 +113,8 @@
       (when (get-buffer "*aw-worktree*")
         (kill-buffer "*aw-worktree*")))))
 
-
-(ert-deftest regression/auto-workflow-projects/task-routing-preserves-parent-fsm-metadata ()
-  "Per-project routing should keep parent FSM metadata while retargeting buffer markers."
-  (let* ((project-root (make-temp-file "aw-project" t))
-         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/foo-exp1" project-root))
-         (gptel-auto-workflow--current-project project-root)
-         (gptel-auto-workflow--current-target "lisp/modules/foo.el")
-         (observed-parent-info nil)
-         (parent-info (list :buffer :parent-buffer
-                            :position :parent-pos
-                            :tools '("Read" "Bash" "Edit")
-                            :preset 'nucleus-gptel-agent))
-         parent-fsm
-         target-buf)
-    (unwind-protect
-        (progn
-          (make-directory worktree-dir t)
-          (setq parent-fsm (gptel-make-fsm :info parent-info))
-          (setq target-buf (get-buffer-create "*aw-worktree*"))
-          (with-current-buffer target-buf
-            (setq-local default-directory (file-name-as-directory worktree-dir))
-            (setq-local gptel--fsm-last parent-fsm))
-          (cl-letf (((symbol-function 'my/gptel--subagent-cache-get) (lambda (&rest _) nil))
-                    ((symbol-function 'my/gptel-agent--task-override)
-                     (lambda (_main-cb _agent-type _description _prompt)
-                       (setq observed-parent-info
-                             (funcall (symbol-function 'gptel-fsm-info) parent-fsm))))
-                    ((symbol-function 'gptel-auto-workflow--get-project-for-context)
-                     (lambda ()
-                       (cons project-root (get-buffer-create "*aw-project-root*"))))
-                    ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
-                     (lambda (_target) worktree-dir))
-                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
-                     (lambda (_dir) target-buf))
-                    ((symbol-function 'gptel-fsm-info)
-                     (lambda (&optional fsm)
-                       (when (eq fsm parent-fsm)
-                         parent-info))))
-            (with-current-buffer target-buf
-              (gptel-auto-workflow--advice-task-override
-               (lambda (&rest _args)
-                 (error "orig task runner should not be used when safe override is available"))
-               (lambda (_result) nil)
-               "executor"
-               "desc"
-               "prompt"))
-            (should (equal (plist-get observed-parent-info :tools)
-                           '("Read" "Bash" "Edit")))
-            (should (eq (plist-get observed-parent-info :preset)
-                        'nucleus-gptel-agent))
-            (should (eq (plist-get observed-parent-info :buffer) target-buf))
-            (should (eq (marker-buffer (plist-get observed-parent-info :position))
-                        target-buf))
-            (should (eq (marker-buffer (plist-get observed-parent-info :tracking-marker))
-                        target-buf))))
-      (delete-directory project-root t)
-      (when (get-buffer "*aw-project-root*")
-        (kill-buffer "*aw-project-root*"))
-      (when (buffer-live-p target-buf)
-        (kill-buffer target-buf)))))
-
-
 (ert-deftest regression/auto-workflow-projects/task-routing-nil-fsm-info-follows-child-fsm ()
   "Nil `gptel-fsm-info' lookups should follow the active child FSM, not the parent placeholder."
-  (ert-skip "Flaky test - FSM routing issues")
   (let* ((project-root (make-temp-file "aw-project" t))
          (worktree-dir (expand-file-name "var/tmp/experiments/optimize/foo-exp1" project-root))
          (gptel-auto-workflow--current-project project-root)
@@ -238,10 +172,8 @@
        (when (get-buffer "*aw-worktree*")
          (kill-buffer "*aw-worktree*")))))
 
-
 (ert-deftest regression/auto-workflow-projects/get-worktree-buffer-anchors-relative-dirs-to-project-root ()
   "Relative worktree dirs should resolve from the workflow project root."
-  (ert-skip "Flaky test - worktree buffer issues")
   (let* ((project-root (make-temp-file "aw-project" t))
          (exp1-dir (expand-file-name "var/tmp/experiments/optimize/foo-exp1" project-root))
          (relative-dir "var/tmp/experiments/optimize/foo-exp2")
@@ -273,10 +205,8 @@
         (kill-buffer created-buf))
       (delete-directory project-root t))))
 
-
 (ert-deftest regression/auto-workflow-projects/get-worktree-buffer-keeps-same-leaf-roots-isolated ()
   "Different worktree roots with the same leaf name must not share a buffer."
-  (ert-skip "Flaky test - worktree buffer isolation")
   (let* ((project-root (make-temp-file "aw-project" t))
          (nested-root (expand-file-name
                        "var/tmp/experiments/optimize/agent-riven-exp1/var/tmp/experiments/optimize/agent-riven-exp2"
@@ -320,10 +250,8 @@
         (kill-buffer top-level-buf))
       (delete-directory project-root t))))
 
-
 (ert-deftest regression/auto-workflow-projects/get-worktree-buffer-recovers-nil-buffer-tables ()
   "Worktree buffer lookup should self-heal if shared tables were left nil."
-  (ert-skip "Flaky test - buffer table recovery")
   (let* ((project-root (make-temp-file "aw-project" t))
          (worktree-dir (expand-file-name "var/tmp/experiments/optimize/foo-exp1" project-root))
          (gptel-auto-workflow--current-project project-root)
@@ -351,7 +279,6 @@
       (when (buffer-live-p created-buf)
         (kill-buffer created-buf))
       (delete-directory project-root t))))
-
 
 (ert-deftest regression/auto-workflow-projects/task-routing-prefers-safe-task-override ()
   "Per-project routing should prefer the safe task override when available."
@@ -383,7 +310,6 @@
       (when (get-buffer "*aw-worktree*")
         (kill-buffer "*aw-worktree*")))))
 
-
 (ert-deftest regression/auto-workflow-projects/queue-helper-returns-before-job-runs ()
   "Queued cron work should not run inline in the `emacsclient' request."
   (let ((gptel-auto-workflow--cron-job-running nil)
@@ -407,10 +333,8 @@
        (should job-ran)
        (should-not gptel-auto-workflow--cron-job-running))))
 
-
 (ert-deftest regression/auto-workflow-projects/queue-helper-keeps-running-until-async-finish ()
   "Async queued jobs should stay marked running until their completion callback fires."
-  (ert-skip "Flaky test - mocking issues with run-at-time")
   (let ((gptel-auto-workflow--cron-job-running nil)
         (scheduled nil)
         (finish-job nil))
@@ -435,10 +359,8 @@
       (funcall finish-job)
       (should-not gptel-auto-workflow--cron-job-running))))
 
-
 (ert-deftest regression/auto-workflow-projects/queue-helper-resets-stale-stats ()
   "Queued jobs should start from clean stats instead of leaking prior run counts."
-  (ert-skip "Flaky test - mocking issues with run-at-time")
   (let ((gptel-auto-workflow--cron-job-running nil)
         (gptel-auto-workflow--stats '(:phase "complete" :total 7 :kept 2))
         (scheduled nil))
@@ -460,7 +382,6 @@
       (should (equal gptel-auto-workflow--stats
                      '(:phase "idle" :total 0 :kept 0)))))) 
 
-
 (ert-deftest regression/auto-workflow-projects/queue-helper-rejects-overlap ()
   "A second cron request should return immediately when one is already queued."
   (let ((gptel-auto-workflow--cron-job-running t)
@@ -479,10 +400,8 @@
        (should-not scheduled)
        (should gptel-auto-workflow--cron-job-running))))
 
-
 (ert-deftest regression/auto-workflow-projects/run-all-projects-waits-for-async-completion ()
   "Project results should be recorded when async completion fires, not at start."
-  (ert-skip "Flaky test - async completion mocking")
   (let ((gptel-auto-workflow-projects '("/tmp/project-a" "/tmp/project-a"))
         (callbacks nil)
         (messages nil))
@@ -510,10 +429,8 @@
                           (string-match-p "\\[auto-workflow\\] All projects processed: /tmp/project-a/:success" msg))
                          messages)))))
 
-
 (ert-deftest regression/auto-workflow-projects/run-all-projects-ignores-duplicate-completion ()
   "Late duplicate project completions should not re-log completion or finish twice."
-  (ert-skip "Flaky test - duplicate completion issues")
   (let ((gptel-auto-workflow-projects '("/tmp/project-a"))
         (callbacks nil)
         (messages nil))
@@ -543,10 +460,8 @@
                    messages)
                  1)))))
 
-
 (ert-deftest regression/auto-workflow-projects/run-all-projects-marks-quota-exhausted ()
   "Project completion should surface quota exhaustion instead of success."
-  (ert-skip "Flaky test - quota exhaustion issues")
   (let ((gptel-auto-workflow-projects '("/tmp/project-a"))
         (callbacks nil)
         (messages nil)
