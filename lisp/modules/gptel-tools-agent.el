@@ -2349,13 +2349,35 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
 (defvar gptel-auto-experiment-retry-delay 5
   "Seconds to wait between retries.")
 
+(defconst gptel-auto-experiment--retryable-patterns
+  "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|curl failed with exit code 28\\|operation timed out"
+  "Regex pattern for transient/retryable API errors.")
+
+(defconst gptel-auto-experiment--rate-limit-patterns
+  "throttling\\|rate.limit\\|quota exceeded\\|429\\|hour allocated quota exceeded"
+  "Regex pattern for API rate limit errors.")
+
+(defconst gptel-auto-experiment--api-error-patterns
+  "invalid_parameter_error\\|InvalidParameter\\|JSON format\\|could not finish"
+  "Regex pattern for API parameter/request errors.")
+
+(defconst gptel-auto-experiment--tool-error-patterns
+  "error.*executor\\|failed to finish\\|Error:.*not available\\|Error:.*not found\\|Error:.*empty"
+  "Regex pattern for tool execution errors.")
+
+(defconst gptel-auto-experiment--success-patterns
+  "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS"
+  "Regex pattern indicating executor succeeded but grader scored 0.")
+
+(defconst gptel-auto-experiment--generic-error-patterns
+  "error\\|failed\\|exception"
+  "Generic error pattern for catch-all error detection.")
+
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
   "Check if ERROR-OUTPUT is a transient/retryable error."
   (and (stringp error-output)
        (let ((case-fold-search t))
-         (string-match-p
-          "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|curl failed with exit code 28\\|operation timed out"
-          error-output))))
+         (string-match-p gptel-auto-experiment--retryable-patterns error-output))))
 
 (defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count)
   "Run experiment with automatic retry on transient errors.
