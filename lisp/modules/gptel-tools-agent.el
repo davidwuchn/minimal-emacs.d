@@ -2352,7 +2352,10 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
   "Check if ERROR-OUTPUT is a transient/retryable error."
   (and (stringp error-output)
-       (string-match-p "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|temporary\\|overloaded" error-output)))
+       (let ((case-fold-search t))
+         (string-match-p
+          "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|curl failed with exit code 28\\|operation timed out"
+          error-output))))
 
 (defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count)
   "Run experiment with automatic retry on transient errors.
@@ -2392,7 +2395,9 @@ Also logs agent-output snippet for debugging when category is :unknown."
      (cons :api-rate-limit "API rate limit exceeded"))
     ((string-match-p "invalid_parameter_error\\|InvalidParameter\\|JSON format" agent-output)
      (cons :api-error "API parameter error (invalid JSON format)"))
-    ((string-match-p "timeout" agent-output)
+    ((let ((case-fold-search t))
+       (string-match-p "timeout\\|timed out\\|curl failed with exit code 28\\|operation timed out"
+                       agent-output))
      (cons :timeout "Experiment timed out"))
     ((string-match-p "error.*executor\\|failed to finish" agent-output)
      (cons :tool-error "Tool execution failed"))
