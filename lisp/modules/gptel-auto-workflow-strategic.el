@@ -67,6 +67,9 @@ Findings stored in var/tmp/research-findings.md for analyzer."
 (defvar gptel-auto-workflow--analyzer-transient-failure nil
   "Non-nil when analyzer target selection failed due to a transient provider issue.")
 
+(defvar gptel-auto-workflow--analyzer-quota-exhausted nil
+  "Non-nil when analyzer target selection hit provider quota limits.")
+
 (defun gptel-auto-workflow--discover-targets ()
   "Discover all Elisp files in lisp/modules/ as potential targets."
   (let* ((proj-root (or (gptel-auto-workflow--project-root)
@@ -263,8 +266,7 @@ Logs when fallback to regex parsing is used."
         (normalized-response (gptel-auto-workflow--normalize-response response)))
     (cond
       ((gptel-auto-experiment--quota-exhausted-p normalized-response)
-       (setq gptel-auto-experiment--quota-exhausted t)
-       (setq gptel-auto-workflow--analyzer-transient-failure t)
+       (setq gptel-auto-workflow--analyzer-quota-exhausted t)
        (message "[auto-workflow] Analyzer quota exhausted during target selection")
        nil)
       ((gptel-auto-workflow--analyzer-transient-error-p normalized-response)
@@ -376,6 +378,7 @@ CALLBACK receives list of target files.
 LLM decides if available, otherwise uses static list."
   (when (functionp callback)
     (setq gptel-auto-workflow--analyzer-transient-failure nil)
+    (setq gptel-auto-workflow--analyzer-quota-exhausted nil)
     (let* ((proj-root (or (gptel-auto-workflow--project-root)
                           (expand-file-name "~/.emacs.d/")))
            (static-targets
@@ -387,14 +390,14 @@ LLM decides if available, otherwise uses static list."
           (gptel-auto-workflow--ask-analyzer-for-targets
            (lambda (targets)
              (cond
+              ((and gptel-auto-workflow--analyzer-quota-exhausted
+                    (null targets))
+               (message "[auto-workflow] Analyzer quota exhausted; using static targets")
+               (funcall callback static-targets))
               ((and gptel-auto-workflow--analyzer-transient-failure
                     (null targets))
-               (message "[auto-workflow] Skipping static fallback after analyzer transient failure")
-               (funcall callback nil))
-              ((and gptel-auto-experiment--quota-exhausted
-                    (null targets))
-               (message "[auto-workflow] Skipping static fallback after analyzer quota exhaustion")
-               (funcall callback nil))
+               (message "[auto-workflow] Analyzer transient failure; using static targets")
+               (funcall callback static-targets))
               (targets
                 (progn
                     (message "[auto-workflow] Analyzer selected %d targets" (length targets))
