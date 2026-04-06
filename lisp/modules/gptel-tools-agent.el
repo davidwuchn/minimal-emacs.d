@@ -2050,28 +2050,55 @@ Call this before any git operation that might modify branches."
 
 (defun gptel-auto-workflow--staging-main-ref ()
   "Return the safe main ref staging and experiments should mirror.
-Prefer local `main' only when it matches `origin/main'. Otherwise use
-`origin/main' so unpublished local commits do not leak into workflow branches."
+Prefer local `main' when it matches `origin/main' or when the current
+checked-out `main' branch is clean and ahead-only relative to `origin/main'.
+Otherwise use `origin/main' so unpublished or diverged state does not leak
+into workflow branches."
   (let ((default-directory (gptel-auto-workflow--default-dir)))
     (let* ((main-result (gptel-auto-workflow--git-result
                          "git rev-parse --verify main"
                          60))
-           (origin-result (gptel-auto-workflow--git-result
-                           "git rev-parse --verify origin/main"
+            (origin-result (gptel-auto-workflow--git-result
+                            "git rev-parse --verify origin/main"
+                            60))
+           (branch-result (gptel-auto-workflow--git-result
+                           "git rev-parse --abbrev-ref HEAD"
                            60))
-           (have-main (= 0 (cdr main-result)))
-           (have-origin (= 0 (cdr origin-result)))
-           (main-hash (and have-main (string-trim (car main-result))))
-           (origin-hash (and have-origin (string-trim (car origin-result)))))
+           (status-result (gptel-auto-workflow--git-result
+                           "git status --porcelain --untracked-files=no"
+                           60))
+           (counts-result (gptel-auto-workflow--git-result
+                           "git rev-list --left-right --count origin/main...main"
+                           60))
+            (have-main (= 0 (cdr main-result)))
+            (have-origin (= 0 (cdr origin-result)))
+            (main-hash (and have-main (string-trim (car main-result))))
+            (origin-hash (and have-origin (string-trim (car origin-result))))
+           (current-branch (and (= 0 (cdr branch-result))
+                                (string-trim (car branch-result))))
+           (clean-worktree (and (= 0 (cdr status-result))
+                                (string-empty-p (string-trim (car status-result)))))
+           (ahead-only
+            (and (= 0 (cdr counts-result))
+                 (string-match "\\`\\([0-9]+\\)[[:space:]]+\\([0-9]+\\)\\'"
+                               (string-trim (car counts-result)))
+                 (= (string-to-number (match-string 1 (string-trim (car counts-result)))) 0)
+                 (> (string-to-number (match-string 2 (string-trim (car counts-result)))) 0))))
       (cond
-       ((and have-main have-origin)
-        (if (string= main-hash origin-hash)
-            "main"
-          (message "[auto-workflow] Local main differs from origin/main; using origin/main as workflow base")
-          "origin/main"))
-       (have-origin
-        "origin/main")
-       (have-main
+        ((and have-main have-origin)
+         (if (string= main-hash origin-hash)
+             "main"
+           (if (and (string= current-branch "main")
+                    clean-worktree
+                    ahead-only)
+               (progn
+                 (message "[auto-workflow] Local main is clean and ahead of origin/main; using main as workflow base")
+                 "main")
+             (message "[auto-workflow] Local main differs from origin/main; using origin/main as workflow base")
+             "origin/main")))
+        (have-origin
+         "origin/main")
+        (have-main
         "main")
        (t
         (message "[auto-workflow] Missing main ref for staging sync")

@@ -3559,8 +3559,34 @@ Submodules are hydrated later during verification, not during merge prep."
       (should (string-match-p "Failed to load auto-workflow modules in batch mode"
                               (cdr result))))))
 
-(ert-deftest regression/auto-workflow/staging-main-ref-prefers-origin-main-when-local-differs ()
-  "Workflow base should fall back to origin/main when local main differs."
+(ert-deftest regression/auto-workflow/staging-main-ref-prefers-clean-local-main-when-ahead ()
+  "Workflow base should use local main when it is clean and only ahead of origin."
+  (let ((commands nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+                (lambda (command &optional _timeout)
+                  (push command commands)
+                  (cond
+                   ((string= command "git rev-parse --verify main")
+                    (cons "8d676d1\n" 0))
+                   ((string= command "git rev-parse --verify origin/main")
+                    (cons "5043dae\n" 0))
+                   ((string= command "git rev-parse --abbrev-ref HEAD")
+                    (cons "main\n" 0))
+                   ((string= command "git status --porcelain --untracked-files=no")
+                    (cons "" 0))
+                   ((string= command "git rev-list --left-right --count origin/main...main")
+                    (cons "0\t1\n" 0))
+                    (t
+                     (cons "" 1)))))
+               ((symbol-function 'message)
+                 (lambda (&rest _) nil)))
+       (should (equal (gptel-auto-workflow--staging-main-ref) "main"))
+       (should (member "git rev-parse --verify main" commands)))))
+
+(ert-deftest regression/auto-workflow/staging-main-ref-prefers-origin-main-when-local-differs-and-dirty ()
+  "Workflow base should still fall back to origin/main when local main is dirty."
   (let ((commands nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
                (lambda () "/tmp/project"))
@@ -3570,14 +3596,20 @@ Submodules are hydrated later during verification, not during merge prep."
                  (cond
                   ((string= command "git rev-parse --verify main")
                    (cons "8d676d1\n" 0))
-                   ((string= command "git rev-parse --verify origin/main")
-                    (cons "5043dae\n" 0))
-                   (t
-                    (cons "" 1)))))
+                  ((string= command "git rev-parse --verify origin/main")
+                   (cons "5043dae\n" 0))
+                  ((string= command "git rev-parse --abbrev-ref HEAD")
+                   (cons "main\n" 0))
+                  ((string= command "git status --porcelain --untracked-files=no")
+                   (cons " M lisp/modules/gptel-tools-agent.el\n" 0))
+                  ((string= command "git rev-list --left-right --count origin/main...main")
+                   (cons "0\t1\n" 0))
+                  (t
+                   (cons "" 1)))))
               ((symbol-function 'message)
-                (lambda (&rest _) nil)))
-       (should (equal (gptel-auto-workflow--staging-main-ref) "origin/main"))
-       (should (member "git rev-parse --verify main" commands)))))
+               (lambda (&rest _) nil)))
+      (should (equal (gptel-auto-workflow--staging-main-ref) "origin/main"))
+      (should (member "git status --porcelain --untracked-files=no" commands)))))
 
 (ert-deftest regression/auto-workflow/create-worktree-uses-safe-main-ref ()
   "Experiment worktrees should use the selected safe main ref, not hard-coded main."
