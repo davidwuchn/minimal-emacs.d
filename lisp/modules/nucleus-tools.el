@@ -69,10 +69,14 @@ When enabled, validates:
     (:explorer . ("Glob" "Grep" "Read" "Code_Map" "Code_Inspect"))
     (:reviewer . ("Glob" "Grep" "Read" "Diagnostics"))
 <<<<<<< HEAD
+<<<<<<< HEAD
     (:analyzer . ("Bash" "Read" "Glob" "Grep" "Code_Map" "Diagnostics" "Programmatic"))
 =======
     (:analyzer . ("Bash" "Read" "Glob" "Grep" "Code_Map"))
 >>>>>>> 7d589248 (⊘ harden live auto-workflow replays)
+=======
+    (:analyzer . ("Bash" "Read" "Glob" "Grep" "Code_Map" "Diagnostics" "Programmatic"))
+>>>>>>> 4071a59d (⊘ isolate executor timeout budget)
     (:comparator . ("Read" "Glob" "Grep"))
     (:grader . ("Read" "Glob" "Grep" "Bash" "Eval")))
   "Canonical toolset definitions for nucleus.
@@ -84,10 +88,14 @@ When enabled, validates:
 :explorer — Codebase exploration (5 tools): Glob, Grep, Read, Code_Map, Code_Inspect
 :reviewer — Code review (4 tools): Read-only + Diagnostics
 <<<<<<< HEAD
+<<<<<<< HEAD
 :analyzer — Benchmark analysis (7 tools): Bash, Read, Glob, Grep, Code_Map, Diagnostics, Programmatic
 =======
 :analyzer — Benchmark analysis (5 tools): Bash, Read, Glob, Grep, Code_Map
 >>>>>>> 7d589248 (⊘ harden live auto-workflow replays)
+=======
+:analyzer — Benchmark analysis (7 tools): Bash, Read, Glob, Grep, Code_Map, Diagnostics, Programmatic
+>>>>>>> 4071a59d (⊘ isolate executor timeout budget)
 :comparator — A/B comparison (3 tools): Read, Glob, Grep
 :grader — Assertion grading (5 tools): Read, Glob, Grep, Bash, Eval
 
@@ -100,10 +108,14 @@ Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   explorer     → :explorer     (5 tools) - codebase exploration + Code tools
   reviewer     → :reviewer     (4 tools) - code review + Diagnostics
 <<<<<<< HEAD
+<<<<<<< HEAD
   analyzer     → :analyzer     (7 tools) - benchmark result analysis
 =======
   analyzer     → :analyzer     (5 tools) - benchmark result analysis
 >>>>>>> 7d589248 (⊘ harden live auto-workflow replays)
+=======
+  analyzer     → :analyzer     (7 tools) - benchmark result analysis
+>>>>>>> 4071a59d (⊘ isolate executor timeout budget)
   comparator   → :comparator   (3 tools) - blind A/B comparison
   grader       → :grader       (5 tools) - assertion grading")
 
