@@ -159,21 +159,12 @@ check_worker_daemon() {
 
 daemon_reports_active_workflow() {
     local elisp="(let ((running (and (boundp 'gptel-auto-workflow--running)
-<<<<<<< HEAD
                                      (default-value 'gptel-auto-workflow--running)))
                        (queued (and (boundp 'gptel-auto-workflow--cron-job-running)
                                     (default-value 'gptel-auto-workflow--cron-job-running))))
                     (if (or running queued) t nil))"
     local output
     if ! output="$(run_emacsclient_eval "$(wrap_emacs_eval "$elisp")" 2 2>/dev/null)"; then
-=======
-                                     gptel-auto-workflow--running))
-                       (queued (and (boundp 'gptel-auto-workflow--cron-job-running)
-                                    gptel-auto-workflow--cron-job-running)))
-                   (if (or running queued) t nil))"
-    local output
-    if ! output="$(run_emacsclient_eval "$elisp" 2 2>/dev/null)"; then
->>>>>>> 30d1506b (fix: harden cold-start auto-workflow)
         local rc=$?
         if [ "$rc" -eq 124 ]; then
             return 2
