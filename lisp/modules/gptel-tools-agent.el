@@ -1187,8 +1187,7 @@ FILES are validated against project root for security.
 (defvar my/gptel--agent-task-state (make-hash-table :test 'eql)
   "Hash table for per-task state. Keyed by task-id.
 Values are plist: (:done :timeout-timer :progress-timer :origin-buf
-:request-buf :last-buffer-tick :last-activity-time :agent-type
-:activity-dir).")
+:request-buf :last-buffer-tick).")
 
 (defvar my/gptel--agent-task-counter 0
   "Counter for generating unique task IDs.")
@@ -1214,76 +1213,6 @@ Dynamic variable, let-bound around gptel-agent--task calls.")
   (when (buffer-live-p buffer)
     (with-current-buffer buffer
       (buffer-chars-modified-tick))))
-
-(defun my/gptel--agent-task-note-activity (task-id &optional timestamp)
-  "Record fresh activity for TASK-ID at TIMESTAMP or now."
-  (when-let* ((state (gethash task-id my/gptel--agent-task-state)))
-    (puthash task-id
-             (plist-put state :last-activity-time (or timestamp (current-time)))
-             my/gptel--agent-task-state)))
-
-(defun my/gptel--agent-task-note-active-activity (&optional agent-type timestamp)
-  "Record fresh activity for active tasks matching AGENT-TYPE.
-When AGENT-TYPE is nil, note activity for every active task."
-  (let ((activity-time (or timestamp (current-time))))
-    (when (> (hash-table-count my/gptel--agent-task-state) 0)
-      (maphash
-       (lambda (task-id state)
-         (when (and (not (plist-get state :done))
-                    (or (null agent-type)
-                        (equal (plist-get state :agent-type) agent-type)))
-           (my/gptel--agent-task-note-activity task-id activity-time)))
-       my/gptel--agent-task-state))))
-
-(defun my/gptel--path-within-directory-p (path directory)
-  "Return non-nil when PATH is DIRECTORY itself or lives beneath it."
-  (when (and (stringp path) (stringp directory))
-    (let* ((path (expand-file-name path))
-           (directory (expand-file-name directory)))
-      (or (equal path directory)
-          (equal (file-name-as-directory path)
-                 (file-name-as-directory directory))
-          (ignore-errors
-            (file-in-directory-p path directory))))))
-
-(defun my/gptel--agent-task-note-context-activity (&optional directory buffer timestamp)
-  "Record activity for executor tasks active in DIRECTORY or BUFFER.
-TIMESTAMP defaults to `current-time'."
-  (let* ((activity-time (or timestamp (current-time)))
-         (dir (and (stringp directory) (expand-file-name directory)))
-         (dir (or dir
-                  (and (stringp default-directory)
-                       (expand-file-name default-directory))))
-         (buf (or buffer (current-buffer)))
-         (file (and (buffer-live-p buf) (buffer-file-name buf))))
-    (when (> (hash-table-count my/gptel--agent-task-state) 0)
-      (maphash
-        (lambda (task-id state)
-          (let ((activity-dir (plist-get state :activity-dir)))
-            (when (and (equal (plist-get state :agent-type) "executor")
-                       (stringp activity-dir)
-                       (or (and dir
-                                (my/gptel--path-within-directory-p dir activity-dir))
-                           (and file
-                                (my/gptel--path-within-directory-p file activity-dir))))
-              (my/gptel--agent-task-note-activity task-id activity-time))))
-        my/gptel--agent-task-state))))
-
-(defun my/gptel--agent-task-note-message-activity (&rest _args)
-  "Treat worktree-context messages as executor activity."
-  (my/gptel--agent-task-note-context-activity))
-
-(advice-add 'message :before #'my/gptel--agent-task-note-message-activity)
-
-(defun my/gptel--agent-task-note-curl-activity (&rest _args)
-  "Treat gptel curl request setup as active subagent progress."
-  (my/gptel--agent-task-note-active-activity))
-
-(with-eval-after-load 'gptel-request
-  (unless (advice-member-p #'my/gptel--agent-task-note-curl-activity
-                           'gptel-curl--get-args)
-    (advice-add 'gptel-curl--get-args :before
-                #'my/gptel--agent-task-note-curl-activity)))
 
 (defun my/gptel--register-agent-task-buffer (buffer)
   "Record BUFFER as the active request buffer for the current subagent task."
@@ -1410,43 +1339,36 @@ Uses hash table keyed by task-id to support parallel execution."
                 (setq state
                       (plist-put
                        state :timeout-timer
-                         (run-at-time
-                          task-timeout nil
-                          (lambda ()
-                           (let* ((state (gethash task-id my/gptel--agent-task-state))
-                                  (already-done (plist-get state :done))
-                                  (last-activity (plist-get state :last-activity-time))
-                                  (idle-seconds (and last-activity
-                                                     (float-time (time-since last-activity)))))
-                             (when state
-                               (cond
-                                (already-done nil)
-                                ((and idle-seconds (< idle-seconds task-timeout))
-                                 (funcall rearm-timeout state))
-                                (t
-                                 (puthash task-id (plist-put state :done t)
-                                          my/gptel--agent-task-state)
-                                 (when (timerp (plist-get state :progress-timer))
-                                   (cancel-timer (plist-get state :progress-timer)))
-                                 (message "[nucleus] Subagent %s timed out after %ds, aborting request"
-                                          agent-type task-timeout)
-                                 (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
-                                             ((fboundp 'gptel-abort)))
-                                   (ignore-errors (gptel-abort request-buf)))
-                                 (let ((timeout-result
-                                        (format "Error: Task \"%s\" (%s) timed out after %ds."
-                                                description agent-type task-timeout)))
-                                   (funcall restore-origin-fsm child-fsm)
-                                   (if (buffer-live-p origin-buf)
-                                       (with-current-buffer origin-buf
-                                         (unwind-protect
-                                             (funcall callback timeout-result)
-                                           (remhash task-id my/gptel--agent-task-state)))
-                                     (unwind-protect
-                                         (funcall callback timeout-result)
-                                       (remhash task-id my/gptel--agent-task-state))))))))))))
-                 (puthash task-id state my/gptel--agent-task-state))
-               state))
+                       (run-at-time
+                        task-timeout nil
+                        (lambda ()
+                          (let* ((state (gethash task-id my/gptel--agent-task-state))
+                                 (already-done (plist-get state :done)))
+                            (when state
+                              (puthash task-id (plist-put state :done t)
+                                       my/gptel--agent-task-state)
+                              (unless already-done
+                                (when (timerp (plist-get state :progress-timer))
+                                  (cancel-timer (plist-get state :progress-timer)))
+                                (message "[nucleus] Subagent %s timed out after %ds, aborting request"
+                                         agent-type task-timeout)
+                                (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
+                                            ((fboundp 'gptel-abort)))
+                                  (ignore-errors (gptel-abort request-buf)))
+                                (let ((timeout-result
+                                       (format "Error: Task \"%s\" (%s) timed out after %ds."
+                                               description agent-type task-timeout)))
+                                  (funcall restore-origin-fsm child-fsm)
+                                  (if (buffer-live-p origin-buf)
+                                      (with-current-buffer origin-buf
+                                        (unwind-protect
+                                            (funcall callback timeout-result)
+                                          (remhash task-id my/gptel--agent-task-state)))
+                                    (unwind-protect
+                                        (funcall callback timeout-result)
+                                      (remhash task-id my/gptel--agent-task-state)))))))))))
+                (puthash task-id state my/gptel--agent-task-state))
+              state))
       (setq note-buffer-activity
             (lambda (state)
               (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
@@ -1454,9 +1376,8 @@ Uses hash table keyed by task-id to support parallel execution."
                 (let* ((current-tick (my/gptel--agent-task-buffer-tick request-buf))
                        (last-tick (plist-get state :last-buffer-tick)))
                   (when (and current-tick (not (equal current-tick last-tick)))
-                     (setq state (plist-put state :last-buffer-tick current-tick))
-                     (setq state (plist-put state :last-activity-time (current-time)))
-                     (setq state (funcall rearm-timeout state)))))
+                    (setq state (plist-put state :last-buffer-tick current-tick))
+                    (setq state (funcall rearm-timeout state)))))
               state))
       (message "[nucleus] Delegating to subagent %s%s..."
                agent-type
@@ -1476,12 +1397,8 @@ Uses hash table keyed by task-id to support parallel execution."
                                :timeout-timer nil
                                :progress-timer progress-timer
                                :origin-buf origin-buf
-                                :request-buf nil
-                                :last-buffer-tick nil
-                                :last-activity-time (current-time)
-                                :agent-type agent-type
-                                :activity-dir (and (stringp default-directory)
-                                                   (expand-file-name default-directory)))
+                               :request-buf nil
+                               :last-buffer-tick nil)
                  my/gptel--agent-task-state)
         (when task-timeout
           (let ((state (gethash task-id my/gptel--agent-task-state)))
@@ -2446,14 +2363,13 @@ Maximum response: 1000 characters."
            'reviewer
            "Review changes before merge"
            review-prompt
-            (lambda (result)
-              (let* ((response (if (stringp result) result (format "%S" result)))
-                     (blocked (string-match-p "^BLOCKED:" response))
-                     (approved (not blocked)))
-                (message "[auto-workflow] Review %s: %s"
-                         (if approved "PASSED" "BLOCKED")
-                         (my/gptel--sanitize-for-logging response 100))
-                (funcall callback (cons approved response)))))
+           (lambda (result)
+             (let* ((response (if (stringp result) result (format "%S" result)))
+                    (approved (string-match-p "^APPROVED" response)))
+               (message "[auto-workflow] Review %s: %s"
+                        (if approved "PASSED" "BLOCKED")
+                        (my/gptel--sanitize-for-logging response 100))
+               (funcall callback (cons approved response)))))
         (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
 
 (defun gptel-auto-workflow--fix-review-issues (optimize-branch review-output callback)
