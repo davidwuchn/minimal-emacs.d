@@ -47,9 +47,70 @@ EXIT-CODE defaults to 1."
               "import json, sys\n"
               (format "with Path(%S).open('a', encoding='utf-8') as handle:\n" log-file)
               "    handle.write(json.dumps(sys.argv) + \"\\n\")\n"
-              (format "raise SystemExit(%d)\n" (or exit-code 1))))
+               (format "raise SystemExit(%d)\n" (or exit-code 1))))
     (set-file-modes file #o755)
     file))
+
+(defun test-auto-workflow--exercise-grade-callback-order (order)
+  "Return grade callback results after exercising ORDER."
+  (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment-use-subagents t)
+        timeout-callback
+        grader-callback
+        results)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (setq timeout-callback (lambda () (apply fn args)))
+                 :fake-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (&rest args)
+                 (setq grader-callback (nth 3 args))))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-grade
+         "HYPOTHESIS: grade race probe"
+         (lambda (result)
+           (push result results)))))
+    (unless (and timeout-callback grader-callback)
+      (error "Grade callbacks were not captured"))
+    (pcase order
+      ('grade-then-timeout
+       (funcall grader-callback '(:score 9 :passed t :details "graded"))
+       (funcall timeout-callback))
+      ('timeout-then-grade
+       (funcall timeout-callback)
+       (funcall grader-callback '(:score 9 :passed t :details "graded")))
+      (_ (error "Unknown grade callback order: %S" order)))
+    (list :results (nreverse results)
+          :remaining-state (hash-table-count gptel-auto-experiment--grade-state))))
+
+(ert-deftest regression/auto-experiment/grade-late-timeout-is-ignored ()
+  "Successful grading should suppress any later timeout callback."
+  (let* ((outcome (test-auto-workflow--exercise-grade-callback-order
+                   'grade-then-timeout))
+         (results (plist-get outcome :results))
+         (result (car results)))
+    (should (= (length results) 1))
+    (should (= (plist-get result :score) 9))
+    (should (eq (plist-get result :passed) t))
+    (should (equal (plist-get result :details) "graded"))
+    (should (zerop (plist-get outcome :remaining-state)))))
+
+(ert-deftest regression/auto-experiment/grade-timeout-ignores-late-grader-callback ()
+  "Timeout completion should ignore any later grader callback."
+  (let* ((outcome (test-auto-workflow--exercise-grade-callback-order
+                   'timeout-then-grade))
+         (results (plist-get outcome :results))
+         (result (car results)))
+    (should (= (length results) 1))
+    (should (zerop (plist-get result :score)))
+    (should-not (plist-get result :passed))
+    (should (equal (plist-get result :details) "timeout"))
+    (should (zerop (plist-get outcome :remaining-state)))))
 
 (ert-deftest regression/auto-experiment/api-errors-do-not-touch-loop-state ()
   "API failures should not try to mutate outer loop state from a callback."
