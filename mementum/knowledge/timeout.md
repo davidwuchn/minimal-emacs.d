@@ -1,111 +1,119 @@
 ---
-title: Timeout Handling in Emacs - Complete Guide
+title: Timeout Handling in Emacs and Curl
 status: active
 category: knowledge
-tags: [emacs, timeout, process, curl, debugging]
+tags: [timeout, curl, process-management, subprocess, error-handling, elisp]
 ---
 
-# Timeout Handling in Emacs - Complete Guide
+# Timeout Handling in Emacs and Curl
 
-Timeouts are critical for maintaining responsive Emacs daemons and preventing runaway processes. This guide covers timeout patterns for shell commands, HTTP requests (via curl), and multi-stage workflows.
+## Overview
 
-## Overview: Timeout Mechanisms in Emacs
+Timeout handling is critical for robust systems. This page synthesizes three production incidents and their solutions to provide actionable patterns for timeout management in Emacs (using gptel) and curl-based network operations.
 
-Emacs provides multiple timeout mechanisms, each with different use cases and failure modes:
+**Key Lesson:** Emacs has a single-threaded event loop. Blocking operations can freeze the entire daemon. Timeout mechanisms must be timer-based, not rely on polling loops.
 
-| Mechanism | Scope | Blocking Risk | Use Case |
-|-----------|-------|---------------|----------|
-| `run-with-timer` | Timer-based | Low | Safety nets, long operations |
-| `accept-process-output` | Process-based | High if misused | Reading process output |
-| `sit-for` | Display-based | None | Cooperative yielding |
-| curl `--max-time` | Network request | Low | HTTP request limits |
-| curl `-y/-Y` | Low-speed detection | Independent | Detecting stalled connections |
+---
 
-## Pattern 1: Robust Shell Command Timeout (CRITICAL)
+## Curl Timeout Mechanisms
 
-The most important timeout pattern: shell commands must never block the main thread.
+Curl provides **three independent timeout mechanisms** that can conflict if not understood:
 
-### Anti-Pattern: Blocking `accept-process-output`
+| Mechanism | Flag | Scope | Behavior |
+|-----------|------|-------|----------|
+| Connection timeout | `--connect-timeout <seconds>` | DNS + TCP handshake only | Aborts if connection not established in time |
+| Total timeout | `--max-time <seconds>` | Entire operation | Aborts if total request exceeds limit |
+| Low-speed timeout | `-y <seconds>` + `-Y <bytes/sec>` | Transfer rate | Aborts if average speed drops below threshold |
+
+### Critical Discovery: Low-Speed Detection is Independent
+
+**The `-y/-Y` flags operate independently of `--max-time`.** When both are set:
+
+```bash
+# This does NOT work as expected:
+curl --max-time 600 -y 15 -Y 50 https://api.example.com/completion
+
+# If LLM thinks for 16 seconds without streaming output:
+# → curl exits with code 28 (CURLE_OPERATION_TIMEDOUT)
+# → --max-time 600 is NEVER reached
+```
+
+**Argument Order Matters:** Curl appends global args before backend args:
+
+```
+curl [global-args] [backend-args]
+curl -y 15 -Y 50 --max-time 900  # -y/-Y still active!
+```
+
+### Pattern: Remove Low-Speed Detection for LLM APIs
+
+For long-running API calls (LLM inference, code generation):
 
 ```elisp
-;; ❌ DANGEROUS: This can hang indefinitely
+;; BAD: Low-speed timeout causes false positives
+(setq gptel-curl-extra-args '("-y" "15" "-Y" "50"))
+
+;; GOOD: Backend timeout handles long-running calls
+(setq gptel-curl-extra-args '("--max-time" "900"))
+```
+
+---
+
+## Common Timeout Issues
+
+### Issue 1: Curl Exit Code 28 Despite Long max-time
+
+**Symptoms:**
+- Exit code 28 (`CURLE_OPERATION_TIMEDOUT`)
+- Backend configured with `--max-time 600` or higher
+- LLM "thinking" for extended periods
+
+**Root Cause:** Global `-y/-Y` flags still active after backend args appended.
+
+**Fix:** Remove `-y/-Y` from global curl extra args:
+
+```elisp
+;; lisp/modules/gptel-ext-abort.el
+(defun my/gptel--install-fast-curl-timeouts ()
+  "Install timeout arguments for fast-failing curl requests."
+  (setq gptel-curl-extra-args
+        '("--connect-timeout" "10"  ; Connection timeout only
+          "--max-time" "300")))     ; Per-request timeout
+```
+
+### Issue 2: Transient Errors Masquerading as Timeouts
+
+Cold-start issues can appear as timeouts:
+
+| Error Code | Message | API | Solution |
+|------------|---------|-----|----------|
+| 1013 | "server is initializing" | Moonshot | Add to transient errors, retry |
+| 500 | Internal server error | Any | Retry with backoff |
+| 502 | Bad gateway | Any | Retry with backoff |
+
+```elisp
+;; lisp/modules/gptel-ext-retry.el
+(defvar gptel-ext-retry--transient-errors
+  '("1013"                          ; Moonshot cold start
+    "server is initializing"
+    "500" "502" "503"               ; Server errors
+    "rate limit" "too many requests"))
+```
+
+### Issue 3: Daemon Unresponsive Due to Blocking accept-process-output
+
+**Severity:** CRITICAL
+
+**Symptoms:**
+- Daemon at 0% CPU but unresponsive to `emacsclient`
+- Bash subprocess running for 30+ minutes
+- No output produced, main thread blocked
+
+**Root Cause:** `accept-process-output` with blocking flag (`t`) can hang indefinitely:
+
+```elisp
+;; BAD: Blocks forever if no output arrives
 (while (and (not done)
             (< (float-time (time-since start)) timeout-seconds))
-  (accept-process-output process 0.1 nil t))  ; 't' blocks until output or exit
-```
-
-**Why it fails:**
-- `accept-process-output` with `t` as the last argument means "block until output or process exit"
-- If the subprocess hangs without producing output, Emacs blocks forever
-- The timeout check is never reached
-- Daemon becomes completely unresponsive
-
-### Correct Pattern: Timer-Based Safety Net
-
-```elisp
-(defun gptel-auto-workflow--shell-command-with-timeout (command timeout-seconds)
-  "Execute COMMAND with TIMEOUT-SECONDS limit.
-Returns (success . output) or (timeout . nil) or (error . message)."
-  (let* ((buffer (generate-new-buffer " *shell-timeout*"))
-         (process nil)
-         (done nil)
-         (timer nil)
-         (start (current-time))
-         result)
-    
-    ;; Start the subprocess
-    (with-current-buffer buffer
-      (setq process
-            (make-process
-             :name "shell-timeout"
-             :buffer buffer
-             :command (list "bash" "-c" command)
-             :sentinel (lambda (p msg)
-                        (when (memq (process-status p) '(exit signal))
-                          (setq done 'finished)))))
-    
-    ;; Timer-based safety net (runs independently)
-    (setq timer
-          (run-with-timer timeout-seconds nil
-                          (lambda ()
-                            (unless done
-                              (setq done 'timeout)))))
-    
-    ;; Non-blocking poll loop
-    (while (eq done nil)
-      ;; Non-blocking: returns immediately if no output
-      (accept-process-output process 0.1 nil nil)
-      (sit-for 0.01)  ; Cooperative yield to allow timer to fire
-      (when (>= (float-time (time-since start)) timeout-seconds)
-        (setq done 'timeout)))
-    
-    ;; Cleanup sequence: timer first, then process, then buffer
-    (when timer (cancel-timer timer))
-    (when (and process (process-live-p process))
-      (delete-process process))
-    
-    (unwind-protect
-        (progn
-          (setq result
-                (cond
-                 ((eq done 'timeout)
-                  (cons 'timeout nil))
-                 ((eq done 'finished)
-                  (cons 'success (string-trim (buffer-string buffer))))
-                 (t
-                  (cons 'error "Unknown state")))))
-      (when (buffer-live-p buffer)
-        (kill-buffer buffer)))
-    
-    result))
-```
-
-### Cleanup Sequence (Critical Order)
-
-```elisp
-;; CORRECT ORDER:
-(when timer (cancel-timer timer))           ; 1. Cancel timer first
-(when (and process (process-live-p process)) ; 2. Then kill process
-  (delete-process process))
-(when (buffer-live
-...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-nUwJZe.txt. Use Read tool if you need more]...
+  (accept-process-output process 0.1 nil t))  ; LAST ARG
+...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-97CPCd.txt. Use Read tool if you need more]...
