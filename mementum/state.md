@@ -1,8 +1,36 @@
 # Mementum State
 
-> Last session: 2026-04-06 20:35
+> Last session: 2026-04-07 12:30
 
-## Total Improvements: 207+ Real Code Fixes (7 new today)
+## Total Improvements: 209+ Real Code Fixes (2 new today)
+
+### Session Summary: 2026-04-07 (Restore Missing Grading Features)
+
+**Action:** Restored two features accidentally removed by commit `1ff9e8b6`
+
+**Result:** ✅ All 1257 tests passing, pushed v2026.04.07
+
+**Improvements (2 commits):**
+- **5ae65d0b** - fix: require concrete executor grading evidence
+- **2ef7a8e4** - fix: fail fast on synchronous subagent launch errors
+
+**Root Cause:**
+- Commit `1ff9e8b6` (prevent executor scope creep) removed 491 lines
+- This accidentally deleted two regression-tested features from `574da21f` and `4d891ea2`
+- Tests existed but code was missing, causing 3 test failures
+
+**Fixes Applied:**
+1. **Grading Evidence** (`574da21f`): `gptel-auto-experiment--build-grading-output` augments grader with git diff from worktree
+2. **Launch Error Handling** (`4d891ea2`): `condition-case` wrapper catches synchronous launch errors with proper cleanup
+
+**Key Insight:**
+- Large refactors (491 lines removed) can silently delete features
+- Regression tests catch this but only if they run after the refactor
+- Cherry-pick with conflict resolution risk: conflict markers can introduce parse errors
+
+**Tag:** `v2026.04.07`
+
+---
 
 ### Session Summary: 2026-04-06 (Auto-Workflow E2E Fix & Operation)
 
