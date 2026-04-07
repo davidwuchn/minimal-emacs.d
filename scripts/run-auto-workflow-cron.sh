@@ -144,10 +144,12 @@ PY
 }
 
 check_worker_daemon() {
+    local rc
     if run_emacsclient_eval "t" 1 >/dev/null 2>&1; then
         return 0
+    else
+        rc=$?
     fi
-    local rc=$?
     if [ "$rc" -eq 124 ]; then
         return 2
     fi
@@ -161,18 +163,19 @@ daemon_reports_active_workflow() {
                                     (default-value 'gptel-auto-workflow--cron-job-running))))
                    (if (or running queued) t nil))"
     local output
-    if ! output="$(run_emacsclient_eval "$elisp" 2 2>/dev/null)"; then
-        local rc=$?
+    local rc
+    if output="$(run_emacsclient_eval "$elisp" 2 2>/dev/null)"; then
+        if printf '%s' "$output" | grep -qx 't'; then
+            return 0
+        fi
+        return 1
+    else
+        rc=$?
         if [ "$rc" -eq 124 ]; then
             return 2
         fi
         return 1
     fi
-
-    if printf '%s' "$output" | grep -qx 't'; then
-        return 0
-    fi
-    return 1
 }
 
 clear_stale_running_status() {

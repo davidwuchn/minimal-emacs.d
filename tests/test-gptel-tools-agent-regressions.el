@@ -1995,6 +1995,38 @@ EXIT-CODE defaults to 1."
                  'started))
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
+       (should (eq (gptel-auto-workflow-cron-safe) 'started))
+       (should-not disabled))))
+
+(ert-deftest regression/auto-workflow/cron-safe-ignores-launch-input-guard ()
+  "Cron-safe should ignore the recent-input guard for daemon-driven launches."
+  (let ((disabled nil)
+        (gptel-auto-workflow-skip-if-recent-input t))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'require)
+               (lambda (&rest _) t))
+              ((symbol-function 'featurep)
+               (lambda (_) t))
+              ((symbol-function 'load-file)
+               (lambda (&rest _) t))
+              ((symbol-function 'gptel-auto-workflow--enable-headless-suppression)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--disable-headless-suppression)
+               (lambda () (setq disabled t)))
+              ((symbol-function 'gptel-auto-workflow--cleanup-stale-state)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--sync-staging-with-main)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--recover-orphans)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow-run-async--guarded)
+               (lambda (_ callback)
+                 (should (functionp callback))
+                 (should-not gptel-auto-workflow-skip-if-recent-input)
+                 'started))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
       (should (eq (gptel-auto-workflow-cron-safe) 'started))
       (should-not disabled))))
 
@@ -2020,6 +2052,30 @@ EXIT-CODE defaults to 1."
                    (current-buffer)))
           (should (equal (gptel-auto-workflow-status)
                          '(:running t :kept 1 :total 2 :phase "running" :results "x"))))
+      (delete-file tmp-file))))
+
+(ert-deftest regression/auto-workflow/status-prefers-active-persisted-snapshot-over-idle-placeholder ()
+  "Status should not let an idle placeholder override a live persisted run."
+  (let* ((tmp-file (make-temp-file "aw-status"))
+         (gptel-auto-workflow-status-file tmp-file)
+         (gptel-auto-workflow--run-id nil)
+         (gptel-auto-workflow--running nil)
+         (gptel-auto-workflow--stats '(:phase "idle" :total 0 :kept 0)))
+    (unwind-protect
+        (progn
+          (with-temp-file tmp-file
+            (prin1 '(:running t
+                     :kept 1
+                     :total 5
+                     :phase "running"
+                     :run-id "2026-04-07T180427Z-bbf1"
+                     :results "var/tmp/experiments/2026-04-07T180427Z-bbf1/results.tsv")
+                   (current-buffer)))
+          (let ((status (gptel-auto-workflow-status)))
+            (should (plist-get status :running))
+            (should (equal (plist-get status :phase) "running"))
+            (should (equal (plist-get status :run-id)
+                           "2026-04-07T180427Z-bbf1"))))
       (delete-file tmp-file))))
 
 (ert-deftest regression/auto-workflow/cleanup-preserves-queued-phase ()
@@ -2599,8 +2655,51 @@ EXIT-CODE defaults to 1."
           (let ((output (shell-command-to-string (format "%s status" script))))
             (should (string-match-p ":running t" output))
             (should (string-match-p ":kept 1" output))
-            (should (string-match-p ":total 5" output))
-            (should (string-match-p ":phase \"running\"" output))))
+             (should (string-match-p ":total 5" output))
+             (should (string-match-p ":phase \"running\"" output))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-status-keeps-running-on-active-probe-timeout ()
+  "Wrapper status should preserve running snapshots when the active probe times out."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "import sys, time\n"
+                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    "if expr == 't':\n"
+                    "    print('t')\n"
+                    "elif 'gptel-auto-workflow--cron-job-running' in expr:\n"
+                    "    time.sleep(3)\n"
+                    "else:\n"
+                    "    print('nil')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-07/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
+            (should (string-match-p ":phase \"running\"" output)))
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running t" (buffer-string)))
+            (should (string-match-p ":phase \"running\"" (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t))))
 
@@ -2641,10 +2740,63 @@ EXIT-CODE defaults to 1."
             (should-not (string-match-p "already-running" output))
             (with-temp-buffer
               (insert-file-contents status-file)
-              (should (string-match-p ":running nil" (buffer-string)))
-              (should (string-match-p ":phase \"idle\"" (buffer-string))))))
+               (should (string-match-p ":running nil" (buffer-string)))
+               (should (string-match-p ":phase \"idle\"" (buffer-string))))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-timeout-keeps-existing-daemon ()
+  "Wrapper auto-workflow should not start a second daemon after a probe timeout."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "echo emacs-invoked >> %s\nexit 1" (shell-quote-argument emacs-log))))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "from pathlib import Path\n"
+                    "import json, sys, time\n"
+                    (format "with Path(%S).open('a', encoding='utf-8') as handle:\n" argv-log)
+                    "    handle.write(json.dumps(sys.argv) + \"\\n\")\n"
+                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    "if expr == 't':\n"
+                    "    time.sleep(2)\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running nil :kept 0 :total 0 :phase \"idle\" :results \"var/tmp/experiments/2026-04-07/results.tsv\")\n"))
+          (should (zerop (call-process shell-file-name nil nil nil shell-command-switch
+                                       (format "%s auto-workflow >/dev/null 2>&1" script))))
+          (with-temp-buffer
+            (insert-file-contents emacs-log)
+            (should (string-empty-p (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents argv-log)
+            (should (string-match-p
+                     (regexp-quote "gptel-auto-workflow-queue-all-projects")
+                     (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log))
+      (when (file-exists-p emacs-log)
+        (delete-file emacs-log)))))
 
 (ert-deftest regression/auto-workflow/recover-all-orphans-untracks-recovered-commits ()
   "Recovered orphan hashes should be removed from the tracking file."

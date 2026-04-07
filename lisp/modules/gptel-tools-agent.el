@@ -4642,6 +4642,22 @@ Relative paths are resolved from the project root."
           :run-id run-id
           :results (gptel-auto-workflow--results-relative-path run-id))))
 
+(defun gptel-auto-workflow--status-active-p (status)
+  "Return non-nil when STATUS reflects an active workflow snapshot."
+  (and (listp status)
+       (or (plist-get status :running)
+           (let ((phase (plist-get status :phase)))
+             (and (stringp phase)
+                  (not (member phase '("idle" "complete" "skipped"))))))))
+
+(defun gptel-auto-workflow--status-placeholder-p (status)
+  "Return non-nil when STATUS is only an idle placeholder snapshot."
+  (and (listp status)
+       (not (plist-get status :running))
+       (equal (plist-get status :phase) "idle")
+       (zerop (or (plist-get status :kept) 0))
+       (zerop (or (plist-get status :total) 0))))
+
 (defun gptel-auto-workflow--persist-status ()
   "Persist current workflow status for non-blocking cron health checks."
   (let* ((file (gptel-auto-workflow--status-file))
@@ -4937,12 +4953,20 @@ Returns (nil . nil) if safe to run."
 (defun gptel-auto-workflow-status ()
   "Return current workflow status as plist.
 Returns (:running :kept :total :phase :results)."
-  (or (and (or gptel-auto-workflow--running
-               (bound-and-true-p gptel-auto-workflow--cron-job-running)
-               gptel-auto-workflow--stats)
-           (gptel-auto-workflow--status-plist))
-      (gptel-auto-workflow-read-persisted-status)
-      (gptel-auto-workflow--status-plist)))
+  (let* ((local-status
+          (and (or gptel-auto-workflow--running
+                   (bound-and-true-p gptel-auto-workflow--cron-job-running)
+                   gptel-auto-workflow--stats)
+               (gptel-auto-workflow--status-plist)))
+         (persisted-status (gptel-auto-workflow-read-persisted-status)))
+    (cond
+     ((and (gptel-auto-workflow--status-placeholder-p local-status)
+           (gptel-auto-workflow--status-active-p persisted-status))
+      persisted-status)
+     (local-status)
+     (persisted-status)
+     (t
+      (gptel-auto-workflow--status-plist)))))
 
 
 (defun gptel-auto-workflow--sanitize-unicode (str)
@@ -5076,13 +5100,14 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
                   (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
                            (length orphans))
                   (gptel-auto-workflow-recover-all-orphans t)))))
-           (let ((started
-                  (gptel-auto-workflow-run-async--guarded
-                   nil
-                   finish)))
-            (unless started
-              (funcall finish nil))
-            started))
+          (let ((started
+                 (let ((gptel-auto-workflow-skip-if-recent-input nil))
+                   (gptel-auto-workflow-run-async--guarded
+                    nil
+                    finish))))
+             (unless started
+               (funcall finish nil))
+             started))
       (error
         (message "[auto-workflow] Cron error: %s"
                  (my/gptel--sanitize-for-logging (error-message-string err) 160))

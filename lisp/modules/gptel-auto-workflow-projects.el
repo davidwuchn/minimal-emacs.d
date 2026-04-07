@@ -330,21 +330,21 @@ the queued job actually finishes."
               (gptel-auto-workflow--make-idempotent-callback
                (lambda (&optional errored)
                  (gptel-auto-workflow--finish-queued-cron-job label errored)))))
-         (setq gptel-auto-workflow--stats
-               (plist-put gptel-auto-workflow--stats :phase label))
-         (when (fboundp 'gptel-auto-workflow--persist-status)
-           (gptel-auto-workflow--persist-status))
-         (condition-case err
-             (if async
-                 (funcall fn finish-job)
-               (progn
-                 (funcall fn)
-                 (funcall finish-job)))
-           (error
-            (setq gptel-auto-workflow--stats
-                  (plist-put gptel-auto-workflow--stats :phase "error"))
-            (message "[%s] Job failed: %s" label err)
-            (funcall finish-job err))))))
+          (setq gptel-auto-workflow--stats
+                (plist-put gptel-auto-workflow--stats :phase label))
+          (when (fboundp 'gptel-auto-workflow--persist-status)
+            (gptel-auto-workflow--persist-status))
+          (condition-case err
+              (if async
+                  (funcall fn finish-job)
+                (progn
+                  (funcall fn)
+                  (funcall finish-job)))
+            (error
+             (setq gptel-auto-workflow--stats
+                   (plist-put gptel-auto-workflow--stats :phase "error"))
+             (message "[%s] Job failed: %s" label err)
+             (funcall finish-job err))))))
     'queued))
 
 (defun gptel-auto-workflow-queue-all-projects ()
