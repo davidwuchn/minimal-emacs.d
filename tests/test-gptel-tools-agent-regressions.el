@@ -158,9 +158,54 @@ EXIT-CODE defaults to 1."
          "HYPOTHESIS: timeout cleanup probe"
          (lambda (_result)
            (error "grade timeout callback boom"))))
-      (should (functionp timeout-callback))
-      (should-error (funcall timeout-callback))
-      (should (zerop (hash-table-count gptel-auto-experiment--grade-state))))))
+       (should (functionp timeout-callback))
+       (should-error (funcall timeout-callback))
+       (should (zerop (hash-table-count gptel-auto-experiment--grade-state))))))
+
+(ert-deftest regression/auto-experiment/grade-includes-worktree-diff-evidence ()
+  "Grader input should include concrete git evidence from the experiment worktree."
+  (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment-use-subagents t)
+        captured-output
+        result)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (&rest _args) :fake-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'file-directory-p)
+               (lambda (_path) t))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (cmd &optional _timeout)
+                 (cond
+                  ((string-match-p "status --short -- .*gptel-tools-agent\\.el" cmd)
+                   (cons " M lisp/modules/gptel-tools-agent.el\n" 0))
+                  ((string-match-p "diff --unified=2 -- .*gptel-tools-agent\\.el" cmd)
+                   (cons (concat "diff --git a/lisp/modules/gptel-tools-agent.el"
+                                 " b/lisp/modules/gptel-tools-agent.el\n"
+                                 "@@ -10,1 +10,2 @@\n"
+                                 "-(old-call)\n"
+                                 "+(new-call)\n"
+                                 "+(guarded-call)\n")
+                         0))
+                  (t (cons "" 0)))))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (output _expected _forbidden cb &optional _timeout)
+                 (setq captured-output output)
+                 (funcall cb '(:score 9 :total 9 :passed t :details "ok"))))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-grade
+         "HYPOTHESIS: tighten nil guards"
+         (lambda (grade)
+           (setq result grade))
+         "lisp/modules/gptel-tools-agent.el"
+         "/tmp/worktree"))
+      (should result)
+      (should (string-match-p "WORKTREE EVIDENCE:" captured-output))
+      (should (string-match-p "M lisp/modules/gptel-tools-agent.el" captured-output))
+      (should (string-match-p "+(guarded-call)" captured-output)))))
 
 (ert-deftest regression/auto-experiment/api-errors-do-not-touch-loop-state ()
   "API failures should not try to mutate outer loop state from a callback."
@@ -183,7 +228,7 @@ EXIT-CODE defaults to 1."
                    (lambda (cb &rest _args)
                      (funcall cb "Error: executor task failed with throttling")))
                   ((symbol-function 'gptel-auto-experiment-grade)
-                   (lambda (_output cb)
+                   (lambda (_output cb &rest _args)
                      (funcall cb '(:score 0 :total 9 :passed nil :details "rate-limited"))))
                   ((symbol-function 'gptel-auto-experiment--categorize-error)
                    (lambda (_output)
@@ -242,7 +287,7 @@ EXIT-CODE defaults to 1."
                                    :default-directory default-directory))
                        (funcall cb "Error: executor task failed with throttling")))
                     ((symbol-function 'gptel-auto-experiment-grade)
-                     (lambda (_output cb)
+                     (lambda (_output cb &rest _args)
                        (setq grade-context
                              (list :buffer (current-buffer)
                                    :default-directory default-directory))
@@ -337,7 +382,7 @@ EXIT-CODE defaults to 1."
                        (setq captured-args args)
                        (funcall cb "Error: executor task failed with throttling")))
                     ((symbol-function 'gptel-auto-experiment-grade)
-                     (lambda (_output cb)
+                     (lambda (_output cb &rest _args)
                        (funcall cb '(:score 0 :total 9 :passed nil :details "rate-limited"))))
                     ((symbol-function 'gptel-auto-experiment--categorize-error)
                      (lambda (_output)
@@ -397,7 +442,7 @@ EXIT-CODE defaults to 1."
                        (push args runagent-calls)
                        (funcall cb "HYPOTHESIS: fix validation path")))
                     ((symbol-function 'gptel-auto-experiment-grade)
-                     (lambda (_output cb)
+                     (lambda (_output cb &rest _args)
                        (funcall cb '(:score 9 :total 9 :passed t :details "ok"))))
                     ((symbol-function 'gptel-auto-experiment-benchmark)
                      (lambda (&optional _full)
@@ -431,9 +476,26 @@ EXIT-CODE defaults to 1."
                            "Retry: fix validation error in lisp/modules/gptel-tools-agent.el"
                            "retry:Dangerous pattern:prompt"
                            nil nil nil))))
-      (when (buffer-live-p worktree-buf)
-        (kill-buffer worktree-buf))
-      (delete-directory project-root t))))
+       (when (buffer-live-p worktree-buf)
+         (kill-buffer worktree-buf))
+       (delete-directory project-root t))))
+
+(ert-deftest regression/auto-experiment/build-prompt-requires-concrete-executor-evidence ()
+  "Experiment prompt should require structured change evidence in the final reply."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+             (lambda (_target) "/tmp/worktree"))
+            ((symbol-function 'shell-command-to-string)
+             (lambda (_cmd) "abc123 recent history"))
+            ((symbol-function 'gptel-auto-experiment--eight-keys-scores)
+             (lambda () nil)))
+    (let ((prompt (gptel-auto-experiment-build-prompt
+                   "lisp/modules/gptel-tools-agent.el" 2 5 nil 0.4)))
+      (should (string-match-p "FINAL RESPONSE must include:" prompt))
+      (should (string-match-p "CHANGED:" prompt))
+      (should (string-match-p "EVIDENCE:" prompt))
+      (should (string-match-p "VERIFY:" prompt))
+      (should (string-match-p "COMMIT:" prompt))
+      (should (string-match-p "NEVER reply with only \"Done\"" prompt)))))
 
 (ert-deftest regression/auto-experiment/executor-timeout-owned-by-subagent-wrapper ()
   "Experiment runner should not install a second wall-clock timeout around executor dispatch."
@@ -835,7 +897,7 @@ EXIT-CODE defaults to 1."
                                       "HYPOTHESIS: initial validation fix"
                                     "HYPOTHESIS: retry path preserves full result"))))
                       ((symbol-function 'gptel-auto-experiment-grade)
-                       (lambda (_output cb)
+                       (lambda (_output cb &rest _args)
                          (cl-incf grade-call-count)
                          (funcall cb
                                   (if (= grade-call-count 1)
@@ -955,7 +1017,7 @@ EXIT-CODE defaults to 1."
                    (lambda (cb &rest _args)
                      (funcall cb "executor output")))
                   ((symbol-function 'gptel-auto-experiment-grade)
-                   (lambda (_output cb)
+                   (lambda (_output cb &rest _args)
                      (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
                   ((symbol-function 'gptel-auto-experiment-benchmark)
                    (lambda (&rest _args)
@@ -1016,7 +1078,7 @@ EXIT-CODE defaults to 1."
                    (lambda (cb &rest _args)
                      (funcall cb "executor output")))
                   ((symbol-function 'gptel-auto-experiment-grade)
-                   (lambda (_output cb)
+                   (lambda (_output cb &rest _args)
                      (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
                   ((symbol-function 'gptel-auto-experiment-benchmark)
                    (lambda (&rest _args)
@@ -1084,7 +1146,7 @@ EXIT-CODE defaults to 1."
                    (lambda (cb &rest _args)
                      (funcall cb "executor output")))
                   ((symbol-function 'gptel-auto-experiment-grade)
-                   (lambda (_output cb)
+                   (lambda (_output cb &rest _args)
                      (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
                   ((symbol-function 'gptel-auto-experiment-benchmark)
                    (lambda (&rest _args)
@@ -1153,7 +1215,7 @@ EXIT-CODE defaults to 1."
                    (lambda (cb &rest _args)
                      (funcall cb "executor output")))
                   ((symbol-function 'gptel-auto-experiment-grade)
-                   (lambda (_output cb)
+                   (lambda (_output cb &rest _args)
                      (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
                   ((symbol-function 'gptel-auto-experiment-benchmark)
                    (lambda (&rest _args)
@@ -3725,6 +3787,19 @@ Submodules are hydrated later during verification, not during merge prep."
       (insert-file-contents file)
       (goto-char (point-min))
       (should (re-search-forward "^model: minimax-m2\\.7-highspeed$" nil t)))))
+
+(ert-deftest regression/auto-workflow/executor-agent-requires-structured-summary ()
+  "Executor agent should require concrete evidence instead of bare completion text."
+  (let ((file (expand-file-name "assistant/agents/executor.md"
+                                (gptel-auto-workflow--project-root))))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (should (re-search-forward "CHANGED:" nil t))
+      (should (re-search-forward "EVIDENCE:" nil t))
+      (should (re-search-forward "VERIFY:" nil t))
+      (should (re-search-forward "COMMIT:" nil t))
+      (should (re-search-forward "Never output only \"Done\"" nil t)))))
 
 (ert-deftest regression/auto-workflow/push-staging-uses-force-with-lease-when-remote-exists ()
   "Staging push should use force-with-lease against the current remote head."
