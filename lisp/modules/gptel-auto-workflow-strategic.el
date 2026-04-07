@@ -321,6 +321,9 @@ Logs when fallback to regex parsing is used."
   "Parse JSON from RESPONSE to extract targets.
 Returns nil if parsing fails or no targets found.
 Logs parsing failures for debugging."
+  (unless (and (stringp response) (not (string-empty-p response)))
+    (message "[auto-workflow] Empty response in parse-json-targets")
+    (return-from gptel-auto-workflow--parse-json-targets nil))
   (condition-case err
       (with-temp-buffer
         (insert response)
@@ -358,6 +361,9 @@ Logs parsing failures for debugging."
 (defun gptel-auto-workflow--parse-regex-targets (response proj-root max-targets)
   "Parse RESPONSE using regex fallback to extract targets.
 Returns list of validated file paths."
+  (unless (and (stringp response) (not (string-empty-p response)))
+    (message "[auto-workflow] Empty response in parse-regex-targets")
+    (return-from gptel-auto-workflow--parse-regex-targets nil))
   (with-temp-buffer
     (insert response)
     (goto-char (point-min))
