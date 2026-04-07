@@ -1975,7 +1975,18 @@ Returns worktree path or nil on failure."
                 (format "git worktree add --force %s %s" worktree-q branch-q)
                 180)))
           (unless (= 0 (cdr add-result))
-            (error "git worktree add failed: %s" (car add-result))))
+            (let ((output (car add-result)))
+              (if (string-match-p "is already checked out" output)
+                  (progn
+                    (message "[auto-workflow] Staging checked out in main worktree, switching to main first")
+                    (gptel-auto-workflow--git-cmd "git checkout main" 60)
+                    (setq add-result
+                          (gptel-auto-workflow--git-result
+                           (format "git worktree add --force %s %s" worktree-q branch-q)
+                           180))
+                    (unless (= 0 (cdr add-result))
+                      (error "git worktree add failed after checkout: %s" (car add-result))))
+                (error "git worktree add failed: %s" output)))))
         (setq gptel-auto-workflow--staging-worktree-dir worktree-dir)
         (message "[auto-workflow] Created staging worktree: %s" worktree-dir)
         worktree-dir))))
