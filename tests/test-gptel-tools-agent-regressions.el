@@ -2078,6 +2078,46 @@ EXIT-CODE defaults to 1."
                            "2026-04-07T180427Z-bbf1"))))
       (delete-file tmp-file))))
 
+(ert-deftest regression/auto-workflow/review-changes-accepts-markdown-approved-output ()
+  "Review parsing should accept the real reviewer markdown approval shape."
+  (let ((gptel-auto-workflow-require-review t)
+        (gptel-auto-experiment-use-subagents t)
+        review-result)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () test-auto-workflow--repo-root))
+              ((symbol-function 'shell-command-to-string)
+               (lambda (&rest _) "diff --git a/file b/file"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional _timeout)
+                 (funcall callback
+                          "Reviewer result for task: Review changes before merge | ## APPROVED | No blockers, critical bugs, or security issues found.")))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (gptel-auto-workflow--review-changes
+       "optimize/test-branch"
+       (lambda (result) (setq review-result result)))
+      (should (car review-result))
+      (should (string-match-p "APPROVED" (cdr review-result))))))
+
+(ert-deftest regression/auto-workflow/review-changes-keeps-blocked-output-blocked ()
+  "Review parsing should still reject explicit blocked results."
+  (let ((gptel-auto-workflow-require-review t)
+        (gptel-auto-experiment-use-subagents t)
+        review-result)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () test-auto-workflow--repo-root))
+              ((symbol-function 'shell-command-to-string)
+               (lambda (&rest _) "diff --git a/file b/file"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional _timeout)
+                 (funcall callback
+                          "Reviewer result for task: Review changes before merge | ## BLOCKED: runtime error risk | Issue details.")))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (gptel-auto-workflow--review-changes
+       "optimize/test-branch"
+       (lambda (result) (setq review-result result)))
+      (should-not (car review-result))
+      (should (string-match-p "BLOCKED" (cdr review-result))))))
+
 (ert-deftest regression/auto-workflow/cleanup-preserves-queued-phase ()
   "Cleanup should not overwrite queued/run phases while a cron job is active."
   (let ((gptel-auto-workflow--running nil)
@@ -2665,6 +2705,7 @@ EXIT-CODE defaults to 1."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (calls-file (expand-file-name "status-calls.txt" status-dir))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
          (fake-emacs
@@ -2679,12 +2720,19 @@ EXIT-CODE defaults to 1."
         (progn
           (with-temp-file fake-emacsclient
             (insert "#!/usr/bin/env python3\n"
-                    "import sys, time\n"
+                    "import pathlib, sys, time\n"
                     "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    (format "calls_path = pathlib.Path(%S)\n" calls-file)
                     "if expr == 't':\n"
                     "    print('t')\n"
-                    "elif 'gptel-auto-workflow--cron-job-running' in expr:\n"
-                    "    time.sleep(3)\n"
+                    "elif 'gptel-auto-workflow-status' in expr:\n"
+                    "    count = int(calls_path.read_text() or '0') if calls_path.exists() else 0\n"
+                    "    count += 1\n"
+                    "    calls_path.write_text(str(count))\n"
+                    "    if count == 1:\n"
+                    "        print('nil')\n"
+                    "    else:\n"
+                    "        time.sleep(3)\n"
                     "else:\n"
                     "    print('nil')\n"
                     "raise SystemExit(0)\n"))
@@ -2695,6 +2743,58 @@ EXIT-CODE defaults to 1."
             (insert "(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-07/results.tsv\")\n"))
           (let ((output (shell-command-to-string (format "%s status" script))))
             (should (string-match-p ":running t" output))
+            (should (string-match-p ":phase \"running\"" output)))
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running t" (buffer-string)))
+            (should (string-match-p ":phase \"running\"" (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-status-keeps-running-on-active-status-fallback ()
+  "Wrapper status should preserve an active snapshot when the fallback probe succeeds."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (calls-file (expand-file-name "status-calls.txt" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "import pathlib, sys\n"
+                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    (format "calls_path = pathlib.Path(%S)\n" calls-file)
+                    "if expr == 't':\n"
+                    "    print('t')\n"
+                    "elif 'gptel-auto-workflow-status' in expr:\n"
+                    "    count = int(calls_path.read_text() or '0') if calls_path.exists() else 0\n"
+                    "    count += 1\n"
+                    "    calls_path.write_text(str(count))\n"
+                    "    if count == 1:\n"
+                    "        print('nil')\n"
+                    "    else:\n"
+                    "        print('(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-07/results.tsv\")')\n"
+                    "else:\n"
+                    "    print('nil')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-07/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
+            (should (string-match-p ":kept 1" output))
             (should (string-match-p ":phase \"running\"" output)))
           (with-temp-buffer
             (insert-file-contents status-file)

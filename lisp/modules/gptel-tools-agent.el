@@ -2616,12 +2616,31 @@ Maximum response: 1000 characters."
            review-prompt
            (lambda (result)
              (let* ((response (if (stringp result) result (format "%S" result)))
-                    (approved (string-match-p "^APPROVED" response)))
+                    (approved (gptel-auto-workflow--review-approved-p response)))
                (message "[auto-workflow] Review %s: %s"
                         (if approved "PASSED" "BLOCKED")
                         (my/gptel--sanitize-for-logging response 100))
                (funcall callback (cons approved response)))))
         (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
+
+(defun gptel-auto-workflow--review-approved-p (response)
+  "Return non-nil when RESPONSE explicitly approves a staging review."
+  (let* ((normalized (replace-regexp-in-string "|" "\n" response))
+         (approved (string-match
+                    (rx (or line-start "\n")
+                        (* blank)
+                        (? (+ "#") (* blank))
+                        "APPROVED" word-end)
+                    normalized))
+         (blocked (string-match
+                   (rx (or line-start "\n")
+                       (* blank)
+                       (? (+ "#") (* blank))
+                       "BLOCKED" word-end)
+                   normalized)))
+    (and approved
+         (or (not blocked)
+             (< approved blocked)))))
 
 (defun gptel-auto-workflow--fix-review-issues (optimize-branch review-output callback)
   "Try to fix issues found in review for OPTIMIZE-BRANCH.
