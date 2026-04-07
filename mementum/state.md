@@ -1,8 +1,8 @@
 # Mementum State
 
-> Last session: 2026-04-07 12:30
+> Last session: 2026-04-07 14:25
 
-## Total Improvements: 209+ Real Code Fixes (2 new today)
+## Total Improvements: 211+ Real Code Fixes (4 new today)
 
 ### Session Summary: 2026-04-07 (Restore Missing Grading Features)
 
@@ -16,6 +16,11 @@
 - **939928cf** - fix: use separate server names for researcher vs auto-workflow
 - **07138248** - 💡 daemon-server-name-conflict pattern
 
+**Auto-Workflow Results (today):**
+- 8 experiments kept (nil guards, duplicate removal, path validation)
+- Merged staging fixes to main
+- Synced main and staging branches
+
 **Root Cause:**
 - Commit `1ff9e8b6` (prevent executor scope creep) removed 491 lines
 - This accidentally deleted two regression-tested features from `574da21f` and `4d891ea2`
@@ -25,12 +30,14 @@
 1. **Grading Evidence** (`574da21f`): `gptel-auto-experiment--build-grading-output` augments grader with git diff from worktree
 2. **Launch Error Handling** (`4d891ea2`): `condition-case` wrapper catches synchronous launch errors with proper cleanup
 3. **Daemon Conflict**: Separate server names prevent "already running" errors when researcher/auto-workflow run concurrently
+4. **Staging Sync**: Merged 2 nil guard fixes from staging, synced branches
 
 **Key Insight:**
 - Large refactors (491 lines removed) can silently delete features
 - Regression tests catch this but only if they run after the refactor
 - Cherry-pick with conflict resolution risk: conflict markers can introduce parse errors
 - Multiple cron jobs need unique server names to avoid daemon conflicts
+- Staging branch accumulates experiment results, needs periodic sync with main
 
 **Tag:** `v2026.04.07`
 
