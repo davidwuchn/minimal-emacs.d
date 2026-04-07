@@ -191,8 +191,10 @@ Creates a history entry with timestamp and summary."
 
 (defun gptel-benchmark--extract-scores (r)
   "Extract scores plist from result entry R.
-Handles both (run . scores) cons cells and plists with :scores key."
+Handles both (run . scores) cons cells and plists with :scores key.
+Returns nil for nil or malformed input."
   (cond
+   ((null r) nil)
    ((and (consp r) (listp (cdr r))) (cdr r))
    ((listp r) (plist-get r :scores))
    (t nil)))
@@ -223,23 +225,6 @@ Handles nil scores by treating them as 0."
                     (alist-get type scores-alist))))))
 
 (defun gptel-benchmark--extract-score-types (scores)
-  "Extract all score types from SCORES as an alist.
-Returns alist of (score-type . value) for all four score types.
-Handles nil values gracefully."
-  (when scores
-    (list (cons :overall-score (plist-get scores :overall-score))
-          (cons :efficiency-score (plist-get scores :efficiency-score))
-          (cons :completion-score (plist-get scores :completion-score))
-          (cons :constraint-score (plist-get scores :constraint-score)))))
-
-(defun gptel-benchmark--calculate-average (score-totals score-type total)
-  "Calculate average for SCORE-TYPE from SCORE-TOTALS given TOTAL count.
-Returns 0.0 if TOTAL is zero to avoid division by zero."
-  (if (> total 0)
-      (/ (alist-get score-type score-totals) (float total))
-    0.0))
-
-(defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist.
 Returns alist of (score-type . value) for the four standard scores.
 Handles nil values gracefully by returning 0.0 for missing scores."
@@ -260,6 +245,13 @@ Returns 0.0 if TOTAL is zero to avoid division by zero."
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores.
 Returns plist with :total-tests, :passed-tests, and average scores."
+  (when (null results)
+    (list :total-tests 0
+          :passed-tests 0
+          :avg-overall 0.0
+          :avg-efficiency 0.0
+          :avg-completion 0.0
+          :avg-constraints 0.0))
   (let ((total 0)
         (passed 0)
         (score-totals '((:overall-score . 0.0)
