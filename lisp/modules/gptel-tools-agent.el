@@ -4093,6 +4093,11 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
           "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|curl failed with exit code 28\\|operation timed out"
           error-output))))
 
+(defun gptel-auto-experiment--hard-timeout-p (error-output)
+  "Return non-nil when ERROR-OUTPUT reports a hard wall-clock timeout."
+  (and (stringp error-output)
+       (string-match-p "timed out after [0-9]+s total runtime" error-output)))
+
 (defun gptel-auto-experiment--quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows provider quota exhaustion."
   (and (stringp agent-output)
@@ -4109,27 +4114,32 @@ RETRY-COUNT tracks current retry attempt."
         (retry-buffer (current-buffer)))
     (gptel-auto-experiment-run
      target experiment-id max-experiments baseline baseline-code-quality previous-results
-       (lambda (result)
-          (let* ((agent-output (plist-get result :agent-output))
-                 (raw-error (or (plist-get result :error)
-                                (and (gptel-auto-experiment--agent-error-p agent-output)
-                                     agent-output)))
-                 (error-type (plist-get result :comparator-reason))
-                 (quota-exhausted
-                  (or gptel-auto-experiment--quota-exhausted
-                      (gptel-auto-experiment--quota-exhausted-p agent-output)))
-                 (retryable-category
-                  (or (memq error-type '(:api-rate-limit :timeout))
-                      (member error-type '(":api-rate-limit" ":timeout"))))
-                 (retryable-failure
-                  (or retryable-category
-                      (and raw-error
-                           (gptel-auto-experiment--is-retryable-error-p raw-error)))))
-            (when quota-exhausted
-              (setq gptel-auto-experiment--quota-exhausted t))
-            (if (and (not quota-exhausted)
-                     (< retries gptel-auto-experiment-max-retries)
-                     retryable-failure)
+        (lambda (result)
+           (let* ((agent-output (plist-get result :agent-output))
+                  (raw-error (or (plist-get result :error)
+                                 (and (gptel-auto-experiment--agent-error-p agent-output)
+                                      agent-output)))
+                  (error-type (plist-get result :comparator-reason))
+                  (hard-timeout
+                   (gptel-auto-experiment--hard-timeout-p raw-error))
+                  (quota-exhausted
+                   (or gptel-auto-experiment--quota-exhausted
+                       (gptel-auto-experiment--quota-exhausted-p agent-output)))
+                  (retryable-category
+                   (or (memq error-type '(:api-rate-limit))
+                       (member error-type '(":api-rate-limit" ":timeout"))))
+                  (retryable-failure
+                   (or (and (not hard-timeout)
+                            (memq error-type '(:timeout)))
+                       retryable-category
+                       (and raw-error
+                            (not hard-timeout)
+                            (gptel-auto-experiment--is-retryable-error-p raw-error)))))
+             (when quota-exhausted
+               (setq gptel-auto-experiment--quota-exhausted t))
+             (if (and (not quota-exhausted)
+                      (< retries gptel-auto-experiment-max-retries)
+                      retryable-failure)
                 (progn
                   (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
                            experiment-id (1+ retries) gptel-auto-experiment-max-retries
@@ -4140,14 +4150,17 @@ RETRY-COUNT tracks current retry attempt."
                                      workflow-root
                                      (lambda ()
                                        (gptel-auto-experiment--run-with-retry
-                                        target experiment-id max-experiments baseline baseline-code-quality
-                                        previous-results callback (1+ retries)))
-                                     retry-buffer
-                                     workflow-root))))
-              (when quota-exhausted
-                (message "[auto-exp] Quota exhausted during experiment %d; skipping retries"
-                         experiment-id))
-              (funcall callback result)))))))
+                                         target experiment-id max-experiments baseline baseline-code-quality
+                                         previous-results callback (1+ retries)))
+                                      retry-buffer
+                                      workflow-root))))
+               (when hard-timeout
+                 (message "[auto-exp] Hard executor timeout during experiment %d; skipping retries"
+                          experiment-id))
+               (when quota-exhausted
+                 (message "[auto-exp] Quota exhausted during experiment %d; skipping retries"
+                          experiment-id))
+               (funcall callback result)))))))
 (defun gptel-auto-experiment--categorize-error (agent-output)
   "Categorize error from AGENT-OUTPUT and return (CATEGORY . DETAILS).
 Categories: :api-rate-limit :api-error :tool-error :timeout :grader-failed :unknown

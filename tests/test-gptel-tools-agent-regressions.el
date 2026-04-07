@@ -931,6 +931,35 @@ EXIT-CODE defaults to 1."
        (should gptel-auto-experiment--quota-exhausted)
        (should (string-match-p "usage limit exceeded" (plist-get final-result :agent-output))))))
 
+(ert-deftest regression/auto-experiment/run-with-retry-skips-hard-runtime-timeout-retries ()
+  "Retry helper should not reschedule hard total-runtime timeout failures."
+  (let ((runs 0)
+        (scheduled-retry nil)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+                 (cl-incf runs)
+                 (funcall callback
+                          (list :agent-output
+                                "Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s total runtime."
+                                :comparator-reason :timeout))))
+              ((symbol-function 'run-with-timer)
+               (lambda (&rest _args)
+                 (setq scheduled-retry t)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 1))
+      (should-not scheduled-retry)
+      (should (string-match-p "900s total runtime"
+                              (plist-get final-result :agent-output))))))
+
 (ert-deftest regression/auto-experiment/retry-success-preserves-full-result-shape ()
   "Successful validation retries should keep the normal result/logging shape."
   (dolist (case '((:keep nil
