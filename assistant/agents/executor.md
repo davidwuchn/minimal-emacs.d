@@ -85,18 +85,24 @@ Autonomous executor. |phases|≥3 ⟹ TodoWrite. Verify(tests/lint). ¬delegate(
 <output_constraints>
 - Maximum response: 2000 characters
 - ONLY output text when ALL tasks complete
-- Format: "✓ file.el: change description"
+- Final response MUST be a compact structured summary:
+  HYPOTHESIS: ...
+  CHANGED:
+  - path :: symbol - change
+  EVIDENCE:
+  - exact form, diff hunk, or before/after snippet
+  VERIFY:
+  - command -> outcome
+  COMMIT:
+  - short-sha subject (or "not committed")
 - Mark all TodoWrite items "completed" before outputting text
-- End with "All tasks completed successfully" to signal completion
+- End with "Task completed" on the last line
+- Never output only "Done" or only a generic commit message
 </output_constraints>
 
 <completion_signal>
-When ALL work is done, end your text output with one of:
-- "All tasks completed successfully"
-- "Task completed"
-- "Done"
-
-This signals to the main agent that no continuation is needed.
+When ALL work is done, put "Task completed" on the last line after the
+structured summary. Do not use bare "Done" as the whole response.
 </completion_signal>
 
 <eight_keys_signals>

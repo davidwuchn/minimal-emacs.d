@@ -1855,8 +1855,9 @@ Call this before any git operation that might modify branches."
 
 (defun gptel-auto-workflow--staging-main-ref ()
   "Return the safe main ref staging and experiments should mirror.
-Prefer local `main' only when it matches `origin/main'. Otherwise use
-`origin/main' so unpublished local commits do not leak into workflow branches."
+Prefer local `main' when it matches `origin/main' or is clean and ahead-only.
+Otherwise use `origin/main' so dirty or divergent local commits do not leak
+into workflow branches."
   (let ((default-directory (gptel-auto-workflow--default-dir)))
     (let* ((main-result (gptel-auto-workflow--git-result
                          "git rev-parse --verify main"
@@ -1867,16 +1868,37 @@ Prefer local `main' only when it matches `origin/main'. Otherwise use
            (have-main (= 0 (cdr main-result)))
            (have-origin (= 0 (cdr origin-result)))
            (main-hash (and have-main (string-trim (car main-result))))
-           (origin-hash (and have-origin (string-trim (car origin-result)))))
-      (cond
-       ((and have-main have-origin)
-        (if (string= main-hash origin-hash)
-            "main"
-          (message "[auto-workflow] Local main differs from origin/main; using origin/main as workflow base")
-          "origin/main"))
-       (have-origin
-        "origin/main")
-       (have-main
+            (origin-hash (and have-origin (string-trim (car origin-result)))))
+       (cond
+        ((and have-main have-origin)
+         (cond
+          ((string= main-hash origin-hash)
+           "main")
+          (t
+           (let* ((status-result (gptel-auto-workflow--git-result
+                                  "git status --porcelain"
+                                  60))
+                  (clean-main (and (= 0 (cdr status-result))
+                                   (string-empty-p (string-trim (car status-result)))))
+                  (divergence-result (gptel-auto-workflow--git-result
+                                      "git rev-list --left-right --count origin/main...main"
+                                      60))
+                  (divergence (and (= 0 (cdr divergence-result))
+                                   (split-string (string-trim (car divergence-result)) "\t")))
+                  (origin-only (car-safe divergence))
+                  (local-only (cadr divergence)))
+             (if (and clean-main
+                      (equal origin-only "0")
+                      local-only
+                      (not (equal local-only "0")))
+                 (progn
+                   (message "[auto-workflow] Local main is clean and ahead of origin/main; using main as workflow base")
+                   "main")
+               (message "[auto-workflow] Local main differs from origin/main; using origin/main as workflow base")
+               "origin/main")))))
+        (have-origin
+         "origin/main")
+        (have-main
         "main")
        (t
         (message "[auto-workflow] Missing main ref for staging sync")
@@ -2793,91 +2815,115 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                     :analyzer-patterns ""
                     :agent-output review-output))
             (funcall finish nil))
-        (let ((merge-success
-               (gptel-auto-workflow--merge-to-staging optimize-branch)))
-          (if (not merge-success)
+        ;; Check for scope creep before merging
+        (let* ((scope-check (gptel-auto-experiment--check-scope))
+               (scope-ok (car scope-check))
+               (changed-files (cdr scope-check)))
+          (if (not scope-ok)
               (progn
-                (message "[auto-workflow] ✗ Merge to staging failed, aborting")
+                (message "[auto-workflow] ✗ Scope creep BLOCKED merge: %d files (max: %d)"
+                         (length changed-files) gptel-auto-experiment-max-changed-files)
                 (gptel-auto-experiment-log-tsv
                  (format-time-string "%Y-%m-%d")
-                 (list :target "staging-merge"
+                 (list :target "staging-scope"
                        :id 0
-                       :hypothesis "Staging merge"
+                       :hypothesis "Staging scope check"
                        :score-before 0
                        :score-after 0
                        :kept nil
                        :duration 0
                        :grader-quality 0
-                       :grader-reason "staging-merge-failed"
-                        :comparator-reason
-                        (format "Failed to merge %s to staging" optimize-branch)
-                        :analyzer-patterns ""
-                        :agent-output ""))
+                       :grader-reason "scope-creep-blocked"
+                       :comparator-reason
+                       (format "Too many files: %s" (mapconcat #'identity changed-files ", "))
+                       :analyzer-patterns ""
+                       :agent-output ""))
                 (funcall finish nil))
-            (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
-                                (gptel-auto-workflow--create-staging-worktree))))
-              (if (not worktree)
+            (let ((merge-success
+                   (gptel-auto-workflow--merge-to-staging optimize-branch)))
+              (if (not merge-success)
                   (progn
-                    (message "[auto-workflow] ✗ Failed to create staging worktree")
+                    (message "[auto-workflow] ✗ Merge to staging failed, aborting")
                     (gptel-auto-experiment-log-tsv
                      (format-time-string "%Y-%m-%d")
-                     (list :target "staging-worktree"
+                     (list :target "staging-merge"
                            :id 0
-                           :hypothesis "Staging worktree"
+                           :hypothesis "Staging merge"
                            :score-before 0
                            :score-after 0
                            :kept nil
                            :duration 0
                            :grader-quality 0
-                            :grader-reason "staging-worktree-failed"
-                            :comparator-reason "Failed to create staging worktree"
+                           :grader-reason "staging-merge-failed"
+                            :comparator-reason
+                            (format "Failed to merge %s to staging" optimize-branch)
                             :analyzer-patterns ""
                             :agent-output ""))
                     (funcall finish nil))
-                (let* ((verification (gptel-auto-workflow--verify-staging))
-                       (tests-passed (car verification))
-                       (output (or (cdr verification) "")))
-                  (if (not tests-passed)
+                (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
+                                    (gptel-auto-workflow--create-staging-worktree))))
+                  (if (not worktree)
                       (progn
-                        (message "[auto-workflow] ✗ Staging verification FAILED")
+                        (message "[auto-workflow] ✗ Failed to create staging worktree")
                         (gptel-auto-experiment-log-tsv
                          (format-time-string "%Y-%m-%d")
-                         (list :target "staging-verification"
+                         (list :target "staging-worktree"
                                :id 0
-                               :hypothesis "Staging verification"
+                               :hypothesis "Staging worktree"
                                :score-before 0
                                :score-after 0
                                :kept nil
                                :duration 0
                                :grader-quality 0
-                               :grader-reason "staging-verification-failed"
-                                :comparator-reason
-                                (truncate-string-to-width output 200)
+                                :grader-reason "staging-worktree-failed"
+                                :comparator-reason "Failed to create staging worktree"
                                 :analyzer-patterns ""
-                                :agent-output output))
+                                :agent-output ""))
                         (funcall finish nil))
-                    (message "[auto-workflow] ✓ Staging verification PASSED")
-                    (if (gptel-auto-workflow--push-staging)
-                        (progn
-                          (gptel-auto-workflow--delete-staging-worktree)
-                          (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")
-                          (funcall finish t))
-                      (message "[auto-workflow] ✗ Staging push FAILED")
-                      (gptel-auto-experiment-log-tsv
-                       (format-time-string "%Y-%m-%d")
-                       (list :target "staging-push"
-                             :id 0
-                             :hypothesis "Staging push"
-                             :score-before 0
-                             :score-after 0
-                             :kept nil
-                             :duration 0
-                             :grader-quality 0
-                              :grader-reason "staging-push-failed"
-                              :comparator-reason "Failed to push staging"
-                              :analyzer-patterns ""
-                              :agent-output output))
-                      (funcall finish nil))))))))))))
+                    (let* ((verification (gptel-auto-workflow--verify-staging))
+                           (tests-passed (car verification))
+                           (output (or (cdr verification) "")))
+                      (if (not tests-passed)
+                          (progn
+                            (message "[auto-workflow] ✗ Staging verification FAILED")
+                            (gptel-auto-experiment-log-tsv
+                             (format-time-string "%Y-%m-%d")
+                             (list :target "staging-verification"
+                                   :id 0
+                                   :hypothesis "Staging verification"
+                                   :score-before 0
+                                   :score-after 0
+                                   :kept nil
+                                   :duration 0
+                                   :grader-quality 0
+                                   :grader-reason "staging-verification-failed"
+                                    :comparator-reason
+                                    (truncate-string-to-width output 200)
+                                    :analyzer-patterns ""
+                                    :agent-output output))
+                            (funcall finish nil))
+                        (message "[auto-workflow] ✓ Staging verification PASSED")
+                        (if (gptel-auto-workflow--push-staging)
+                            (progn
+                              (gptel-auto-workflow--delete-staging-worktree)
+                              (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")
+                              (funcall finish t))
+                          (message "[auto-workflow] ✗ Staging push FAILED")
+                          (gptel-auto-experiment-log-tsv
+                           (format-time-string "%Y-%m-%d")
+                           (list :target "staging-push"
+                                 :id 0
+                                 :hypothesis "Staging push"
+                                 :score-before 0
+                                 :score-after 0
+                                 :kept nil
+                                 :duration 0
+                                 :grader-quality 0
+                                  :grader-reason "staging-push-failed"
+                                  :comparator-reason "Failed to push staging"
+                                  :analyzer-patterns ""
+                                  :agent-output output))
+                          (funcall finish nil))))))))))))))
 
 
 ;;; Multi-Project Support
@@ -2984,6 +3030,37 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
           (message "[auto-experiment] ✓ Tests passed"))
         result))))
 
+(defcustom gptel-auto-experiment-require-tests t
+  "When non-nil, require tests to pass before merging experiment to staging.
+This catches bugs that the grader might miss (e.g., CL idioms that don't work in ELisp).
+Set to nil to disable (only for emergency situations)."
+  :type 'boolean
+  :group 'gptel-auto-workflow)
+
+(defcustom gptel-auto-experiment-max-changed-files 3
+  "Maximum number of files an experiment can change.
+Prevents scope creep where executor touches many unrelated files.
+Set to 0 to disable the check."
+  :type 'integer
+  :group 'gptel-auto-workflow)
+
+(defun gptel-auto-experiment--check-scope ()
+  "Return (ok-p . changed-files) for current experiment.
+Checks that the number of changed files is within limits."
+  (let* ((worktree (gptel-auto-workflow--worktree-or-project-dir))
+         (changed-files (shell-command-to-string
+                         (format "cd %s && git diff --name-only HEAD~1 2>/dev/null"
+                                 (shell-quote-argument worktree))))
+         (files (split-string changed-files "\n" t))
+         (count (length files)))
+    (if (and (> gptel-auto-experiment-max-changed-files 0)
+             (> count gptel-auto-experiment-max-changed-files))
+        (progn
+          (message "[auto-exp] ⚠ Scope creep detected: %d files changed (max: %d)"
+                   count gptel-auto-experiment-max-changed-files)
+          (cons nil files))
+      (cons t files))))
+
 (defun gptel-auto-experiment-benchmark (&optional skip-tests)
   "Run syntax validation + Eight Keys scoring.
 If SKIP-TESTS is non-nil, skip test execution (tests run in staging flow).
@@ -2992,13 +3069,20 @@ Returns plist with :passed, :tests-passed, :eight-keys, etc.
 NOTE: Nucleus script validation is skipped for experiments because:
 1. verify-nucleus.sh uses script location ($DIR), not worktree context
 2. Executor already runs verification in worktree context
-3. Full validation happens in staging flow"
-  (let* ((start (float-time))
-         (default-directory (gptel-auto-workflow--worktree-or-project-dir))
-         (target-file (when gptel-auto-workflow--current-target
-                        (expand-file-name gptel-auto-workflow--current-target default-directory)))
-         (validation-error (when target-file
-                             (gptel-auto-experiment--validate-code target-file))))
+3. Full validation happens in staging flow
+
+IMPORTANT: When `gptel-auto-experiment-require-tests' is non-nil (default),
+tests are run BEFORE the experiment is considered passed, even if skip-tests
+is t. This catches bugs like using CL idioms (multiple-value-bind) that don't
+work correctly in Emacs Lisp."
+(let* ((start (float-time))
+          (default-directory (gptel-auto-workflow--worktree-or-project-dir))
+          (target-file (when gptel-auto-workflow--current-target
+                         (expand-file-name gptel-auto-workflow--current-target default-directory)))
+          (validation-error (when target-file
+                              (gptel-auto-experiment--validate-code target-file)))
+          (should-run-tests (or (not skip-tests)
+                                gptel-auto-experiment-require-tests)))
     (if validation-error
         (progn
           (message "[auto-exp] ✗ Validation failed: %s"
@@ -3006,16 +3090,37 @@ NOTE: Nucleus script validation is skipped for experiments because:
           (list :passed nil
                 :validation-error validation-error
                 :time (- (float-time) start)))
-      (let* ((tests-result (when (not skip-tests)
+      (let* ((tests-result (when should-run-tests
                              (gptel-auto-experiment-run-tests)))
-             (tests-passed (or skip-tests (car tests-result)))
+             (tests-output (when tests-result (cdr tests-result)))
+             (tests-baseline
+              (when (and should-run-tests
+                         tests-result
+                         (not (car tests-result))
+                         tests-output)
+                (gptel-auto-workflow--staging-tests-match-main-baseline-p
+                 tests-output)))
+             (tests-passed (if should-run-tests
+                               (or (and tests-result (car tests-result))
+                                   (car tests-baseline))
+                             t))
              (scores (gptel-auto-experiment--eight-keys-scores)))
+        (when (and tests-baseline
+                   (car tests-baseline))
+          (message "[auto-exp] %s" (cdr tests-baseline)))
+        (when (and skip-tests gptel-auto-experiment-require-tests)
+          (message "[auto-exp] Tests required before staging merge: %s"
+                   (if tests-passed "PASS" "FAIL")))
         (list :passed tests-passed
               :nucleus-passed t
               :nucleus-skipped t
               :tests-passed tests-passed
-              :tests-output (when tests-result (cdr tests-result))
-              :tests-skipped skip-tests
+              :tests-output (cond
+                             ((and tests-output tests-baseline)
+                              (concat tests-output "\n\n" (cdr tests-baseline)))
+                             (tests-output)
+                             (tests-baseline (cdr tests-baseline)))
+              :tests-skipped (not should-run-tests)
               :time (- (float-time) start)
               :eight-keys (when scores (alist-get 'overall scores))
               :eight-keys-scores scores)))))
@@ -3099,6 +3204,12 @@ Values are plist: (:done :timer).")
 
 (defvar gptel-auto-experiment--grade-counter 0
   "Counter for generating unique grade IDs.")
+
+(defvar gptel-auto-experiment--grading-target nil
+  "Dynamically bound target file for the current grade request.")
+
+(defvar gptel-auto-experiment--grading-worktree nil
+  "Dynamically bound experiment worktree for the current grade request.")
 
 (defvar gptel-auto-experiment-grade-timeout 120
   "Timeout in seconds for grading subagent.
@@ -3205,12 +3316,56 @@ stored timeout timer before invoking CALLBACK."
         (remhash grade-id gptel-auto-experiment--grade-state))
       t)))
 
-(defun gptel-auto-experiment-grade (output callback)
+(defun gptel-auto-experiment--build-grading-output (output &optional target worktree)
+  "Augment OUTPUT with concrete worktree evidence for grading.
+When TARGET and WORKTREE are available, include git status and a diff excerpt
+so the grader can inspect the actual edit instead of relying only on the
+executor's prose summary."
+  (let* ((base-output (if (stringp output) output (format "%s" output)))
+         (resolved-target (or target gptel-auto-experiment--grading-target))
+         (resolved-worktree (or worktree gptel-auto-experiment--grading-worktree)))
+    (if (or (not (gptel-auto-workflow--non-empty-string-p resolved-target))
+            (not (gptel-auto-workflow--non-empty-string-p resolved-worktree))
+            (not (file-directory-p resolved-worktree)))
+        base-output
+      (let* ((default-directory resolved-worktree)
+             (target-q (shell-quote-argument resolved-target))
+             (status-result
+              (gptel-auto-workflow--git-result
+               (format "git status --short -- %s" target-q) 30))
+             (diff-result
+              (gptel-auto-workflow--git-result
+               (format "git diff --unified=2 -- %s" target-q) 30))
+             (status-output (string-trim (car status-result)))
+             (diff-output (string-trim (car diff-result)))
+             (status-text
+              (if (and (= (cdr status-result) 0)
+                       (not (string-empty-p status-output)))
+                  status-output
+                "No pending git status for target"))
+             (diff-text
+              (cond
+               ((/= (cdr diff-result) 0)
+                (format "git diff failed: %s"
+                        (my/gptel--sanitize-for-logging (car diff-result) 200)))
+               ((string-empty-p diff-output)
+                "No diff captured for target")
+               ((> (length diff-output) 3000)
+                (concat (substring diff-output 0 3000) "\n...[truncated]"))
+               (t diff-output))))
+        (format "%s\n\nWORKTREE EVIDENCE:\n- Target: %s\n- Git status:\n%s\n- Diff excerpt:\n%s"
+                base-output
+                resolved-target
+                status-text
+                diff-text)))))
+
+(defun gptel-auto-experiment-grade (output callback &optional target worktree)
   "Grade experiment OUTPUT. LLM decides quality threshold.
 Timeout fails the grade (conservative).
 If OUTPUT is an error message, fails immediately with error details.
 Uses hash table keyed by grade-id to support parallel execution.
-The grader subagent overlay will appear in the current buffer at time of call."
+The grader subagent overlay will appear in the current buffer at time of call.
+TARGET and WORKTREE let the grader inspect concrete git evidence."
   (let ((grade-id (cl-incf gptel-auto-experiment--grade-counter))
         (grade-buffer (current-buffer)))
     (cl-block gptel-auto-experiment-grade
@@ -3245,7 +3400,7 @@ The grader subagent overlay will appear in the current buffer at time of call."
           ;; Ensure grader runs in the captured buffer context so overlay appears in right place
           (with-current-buffer grade-buffer
             (gptel-benchmark-grade
-             output
+             (gptel-auto-experiment--build-grading-output output target worktree)
              '("change clearly described"
                "change is minimal and focused"
                "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
@@ -3405,10 +3560,18 @@ Make minimal, targeted changes to CODE, not documentation.
 5. Implement the CODE change minimally using Edit tool
 6. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
 7. COMMIT your changes: git add -A && git commit -m \"message\"
+8. FINAL RESPONSE must include:
+   - CHANGED: exact file path(s) and function/variable names touched
+   - EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit
+   - VERIFY: exact command(s) run and whether they passed or failed
+   - COMMIT: short SHA and subject, or \"not committed\"
+9. End the final response with: Task completed
+10. NEVER reply with only \"Done\", only a commit message, or a vague success claim
 
 CRITICAL: Your response MUST start with HYPOTHESIS: on the first line.
 DO NOT add comments, docstrings, or documentation.
 DO make actual code changes that improve functionality.
+DO include concrete evidence of what changed so the grader can inspect it.
 
 Example HYPOTHESES:
 - HYPOTHESIS: Adding validation for nil input in process-item will prevent runtime errors
@@ -3746,9 +3909,11 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                              (my/gptel--sanitize-for-logging agent-output 150))
                     (when timeout-timer (cancel-timer timeout-timer))
                     (unless finished
-                      (gptel-auto-experiment-grade
-                       agent-output
-                       (lambda (grade)
+                      (let ((gptel-auto-experiment--grading-target target)
+                            (gptel-auto-experiment--grading-worktree experiment-worktree))
+                        (gptel-auto-experiment-grade
+                         agent-output
+                         (lambda (grade)
                          (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
                           (let* ((grade-score (plist-get grade :score))
                                  (grade-total (plist-get grade :total))
@@ -3760,7 +3925,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                      (when (and agent-output (> (length agent-output) 0))
                        (message "[auto-exp] Agent preview: %s"
                                 (my/gptel--sanitize-for-logging agent-output 100)))
-                     ;; Check if grader passed
+                      ;; Check if grader passed
                      (if (not grade-passed)
                          ;; Grader failed - categorize the error
                          (let* ((error-info (gptel-auto-experiment--categorize-error agent-output))
@@ -3888,13 +4053,15 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                 (my/gptel--run-agent-tool-with-timeout
                                  experiment-timeout
                                  (lambda (retry-output)
+                                    (let ((gptel-auto-experiment--grading-target target)
+                                          (gptel-auto-experiment--grading-worktree experiment-worktree))
                                       (gptel-auto-experiment-grade
                                        retry-output
                                        (lambda (retry-grade)
                                          (if (plist-get retry-grade :passed)
                                              (let ((retry-bench (gptel-auto-experiment-benchmark t)))
                                                (if (plist-get retry-bench :passed)
-                                                   (let* ((retry-score (plist-get retry-bench :eight-keys))
+                                                    (let* ((retry-score (plist-get retry-bench :eight-keys))
                                                           (retry-quality
                                                            (or (gptel-auto-experiment--code-quality-score) 0.5))
                                                           (retry-hypothesis
@@ -3973,11 +4140,11 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                            (funcall callback
                                                     (list :target target
                                                           :id experiment-id
-                                                          :kept nil))))))
+                                                          :kept nil)))))))
                                     "executor"
                                     (format "Retry: fix validation error in %s" target)
                                     (gptel-auto-experiment--make-retry-prompt
-                                     target validation-error executor-prompt)))
+                                      target validation-error executor-prompt)))
                             (let ((default-directory experiment-worktree))
                               (setq finished t)
                               (magit-git-success "checkout" "--" ".")
@@ -4004,7 +4171,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                 (gptel-auto-experiment-log-tsv
                                  (format-time-string "%Y-%m-%d") exp-result)
                                 (funcall callback exp-result))))))
-))))))))
+)))))))))
                    "executor"
                    (format "Experiment %d: optimize %s" experiment-id target)
                    executor-prompt

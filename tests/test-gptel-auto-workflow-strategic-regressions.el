@@ -7,6 +7,72 @@
 
 (require 'gptel-auto-workflow-strategic)
 
+(ert-deftest regression/auto-workflow-strategic/parse-targets-keeps-analyzer-quota-separate-from-executor-quota ()
+  "Analyzer quota errors should not trip the executor quota flag."
+  (let ((gptel-auto-experiment--quota-exhausted nil)
+        (gptel-auto-workflow--analyzer-transient-failure nil)
+        (gptel-auto-workflow--analyzer-quota-exhausted nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (should-not
+       (gptel-auto-workflow--parse-targets
+        "Error: Task analyzer could not finish task. Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"))
+      (should gptel-auto-workflow--analyzer-quota-exhausted)
+      (should-not gptel-auto-workflow--analyzer-transient-failure)
+      (should-not gptel-auto-experiment--quota-exhausted))))
+
+(ert-deftest regression/auto-workflow-strategic/select-targets-falls-back-on-analyzer-transient-failure ()
+  "Transient analyzer failures should use static targets."
+  (let ((gptel-auto-workflow-strategic-selection t)
+        (gptel-auto-workflow-targets '("ignored.el"))
+        (selected nil)
+        (messages nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--filter-valid-targets)
+               (lambda (&rest _args) '("lisp/modules/static-target.el")))
+              ((symbol-function 'gptel-auto-workflow--ask-analyzer-for-targets)
+               (lambda (callback)
+                 (setq gptel-auto-workflow--analyzer-transient-failure t)
+                 (funcall callback nil)))
+              ((symbol-function 'message)
+               (lambda (format-string &rest args)
+                 (push (apply #'format format-string args) messages))))
+      (gptel-auto-workflow-select-targets
+       (lambda (targets)
+         (setq selected targets)))
+      (should (equal selected '("lisp/modules/static-target.el")))
+      (should (member "[auto-workflow] Analyzer transient failure; using static targets"
+                      messages)))))
+
+(ert-deftest regression/auto-workflow-strategic/select-targets-falls-back-on-analyzer-quota ()
+  "Analyzer quota exhaustion should use static targets without tripping executor quota."
+  (let ((gptel-auto-workflow-strategic-selection t)
+        (gptel-auto-workflow-targets '("ignored.el"))
+        (gptel-auto-experiment--quota-exhausted nil)
+        (selected nil)
+        (messages nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--filter-valid-targets)
+               (lambda (&rest _args) '("lisp/modules/static-target.el")))
+              ((symbol-function 'gptel-auto-workflow--ask-analyzer-for-targets)
+               (lambda (callback)
+                 (setq gptel-auto-workflow--analyzer-quota-exhausted t)
+                 (funcall callback nil)))
+              ((symbol-function 'message)
+               (lambda (format-string &rest args)
+                 (push (apply #'format format-string args) messages))))
+      (gptel-auto-workflow-select-targets
+       (lambda (targets)
+         (setq selected targets)))
+      (should (equal selected '("lisp/modules/static-target.el")))
+      (should-not gptel-auto-experiment--quota-exhausted)
+      (should (member "[auto-workflow] Analyzer quota exhausted; using static targets"
+                      messages)))))
+
 (ert-deftest regression/auto-workflow-strategic/filter-valid-targets-rejects-nested-repos ()
   "Nested git repos should not be selected by the root workflow."
   (let* ((proj-root (make-temp-file "aw-strategic" t))
