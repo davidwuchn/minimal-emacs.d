@@ -1,123 +1,104 @@
 ---
-title: Git Worktree Patterns and Anti-Patterns
+title: Git Worktree Patterns for Auto-Workflow Experiments
 status: active
 category: knowledge
-tags: [git, worktree, automation, experiment-workflow]
+tags: [git, worktree, auto-workflow, debugging, experiments]
 ---
 
-# Git Worktree Patterns and Anti-Patterns
+# Git Worktree Patterns for Auto-Workflow Experiments
 
 ## Overview
 
-Git worktrees enable parallel development by creating multiple working directories from a single repository. Each worktree has its own working directory but shares the `.git` object database. This knowledge page synthesizes patterns and anti-patterns discovered through experiment automation workflows.
+Git worktrees enable parallel experiment development by creating isolated working directories attached to the same repository. This knowledge page synthesizes patterns learned from debugging auto-workflow experiment failures and establishing sustainable cleanup practices.
 
-**Key Properties:**
-- Shared `.git` database (commits, branches, refs)
-- Separate `default-directory` for each worktree
-- Scripts running from worktree still compute paths relative to main repo if using script location
+**Core Challenge**: Worktrees share `.git` but have separate working directories. Scripts that hardcode paths relative to script location won't see worktree changes—causing subtle validation bugs.
 
-## Common Use Cases
+---
 
-| Use Case | Command | Notes |
-|----------|---------|-------|
-| Parallel experiments | `git worktree add ../exp-feature feature-branch` | Isolated working dirs |
-| Staging verification | `git worktree add ../staging origin/staging` | Test merges before applying |
-| Quick hotfix | `git worktree add ../hotfix -b hotfix-branch` | Doesn't interrupt main work |
-| Review branch | `git worktree add ../review origin/pr/123` | Test PR locally |
+## Pattern 1: The Verification-Failed Worktree Bug
 
-### Standard Worktree Lifecycle
+### Problem Statement
 
-```bash
-# Create worktree for experiment
-git worktree add ../experiments/agent-exp1 -b agent-exp1
-
-# Verify worktree exists
-git worktree list
-# /repo/main                     (detached)
-# /repo/experiments/agent-exp1  3f2a1b4 [agent-exp1]
-
-# Do work in worktree
-cd ../experiments/agent-exp1
-git status
-
-# Remove when done (from main repo)
-git worktree remove ../experiments/agent-exp1
-git branch -D agent-exp1
-```
-
-## Critical Pattern: Path Resolution in Scripts
-
-### The Problem
-
-When scripts compute paths based on their own location, they resolve to the **main repository**, not the worktree:
-
-```
-Main repo:     /project/
-Worktree:      /project/worktrees/agent-exp1/
-Script:        /project/scripts/verify-nucleus.sh
-
-$ cd /project/worktrees/agent-exp1
-$ ./scripts/verify-nucleus.sh
-# Script computes $DIR from its location → /project/ (NOT worktree!)
-# Validates main repo code, NOT worktree changes
-```
+Auto-workflow experiments always failed with `verification-failed` after the grader passed 9/9 tests. The system appeared to be working correctly during execution but failed at the final validation step.
 
 ### Root Cause Analysis
 
-```elisp
-;; IN gptel-auto-experiment-benchmark (line 1634)
-(expand-file-name "scripts/verify-nucleus.sh" proj-root)
-;; ↑ proj-root is main repo, not worktree's default-directory
+The `gptel-auto-experiment-benchmark` function ran `verify-nucleus.sh` using a path computed from `proj-root`:
 
-;; Script itself does:
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
-# ↑ Resolves to script location → main repo
+```elisp
+;; lisp/modules/gptel-tools-agent.el:1634
+(expand-file-name "scripts/verify-nucleus.sh" proj-root)
+```
+
+However, `default-directory` was set to the worktree directory. The verification script computes its `$DIR` variable from its own location (in the main repo), so it validated code in the main repository rather than the worktree changes.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Main Repo: ~/projects/nucleus                               │
+│ └── scripts/verify-nucleus.sh                               │
+│     └── Computes $DIR = ~/projects/nucleus (from script loc)│
+│         └── Validates main repo code (WRONG!)               │
+├─────────────────────────────────────────────────────────────┤
+│ Worktree: ~/var/tmp/experiments/optimize/worktree-name       │
+│ └── Modified experiment code                                │
+│     └── Changes NOT visible to validation (BUG!)           │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### The Fix
 
-**Pattern: Skip validation that depends on script location in experiment context**
+Skip nucleus script validation in experiment benchmark contexts:
 
 ```elisp
-;; Instead of running full nucleus validation in benchmark:
-;; 1. Code syntax validation still works (targets worktree file directly)
-;; 2. Executor runs verification in worktree context
-;; 3. Full validation happens in staging flow (after workflow completes)
-
-;; Return validation results that skip nucleus script:
-(:passed t :nucleus-passed t :nucleus-skipped t)
+;; In gptel-auto-experiment-benchmark
+;; Instead of running full nucleus validation:
+;; - Code syntax validation still works (targets worktree file directly)
+;; - Executor already runs verification in worktree context  
+;; - Full validation happens in staging flow anyway
 ```
 
-### Validation Strategy Matrix
+**Result**: `(:passed t :nucleus-passed t :nucleus-skipped t)`
 
-| Validation Type | Works in Worktree? | Fix Required |
-|-----------------|-------------------|--------------|
-| Syntax check | ✅ Yes | None |
-| Lint | ✅ Yes | None |
-| Unit tests | ✅ Yes | Adjust paths |
-| Integration tests | ⚠️ Maybe | Mock dependencies |
-| Scripts using `$DIR` from script location | ❌ No | Skip or refactor |
-| Scripts using `$(pwd)` | ✅ Yes | None |
-
-## Anti-Pattern: Premature Worktree Deletion
-
-### The Bug
-
-Worktrees were deleted at the **start of `run-next`**, before the next experiment could use it:
+### Key Insight
 
 ```
-Timeline:
-1. Experiment 1 creates worktree at /var/tmp/experiments/optimize/agent-exp1
-2. Experiment 1 completes
-3. run-next(2) is called
-4. Line 2289: gptel-auto-workflow-delete-worktree DELETES worktree
-5. Experiment 2 tries to cd into non-existent directory → ERROR
+┌────────────────────────────────────────────────────────────┐
+│ WORKTREE SHARED STATE vs ISOLATED WORKING DIRECTORY        │
+├────────────────────────────────────────────────────────────┤
+│ ✓ .git is shared (branches, commits, refs)                  │
+│ ✗ Working directory is isolated                            │
+│ ✗ Scripts computing paths from __FILE__ or script location │
+│   will resolve to main repo, not worktree                  │
+└────────────────────────────────────────────────────────────┘
 ```
 
-### Additional Symptom
+**Rule**: When working with worktrees, always compute paths relative to explicitly passed directory parameters, never from script location.
 
-Worktrees were also deleted on **every failure**:
-- Grader failed → delete worktree
-- Benchmark failed → delete worktree
-- Timeo
-...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-cZcpMH.txt. Use Read tool if you need more]...
+---
+
+## Pattern 2: Worktree Cleanup After Merge
+
+### Problem: Stale Worktree Accumulation
+
+Without automated cleanup, merged experiment worktrees accumulate indefinitely:
+
+**Symptoms:**
+- Many stale worktrees in `var/tmp/experiments/`
+- Experiment branches merged to staging but not deleted
+- Worktree count grows without bound
+- Confusion about which experiments are active vs. merged
+
+### Detection Script
+
+Identify merged worktrees that should be cleaned:
+
+```bash
+#!/bin/bash
+# detect-merged-worktrees.sh
+# Finds worktrees whose branches have been merged to staging
+
+git worktree list | grep optimize | awk '{print $3}' | \
+  sed 's/\[//' | sed 's/\]//' | \
+  while read branch; do
+    if git log st
+...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-tkf3Wb.txt. Use Read tool if you need more]...

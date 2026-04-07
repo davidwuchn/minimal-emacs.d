@@ -1,117 +1,107 @@
 ---
-title: Timeout Handling in Emacs and Curl
+title: Timeout Handling in Emacs
 status: active
 category: knowledge
-tags: [emacs, curl, timeout, subprocess, process-management, elisp, debugging]
+tags: [emacs, timeout, process, curl, gptel, debugging, performance]
 ---
 
-# Timeout Handling in Emacs and Curl
+# Timeout Handling in Emacs
 
 ## Overview
 
-Timeout handling is critical for reliable automation systems. This page synthesizes three real incidents involving timeout mechanisms across curl HTTP requests and Emacs subprocess management. Understanding the distinction between different timeout types—and their interactions—is essential for building robust systems.
+Timeout handling is critical for reliable automation workflows. These patterns address three distinct timeout scenarios: curl network timeouts, timer-based execution budgets, and shell subprocess blocking. Each requires different strategies because Emacs has multiple timeout mechanisms with different blocking characteristics.
 
 ## Curl Timeout Mechanisms
 
-Curl provides **three independent timeout mechanisms**. Misunderstanding their interactions leads to false positives and unexplained failures.
+Curl provides three independent timeout mechanisms. Understanding their interaction is essential for debugging exit code 28 errors.
 
-### The Three Timeout Types
+### Timeout Types
 
-| Flag | Purpose | Scope | Independent? |
-|------|---------|-------|--------------|
-| `--connect-timeout` | TCP connection phase only | Connection | Yes |
-| `--max-time` | Total operation time | Entire request | Yes |
-| `-y` / `-Y` | Low-speed detection | Entire request | **Yes** |
+| Mechanism | Flag | Purpose | Blocking Behavior |
+|-----------|------|---------|-------------------|
+| Connection timeout | `--connect-timeout N` | DNS + TCP handshake | Aborts during connection phase only |
+| Maximum time | `--max-time N` | Total operation duration | Hard cap on entire request |
+| Low-speed detection | `-y N -Y B` | Detect stalled connections | Independent of `--max-time`! |
 
-**Critical insight:** Low-speed detection (`-y`/`-Y`) operates completely independently of `--max-time`. Setting a generous `--max-time` does not disable or override low-speed detection.
+### The Low-Speed Trap
 
-### Low-Speed Detection Explained
+**Exit code 28** means "Operation timeout" but can occur even with generous `--max-time` settings if low-speed detection triggers first.
 
 ```bash
-# These are INDEPENDENT - both apply simultaneously
-curl --max-time 600 -y 15 -Y 50 https://api.example.com/completion
-
-# Explanation:
-# --max-time 600 : Allow 10 minutes total
-# -y 15         : Abort if below threshold for 15 consecutive seconds
-# -Y 50         : Threshold is 50 bytes/second
+# These flags are INDEPENDENT - low-speed can fire before max-time
+curl -y 15 -Y 50 --max-time 600 https://api.example.com
+#           ↑    ↑         ↑
+#    15 sec   50 B/s   10 min total
+#           threshold
 ```
 
-**Exit code 28** means "operation timeout" but can be triggered by **either** `--max-time` expiration **or** low-speed detection—making debugging difficult without knowing which mechanism fired.
+**How it works:** Curl tracks bytes/second. If average throughput drops below the threshold for the specified duration, curl aborts regardless of remaining `--max-time`.
 
-### The Problem: Global Args Appended to Backend Args
+### Why This Breaks LLM Calls
 
-In gptel configurations, curl arguments are composed as:
-
-```
-gptel-curl-extra-args (global) + backend-specific args
-```
+LLM APIs often "think" before streaming output. A 20-second thinking phase with no bytes sent triggers `-y 15 -Y 50` even though the total operation would complete within `--max-time 600`.
 
 ```elisp
-;; Global args (user config)
-(defcustom gptel-curl-extra-args '("-y" "15" "-Y" "50"))
-
-;; Backend args (per-provider)
-:curl-args '("--http1.1" "--max-time" "900")
-;;                            ^-- Backend max-time
+;; PROBLEM: Global curl args appended to backend args
+;; gptel-curl-extra-args: "-y 15 -Y 50"  ← Added to every request
+;; Backend args: "--max-time 900"         ← Cannot override -y/-Y
+;; Result: Timeout after 15 seconds of silence, not 900 seconds
 ```
 
-The combined curl command becomes:
-```bash
-curl -y 15 -Y 50 --http1.1 --max-time 900 ...
-#        ^-- Global (unwanted)    ^-- Backend (intended)
-```
-
-**Result:** Backend `--max-time 900` does not disable global `-y/-Y`. If the LLM "thinks" for 16 seconds without streaming output, curl aborts with exit 28.
-
-### The Fix
-
-Remove low-speed detection from global args for long-running API calls:
+### Correct Configuration
 
 ```elisp
-;; BAD: Causes false positives for async APIs
-(defcustom gptel-curl-extra-args '("-y" "15" "-Y" "50"))
+;; REMOVE low-speed detection for long-running API calls
+(setq gptel-curl-extra-args '())  ; Or specific non-timeout args
 
-;; GOOD: Let backend handle timeouts
-(defcustom gptel-curl-extra-args '())
+;; For backend-specific timeouts, use only --max-time
+:curl-args '("--http1.1" "--max-time" "120" "--connect-timeout" "10")
 ```
 
-## Emacs Timer-Based Timeouts
+## The Blocking Bug: accept-process-output with t
 
-### The Naive Implementation (Broken)
+### Root Cause
+
+When a shell command hangs without producing output, `accept-process-output` with `t` as the last argument blocks indefinitely:
 
 ```elisp
-(defun broken-timeout-handler ()
-  "This implementation BLOCKS and fails."
-  (let ((timeout-seconds 30)
-        (done nil))
-    (while (and (not done)
-                (< (float-time (time-since start-time)) timeout-seconds))
-      ;; BLOCKING CALL - problem source
-      (accept-process-output process 0.1 nil t)  ; 't' = block indefinitely
-      )))
+;; DANGEROUS: This can hang forever
+(while (and (not done)
+            (< (float-time (time-since start)) timeout-seconds))
+  (accept-process-output process 0.1 nil t))  ; ← BLOCKING
+;; If process hangs silently, we never reach the while condition check
 ```
 
 **Why it fails:**
-- `accept-process-output` with `t` as the last argument means "block until output or process exit"
-- If the subprocess hangs without producing output, `accept-process-output` blocks forever
-- The timeout check in the `while` loop is never reached
-- Emacs becomes completely unresponsive
+- `t` as final arg = "block until output or process exit"
+- No output = block forever
+- While loop never continues to check timeout condition
+- Emacs daemon becomes completely unresponsive
 
-### The Robust Implementation (Correct)
+### Demonstration
 
 ```elisp
-(defun gptel-auto-workflow--shell-command-with-timeout (command timeout-seconds)
-  "Execute COMMAND with TIMEOUT-SECONDS timeout.
-Returns (success . output) or (timeout . nil)."
-  (let* ((buffer (generate-new-buffer " *timeout-cmd*"))
-         (process nil)
-         (timer nil)
+;; This hangs Emacs indefinitely:
+(gptel-auto-workflow--shell-command-with-timeout "sleep 60" 5)
+;; Should timeout in 5 seconds but blocks forever
+```
+
+### The Perfect Fix Pattern
+
+```elisp
+(defun gptel-auto-workflow--shell-command-with-timeout
+    (command timeout-seconds &optional buffer-name)
+  "Execute COMMAND with TIMEOUT-SECONDS limit.
+Returns (finished . output) or (timeout . \"timeout message\")."
+  (let* ((buffer (or buffer-name (generate-new-buffer " *cmd-out*")))
          (done nil)
-         (start-time (current-time)))
-    
-    (unwind-protect
-        (progn
-          ;; Start the process
-   
-...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-NTc8Gn.txt. Use Read tool if you need more]...
+         (timer nil)
+         (start (current-time))
+         (process nil))
+
+    ;; SAFETY NET: Timer fires regardless of blocking state
+    (setq timer (run-with-timer timeout-seconds nil
+                                (lambda ()
+                                  (unless done
+                                    (set
+...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-f0Yqyc.txt. Use Read tool if you need more]...
