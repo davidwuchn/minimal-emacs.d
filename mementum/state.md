@@ -479,3 +479,26 @@ Don't reinvent the wheel. Use the daemon.
 
 **Verification:** ✅ Backend now shows "MiniMax" after daemon restart
 
+---
+
+### Fix: Instincts YAML Parsing (2026-04-07 21:15)
+
+**Problem:** `gptel-benchmark-instincts-weekly-job` failed with "Wrong type argument: stringp, nil"
+
+**Root Cause:**
+1. Multi-line YAML blocks (instincts:) weren't extracted properly
+2. Numeric evidence values failed `string-to-number`
+3. Dates like "2026-03-22" were incorrectly parsed
+
+**Fix:**
+1. Rewrote `gptel-benchmark-instincts--parse-frontmatter` to handle multi-line blocks
+2. Added type checking for evidence (handles both string and number)
+3. Separate regex patterns for floats vs dates
+
+**Test:**
+- ✅ `gptel-benchmark-instincts-commit-batch` works
+- ✅ `gptel-benchmark-instincts-weekly-job` works
+- ✅ Updated nucleus-patterns.md (vitality: φ 0.88→0.90, evidence 8→9)
+
+**Commit:** `b33db20a`
+
