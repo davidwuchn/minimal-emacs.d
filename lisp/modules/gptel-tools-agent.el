@@ -3443,6 +3443,12 @@ Values are plist: (:done :timer).")
 (defvar gptel-auto-experiment--grade-counter 0
   "Counter for generating unique grade IDs.")
 
+(defvar gptel-auto-experiment--grading-target nil
+  "Dynamically bound target file for the current grade request.")
+
+(defvar gptel-auto-experiment--grading-worktree nil
+  "Dynamically bound experiment worktree for the current grade request.")
+
 (defvar gptel-auto-experiment-grade-timeout 120
   "Timeout in seconds for grading subagent.
 Default 120s (2 min) allows grader to process complex outputs.")
@@ -3550,12 +3556,56 @@ stored timeout timer before invoking CALLBACK."
         (remhash grade-id gptel-auto-experiment--grade-state))
       t)))
 
-(defun gptel-auto-experiment-grade (output callback)
+(defun gptel-auto-experiment--build-grading-output (output &optional target worktree)
+  "Augment OUTPUT with concrete worktree evidence for grading.
+When TARGET and WORKTREE are available, include git status and a diff excerpt
+so the grader can inspect the actual edit instead of relying only on the
+executor's prose summary."
+  (let* ((base-output (if (stringp output) output (format "%s" output)))
+         (resolved-target (or target gptel-auto-experiment--grading-target))
+         (resolved-worktree (or worktree gptel-auto-experiment--grading-worktree)))
+    (if (or (not (gptel-auto-workflow--non-empty-string-p resolved-target))
+            (not (gptel-auto-workflow--non-empty-string-p resolved-worktree))
+            (not (file-directory-p resolved-worktree)))
+        base-output
+      (let* ((default-directory resolved-worktree)
+             (target-q (shell-quote-argument resolved-target))
+             (status-result
+              (gptel-auto-workflow--git-result
+               (format "git status --short -- %s" target-q) 30))
+             (diff-result
+              (gptel-auto-workflow--git-result
+               (format "git diff --unified=2 -- %s" target-q) 30))
+             (status-output (string-trim (car status-result)))
+             (diff-output (string-trim (car diff-result)))
+             (status-text
+              (if (and (= (cdr status-result) 0)
+                       (not (string-empty-p status-output)))
+                  status-output
+                "No pending git status for target"))
+             (diff-text
+              (cond
+               ((/= (cdr diff-result) 0)
+                (format "git diff failed: %s"
+                        (my/gptel--sanitize-for-logging (car diff-result) 200)))
+               ((string-empty-p diff-output)
+                "No diff captured for target")
+               ((> (length diff-output) 3000)
+                (concat (substring diff-output 0 3000) "\n...[truncated]"))
+               (t diff-output))))
+        (format "%s\n\nWORKTREE EVIDENCE:\n- Target: %s\n- Git status:\n%s\n- Diff excerpt:\n%s"
+                base-output
+                resolved-target
+                status-text
+                diff-text)))))
+
+(defun gptel-auto-experiment-grade (output callback &optional target worktree)
   "Grade experiment OUTPUT. LLM decides quality threshold.
 Timeout fails the grade (conservative).
 If OUTPUT is an error message, fails immediately with error details.
 Uses hash table keyed by grade-id to support parallel execution.
-The grader subagent overlay will appear in the current buffer at time of call."
+The grader subagent overlay will appear in the current buffer at time of call.
+TARGET and WORKTREE let the grader inspect concrete git evidence."
   (let ((grade-id (cl-incf gptel-auto-experiment--grade-counter))
         (grade-buffer (current-buffer)))
     (cl-block gptel-auto-experiment-grade
@@ -3590,7 +3640,7 @@ The grader subagent overlay will appear in the current buffer at time of call."
           ;; Ensure grader runs in the captured buffer context so overlay appears in right place
           (with-current-buffer grade-buffer
             (gptel-benchmark-grade
-             output
+             (gptel-auto-experiment--build-grading-output output target worktree)
              '("change clearly described"
                "change is minimal and focused"
                "improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability"
@@ -3750,10 +3800,18 @@ Make minimal, targeted changes to CODE, not documentation.
 5. Implement the CODE change minimally using Edit tool
 6. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
 7. COMMIT your changes: git add -A && git commit -m \"message\"
+8. FINAL RESPONSE must include:
+   - CHANGED: exact file path(s) and function/variable names touched
+   - EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit
+   - VERIFY: exact command(s) run and whether they passed or failed
+   - COMMIT: short SHA and subject, or \"not committed\"
+9. End the final response with: Task completed
+10. NEVER reply with only \"Done\", only a commit message, or a vague success claim
 
 CRITICAL: Your response MUST start with HYPOTHESIS: on the first line.
 DO NOT add comments, docstrings, or documentation.
 DO make actual code changes that improve functionality.
+DO include concrete evidence of what changed so the grader can inspect it.
 
 Example HYPOTHESES:
 - HYPOTHESIS: Adding validation for nil input in process-item will prevent runtime errors
@@ -4074,9 +4132,11 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                     (message "[auto-exp] Agent output (first 150 chars): %s"
                              (my/gptel--sanitize-for-logging agent-output 150))
                     (unless finished
-                      (gptel-auto-experiment-grade
-                       agent-output
-                       (lambda (grade)
+                      (let ((gptel-auto-experiment--grading-target target)
+                            (gptel-auto-experiment--grading-worktree experiment-worktree))
+                        (gptel-auto-experiment-grade
+                         agent-output
+                         (lambda (grade)
                          (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
                           (let* ((grade-score (plist-get grade :score))
                                  (grade-total (plist-get grade :total))
@@ -4088,7 +4148,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                      (when (and agent-output (> (length agent-output) 0))
                        (message "[auto-exp] Agent preview: %s"
                                 (my/gptel--sanitize-for-logging agent-output 100)))
-                     ;; Check if grader passed
+                      ;; Check if grader passed
                      (if (not grade-passed)
                          ;; Grader failed - categorize the error
                          (let* ((error-info (gptel-auto-experiment--categorize-error agent-output))
@@ -4216,13 +4276,15 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                 (my/gptel--run-agent-tool-with-timeout
                                  experiment-timeout
                                  (lambda (retry-output)
+                                    (let ((gptel-auto-experiment--grading-target target)
+                                          (gptel-auto-experiment--grading-worktree experiment-worktree))
                                       (gptel-auto-experiment-grade
                                        retry-output
                                        (lambda (retry-grade)
                                          (if (plist-get retry-grade :passed)
                                              (let ((retry-bench (gptel-auto-experiment-benchmark t)))
                                                (if (plist-get retry-bench :passed)
-                                                   (let* ((retry-score (plist-get retry-bench :eight-keys))
+                                                    (let* ((retry-score (plist-get retry-bench :eight-keys))
                                                           (retry-quality
                                                            (or (gptel-auto-experiment--code-quality-score) 0.5))
                                                           (retry-hypothesis
@@ -4301,11 +4363,11 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                            (funcall callback
                                                     (list :target target
                                                           :id experiment-id
-                                                          :kept nil))))))
+                                                          :kept nil)))))))
                                     "executor"
                                     (format "Retry: fix validation error in %s" target)
                                     (gptel-auto-experiment--make-retry-prompt
-                                     target validation-error executor-prompt)))
+                                      target validation-error executor-prompt)))
                             (let ((default-directory experiment-worktree))
                               (setq finished t)
                               (magit-git-success "checkout" "--" ".")
@@ -4332,7 +4394,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                 (gptel-auto-experiment-log-tsv
                                  (gptel-auto-workflow--current-run-id) exp-result)
                                 (funcall callback exp-result))))))
-))))))))
+)))))))))
                    "executor"
                    (format "Experiment %d: optimize %s" experiment-id target)
                    executor-prompt
