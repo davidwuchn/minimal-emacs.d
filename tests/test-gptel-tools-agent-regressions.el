@@ -1483,6 +1483,37 @@ EXIT-CODE defaults to 1."
        (should-not outer-results)
        (should (= (hash-table-count my/gptel--agent-task-state) 0)))))
 
+(ert-deftest regression/auto-workflow/force-stop-clears-grade-timeouts ()
+  "Force-stop should clear pending grade timeouts so experiments cannot resume."
+  (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment-use-subagents t)
+        (gptel-auto-workflow--stats '(:phase "running"))
+        (gptel-auto-workflow--running t)
+        (gptel-auto-workflow--cron-job-running t)
+        timeout-callback
+        results)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (setq timeout-callback (lambda () (apply fn args)))
+                 :fake-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-auto-workflow--persist-status) (lambda (&rest _) nil))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-grade
+         "HYPOTHESIS: stop grade timeout leak"
+         (lambda (result)
+           (push result results))))
+      (should (= (hash-table-count gptel-auto-experiment--grade-state) 1))
+      (gptel-auto-workflow-force-stop)
+      (should (zerop (hash-table-count gptel-auto-experiment--grade-state)))
+      (funcall timeout-callback)
+      (should-not results))))
+
 (ert-deftest regression/auto-workflow/force-stop-aborts-active-subagent-buffers ()
   "Force-stop should abort the live routed subagent buffer before callbacks fire."
   (let ((captured-callback nil)

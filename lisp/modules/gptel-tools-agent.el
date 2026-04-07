@@ -3561,6 +3561,15 @@ Values are plist: (:done :timer).")
   "Timeout in seconds for grading subagent.
 Default 120s (2 min) allows grader to process complex outputs.")
 
+(defun gptel-auto-experiment--reset-grade-state ()
+  "Cancel and clear all pending grade callbacks."
+  (maphash
+   (lambda (_grade-id state)
+     (when (timerp (plist-get state :timer))
+       (cancel-timer (plist-get state :timer))))
+   gptel-auto-experiment--grade-state)
+  (clrhash gptel-auto-experiment--grade-state))
+
 (defun gptel-auto-experiment--invalid-cl-return-target-in-forms (forms &optional blocks)
   "Return the first invalid `cl-return-from' target in FORMS.
 BLOCKS is the list of block names currently in scope."
@@ -5002,6 +5011,7 @@ Prevents workflow from hanging indefinitely due to callback failures."
 Interactive command to recover from hung workflow state."
   (interactive)
   (my/gptel--reset-agent-task-state)
+  (gptel-auto-experiment--reset-grade-state)
   (setq gptel-auto-workflow--running nil
         gptel-auto-workflow--cron-job-running nil
         gptel-auto-workflow--run-project-root nil
@@ -5320,6 +5330,7 @@ Only removes worktrees if no gptel processes are running."
         (cleaned 0))
     (when proj-root
       (my/gptel--reset-agent-task-state)
+      (gptel-auto-experiment--reset-grade-state)
       (gptel-auto-workflow--cleanup-old-worktrees)
       (dolist (timer (copy-sequence timer-list))
         (when (timerp timer)
