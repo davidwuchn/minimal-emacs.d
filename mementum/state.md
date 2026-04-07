@@ -268,3 +268,29 @@ mementum/
 - **Tests:** 1253 total, 1179 passed, 74 skipped, 0 failed
 - **All ERT tests:** PASSING ✅
 - **Submodules:** All synced to latest commits ✅
+
+---
+
+### Fix: Mementum Synthesis Quality (2026-04-07)
+
+**Problem:** Mementum cron job created stub pages (19-25 lines) with no actual content.
+
+**Root Cause:** `gptel-mementum-synthesize-candidate` used placeholder text instead of extracting patterns.
+
+**Solution:**
+1. Call LLM executor to synthesize memories into actual content
+2. Require ≥50 lines before saving
+3. Validate generated content before human approval
+
+**New Functions:**
+- `gptel-mementum--build-synthesis-prompt`
+- `gptel-mementum--extract-content`
+- `gptel-mementum--handle-synthesis-result`
+- `gptel-mementum--save-knowledge-page`
+
+**Commit:** `89094a5f`
+
+**Next Cron Run:** Sunday 2026-04-12 04:00
+
+**Expected:** No more stub pages; all syntheses generate useful content.
+
