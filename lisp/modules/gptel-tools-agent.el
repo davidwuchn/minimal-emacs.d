@@ -2620,7 +2620,8 @@ Maximum response: 1000 characters."
                (message "[auto-workflow] Review %s: %s"
                         (if approved "PASSED" "BLOCKED")
                         (my/gptel--sanitize-for-logging response 100))
-               (funcall callback (cons approved response)))))
+               (funcall callback (cons approved response))))
+           my/gptel-agent-task-timeout)
         (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
 
 (defun gptel-auto-workflow--review-approved-p (response)
