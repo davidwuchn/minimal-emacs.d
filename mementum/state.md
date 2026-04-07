@@ -10,9 +10,11 @@
 
 **Result:** ✅ All 1257 tests passing, pushed v2026.04.07
 
-**Improvements (2 commits):**
+**Improvements (4 commits):**
 - **5ae65d0b** - fix: require concrete executor grading evidence
 - **2ef7a8e4** - fix: fail fast on synchronous subagent launch errors
+- **939928cf** - fix: use separate server names for researcher vs auto-workflow
+- **07138248** - 💡 daemon-server-name-conflict pattern
 
 **Root Cause:**
 - Commit `1ff9e8b6` (prevent executor scope creep) removed 491 lines
@@ -22,11 +24,13 @@
 **Fixes Applied:**
 1. **Grading Evidence** (`574da21f`): `gptel-auto-experiment--build-grading-output` augments grader with git diff from worktree
 2. **Launch Error Handling** (`4d891ea2`): `condition-case` wrapper catches synchronous launch errors with proper cleanup
+3. **Daemon Conflict**: Separate server names prevent "already running" errors when researcher/auto-workflow run concurrently
 
 **Key Insight:**
 - Large refactors (491 lines removed) can silently delete features
 - Regression tests catch this but only if they run after the refactor
 - Cherry-pick with conflict resolution risk: conflict markers can introduce parse errors
+- Multiple cron jobs need unique server names to avoid daemon conflicts
 
 **Tag:** `v2026.04.07`
 
