@@ -213,9 +213,12 @@ Returns updated targets list."
    (t
     (let ((abs-path (if (file-name-absolute-p file)
                         file
-                      (expand-file-name file proj-root))))
+                      (expand-file-name file proj-root)))
+          (root-prefix (if (string-suffix-p "/" proj-root)
+                          proj-root
+                        (concat proj-root "/"))))
       (if (and (file-exists-p abs-path)
-               (string-prefix-p proj-root abs-path)
+               (string-prefix-p root-prefix abs-path)
                (gptel-auto-workflow--target-in-root-repo-p abs-path proj-root))
            (let ((rel-path (file-relative-name abs-path proj-root)))
              (if (member rel-path targets)
