@@ -88,6 +88,95 @@ EXIT-CODE defaults to 1."
     (list :results (nreverse results)
           :remaining-state (hash-table-count gptel-auto-experiment--grade-state))))
 
+(defun test-auto-workflow--exercise-retry-accounting (retry-outcome)
+  "Exercise retry-accounting flow for RETRY-OUTCOME."
+  (let* ((worktree (make-temp-file "aw-retry-accounting" t))
+         (logged-results nil)
+         (callback-result nil)
+         (tool-call 0)
+         (grade-call 0)
+         (bench-call 0))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (lambda (&rest _) worktree))
+                  ((symbol-function 'gptel-auto-workflow--get-current-branch)
+                   (lambda (&rest _) "optimize/test"))
+                  ((symbol-function 'gptel-auto-workflow--branch-name)
+                   (lambda (&rest _) "optimize/test"))
+                  ((symbol-function 'gptel-auto-experiment--call-in-context)
+                   (lambda (_buffer _directory fn)
+                     (funcall fn)))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results callback)
+                     (funcall callback '(:patterns ("retry-pattern")))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _) "executor prompt"))
+                  ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                   (lambda (_timeout callback &rest _)
+                     (cl-incf tool-call)
+                     (funcall callback
+                              (if (= tool-call 1)
+                                  "HYPOTHESIS: initial hypothesis"
+                                "HYPOTHESIS: retry hypothesis"))))
+                  ((symbol-function 'gptel-auto-experiment-grade)
+                   (lambda (_output callback)
+                     (cl-incf grade-call)
+                     (pcase grade-call
+                       (1 (funcall callback '(:score 9 :total 9 :passed t :details "initial grade")))
+                       (2 (funcall callback
+                                   (if (eq retry-outcome 'retry-grade-failed)
+                                       '(:score 0 :total 9 :passed nil :details "retry grade failed")
+                                     '(:score 8 :total 9 :passed t :details "retry grade passed"))))
+                       (_ (error "Unexpected retry grade call %s" grade-call)))))
+                  ((symbol-function 'gptel-auto-experiment-benchmark)
+                   (lambda (&rest _)
+                     (cl-incf bench-call)
+                     (pcase bench-call
+                       (1 (list :passed nil
+                                :validation-error "Syntax error in /tmp/file.el: (end-of-file)"
+                                :tests-passed t
+                                :nucleus-passed t))
+                       (2 (pcase retry-outcome
+                            ('retry-validation-failed
+                             (list :passed nil
+                                   :validation-error "Syntax error in /tmp/file.el: (end-of-file)"
+                                   :tests-passed t
+                                   :nucleus-passed t))
+                            (_ (error "Unexpected second benchmark for %s" retry-outcome))))
+                       (_ (error "Unexpected benchmark call %s" bench-call)))))
+                  ((symbol-function 'gptel-auto-experiment--teachable-validation-error-p)
+                   (lambda (&rest _) t))
+                  ((symbol-function 'gptel-auto-experiment--make-retry-prompt)
+                   (lambda (&rest _) "retry prompt"))
+                  ((symbol-function 'gptel-auto-experiment--extract-hypothesis)
+                   (lambda (output)
+                     (if (string-match-p "retry hypothesis" output)
+                         "retry hypothesis"
+                       "initial hypothesis")))
+                  ((symbol-function 'gptel-auto-experiment-log-tsv)
+                   (lambda (_run-id exp-result)
+                     (push exp-result logged-results)))
+                  ((symbol-function 'gptel-auto-workflow--current-run-id)
+                   (lambda () "run-1234"))
+                  ((symbol-function 'magit-git-success)
+                   (lambda (&rest _) t))
+                  ((symbol-function 'gptel-auto-experiment-decide)
+                   (lambda (&rest _)
+                     (error "Retry failure path should not decide keep/discard")))
+                  ((symbol-function 'message)
+                   (lambda (&rest _) nil)))
+          (gptel-auto-experiment-run
+           "lisp/modules/gptel-tools-agent.el"
+           2 5 0.4 0.7 nil
+           (lambda (result)
+             (setq callback-result result)))
+          (list :callback-result callback-result
+                :logged-results (nreverse logged-results)
+                :tool-calls tool-call
+                :grade-calls grade-call
+                :bench-calls bench-call))
+      (delete-directory worktree t))))
+
 (ert-deftest regression/auto-experiment/grade-late-timeout-is-ignored ()
   "Successful grading should suppress any later timeout callback."
   (let* ((outcome (test-auto-workflow--exercise-grade-callback-order
@@ -3777,10 +3866,40 @@ Submodules are hydrated later during verification, not during merge prep."
               (should-not (equal status-file
                                  (expand-file-name "var/tmp/cron/auto-workflow-status.sexp"
                                                    proj-root)))
-              (should (equal captured-args '("unit")))
-              (should-not (file-exists-p status-file))))
+               (should (equal captured-args '("unit")))
+               (should-not (file-exists-p status-file))))
         (delete-directory proj-root t)
         (delete-directory worktree t)))))
+
+(ert-deftest regression/auto-experiment/retry-validation-failure-logs-result ()
+  "Retry validation failures should still be logged to results.tsv."
+  (let* ((outcome (test-auto-workflow--exercise-retry-accounting 'retry-validation-failed))
+         (logged-results (plist-get outcome :logged-results))
+         (result (car logged-results))
+         (callback-result (plist-get outcome :callback-result)))
+    (should (= (length logged-results) 1))
+    (should (equal callback-result result))
+    (should (equal (plist-get result :id) 2))
+    (should (equal (plist-get result :hypothesis) "retry hypothesis"))
+    (should (equal (plist-get result :comparator-reason)
+                   "Syntax error in /tmp/file.el: (end-of-file)"))
+    (should (equal (plist-get result :validation-error)
+                   "Syntax error in /tmp/file.el: (end-of-file)"))
+    (should (equal (plist-get result :retries) 1))))
+
+(ert-deftest regression/auto-experiment/retry-grade-failure-logs-result ()
+  "Retry grade failures should still be logged to results.tsv."
+  (let* ((outcome (test-auto-workflow--exercise-retry-accounting 'retry-grade-failed))
+         (logged-results (plist-get outcome :logged-results))
+         (result (car logged-results))
+         (callback-result (plist-get outcome :callback-result)))
+    (should (= (length logged-results) 1))
+    (should (equal callback-result result))
+    (should (equal (plist-get result :id) 2))
+    (should (equal (plist-get result :hypothesis) "retry hypothesis"))
+    (should (equal (plist-get result :grader-reason) "retry grade failed"))
+    (should (equal (plist-get result :comparator-reason) "retry-grade-failed"))
+    (should (equal (plist-get result :retries) 1))))
 
 (ert-deftest regression/auto-experiment/benchmark-allows-main-baseline-test-failures ()
   "Required experiment tests should allow failures already present on main."

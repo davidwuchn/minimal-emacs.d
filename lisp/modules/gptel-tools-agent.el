@@ -4411,18 +4411,59 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                                  (gptel-auto-workflow--current-run-id) exp-result)
                                                                 (funcall callback exp-result))))))))
                                                  (setq finished t)
-                                                 (message "[auto-experiment] ✗ Retry still failed validation")
-                                                 (funcall callback
+                                                  (message "[auto-experiment] ✗ Retry still failed validation")
+                                                  (let* ((retry-hypothesis
+                                                          (gptel-auto-experiment--extract-hypothesis retry-output))
+                                                         (retry-validation-error
+                                                          (plist-get retry-bench :validation-error))
+                                                         (retry-tests-passed
+                                                          (plist-get retry-bench :tests-passed))
+                                                         (reason
+                                                          (cond
+                                                           (retry-validation-error retry-validation-error)
+                                                           ((not (plist-get retry-bench :nucleus-passed))
+                                                            "nucleus-validation-failed")
+                                                           ((not retry-tests-passed)
+                                                            "tests-failed")
+                                                           (t "verification-failed")))
+                                                         (exp-result
                                                           (list :target target
                                                                 :id experiment-id
+                                                                :hypothesis retry-hypothesis
+                                                                :score-before baseline
+                                                                :score-after 0
                                                                 :kept nil
-                                                                :validation-error
-                                                                (plist-get retry-bench :validation-error)))))
-                                           (setq finished t)
-                                           (funcall callback
+                                                                :duration (- (float-time) start-time)
+                                                                :grader-quality (plist-get retry-grade :score)
+                                                                :grader-reason (plist-get retry-grade :details)
+                                                                :comparator-reason reason
+                                                                :analyzer-patterns (format "%s" patterns)
+                                                                :agent-output retry-output
+                                                                :retries 1
+                                                                :validation-error retry-validation-error)))
+                                                    (gptel-auto-experiment-log-tsv
+                                                     (gptel-auto-workflow--current-run-id) exp-result)
+                                                    (funcall callback exp-result))))
+                                            (setq finished t)
+                                            (let* ((retry-hypothesis
+                                                    (gptel-auto-experiment--extract-hypothesis retry-output))
+                                                   (exp-result
                                                     (list :target target
                                                           :id experiment-id
-                                                          :kept nil)))))))
+                                                          :hypothesis retry-hypothesis
+                                                          :score-before baseline
+                                                          :score-after 0
+                                                          :kept nil
+                                                          :duration (- (float-time) start-time)
+                                                          :grader-quality (plist-get retry-grade :score)
+                                                          :grader-reason (plist-get retry-grade :details)
+                                                          :comparator-reason "retry-grade-failed"
+                                                          :analyzer-patterns (format "%s" patterns)
+                                                          :agent-output retry-output
+                                                          :retries 1)))
+                                              (gptel-auto-experiment-log-tsv
+                                               (gptel-auto-workflow--current-run-id) exp-result)
+                                              (funcall callback exp-result)))))))
                                     "executor"
                                     (format "Retry: fix validation error in %s" target)
                                     (gptel-auto-experiment--make-retry-prompt
