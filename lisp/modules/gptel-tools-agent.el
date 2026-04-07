@@ -3070,10 +3070,22 @@ work correctly in Emacs Lisp."
                 :time (- (float-time) start)))
       (let* ((tests-result (when should-run-tests
                              (gptel-auto-experiment-run-tests)))
+             (tests-output (when tests-result (cdr tests-result)))
+             (tests-baseline
+              (when (and should-run-tests
+                         tests-result
+                         (not (car tests-result))
+                         tests-output)
+                (gptel-auto-workflow--staging-tests-match-main-baseline-p
+                 tests-output)))
              (tests-passed (if should-run-tests
-                               (and tests-result (car tests-result))
+                               (or (and tests-result (car tests-result))
+                                   (car tests-baseline))
                              t))
              (scores (gptel-auto-experiment--eight-keys-scores)))
+        (when (and tests-baseline
+                   (car tests-baseline))
+          (message "[auto-exp] %s" (cdr tests-baseline)))
         (when (and skip-tests gptel-auto-experiment-require-tests)
           (message "[auto-exp] Tests required before staging merge: %s"
                    (if tests-passed "PASS" "FAIL")))
@@ -3081,7 +3093,11 @@ work correctly in Emacs Lisp."
               :nucleus-passed t
               :nucleus-skipped t
               :tests-passed tests-passed
-              :tests-output (when tests-result (cdr tests-result))
+              :tests-output (cond
+                             ((and tests-output tests-baseline)
+                              (concat tests-output "\n\n" (cdr tests-baseline)))
+                             (tests-output)
+                             (tests-baseline (cdr tests-baseline)))
               :tests-skipped (not should-run-tests)
               :time (- (float-time) start)
               :eight-keys (when scores (alist-get 'overall scores))

@@ -3347,6 +3347,31 @@ Submodules are hydrated later during verification, not during merge prep."
         (should-not (plist-get result :tests-skipped))
         (should (equal (plist-get result :tests-output) "tests ok"))))))
 
+(ert-deftest regression/auto-experiment/benchmark-allows-main-baseline-test-failures ()
+  "Required experiment tests should allow failures already present on main."
+  (let ((gptel-auto-experiment-require-tests t)
+        (gptel-auto-workflow--current-target "lisp/modules/gptel-tools-agent.el"))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-or-project-dir)
+               (lambda () "/tmp/worktree"))
+              ((symbol-function 'gptel-auto-experiment--validate-code)
+               (lambda (_file) nil))
+              ((symbol-function 'gptel-auto-experiment-run-tests)
+               (lambda ()
+                 (cons nil "   FAILED   1/10  existing/baseline-failure (0.001 sec)\n")))
+              ((symbol-function 'gptel-auto-workflow--staging-tests-match-main-baseline-p)
+               (lambda (_output)
+                 (cons t "No new staging test failures vs main baseline")))
+              ((symbol-function 'gptel-auto-experiment--eight-keys-scores)
+               (lambda () '((overall . 0.6))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (let ((result (gptel-auto-experiment-benchmark t)))
+        (should (plist-get result :passed))
+        (should (plist-get result :tests-passed))
+        (should-not (plist-get result :tests-skipped))
+        (should (string-match-p "No new staging test failures vs main baseline"
+                                (plist-get result :tests-output)))))))
+
 (ert-deftest regression/auto-workflow/verify-staging-allows-baseline-failures ()
   "Staging verification should pass when test failures match the main baseline."
   (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging")
