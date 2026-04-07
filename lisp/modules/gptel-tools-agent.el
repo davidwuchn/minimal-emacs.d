@@ -5798,7 +5798,9 @@ Returns list of synthesis candidates."
   "Synthesize CANDIDATE into knowledge page with human approval.
 CANDIDATE is plist with :topic :count :files.
 Implements λ termination(x): synthesis ≡ AI | approval ≡ human.
-Returns t if synthesis was initiated, nil otherwise."
+Returns t if synthesis was initiated, nil otherwise.
+
+Note: Call gptel-mementum-ensure-agents first for batch processing."
   (let* ((topic (plist-get candidate :topic))
          (files (plist-get candidate :files))
          (memories-content '()))
@@ -5812,28 +5814,6 @@ Returns t if synthesis was initiated, nil otherwise."
           nil)
       (let ((synthesis-prompt (gptel-mementum--build-synthesis-prompt topic memories-content)))
         (message "[mementum] Synthesizing %d memories for topic: %s" (length memories-content) topic)
-        ;; Ensure agents are loaded (same setup as auto-workflow)
-        (when (fboundp 'gptel-agent--update-agents)
-          ;; Add yaml to load-path if needed (required for parsing agent markdown)
-          (unless (featurep 'yaml)
-            (let* ((base-dir (or (bound-and-true-p user-emacs-directory) 
-                                 (expand-file-name "~/.emacs.d")))
-                   (elpa-dir (expand-file-name "var/elpa/" base-dir))
-                   (yaml-dir (car (directory-files elpa-dir t "\\`yaml-"))))
-              (when (and yaml-dir (file-directory-p yaml-dir))
-                (add-to-list 'load-path yaml-dir)
-                (require 'yaml nil t))))
-          ;; Set up agent directories if not already set
-          (unless (and (boundp 'gptel-agent-dirs) gptel-agent-dirs)
-            (let* ((base-dir (or (bound-and-true-p user-emacs-directory) 
-                                 (expand-file-name "~/.emacs.d")))
-                   (pkg-agents (expand-file-name "packages/gptel-agent/agents/" base-dir)))
-              (setq gptel-agent-dirs
-                    (cl-remove-if-not #'file-directory-p (list pkg-agents)))))
-          ;; Load agent definitions
-          (when (and (boundp 'gptel-agent-dirs) gptel-agent-dirs)
-            (or (and (boundp 'gptel-agent--agents) gptel-agent--agents)
-                (gptel-agent--update-agents))))
         (if (and (fboundp 'gptel-benchmark-call-subagent)
                  (fboundp 'gptel-agent--task)
                  (boundp 'gptel-agent--agents)
@@ -5848,6 +5828,59 @@ Returns t if synthesis was initiated, nil otherwise."
              300)
           (message "[mementum] Skip '%s': executor subagent not available" topic))
         t))))
+
+(defun gptel-mementum-ensure-agents ()
+  "Ensure gptel-agent and executor are available for synthesis.
+Call once before processing multiple candidates. Returns t if executor available."
+  ;; Ensure gptel-agent is loaded
+  (unless (featurep 'gptel-agent)
+    ;; Add yaml to load-path (required for parsing agent markdown)
+    (let* ((base-dir (or (bound-and-true-p user-emacs-directory) 
+                         (expand-file-name "~/.emacs.d")))
+           (elpa-dir (expand-file-name "var/elpa/" base-dir))
+           (yaml-dir (car (directory-files elpa-dir t "\\`yaml-"))))
+      (when (and yaml-dir (file-directory-p yaml-dir))
+        (add-to-list 'load-path yaml-dir)))
+    (require 'gptel-agent nil t))
+  ;; Load gptel-benchmark-subagent for executor calls
+  (unless (fboundp 'gptel-benchmark-call-subagent)
+    (let ((base-dir (or (bound-and-true-p user-emacs-directory)
+                        (expand-file-name "~/.emacs.d"))))
+      (load-file (expand-file-name "lisp/modules/gptel-benchmark-subagent.el" base-dir))))
+  ;; Set up agent directories
+  (when (fboundp 'gptel-agent--update-agents)
+    (unless (and (boundp 'gptel-agent-dirs) gptel-agent-dirs)
+      (let* ((base-dir (or (bound-and-true-p user-emacs-directory) 
+                           (expand-file-name "~/.emacs.d")))
+             (pkg-agents (expand-file-name "packages/gptel-agent/agents/" base-dir)))
+        (setq gptel-agent-dirs
+              (cl-remove-if-not #'file-directory-p (list pkg-agents)))))
+    ;; Load agent definitions
+    (when (and (boundp 'gptel-agent-dirs) gptel-agent-dirs)
+      (or (and (boundp 'gptel-agent--agents) gptel-agent--agents)
+          (gptel-agent--update-agents))))
+  ;; Return t if executor is available
+  (and (fboundp 'gptel-benchmark-call-subagent)
+       (fboundp 'gptel-agent--task)
+       (boundp 'gptel-agent--agents)
+       gptel-agent--agents
+       (assoc "executor" gptel-agent--agents)))
+
+(defun gptel-mementum-synthesize-all-candidates (&optional candidates)
+  "Synthesize all CANDIDATES (or detect if nil) with human approval.
+Ensures agents are loaded once before processing batch."
+  (let* ((cands (or candidates (gptel-mementum-check-synthesis-candidates)))
+         (synthesized 0))
+    ;; Setup agents once for entire batch (not per-candidate)
+    (if (gptel-mementum-ensure-agents)
+        (progn
+          (message "[mementum] Executor available, processing %d candidates" (length cands))
+          (dolist (candidate cands)
+            (when (gptel-mementum-synthesize-candidate candidate)
+              (cl-incf synthesized))))
+      (message "[mementum] Executor not available, skipping synthesis"))
+    (message "[mementum] Synthesized %d/%d candidates" synthesized (length cands))
+    synthesized))
 
 (defun gptel-mementum--handle-synthesis-result (topic files result)
   "Handle LLM synthesis RESULT for TOPIC from FILES.
