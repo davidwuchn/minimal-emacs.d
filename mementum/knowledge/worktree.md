@@ -1,124 +1,123 @@
 ---
-title: Git Worktree Management in Auto-Workflow
+title: Git Worktree Patterns and Anti-Patterns
 status: active
 category: knowledge
-tags: [git, worktree, automation, workflow, debugging]
+tags: [git, worktree, automation, experiment-workflow]
 ---
 
-# Git Worktree Management in Auto-Workflow
+# Git Worktree Patterns and Anti-Patterns
 
 ## Overview
 
-Git worktrees enable parallel experiment development by creating isolated working directories attached to the same repository. This knowledge page documents patterns, pitfalls, and best practices discovered through debugging the auto-experiment workflow system.
+Git worktrees enable parallel development by creating multiple working directories from a single repository. Each worktree has its own working directory but shares the `.git` object database. This knowledge page synthesizes patterns and anti-patterns discovered through experiment automation workflows.
 
-## Core Concepts
+**Key Properties:**
+- Shared `.git` database (commits, branches, refs)
+- Separate `default-directory` for each worktree
+- Scripts running from worktree still compute paths relative to main repo if using script location
 
-### What Are Worktrees?
+## Common Use Cases
 
-Worktrees allow multiple working directories (worktrees) to share a single Git repository. Each worktree can have its own branch, making parallel development possible without cloning the entire repository multiple times.
+| Use Case | Command | Notes |
+|----------|---------|-------|
+| Parallel experiments | `git worktree add ../exp-feature feature-branch` | Isolated working dirs |
+| Staging verification | `git worktree add ../staging origin/staging` | Test merges before applying |
+| Quick hotfix | `git worktree add ../hotfix -b hotfix-branch` | Doesn't interrupt main work |
+| Review branch | `git worktree add ../review origin/pr/123` | Test PR locally |
 
+### Standard Worktree Lifecycle
+
+```bash
+# Create worktree for experiment
+git worktree add ../experiments/agent-exp1 -b agent-exp1
+
+# Verify worktree exists
+git worktree list
+# /repo/main                     (detached)
+# /repo/experiments/agent-exp1  3f2a1b4 [agent-exp1]
+
+# Do work in worktree
+cd ../experiments/agent-exp1
+git status
+
+# Remove when done (from main repo)
+git worktree remove ../experiments/agent-exp1
+git branch -D agent-exp1
 ```
-Main Repository (bare)
-└── Worktree 1: experiments/agent-exp1 (branch: agent-exp1)
-└── Worktree 2: experiments/core-exp2 (branch: core-exp2)
-└── Worktree 3: var/tmp/experiments/optimize/ (branch: optimize-exp3)
-```
 
-### Key Properties
-
-| Property | Main Repo | Worktree |
-|----------|-----------|----------|
-| `.git` directory | Actual `.git` folder | Pointer file (`.git`) |
-| Branch checkout | Yes | Separate branch per worktree |
-| Object storage | Shared | Shared via main repo |
-| Working directory | Separate | Separate |
-| `default-directory` | Repository root | Worktree root |
-
-## Critical Pattern: Path Resolution in Worktrees
+## Critical Pattern: Path Resolution in Scripts
 
 ### The Problem
 
-Scripts that compute paths relative to their own location behave differently in worktrees vs. the main repository.
-
-**Typical script pattern:**
-```bash
-# verify-nucleus.sh computes its directory like this:
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DIR="$(dirname "$SCRIPT_DIR")"
-```
-
-**Why this breaks in worktrees:**
+When scripts compute paths based on their own location, they resolve to the **main repository**, not the worktree:
 
 ```
-Main Repository Location:
-  ~/projects/nucleus/
-  └── scripts/verify-nucleus.sh
-  └── lisp/modules/gptel-tools-agent.el
+Main repo:     /project/
+Worktree:      /project/worktrees/agent-exp1/
+Script:        /project/scripts/verify-nucleus.sh
 
-Worktree Location:
-  ~/var/tmp/experiments/optimize/
-  └── scripts/verify-nucleus.sh  ← symlink or copied
-  └── lisp/modules/gptel-tools-agent.el  ← symlink or copied
+$ cd /project/worktrees/agent-exp1
+$ ./scripts/verify-nucleus.sh
+# Script computes $DIR from its location → /project/ (NOT worktree!)
+# Validates main repo code, NOT worktree changes
 ```
 
-The script's `$DIR` resolves to the **worktree root**, but the code calling the script uses paths from the **main repository**:
+### Root Cause Analysis
 
 ```elisp
-;; In gptel-auto-experiment-benchmark (line 1634):
-(let ((proj-root (expand-file-name "scripts/verify-nucleus.sh" project-root)))
-  ;; proj-root points to MAIN REPO, but default-directory is WORKTREE
-  (call-process "bash" nil t nil (expand-file-name "scripts/verify-nucleus.sh" proj-root)))
+;; IN gptel-auto-experiment-benchmark (line 1634)
+(expand-file-name "scripts/verify-nucleus.sh" proj-root)
+;; ↑ proj-root is main repo, not worktree's default-directory
+
+;; Script itself does:
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
+# ↑ Resolves to script location → main repo
 ```
 
 ### The Fix
 
-**Pattern: Skip nucleus script validation in experiment context**
+**Pattern: Skip validation that depends on script location in experiment context**
 
 ```elisp
-;; Instead of always running verification script:
-(when (and (not (gptel-auto-workflow--in-experiment-context-p))
-           (file-exists-p verification-script))
-  (call-process "bash" ... verification-script ...))
+;; Instead of running full nucleus validation in benchmark:
+;; 1. Code syntax validation still works (targets worktree file directly)
+;; 2. Executor runs verification in worktree context
+;; 3. Full validation happens in staging flow (after workflow completes)
 
-;; For experiments, rely on:
-;; 1. Code syntax validation (targets worktree file directly)
-;; 2. Executor verification in worktree context
-;; 3. Full validation in staging flow
-```
-
-**Verification Result:**
-```elisp
+;; Return validation results that skip nucleus script:
 (:passed t :nucleus-passed t :nucleus-skipped t)
 ```
 
-## Worktree Deletion Timing
+### Validation Strategy Matrix
 
-### The Critical Timing Bug
+| Validation Type | Works in Worktree? | Fix Required |
+|-----------------|-------------------|--------------|
+| Syntax check | ✅ Yes | None |
+| Lint | ✅ Yes | None |
+| Unit tests | ✅ Yes | Adjust paths |
+| Integration tests | ⚠️ Maybe | Mock dependencies |
+| Scripts using `$DIR` from script location | ❌ No | Skip or refactor |
+| Scripts using `$(pwd)` | ✅ Yes | None |
 
-**Symptom:** `No such file or directory` errors during auto-workflow experiments
+## Anti-Pattern: Premature Worktree Deletion
 
-**Root Cause:** Worktree deleted at START of `run-next`, before next experiment could use it
+### The Bug
 
-### Timeline of the Bug
+Worktrees were deleted at the **start of `run-next`**, before the next experiment could use it:
 
 ```
-Experiment 1 Flow:
-  1. Creates worktree at var/tmp/experiments/optimize/agent-exp1
-  2. Runs benchmark in worktree
-  3. Completes successfully
-  4. run-next(2) is called
-  5. Line 2289: gptel-auto-workflow-delete-worktree DELETES worktree
-  6. Experiment 2 starts
-  7. Tries to cd to non-existent worktree → ERROR
-
-Additional Problem:
-  - Worktree deleted on EVERY failure (grader failed, benchmark failed, timeout)
-  - Prevents retry of failed experiments
+Timeline:
+1. Experiment 1 creates worktree at /var/tmp/experiments/optimize/agent-exp1
+2. Experiment 1 completes
+3. run-next(2) is called
+4. Line 2289: gptel-auto-workflow-delete-worktree DELETES worktree
+5. Experiment 2 tries to cd into non-existent directory → ERROR
 ```
 
-### The Solution
+### Additional Symptom
 
-**Principle:** Resources should only be cleaned up when truly done.
-
-**For auto-workflow, "done" means at the START of the NEXT run, not the end of the 
-...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-6OwWTw.txt. Use Read tool if you need more]...
+Worktrees were also deleted on **every failure**:
+- Grader failed → delete worktree
+- Benchmark failed → delete worktree
+- Timeo
+...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-cZcpMH.txt. Use Read tool if you need more]...

@@ -1,118 +1,142 @@
 ---
-
-title: Variable Management Patterns
+title: Variable Handling in Shell and Emacs
 status: active
 category: knowledge
-tags: [elisp, shell, cron, path-resolution, best-practices]
+tags: [shell, emacs-lisp, environment, cron, portability]
+---
 
-# Variable Management Patterns
+# Variable Handling in Shell and Emacs
 
 ## Overview
 
-This page covers essential patterns for managing variables across different contexts: Emacs Lisp (`defvar`, special variables), shell scripting (environment variables, cron), and path resolution. The common thread is avoiding scope leakage, ensuring variables expand in the correct environment, and maintaining portable code across systems.
+Variables in shell scripts and Emacs Lisp behave differently from traditional programming languages. Environment variables, shell variables, and Lisp variables each have distinct scoping rules and expansion behaviors. This page synthesizes patterns for handling variables correctly across these contexts.
+
+## Shell Environment Variables
+
+### Variable Expansion in Cron Jobs
+
+**Problem:** Cron jobs often fail silently when variables appear undefined.
+
+| Context | Variable Set | Variable Visible | Result |
+|---------|--------------|------------------|--------|
+| Crontab assignment | Yes | No | Empty expansion |
+| Inline `$HOME` | N/A | Yes | Works correctly |
+| Subshell export | Yes | Yes | Works correctly |
+
+**Broken Pattern (Crontab):**
+```bash
+# WRONG - LOGDIR is set in cron's environment, not the shell's
+LOGDIR=$HOME/.emacs.d/var/tmp/cron
+0 * * * * /path/to/command >> $LOGDIR/auto-workflow.log 2>&1
+```
+
+**Correct Pattern (Crontab):**
+```bash
+# RIGHT - Expand variable inline
+0 * * * * /path/to/command >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+```
+
+**Why This Happens:**
+
+1. Crontab lines are parsed by cron daemon
+2. Variable assignments like `LOGDIR=value` set cron's environment
+3. The actual command runs in a separate shell process
+4. That shell doesn't inherit the variable from cron's environment
+5. `$LOGDIR` expands to empty string
+
+**Detection Commands:**
+```bash
+# View cron job execution with expanded variables
+journalctl -u cron --since "today" | grep -E "COMMAND|CMD"
+
+# On macOS
+log show --predicate 'process == "cron"' --last 1h
+
+# Test variable visibility in your cron environment
+crontab -l | while read line; do echo "Line: $line"; done
+```
 
 ---
 
-## 1. Emacs Lisp: `defvar` for External Variables
+### Path Portability: Use `$HOME` or Dynamic Resolution
 
-### The Problem
+**Anti-pattern:** Hardcoded user paths
+```bash
+# WRONG - Breaks on different systems/users
+/Users/davidwu/workspace/project
+/home/username/project
+```
 
-When a variable is defined in one file but referenced in another, a naive `defvar` with docstring creates a duplicate definition that may override the original or trigger compiler warnings.
+**Correct Patterns:**
+```bash
+# Use HOME for home directory
+$HOME/.emacs.d/var/tmp
 
-### Pattern: Forward Declaration Without Docstring
+# Use git toplevel for project root
+$(git rev-parse --show-toplevel)
 
+# Use script directory for relative paths
+$(dirname "$0")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Use realpath for canonical paths
+$(realpath "$0")
+```
+
+**System Detection Pattern:**
+```bash
+# Detect OS and set paths accordingly
+detect_os() {
+    case "$(uname -s)" in
+        Darwin*)  echo "macOS" ;;
+        Linux*)   echo "Linux" ;;
+        CYGWIN*)  echo "Windows" ;;
+        *)        echo "Unknown" ;;
+    esac
+}
+
+# Linux systemd paths
+SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+
+# macOS launchd paths
+LAUNCHD_USER_DIR="$HOME/Library/LaunchAgents"
+```
+
+**Portability Scan:**
+```bash
+# Find all hardcoded paths that should be portable
+grep -rn "/Users/" . --include="*.sh" --include="*.el" --include="*.md"
+grep -rn "/home/" . --include="*.sh" --include="*.el"
+grep -rn "/tmp" . --include="*.sh" | grep -v "\$TMPDIR\|\/tmp\/"
+```
+
+---
+
+## Emacs Lisp Variables
+
+### Forward Declaration with `defvar`
+
+**Purpose:** Declare a variable exists without defining it, useful when a variable is defined in another file or loaded library.
+
+**Correct Pattern (No Docstring):**
 ```elisp
-;; BAD: Duplicate docstring, potential override
+;; Forward declaration - variable defined elsewhere
+(defvar gptel-auto-workflow--worktree-state)
+
+;; Multiple forward declarations
+(defvar gptel-auto-workflow--cache-dir)
+(defvar gptel-auto-workflow--config-alist)
+```
+
+**Anti-pattern (Duplicate Definition):**
+```elisp
+;; WRONG - Duplicates docstring and may cause compiler warnings
 (defvar gptel-auto-workflow--worktree-state nil
   "Hash table for worktree state. Defined in gptel-tools-agent.el.")
-
-;; GOOD: Clean forward declaration
-(defvar gptel-auto-workflow--worktree-state)
 ```
 
-### Why This Works
-
-| Approach | Behavior |
-|----------|----------|
-| `defvar` with docstring | Sets variable if unbound; preserves value if already bound; docstring is redundant if primary definition exists |
-| `defvar` without docstring | Same value-preserving behavior, but signals intent that this is a forward/reference declaration |
-| No declaration | Byte-compiler warning; runtime `void-variable` error if accessed before load |
-
-### Critical: `lexical-binding` Interaction
-
-When `lexical-binding: t` is enabled, `let` bindings create lexical closures by default. For dynamic/special variable behavior:
-
-```elisp
-;; -*- lexical-binding: t; -*-
-
-;; Without defvar: this binds LEXICALLY (local to closure)
-(let ((gptel-auto-workflow--worktree-state (make-hash-table)))
-  (message "This is a local binding, not the global variable"))
-
-;; With defvar: this binds DYNAMICALLY (affects global value)
-(defvar gptel-auto-workflow--worktree-state)
-
-(let ((gptel-auto-workflow--worktree-state (make-hash-table)))
-  (message "This IS the global/dynamic variable"))
-```
-
-### Quick Reference: `defvar` Forms
-
-| Form | Use Case |
-|------|----------|
-| `(defvar SYMBOL)` | Forward declaration; no docstring; suppresses compiler warning |
-| `(defvar SYMBOL INITVALUE DOC)` | Full definition with initial value (only set if unbound) |
-| `(defvar SYMBOL INITVALUE)` | Definition without docstring but with init value |
-| `(defcustom SYMBOL VALUE DOC)` | User-customizable variable (via `M-x customize`) |
-
----
-
-## 2. Shell: Path Resolution Patterns
-
-### The Golden Rule
-
-```
-⚠ ALWAYS use $HOME or $(git rev-parse --show-toplevel)
-⚠ NEVER hardcode /Users/username paths
-```
-
-### Pattern Matrix
-
-| Context | Preferred | Avoid |
-|---------|-----------|-------|
-| User home | `$HOME` | `/Users/davidwu`, `/home/username` |
-| Project root | `$(git rev-parse --show-toplevel)` | `/home/user/workspace/project` |
-| Relative to script | `$(dirname "$0")` | Hardcoded parent dirs |
-| Config files | `$XDG_CONFIG_HOME` or `$HOME/.config` | `~/Library/Preferences` |
-
-### Examples
-
-```bash
-# ✅ GOOD: Portable path resolution
-LOGDIR="$HOME/.emacs.d/var/tmp/cron"
-LOGFILE="$LOGDIR/auto-workflow.log"
-
-# ✅ GOOD: Git-aware project root
-PROJECT_ROOT="$(git rev-parse --show-toplevel)"
-source "$PROJECT_ROOT/scripts/common.sh"
-
-# ✅ GOOD: Script-relative paths
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG="$SCRIPT_DIR/../config/app.conf"
-
-# ❌ BAD: Hardcoded username
-LOGFILE="/Users/davidwu/.emacs.d/var/tmp/cron/auto-workflow.log"
-
-# ❌ BAD: Assumes specific home location
-CONFIG="/home/davidwu/.config/emacs/app.conf"
-```
-
-### Detection Command
-
-Find all hardcoded paths that break portability:
-
-```bash
-grep -rn "/Users/davidwu\|/home/[^/]\+" . \
-  --include="*.sh" \
-  --include="*.
-...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-0Zr4vO.txt. Use Read tool if you need more]...
+**Why Without Docstring:**
+| Aspect | With Docstring | Without Docstring |
+|--------|----------------|-------------------|
+| Co
+...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-2UwLRN.txt. Use Read tool if you need more]...
