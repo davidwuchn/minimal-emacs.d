@@ -307,6 +307,8 @@ case "$ACTION" in
                              (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
                  (require 'gptel-request)
                  (require 'gptel-agent-tools)
+                 (load-file (expand-file-name \"lisp/modules/gptel-ext-backends.el\" root))
+                 (setq gptel-backend gptel--minimax gptel-model 'minimax-m2.5)
                  (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
                  (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-strategic.el\" root))
                  (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
@@ -339,6 +341,8 @@ case "$ACTION" in
                              (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
                  (require 'gptel-request)
                  (require 'gptel-agent-tools)
+                 (load-file (expand-file-name \"lisp/modules/gptel-ext-backends.el\" root))
+                 (setq gptel-backend gptel--minimax gptel-model 'minimax-m2.5)
                  (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
                  (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-strategic.el\" root))
                  (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
@@ -362,6 +366,8 @@ case "$ACTION" in
                      (format \"(%s %s)\n\"
                              (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
                              (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
+                 (load-file (expand-file-name \"lisp/modules/gptel-ext-backends.el\" root))
+                 (setq gptel-backend gptel--minimax gptel-model 'minimax-m2.5)
                  (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
                  (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
                  (gptel-auto-workflow-queue-all-mementum))"
@@ -384,6 +390,8 @@ case "$ACTION" in
                      (format \"(%s %s)\n\"
                              (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
                              (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
+                 (load-file (expand-file-name \"lisp/modules/gptel-ext-backends.el\" root))
+                 (setq gptel-backend gptel--minimax gptel-model 'minimax-m2.5)
                  (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
                  (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
                  (gptel-auto-workflow-queue-all-instincts))"
