@@ -294,3 +294,20 @@ mementum/
 
 **Expected:** No more stub pages; all syntheses generate useful content.
 
+
+---
+
+### Fix: Headless Suppression for Mementum Cron (2026-04-07)
+
+**User Question:** "Why do we need human approval when running in cron jobs?"
+
+**Problem:** Mementum cron job would hang on `y-or-n-p` prompt, waiting for impossible user input.
+
+**Solution:** Enable `gptel-auto-workflow--enable-headless-suppression` for mementum/instincts cron jobs.
+
+**Behavior:**
+- Cron runs: Auto-answers 'yes' to all prompts (fully autonomous)
+- Interactive runs: Shows preview and prompts user
+
+**Commit:** `b51ed547`
+
