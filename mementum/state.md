@@ -460,3 +460,22 @@ Don't reinvent the wheel. Use the daemon.
 - Mementum cron: Sunday 04:00
 - Instincts cron: Sunday 05:00
 
+---
+
+### Fix: Auto-Workflow Backend Missing (2026-04-07 20:40)
+
+**Problem:** All auto-workflow experiments failing with timeouts and network errors.
+
+**Root Cause:** Auto-workflow daemon had no gptel backend configured (`gptel-backend` was nil).
+
+**Symptoms:**
+- "Curl failed with exit code 28" (timeout)
+- "unknown error, 520 (1000)" (server error)
+- All experiments discarded
+
+**Fix:** Load `gptel-ext-backends.el` and set default backend (minimax) in all cron job entry points.
+
+**Commit:** `72e0e131`
+
+**Verification:** ✅ Backend now shows "MiniMax" after daemon restart
+
