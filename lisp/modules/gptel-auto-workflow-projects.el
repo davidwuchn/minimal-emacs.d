@@ -698,16 +698,21 @@ Without PROJECT-ROOT, clears cache for all projects."
 
 (defun gptel-auto-workflow-run-mementum-for-project (project-root)
   "Run mementum weekly job for specific PROJECT-ROOT.
-Loads project context and runs mementum maintenance in that context."
+Loads project context and runs mementum maintenance in that context.
+Enables headless suppression to auto-approve synthesis prompts."
   (interactive "DProject root: ")
   (let* ((root (expand-file-name project-root))
          (default-directory root)
-         (mementum-root root))
+         (mementum-root root)
+         (headless-was-enabled (bound-and-true-p gptel-auto-workflow--headless)))
     (message "[mementum] Starting weekly job for project: %s" root)
     ;; Ensure gptel-tools-agent is loaded for mementum functions
     (unless (featurep 'gptel-tools-agent)
       (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)))
     (setq gptel-auto-workflow--current-project root)
+    ;; Enable headless suppression for cron runs (auto-approve y-or-n-p)
+    (unless headless-was-enabled
+      (gptel-auto-workflow--enable-headless-suppression))
     (condition-case err
         (progn
           (gptel-mementum-weekly-job)
@@ -715,6 +720,9 @@ Loads project context and runs mementum maintenance in that context."
       (error
        (message "[mementum] ✗ Failed: %s - %s" root err)
        nil))
+    ;; Restore headless state
+    (unless headless-was-enabled
+      (gptel-auto-workflow--disable-headless-suppression))
     (setq gptel-auto-workflow--current-project nil)))
 
 (defun gptel-auto-workflow-run-all-mementum ()
@@ -749,16 +757,21 @@ To be called from cron - runs mementum maintenance for each project."
 
 (defun gptel-auto-workflow-run-instincts-for-project (project-root)
   "Run instincts weekly job for specific PROJECT-ROOT.
-Loads project context and runs instincts evolution in that context."
+Loads project context and runs instincts evolution in that context.
+Enables headless suppression for cron runs."
   (interactive "DProject root: ")
   (let* ((root (expand-file-name project-root))
          (default-directory root)
-         (mementum-root root))
+         (mementum-root root)
+         (headless-was-enabled (bound-and-true-p gptel-auto-workflow--headless)))
     (message "[instincts] Starting weekly job for project: %s" root)
     ;; Ensure gptel-benchmark-instincts is loaded
     (unless (featurep 'gptel-benchmark-instincts)
       (load-file (expand-file-name "lisp/modules/gptel-benchmark-instincts.el" root)))
     (setq gptel-auto-workflow--current-project root)
+    ;; Enable headless suppression for cron runs
+    (unless headless-was-enabled
+      (gptel-auto-workflow--enable-headless-suppression))
     (condition-case err
         (progn
           (gptel-benchmark-instincts-weekly-job)
@@ -766,6 +779,9 @@ Loads project context and runs instincts evolution in that context."
       (error
        (message "[instincts] ✗ Failed: %s - %s" root err)
        nil))
+    ;; Restore headless state
+    (unless headless-was-enabled
+      (gptel-auto-workflow--disable-headless-suppression))
     (setq gptel-auto-workflow--current-project nil)))
 
 (defun gptel-auto-workflow-run-all-instincts ()
