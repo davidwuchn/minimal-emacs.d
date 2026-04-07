@@ -2624,8 +2624,13 @@ Maximum response: 1000 characters."
         (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
 
 (defun gptel-auto-workflow--review-approved-p (response)
-  "Return non-nil when RESPONSE explicitly approves a staging review."
+  "Return non-nil when RESPONSE approves a staging review.
+
+Accept both the older explicit APPROVED/BLOCKED markers and the newer
+reviewer markdown shape that summarizes \"No blockers\" and uses
+non-blocking sections like \"No Issue\" or \"Praise\"."
   (let* ((normalized (replace-regexp-in-string "|" "\n" response))
+         (case-fold-search t)
          (approved (string-match
                     (rx (or line-start "\n")
                         (* blank)
@@ -2637,10 +2642,53 @@ Maximum response: 1000 characters."
                        (* blank)
                        (? (+ "#") (* blank))
                        "BLOCKED" word-end)
-                   normalized)))
-    (and approved
-         (or (not blocked)
-             (< approved blocked)))))
+                   normalized))
+         (no-blockers (string-match-p
+                       (rx (or line-start "\n")
+                           (* blank)
+                           (? (+ "#") (* blank))
+                           "No blockers"
+                           (* nonl))
+                       normalized))
+         (non-blocking-section (string-match-p
+                                (rx (or line-start "\n")
+                                    (* blank)
+                                    (+ "#") (+ blank)
+                                    (or "No Issue"
+                                        "Praise"
+                                        "Defensive Hardening"
+                                        "Style-Only Suggestions")
+                                    word-end)
+                                normalized))
+         (bug-section (string-match-p
+                       (rx (or line-start "\n")
+                           (* blank)
+                           (+ "#") (+ blank)
+                           "Proven Correctness Bugs"
+                           word-end)
+                       normalized))
+         (action-items (string-match-p
+                        (rx (or line-start "\n")
+                            (* blank)
+                            "- [ ]")
+                        normalized))
+         (unverified (string-match-p
+                      (rx (or line-start "\n")
+                          (* blank)
+                          "UNVERIFIED")
+                      normalized)))
+    (cond
+     ((and blocked
+           (or (not approved)
+               (< blocked approved)))
+      nil)
+     (approved t)
+     ((and (or no-blockers non-blocking-section)
+           (not bug-section)
+           (not action-items)
+           (not unverified))
+      t)
+     (t nil))))
 
 (defun gptel-auto-workflow--fix-review-issues (optimize-branch review-output callback)
   "Try to fix issues found in review for OPTIMIZE-BRANCH.

@@ -2207,6 +2207,46 @@ EXIT-CODE defaults to 1."
       (should-not (car review-result))
       (should (string-match-p "BLOCKED" (cdr review-result))))))
 
+(ert-deftest regression/auto-workflow/review-changes-accepts-no-blockers-markdown-output ()
+  "Review parsing should accept reviewer summaries that say there are no blockers."
+  (let ((gptel-auto-workflow-require-review t)
+        (gptel-auto-experiment-use-subagents t)
+        review-result)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () test-auto-workflow--repo-root))
+              ((symbol-function 'shell-command-to-string)
+               (lambda (&rest _) "diff --git a/file b/file"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional _timeout)
+                 (funcall callback
+                          "Reviewer result for task: Review changes before merge | ## Summary | The diff adds proper nil-guard hardening to prevent runtime errors when `target` is nil, non-string, or empty. No blockers, critical bugs, or security issues introduced. | ### No Issue | **lisp/modules/gptel-tools-agent.el:1949** - Defensive hardening is correct and complete.")))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (gptel-auto-workflow--review-changes
+       "optimize/test-branch"
+       (lambda (result) (setq review-result result)))
+      (should (car review-result))
+      (should (string-match-p "No blockers" (cdr review-result))))))
+
+(ert-deftest regression/auto-workflow/review-changes-keeps-proven-bug-output-blocked ()
+  "Review parsing should reject sectioned reviewer output with proven bugs."
+  (let ((gptel-auto-workflow-require-review t)
+        (gptel-auto-experiment-use-subagents t)
+        review-result)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () test-auto-workflow--repo-root))
+              ((symbol-function 'shell-command-to-string)
+               (lambda (&rest _) "diff --git a/file b/file"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional _timeout)
+                 (funcall callback
+                          "Reviewer result for task: Review changes before merge | ## Summary | This change introduces a correctness bug in the new guard. | ### Proven Correctness Bugs | **lisp/modules/gptel-tools-agent.el:1949** - The guard still permits empty strings. | ## Action Items | - [ ] Fix the empty-string handling.")))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (gptel-auto-workflow--review-changes
+       "optimize/test-branch"
+       (lambda (result) (setq review-result result)))
+      (should-not (car review-result))
+      (should (string-match-p "Proven Correctness Bugs" (cdr review-result))))))
+
 (ert-deftest regression/auto-workflow/cleanup-preserves-queued-phase ()
   "Cleanup should not overwrite queued/run phases while a cron job is active."
   (let ((gptel-auto-workflow--running nil)
