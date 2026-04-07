@@ -138,7 +138,9 @@ Nested git repos are NOT searched (use ripgrep fallback for those).
 Honors `my/gptel-search-timeout' for large repos."
   (let ((default-directory root))
     (when (and (executable-find "git")
-               (file-directory-p (expand-file-name ".git" root)))
+               ;; Git worktrees expose .git as a file that points at the real
+               ;; gitdir, so file existence is the correct repo-root check here.
+               (file-exists-p (expand-file-name ".git" root)))
       (with-timeout (my/gptel-search-timeout nil)
         (with-temp-buffer
           (let* ((pattern (format "\\b%s\\b" (regexp-quote symbol-name)))

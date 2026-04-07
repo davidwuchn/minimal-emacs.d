@@ -309,6 +309,32 @@ Returns list of file:line:context with backend info."
     (should (listp result))
     (should (> (length result) 0))))
 
+(ert-deftest test-gptel-code-git-grep-works-in-worktree-root ()
+  "Test git grep works when repo root exposes `.git' as a file.
+This matches git worktree roots like staging verification worktrees."
+  (let ((root (make-temp-file "gptel-code-worktree" t))
+        (calls nil))
+    (unwind-protect
+        (progn
+          (with-temp-file (expand-file-name ".git" root)
+            (insert "gitdir: /tmp/fake-gitdir\n"))
+          (cl-letf (((symbol-function 'executable-find)
+                     (lambda (program)
+                       (when (equal program "git")
+                         "/usr/bin/git")))
+                    ((symbol-function 'call-process)
+                     (lambda (program _infile buffer _display &rest args)
+                       (push (cons program args) calls)
+                        (with-current-buffer (if (eq buffer t)
+                                                 (current-buffer)
+                                               buffer)
+                          (insert "lisp/example.el:1:(defun worktree-probe)\n"))
+                        0)))
+            (let ((result (my/gptel--git-grep-usages "defun" root)))
+              (should (equal result '("lisp/example.el:1:(defun worktree-probe)")))
+              (should calls))))
+      (delete-directory root t))))
+
 (ert-deftest test-gptel-code-find-usages-uses-git-grep ()
   "Test Code_Usages fallback chain includes git grep.
 When LSP is unavailable and in a git repo, git grep should be tried first."
