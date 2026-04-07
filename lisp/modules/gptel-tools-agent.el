@@ -5812,12 +5812,41 @@ Returns t if synthesis was initiated, nil otherwise."
           nil)
       (let ((synthesis-prompt (gptel-mementum--build-synthesis-prompt topic memories-content)))
         (message "[mementum] Synthesizing %d memories for topic: %s" (length memories-content) topic)
-        (my/gptel--call-gptel-agent-task
-         (lambda (result)
-           (gptel-mementum--handle-synthesis-result topic files result))
-         'executor
-         (format "Synthesize knowledge: %s" topic)
-         synthesis-prompt)
+        ;; Ensure agents are loaded (same setup as auto-workflow)
+        (when (fboundp 'gptel-agent--update-agents)
+          ;; Add yaml to load-path if needed (required for parsing agent markdown)
+          (unless (featurep 'yaml)
+            (let* ((base-dir (or (bound-and-true-p user-emacs-directory) 
+                                 (expand-file-name "~/.emacs.d")))
+                   (elpa-dir (expand-file-name "var/elpa/" base-dir))
+                   (yaml-dir (car (directory-files elpa-dir t "\\`yaml-"))))
+              (when (and yaml-dir (file-directory-p yaml-dir))
+                (add-to-list 'load-path yaml-dir)
+                (require 'yaml nil t))))
+          ;; Set up agent directories if not already set
+          (unless (and (boundp 'gptel-agent-dirs) gptel-agent-dirs)
+            (let* ((base-dir (or (bound-and-true-p user-emacs-directory) 
+                                 (expand-file-name "~/.emacs.d")))
+                   (pkg-agents (expand-file-name "packages/gptel-agent/agents/" base-dir)))
+              (setq gptel-agent-dirs
+                    (cl-remove-if-not #'file-directory-p (list pkg-agents)))))
+          ;; Load agent definitions
+          (when (and (boundp 'gptel-agent-dirs) gptel-agent-dirs)
+            (or (and (boundp 'gptel-agent--agents) gptel-agent--agents)
+                (gptel-agent--update-agents))))
+        (if (and (fboundp 'gptel-benchmark-call-subagent)
+                 (fboundp 'gptel-agent--task)
+                 (boundp 'gptel-agent--agents)
+                 gptel-agent--agents
+                 (assoc "executor" gptel-agent--agents))
+            (gptel-benchmark-call-subagent
+             'executor
+             (format "Synthesize knowledge: %s" topic)
+             synthesis-prompt
+             (lambda (result)
+               (gptel-mementum--handle-synthesis-result topic files result))
+             300)
+          (message "[mementum] Skip '%s': executor subagent not available" topic))
         t))))
 
 (defun gptel-mementum--handle-synthesis-result (topic files result)
