@@ -5352,10 +5352,10 @@ TARGETS defaults to `gptel-auto-workflow-targets'."
   (interactive)
   (gptel-auto-workflow-run-async targets))
 
-;;; Autonomous Research Agent (program.md + skills + mementum)
+;;; Autonomous Research Agent (directive.md + skills + mementum)
 
-(defcustom gptel-auto-workflow-program-file "docs/auto-workflow-program.md"
-  "Path to program.md (human-editable objectives)."
+(defcustom gptel-auto-workflow-program-file "docs/directive.md"
+  "Path to directive.md (human-editable objectives)."
   :type 'file
   :group 'gptel-tools-agent)
 
@@ -5365,13 +5365,13 @@ TARGETS defaults to `gptel-auto-workflow-targets'."
   :group 'gptel-tools-agent)
 
 (defvar gptel-auto-workflow--program nil
-  "Parsed program.md content.")
+  "Parsed directive.md content.")
 
 (defvar gptel-auto-workflow--skills nil
   "Loaded optimization skills for current run.")
 
 (defun gptel-auto-workflow-load-program ()
-  "Load and parse docs/auto-workflow-program.md."
+  "Load and parse docs/directive.md."
   (let* ((file (expand-file-name gptel-auto-workflow-program-file
                                  (gptel-auto-workflow--project-root)))
          (content (gptel-auto-workflow--read-file-contents file))

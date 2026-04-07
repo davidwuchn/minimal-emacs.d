@@ -213,7 +213,7 @@ Emacs/gptel
 
 | autoresearch | minimal-emacs.d |
 |--------------|-----------------|
-| `program.md` | `docs/auto-workflow-program.md` |
+| `program.md` | `docs/directive.md` |
 | 5 min budget | 10 min budget |
 | ~100 experiments/night | ~48 experiments/night |
 | Autonomous commits | Human-gated (git) |

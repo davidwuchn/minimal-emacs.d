@@ -208,9 +208,9 @@ Executor makes changes
    Push to optimize/* only
 ```
 
-## program.md
+## directive.md
 
-Human-editable objectives at `docs/auto-workflow-program.md`.
+Human-editable objectives at `docs/directive.md`.
 
 **Note**: LLM decides targets. Static targets are fallback only.
 
