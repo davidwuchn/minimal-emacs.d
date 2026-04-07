@@ -3059,8 +3059,8 @@ work correctly in Emacs Lisp."
                          (expand-file-name gptel-auto-workflow--current-target default-directory)))
           (validation-error (when target-file
                               (gptel-auto-experiment--validate-code target-file)))
-          (should-run-tests (and (not skip-tests)
-                                 gptel-auto-experiment-require-tests)))
+          (should-run-tests (or (not skip-tests)
+                                gptel-auto-experiment-require-tests)))
     (if validation-error
         (progn
           (message "[auto-exp] ✗ Validation failed: %s"
@@ -3070,8 +3070,9 @@ work correctly in Emacs Lisp."
                 :time (- (float-time) start)))
       (let* ((tests-result (when should-run-tests
                              (gptel-auto-experiment-run-tests)))
-             (tests-passed (or (and skip-tests (not gptel-auto-experiment-require-tests))
-                               (and tests-result (car tests-result))))
+             (tests-passed (if should-run-tests
+                               (and tests-result (car tests-result))
+                             t))
              (scores (gptel-auto-experiment--eight-keys-scores)))
         (when (and skip-tests gptel-auto-experiment-require-tests)
           (message "[auto-exp] Tests required before staging merge: %s"
@@ -3081,7 +3082,7 @@ work correctly in Emacs Lisp."
               :nucleus-skipped t
               :tests-passed tests-passed
               :tests-output (when tests-result (cdr tests-result))
-              :tests-skipped (and skip-tests (not gptel-auto-experiment-require-tests))
+              :tests-skipped (not should-run-tests)
               :time (- (float-time) start)
               :eight-keys (when scores (alist-get 'overall scores))
               :eight-keys-scores scores)))))
