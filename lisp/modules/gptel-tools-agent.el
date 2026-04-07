@@ -5345,11 +5345,12 @@ TARGETS defaults to `gptel-auto-workflow-targets'."
 
 (defun gptel-auto-workflow-skill-path (target type)
   "Get skill path for TARGET. TYPE is 'target or 'mutation."
-  (let* ((name (file-name-sans-extension (file-name-nondirectory target)))
-         (skill-name (car (last (split-string name "-")))))
+  (let* ((name (file-name-sans-extension (file-name-nondirectory (or target ""))))
+         (parts (if (> (length name) 0) (split-string name "-") (list name)))
+         (skill-name (car (last parts))))
     (if (eq type 'target)
-        (format "%s/optimization-skills/%s.md" gptel-auto-workflow-skills-dir skill-name)
-      (format "%s/mutations/%s.md" gptel-auto-workflow-skills-dir target))))
+        (format "%s/optimization-skills/%s.md" gptel-auto-workflow-skills-dir (or skill-name "unknown"))
+      (format "%s/mutations/%s.md" gptel-auto-workflow-skills-dir (or target "unknown")))))
 
 (defun gptel-auto-workflow-skill-load (skill-file)
   "Load skill from SKILL-FILE."
@@ -5741,7 +5742,8 @@ Run weekly via cron."
       (when (file-exists-p dir)
         (dolist (file (directory-files dir t "\\.md$"))
           (let ((content (gptel-auto-workflow--read-file-contents file)))
-            (when (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content)
+            (when (and (stringp content)
+                       (string-match "^last-tested:[[:space:]]*\\([0-9-]+\\)" content))
               (let* ((date-str (match-string 1 content))
                      (last-tested (when (>= (length date-str) 10)
                                     (encode-time 0 0 0 (string-to-number (substring date-str 8 10))
