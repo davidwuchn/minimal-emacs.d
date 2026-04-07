@@ -1361,21 +1361,49 @@ Uses hash table keyed by task-id to support parallel execution."
           (puthash task-id (plist-put state :timeout-timer timeout-timer) my/gptel--agent-task-state))))
     (let ((my/gptel--current-agent-task-id task-id)
           (my/gptel--subagent-origin-buffer origin-buf))
-      (let ((request-started nil))
+      (let ((request-started nil)
+            (launch-error nil))
         (unwind-protect
-            (progn
-              (my/gptel--call-gptel-agent-task
-               wrapped-cb agent-type description packaged-prompt)
-                (setq request-started t)
-                (when-let* ((state (gethash task-id my/gptel--agent-task-state))
-                            (request-buf (my/gptel--agent-task-request-buffer state))
-                            ((buffer-live-p request-buf)))
-                  (with-current-buffer request-buf
-                    (when (local-variable-p 'gptel--fsm-last)
-                      (setq child-fsm gptel--fsm-last)
-                      (my/gptel--disable-auto-retry-for-fsm child-fsm)))))
+            (condition-case err
+                (progn
+                  (my/gptel--call-gptel-agent-task
+                   wrapped-cb agent-type description packaged-prompt)
+                  (setq request-started t)
+                  (when-let* ((state (gethash task-id my/gptel--agent-task-state))
+                              (request-buf (my/gptel--agent-task-request-buffer state))
+                              ((buffer-live-p request-buf)))
+                    (with-current-buffer request-buf
+                      (when (local-variable-p 'gptel--fsm-last)
+                        (setq child-fsm gptel--fsm-last)
+                        (my/gptel--disable-auto-retry-for-fsm child-fsm)))))
+              (error
+               (setq launch-error err)))
            (unless request-started
-             (funcall restore-origin-fsm)))))))
+             (funcall restore-origin-fsm)))
+        (when launch-error
+          (let* ((state (gethash task-id my/gptel--agent-task-state))
+                 (timeout-timer (plist-get state :timeout-timer))
+                 (progress-timer (plist-get state :progress-timer))
+                 (request-buf (and state
+                                   (my/gptel--agent-task-request-buffer state))))
+            (when state
+              (when (timerp timeout-timer)
+                (cancel-timer timeout-timer))
+              (when (timerp progress-timer)
+                (cancel-timer progress-timer))
+              (remhash task-id my/gptel--agent-task-state))
+            (funcall restore-origin-fsm child-fsm)
+            (when (and (buffer-live-p request-buf)
+                       (fboundp 'gptel-abort))
+              (ignore-errors (gptel-abort request-buf)))
+            (message "[nucleus] Subagent %s failed before startup completed: %s"
+                     agent-type
+                     (my/gptel--sanitize-for-logging
+                      (error-message-string launch-error) 160))
+            (funcall callback
+                     (format "Error: Task runner failed for %s: %s"
+                             agent-type
+                             (error-message-string launch-error)))))))))
 
 (cl-defun my/gptel--run-agent-tool (callback &optional agent-name description prompt files include-history include-diff)
   "Run a gptel-agent agent by name.
