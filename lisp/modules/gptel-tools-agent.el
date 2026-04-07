@@ -3457,25 +3457,30 @@ Then on a new line, briefly explain why (1 sentence)."
           (with-current-buffer decide-buffer
             (gptel-benchmark-call-subagent
              'comparator
-             "Compare experiment results"
-             compare-prompt
-             (lambda (result)
-               (let* ((response (if (stringp result) result (format "%S" result)))
-                      (winner (cond
-                               ((string-match "^\\s-*A\\b" response) "A")
-                               ((string-match "^\\s-*B\\b" response) "B")
-                               ((string-match "^\\s-*tie\\b" response) "tie")
-                               (t "B")))
-                      (keep (string= winner "B")))
-                 (funcall callback
-                          (list :keep keep
-                                :reasoning (format "Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                                   winner score-before score-after
-                                                   quality-before quality-after
-                                                   combined-before combined-after)
-                                :improvement (list :score (- score-after score-before)
-                                                   :quality (- quality-after quality-before)
-                                                   :combined (- combined-after combined-before)))))))))
+"Compare experiment results"
+              compare-prompt
+              (lambda (result)
+                (let* ((response (if (stringp result) result (format "%S" result)))
+                       (combined-delta (- combined-after combined-before))
+                       (llm-winner (cond
+                                    ((string-match "^\\s-*A\\b" response) "A")
+                                    ((string-match "^\\s-*B\\b" response) "B")
+                                    ((string-match "^\\s-*tie\\b" response) "tie")
+                                    (t "B")))
+                       (winner (cond
+                                ((<= combined-delta -0.005) "A")
+                                ((>= combined-delta 0.005) "B")
+                                (t llm-winner)))
+                       (keep (string= winner "B")))
+                  (funcall callback
+                           (list :keep keep
+                                 :reasoning (format "Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
+                                                    winner score-before score-after
+                                                    quality-before quality-after
+                                                    combined-before combined-after)
+                                 :improvement (list :score (- score-after score-before)
+                                                    :quality (- quality-after quality-before)
+                                                    :combined combined-delta))))))))
       (let ((keep (> combined-after combined-before)))
         (funcall callback
                  (list :keep keep
