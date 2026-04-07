@@ -5301,13 +5301,13 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
           (gptel-auto-workflow--safe-call "Cleanup" #'gptel-auto-workflow--cleanup-stale-state)
           (gptel-auto-workflow--safe-call "Sync staging" #'gptel-auto-workflow--sync-staging-with-main)
           (gptel-auto-workflow--safe-call
-           "Orphan recovery"
+           "Orphan scan"
            (lambda ()
-              (let ((orphans (gptel-auto-workflow--recover-orphans)))
-                (when orphans
-                  (message "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run"
-                           (length orphans))
-                  (gptel-auto-workflow-recover-all-orphans t)))))
+             (let ((orphans (gptel-auto-workflow--recover-orphans)))
+               (when orphans
+                 (message
+                  "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run; leaving them tracked for manual recovery"
+                  (length orphans))))))
           (let ((started
                  (let ((gptel-auto-workflow-skip-if-recent-input nil))
                    (gptel-auto-workflow-run-async--guarded
