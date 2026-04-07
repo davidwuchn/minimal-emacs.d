@@ -524,6 +524,13 @@ When FILE_PATH is nil, searches the entire project workspace."
                    (format "Error: Code_Inspect timed out after 10 seconds for '%s'\n\nACTION:\n  1. Provide explicit file_path to skip workspace search\n  2. Large project - search may take time\n  3. Try Code_Map on specific files first" node_name))
                   (t (format "Error executing Code_Inspect: %s\n\nACTION: Check symbol name and file path, then try again." msg))))))))
 
+(defun gptel-tools-code--file-changed-externally-p ()
+  "Check if the current buffer's file has been modified externally.
+Returns t if file exists and is newer than buffer's view, nil otherwise."
+  (and (buffer-file-name)
+       (file-exists-p (buffer-file-name))
+       (not (verify-visited-file-modtime))))
+
 (defun gptel-tools-code--replace-node (file_path node_name new_code)
   "Surgically replace NODE_NAME in FILE_PATH with NEW_CODE.
 Syncs buffer with disk, validates parser, guards against truncation."
@@ -535,9 +542,7 @@ Syncs buffer with disk, validates parser, guards against truncation."
           (with-current-buffer (find-file-noselect abs-path)
           (when (buffer-modified-p)
             (error "Buffer has unsaved changes. Save or revert manually before Code_Replace."))
-          (when (and (buffer-file-name)
-                     (file-exists-p (buffer-file-name))
-                     (not (verify-visited-file-modtime)))
+          (when (gptel-tools-code--file-changed-externally-p)
             (revert-buffer t t t))
            (let ((parser-error (gptel-tools-code--ensure-treesit-ready abs-path
                                                                        "Edit tool (manual paren balancing required)")))
@@ -552,10 +557,8 @@ Syncs buffer with disk, validates parser, guards against truncation."
                              (length new_code) (length old-code))
                    (if (treesit-agent-replace-node node_name new_code)
                        (progn
-                         (when (and (buffer-file-name)
-                                    (file-exists-p (buffer-file-name))
-                                    (not (verify-visited-file-modtime)))
-                           (error "File changed externally after revert. Re-run Code_Replace."))
+                         (when (gptel-tools-code--file-changed-externally-p)
+                           (error "File changed externally during replace. Re-run Code_Replace."))
                          (cl-letf (((symbol-function 'ask-user-about-supersession-threat) #'ignore))
                            (save-buffer))
                          (format "Successfully replaced '%s' in %s" node_name abs-path))
