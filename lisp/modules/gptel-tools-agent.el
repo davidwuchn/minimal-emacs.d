@@ -5797,52 +5797,120 @@ Returns list of synthesis candidates."
 (defun gptel-mementum-synthesize-candidate (candidate)
   "Synthesize CANDIDATE into knowledge page with human approval.
 CANDIDATE is plist with :topic :count :files.
-Implements λ termination(x): synthesis ≡ AI | approval ≡ human."
+Implements λ termination(x): synthesis ≡ AI | approval ≡ human.
+Returns t if synthesis was initiated, nil otherwise."
   (let* ((topic (plist-get candidate :topic))
          (files (plist-get candidate :files))
-         (memories-content '())
-         (synthesized nil))
+         (memories-content '()))
     (dolist (file files)
       (let ((content (gptel-auto-workflow--read-file-contents file)))
         (when content
           (push content memories-content))))
-    (when (>= (length memories-content) 3)
-      (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
-        (with-current-buffer preview-buffer
-          (erase-buffer)
-          (insert (format "# Synthesis Preview: %s\n\n" topic))
-          (insert (format "## Source Memories (%d)\n\n" (length memories-content)))
-          (dolist (content memories-content)
-            (insert (format "### %s\n\n%s\n\n"
-                            (truncate-string-to-width content 50 nil nil "...")
-                            content)))
-          (insert "\n## Proposed Knowledge Page\n\n")
-          (insert (format "---\ntitle: %s\nstatus: open\ncategory: synthesized\ntags:\n  - %s\nsynthesized: %s\n---\n\n"
-                          topic topic (format-time-string "%Y-%m-%d")))
-          (insert (format "# %s\n\nSynthesized from %d memories.\n\n" topic (length memories-content)))
-          (insert "## Key Patterns\n\n(Auto-detected patterns)\n\n")
-          (goto-char (point-min)))
-        (display-buffer preview-buffer)
-        (when (y-or-n-p (format "Create knowledge page for '%s'? " topic))
-          (let* ((frontmatter (format "---\ntitle: %s\nstatus: open\ncategory: synthesized\ntags:\n  - %s\nsynthesized: %s\n---"
-                                      topic topic (format-time-string "%Y-%m-%d")))
-                 (content (format "\n\n# %s\n\nSynthesized from %d memories.\n\n## Key Patterns\n\nPatterns identified from:\n%s\n"
-                                  topic (length memories-content)
-                                  (mapconcat (lambda (f) (format "- %s" (file-name-nondirectory f))) files "\n")))
-                 (know-dir (expand-file-name "mementum/knowledge" (gptel-auto-workflow--project-root)))
-                 (know-file (expand-file-name (format "%s.md" topic) know-dir)))
-            (make-directory know-dir t)
-            (with-temp-file know-file
-              (insert frontmatter)
-              (insert content))
-            (message "[mementum] Created knowledge page: %s" know-file)
-            ;; SECURITY: Use shell-quote-argument to prevent shell injection
-            (shell-command-to-string
-             (format "git add %s && git commit -m %s"
-                     (shell-quote-argument know-file)
-                     (shell-quote-argument (format "💡 synthesis: %s" topic))))
-            (setq synthesized t)))))
-    synthesized))
+    (if (< (length memories-content) 3)
+        (progn
+          (message "[mementum] Skip synthesis: only %d memories for '%s'" (length memories-content) topic)
+          nil)
+      (let ((synthesis-prompt (gptel-mementum--build-synthesis-prompt topic memories-content)))
+        (message "[mementum] Synthesizing %d memories for topic: %s" (length memories-content) topic)
+        (my/gptel--call-gptel-agent-task
+         (lambda (result)
+           (gptel-mementum--handle-synthesis-result topic files result))
+         'executor
+         (format "Synthesize knowledge: %s" topic)
+         synthesis-prompt)
+        t))))
+
+(defun gptel-mementum--handle-synthesis-result (topic files result)
+  "Handle LLM synthesis RESULT for TOPIC from FILES.
+Shows preview and asks for human approval before saving."
+  (condition-case err
+      (let* ((extracted (gptel-mementum--extract-content result))
+             (line-count (with-temp-buffer (insert extracted) (count-lines 1 (point-max))))
+             (preview-buffer (get-buffer-create "*Synthesis Preview*")))
+        (if (< line-count 50)
+            (message "[mementum] Skip '%s': only %d lines (need ≥50)" topic line-count)
+          (with-current-buffer preview-buffer
+            (erase-buffer)
+            (insert (format "# Synthesis Preview: %s\n\n" topic))
+            (insert (format "Generated: %d lines\n\n" line-count))
+            (insert "## Generated Knowledge Page\n\n")
+            (insert extracted)
+            (goto-char (point-min)))
+          (display-buffer preview-buffer)
+          (when (y-or-n-p (format "Create knowledge page for '%s'? (%d lines) " topic line-count))
+            (gptel-mementum--save-knowledge-page topic files extracted))))
+    (error
+     (message "[mementum] Error handling synthesis for '%s': %s" topic err))))
+
+(defun gptel-mementum--build-synthesis-prompt (topic memories)
+  "Build prompt for LLM to synthesize MEMORIES into knowledge page for TOPIC."
+  (format "Synthesize the following memories into a knowledge page.
+
+TOPIC: %s
+
+REQUIREMENTS:
+1. Minimum 50 lines of actual content
+2. Concrete examples (code, tables, commands)
+3. Actionable patterns (not just descriptions)
+4. Cross-references to related topics
+
+OUTPUT FORMAT:
+---
+title: [Title]
+status: active
+category: knowledge
+tags: [tag1, tag2]
+---
+
+# [Title]
+
+## [Section 1]
+
+[Content with examples]
+
+## [Section 2]
+
+[Content with patterns]
+
+## Related
+
+- [Related topics]
+
+---
+
+MEMORIES TO SYNTHESIZE:
+
+%s
+
+---
+
+Generate the complete knowledge page now. Start with the frontmatter and include ALL content. Do not truncate or summarize - provide the full synthesis."
+          topic
+          (mapconcat #'identity memories "\n\n---\n\n")))
+
+(defun gptel-mementum--extract-content (llm-result)
+  "Extract knowledge page content from LLM-RESULT.
+Returns the content between the first --- and end, or the whole result."
+  (let* ((result (if (stringp llm-result) llm-result (format "%s" llm-result)))
+         (start (string-match "---\n" result)))
+    (if start
+        (substring result start)
+      result)))
+
+(defun gptel-mementum--save-knowledge-page (topic files content)
+  "Save synthesized CONTENT as knowledge page for TOPIC from FILES."
+  (let* ((know-dir (expand-file-name "mementum/knowledge" (gptel-auto-workflow--project-root)))
+         (know-file (expand-file-name (format "%s.md" topic) know-dir)))
+    (make-directory know-dir t)
+    (with-temp-file know-file
+      (insert content))
+    (message "[mementum] Created knowledge page: %s (%d lines)" 
+             know-file 
+             (with-temp-buffer (insert content) (count-lines 1 (point-max))))
+    (shell-command-to-string
+     (format "git add %s && git commit -m %s"
+             (shell-quote-argument know-file)
+             (shell-quote-argument (format "💡 synthesis: %s (AI-generated)" topic))))))
 
 (defun gptel-mementum-synthesize-all-candidates (&optional candidates)
   "Synthesize all CANDIDATES (or detect if nil) with human approval."
