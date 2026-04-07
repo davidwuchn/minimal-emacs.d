@@ -197,7 +197,8 @@ Returns updated eight-keys plist with all keys decayed."
 
 (defun gptel-benchmark-instincts--parse-frontmatter (file)
   "Parse YAML frontmatter from FILE.
-Returns alist of frontmatter keys/values."
+Returns alist of frontmatter keys/values.
+Handles multi-line blocks (e.g., instincts:) by capturing indented content."
   (when (file-exists-p file)
     (with-temp-buffer
       (insert-file-contents file)
@@ -210,11 +211,25 @@ Returns alist of frontmatter keys/values."
               (result '()))
           (when end
             (while (< (point) end)
-              (when (looking-at "^\\([^:]+\\):\\s-*\\(.*\\)$")
+              (cond
+               ((looking-at "^\\([^:]+\\):\\s-*$")
+                (let ((key (intern (concat ":" (string-trim (match-string 1))))))
+                  (forward-line 1)
+                  (let ((block-lines '()))
+                    (while (and (< (point) end)
+                                (looking-at "^  "))
+                      (push (buffer-substring-no-properties (line-beginning-position)
+                                                            (line-end-position))
+                            block-lines)
+                      (forward-line 1))
+                    (push (cons key (string-join (nreverse block-lines) "\n")) result))))
+               ((looking-at "^\\([^:]+\\):\\s-*\\(.*\\)$")
                 (let ((key (intern (concat ":" (string-trim (match-string 1)))))
                       (value (string-trim (match-string 2))))
-                  (push (cons key value) result)))
-              (forward-line 1))
+                  (push (cons key value) result)
+                  (forward-line 1)))
+               (t
+                (forward-line 1))))
             (nreverse result)))))))
 
 (defun gptel-benchmark-instincts--parse-instincts (instincts-string)
@@ -245,11 +260,20 @@ INSTINCTS-STRING is the raw YAML content."
                  (eight-keys (cdr (assoc :eight-keys current-data))))
             (setcdr (assoc :eight-keys current-data)
                     (plist-put eight-keys key val))))
-         ;; Other values
-         ((string-match "^    \\([a-z-]+\\):\\s-*\\([0-9]+\\|[^[:space:]]+\\)" line)
-          (let ((key (intern (concat ":" (match-string 1 line))))
-                (value (match-string 2 line)))
-            (push (cons key value) current-data)))))
+;; Other values (numeric or string)
+          ((string-match "^    \\([a-z-]+\\):\\s-*\\([0-9]+\\.[0-9]+\\)" line)
+           (let ((key (intern (concat ":" (match-string 1 line))))
+                 (value (string-to-number (match-string 2 line))))
+             (push (cons key value) current-data)))
+          ((string-match "^    \\([a-z-]+\\):\\s-*\\([0-9]+\\)\\s-*$" line)
+           (let ((key (intern (concat ":" (match-string 1 line))))
+                 (value (string-to-number (match-string 2 line))))
+             (push (cons key value) current-data)))
+          ;; String values (dates, etc.)
+          ((string-match "^    \\([a-z-]+\\):\\s-*\\([^[:space:]]+\\)" line)
+           (let ((key (intern (concat ":" (match-string 1 line))))
+                 (value (match-string 2 line)))
+             (push (cons key value) current-data)))))
       (when current-pattern
         (push (cons current-pattern current-data) result))
       (nreverse result))))
@@ -358,7 +382,10 @@ Returns updated instincts alist."
         (if existing
             (let* ((existing-data (cdr existing))
                    (existing-eight-keys (cdr (assoc :eight-keys existing-data)))
-                   (existing-evidence (or (cdr (assoc :evidence existing-data)) 0))
+                   (existing-evidence (let ((ev (cdr (assoc :evidence existing-data))))
+                     (cond ((numberp ev) ev)
+                           ((stringp ev) (string-to-number ev))
+                           (t 0))))
                    (merged-keys (gptel-benchmark-instincts--merge-eight-keys
                                  existing-eight-keys eight-keys-delta count))
                    (new-phi (gptel-benchmark-instincts-compute-phi merged-keys)))

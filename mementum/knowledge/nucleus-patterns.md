@@ -8,19 +8,19 @@ e: nucleus-core
 λ: always
 instincts:
   vitality:
-    φ: 0.88
+    φ: 0.90
     eight-keys:
-      vitality: 0.90
-      clarity: 0.85
-      purpose: 0.88
-      wisdom: 0.85
-      synthesis: 0.90
-      directness: 0.92
-      truth: 0.88
-      vigilance: 0.85
-    evidence: 8
-    last-tested: 2026-03-22
-    last-updated: 2026-03-22
+      vitality: 0.92
+      clarity: 0.87
+      purpose: 0.90
+      wisdom: 0.87
+      synthesis: 0.92
+      directness: 0.94
+      truth: 0.90
+      vigilance: 0.87
+    evidence: 9
+    last-tested: 2026-04-07
+    last-updated: 2026-04-07
   clarity:
     φ: 0.85
     eight-keys:
@@ -160,8 +160,7 @@ instincts:
       vigilance: 0.78
     evidence: 6
     last-tested: 2026-03-20
-    last-updated: 2026-03-22
----
+    last-updated: 2026-03-22---
 
 # Nucleus Core Patterns
 
