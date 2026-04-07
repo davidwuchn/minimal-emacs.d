@@ -3307,22 +3307,34 @@ Always returns absolute path."
 Tests run in worktree if set, otherwise project root.
 Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
   (let* ((proj-root (gptel-auto-workflow--project-root))
-         (default-directory (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target) proj-root))
+         (worktree (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)
+                       proj-root))
+         (default-directory worktree)
+         (isolated-status-file (let ((path (make-temp-file "auto-workflow-status-" nil ".sexp")))
+                                 (delete-file path)
+                                 path))
+         (process-environment
+          (cons (format "AUTO_WORKFLOW_STATUS_FILE=%s" isolated-status-file)
+                process-environment))
          (test-script (expand-file-name "scripts/run-tests.sh" proj-root))
          (output-buffer (generate-new-buffer "*test-output*"))
          result)
-    (if (not (file-executable-p test-script))
-        (progn
-          (message "[auto-experiment] Test script not found or not executable: %s" test-script)
-          (cons t "No test script - skipping"))
-      (message "[auto-experiment] Running tests...")
-      (let ((exit-code (call-process test-script nil output-buffer nil)))
-        (with-current-buffer output-buffer
-          (setq result (cons (zerop exit-code) (buffer-string))))
-        (kill-buffer output-buffer)
-        (when (car result)
-          (message "[auto-experiment] ✓ Tests passed"))
-        result))))
+    (unwind-protect
+        (if (not (file-executable-p test-script))
+            (progn
+              (message "[auto-experiment] Test script not found or not executable: %s" test-script)
+              (cons t "No test script - skipping"))
+          (message "[auto-experiment] Running tests...")
+          (let ((exit-code (call-process test-script nil output-buffer nil "unit")))
+            (with-current-buffer output-buffer
+              (setq result (cons (zerop exit-code) (buffer-string))))
+            (when (car result)
+              (message "[auto-experiment] ✓ Tests passed"))
+            result))
+      (when (buffer-live-p output-buffer)
+        (kill-buffer output-buffer))
+      (when (file-exists-p isolated-status-file)
+        (delete-file isolated-status-file)))))
 
 (defcustom gptel-auto-experiment-require-tests t
   "When non-nil, require tests to pass before merging experiment to staging.
@@ -4645,10 +4657,23 @@ Relative paths are resolved from the project root."
 
 (defun gptel-auto-workflow--status-file ()
   "Return absolute path to the persisted workflow status snapshot."
-  (if (file-name-absolute-p gptel-auto-workflow-status-file)
-      gptel-auto-workflow-status-file
-    (expand-file-name gptel-auto-workflow-status-file
-                      (gptel-auto-workflow--default-dir))))
+  (let* ((configured-file gptel-auto-workflow-status-file)
+         (default-file "var/tmp/cron/auto-workflow-status.sexp")
+         (env-file (getenv "AUTO_WORKFLOW_STATUS_FILE")))
+    (cond
+     ((not (equal configured-file default-file))
+      (if (file-name-absolute-p configured-file)
+          configured-file
+        (expand-file-name configured-file
+                          (gptel-auto-workflow--default-dir))))
+     ((and (stringp env-file)
+           (not (string-empty-p env-file)))
+      env-file)
+     ((file-name-absolute-p configured-file)
+      configured-file)
+     (t
+      (expand-file-name configured-file
+                        (gptel-auto-workflow--default-dir))))))
 
 (defun gptel-auto-workflow--status-plist ()
   "Return current workflow status as a plist."
@@ -5053,7 +5078,8 @@ Usage:
     (gptel-auto-workflow--require-magit-dependencies)
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
-          gptel-auto-workflow--run-id (gptel-auto-workflow--make-run-id)
+          gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id
+                                          (gptel-auto-workflow--make-run-id))
           gptel-auto-experiment--api-error-count 0
           gptel-auto-experiment--quota-exhausted nil
           gptel-auto-workflow--running t

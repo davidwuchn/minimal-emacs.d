@@ -316,6 +316,9 @@ the queued job actually finishes."
           (gptel-auto-workflow--persist-status))
         'already-running)
     (setq gptel-auto-workflow--cron-job-running t)
+    (when (fboundp 'gptel-auto-workflow--make-run-id)
+      (setq gptel-auto-workflow--run-id
+            (gptel-auto-workflow--make-run-id)))
     (setq gptel-auto-workflow--stats
           (list :phase (format "%s-queued" label)
                 :total 0

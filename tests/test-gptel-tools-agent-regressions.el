@@ -3095,6 +3095,33 @@ EXIT-CODE defaults to 1."
                      :run-id "2026-04-06T022911Z-0af8"
                      :results "var/tmp/experiments/2026-04-06T022911Z-0af8/results.tsv")))))
 
+(ert-deftest regression/auto-workflow/status-file-honors-environment-override ()
+  "Workflow status file should honor AUTO_WORKFLOW_STATUS_FILE."
+  (let* ((override-file (make-temp-file "aw-status-override" nil ".sexp"))
+         (process-environment
+          (cons (format "AUTO_WORKFLOW_STATUS_FILE=%s" override-file)
+                process-environment))
+         (gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.sexp"))
+    (unwind-protect
+        (should (equal (gptel-auto-workflow--status-file) override-file))
+      (when (file-exists-p override-file)
+        (delete-file override-file)))))
+
+(ert-deftest regression/auto-workflow/status-file-explicit-binding-beats-environment-override ()
+  "Explicit Lisp bindings should beat AUTO_WORKFLOW_STATUS_FILE."
+  (let* ((override-file (make-temp-file "aw-status-env" nil ".sexp"))
+         (bound-file (make-temp-file "aw-status-bound" nil ".sexp"))
+         (process-environment
+          (cons (format "AUTO_WORKFLOW_STATUS_FILE=%s" override-file)
+                process-environment))
+         (gptel-auto-workflow-status-file bound-file))
+    (unwind-protect
+        (should (equal (gptel-auto-workflow--status-file) bound-file))
+      (when (file-exists-p override-file)
+        (delete-file override-file))
+      (when (file-exists-p bound-file)
+        (delete-file bound-file)))))
+
 (ert-deftest regression/auto-workflow/run-async-assigns-run-id-before-first-persist ()
   "Workflow launch should assign a run id before the first persisted snapshot."
   (let (persisted-status)
@@ -3121,6 +3148,60 @@ EXIT-CODE defaults to 1."
         (should (string-match-p
                  "^[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{6\\}Z-[0-9a-f]\\{4\\}$"
                  (plist-get persisted-status :run-id)))
+        (should (equal (plist-get persisted-status :results)
+                       (format "var/tmp/experiments/%s/results.tsv"
+                               (plist-get persisted-status :run-id))))))))
+
+(ert-deftest regression/auto-workflow/run-async-reuses-existing-run-id ()
+  "Workflow launch should reuse a queued run id instead of replacing it."
+  (let (persisted-status)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--active-use-p)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--require-magit-dependencies)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda ()
+                 (setq persisted-status (gptel-auto-workflow--status-plist))))
+              ((symbol-function 'gptel-auto-workflow--run-with-targets)
+               (lambda (&rest _) nil))
+              ((symbol-function 'run-with-timer)
+               (lambda (&rest _) 'fake-watchdog))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (let ((gptel-auto-workflow--run-id "2026-04-07T185008Z-edbd")
+            (gptel-auto-workflow--running nil)
+            (gptel-auto-workflow--stats nil)
+            (gptel-auto-workflow--watchdog-timer nil))
+        (should (eq (gptel-auto-workflow-run-async '("lisp/modules/gptel-tools-agent.el"))
+                    'started))
+        (should (equal gptel-auto-workflow--run-id "2026-04-07T185008Z-edbd"))
+        (should (equal (plist-get persisted-status :run-id)
+                       "2026-04-07T185008Z-edbd"))))))
+
+(ert-deftest regression/auto-workflow/queue-cron-job-assigns-run-id-before-first-persist ()
+  "Queued workflow snapshots should get a fresh run id before persisting."
+  (let (persisted-status)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda ()
+                 (setq persisted-status (gptel-auto-workflow--status-plist))))
+              ((symbol-function 'run-at-time)
+               (lambda (&rest _) 'fake-timer))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (let ((gptel-auto-workflow--run-id "2026-04-07T180427Z-bbf1")
+            (gptel-auto-workflow--cron-job-running nil)
+            (gptel-auto-workflow--stats nil))
+        (should (eq (gptel-auto-workflow--queue-cron-job
+                     "auto-workflow"
+                     (lambda (&optional _completion-callback) nil)
+                     :async t)
+                    'queued))
+        (should (string-match-p
+                 "^[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{6\\}Z-[0-9a-f]\\{4\\}$"
+                 (plist-get persisted-status :run-id)))
+        (should-not (equal (plist-get persisted-status :run-id)
+                           "2026-04-07T180427Z-bbf1"))
+        (should (equal (plist-get persisted-status :phase) "auto-workflow-queued"))
         (should (equal (plist-get persisted-status :results)
                        (format "var/tmp/experiments/%s/results.tsv"
                                (plist-get persisted-status :run-id))))))))
@@ -3657,8 +3738,49 @@ Submodules are hydrated later during verification, not during merge prep."
         (should (= run-count 1))
         (should (plist-get result :passed))
         (should (plist-get result :tests-passed))
-        (should-not (plist-get result :tests-skipped))
-        (should (equal (plist-get result :tests-output) "tests ok"))))))
+         (should-not (plist-get result :tests-skipped))
+         (should (equal (plist-get result :tests-output) "tests ok"))))))
+
+(ert-deftest regression/auto-experiment/run-tests-isolates-status-file ()
+  "Experiment test subprocesses should not share the live workflow status file."
+  (let* ((proj-root (make-temp-file "aw-tests-root" t))
+         (worktree (make-temp-file "aw-tests-worktree" t))
+         captured-env
+         captured-args)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () proj-root))
+              ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+               (lambda (&rest _) worktree))
+              ((symbol-function 'file-executable-p)
+               (lambda (_file) t))
+              ((symbol-function 'call-process)
+               (lambda (_program _in buffer _display &rest args)
+                 (setq captured-env (copy-sequence process-environment))
+                 (setq captured-args args)
+                 (with-current-buffer buffer
+                   (insert "tests ok"))
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (unwind-protect
+          (let ((result (gptel-auto-experiment-run-tests)))
+            (should (car result))
+            (should (equal (cdr result) "tests ok"))
+            (let* ((prefix "AUTO_WORKFLOW_STATUS_FILE=")
+                   (entry (seq-find (lambda (item)
+                                      (string-prefix-p prefix item))
+                                    captured-env))
+                   (status-file (and entry
+                                     (substring entry (length prefix)))))
+              (should status-file)
+              (should (file-name-absolute-p status-file))
+              (should-not (equal status-file
+                                 (expand-file-name "var/tmp/cron/auto-workflow-status.sexp"
+                                                   proj-root)))
+              (should (equal captured-args '("unit")))
+              (should-not (file-exists-p status-file))))
+        (delete-directory proj-root t)
+        (delete-directory worktree t)))))
 
 (ert-deftest regression/auto-experiment/benchmark-allows-main-baseline-test-failures ()
   "Required experiment tests should allow failures already present on main."
