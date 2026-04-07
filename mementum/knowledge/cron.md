@@ -105,6 +105,80 @@ Ensure log directory exists before cron runs:
 @reboot mkdir -p $HOME/.emacs.d/var/tmp/cron
 ```
 
+## Installation Script
+
+**Location:** `scripts/install-cron.sh`
+
+### Usage
+
+```bash
+# Install crontab (auto-detect platform)
+./scripts/install-cron.sh
+
+# Preview without installing
+./scripts/install-cron.sh --dry-run
+
+# Render crontab to stdout
+./scripts/install-cron.sh --render
+```
+
+### Machine Detection
+
+Script auto-detects machine type:
+
+| Machine | Detection | Schedule |
+|---------|-----------|----------|
+| macOS | `uname -s = "Darwin"` | 10AM, 2PM, 6PM |
+| Pi5 | hostname contains `pi5\|raspberrypi\|onepi` | 6 runs/day |
+| Linux | `uname -s = "Linux"` | Same as Pi5 |
+| Single | Fallback | Every 4 hours |
+
+### Section-Based Rendering
+
+Cron template (`cron.d/auto-workflow`) has sections:
+
+```
+# -----------------------------------------------------------------
+# PI5: Linux systemd (24/7 headless) - SECTION: pi5
+# -----------------------------------------------------------------
+#0 23,3,7,11,15,19 * * * ...
+
+# -----------------------------------------------------------------
+# MACOS: Daylight hours (interactive use) - SECTION: macos
+# -----------------------------------------------------------------
+#0 10,14,18 * * * ...
+```
+
+Script:
+1. Finds section matching machine type
+2. Uncomments lines starting with `#0 ` in that section
+3. Other sections stay commented
+4. Injects PATH and XDG_RUNTIME_DIR
+
+### PATH Differences by Platform
+
+```bash
+# macOS (homebrew)
+PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin
+
+# Linux
+PATH=/usr/local/bin:/usr/bin:/bin
+```
+
+### Log Directory
+
+Script creates on install:
+
+```bash
+mkdir -p var/tmp/cron var/tmp/experiments
+```
+
+And via crontab on reboot:
+
+```cron
+@reboot mkdir -p $HOME/.emacs.d/var/tmp/cron
+```
+
 ## Verification
 
 After installing crontab:
