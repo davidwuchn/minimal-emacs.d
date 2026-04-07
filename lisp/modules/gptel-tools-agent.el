@@ -1855,8 +1855,9 @@ Call this before any git operation that might modify branches."
 
 (defun gptel-auto-workflow--staging-main-ref ()
   "Return the safe main ref staging and experiments should mirror.
-Prefer local `main' only when it matches `origin/main'. Otherwise use
-`origin/main' so unpublished local commits do not leak into workflow branches."
+Prefer local `main' when it matches `origin/main' or is clean and ahead-only.
+Otherwise use `origin/main' so dirty or divergent local commits do not leak
+into workflow branches."
   (let ((default-directory (gptel-auto-workflow--default-dir)))
     (let* ((main-result (gptel-auto-workflow--git-result
                          "git rev-parse --verify main"
@@ -1867,16 +1868,37 @@ Prefer local `main' only when it matches `origin/main'. Otherwise use
            (have-main (= 0 (cdr main-result)))
            (have-origin (= 0 (cdr origin-result)))
            (main-hash (and have-main (string-trim (car main-result))))
-           (origin-hash (and have-origin (string-trim (car origin-result)))))
-      (cond
-       ((and have-main have-origin)
-        (if (string= main-hash origin-hash)
-            "main"
-          (message "[auto-workflow] Local main differs from origin/main; using origin/main as workflow base")
-          "origin/main"))
-       (have-origin
-        "origin/main")
-       (have-main
+            (origin-hash (and have-origin (string-trim (car origin-result)))))
+       (cond
+        ((and have-main have-origin)
+         (cond
+          ((string= main-hash origin-hash)
+           "main")
+          (t
+           (let* ((status-result (gptel-auto-workflow--git-result
+                                  "git status --porcelain"
+                                  60))
+                  (clean-main (and (= 0 (cdr status-result))
+                                   (string-empty-p (string-trim (car status-result)))))
+                  (divergence-result (gptel-auto-workflow--git-result
+                                      "git rev-list --left-right --count origin/main...main"
+                                      60))
+                  (divergence (and (= 0 (cdr divergence-result))
+                                   (split-string (string-trim (car divergence-result)) "\t")))
+                  (origin-only (car-safe divergence))
+                  (local-only (cadr divergence)))
+             (if (and clean-main
+                      (equal origin-only "0")
+                      local-only
+                      (not (equal local-only "0")))
+                 (progn
+                   (message "[auto-workflow] Local main is clean and ahead of origin/main; using main as workflow base")
+                   "main")
+               (message "[auto-workflow] Local main differs from origin/main; using origin/main as workflow base")
+               "origin/main")))))
+        (have-origin
+         "origin/main")
+        (have-main
         "main")
        (t
         (message "[auto-workflow] Missing main ref for staging sync")
