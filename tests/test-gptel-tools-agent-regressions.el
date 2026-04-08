@@ -4709,6 +4709,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
   (let* ((proj-root (make-temp-file "aw-tests-root" t))
          (worktree (make-temp-file "aw-tests-worktree" t))
          captured-env
+         captured-program
          captured-args)
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () proj-root))
@@ -4717,12 +4718,13 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'file-executable-p)
                (lambda (_file) t))
               ((symbol-function 'call-process)
-               (lambda (_program _in buffer _display &rest args)
-                 (setq captured-env (copy-sequence process-environment))
-                 (setq captured-args args)
-                 (with-current-buffer buffer
-                   (insert "tests ok"))
-                 0))
+               (lambda (program _in buffer _display &rest args)
+                  (setq captured-program program)
+                  (setq captured-env (copy-sequence process-environment))
+                  (setq captured-args args)
+                  (with-current-buffer buffer
+                    (insert "tests ok"))
+                  0))
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (unwind-protect
@@ -4733,8 +4735,10 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                    (entry (seq-find (lambda (item)
                                       (string-prefix-p prefix item))
                                     captured-env))
-                   (status-file (and entry
-                                     (substring entry (length prefix)))))
+                    (status-file (and entry
+                                      (substring entry (length prefix)))))
+              (should (equal captured-program
+                             (expand-file-name "scripts/run-tests.sh" worktree)))
               (should status-file)
               (should (file-name-absolute-p status-file))
               (should-not (equal status-file

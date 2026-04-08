@@ -3534,7 +3534,7 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
          (process-environment
           (cons (format "AUTO_WORKFLOW_STATUS_FILE=%s" isolated-status-file)
                 process-environment))
-         (test-script (expand-file-name "scripts/run-tests.sh" proj-root))
+         (test-script (expand-file-name "scripts/run-tests.sh" worktree))
          (output-buffer (generate-new-buffer "*test-output*"))
          result)
     (unwind-protect
