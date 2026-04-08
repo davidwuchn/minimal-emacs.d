@@ -1272,9 +1272,12 @@ Dynamic variable, let-bound around gptel-agent--task calls.")
 (defun my/gptel--agent-task-note-activity (task-id &optional timestamp)
   "Record fresh activity for TASK-ID at TIMESTAMP or now."
   (when-let* ((state (gethash task-id my/gptel--agent-task-state)))
-    (puthash task-id
-             (plist-put state :last-activity-time (or timestamp (current-time)))
-             my/gptel--agent-task-state)))
+    (let ((activity-time (or timestamp (current-time))))
+      (puthash task-id
+               (plist-put state :last-activity-time activity-time)
+               my/gptel--agent-task-state)
+      (when gptel-auto-workflow--running
+        (setq gptel-auto-workflow--last-progress-time activity-time)))))
 
 (defun my/gptel--agent-task-uses-idle-timeout-p (agent-type)
   "Return non-nil when AGENT-TYPE should use inactivity-based timeout extension."

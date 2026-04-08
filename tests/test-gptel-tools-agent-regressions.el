@@ -3039,9 +3039,30 @@ EXIT-CODE defaults to 1."
       (should-not gptel-auto-workflow--running)
       (should-not gptel-auto-workflow--cron-job-running)
       (should-not gptel-auto-workflow--current-project)
-      (should-not gptel-auto-workflow--current-target)
-      (should (equal (plist-get gptel-auto-workflow--stats :phase) "idle"))
-      (should (equal (plist-get persisted :phase) "idle")))))
+       (should-not gptel-auto-workflow--current-target)
+       (should (equal (plist-get gptel-auto-workflow--stats :phase) "idle"))
+       (should (equal (plist-get persisted :phase) "idle")))))
+
+(ert-deftest regression/auto-workflow/watchdog-allows-active-subagent-progress ()
+  "Watchdog should not force-stop while an active subagent is still making progress."
+  (let ((gptel-auto-workflow--running t)
+        (gptel-auto-workflow--last-progress-time
+         (time-subtract (current-time) (seconds-to-time (* 40 60))))
+        (gptel-auto-workflow--max-stuck-minutes 30)
+        (gptel-auto-workflow--stats '(:phase "running" :total 1 :kept 0))
+        (my/gptel--agent-task-state (make-hash-table :test 'eql))
+        (activity-time (time-subtract (current-time) (seconds-to-time 5))))
+    (puthash 1 '(:done nil :agent-type "executor")
+             my/gptel--agent-task-state)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda () (error "watchdog should not persist while progress is fresh")))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (my/gptel--agent-task-note-activity 1 activity-time)
+      (should (eq (gptel-auto-workflow--watchdog-check) t))
+      (should gptel-auto-workflow--running)
+      (should (equal gptel-auto-workflow--last-progress-time activity-time))
+      (should (equal (plist-get gptel-auto-workflow--stats :phase) "running")))))
 
 (ert-deftest regression/auto-workflow/headless-subagents-bypass-runagent-loop ()
   "Headless auto-workflow subagents should set the loop bypass flag."
