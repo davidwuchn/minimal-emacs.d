@@ -390,9 +390,48 @@ EXIT-CODE defaults to 1."
              (setq result exp-result)))
           (should result)
            (should (= gptel-auto-experiment--api-error-count 3))
-           (should (equal (plist-get result :comparator-reason) ":api-rate-limit"))
-            (should-not (plist-get result :kept))))
+            (should (equal (plist-get result :comparator-reason) ":api-rate-limit"))
+             (should-not (plist-get result :kept))))
         (delete-directory temp-dir t)))
+
+(ert-deftest regression/auto-experiment/run-surfaces-retryable-grader-errors ()
+  "Failed grades should surface retryable grader details for outer retry logic."
+  (let ((result nil)
+        (temp-dir (make-temp-file "exp-worktree" t))
+        (grader-error
+         "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")"))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (lambda (_target _experiment-id) temp-dir))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results cb)
+                     (funcall cb '(:patterns nil))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _args) "prompt"))
+                  ((symbol-function 'run-with-timer)
+                   (lambda (&rest _args) :fake-timer))
+                  ((symbol-function 'cancel-timer)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'my/gptel--run-agent-tool)
+                   (lambda (cb &rest _args)
+                     (funcall cb "Executor result for task: successful candidate")))
+                  ((symbol-function 'gptel-auto-experiment-grade)
+                   (lambda (_output cb &rest _args)
+                     (funcall cb `(:score 0 :total 9 :passed nil :details ,grader-error))))
+                  ((symbol-function 'gptel-auto-experiment-log-tsv)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (gptel-auto-experiment-run
+           "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+           (lambda (exp-result)
+             (setq result exp-result))))
+      (delete-directory temp-dir t))
+    (should result)
+    (should (equal (plist-get result :error) grader-error))
+    (should (equal (plist-get result :grader-reason) grader-error))
+    (should (gptel-auto-experiment--is-retryable-error-p
+             (plist-get result :error)))))
 
 (ert-deftest regression/auto-experiment/run-uses-new-worktree-buffer-context ()
   "Later experiments should switch into the new worktree buffer before subagents run."
@@ -1022,6 +1061,39 @@ EXIT-CODE defaults to 1."
                               (list :agent-output
                                     "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 28. See Curl manpage for details.\""
                                     :comparator-reason ":timeout")
+                            (list :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+       (should (= runs 2))
+       (should (equal (plist-get final-result :agent-output)
+                      "Executor result for task: retry success")))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-retries-grader-overload-errors ()
+  "Retry helper should retry transient grader overload failures surfaced via :error."
+  (let ((runs 0)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0)
+        (grader-error
+         "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")"))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+                 (cl-incf runs)
+                 (funcall callback
+                          (if (= runs 1)
+                              (list :agent-output "Executor result for task: candidate"
+                                    :error grader-error
+                                    :grader-reason grader-error
+                                    :comparator-reason ":api-error")
                             (list :agent-output "Executor result for task: retry success"
                                   :comparator-reason "ok")))))
               ((symbol-function 'run-with-timer)

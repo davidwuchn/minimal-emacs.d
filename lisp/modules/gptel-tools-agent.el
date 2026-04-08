@@ -4127,6 +4127,19 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
           "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|curl failed with exit code 28\\|operation timed out"
           error-output))))
 
+(defun gptel-auto-experiment--grade-failure-error-output (grade-details agent-output)
+  "Return retryable/error-shaped output for a failed grade.
+Prefer GRADE-DETAILS when the grader itself failed transiently; otherwise
+fall back to an error-shaped AGENT-OUTPUT."
+  (cond
+   ((and (stringp grade-details)
+         (or (gptel-auto-experiment--agent-error-p grade-details)
+             (gptel-auto-experiment--is-retryable-error-p grade-details)
+             (gptel-auto-experiment--quota-exhausted-p grade-details)))
+    grade-details)
+   ((gptel-auto-experiment--agent-error-p agent-output)
+    agent-output)))
+
 (defun gptel-auto-experiment--hard-timeout-p (error-output)
   "Return non-nil when ERROR-OUTPUT reports a hard wall-clock timeout."
   (and (stringp error-output)
@@ -4392,41 +4405,51 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                        (message "[auto-exp] Agent preview: %s"
                                 (my/gptel--sanitize-for-logging agent-output 100)))
                       ;; Check if grader passed
-                     (if (not grade-passed)
-                         ;; Grader failed - categorize the error
-                         (let* ((error-info (gptel-auto-experiment--categorize-error agent-output))
-                                (error-category (car error-info))
-                                (error-details (cdr error-info)))
-                           (setq finished t)
-                           ;; Track API errors for adaptive reduction
-                           (when (memq error-category '(:api-rate-limit :api-error))
+                      (if (not grade-passed)
+                          ;; Grader failures should classify from grader details when
+                          ;; they carry the real transient/API error instead of the
+                          ;; executor's normal success output.
+                          (let* ((grade-error-output
+                                  (gptel-auto-experiment--grade-failure-error-output
+                                   grade-details agent-output))
+                                 (error-source (or grade-error-output agent-output))
+                                 (error-info (gptel-auto-experiment--categorize-error
+                                              error-source))
+                                 (error-category (car error-info))
+                                 (error-details (cdr error-info)))
+                            (setq finished t)
+                            ;; Track API errors for adaptive reduction
+                            (when (memq error-category '(:api-rate-limit :api-error))
                              (cl-incf gptel-auto-experiment--api-error-count)
                              (message "[auto-workflow] API error #%d: %s"
                                       gptel-auto-experiment--api-error-count error-category)
-                             (when (gptel-auto-experiment--quota-exhausted-p agent-output)
-                               (setq gptel-auto-experiment--quota-exhausted t)
-                               (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run"))
-                             ;; The outer experiment loop owns max-exp and will
-                             ;; adapt or stop early based on the shared error count.
-                             (when (>= gptel-auto-experiment--api-error-count 3)
+                              (when (gptel-auto-experiment--quota-exhausted-p error-source)
+                                (setq gptel-auto-experiment--quota-exhausted t)
+                                (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run"))
+                              ;; The outer experiment loop owns max-exp and will
+                              ;; adapt or stop early based on the shared error count.
+                              (when (>= gptel-auto-experiment--api-error-count 3)
                                (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
                                         target)))
                            ;; Log the failure
-                           (let ((exp-result (list :target target
-                                                   :id experiment-id
-                                                   :hypothesis hypothesis
-                                                   :score-before baseline
-                                                   :score-after 0
-                                                   :kept nil
-                                                   :duration (- (float-time) start-time)
-                                                   :grader-quality grade-score
-                                                   :grader-reason grade-details
-                                                   :comparator-reason (symbol-name error-category)
-                                                   :analyzer-patterns (format "%s" patterns)
-                                                   :agent-output agent-output)))
-                            (gptel-auto-experiment-log-tsv
-                             (gptel-auto-workflow--current-run-id) exp-result)
-                             (funcall callback exp-result)))
+                            (let ((exp-result (list :target target
+                                                    :id experiment-id
+                                                    :hypothesis hypothesis
+                                                    :score-before baseline
+                                                    :score-after 0
+                                                    :kept nil
+                                                    :duration (- (float-time) start-time)
+                                                    :grader-quality grade-score
+                                                    :grader-reason grade-details
+                                                    :comparator-reason (symbol-name error-category)
+                                                    :analyzer-patterns (format "%s" patterns)
+                                                    :agent-output agent-output)))
+                             (when grade-error-output
+                               (setq exp-result
+                                     (plist-put exp-result :error grade-error-output)))
+                             (gptel-auto-experiment-log-tsv
+                              (gptel-auto-workflow--current-run-id) exp-result)
+                              (funcall callback exp-result)))
                        ;; Grader passed - commit changes, then run benchmark
                        (let ((commit-dir (or (gptel-auto-workflow--get-worktree-dir target)
                                              (gptel-auto-workflow--project-root))))
