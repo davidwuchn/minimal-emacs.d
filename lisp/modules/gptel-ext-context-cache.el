@@ -525,37 +525,36 @@ Handles API key lookup, process creation, JSON parsing, and error handling."
   "Fetch context window for MODEL from OpenRouter and cache it.
 
 Runs asynchronously; returns nil immediately."
-  (cl-block my/gptel--openrouter-fetch-context-window
-    (let* ((model-id (my/gptel--model-id-string model))
-           (url "https://openrouter.ai/api/v1/models"))
-      (cond
-       ((or (not (stringp model-id)) (string= model-id "nil"))
-        (message "OpenRouter context-window: model not set (gptel-model is nil)")
-        nil)
-       ((not (executable-find "curl"))
-        (message "OpenRouter context-window: curl not found")
-        nil)
-       (my/gptel--openrouter-context-window-fetch-inflight
-        (message "OpenRouter context-window: fetch already in progress")
-        nil)
-       (t
-        (my/gptel--openrouter-fetch-with-callback
-         url
-         (lambda (data)
-           (let ((entry (seq-find (lambda (e)
-                                    (let ((id (alist-get 'id e)))
-                                      (and (stringp id) (string= id model-id))))
-                                  data))
-                 (cw (and entry (alist-get 'context_length entry))))
-             (if (and (integerp cw) (> cw 0))
-                 (progn
-                   (my/gptel--cache-put-context-window model-id cw)
-                   (message "OpenRouter context-window cached: %s -> %d" model-id cw))
-               (message "OpenRouter context-window: model not found or missing context_length: %s" model-id))))
-         "gptel-openrouter-models"
-         my/gptel-openrouter-models-connect-timeout
-         my/gptel-openrouter-models-max-time)
-        nil)))))
+  (let* ((model-id (my/gptel--model-id-string model))
+         (url "https://openrouter.ai/api/v1/models"))
+    (cond
+     ((or (not (stringp model-id)) (string= model-id "nil"))
+      (message "OpenRouter context-window: model not set (gptel-model is nil)")
+      nil)
+     ((not (executable-find "curl"))
+      (message "OpenRouter context-window: curl not found")
+      nil)
+     (my/gptel--openrouter-context-window-fetch-inflight
+      (message "OpenRouter context-window: fetch already in progress")
+      nil)
+     (t
+      (my/gptel--openrouter-fetch-with-callback
+       url
+       (lambda (data)
+         (let ((entry (seq-find (lambda (e)
+                                  (let ((id (alist-get 'id e)))
+                                    (and (stringp id) (string= id model-id))))
+                                data))
+               (cw (and entry (alist-get 'context_length entry))))
+           (if (and (integerp cw) (> cw 0))
+               (progn
+                 (my/gptel--cache-put-context-window model-id cw)
+                 (message "OpenRouter context-window cached: %s -> %d" model-id cw))
+             (message "OpenRouter context-window: model not found or missing context_length: %s" model-id))))
+       "gptel-openrouter-models"
+       my/gptel-openrouter-models-connect-timeout
+       my/gptel-openrouter-models-max-time)
+      nil))))
 
 (defun my/gptel--auto-refresh-context-window-cache-maybe ()
   "Refresh context window cache if stale (non-blocking)."
