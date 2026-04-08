@@ -217,22 +217,25 @@ Passes if score >= 80% of total (not requiring perfect score)."
 Returns a score from 0.0 to 1.0.
 
 Metrics (weighted):
-- Docstring coverage (40%): % of functions with docstrings
-- Function length (30%): shorter functions score higher
-- Cyclomatic complexity (30%): fewer conditionals score higher
+- Docstring coverage (20%): % of functions with docstrings
+- Positive patterns (30%): error handling, naming, predicates
+- Function length (25%): shorter functions score higher
+- Cyclomatic complexity (25%): fewer conditionals score higher
 
-Perfect score (1.0) = all functions have docstrings, all under 20 lines,
-simple control flow with ≤2 branches per function."
+Perfect score (1.0) = all functions have docstrings, proper error handling,
+good naming conventions, all under 20 lines, simple control flow."
   (let* ((func-data (gptel-benchmark--extract-function-data code))
          (func-count (length func-data)))
     (if (= func-count 0)
         0.5
       (let* ((docstring-score (gptel-benchmark--docstring-coverage func-data))
+             (positive-score (gptel-benchmark--positive-patterns-score code))
              (length-score (gptel-benchmark--function-length-score func-data))
              (complexity-score (gptel-benchmark--complexity-score code func-count)))
-        (+ (* 0.40 docstring-score)
-           (* 0.30 length-score)
-           (* 0.30 complexity-score))))))
+        (+ (* 0.20 docstring-score)
+           (* 0.30 positive-score)
+           (* 0.25 length-score)
+           (* 0.25 complexity-score))))))
 
 (defun gptel-benchmark--extract-function-data (code)
   "Extract function data from CODE.
@@ -313,6 +316,43 @@ Returns 0.0-1.0 where 1.0 = simple code (≤2 branches per function avg)."
        ((<= avg-complexity 5.0) 0.5)
        ((<= avg-complexity 8.0) 0.3)
        (t 0.1)))))
+
+(defun gptel-benchmark--positive-patterns-score (code)
+  "Score positive patterns in CODE.
+Returns 0.0-1.0 where higher scores indicate better practices.
+
+Positive patterns (weighted):
+- Error handling (40%): condition-case, user-error, error, signal
+- Naming conventions (30%): -- for internal, no my- prefix, proper predicates
+- Standard predicates (30%): null, stringp, listp, etc.
+
+This rewards code that follows Emacs Lisp best practices."
+  (let* ((error-handling-terms '("condition-case" "user-error" "error" "signal"
+                                  "cl-assert" "cl-check-type" "assert"))
+         (bad-naming '("my-" "foo-" "bar-" "baz-"))
+         (good-predicates '("null" "stringp" "listp" "numberp" "integerp"
+                           "symbolp" "functionp" "boundp" "fboundp" "keywordp"
+                           "arrayp" "sequencep" "consp" "atom" "listp"))
+         (error-score 0.0)
+         (naming-score 1.0)
+         (predicate-score 0.0)
+         (func-count (max 1 (length (gptel-benchmark--extract-function-data code)))))
+    (with-temp-buffer
+      (insert code)
+      (goto-char (point-min))
+      (when (re-search-forward (regexp-opt error-handling-terms) nil t)
+        (setq error-score 1.0))
+      (goto-char (point-min))
+      (while (re-search-forward (regexp-opt bad-naming) nil t)
+        (setq naming-score (max 0.0 (- naming-score 0.3))))
+      (goto-char (point-min))
+      (let ((pred-count 0))
+        (while (re-search-forward (regexp-opt good-predicates) nil t)
+          (cl-incf pred-count))
+        (setq predicate-score (min 1.0 (/ (float pred-count) func-count)))))
+    (+ (* 0.40 error-score)
+       (* 0.30 naming-score)
+       (* 0.30 predicate-score))))
 
 ;;; LLM Quality Detection
 

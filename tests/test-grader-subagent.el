@@ -242,6 +242,66 @@ Returns 1.0 if under max, 0.5 if over."
          (score-without (gptel-benchmark--code-quality-score without-docs)))
     (should (> score-with score-without))))
 
+;;; Test 14.1: Positive Patterns Score Function
+
+(ert-deftest grader/positive-patterns-score-exists ()
+  "Positive patterns scoring function should exist."
+  (require 'gptel-benchmark-subagent)
+  (should (fboundp 'gptel-benchmark--positive-patterns-score)))
+
+(ert-deftest grader/positive-patterns-rewards-error-handling ()
+  "Code with error handling should score higher in positive patterns."
+  (require 'gptel-benchmark-subagent)
+  (let* ((with-error "(defun foo (x) (if (null x) (error \"nil\") x))")
+         (without-error "(defun foo (x) x)")
+         (score-with (gptel-benchmark--positive-patterns-score with-error))
+         (score-without (gptel-benchmark--positive-patterns-score without-error)))
+    (should (> score-with score-without))))
+
+(ert-deftest grader/positive-patterns-penalizes-bad-naming ()
+  "Code with bad naming (my-, foo-, bar-) should score lower."
+  (require 'gptel-benchmark-subagent)
+  (let* ((bad-naming "(defun my-func (x) x)")
+         (good-naming "(defun process-item (x) x)")
+         (score-bad (gptel-benchmark--positive-patterns-score bad-naming))
+         (score-good (gptel-benchmark--positive-patterns-score good-naming)))
+    (should (< score-bad score-good))))
+
+(ert-deftest grader/positive-patterns-rewards-type-predicates ()
+  "Code using type predicates should score higher."
+  (require 'gptel-benchmark-subagent)
+  (let* ((with-pred "(defun foo (x) (if (stringp x) (length x) 0))")
+         (without-pred "(defun foo (x) (length x))")
+         (score-with (gptel-benchmark--positive-patterns-score with-pred))
+         (score-without (gptel-benchmark--positive-patterns-score without-pred)))
+    (should (> score-with score-without))))
+
+;;; Test 14.2: New Weight Distribution
+
+(ert-deftest grader/code-quality-weights-positive-patterns ()
+  "Code quality score should weight positive patterns at 30%."
+  (require 'gptel-benchmark-subagent)
+  (let* ((code "(defun foo () t)")
+         (func-data (gptel-benchmark--extract-function-data code))
+         (docstring (gptel-benchmark--docstring-coverage func-data))
+         (positive (gptel-benchmark--positive-patterns-score code))
+         (length-score (gptel-benchmark--function-length-score func-data))
+         (complexity (gptel-benchmark--complexity-score code 1))
+         (expected (+ (* 0.20 docstring) (* 0.30 positive) (* 0.25 length-score) (* 0.25 complexity)))
+         (actual (gptel-benchmark--code-quality-score code)))
+    (should (< (abs (- actual expected)) 0.01))))
+
+(ert-deftest grader/code-quality-good-patterns-no-docs ()
+  "Code with good patterns but no docstrings should score >= 0.70."
+  (require 'gptel-benchmark-subagent)
+  (let* ((code "(defun process (x)
+  (if (null x)
+      (error \"x is nil\")
+    (when (stringp x)
+      (length x))))")
+         (score (gptel-benchmark--code-quality-score code)))
+    (should (>= score 0.70))))
+
 ;;; Test 16: Auto-Experiment Code Quality Integration
 
 (ert-deftest grader/auto-experiment-uses-code-quality ()
