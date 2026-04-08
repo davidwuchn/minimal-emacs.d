@@ -775,6 +775,21 @@ EXIT-CODE defaults to 1."
         (kill-buffer worktree-buf))
       (delete-directory project-root t)))))
 
+(ert-deftest regression/auto-workflow/skill-path-handles-nil-and-empty-input ()
+  "Skill paths should fall back to \"unknown\" for nil or empty inputs."
+  (let ((gptel-auto-workflow-skills-dir "mementum/knowledge"))
+    (should (equal (gptel-auto-workflow-skill-path nil 'target)
+                   "mementum/knowledge/optimization-skills/unknown.md"))
+    (should (equal (gptel-auto-workflow-skill-path "" 'target)
+                   "mementum/knowledge/optimization-skills/unknown.md"))
+    (should (equal (gptel-auto-workflow-skill-path nil 'mutation)
+                   "mementum/knowledge/mutations/unknown.md"))
+    (should (equal (gptel-auto-workflow-skill-path "" 'mutation)
+                   "mementum/knowledge/mutations/unknown.md"))
+    (should (equal (gptel-auto-workflow-skill-path
+                    "lisp/modules/gptel-auto-workflow-strategic.el" 'target)
+                   "mementum/knowledge/optimization-skills/strategic.md"))))
+
 (ert-deftest regression/auto-experiment/executor-timeout-owned-by-subagent-wrapper ()
   "Experiment runner should not install a second wall-clock timeout around executor dispatch."
   (let* ((project-root (make-temp-file "aw-project" t))
