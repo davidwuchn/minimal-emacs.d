@@ -5170,6 +5170,7 @@ Increase if git operations frequently timeout."
   "Run git command CMD with TIMEOUT (default: gptel-auto-workflow-git-timeout).
 Returns command output as string.
 Automatically adds --no-pager to prevent blocking on pager output."
+  (gptel-auto-workflow--validate-non-empty-string cmd "command")
   (let ((git-cmd (if (string-match-p "^git " cmd)
                      (concat "git --no-pager " (substring cmd 4))
                    cmd)))
@@ -5179,6 +5180,7 @@ Automatically adds --no-pager to prevent blocking on pager output."
 (defun gptel-auto-workflow--git-result (cmd &optional timeout)
   "Run git command CMD with TIMEOUT and return (OUTPUT . EXIT-CODE).
 Automatically adds --no-pager to prevent blocking on pager output."
+  (gptel-auto-workflow--validate-non-empty-string cmd "command")
   (let ((git-cmd (if (string-match-p "^git " cmd)
                      (concat "git --no-pager " (substring cmd 4))
                    cmd)))
