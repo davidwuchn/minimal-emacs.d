@@ -948,36 +948,40 @@ large-result truncation, and result caching."
 
 (defun my/gptel--deliver-subagent-result (callback result)
   "Deliver RESULT to CALLBACK, truncating large results to a temp file."
-  (if (> (length result) my/gptel-subagent-result-limit)
-      (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
-                            (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt")
-                          (make-temp-file "gptel-subagent-result-" nil ".txt")))
-             (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
-                                (substring result 0 my/gptel-subagent-result-limit)
-                                temp-file))
-             (buf (current-buffer))
-             (buf-has-local (and (buffer-live-p buf)
-                                 (local-variable-p 'my/gptel--subagent-temp-files buf))))
-        (with-temp-file temp-file
-          (insert result))
-        (push temp-file my/gptel--global-temp-files)
-        (when buf-has-local
-          (with-current-buffer buf
-            (push temp-file my/gptel--subagent-temp-files)))
-        (when (> my/gptel-subagent-temp-file-ttl 0)
-          (run-at-time my/gptel-subagent-temp-file-ttl nil
-                       (lambda (f b has-local)
-                         (when (file-exists-p f)
-                           (delete-file f))
-                         (setq my/gptel--global-temp-files
-                               (delete f my/gptel--global-temp-files))
-                         (when (and has-local (buffer-live-p b))
-                           (with-current-buffer b
-                             (setq my/gptel--subagent-temp-files
-                                   (delete f my/gptel--subagent-temp-files)))))
-                       temp-file buf buf-has-local))
-         (funcall callback trunc-msg))
-     (funcall callback result)))
+  (cl-block my/gptel--deliver-subagent-result
+    (unless (stringp result)
+      (funcall callback (or result ""))
+      (cl-return-from my/gptel--deliver-subagent-result))
+    (if (> (length result) my/gptel-subagent-result-limit)
+        (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
+                              (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt")
+                            (make-temp-file "gptel-subagent-result-" nil ".txt")))
+               (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
+                                  (substring result 0 my/gptel-subagent-result-limit)
+                                  temp-file))
+               (buf (current-buffer))
+               (buf-has-local (and (buffer-live-p buf)
+                                   (local-variable-p 'my/gptel--subagent-temp-files buf))))
+          (with-temp-file temp-file
+            (insert result))
+          (push temp-file my/gptel--global-temp-files)
+          (when buf-has-local
+            (with-current-buffer buf
+              (push temp-file my/gptel--subagent-temp-files)))
+          (when (> my/gptel-subagent-temp-file-ttl 0)
+            (run-at-time my/gptel-subagent-temp-file-ttl nil
+                         (lambda (f b has-local)
+                           (when (file-exists-p f)
+                             (delete-file f))
+                           (setq my/gptel--global-temp-files
+                                 (delete f my/gptel--global-temp-files))
+                           (when (and has-local (buffer-live-p b))
+                             (with-current-buffer b
+                               (setq my/gptel--subagent-temp-files
+                                     (delete f my/gptel--subagent-temp-files)))))
+                         temp-file buf buf-has-local))
+           (funcall callback trunc-msg))
+      (funcall callback result))))
 
 (defun my/gptel-agent--truncate-buffer-around (orig prefix &optional max-lines)
   "Prevent temp artifacts from starting with a raw Emacs modeline.
