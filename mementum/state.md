@@ -1,20 +1,23 @@
 # Mementum State
 
-> Last session: 2026-04-08 20:45
+> Last session: 2026-04-08 21:00
 
-## Total Improvements: 215+ Real Code Fixes (4 new today)
+## Total Improvements: 218+ Real Code Fixes (7 new today)
 
-### Session Summary: 2026-04-08 (TDD Code Quality Metric Fix)
+### Session Summary: 2026-04-08 (TDD Code Quality Metric + Staging Fix)
 
-**Action:** Fixed code quality metric that was discarding valid experiments
+**Action:** Fixed code quality metric and manually merged kept experiments to staging
 
-**Result:** ✅ All 1303 tests passing, 28 E2E tests passing
+**Result:** ✅ All 1307 tests passing, 28 E2E tests passing
 
-**Improvements (2 commits):**
+**Improvements (3 commits + 2 manual merges):**
 - **d0d03f4a** - Δ improve code quality metric (TDD)
 - **618009f6** - fix: rename evolve tests to workflow
+- **f592aa14** - ◈ update state.md
+- Manual merge: `optimize/cache-imacpro.taila8bdd.ts.net-exp2` → staging (context-cache fix)
+- Manual merge: `optimize/core-imacpro.taila8bdd.ts.net-exp1` → staging (benchmark-core fix)
 
-**Problem:**
+**Problem 1: Code Quality Metric**
 - Old metric weighted docstrings at 40%, harshly penalizing generated code
 - Code with good patterns but no docs scored 0.51 → discarded
 - Valid experiments with error handling, type predicates were rejected
@@ -26,9 +29,17 @@
 4. Rebalanced weights: docstring 20% → positive 30% → length 25% → complexity 25%
 5. All tests passed
 
-**Result:**
-- Code with good patterns but no docs now scores ≥0.70 vs 0.51 before
-- Positive patterns rewarded: error handling, good naming, type predicates
+**Problem 2: Staging Merge Failures**
+- staging-merge failed for optimize branches
+- Root cause: optimize branches based on older commits
+- Kept experiments were not merged to staging
+- staging-merge logged: "Failed to merge optimize/* to staging"
+
+**Solution:**
+1. Manually merged `optimize/cache-imacpro.taila8bdd.ts.net-exp2` to staging
+2. Manually merged `optimize/core-imacpro.taila8bdd.ts.net-exp1` to staging
+3. All tests pass (1307 tests)
+4. Pushed staging to origin
 
 **Auto-Workflow Results (18:00 run):**
 - 3 kept, 13 discarded (before fix deployed)
@@ -36,19 +47,14 @@
 - Discarded experiments had tests failing (safety mechanism)
 - Next run at 22:00 will use new metric
 
-**Test Script Fix:**
-- `gptel-auto-evolve-run` never existed (removed Mar 25, 2026)
-- Updated to check `gptel-auto-workflow-run-async`
-- Renamed `run_evolve_tests` → `run_workflow_tests`
-
-**Key Insight:**
+**Key Insights:**
 - TDD cycle: test → fail → implement → pass
-- Tests encode requirements before code exists
-- Run `0f0fa0bb` removed auto-evolve (304 lines), replaced by auto-workflow
+- staging-flow merge needs investigation for better conflict handling
+- Optimize branches should rebase onto latest staging before merge
 
 **Synced Branches:**
-- main: `618009f6`
-- staging: `ef8973e5` (merged main)
+- main: `f592aa14`
+- staging: `4d3defc8` (manually merged kept experiments)
 
 ---
 
