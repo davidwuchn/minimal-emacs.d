@@ -4218,7 +4218,7 @@ fall back to an error-shaped AGENT-OUTPUT."
   (and (stringp agent-output)
        (let ((case-fold-search t))
          (string-match-p
-          "allocated quota exceeded\\|usage limit exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|hard limit reached"
+          "allocated quota exceeded\\|usage limit exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
           agent-output))))
 
 (defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count)
