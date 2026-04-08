@@ -948,36 +948,40 @@ large-result truncation, and result caching."
 
 (defun my/gptel--deliver-subagent-result (callback result)
   "Deliver RESULT to CALLBACK, truncating large results to a temp file."
-  (if (> (length result) my/gptel-subagent-result-limit)
-      (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
-                            (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt")
-                          (make-temp-file "gptel-subagent-result-" nil ".txt")))
-             (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
-                                (substring result 0 my/gptel-subagent-result-limit)
-                                temp-file))
-             (buf (current-buffer))
-             (buf-has-local (and (buffer-live-p buf)
-                                 (local-variable-p 'my/gptel--subagent-temp-files buf))))
-        (with-temp-file temp-file
-          (insert result))
-        (push temp-file my/gptel--global-temp-files)
-        (when buf-has-local
-          (with-current-buffer buf
-            (push temp-file my/gptel--subagent-temp-files)))
-        (when (> my/gptel-subagent-temp-file-ttl 0)
-          (run-at-time my/gptel-subagent-temp-file-ttl nil
-                       (lambda (f b has-local)
-                         (when (file-exists-p f)
-                           (delete-file f))
-                         (setq my/gptel--global-temp-files
-                               (delete f my/gptel--global-temp-files))
-                         (when (and has-local (buffer-live-p b))
-                           (with-current-buffer b
-                             (setq my/gptel--subagent-temp-files
-                                   (delete f my/gptel--subagent-temp-files)))))
-                       temp-file buf buf-has-local))
-         (funcall callback trunc-msg))
-     (funcall callback result)))
+  (cl-block my/gptel--deliver-subagent-result
+    (unless (stringp result)
+      (funcall callback (or result ""))
+      (cl-return-from my/gptel--deliver-subagent-result))
+    (if (> (length result) my/gptel-subagent-result-limit)
+        (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
+                              (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt")
+                            (make-temp-file "gptel-subagent-result-" nil ".txt")))
+               (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
+                                  (substring result 0 my/gptel-subagent-result-limit)
+                                  temp-file))
+               (buf (current-buffer))
+               (buf-has-local (and (buffer-live-p buf)
+                                   (local-variable-p 'my/gptel--subagent-temp-files buf))))
+          (with-temp-file temp-file
+            (insert result))
+          (push temp-file my/gptel--global-temp-files)
+          (when buf-has-local
+            (with-current-buffer buf
+              (push temp-file my/gptel--subagent-temp-files)))
+          (when (> my/gptel-subagent-temp-file-ttl 0)
+            (run-at-time my/gptel-subagent-temp-file-ttl nil
+                         (lambda (f b has-local)
+                           (when (file-exists-p f)
+                             (delete-file f))
+                           (setq my/gptel--global-temp-files
+                                 (delete f my/gptel--global-temp-files))
+                           (when (and has-local (buffer-live-p b))
+                             (with-current-buffer b
+                               (setq my/gptel--subagent-temp-files
+                                     (delete f my/gptel--subagent-temp-files)))))
+                         temp-file buf buf-has-local))
+           (funcall callback trunc-msg))
+      (funcall callback result))))
 
 (defun my/gptel-agent--truncate-buffer-around (orig prefix &optional max-lines)
   "Prevent temp artifacts from starting with a raw Emacs modeline.
@@ -2944,59 +2948,89 @@ do not fetch every remote head into `refs/remotes/origin/*'."
 
 
 (defun gptel-auto-workflow--merge-to-staging (optimize-branch)
-  "Merge OPTIMIZE-BRANCH to staging.
-Auto-resolves conflicts by preferring incoming changes (theirs).
-Returns t on success, nil on unrecoverable conflict.
+  "Merge OPTIMIZE-BRANCH to staging using cherry-pick.
+Cherry-pick the tip commit of OPTIMIZE-BRANCH onto staging.
+Returns t on success, nil on failure.
 Uses the staging worktree instead of switching branches in the root repo."
   (let* ((staging gptel-auto-workflow-staging-branch)
          (staging-q (shell-quote-argument staging))
          (optimize-ref (gptel-auto-workflow--ensure-merge-source-ref optimize-branch))
-         (merge-message (shell-quote-argument
-                          (format "Merge %s for verification" optimize-branch))))
-    (message "[auto-workflow] Merging %s to %s" optimize-branch staging)
+         (merge-message (format "Merge %s for verification" optimize-branch)))
+    (message "[auto-workflow] Cherry-picking %s to %s" optimize-branch staging)
     (if (not (gptel-auto-workflow--ensure-staging-branch-exists))
         nil
       (if (not optimize-ref)
           (progn
             (message "[auto-workflow] Missing merge source branch: %s" optimize-branch)
             nil)
-      (gptel-auto-workflow--with-staging-worktree
-       (lambda ()
-            (let* ((remote-staging (format "origin/%s" staging))
-                 (reset-target (if (= 0 (cdr (gptel-auto-workflow--git-result
-                                               (format "git rev-parse --verify %s"
-                                                       (shell-quote-argument remote-staging))
-                                               60)))
-                                   remote-staging
-                                 staging))
-                 (setup-results (list
-                                 (gptel-auto-workflow--git-result
-                                  (format "git checkout %s" staging-q)
-                                  60)
-                                 (gptel-auto-workflow--git-result
-                                  (format "git reset --hard %s" (shell-quote-argument reset-target))
-                                  180)))
-                 (failed-setup (cl-find-if (lambda (item) (/= 0 (cdr item)))
-                                           setup-results)))
-            (if failed-setup
-                (progn
-                  (message "[auto-workflow] Failed to prepare staging merge: %s"
-                          (my/gptel--sanitize-for-logging (car failed-setup) 160))
-                  nil)
-              (let* ((merge-result
-                      (gptel-auto-workflow--git-result
-                       (format "git merge -X theirs %s --no-ff -m %s"
-                               (shell-quote-argument optimize-ref) merge-message)
-                       180))
-                     (merge-output (car merge-result)))
-                (cond
-                 ((eq 0 (cdr merge-result)) t)
-                 ((string-match-p "Already up[ -]to[- ]date" merge-output) t)
-                 (t
-                  (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))
-                  (message "[auto-workflow] Merge to staging failed: %s"
-                           (my/gptel--sanitize-for-logging merge-output 160))
-                  nil)))))))))))
+        (gptel-auto-workflow--with-staging-worktree
+         (lambda ()
+           (let* ((remote-staging (format "origin/%s" staging))
+                  (reset-target (if (= 0 (cdr (gptel-auto-workflow--git-result
+                                                (format "git rev-parse --verify %s"
+                                                        (shell-quote-argument remote-staging))
+                                                60)))
+                                    remote-staging
+                                  staging))
+                  (setup-results (list
+                                  (gptel-auto-workflow--git-result
+                                   (format "git checkout %s" staging-q)
+                                   60)
+                                  (gptel-auto-workflow--git-result
+                                   (format "git reset --hard %s" (shell-quote-argument reset-target))
+                                   180)))
+                  (failed-setup (cl-find-if (lambda (item) (/= 0 (cdr item)))
+                                            setup-results)))
+             (if failed-setup
+                 (progn
+                   (message "[auto-workflow] Failed to prepare staging merge: %s"
+                            (my/gptel--sanitize-for-logging (car failed-setup) 160))
+                   nil)
+               (let* ((commit-hash (string-trim
+                                    (car (gptel-auto-workflow--git-result
+                                          (format "git rev-parse %s"
+                                                  (shell-quote-argument optimize-ref))
+                                          60))))
+                      (cherry-result
+                       (gptel-auto-workflow--git-result
+                        (format "git cherry-pick --no-commit %s"
+                                (shell-quote-argument commit-hash))
+                        180))
+                      (cherry-output (car cherry-result)))
+                 (cond
+                  ((eq 0 (cdr cherry-result))
+                   (let ((commit-result
+                          (gptel-auto-workflow--git-result
+                           (format "git commit -m %s" (shell-quote-argument merge-message))
+                           60)))
+                     (if (eq 0 (cdr commit-result))
+                         t
+                       (message "[auto-workflow] Commit failed after cherry-pick: %s"
+                                (my/gptel--sanitize-for-logging (car commit-result) 160))
+                       nil)))
+                  ((string-match-p "The previous cherry-pick is now empty" cherry-output)
+                   (message "[auto-workflow] Cherry-pick empty (already in staging)")
+                   (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                   t)
+                  (t
+                   (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                   (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
+                            (my/gptel--sanitize-for-logging cherry-output 160))
+                   (let* ((merge-result
+                           (gptel-auto-workflow--git-result
+                            (format "git merge -X theirs %s --no-ff -m %s"
+                                    (shell-quote-argument optimize-ref)
+                                    (shell-quote-argument merge-message))
+                            180))
+                          (merge-output (car merge-result)))
+                     (cond
+                      ((eq 0 (cdr merge-result)) t)
+                      ((string-match-p "Already up[ -]to[- ]date" merge-output) t)
+                      (t
+                       (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))
+                       (message "[auto-workflow] Merge also failed: %s"
+                                (my/gptel--sanitize-for-logging merge-output 160))
+                       nil))))))))))))))
 
 
 
@@ -4184,7 +4218,7 @@ fall back to an error-shaped AGENT-OUTPUT."
   (and (stringp agent-output)
        (let ((case-fold-search t))
          (string-match-p
-          "allocated quota exceeded\\|usage limit exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|hard limit reached"
+          "allocated quota exceeded\\|usage limit exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
           agent-output))))
 
 (defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count)
@@ -5166,6 +5200,7 @@ Increase if git operations frequently timeout."
   "Run git command CMD with TIMEOUT (default: gptel-auto-workflow-git-timeout).
 Returns command output as string.
 Automatically adds --no-pager to prevent blocking on pager output."
+  (gptel-auto-workflow--validate-non-empty-string cmd "command")
   (let ((git-cmd (if (string-match-p "^git " cmd)
                      (concat "git --no-pager " (substring cmd 4))
                    cmd)))
@@ -5175,6 +5210,7 @@ Automatically adds --no-pager to prevent blocking on pager output."
 (defun gptel-auto-workflow--git-result (cmd &optional timeout)
   "Run git command CMD with TIMEOUT and return (OUTPUT . EXIT-CODE).
 Automatically adds --no-pager to prevent blocking on pager output."
+  (gptel-auto-workflow--validate-non-empty-string cmd "command")
   (let ((git-cmd (if (string-match-p "^git " cmd)
                      (concat "git --no-pager " (substring cmd 4))
                    cmd)))
