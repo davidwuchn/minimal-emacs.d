@@ -5537,6 +5537,18 @@ Only removes worktrees if no gptel processes are running."
     (when (> cleaned 0)
       (message "[auto-workflow] Cleaned %d stale items" cleaned))))
 
+(defun gptel-auto-workflow--kept-target-count (results)
+  "Return the number of distinct targets with kept results in RESULTS."
+  (let ((seen (make-hash-table :test 'equal))
+        (count 0))
+    (dolist (result results count)
+      (let ((target (plist-get result :target)))
+        (when (and (plist-get result :kept)
+                   (stringp target)
+                   (not (gethash target seen)))
+          (puthash target t seen)
+          (cl-incf count))))))
+
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
   "Run experiments for TARGETS sequentially."
   (let* ((run-id (gptel-auto-workflow--current-run-id))
@@ -5554,13 +5566,13 @@ Only removes worktrees if no gptel processes are running."
                       gptel-auto-workflow--run-project-root nil
                       gptel-auto-workflow--current-target nil
                       gptel-auto-workflow--current-project nil)
-               (setq gptel-auto-workflow--stats
-                     (plist-put gptel-auto-workflow--stats :phase final-phase))
-               (gptel-auto-workflow--persist-status)
-               (message "[auto-workflow] Complete: %d experiments, %d kept"
-                        (length all-results) kept-count)
-               (when completion-callback
-                 (funcall completion-callback all-results)))))))
+                (setq gptel-auto-workflow--stats
+                      (plist-put gptel-auto-workflow--stats :phase final-phase))
+                (gptel-auto-workflow--persist-status)
+                (message "[auto-workflow] Complete: %d experiments, %d targets improved"
+                         (length all-results) kept-count)
+                (when completion-callback
+                  (funcall completion-callback all-results)))))))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root
           gptel-auto-workflow--run-project-root proj-root)
@@ -5585,10 +5597,10 @@ Only removes worktrees if no gptel processes are running."
                         (lambda (results)
                           (setq all-results (append all-results results))
                           (setq kept-count
-                                (cl-count-if (lambda (r) (plist-get r :kept)) all-results))
+                                (gptel-auto-workflow--kept-target-count all-results))
                           (setq gptel-auto-workflow--stats
                                 (plist-put gptel-auto-workflow--stats :kept kept-count))
-                           (gptel-auto-workflow--persist-status)
+                            (gptel-auto-workflow--persist-status)
                            (if gptel-auto-experiment--quota-exhausted
                                (progn
                                  (message "[auto-workflow] Provider quota exhausted; stopping remaining targets")
