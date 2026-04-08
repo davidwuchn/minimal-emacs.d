@@ -245,6 +245,13 @@ Returns 0.0 if TOTAL is zero to avoid division by zero."
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores.
 Returns plist with :total-tests, :passed-tests, and average scores."
+  (when gptel-benchmark--cancelled
+    (list :total-tests 0
+          :passed-tests 0
+          :avg-overall 0.0
+          :avg-efficiency 0.0
+          :avg-completion 0.0
+          :avg-constraints 0.0))
   (when (null results)
     (list :total-tests 0
           :passed-tests 0
