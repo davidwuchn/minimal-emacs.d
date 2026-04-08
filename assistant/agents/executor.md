@@ -4,7 +4,7 @@ backend: MiniMax
 model: minimax-m2.7-highspeed
 max-tokens: 65536
 temperature: 0.1
-steps: 100
+steps: 25
 description: Nucleus executor for multi-step tasks (MiniMax)
 tools:
   - ApplyPatch

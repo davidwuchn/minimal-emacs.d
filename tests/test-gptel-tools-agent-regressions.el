@@ -5082,6 +5082,15 @@ Submodules are hydrated later during verification, not during merge prep."
       (should (re-search-forward "COMMIT:" nil t))
       (should (re-search-forward "Never output only \"Done\"" nil t)))))
 
+(ert-deftest regression/auto-workflow/executor-agent-uses-25-step-budget ()
+  "Executor agent should keep the documented 25-step budget."
+  (let ((file (expand-file-name "assistant/agents/executor.md"
+                                (gptel-auto-workflow--project-root))))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (should (re-search-forward "^steps: 25$" nil t)))))
+
 (ert-deftest regression/auto-workflow/push-staging-uses-force-with-lease-when-remote-exists ()
   "Staging push should use force-with-lease against the current remote head."
   (let* ((commands nil)
