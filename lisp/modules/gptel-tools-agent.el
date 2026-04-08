@@ -2377,7 +2377,7 @@ superproject-managed `.git/modules/...` store."
     (replace-regexp-in-string "\x1b\\[[0-9;]*[[:alpha:]]" "" text t t)))
 
 (defun gptel-auto-workflow--extract-failed-tests (output)
-  "Return unique failure signatures parsed from OUTPUT."
+  "Return unique verification failure signatures parsed from OUTPUT."
   (let (failed)
     (when (stringp output)
       (with-temp-buffer
@@ -2391,7 +2391,12 @@ superproject-managed `.git/modules/...` store."
         (while (re-search-forward
                 "^[[:space:]]*✗[[:space:]]+\\(.+\\)$"
                 nil t)
-          (push (format "summary:%s" (string-trim (match-string 1))) failed))))
+          (push (format "summary:%s" (string-trim (match-string 1))) failed))
+        (goto-char (point-min))
+        (while (re-search-forward
+                "^ERROR:[[:space:]]+\\(.+\\)$"
+                nil t)
+          (push (format "error:%s" (string-trim (match-string 1))) failed))))
     (nreverse (cl-remove-duplicates failed :test #'string=))))
 
 (defun gptel-auto-workflow--temporary-worktree-path (slug)
@@ -2439,7 +2444,7 @@ superproject-managed `.git/modules/...` store."
            (ignore-errors (delete-directory worktree-dir t))))))))
 
 (defun gptel-auto-workflow--main-baseline-test-results ()
-  "Return plist describing test failures for the current staging baseline ref."
+  "Return plist describing verification failures for the current staging baseline ref."
   (let ((main-ref (gptel-auto-workflow--staging-main-ref)))
     (cond
      ((not main-ref)
@@ -2451,6 +2456,7 @@ superproject-managed `.git/modules/...` store."
         main-ref
         (lambda (worktree)
           (let* ((test-script (expand-file-name "scripts/run-tests.sh" worktree))
+                 (verify-script (expand-file-name "scripts/verify-nucleus.sh" worktree))
                  (hydrate (gptel-auto-workflow--hydrate-staging-submodules worktree)))
             (cond
              ((/= 0 (cdr hydrate))
@@ -2464,46 +2470,58 @@ superproject-managed `.git/modules/...` store."
              (t
               (let* ((buffer (generate-new-buffer "*main-baseline-verify*"))
                      exit-code
+                     verify-exit-code
                      output
                      failed-tests)
-                (unwind-protect
-                    (let ((default-directory worktree))
-                      (setq exit-code (call-process "bash" nil buffer nil test-script "unit"))
-                      (setq output (with-current-buffer buffer (buffer-string)))
-                      (setq failed-tests (gptel-auto-workflow--extract-failed-tests output))
-                      (cond
-                       ((eq exit-code 0)
-                        (list :ref main-ref
-                              :exit-code 0
-                              :failed-tests nil
-                              :output output))
-                       (failed-tests
-                        (list :ref main-ref
-                              :exit-code exit-code
-                              :failed-tests failed-tests
-                              :output output))
-                       (t
-                        (list :ref main-ref
-                              :exit-code exit-code
-                              :error (format "Failed to parse %s baseline test failures"
-                                             main-ref)
-                              :output output))))
-                  (when (buffer-live-p buffer)
+                 (unwind-protect
+                     (let ((default-directory worktree))
+                       (setq exit-code
+                             (if (file-exists-p test-script)
+                                 (call-process "bash" nil buffer nil test-script "unit")
+                               0))
+                       (setq verify-exit-code
+                             (if (file-exists-p verify-script)
+                                 (call-process "bash" nil buffer nil verify-script)
+                               0))
+                       (setq output (with-current-buffer buffer (buffer-string)))
+                       (setq failed-tests (gptel-auto-workflow--extract-failed-tests output))
+                       (cond
+                        ((and (eq exit-code 0) (eq verify-exit-code 0))
+                         (list :ref main-ref
+                               :exit-code 0
+                               :failed-tests nil
+                               :output output))
+                        (failed-tests
+                         (list :ref main-ref
+                               :exit-code (or (and (/= exit-code 0) exit-code)
+                                              (and (/= verify-exit-code 0) verify-exit-code)
+                                              1)
+                               :failed-tests failed-tests
+                               :output output))
+                        (t
+                         (list :ref main-ref
+                               :exit-code (or (and (/= exit-code 0) exit-code)
+                                              (and (/= verify-exit-code 0) verify-exit-code)
+                                              1)
+                               :error (format "Failed to parse %s baseline test failures"
+                                              main-ref)
+                               :output output))))
+                   (when (buffer-live-p buffer)
                     (kill-buffer buffer)))))))))
        (list :ref main-ref
              :error (format "Failed to create %s baseline worktree" main-ref)))))))
 
 (defun gptel-auto-workflow--staging-tests-match-main-baseline-p (staging-output)
-  "Return (PASS-P . NOTE) comparing STAGING-OUTPUT failures against main baseline."
+  "Return (PASS-P . NOTE) comparing STAGING-OUTPUT verification failures against main baseline."
   (let ((staging-failures (gptel-auto-workflow--extract-failed-tests staging-output)))
     (cond
      ((null staging-failures)
-      (cons nil "Staging tests failed without parsable failure signatures"))
+      (cons nil "Staging verification failed without parsable failure signatures"))
      (t
-      (let* ((baseline (gptel-auto-workflow--main-baseline-test-results))
-             (baseline-error (plist-get baseline :error))
-             (baseline-ref (or (plist-get baseline :ref) "main"))
-             (baseline-failures (plist-get baseline :failed-tests))
+       (let* ((baseline (gptel-auto-workflow--main-baseline-test-results))
+              (baseline-error (plist-get baseline :error))
+              (baseline-ref (or (plist-get baseline :ref) "main"))
+              (baseline-failures (plist-get baseline :failed-tests))
              (new-failures (cl-set-difference staging-failures baseline-failures
                                               :test #'string=)))
         (cond
@@ -2511,11 +2529,11 @@ superproject-managed `.git/modules/...` store."
           (cons nil (format "Failed to determine %s baseline: %s"
                             baseline-ref baseline-error)))
          (new-failures
-          (cons nil (format "New staging test failures vs %s: %s"
+          (cons nil (format "New staging verification failures vs %s: %s"
                             baseline-ref
                             (mapconcat #'identity new-failures ", "))))
           (t
-           (cons t (format "No new staging test failures vs %s baseline%s"
+           (cons t (format "No new staging verification failures vs %s baseline%s"
                            baseline-ref
                            (if baseline-failures
                                (format " (%s)"
@@ -2996,13 +3014,13 @@ Returns (success-p . output)."
               (verify-pass (and submodule-pass
                                 (or (not (and verify-script (file-exists-p verify-script)))
                                     (eq verify-result 0))))
+              (checks-pass (and test-pass verify-pass))
               (output (with-current-buffer output-buffer (buffer-string))))
         (when (and submodule-pass
-                   (and test-script (file-exists-p test-script))
-                   (not test-pass))
+                   (not checks-pass))
           (let ((baseline-check
                  (gptel-auto-workflow--staging-tests-match-main-baseline-p output)))
-            (setq test-pass (car baseline-check))
+            (setq checks-pass (car baseline-check))
             (with-current-buffer output-buffer
               (goto-char (point-max))
               (unless (bolp)
@@ -3010,7 +3028,7 @@ Returns (success-p . output)."
               (insert "\n" (cdr baseline-check) "\n"))
             (setq output (with-current-buffer output-buffer (buffer-string)))))
         (kill-buffer output-buffer)
-        (setq result (and syntax-pass test-pass verify-pass))
+        (setq result (and syntax-pass submodule-pass checks-pass))
         (message "[auto-workflow] Staging verification: %s" (if result "PASS" "FAIL"))
         (cons result output)))))
 

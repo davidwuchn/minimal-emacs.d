@@ -4057,6 +4057,52 @@ Submodules are hydrated later during verification, not during merge prep."
         (when-let ((buf (get-buffer "*test-main-baseline-verify*")))
           (kill-buffer buf))))))
 
+(ert-deftest regression/auto-workflow/main-baseline-test-results-runs-verify-nucleus ()
+  "Main-baseline comparison should include verify-nucleus failures in the baseline."
+  (let ((captured nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--staging-main-ref)
+               (lambda () "main"))
+              ((symbol-function 'gptel-auto-workflow--with-temporary-worktree)
+               (lambda (_name _ref fn)
+                 (funcall fn "/tmp/main-baseline")))
+              ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
+               (lambda (_worktree)
+                 (cons "Hydrated submodules" 0)))
+              ((symbol-function 'file-exists-p)
+               (lambda (path)
+                 (member path
+                         '("/tmp/main-baseline/scripts/run-tests.sh"
+                           "/tmp/main-baseline/scripts/verify-nucleus.sh"))))
+              ((symbol-function 'generate-new-buffer)
+               (lambda (&rest _) (get-buffer-create "*test-main-baseline-verify*")))
+              ((symbol-function 'call-process)
+               (lambda (_program _in buffer _display script &rest args)
+                 (push (list script args) captured)
+                 (with-current-buffer buffer
+                   (insert (format "ran %s%s\n"
+                                   script
+                                   (if args
+                                       (format " %s" (mapconcat #'identity args " "))
+                                     ""))))
+                 (if (equal script "/tmp/main-baseline/scripts/verify-nucleus.sh")
+                     (progn
+                       (with-current-buffer buffer
+                         (insert "ERROR: packages/gptel is pinned to old, but tracked branch master is at new.\n"))
+                       1)
+                   0)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (unwind-protect
+          (let ((result (gptel-auto-workflow--main-baseline-test-results)))
+            (should (equal (nreverse captured)
+                           '(("/tmp/main-baseline/scripts/run-tests.sh" ("unit"))
+                             ("/tmp/main-baseline/scripts/verify-nucleus.sh" nil))))
+            (should (= (plist-get result :exit-code) 1))
+            (should (equal (plist-get result :failed-tests)
+                           '("error:packages/gptel is pinned to old, but tracked branch master is at new."))))
+        (when-let ((buf (get-buffer "*test-main-baseline-verify*")))
+          (kill-buffer buf))))))
+
 (ert-deftest regression/auto-experiment/benchmark-runs-required-tests-even-when-skipped ()
   "Required experiment tests should still run even when callers pass SKIP-TESTS."
   (let ((gptel-auto-experiment-require-tests t)
@@ -4163,18 +4209,18 @@ Submodules are hydrated later during verification, not during merge prep."
               ((symbol-function 'gptel-auto-experiment-run-tests)
                (lambda ()
                  (cons nil "   FAILED   1/10  existing/baseline-failure (0.001 sec)\n")))
-              ((symbol-function 'gptel-auto-workflow--staging-tests-match-main-baseline-p)
-               (lambda (_output)
-                 (cons t "No new staging test failures vs main baseline")))
+               ((symbol-function 'gptel-auto-workflow--staging-tests-match-main-baseline-p)
+                (lambda (_output)
+                  (cons t "No new staging verification failures vs main baseline")))
               ((symbol-function 'gptel-auto-experiment--eight-keys-scores)
-               (lambda () '((overall . 0.6))))
+                (lambda () '((overall . 0.6))))
               ((symbol-function 'message)
-               (lambda (&rest _) nil)))
+                (lambda (&rest _) nil)))
       (let ((result (gptel-auto-experiment-benchmark t)))
         (should (plist-get result :passed))
         (should (plist-get result :tests-passed))
         (should-not (plist-get result :tests-skipped))
-        (should (string-match-p "No new staging test failures vs main baseline"
+        (should (string-match-p "No new staging verification failures vs main baseline"
                                 (plist-get result :tests-output)))))))
 
 (ert-deftest regression/auto-workflow/verify-staging-allows-baseline-failures ()
@@ -4191,9 +4237,9 @@ Submodules are hydrated later during verification, not during merge prep."
               ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
                (lambda (_worktree)
                   (cons "Hydrated submodules" 0)))
-              ((symbol-function 'gptel-auto-workflow--staging-tests-match-main-baseline-p)
-               (lambda (_output)
-                 (cons t "No new staging test failures vs main baseline")))
+               ((symbol-function 'gptel-auto-workflow--staging-tests-match-main-baseline-p)
+                (lambda (_output)
+                  (cons t "No new staging verification failures vs main baseline")))
               ((symbol-function 'generate-new-buffer)
                (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
               ((symbol-function 'call-process)
@@ -4218,9 +4264,57 @@ Submodules are hydrated later during verification, not during merge prep."
           (let ((result (gptel-auto-workflow--verify-staging)))
             (should (car result))
             (should (equal test-args '("unit")))
-            (should (string-match-p "No new staging test failures vs main baseline"
+            (should (string-match-p "No new staging verification failures vs main baseline"
                                     (cdr result)))
             (should (string-match-p "ran /tmp/staging/scripts/verify-nucleus.sh"
+                                    (cdr result))))
+        (when-let ((buf (get-buffer "*test-staging-verify*")))
+          (kill-buffer buf))))))
+
+(ert-deftest regression/auto-workflow/verify-staging-allows-baseline-verify-failures ()
+  "Staging verification should pass when verify-nucleus failures match the main baseline."
+  (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging")
+        (test-args nil)
+        (test-script "/tmp/staging/scripts/run-tests.sh")
+        (verify-script "/tmp/staging/scripts/verify-nucleus.sh"))
+    (cl-letf (((symbol-function 'file-exists-p)
+               (lambda (path)
+                 (member path (list "/tmp/staging" test-script verify-script))))
+              ((symbol-function 'gptel-auto-workflow--check-el-syntax)
+               (lambda (&rest _) t))
+              ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
+               (lambda (_worktree)
+                 (cons "Hydrated submodules" 0)))
+              ((symbol-function 'gptel-auto-workflow--staging-tests-match-main-baseline-p)
+               (lambda (_output)
+                 (cons t "No new staging verification failures vs main baseline")))
+              ((symbol-function 'generate-new-buffer)
+               (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
+              ((symbol-function 'call-process)
+               (lambda (_program _in buffer _display script &rest args)
+                 (when (equal script test-script)
+                   (setq test-args args))
+                 (with-current-buffer buffer
+                   (insert (format "ran %s%s\n"
+                                   script
+                                   (if args
+                                       (format " %s" (mapconcat #'identity args " "))
+                                     ""))))
+                 (if (equal script verify-script)
+                     (progn
+                       (with-current-buffer buffer
+                         (insert "ERROR: packages/gptel is pinned to old, but tracked branch master is at new.\n"))
+                       1)
+                   0)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (unwind-protect
+          (let ((result (gptel-auto-workflow--verify-staging)))
+            (should (car result))
+            (should (equal test-args '("unit")))
+            (should (string-match-p "No new staging verification failures vs main baseline"
+                                    (cdr result)))
+            (should (string-match-p "ERROR: packages/gptel is pinned to old"
                                     (cdr result))))
         (when-let ((buf (get-buffer "*test-staging-verify*")))
           (kill-buffer buf))))))
@@ -4239,9 +4333,9 @@ Submodules are hydrated later during verification, not during merge prep."
               ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
                (lambda (_worktree)
                  (cons "Hydrated submodules" 0)))
-              ((symbol-function 'gptel-auto-workflow--staging-tests-match-main-baseline-p)
-               (lambda (_output)
-                 (cons nil "New staging test failures vs main: new/failure")))
+               ((symbol-function 'gptel-auto-workflow--staging-tests-match-main-baseline-p)
+                (lambda (_output)
+                  (cons nil "New staging verification failures vs main: new/failure")))
               ((symbol-function 'generate-new-buffer)
                (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
               ((symbol-function 'call-process)
@@ -4266,7 +4360,7 @@ Submodules are hydrated later during verification, not during merge prep."
             (let ((result (gptel-auto-workflow--verify-staging)))
               (should (equal test-args '("unit")))
               (should-not (car result))
-              (should (string-match-p "New staging test failures vs main"
+              (should (string-match-p "New staging verification failures vs main"
                                       (cdr result))))
            (when-let ((buf (get-buffer "*test-staging-verify*")))
              (kill-buffer buf))))))
@@ -4411,12 +4505,26 @@ Submodules are hydrated later during verification, not during merge prep."
              (lambda ()
                '(:ref "main"
                  :exit-code 1
-                 :failed-tests ("summary:Some ERT tests failed")))))
+                  :failed-tests ("summary:Some ERT tests failed")))))
     (let ((result
            (gptel-auto-workflow--staging-tests-match-main-baseline-p
-            "\x1b[0;31m✗\x1b[0m Some ERT tests failed\nSummary: PASS: 26 FAIL: 1 SKIP: 1\n")))
+             "\x1b[0;31m✗\x1b[0m Some ERT tests failed\nSummary: PASS: 26 FAIL: 1 SKIP: 1\n")))
       (should (car result))
-      (should (string-match-p "No new staging test failures vs main baseline"
+      (should (string-match-p "No new staging verification failures vs main baseline"
+                              (cdr result))))))
+
+(ert-deftest regression/auto-workflow/staging-baseline-allows-error-only-failures ()
+  "Baseline comparison should allow matching ERROR-only verification failures."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--main-baseline-test-results)
+             (lambda ()
+               '(:ref "main"
+                 :exit-code 1
+                 :failed-tests ("error:packages/gptel is pinned to old, but tracked branch master is at new.")))))
+    (let ((result
+           (gptel-auto-workflow--staging-tests-match-main-baseline-p
+            "ERROR: packages/gptel is pinned to old, but tracked branch master is at new.\nSubmodule sync check failed with 1 problem(s).\n")))
+      (should (car result))
+      (should (string-match-p "No new staging verification failures vs main baseline"
                               (cdr result))))))
 
 (ert-deftest regression/auto-workflow/staging-baseline-detects-new-summary-failures ()
