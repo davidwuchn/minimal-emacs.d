@@ -177,6 +177,66 @@ EXIT-CODE defaults to 1."
                 :bench-calls bench-call))
       (delete-directory worktree t))))
 
+(ert-deftest regression/auto-workflow/fix-directly-requires-git-success ()
+  "Direct review fixes should fail if git add/commit fails."
+  (let ((gptel-auto-experiment-use-subagents t)
+        callback-result
+        git-calls)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback)
+                 (funcall callback "Applied fix")))
+              ((symbol-function 'magit-git-success)
+               (lambda (&rest args)
+                 (push args git-calls)
+                 (not (equal args '("commit" "-m" "fix: address review issues")))))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-workflow--fix-directly
+       "review blockers"
+       (lambda (result)
+         (setq callback-result result)))
+      (should (equal (nreverse git-calls)
+                     '(("add" "-A")
+                       ("commit" "-m" "fix: address review issues"))))
+      (should-not (car callback-result))
+      (should (equal (cdr callback-result) "Applied fix")))))
+
+(ert-deftest regression/auto-workflow/research-then-fix-requires-git-success ()
+  "Researched review fixes should fail if git add/commit fails."
+  (let ((gptel-auto-experiment-use-subagents t)
+        callback-result
+        agent-calls
+        git-calls)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (agent description _prompt callback)
+                 (push (list agent description) agent-calls)
+                 (funcall callback
+                          (if (eq agent 'researcher)
+                              "Research findings"
+                            "Applied researched fix"))))
+              ((symbol-function 'magit-git-success)
+               (lambda (&rest args)
+                 (push args git-calls)
+                 (not (equal args '("commit" "-m" "fix: address review issues")))))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-workflow--research-then-fix
+       "review blockers"
+       (lambda (result)
+         (setq callback-result result)))
+      (should (equal (nreverse agent-calls)
+                     '((researcher "Research fix approach")
+                       (executor "Apply researched fixes"))))
+      (should (equal (nreverse git-calls)
+                     '(("add" "-A")
+                       ("commit" "-m" "fix: address review issues"))))
+      (should-not (car callback-result))
+      (should (equal (cdr callback-result) "Applied researched fix")))))
+
 (ert-deftest regression/auto-experiment/grade-late-timeout-is-ignored ()
   "Successful grading should suppress any later timeout callback."
   (let* ((outcome (test-auto-workflow--exercise-grade-callback-order

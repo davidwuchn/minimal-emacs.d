@@ -2747,11 +2747,11 @@ Focus only on the issues mentioned. Do not refactor or add features."
          fix-prompt
          (lambda (result)
            (let* ((response (if (stringp result) result (format "%S" result)))
-                  (success (not (string-match-p "^Error:" response))))
-             (when success
-               (magit-git-success "add" "-A")
-               (magit-git-success "commit" "-m" "fix: address review issues"))
-             (funcall callback (cons success response)))))
+                  (success (not (string-match-p "^Error:" response)))
+                  (git-success (when success
+                                 (and (magit-git-success "add" "-A")
+                                      (magit-git-success "commit" "-m" "fix: address review issues")))))
+             (funcall callback (cons (and success git-success) response)))))
       (funcall callback (cons nil "No executor agent available")))))
 
 (defun gptel-auto-workflow--research-then-fix (review-output callback)
@@ -2796,15 +2796,15 @@ INSTRUCTIONS:
                                       (truncate-string-to-width review-output 500 nil nil "..."))))
              (gptel-benchmark-call-subagent
               'executor
-              "Apply researched fixes"
-              fix-prompt
-              (lambda (result)
-                (let* ((response (if (stringp result) result (format "%S" result)))
-                       (success (not (string-match-p "^Error:" response))))
-                  (when success
-                    (magit-git-success "add" "-A")
-                    (magit-git-success "commit" "-m" "fix: address review issues"))
-                  (funcall callback (cons success response))))))))
+               "Apply researched fixes"
+               fix-prompt
+               (lambda (result)
+                 (let* ((response (if (stringp result) result (format "%S" result)))
+                       (success (not (string-match-p "^Error:" response)))
+                       (git-success (when success
+                                      (and (magit-git-success "add" "-A")
+                                           (magit-git-success "commit" "-m" "fix: address review issues")))))
+                   (funcall callback (cons (and success git-success) response))))))))
       (funcall callback (cons nil "No subagent available")))))
 
 (defun gptel-auto-workflow--ensure-on-main-branch ()
