@@ -1044,6 +1044,20 @@ EXIT-CODE defaults to 1."
      "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 28. See Curl manpage for details.\"")
      '(:timeout . "Experiment timed out"))))
 
+(ert-deftest regression/auto-experiment/curl-exit-56-is-retryable ()
+  "Curl exit code 56 should be treated as a transient transport timeout."
+  (should
+   (gptel-auto-experiment--is-retryable-error-p
+    "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 56. See Curl manpage for details.\"")))
+
+(ert-deftest regression/auto-experiment/curl-exit-56-categorizes-as-timeout ()
+  "Curl exit code 56 should categorize as a timeout, not a hard tool failure."
+  (should
+   (equal
+    (gptel-auto-experiment--categorize-error
+     "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 56. See Curl manpage for details.\"")
+    '(:timeout . "Experiment timed out"))))
+
 (ert-deftest regression/auto-experiment/usage-limit-exceeded-counts-as-quota-exhaustion ()
   "Live provider usage-limit errors should trip hard quota detection."
   (should
@@ -1079,6 +1093,36 @@ EXIT-CODE defaults to 1."
        (should (= runs 2))
        (should (equal (plist-get final-result :agent-output)
                       "Executor result for task: retry success")))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-retries-curl-exit-56 ()
+  "Retry helper should retry curl exit code 56 transport failures."
+  (let ((runs 0)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+                 (cl-incf runs)
+                 (funcall callback
+                          (if (= runs 1)
+                              (list :agent-output
+                                    "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 56. See Curl manpage for details.\""
+                                    :comparator-reason ":timeout")
+                            (list :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 2))
+      (should (equal (plist-get final-result :agent-output)
+                     "Executor result for task: retry success")))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-retries-grader-overload-errors ()
   "Retry helper should retry transient grader overload failures surfaced via :error."

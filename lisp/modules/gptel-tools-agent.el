@@ -4128,7 +4128,7 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
   (and (stringp error-output)
        (let ((case-fold-search t))
          (string-match-p
-          "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|curl failed with exit code 28\\|operation timed out"
+          "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
           error-output))))
 
 (defun gptel-auto-experiment--grade-failure-error-output (grade-details agent-output)
@@ -4244,7 +4244,7 @@ Also logs agent-output snippet for debugging when category is :unknown."
     ((string-match-p "invalid_parameter_error\\|InvalidParameter\\|JSON format" agent-output)
      (cons :api-error "API parameter error (invalid JSON format)"))
     ((let ((case-fold-search t))
-       (string-match-p "timeout\\|timed out\\|curl failed with exit code 28\\|operation timed out"
+       (string-match-p "timeout\\|timed out\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
                        agent-output))
      (cons :timeout "Experiment timed out"))
     ((string-match-p "error.*executor\\|failed to finish" agent-output)
