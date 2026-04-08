@@ -192,13 +192,15 @@ with identical arguments.  Try a different approach or break the task into small
   "Around-advice on `gptel--parse-tools': remove duplicate tool names before parsing.
 Uses last-wins so the most recently registered struct takes precedence."
   (funcall orig backend
-           (let ((seen (make-hash-table :test #'equal)))
-             (nreverse
-              (cl-loop for tool in (nreverse (copy-sequence tools))
-                       for name = (ignore-errors (gptel-tool-name tool))
-                       when (and name (not (gethash name seen)))
-                       do (puthash name t seen)
-                       and collect tool)))))
+           (if (null tools)
+               tools
+             (let ((seen (make-hash-table :test #'equal)))
+               ;; Iterate reversed to capture last occurrence of each name.
+               (dolist (tool (nreverse tools))
+                 (let ((name (ignore-errors (gptel-tool-name tool))))
+                   (when name (puthash name tool seen))))
+               ;; Return values in original order (first occurrence wins).
+               (nreverse (hash-table-values seen))))))
 
 ;; --- Advice Registration ---
 ;; Each function registers its own advice in the module that defines it.
