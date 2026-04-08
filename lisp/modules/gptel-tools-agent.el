@@ -5357,35 +5357,40 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
       (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root)))
     (setq gptel-auto-workflow-persistent-headless t)
     (gptel-auto-workflow--enable-headless-suppression)
-    (setq gptel-auto-experiment--api-error-count 0)
-    (condition-case err
+    (if gptel-auto-workflow--running
         (progn
-          (gptel-auto-workflow--safe-call "Cleanup" #'gptel-auto-workflow--cleanup-stale-state)
-          (gptel-auto-workflow--safe-call "Sync staging" #'gptel-auto-workflow--sync-staging-with-main)
-          (gptel-auto-workflow--safe-call
-           "Orphan scan"
-           (lambda ()
-             (let ((orphans (gptel-auto-workflow--recover-orphans)))
-               (when orphans
-                 (message
-                  "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run; leaving them tracked for manual recovery"
-                  (length orphans))))))
-          (let ((started
-                 (let ((gptel-auto-workflow-skip-if-recent-input nil))
-                   (gptel-auto-workflow-run-async--guarded
-                    nil
-                    finish))))
-             (unless started
-               (funcall finish nil))
-             started))
-      (error
-        (message "[auto-workflow] Cron error: %s"
-                 (my/gptel--sanitize-for-logging (error-message-string err) 160))
-        (setq gptel-auto-workflow--stats
-              (list :phase "error" :total 0 :kept 0))
-        (gptel-auto-workflow--persist-status)
-        (funcall finish nil)
-        nil))))
+          (message "[auto-workflow] Job already running; skipping new request")
+          (funcall finish nil)
+          nil)
+      (setq gptel-auto-experiment--api-error-count 0)
+      (condition-case err
+          (progn
+            (gptel-auto-workflow--safe-call "Cleanup" #'gptel-auto-workflow--cleanup-stale-state)
+            (gptel-auto-workflow--safe-call "Sync staging" #'gptel-auto-workflow--sync-staging-with-main)
+            (gptel-auto-workflow--safe-call
+             "Orphan scan"
+             (lambda ()
+               (let ((orphans (gptel-auto-workflow--recover-orphans)))
+                 (when orphans
+                   (message
+                    "[auto-workflow] ⚠ Found %d orphan commit(s) from previous run; leaving them tracked for manual recovery"
+                    (length orphans))))))
+            (let ((started
+                   (let ((gptel-auto-workflow-skip-if-recent-input nil))
+                     (gptel-auto-workflow-run-async--guarded
+                      nil
+                      finish))))
+              (unless started
+                (funcall finish nil))
+              started))
+        (error
+         (message "[auto-workflow] Cron error: %s"
+                  (my/gptel--sanitize-for-logging (error-message-string err) 160))
+         (setq gptel-auto-workflow--stats
+               (list :phase "error" :total 0 :kept 0))
+         (gptel-auto-workflow--persist-status)
+         (funcall finish nil)
+         nil)))))
 
 
 (defun gptel-auto-workflow--experiment-suffix ()
@@ -6266,7 +6271,8 @@ Returns the content between the first --- and end, or the whole result."
              know-file 
              (with-temp-buffer (insert content) (count-lines 1 (point-max))))
     (shell-command-to-string
-     (format "git add %s && git commit -m %s"
+     (format "cd %s && git add %s && git commit -m %s"
+             (shell-quote-argument (gptel-auto-workflow--project-root))
              (shell-quote-argument know-file)
              (shell-quote-argument (format "💡 synthesis: %s (AI-generated)" topic))))))
 
