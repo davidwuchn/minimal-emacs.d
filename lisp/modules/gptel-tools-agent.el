@@ -4243,11 +4243,9 @@ RETRY-COUNT tracks current retry attempt."
                   (or gptel-auto-experiment--quota-exhausted
                       (gptel-auto-experiment--quota-exhausted-p agent-output)))
                   (api-rate-limit-category
-                   (or (memq error-type '(:api-rate-limit))
-                       (member error-type '(":api-rate-limit"))))
+                   (memq error-type '(:api-rate-limit)))
                   (timeout-category
-                   (or (memq error-type '(:timeout))
-                       (member error-type '(":timeout"))))
+                   (memq error-type '(:timeout)))
                   (retryable-category
                    (or api-rate-limit-category
                        (and (not hard-timeout)
