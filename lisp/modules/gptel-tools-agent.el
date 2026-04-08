@@ -2929,15 +2929,22 @@ Uses the staging worktree instead of switching branches in the root repo."
             nil)
       (gptel-auto-workflow--with-staging-worktree
        (lambda ()
-            (let* ((setup-results (list
-                                   (gptel-auto-workflow--git-result
-                                    (format "git checkout %s" staging-q)
-                                    60)
-                                   (gptel-auto-workflow--git-result
-                                    (format "git reset --hard %s" staging-q)
-                                   180)))
-                  (failed-setup (cl-find-if (lambda (item) (/= 0 (cdr item)))
-                                            setup-results)))
+            (let* ((remote-staging (format "origin/%s" staging))
+                 (reset-target (if (= 0 (cdr (gptel-auto-workflow--git-result
+                                               (format "git rev-parse --verify %s"
+                                                       (shell-quote-argument remote-staging))
+                                               60)))
+                                   remote-staging
+                                 staging))
+                 (setup-results (list
+                                 (gptel-auto-workflow--git-result
+                                  (format "git checkout %s" staging-q)
+                                  60)
+                                 (gptel-auto-workflow--git-result
+                                  (format "git reset --hard %s" (shell-quote-argument reset-target))
+                                  180)))
+                 (failed-setup (cl-find-if (lambda (item) (/= 0 (cdr item)))
+                                           setup-results)))
             (if failed-setup
                 (progn
                   (message "[auto-workflow] Failed to prepare staging merge: %s"

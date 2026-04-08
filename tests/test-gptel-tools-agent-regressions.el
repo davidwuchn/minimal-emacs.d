@@ -3962,6 +3962,7 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-workflow/merge-to-staging-resets-worktree-before-merge ()
   "Staging merge should reset the staging worktree before merging optimize refs.
+When origin/staging exists, resets to origin/staging to handle diverged local staging.
 Submodules are hydrated later during verification, not during merge prep."
   (let ((commands nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--ensure-staging-branch-exists)
@@ -3977,7 +3978,7 @@ Submodules are hydrated later during verification, not during merge prep."
                ((symbol-function 'message)
                 (lambda (&rest _) nil)))
        (should (gptel-auto-workflow--merge-to-staging "optimize/test-exp1"))
-       (should (member "git reset --hard staging" commands))
+       (should (member "git reset --hard origin/staging" commands))
        (should (member "git merge -X theirs optimize/test-exp1 --no-ff -m Merge\\ optimize/test-exp1\\ for\\ verification"
                        commands))
        (should-not (member "git fetch origin" commands))
