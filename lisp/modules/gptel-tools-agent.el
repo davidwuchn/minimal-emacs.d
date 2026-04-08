@@ -6268,7 +6268,8 @@ Returns the content between the first --- and end, or the whole result."
              know-file 
              (with-temp-buffer (insert content) (count-lines 1 (point-max))))
     (shell-command-to-string
-     (format "git add %s && git commit -m %s"
+     (format "cd %s && git add %s && git commit -m %s"
+             (shell-quote-argument (gptel-auto-workflow--project-root))
              (shell-quote-argument know-file)
              (shell-quote-argument (format "💡 synthesis: %s (AI-generated)" topic))))))
 
