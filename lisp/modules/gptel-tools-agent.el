@@ -5237,27 +5237,30 @@ Returns (:running :kept :total :phase :results)."
 
 (defun gptel-auto-workflow--sanitize-unicode (str)
   "Sanitize Unicode characters in STR for safe display.
-Replaces curly quotes, dashes, and zero-width characters with ASCII equivalents."
-  (let ((clean str))
-    (setq clean (replace-regexp-in-string
-                 (regexp-opt (mapcar #'char-to-string '(?\u2018 ?\u2019 ?\u0060)))
-                 "'"
-                 clean))
-    (setq clean (replace-regexp-in-string
-                 (regexp-opt (mapcar #'char-to-string '(?\u201C ?\u201D)))
-                 "\""
-                 clean))
-    (setq clean (replace-regexp-in-string
-                 (regexp-opt (mapcar #'char-to-string '(?\u2013 ?\u2014)))
-                 "-"
-                 clean))
-    (setq clean (replace-regexp-in-string (string ?\u2026) "..." clean))
-    (setq clean (replace-regexp-in-string (string ?\u00A0) " " clean))
-    (setq clean (replace-regexp-in-string
-                 (regexp-opt (mapcar #'char-to-string '(?\u200B ?\u200C ?\u200D)))
-                 ""
-                 clean))
-    clean))
+Replaces curly quotes, dashes, and zero-width characters with ASCII equivalents.
+Returns empty string if STR is nil or not a string."
+  (if (not (stringp str))
+      ""
+    (let ((clean str))
+      (setq clean (replace-regexp-in-string
+                   (regexp-opt (mapcar #'char-to-string '(?\u2018 ?\u2019 ?\u0060)))
+                   "'"
+                   clean))
+      (setq clean (replace-regexp-in-string
+                   (regexp-opt (mapcar #'char-to-string '(?\u201C ?\u201D)))
+                   "\""
+                   clean))
+      (setq clean (replace-regexp-in-string
+                   (regexp-opt (mapcar #'char-to-string '(?\u2013 ?\u2014)))
+                   "-"
+                   clean))
+      (setq clean (replace-regexp-in-string (string ?\u2026) "..." clean))
+      (setq clean (replace-regexp-in-string (string ?\u00A0) " " clean))
+      (setq clean (replace-regexp-in-string
+                   (regexp-opt (mapcar #'char-to-string '(?\u200B ?\u200C ?\u200D)))
+                   ""
+                   clean))
+      clean)))
 
 
 (defun gptel-auto-workflow-log ()
