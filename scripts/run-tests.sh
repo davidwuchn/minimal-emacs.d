@@ -5,9 +5,9 @@
 # Usage:
 #   ./scripts/run-tests.sh              # Run all tests
 #   ./scripts/run-tests.sh unit         # Run ERT unit tests only
-#   ./scripts/run-tests.sh e2e         # Run E2E tests only
+#   ./scripts/run-tests.sh e2e          # Run E2E tests only
 #   ./scripts/run-tests.sh cron         # Run cron installation tests only
-#   ./scripts/run-tests.sh evolve        # Run auto-evolve tests only
+#   ./scripts/run-tests.sh workflow     # Run auto-workflow tests only
 #   ./scripts/run-tests.sh all          # Run everything
 #
 # Returns 0 if all tests pass, 1 if any fail.
@@ -234,14 +234,14 @@ run_cron_tests() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Auto-Evolve Tests
+# Auto-Workflow Tests
 # ═══════════════════════════════════════════════════════════════════════════
 
-run_evolve_tests() {
+run_workflow_tests() {
     local ORIGINAL_BRANCH
     ORIGINAL_BRANCH=$(git branch --show-current)
     
-    section "Auto-Evolve"
+    section "Auto-Workflow"
     
     # Emacs server
     echo "Checking Emacs server..."
@@ -254,10 +254,10 @@ run_evolve_tests() {
     
     # Function exists
     echo "Checking function..."
-    if emacsclient --eval "(fboundp 'gptel-auto-evolve-run)" 2>/dev/null | grep -q "t"; then
-        pass "gptel-auto-evolve-run is defined"
+    if emacsclient --eval "(fboundp 'gptel-auto-workflow-run-async)" 2>/dev/null | grep -q "t"; then
+        pass "gptel-auto-workflow-run-async is defined"
     else
-        skip "gptel-auto-evolve-run is NOT defined (may not be loaded)"
+        skip "gptel-auto-workflow-run-async is NOT defined (may not be loaded)"
     fi
     
     # Git configuration
@@ -312,8 +312,8 @@ case "$SUBCOMMAND" in
     cron|c)
         run_cron_tests || FAILED=1
         ;;
-    evolve|ev)
-        run_evolve_tests || FAILED=1
+    workflow|w)
+        run_workflow_tests || FAILED=1
         ;;
     all|a)
         run_unit_tests || FAILED=1
@@ -322,16 +322,16 @@ case "$SUBCOMMAND" in
         echo ""
         run_cron_tests || FAILED=1
         echo ""
-        run_evolve_tests || FAILED=1
+        run_workflow_tests || FAILED=1
         ;;
     *)
-        echo "Usage: $0 {unit|e2e|cron|evolve|all}"
+        echo "Usage: $0 {unit|e2e|cron|workflow|all}"
         echo ""
-        echo "  unit, u   - ERT unit tests only"
-        echo "  e2e, e    - Auto-workflow E2E tests only"
-        echo "  cron, c   - Cron installation tests only"
-        echo "  evolve, ev - Auto-evolve tests only"
-        echo "  all, a    - Run all tests (default)"
+        echo "  unit, u      - ERT unit tests only"
+        echo "  e2e, e       - Auto-workflow E2E tests only"
+        echo "  cron, c      - Cron installation tests only"
+        echo "  workflow, w  - Auto-workflow tests only"
+        echo "  all, a       - Run all tests (default)"
         exit 1
         ;;
 esac
