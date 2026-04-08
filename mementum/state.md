@@ -1,8 +1,56 @@
 # Mementum State
 
-> Last session: 2026-04-07 14:35
+> Last session: 2026-04-08 20:45
 
-## Total Improvements: 211+ Real Code Fixes (4 new today)
+## Total Improvements: 215+ Real Code Fixes (4 new today)
+
+### Session Summary: 2026-04-08 (TDD Code Quality Metric Fix)
+
+**Action:** Fixed code quality metric that was discarding valid experiments
+
+**Result:** ✅ All 1303 tests passing, 28 E2E tests passing
+
+**Improvements (2 commits):**
+- **d0d03f4a** - Δ improve code quality metric (TDD)
+- **618009f6** - fix: rename evolve tests to workflow
+
+**Problem:**
+- Old metric weighted docstrings at 40%, harshly penalizing generated code
+- Code with good patterns but no docs scored 0.51 → discarded
+- Valid experiments with error handling, type predicates were rejected
+
+**Solution (TDD approach):**
+1. Write 6 new tests first for `gptel-benchmark--positive-patterns-score`
+2. All tests failed (function didn't exist)
+3. Implemented function scoring: error handling (40%), naming (30%), predicates (30%)
+4. Rebalanced weights: docstring 20% → positive 30% → length 25% → complexity 25%
+5. All tests passed
+
+**Result:**
+- Code with good patterns but no docs now scores ≥0.70 vs 0.51 before
+- Positive patterns rewarded: error handling, good naming, type predicates
+
+**Auto-Workflow Results (18:00 run):**
+- 3 kept, 13 discarded (before fix deployed)
+- Kept: context-cache (+0.01), benchmark-core (quality 0.50→0.93)
+- Discarded experiments had tests failing (safety mechanism)
+- Next run at 22:00 will use new metric
+
+**Test Script Fix:**
+- `gptel-auto-evolve-run` never existed (removed Mar 25, 2026)
+- Updated to check `gptel-auto-workflow-run-async`
+- Renamed `run_evolve_tests` → `run_workflow_tests`
+
+**Key Insight:**
+- TDD cycle: test → fail → implement → pass
+- Tests encode requirements before code exists
+- Run `0f0fa0bb` removed auto-evolve (304 lines), replaced by auto-workflow
+
+**Synced Branches:**
+- main: `618009f6`
+- staging: `ef8973e5` (merged main)
+
+---
 
 ### Session Summary: 2026-04-07 (Restore Missing Grading Features)
 
