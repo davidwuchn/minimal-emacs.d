@@ -88,6 +88,10 @@ submodule_sha() {
             if [[ ! -d "$path" ]]; then
                 return 1
             fi
+            local dot_git="$path/.git"
+            if [[ ! -e "$dot_git" ]]; then
+                return 1
+            fi
             git -C "$path" rev-parse HEAD 2>/dev/null
             ;;
         cached)
