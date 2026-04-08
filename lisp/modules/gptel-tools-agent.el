@@ -4098,6 +4098,13 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
   (and (stringp error-output)
        (string-match-p "timed out after [0-9]+s total runtime" error-output)))
 
+(defun gptel-auto-experiment--result-hard-timeout-p (result)
+  "Return non-nil when RESULT failed due to a hard executor timeout."
+  (gptel-auto-experiment--hard-timeout-p
+   (or (plist-get result :error)
+       (plist-get result :agent-output)
+       (plist-get result :grader-reason))))
+
 (defun gptel-auto-experiment--quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows provider quota exhaustion."
   (and (stringp agent-output)
@@ -4771,23 +4778,31 @@ Adapts max-experiments based on API error rate."
                      (lambda (result)
                        (push result results)
                        (gptel-auto-workflow--update-progress)
-                        (let ((score-after (gptel-auto-workflow--plist-get result :score-after 0)))
-                          (when (and score-after (> score-after best-score))
-                            (setq best-score score-after
-                                  no-improvement-count 0))
-                          (when (and score-after (<= score-after best-score))
-                            (cl-incf no-improvement-count)))
-                        (let ((continue
-                               (lambda ()
-                                 (gptel-auto-workflow--call-in-run-context
-                                  workflow-root
-                                  (lambda () (run-next (1+ exp-id)))
-                                  loop-buffer
-                                  workflow-root))))
-                          (if (> gptel-auto-experiment-delay-between 0)
-                              (run-with-timer gptel-auto-experiment-delay-between nil
-                                              continue)
-                            (funcall continue))))))))
+                         (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
+                                (hard-timeout
+                                 (gptel-auto-experiment--result-hard-timeout-p result))
+                                (next-exp-id (if hard-timeout
+                                                 (1+ max-exp)
+                                               (1+ exp-id))))
+                           (when (and score-after (> score-after best-score))
+                             (setq best-score score-after
+                                   no-improvement-count 0))
+                           (when (and score-after (<= score-after best-score))
+                             (cl-incf no-improvement-count))
+                           (when hard-timeout
+                             (message "[auto-experiment] Hard timeout for %s in experiment %d; stopping remaining experiments for this target"
+                                      target exp-id))
+                           (let ((continue
+                                (lambda ()
+                                  (gptel-auto-workflow--call-in-run-context
+                                   workflow-root
+                                   (lambda () (run-next next-exp-id))
+                                   loop-buffer
+                                   workflow-root))))
+                             (if (> gptel-auto-experiment-delay-between 0)
+                                 (run-with-timer gptel-auto-experiment-delay-between nil
+                                                 continue)
+                               (funcall continue)))))))))
       (gptel-auto-workflow--call-in-run-context
        workflow-root
        (lambda () (run-next 1))

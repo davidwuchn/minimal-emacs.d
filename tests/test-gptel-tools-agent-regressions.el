@@ -806,8 +806,42 @@ EXIT-CODE defaults to 1."
        (lambda (loop-results)
          (setq results loop-results)))
       (should (= runs 1))
-       (should (= (length results) 1))
-       (should gptel-auto-experiment--quota-exhausted))))
+        (should (= (length results) 1))
+        (should gptel-auto-experiment--quota-exhausted))))
+
+(ert-deftest regression/auto-experiment/hard-timeout-stops-further-experiments ()
+  "Hard total-runtime timeouts should stop the current target after one experiment."
+  (let ((gptel-auto-experiment-delay-between 0)
+        (gptel-auto-experiment-no-improvement-threshold 99)
+        (runs 0)
+        (results nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+               (lambda (&rest _) '(:eight-keys 0.4)))
+              ((symbol-function 'gptel-auto-experiment--code-quality-score)
+               (lambda () 0.5))
+              ((symbol-function 'gptel-auto-experiment--run-with-retry)
+               (lambda (target exp-id max-exp baseline baseline-code-quality previous-results callback &optional _retry-count)
+                 (cl-incf runs)
+                 (funcall callback
+                          (list :target target
+                                :id exp-id
+                                :score-after 0
+                                :kept nil
+                                :comparator-reason ":timeout"
+                                :agent-output
+                                (format "Error: Task \"Experiment %d: optimize %s\" (executor) timed out after 900s total runtime."
+                                        exp-id target)))
+                 (list target max-exp baseline baseline-code-quality previous-results)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-experiment-loop
+       "lisp/modules/gptel-tools-agent.el"
+       (lambda (loop-results)
+         (setq results loop-results)))
+      (should (= runs 1))
+      (should (= (length results) 1))
+      (should (string-match-p "900s total runtime"
+                              (plist-get (car results) :agent-output))))))
 
 (ert-deftest regression/subagent/late-callback-after-timeout-is-ignored ()
   "Late subagent callback should not fire after timeout already completed the task."
