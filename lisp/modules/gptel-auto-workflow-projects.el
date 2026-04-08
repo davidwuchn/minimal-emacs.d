@@ -50,8 +50,9 @@ Customize this variable to add more projects.")
 (defvar gptel-auto-workflow--cron-job-running nil
   "Non-nil while a queued cron job is executing.")
 
-(defvar gptel-auto-workflow--stats nil
-  "Current run statistics shared with `gptel-tools-agent'.")
+;; Forward declarations for variables defined in gptel-tools-agent.el
+(defvar gptel-auto-workflow--stats nil)
+(defvar gptel-auto-workflow--running nil)
 
 (defvar mementum-root nil
   "Root directory for mementum. Set per-project.")
