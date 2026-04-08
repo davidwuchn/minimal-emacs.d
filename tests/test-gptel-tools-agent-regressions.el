@@ -1090,6 +1090,47 @@ EXIT-CODE defaults to 1."
       (should (string-match-p "900s total runtime"
                               (plist-get (car results) :agent-output))))))
 
+(ert-deftest regression/auto-experiment/validation-retry-timeout-does-not-stop-further-experiments ()
+  "Timed-out validation repairs should discard one experiment, not the whole target."
+  (let ((gptel-auto-experiment-delay-between 0)
+        (gptel-auto-experiment-max-per-target 2)
+        (gptel-auto-experiment-no-improvement-threshold 99)
+        (runs 0)
+        (results nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+               (lambda (&rest _) '(:eight-keys 0.4)))
+              ((symbol-function 'gptel-auto-experiment--code-quality-score)
+               (lambda () 0.5))
+              ((symbol-function 'gptel-auto-experiment--run-with-retry)
+               (lambda (target exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _retry-count)
+                 (cl-incf runs)
+                 (funcall callback
+                          (if (= exp-id 1)
+                              (list :target target
+                                    :id exp-id
+                                    :score-after 0
+                                    :validation-retry t
+                                    :kept nil
+                                    :comparator-reason "retry-grade-failed"
+                                    :agent-output
+                                    (format "Error: Task \"Retry: fix validation error in %s\" (executor) timed out after 240s total runtime."
+                                            target))
+                            (list :target target
+                                  :id exp-id
+                                  :score-after 0.4
+                                  :kept nil
+                                  :agent-output "no-op")))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-experiment-loop
+       "lisp/modules/gptel-tools-agent.el"
+       (lambda (loop-results)
+         (setq results loop-results)))
+      (should (= runs 2))
+      (should (= (length results) 2))
+      (should (plist-get (car results) :validation-retry))
+      (should (= (plist-get (cadr results) :id) 2)))))
+
 (ert-deftest regression/subagent/late-callback-after-timeout-is-ignored ()
   "Late subagent callback should not fire after timeout already completed the task."
   (ert-skip "Flaky test - callback timing issues")
@@ -1499,6 +1540,7 @@ EXIT-CODE defaults to 1."
             (should (equal (plist-get result :agent-output)
                            "HYPOTHESIS: retry path preserves full result"))
             (should (= (plist-get result :retries) 1))
+            (should (plist-get result :validation-retry))
             (should (= gptel-auto-experiment--no-improvement-count
                        (plist-get case :no-improvement)))
             (if (plist-get case :tracked)
@@ -4717,6 +4759,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                    "Syntax error in /tmp/file.el: (end-of-file)"))
     (should (equal (plist-get result :validation-error)
                    "Syntax error in /tmp/file.el: (end-of-file)"))
+    (should (plist-get result :validation-retry))
     (should (equal (plist-get result :retries) 1))))
 
 (ert-deftest regression/auto-experiment/retry-grade-failure-logs-result ()
@@ -4731,6 +4774,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
     (should (equal (plist-get result :hypothesis) "retry hypothesis"))
     (should (equal (plist-get result :grader-reason) "retry grade failed"))
     (should (equal (plist-get result :comparator-reason) "retry-grade-failed"))
+    (should (plist-get result :validation-retry))
     (should (equal (plist-get result :retries) 1))))
 
 (ert-deftest regression/auto-experiment/benchmark-allows-main-baseline-test-failures ()

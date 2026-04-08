@@ -4221,10 +4221,11 @@ fall back to an error-shaped AGENT-OUTPUT."
 
 (defun gptel-auto-experiment--result-hard-timeout-p (result)
   "Return non-nil when RESULT failed due to a hard executor timeout."
-  (gptel-auto-experiment--hard-timeout-p
-   (or (plist-get result :error)
-       (plist-get result :agent-output)
-       (plist-get result :grader-reason))))
+  (and (not (plist-get result :validation-retry))
+       (gptel-auto-experiment--hard-timeout-p
+        (or (plist-get result :error)
+            (plist-get result :agent-output)
+            (plist-get result :grader-reason)))))
 
 (defun gptel-auto-experiment--quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows provider quota exhaustion."
@@ -4648,6 +4649,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                                         :score-before baseline
                                                                         :score-after retry-score
                                                                         :code-quality retry-quality
+                                                                        :validation-retry t
                                                                         :kept keep
                                                                         :duration (- (float-time) start-time)
                                                                         :grader-quality (plist-get retry-grade :score)
@@ -4707,17 +4709,18 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                            ((not retry-tests-passed)
                                                             "tests-failed")
                                                            (t "verification-failed")))
-                                                         (exp-result
-                                                          (list :target target
-                                                                :id experiment-id
-                                                                :hypothesis retry-hypothesis
-                                                                :score-before baseline
-                                                                :score-after 0
-                                                                :kept nil
-                                                                :duration (- (float-time) start-time)
-                                                                :grader-quality (plist-get retry-grade :score)
-                                                                :grader-reason (plist-get retry-grade :details)
-                                                                :comparator-reason reason
+                                                          (exp-result
+                                                           (list :target target
+                                                                 :id experiment-id
+                                                                 :hypothesis retry-hypothesis
+                                                                 :score-before baseline
+                                                                 :score-after 0
+                                                                 :validation-retry t
+                                                                 :kept nil
+                                                                 :duration (- (float-time) start-time)
+                                                                 :grader-quality (plist-get retry-grade :score)
+                                                                 :grader-reason (plist-get retry-grade :details)
+                                                                 :comparator-reason reason
                                                                 :analyzer-patterns (format "%s" patterns)
                                                                 :agent-output retry-output
                                                                 :retries 1
@@ -4728,17 +4731,18 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                             (setq finished t)
                                             (let* ((retry-hypothesis
                                                     (gptel-auto-experiment--extract-hypothesis retry-output))
-                                                   (exp-result
-                                                    (list :target target
-                                                          :id experiment-id
-                                                          :hypothesis retry-hypothesis
-                                                          :score-before baseline
-                                                          :score-after 0
-                                                          :kept nil
-                                                          :duration (- (float-time) start-time)
-                                                          :grader-quality (plist-get retry-grade :score)
-                                                          :grader-reason (plist-get retry-grade :details)
-                                                          :comparator-reason "retry-grade-failed"
+                                                    (exp-result
+                                                     (list :target target
+                                                           :id experiment-id
+                                                           :hypothesis retry-hypothesis
+                                                           :score-before baseline
+                                                           :score-after 0
+                                                           :validation-retry t
+                                                           :kept nil
+                                                           :duration (- (float-time) start-time)
+                                                           :grader-quality (plist-get retry-grade :score)
+                                                           :grader-reason (plist-get retry-grade :details)
+                                                           :comparator-reason "retry-grade-failed"
                                                           :analyzer-patterns (format "%s" patterns)
                                                           :agent-output retry-output
                                                           :retries 1)))
