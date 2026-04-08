@@ -3986,7 +3986,8 @@ Submodules are hydrated later during verification, not during merge prep."
 (ert-deftest regression/auto-workflow/verify-staging-hydrates-top-level-submodules ()
   "Staging verification should hydrate submodules via shared repos, not recursive update."
   (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging")
-        (hydrated nil)
+         (hydrated nil)
+        (test-args nil)
         (test-script "/tmp/staging/scripts/run-tests.sh")
         (verify-script "/tmp/staging/scripts/verify-nucleus.sh"))
     (cl-letf (((symbol-function 'file-exists-p)
@@ -4001,19 +4002,59 @@ Submodules are hydrated later during verification, not during merge prep."
               ((symbol-function 'generate-new-buffer)
                (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
               ((symbol-function 'call-process)
-               (lambda (_program _in buffer _display script)
-                 (with-current-buffer buffer
-                   (insert (format "ran %s\n" script)))
-                 0))
+               (lambda (_program _in buffer _display script &rest args)
+                  (when (equal script test-script)
+                    (setq test-args args))
+                  (with-current-buffer buffer
+                    (insert (format "ran %s%s\n"
+                                    script
+                                    (if args
+                                        (format " %s" (mapconcat #'identity args " "))
+                                      ""))))
+                  0))
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (unwind-protect
           (let ((result (gptel-auto-workflow--verify-staging)))
             (should (car result))
             (should (equal hydrated "/tmp/staging"))
-            (should (string-match-p "ran /tmp/staging/scripts/run-tests.sh" (cdr result)))
+            (should (equal test-args '("unit")))
+            (should (string-match-p "ran /tmp/staging/scripts/run-tests.sh unit" (cdr result)))
             (should (string-match-p "ran /tmp/staging/scripts/verify-nucleus.sh" (cdr result))))
         (when-let ((buf (get-buffer "*test-staging-verify*")))
+          (kill-buffer buf))))))
+
+(ert-deftest regression/auto-workflow/main-baseline-test-results-runs-unit-mode ()
+  "Main-baseline comparison should invoke the unit-test mode only."
+  (let ((captured nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--staging-main-ref)
+               (lambda () "main"))
+              ((symbol-function 'gptel-auto-workflow--with-temporary-worktree)
+               (lambda (_name _ref fn)
+                 (funcall fn "/tmp/main-baseline")))
+              ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
+               (lambda (_worktree)
+                 (cons "Hydrated submodules" 0)))
+              ((symbol-function 'file-exists-p)
+               (lambda (path)
+                 (equal path "/tmp/main-baseline/scripts/run-tests.sh")))
+              ((symbol-function 'generate-new-buffer)
+               (lambda (&rest _) (get-buffer-create "*test-main-baseline-verify*")))
+              ((symbol-function 'call-process)
+               (lambda (_program _in buffer _display script &rest args)
+                 (setq captured (list script args))
+                 (with-current-buffer buffer
+                   (insert "ok"))
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (unwind-protect
+          (let ((result (gptel-auto-workflow--main-baseline-test-results)))
+            (should (equal captured
+                           '("/tmp/main-baseline/scripts/run-tests.sh" ("unit"))))
+            (should (equal (plist-get result :exit-code) 0))
+            (should-not (plist-get result :failed-tests)))
+        (when-let ((buf (get-buffer "*test-main-baseline-verify*")))
           (kill-buffer buf))))))
 
 (ert-deftest regression/auto-experiment/benchmark-runs-required-tests-even-when-skipped ()
@@ -4139,6 +4180,7 @@ Submodules are hydrated later during verification, not during merge prep."
 (ert-deftest regression/auto-workflow/verify-staging-allows-baseline-failures ()
   "Staging verification should pass when test failures match the main baseline."
   (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging")
+        (test-args nil)
         (test-script "/tmp/staging/scripts/run-tests.sh")
         (verify-script "/tmp/staging/scripts/verify-nucleus.sh"))
     (cl-letf (((symbol-function 'file-exists-p)
@@ -4155,20 +4197,27 @@ Submodules are hydrated later during verification, not during merge prep."
               ((symbol-function 'generate-new-buffer)
                (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
               ((symbol-function 'call-process)
-               (lambda (_program _in buffer _display script)
-                 (with-current-buffer buffer
-                   (insert (format "ran %s\n" script)))
-                 (if (equal script test-script)
-                     (progn
-                       (with-current-buffer buffer
-                         (insert "   FAILED   1/10  existing/baseline-failure (0.001 sec)\n"))
-                       1)
+               (lambda (_program _in buffer _display script &rest args)
+                  (when (equal script test-script)
+                    (setq test-args args))
+                  (with-current-buffer buffer
+                    (insert (format "ran %s%s\n"
+                                    script
+                                    (if args
+                                        (format " %s" (mapconcat #'identity args " "))
+                                      ""))))
+                  (if (equal script test-script)
+                      (progn
+                        (with-current-buffer buffer
+                          (insert "   FAILED   1/10  existing/baseline-failure (0.001 sec)\n"))
+                        1)
                    0)))
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (unwind-protect
           (let ((result (gptel-auto-workflow--verify-staging)))
             (should (car result))
+            (should (equal test-args '("unit")))
             (should (string-match-p "No new staging test failures vs main baseline"
                                     (cdr result)))
             (should (string-match-p "ran /tmp/staging/scripts/verify-nucleus.sh"
@@ -4179,6 +4228,7 @@ Submodules are hydrated later during verification, not during merge prep."
 (ert-deftest regression/auto-workflow/verify-staging-fails-on-new-regressions ()
   "Staging verification should fail when test failures exceed the main baseline."
   (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging")
+        (test-args nil)
         (test-script "/tmp/staging/scripts/run-tests.sh")
         (verify-script "/tmp/staging/scripts/verify-nucleus.sh"))
     (cl-letf (((symbol-function 'file-exists-p)
@@ -4195,24 +4245,31 @@ Submodules are hydrated later during verification, not during merge prep."
               ((symbol-function 'generate-new-buffer)
                (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
               ((symbol-function 'call-process)
-               (lambda (_program _in buffer _display script)
-                 (with-current-buffer buffer
-                   (insert (format "ran %s\n" script)))
-                 (if (equal script test-script)
-                     (progn
-                       (with-current-buffer buffer
-                         (insert "   FAILED   1/10  new/failure (0.001 sec)\n"))
-                       1)
+               (lambda (_program _in buffer _display script &rest args)
+                  (when (equal script test-script)
+                    (setq test-args args))
+                  (with-current-buffer buffer
+                    (insert (format "ran %s%s\n"
+                                    script
+                                    (if args
+                                        (format " %s" (mapconcat #'identity args " "))
+                                      ""))))
+                  (if (equal script test-script)
+                      (progn
+                        (with-current-buffer buffer
+                          (insert "   FAILED   1/10  new/failure (0.001 sec)\n"))
+                        1)
                    0)))
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
-      (unwind-protect
-           (let ((result (gptel-auto-workflow--verify-staging)))
-             (should-not (car result))
-             (should (string-match-p "New staging test failures vs main"
-                                     (cdr result))))
-          (when-let ((buf (get-buffer "*test-staging-verify*")))
-            (kill-buffer buf))))))
+       (unwind-protect
+            (let ((result (gptel-auto-workflow--verify-staging)))
+              (should (equal test-args '("unit")))
+              (should-not (car result))
+              (should (string-match-p "New staging test failures vs main"
+                                      (cdr result))))
+           (when-let ((buf (get-buffer "*test-staging-verify*")))
+             (kill-buffer buf))))))
 
 (ert-deftest regression/auto-workflow/staging-worktree-failure-restores-staging-baseline ()
   "Failed staging worktree creation should restore the pre-merge staging baseline."

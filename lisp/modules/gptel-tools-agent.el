@@ -2468,7 +2468,7 @@ superproject-managed `.git/modules/...` store."
                      failed-tests)
                 (unwind-protect
                     (let ((default-directory worktree))
-                      (setq exit-code (call-process "bash" nil buffer nil test-script))
+                      (setq exit-code (call-process "bash" nil buffer nil test-script "unit"))
                       (setq output (with-current-buffer buffer (buffer-string)))
                       (setq failed-tests (gptel-auto-workflow--extract-failed-tests output))
                       (cond
@@ -2987,7 +2987,7 @@ Returns (success-p . output)."
                     (with-current-buffer output-buffer
                       (insert (car submodules) "\n"))))
               (test-result (when (and submodule-pass test-script (file-exists-p test-script))
-                             (call-process "bash" nil output-buffer nil test-script)))
+                             (call-process "bash" nil output-buffer nil test-script "unit")))
               (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
                                (call-process "bash" nil output-buffer nil verify-script)))
               (test-pass (and submodule-pass
