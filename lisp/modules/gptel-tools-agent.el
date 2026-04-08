@@ -293,7 +293,9 @@ On timeout or error, returns empty string and logs warning."
           (message "[auto-workflow] %s"
                    (my/gptel--sanitize-for-logging (car result) 160))
           "")
-      (string-trim (car result)))))
+      (if (stringp (car result))
+          (string-trim (car result))
+        ""))))
 
 ;;; Orphan Commit Tracking
 
