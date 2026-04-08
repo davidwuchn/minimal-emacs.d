@@ -175,7 +175,7 @@ Legacy function - routes to worktree buffer for backward compatibility."
   "Add PROJECT-ROOT to auto-workflow projects list.
 Interactively prompts for directory."
   (interactive "DProject root: ")
-  (let ((root (expand-file-name project-root)))
+  (let ((root (file-name-as-directory (expand-file-name project-root))))
     (unless (file-exists-p (expand-file-name ".dir-locals.el" root))
       (error "No .dir-locals.el found in %s" root))
     (unless (member root gptel-auto-workflow-projects)
@@ -192,7 +192,7 @@ Interactively prompts for directory."
   (interactive
    (list (completing-read "Remove project: " 
                           gptel-auto-workflow-projects)))
-  (let ((root (expand-file-name project-root)))
+  (let ((root (file-name-as-directory (expand-file-name project-root))))
     (setq gptel-auto-workflow-projects 
           (delete root gptel-auto-workflow-projects))
     (customize-save-variable 'gptel-auto-workflow-projects 
@@ -200,7 +200,7 @@ Interactively prompts for directory."
     (remhash root gptel-auto-workflow--project-buffers)
     (remhash root gptel-auto-workflow--worktree-buffers)
     (remhash root gptel-auto-workflow--research-findings-cache)
-    (message "Removed project: %s" project-root)))
+    (message "Removed project: %s" root)))
 
 (defun gptel-auto-workflow-list-projects ()
   "Display list of configured projects."

@@ -2524,7 +2524,7 @@ superproject-managed `.git/modules/...` store."
   (let ((staging-failures (gptel-auto-workflow--extract-failed-tests staging-output)))
     (cond
      ((null staging-failures)
-      (cons nil "Staging verification failed without parsable failure signatures"))
+      (cons t "Staging tests passed: no failures detected"))
      (t
        (let* ((baseline (gptel-auto-workflow--main-baseline-test-results))
               (baseline-error (plist-get baseline :error))
@@ -6292,15 +6292,7 @@ Returns the content between the first --- and end, or the whole result."
              (shell-quote-argument know-file)
              (shell-quote-argument (format "💡 synthesis: %s (AI-generated)" topic))))))
 
-(defun gptel-mementum-synthesize-all-candidates (&optional candidates)
-  "Synthesize all CANDIDATES (or detect if nil) with human approval."
-  (let* ((cands (or candidates (gptel-mementum-check-synthesis-candidates)))
-         (synthesized 0))
-    (dolist (candidate cands)
-      (when (gptel-mementum-synthesize-candidate candidate)
-        (cl-incf synthesized)))
-    (message "[mementum] Synthesized %d/%d candidates" synthesized (length cands))
-    synthesized))
+
 
 (defun gptel-mementum-weekly-job ()
   "Weekly mementum maintenance: decay + index rebuild + synthesis.

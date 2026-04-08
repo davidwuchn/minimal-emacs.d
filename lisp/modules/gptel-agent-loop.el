@@ -305,9 +305,10 @@ Truncates accumulated output to last
 `gptel-agent-loop-continuation-context-limit' chars."
   (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
          (limit gptel-agent-loop-continuation-context-limit)
-         (truncated (if (and limit (> (length output) limit))
+         (len (length output))
+         (truncated (if (and (integerp limit) (> limit 0) (> len limit))
                         (concat "...[earlier output truncated]\n"
-                                (substring output (- limit)))
+                                (substring output (- len limit)))
                       output)))
     (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
             gptel-agent-loop-continuation-prompt
@@ -529,36 +530,27 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
                  t))
 
                ((gptel-agent-loop--continuation-needed-p state resp)
-                (let ((cont-count (or (gptel-agent-loop--task-continuation-count state) 0)))
-                  (if (>= cont-count gptel-agent-loop-max-continuations)
+                (let ((cont-count (1+ (or (gptel-agent-loop--task-continuation-count state) 0))))
+                  (setf (gptel-agent-loop--task-continuation-count state) cont-count)
+                  (if gptel-agent-loop-hard-loop
                       (progn
-                        (message "[RunAgent] Max continuations (%d) reached, stopping" cont-count)
-                        (gptel-agent-loop--deliver-result
-                         state
-                         (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps, %d continuations]"
-                                 (gptel-agent-loop--build-final-result state "")
+                        (message "[RunAgent] Auto-continuing after %d steps (continuation %d/%d)..."
                                  (gptel-agent-loop--task-step-count state)
-                                 cont-count)))
-                    (setf (gptel-agent-loop--task-continuation-count state) (1+ cont-count))
-                    (if gptel-agent-loop-hard-loop
-                        (progn
-                          (message "[RunAgent] Auto-continuing after %d steps (continuation %d/%d)..."
-                                   (gptel-agent-loop--task-step-count state)
-                                   (1+ cont-count) gptel-agent-loop-max-continuations)
-                          (gptel-agent-loop--append-output state resp)
-                          (gptel-agent-loop--schedule
-                           0.1
-                           (lambda ()
-                             (gptel-agent-loop--request
-                              state
-                              (gptel-agent-loop--continuation-prompt-for state)
-                              t
-                              nil))))
-                      (gptel-agent-loop--deliver-result
-                       state
-                       (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-                               (gptel-agent-loop--build-final-result state "")
-                               (gptel-agent-loop--task-step-count state)))))))
+                                 cont-count gptel-agent-loop-max-continuations)
+                        (gptel-agent-loop--append-output state resp)
+                        (gptel-agent-loop--schedule
+                         0.1
+                         (lambda ()
+                           (gptel-agent-loop--request
+                            state
+                            (gptel-agent-loop--continuation-prompt-for state)
+                            t
+                            nil))))
+                    (gptel-agent-loop--deliver-result
+                     state
+                     (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
+                             (gptel-agent-loop--build-final-result state "")
+                             (gptel-agent-loop--task-step-count state))))))
 
                (t
                 (gptel-agent-loop--deliver-result
