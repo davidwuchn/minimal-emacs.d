@@ -1841,6 +1841,12 @@ forcibly aborted."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-review-time-budget 600
+  "Timeout budget in seconds for staging review subagent calls."
+  :type 'integer
+  :safe #'integerp
+  :group 'gptel-tools-agent)
+
 (defcustom gptel-auto-experiment-max-per-target 5
   "Maximum experiments per target.
 Monthly subscription: 5 is optimal (diminishing returns after 3-4)."
@@ -2604,6 +2610,8 @@ Reviewer checks for Blocker/Critical issues."
       (funcall callback (cons t "Review disabled by config"))
     (let* ((proj-root (gptel-auto-workflow--project-root))
            (default-directory proj-root)
+           (review-timeout (max my/gptel-agent-task-timeout
+                                gptel-auto-workflow-review-time-budget))
            ;; SECURITY: Use shell-quote-argument to prevent shell injection
            (staging-quoted (shell-quote-argument gptel-auto-workflow-staging-branch))
            (optimize-quoted (shell-quote-argument optimize-branch))
@@ -2649,7 +2657,7 @@ Maximum response: 1000 characters."
                         (if approved "PASSED" "BLOCKED")
                         (my/gptel--sanitize-for-logging response 100))
                (funcall callback (cons approved response))))
-           my/gptel-agent-task-timeout)
+           review-timeout)
         (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
 
 (defun gptel-auto-workflow--review-approved-p (response)

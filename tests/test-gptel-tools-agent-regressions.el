@@ -2680,6 +2680,46 @@ EXIT-CODE defaults to 1."
       (should (car review-result))
       (should (string-match-p "APPROVED" (cdr review-result))))))
 
+(ert-deftest regression/auto-workflow/review-changes-uses-review-time-budget ()
+  "Review dispatch should use the dedicated review timeout budget."
+  (let ((gptel-auto-workflow-require-review t)
+        (gptel-auto-experiment-use-subagents t)
+        (gptel-auto-workflow-review-time-budget 600)
+        (my/gptel-agent-task-timeout 300)
+        captured-timeout
+        review-result)
+    (cl-letf (((symbol-function 'shell-command-to-string)
+               (lambda (&rest _) "diff --git a/file b/file"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional timeout)
+                 (setq captured-timeout timeout)
+                 (funcall callback "APPROVED")))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (gptel-auto-workflow--review-changes
+       "optimize/test-branch"
+       (lambda (result) (setq review-result result)))
+      (should (= captured-timeout 600))
+      (should (car review-result)))))
+
+(ert-deftest regression/auto-workflow/review-changes-keeps-higher-global-timeout ()
+  "Review dispatch should not shorten a larger global task timeout."
+  (let ((gptel-auto-workflow-require-review t)
+        (gptel-auto-experiment-use-subagents t)
+        (gptel-auto-workflow-review-time-budget 600)
+        (my/gptel-agent-task-timeout 900)
+        captured-timeout)
+    (cl-letf (((symbol-function 'shell-command-to-string)
+               (lambda (&rest _) "diff --git a/file b/file"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional timeout)
+                 (setq captured-timeout timeout)
+                 (funcall callback "APPROVED")))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (gptel-auto-workflow--review-changes
+       "optimize/test-branch"
+       (lambda (&rest _) nil))
+      (should (= captured-timeout 900)))))
+
 (ert-deftest regression/auto-workflow/review-changes-keeps-blocked-output-blocked ()
   "Review parsing should still reject explicit blocked results."
   (let ((gptel-auto-workflow-require-review t)
