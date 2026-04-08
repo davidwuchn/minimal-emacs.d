@@ -3283,6 +3283,7 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                             :comparator-reason "Failed to create staging worktree"
                             :analyzer-patterns ""
                             :agent-output ""))
+                    (gptel-auto-workflow--reset-staging-after-failure staging-base)
                     (funcall finish nil))
                 (let* ((verification (gptel-auto-workflow--verify-staging))
                        (tests-passed (car verification))
