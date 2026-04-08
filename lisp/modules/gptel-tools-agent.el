@@ -948,36 +948,40 @@ large-result truncation, and result caching."
 
 (defun my/gptel--deliver-subagent-result (callback result)
   "Deliver RESULT to CALLBACK, truncating large results to a temp file."
-  (if (> (length result) my/gptel-subagent-result-limit)
-      (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
-                            (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt")
-                          (make-temp-file "gptel-subagent-result-" nil ".txt")))
-             (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
-                                (substring result 0 my/gptel-subagent-result-limit)
-                                temp-file))
-             (buf (current-buffer))
-             (buf-has-local (and (buffer-live-p buf)
-                                 (local-variable-p 'my/gptel--subagent-temp-files buf))))
-        (with-temp-file temp-file
-          (insert result))
-        (push temp-file my/gptel--global-temp-files)
-        (when buf-has-local
-          (with-current-buffer buf
-            (push temp-file my/gptel--subagent-temp-files)))
-        (when (> my/gptel-subagent-temp-file-ttl 0)
-          (run-at-time my/gptel-subagent-temp-file-ttl nil
-                       (lambda (f b has-local)
-                         (when (file-exists-p f)
-                           (delete-file f))
-                         (setq my/gptel--global-temp-files
-                               (delete f my/gptel--global-temp-files))
-                         (when (and has-local (buffer-live-p b))
-                           (with-current-buffer b
-                             (setq my/gptel--subagent-temp-files
-                                   (delete f my/gptel--subagent-temp-files)))))
-                       temp-file buf buf-has-local))
-         (funcall callback trunc-msg))
-     (funcall callback result)))
+  (cl-block my/gptel--deliver-subagent-result
+    (unless (stringp result)
+      (funcall callback (or result ""))
+      (cl-return-from my/gptel--deliver-subagent-result))
+    (if (> (length result) my/gptel-subagent-result-limit)
+        (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
+                              (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt")
+                            (make-temp-file "gptel-subagent-result-" nil ".txt")))
+               (trunc-msg (format "%s\n...[Result too large, truncated. Full result saved to: %s. Use Read tool if you need more]..."
+                                  (substring result 0 my/gptel-subagent-result-limit)
+                                  temp-file))
+               (buf (current-buffer))
+               (buf-has-local (and (buffer-live-p buf)
+                                   (local-variable-p 'my/gptel--subagent-temp-files buf))))
+          (with-temp-file temp-file
+            (insert result))
+          (push temp-file my/gptel--global-temp-files)
+          (when buf-has-local
+            (with-current-buffer buf
+              (push temp-file my/gptel--subagent-temp-files)))
+          (when (> my/gptel-subagent-temp-file-ttl 0)
+            (run-at-time my/gptel-subagent-temp-file-ttl nil
+                         (lambda (f b has-local)
+                           (when (file-exists-p f)
+                             (delete-file f))
+                           (setq my/gptel--global-temp-files
+                                 (delete f my/gptel--global-temp-files))
+                           (when (and has-local (buffer-live-p b))
+                             (with-current-buffer b
+                               (setq my/gptel--subagent-temp-files
+                                     (delete f my/gptel--subagent-temp-files)))))
+                         temp-file buf buf-has-local))
+           (funcall callback trunc-msg))
+      (funcall callback result))))
 
 (defun my/gptel-agent--truncate-buffer-around (orig prefix &optional max-lines)
   "Prevent temp artifacts from starting with a raw Emacs modeline.
@@ -1831,6 +1835,21 @@ Monthly subscription: LLM selection finds best targets each run."
 Executor requests still use `gptel-auto-experiment-time-budget' as their idle
 timeout, but active runs may exceed it by this grace period before they are
 forcibly aborted."
+  :type 'integer
+  :safe #'integerp
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-experiment-validation-retry-time-budget 180
+  "Timeout budget in seconds for validation-retry executor calls.
+
+Validation retries should repair one known error in the current worktree, so
+they use a shorter budget than full experiments."
+  :type 'integer
+  :safe #'integerp
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-experiment-validation-retry-active-grace 60
+  "Extra wall-clock seconds active validation-retry calls may use beyond budget."
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
@@ -4581,13 +4600,15 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                 (message "[auto-experiment] ✗ %s"
                                          (my/gptel--sanitize-for-logging validation-error 200))
                                 (magit-git-success "checkout" "--" ".")
-                                (my/gptel--run-agent-tool-with-timeout
-                                 experiment-timeout
-                                 (lambda (retry-output)
-                                    (let ((gptel-auto-experiment--grading-target target)
-                                          (gptel-auto-experiment--grading-worktree experiment-worktree))
-                                      (gptel-auto-experiment-grade
-                                       retry-output
+                                (let ((gptel-auto-experiment-active-grace
+                                       gptel-auto-experiment-validation-retry-active-grace))
+                                  (my/gptel--run-agent-tool-with-timeout
+                                   gptel-auto-experiment-validation-retry-time-budget
+                                   (lambda (retry-output)
+                                     (let ((gptel-auto-experiment--grading-target target)
+                                           (gptel-auto-experiment--grading-worktree experiment-worktree))
+                                       (gptel-auto-experiment-grade
+                                        retry-output
                                        (lambda (retry-grade)
                                          (if (plist-get retry-grade :passed)
                                              (let ((retry-bench (gptel-auto-experiment-benchmark t)))
@@ -4712,11 +4733,11 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                           :retries 1)))
                                               (gptel-auto-experiment-log-tsv
                                                (gptel-auto-workflow--current-run-id) exp-result)
-                                              (funcall callback exp-result)))))))
-                                    "executor"
-                                    (format "Retry: fix validation error in %s" target)
-                                    (gptel-auto-experiment--make-retry-prompt
-                                      target validation-error executor-prompt)))
+                                               (funcall callback exp-result)))))))
+                                   "executor"
+                                   (format "Retry: fix validation error in %s" target)
+                                   (gptel-auto-experiment--make-retry-prompt
+                                    target validation-error executor-prompt))))
                             (let ((default-directory experiment-worktree))
                               (setq finished t)
                               (magit-git-success "checkout" "--" ".")
@@ -4809,34 +4830,59 @@ TARGET is the file currently being optimized."
                   (string-suffix-p ".el" target)
                   (string-match-p "\\`Syntax error in " validation-error)))))))
 
-(defun gptel-auto-experiment--make-retry-prompt (target validation-error _original-prompt)
+(defun gptel-auto-experiment--make-retry-prompt (target validation-error original-prompt)
   "Create retry prompt after validation failure.
 TARGET is the file being edited.
 VALIDATION-ERROR is the error message.
 Instructs executor to load relevant skill instead of hardcoding patterns."
-  (format "Your previous edit to %s was REJECTED due to validation error:
+  (let ((skill-guidance
+         (cond
+          ;; Elisp syntax and dangerous patterns - tell executor to load skill
+          ((and (stringp target)
+                (string-suffix-p ".el" target)
+                (or (string-match-p
+                     "cl-return-from.*without.*cl-block\\|Dangerous pattern"
+                     validation-error)
+                    (string-match-p "\\`Syntax error in " validation-error)))
+           "CALL THIS FIRST: Skill(\"elisp-expert\")
+This skill teaches syntax-safe Elisp edits and dangerous patterns including cl-return-from requirements.")
+          ;; Add more skill mappings here as needed
+          (t "")))
+        (original-contract
+         (if (and (stringp original-prompt)
+                  (> (length original-prompt) 0))
+             original-prompt
+           (concat
+            "FINAL RESPONSE must include:\n"
+            "- CHANGED: exact file path(s) and function/variable names touched\n"
+            "- EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit\n"
+            "- VERIFY: exact command(s) run and whether they passed or failed\n"
+            "- COMMIT: always \"not committed\"\n"
+            "End the final response with: Task completed"))))
+    (format "Your previous edit to %s was REJECTED due to validation error:
 
 ERROR: %s
 
-IMPORTANT: Before retrying, load the relevant skill for guidance.
+IMPORTANT:
+1. This is a focused repair retry, not a fresh experiment.
+2. Fix ONLY the reported validation issue in %s with the smallest possible edit.
+3. Keep the earlier improvement if it still makes sense after the repair; do not broaden the change.
+4. Prefer focused reads near the reported failure instead of rereading large files.
+5. Do not run broad repo tests or compile unrelated files until the validation issue is fixed.
+6. For Elisp syntax errors, repair the parse error first and confirm the file reads or byte-compiles before broader verification.
+7. Reuse the original experiment contract and final response format below.
+
+Before retrying, load the relevant skill for guidance.
 
 %s
 
-Read the file, understand the error, load the skill if available, and generate corrected code."
-           target
-           validation-error
-           (cond
-            ;; Elisp syntax and dangerous patterns - tell executor to load skill
-            ((and (stringp target)
-                  (string-suffix-p ".el" target)
-                  (or (string-match-p
-                       "cl-return-from.*without.*cl-block\\|Dangerous pattern"
-                       validation-error)
-                      (string-match-p "\\`Syntax error in " validation-error)))
-             "CALL THIS FIRST: Skill(\"elisp-expert\")
-This skill teaches syntax-safe Elisp edits and dangerous patterns including cl-return-from requirements.")
-            ;; Add more skill mappings here as needed
-            (t ""))))
+ORIGINAL TASK:
+%s"
+            target
+            validation-error
+            target
+            skill-guidance
+            original-contract)))
 
 ;;; Experiment Loop
 

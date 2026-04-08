@@ -684,9 +684,96 @@ EXIT-CODE defaults to 1."
       (should (string-match-p "VERIFY:" prompt))
       (should (string-match-p "COMMIT:" prompt))
       (should (string-match-p "DO NOT run git add, git commit, git push, or stage changes yourself" prompt))
-      (should (string-match-p "COMMIT: always \"not committed\"" prompt))
-      (should-not (string-match-p "COMMIT your changes: git add -A && git commit" prompt))
-      (should (string-match-p "NEVER reply with only \"Done\"" prompt)))))
+       (should (string-match-p "COMMIT: always \"not committed\"" prompt))
+       (should-not (string-match-p "COMMIT your changes: git add -A && git commit" prompt))
+       (should (string-match-p "NEVER reply with only \"Done\"" prompt)))))
+
+(ert-deftest regression/auto-experiment/retry-prompt-preserves-focused-contract ()
+  "Validation retries should keep the original focused experiment contract."
+  (let* ((original-prompt (concat "ORIGINAL EXPERIMENT\n"
+                                  "FINAL RESPONSE must include:\n"
+                                  "- CHANGED:\n"
+                                  "- EVIDENCE:\n"
+                                  "- VERIFY:\n"
+                                  "- COMMIT:\n"
+                                  "Task completed"))
+         (prompt (gptel-auto-experiment--make-retry-prompt
+                  "lisp/modules/gptel-ext-tool-sanitize.el"
+                  "Syntax error in /tmp/file.el: (invalid-read-syntax ) 124 48)"
+                  original-prompt)))
+    (should (string-match-p "focused repair retry, not a fresh experiment" prompt))
+    (should (string-match-p "Fix ONLY the reported validation issue" prompt))
+    (should (string-match-p "Do not run broad repo tests or compile unrelated files" prompt))
+    (should (string-match-p "Skill(\"elisp-expert\")" prompt))
+    (should (string-match-p "ORIGINAL TASK:" prompt))
+    (should (string-match-p (regexp-quote original-prompt) prompt))))
+
+(ert-deftest regression/auto-experiment/validation-retry-uses-dedicated-time-budget ()
+  "Validation retries should use the shorter retry-specific timeout budget."
+  (let* ((project-root (make-temp-file "aw-project" t))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/retry-riven-exp1" project-root))
+         (worktree-buf (get-buffer-create "*aw-retry-time-budget*"))
+         (benchmark-calls 0)
+         (captured-timeouts nil)
+         (captured-graces nil)
+         result)
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer worktree-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir)))
+          (let ((gptel-auto-experiment-time-budget 600)
+                (gptel-auto-experiment-active-grace 300)
+                (gptel-auto-experiment-validation-retry-time-budget 180)
+                (gptel-auto-experiment-validation-retry-active-grace 60))
+            (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                       (lambda (_target _experiment-id) worktree-dir))
+                      ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                       (lambda (_worktree-dir) worktree-buf))
+                      ((symbol-function 'gptel-auto-experiment-analyze)
+                       (lambda (_previous-results cb)
+                         (funcall cb nil)))
+                      ((symbol-function 'gptel-auto-experiment-build-prompt)
+                       (lambda (&rest _args) "prompt"))
+                      ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                       (lambda (timeout cb &rest _args)
+                         (push timeout captured-timeouts)
+                         (push gptel-auto-experiment-active-grace captured-graces)
+                         (funcall cb "HYPOTHESIS: retry hypothesis")))
+                      ((symbol-function 'gptel-auto-experiment-grade)
+                       (lambda (_output cb &rest _args)
+                         (funcall cb '(:score 9 :total 9 :passed t :details "ok"))))
+                      ((symbol-function 'gptel-auto-experiment-benchmark)
+                       (lambda (&optional _full)
+                         (cl-incf benchmark-calls)
+                         (if (= benchmark-calls 1)
+                             '(:passed nil
+                               :validation-error "Syntax error in /tmp/file.el: (end-of-file)"
+                               :tests-passed t
+                               :nucleus-passed t)
+                           '(:passed nil
+                             :validation-error "still bad"
+                             :tests-passed t
+                             :nucleus-passed t))))
+                      ((symbol-function 'magit-git-success)
+                       (lambda (&rest _args) t))
+                      ((symbol-function 'gptel-auto-experiment-log-tsv)
+                       (lambda (&rest _args) nil))
+                      ((symbol-function 'message)
+                       (lambda (&rest _args) nil)))
+              (with-current-buffer worktree-buf
+                (gptel-auto-experiment-run
+                 "lisp/modules/gptel-ext-tool-sanitize.el" 1 5 0.4 0.5 nil
+                 (lambda (exp-result)
+                   (setq result exp-result)))))
+          (setq captured-timeouts (nreverse captured-timeouts)
+                captured-graces (nreverse captured-graces))
+          (should result)
+          (should (equal captured-timeouts '(600 180)))
+          (should (equal captured-graces '(300 60))))
+      (when (buffer-live-p worktree-buf)
+        (kill-buffer worktree-buf))
+      (delete-directory project-root t)))))
 
 (ert-deftest regression/auto-experiment/executor-timeout-owned-by-subagent-wrapper ()
   "Experiment runner should not install a second wall-clock timeout around executor dispatch."
