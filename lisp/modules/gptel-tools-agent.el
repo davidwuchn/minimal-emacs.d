@@ -4015,12 +4015,14 @@ Make minimal, targeted changes to CODE, not documentation.
 4. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
 5. Implement the CODE change minimally using Edit tool
 6. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
-7. COMMIT your changes: git add -A && git commit -m \"message\"
+7. DO NOT run git add, git commit, git push, or stage changes yourself.
+   Leave edits uncommitted in the worktree; the auto-workflow controller
+   handles grading, commit creation, review, and staging.
 8. FINAL RESPONSE must include:
    - CHANGED: exact file path(s) and function/variable names touched
    - EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit
    - VERIFY: exact command(s) run and whether they passed or failed
-   - COMMIT: short SHA and subject, or \"not committed\"
+   - COMMIT: always \"not committed\" (workflow controller handles commits)
 9. End the final response with: Task completed
 10. NEVER reply with only \"Done\", only a commit message, or a vague success claim
 

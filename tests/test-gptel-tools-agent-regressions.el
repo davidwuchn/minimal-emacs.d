@@ -683,6 +683,9 @@ EXIT-CODE defaults to 1."
       (should (string-match-p "EVIDENCE:" prompt))
       (should (string-match-p "VERIFY:" prompt))
       (should (string-match-p "COMMIT:" prompt))
+      (should (string-match-p "DO NOT run git add, git commit, git push, or stage changes yourself" prompt))
+      (should (string-match-p "COMMIT: always \"not committed\"" prompt))
+      (should-not (string-match-p "COMMIT your changes: git add -A && git commit" prompt))
       (should (string-match-p "NEVER reply with only \"Done\"" prompt)))))
 
 (ert-deftest regression/auto-experiment/executor-timeout-owned-by-subagent-wrapper ()
@@ -5162,6 +5165,17 @@ Submodules are hydrated later during verification, not during merge prep."
       (insert-file-contents file)
       (goto-char (point-min))
       (should (re-search-forward "^steps: 25$" nil t)))))
+
+(ert-deftest regression/auto-workflow/executor-agent-forbids-git-commits ()
+  "Executor agent should leave git commit/push to the workflow controller."
+  (let ((file (expand-file-name "assistant/agents/executor.md"
+                                (gptel-auto-workflow--project-root))))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (should (re-search-forward "Do not run `git add`, `git commit`, `git push`" nil t))
+      (should (re-search-forward "Leave edits uncommitted in the worktree" nil t))
+      (should (re-search-forward "`COMMIT:` must be `not committed`" nil t)))))
 
 (ert-deftest regression/auto-workflow/push-staging-uses-force-with-lease-when-remote-exists ()
   "Staging push should use force-with-lease against the current remote head."
