@@ -948,6 +948,9 @@ large-result truncation, and result caching."
 
 (defun my/gptel--deliver-subagent-result (callback result)
   "Deliver RESULT to CALLBACK, truncating large results to a temp file."
+  (unless (stringp result)
+    (funcall callback (or result ""))
+    (cl-return-from my/gptel--deliver-subagent-result))
   (if (> (length result) my/gptel-subagent-result-limit)
       (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
                             (my/gptel-make-temp-file "gptel-subagent-result-" nil ".txt")
