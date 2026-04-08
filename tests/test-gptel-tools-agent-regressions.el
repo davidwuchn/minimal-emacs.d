@@ -4324,9 +4324,9 @@ EXIT-CODE defaults to 1."
         (kill-buffer proc-buf)))))
 
 (ert-deftest regression/auto-workflow/merge-to-staging-resets-worktree-before-merge ()
-  "Staging merge should reset the staging worktree before merging optimize refs.
+  "Staging merge should reset the staging worktree before cherry-picking optimize refs.
 When origin/staging exists, resets to origin/staging to handle diverged local staging.
-Submodules are hydrated later during verification, not during merge prep."
+Uses cherry-pick instead of merge to avoid branch divergence issues."
   (let ((commands nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--ensure-staging-branch-exists)
                 (lambda () t))
@@ -4337,13 +4337,14 @@ Submodules are hydrated later during verification, not during merge prep."
               ((symbol-function 'gptel-auto-workflow--git-result)
                 (lambda (command &optional _timeout)
                   (push command commands)
-                  (cons "" 0)))
+                  (if (string-match-p "git rev-parse optimize/test-exp1" command)
+                      (cons "abc123" 0)
+                    (cons "" 0))))
                ((symbol-function 'message)
                 (lambda (&rest _) nil)))
        (should (gptel-auto-workflow--merge-to-staging "optimize/test-exp1"))
        (should (member "git reset --hard origin/staging" commands))
-       (should (member "git merge -X theirs optimize/test-exp1 --no-ff -m Merge\\ optimize/test-exp1\\ for\\ verification"
-                       commands))
+       (should (member "git cherry-pick --no-commit abc123" commands))
        (should-not (member "git fetch origin" commands))
        (should-not (member "git submodule update --init --recursive" commands)))))
 
