@@ -1,43 +1,38 @@
-# Staging-Merge Failure Pattern
+# Staging-Merge Failure Pattern (FIXED)
 
-## Problem
-Auto-workflow kept experiments were not being merged to staging branch.
-
-## Symptom
-- Results TSV shows: `staging-merge discarded staging-merge-failed`
-- Comparator reason: `Failed to merge optimize/{branch} to staging`
-- Agent output: empty (no detailed error logged)
+## Problem (Historical)
+Auto-workflow kept experiments were not being merged to staging branch due to branch divergence.
 
 ## Root Cause
-Optimize branches are created during experiments and based on the state at experiment start time. By the time the experiment is "kept" and ready to merge to staging:
+Optimize branches are created from `main` at experiment start. By the time the experiment is "kept":
 1. Staging may have advanced (new commits merged)
 2. Optimize branch is behind staging
-3. `git merge -X theirs` fails (conflict resolution not sufficient)
+3. `git merge -X theirs` fails due to branch history conflicts
 
-## Manual Fix
-```bash
-git checkout staging
-git merge optimize/{branch} -m "Merge optimize/{branch} for verification"
-./scripts/run-tests.sh unit  # Verify tests pass
-git push origin staging
+## Solution (Implemented)
+Changed `gptel-auto-workflow--merge-to-staging` to use cherry-pick instead of merge:
+
+```elisp
+;; Before: git merge -X theirs optimize/branch --no-ff
+;; After:  git cherry-pick --no-commit <commit-hash>
+;;         git commit -m "Merge optimize/branch for verification"
 ```
 
-## Affected Runs
-- 2026-04-08T180000Z-7ca9: 2 staging-merge failures (cache, core experiments)
+**Benefits:**
+- Cherry-pick applies only the tip commit changes
+- Works even when staging has moved forward
+- No branch history conflicts
+- Falls back to merge if cherry-pick fails
+- No manual intervention needed
 
 ## Code Location
-`gptel-auto-workflow--merge-to-staging` (gptel-tools-agent.el:2923)
-- Uses `git merge -X theirs --no-ff`
-- Resets staging to origin/staging before merge
-- Problem: doesn't rebase optimize branch onto staging first
+`gptel-auto-workflow--merge-to-staging` (gptel-tools-agent.el:2931)
 
-## Potential Fix
-Before merging, rebase optimize branch onto staging:
-```elisp
-(gptel-auto-workflow--git-result
- (format "git rebase %s %s" staging-q optimize-branch-q)
- 180)
-```
+## Test
+`regression/auto-workflow/merge-to-staging-resets-worktree-before-merge`
 
-## Lesson
-Always manually check staging branch after auto-workflow runs to ensure kept experiments are merged.
+## Commit
+`e293aa29` - ⚒ fix: use cherry-pick instead of merge for staging integration
+
+## Status
+✅ FIXED - No manual intervention needed after this commit.
