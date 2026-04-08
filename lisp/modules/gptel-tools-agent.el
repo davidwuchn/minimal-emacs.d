@@ -4785,8 +4785,11 @@ Tries multiple patterns in order:
 5. Action verb at start of sentence
 6. Summary after ✓ checkmark (fallback)"
   (cond
+   ;; Guard against non-string input
+   ((not (stringp output))
+    "No hypothesis stated")
    ;; Check for error message first
-   ((and (stringp output) (string-match-p "^Error:" output))
+   ((string-match-p "^Error:" output)
     "Agent error")
    ((string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
     (match-string 1 output))
