@@ -50,8 +50,9 @@ Tries: exact, case-insensitive, underscore/hyphen normalization."
 ;; malformed tool calls with an error result so they're skipped.
 (defun my/gptel--nil-tool-call-p (tc)
   "Return non-nil when TC is a nil/null/empty-named tool call spec."
-  (let ((name (plist-get tc :name)))
-    (or (null name) (eq name :null) (equal name "null") (equal name ""))))
+  (when (listp tc)
+    (let ((name (plist-get tc :name)))
+      (or (null name) (eq name :null) (equal name "null") (equal name "")))))
 
 (defun my/gptel--repair-tool-call (tc correct-name)
   "Repair tool call TC to use CORRECT-NAME.
