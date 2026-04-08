@@ -4940,7 +4940,7 @@ Adapts max-experiments based on API error rate."
                            (when (and score-after (> score-after best-score))
                              (setq best-score score-after
                                    no-improvement-count 0))
-                           (when (and score-after (<= score-after best-score))
+                           (when (and score-after (< score-after best-score))
                              (cl-incf no-improvement-count))
                             (when hard-timeout
                               (message "[auto-experiment] Hard timeout for %s in experiment %d; stopping remaining experiments for this target"
