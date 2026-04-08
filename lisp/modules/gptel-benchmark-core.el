@@ -245,20 +245,23 @@ Returns 0.0 if TOTAL is zero to avoid division by zero."
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores.
 Returns plist with :total-tests, :passed-tests, and average scores."
-  (when gptel-benchmark--cancelled
-    (list :total-tests 0
-          :passed-tests 0
-          :avg-overall 0.0
-          :avg-efficiency 0.0
-          :avg-completion 0.0
-          :avg-constraints 0.0))
-  (when (null results)
-    (list :total-tests 0
-          :passed-tests 0
-          :avg-overall 0.0
-          :avg-efficiency 0.0
-          :avg-completion 0.0
-          :avg-constraints 0.0))
+  (cl-block summarize
+    (when gptel-benchmark--cancelled
+      (cl-return-from summarize
+        (list :total-tests 0
+              :passed-tests 0
+              :avg-overall 0.0
+              :avg-efficiency 0.0
+              :avg-completion 0.0
+              :avg-constraints 0.0)))
+    (when (null results)
+      (cl-return-from summarize
+        (list :total-tests 0
+              :passed-tests 0
+              :avg-overall 0.0
+              :avg-efficiency 0.0
+              :avg-completion 0.0
+              :avg-constraints 0.0)))
   (let ((total 0)
         (passed 0)
         (score-totals '((:overall-score . 0.0)
@@ -279,12 +282,13 @@ Returns plist with :total-tests, :passed-tests, and average scores."
                  (gptel-benchmark--extract-score-types scores))))
         (when (>= (or overall 0) 0.7)
           (cl-incf passed))))
-    (list :total-tests total
-          :passed-tests passed
-          :avg-overall (gptel-benchmark--calculate-average score-totals total :overall-score)
-          :avg-efficiency (gptel-benchmark--calculate-average score-totals total :efficiency-score)
-          :avg-completion (gptel-benchmark--calculate-average score-totals total :completion-score)
-          :avg-constraints (gptel-benchmark--calculate-average score-totals total :constraint-score))))
+    (cl-return-from summarize
+      (list :total-tests total
+            :passed-tests passed
+            :avg-overall (gptel-benchmark--calculate-average score-totals total :overall-score)
+            :avg-efficiency (gptel-benchmark--calculate-average score-totals total :efficiency-score)
+            :avg-completion (gptel-benchmark--calculate-average score-totals total :completion-score)
+            :avg-constraints (gptel-benchmark--calculate-average score-totals total :constraint-score))))))
 
 ;;; Eight Keys Integration
 
