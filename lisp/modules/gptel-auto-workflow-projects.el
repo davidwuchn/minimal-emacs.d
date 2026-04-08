@@ -310,7 +310,8 @@ When ERRORED is non-nil, preserve the existing error phase."
 This keeps `emacsclient --eval' callers from monopolizing the daemon.
 When ASYNC is non-nil, FN must accept a completion callback and invoke it when
 the queued job actually finishes."
-  (if gptel-auto-workflow--cron-job-running
+  (if (or gptel-auto-workflow--cron-job-running
+          (bound-and-true-p gptel-auto-workflow--running))
       (progn
         (message "[%s] Job already running; skipping new request" label)
         (when (fboundp 'gptel-auto-workflow--persist-status)

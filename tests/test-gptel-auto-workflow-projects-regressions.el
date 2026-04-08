@@ -99,6 +99,26 @@
        (should-not scheduled)
        (should gptel-auto-workflow--cron-job-running))))
 
+(ert-deftest regression/auto-workflow-projects/queue-helper-rejects-active-workflow ()
+  "Queued cron requests should not replace an already running workflow."
+  (let ((gptel-auto-workflow--cron-job-running nil)
+        (gptel-auto-workflow--running t)
+        (scheduled nil))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (&rest _)
+                 (setq scheduled t)
+                 'fake-timer))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda (&rest _) nil)))
+      (should
+       (eq (gptel-auto-workflow--queue-cron-job
+            "auto-workflow"
+            (lambda ()))
+           'already-running))
+      (should-not scheduled)
+      (should gptel-auto-workflow--running)
+      (should-not gptel-auto-workflow--cron-job-running))))
+
 (ert-deftest regression/auto-workflow-projects/run-all-projects-waits-for-async-completion ()
   "Project results should be recorded when async completion fires, not at start."
   (let ((gptel-auto-workflow-projects '("/tmp/project-a" "/tmp/project-a"))
