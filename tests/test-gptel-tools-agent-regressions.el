@@ -811,8 +811,51 @@ EXIT-CODE defaults to 1."
             (let ((second (car invocation-contexts)))
               (should (equal (plist-get second :exp-id) 2))
               (should (equal (plist-get second :default-directory) project-root))
-              (should (equal (plist-get second :current-project) project-root))
-              (should (equal (plist-get second :run-project-root) project-root)))))
+               (should (equal (plist-get second :current-project) project-root))
+               (should (equal (plist-get second :run-project-root) project-root)))))
+       (delete-directory project-root t))))
+
+(ert-deftest regression/auto-experiment/loop-delay-skips-stale-run ()
+  "Delayed next-experiment callbacks should not restart after the run ends."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-project" t)))
+         (gptel-auto-experiment-delay-between 5)
+         (gptel-auto-experiment-max-per-target 2)
+         (gptel-auto-experiment-no-improvement-threshold 99)
+         (gptel-auto-workflow--run-id "run-1")
+         (gptel-auto-workflow--running t)
+         (gptel-auto-workflow--run-project-root project-root)
+         (gptel-auto-workflow--current-project project-root)
+         scheduled-next
+         (invocation-count 0))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+                     (lambda (&rest _) '(:eight-keys 0.4)))
+                    ((symbol-function 'gptel-auto-experiment--code-quality-score)
+                     (lambda () 0.5))
+                    ((symbol-function 'run-with-timer)
+                     (lambda (_secs _repeat fn &rest _args)
+                       (setq scheduled-next fn)
+                       :fake-timer))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-experiment--run-with-retry)
+                     (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results cb &optional _retry-count)
+                       (cl-incf invocation-count)
+                       (funcall cb (list :target "target"
+                                         :id 1
+                                         :score-after 0.4
+                                         :kept nil
+                                         :agent-output "no-op")))))
+            (with-temp-buffer
+              (setq default-directory project-root)
+              (gptel-auto-experiment-loop "target" (lambda (&rest _) nil)))
+            (should (= invocation-count 1))
+            (should (functionp scheduled-next))
+            (setq gptel-auto-workflow--running nil
+                  gptel-auto-workflow--run-id "run-2")
+            (funcall scheduled-next)
+            (should (= invocation-count 1))))
       (delete-directory project-root t))))
 
 (ert-deftest regression/gptel-agent/truncate-buffer-prefixes-modeline-temp-artifacts ()
@@ -1088,6 +1131,39 @@ EXIT-CODE defaults to 1."
       (should (= scheduled-retries 1))
       (should (string-match-p "10s total runtime"
                               (plist-get final-result :agent-output))))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-skips-stale-run ()
+  "Retry timers should not restart an experiment after its run has ended."
+  (let ((runs 0)
+        scheduled-retry
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 5)
+        (gptel-auto-workflow--run-id "run-1")
+        (gptel-auto-workflow--running t))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+                 (cl-incf runs)
+                 (funcall callback
+                          (list :agent-output
+                                "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 28. See Curl manpage for details.\""
+                                :comparator-reason ":timeout"))))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (setq scheduled-retry (lambda () (apply fn args)))
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-agent-loop.el" 1 5 0.4 0.5 nil
+       (lambda (_result) nil))
+      ;; Simulate the first attempt completing with a retryable timeout after the
+      ;; helper has captured the active run identity.
+      (setq gptel-auto-workflow--running nil
+            gptel-auto-workflow--run-id "run-2")
+      (let ((captured scheduled-retry))
+        (should captured)
+        (funcall captured))
+      (should (= runs 1)))))
 
 (ert-deftest regression/auto-experiment/retry-success-preserves-full-result-shape ()
   "Successful validation retries should keep the normal result/logging shape."

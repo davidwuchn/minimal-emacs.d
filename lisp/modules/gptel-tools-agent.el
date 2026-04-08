@@ -315,6 +315,14 @@ On timeout or error, returns empty string and logs warning."
   (or gptel-auto-workflow--run-id
       (format-time-string "%Y-%m-%d")))
 
+(defun gptel-auto-workflow--run-callback-live-p (run-id)
+  "Return non-nil when delayed work for RUN-ID should still execute.
+Nil RUN-ID means no active workflow identity was captured, so callbacks remain
+allowed for compatibility with isolated tests."
+  (or (null run-id)
+      (and gptel-auto-workflow--running
+           (equal gptel-auto-workflow--run-id run-id))))
+
 (defun gptel-auto-workflow--results-relative-path (&optional run-id)
   "Return the relative results path for RUN-ID or the active run."
   (format "var/tmp/experiments/%s/results.tsv"
@@ -4144,10 +4152,11 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
 RETRY-COUNT tracks current retry attempt."
   (let ((retries (or retry-count 0))
         (workflow-root (gptel-auto-workflow--resolve-run-root))
-        (retry-buffer (current-buffer)))
+        (retry-buffer (current-buffer))
+        (run-id gptel-auto-workflow--run-id))
     (gptel-auto-experiment-run
      target experiment-id max-experiments baseline baseline-code-quality previous-results
-        (lambda (result)
+         (lambda (result)
            (let* ((agent-output (plist-get result :agent-output))
                   (raw-error (or (plist-get result :error)
                                  (and (gptel-auto-experiment--agent-error-p agent-output)
@@ -4179,22 +4188,25 @@ RETRY-COUNT tracks current retry attempt."
                       (< retries gptel-auto-experiment-max-retries)
                       retryable-failure)
                 (progn
-                  (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
-                           experiment-id (1+ retries) gptel-auto-experiment-max-retries
-                           gptel-auto-experiment-retry-delay)
-                  (run-with-timer gptel-auto-experiment-retry-delay nil
-                                  (lambda ()
-                                    (gptel-auto-workflow--call-in-run-context
-                                     workflow-root
-                                     (lambda ()
-                                       (gptel-auto-experiment--run-with-retry
-                                         target experiment-id max-experiments baseline baseline-code-quality
-                                         previous-results callback (1+ retries)))
-                                      retry-buffer
-                                      workflow-root))))
-               (when hard-timeout
-                 (message "[auto-exp] Hard executor timeout during experiment %d; skipping retries"
-                          experiment-id))
+                   (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
+                            experiment-id (1+ retries) gptel-auto-experiment-max-retries
+                            gptel-auto-experiment-retry-delay)
+                   (run-with-timer gptel-auto-experiment-retry-delay nil
+                                   (lambda ()
+                                     (if (gptel-auto-workflow--run-callback-live-p run-id)
+                                         (gptel-auto-workflow--call-in-run-context
+                                          workflow-root
+                                          (lambda ()
+                                            (gptel-auto-experiment--run-with-retry
+                                             target experiment-id max-experiments baseline baseline-code-quality
+                                             previous-results callback (1+ retries)))
+                                          retry-buffer
+                                          workflow-root)
+                                       (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
+                                                experiment-id run-id)))))
+                (when hard-timeout
+                  (message "[auto-exp] Hard executor timeout during experiment %d; skipping retries"
+                           experiment-id))
                (when quota-exhausted
                  (message "[auto-exp] Quota exhausted during experiment %d; skipping retries"
                           experiment-id))
@@ -4772,6 +4784,7 @@ Adapts max-experiments based on API error rate."
          (original-max gptel-auto-experiment-max-per-target)
          (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
          (threshold gptel-auto-experiment-no-improvement-threshold)
+         (run-id gptel-auto-workflow--run-id)
          (workflow-root (gptel-auto-workflow--resolve-run-root))
          (loop-buffer (current-buffer))
          (results nil)
@@ -4815,19 +4828,22 @@ Adapts max-experiments based on API error rate."
                                    no-improvement-count 0))
                            (when (and score-after (<= score-after best-score))
                              (cl-incf no-improvement-count))
-                           (when hard-timeout
-                             (message "[auto-experiment] Hard timeout for %s in experiment %d; stopping remaining experiments for this target"
-                                      target exp-id))
-                           (let ((continue
-                                (lambda ()
-                                  (gptel-auto-workflow--call-in-run-context
-                                   workflow-root
-                                   (lambda () (run-next next-exp-id))
-                                   loop-buffer
-                                   workflow-root))))
-                             (if (> gptel-auto-experiment-delay-between 0)
-                                 (run-with-timer gptel-auto-experiment-delay-between nil
-                                                 continue)
+                            (when hard-timeout
+                              (message "[auto-experiment] Hard timeout for %s in experiment %d; stopping remaining experiments for this target"
+                                       target exp-id))
+                            (let ((continue
+                                 (lambda ()
+                                   (if (gptel-auto-workflow--run-callback-live-p run-id)
+                                       (gptel-auto-workflow--call-in-run-context
+                                        workflow-root
+                                        (lambda () (run-next next-exp-id))
+                                        loop-buffer
+                                        workflow-root)
+                                     (message "[auto-experiment] Skipping stale continuation for %s; run %s is no longer active"
+                                              target run-id)))))
+                              (if (> gptel-auto-experiment-delay-between 0)
+                                  (run-with-timer gptel-auto-experiment-delay-between nil
+                                                  continue)
                                (funcall continue)))))))))
       (gptel-auto-workflow--call-in-run-context
        workflow-root
