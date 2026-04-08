@@ -4119,19 +4119,24 @@ RETRY-COUNT tracks current retry attempt."
                   (raw-error (or (plist-get result :error)
                                  (and (gptel-auto-experiment--agent-error-p agent-output)
                                       agent-output)))
-                  (error-type (plist-get result :comparator-reason))
-                  (hard-timeout
-                   (gptel-auto-experiment--hard-timeout-p raw-error))
-                  (quota-exhausted
-                   (or gptel-auto-experiment--quota-exhausted
-                       (gptel-auto-experiment--quota-exhausted-p agent-output)))
-                  (retryable-category
+                 (error-type (plist-get result :comparator-reason))
+                 (hard-timeout
+                  (gptel-auto-experiment--hard-timeout-p raw-error))
+                 (quota-exhausted
+                  (or gptel-auto-experiment--quota-exhausted
+                      (gptel-auto-experiment--quota-exhausted-p agent-output)))
+                  (api-rate-limit-category
                    (or (memq error-type '(:api-rate-limit))
-                       (member error-type '(":api-rate-limit" ":timeout"))))
+                       (member error-type '(":api-rate-limit"))))
+                  (timeout-category
+                   (or (memq error-type '(:timeout))
+                       (member error-type '(":timeout"))))
+                  (retryable-category
+                   (or api-rate-limit-category
+                       (and (not hard-timeout)
+                            timeout-category)))
                   (retryable-failure
-                   (or (and (not hard-timeout)
-                            (memq error-type '(:timeout)))
-                       retryable-category
+                   (or retryable-category
                        (and raw-error
                             (not hard-timeout)
                             (gptel-auto-experiment--is-retryable-error-p raw-error)))))
