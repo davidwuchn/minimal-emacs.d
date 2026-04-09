@@ -1634,8 +1634,8 @@ Uses hash table keyed by task-id to support parallel execution."
                 (funcall restore-origin-fsm)))
             (when launch-error
               (let* ((state (gethash task-id my/gptel--agent-task-state))
-                     (timeout-timer (plist-get state :timeout-timer))
-                     (progress-timer (plist-get state :progress-timer))
+                     (timeout-timer (and state (plist-get state :timeout-timer)))
+                     (progress-timer (and state (plist-get state :progress-timer)))
                      (request-buf (and state
                                        (my/gptel--agent-task-request-buffer state))))
                 (when state
@@ -4470,10 +4470,10 @@ Also logs agent-output snippet for debugging when category is :unknown."
 (defun gptel-auto-experiment--adaptive-max-experiments (original-max)
   "Return adjusted experiment count based on API error rate."
   (if (gptel-auto-experiment--should-reduce-experiments-p)
-      (progn
+      (let ((halved (max 1 (ash original-max -1))))
         (message "[auto-workflow] Reducing experiments from %d to %d due to API errors"
-                 original-max (max 1 (/ original-max 2)))
-        (max 1 (/ original-max 2)))
+                 original-max halved)
+        halved)
     original-max))
 
 (defun gptel-auto-experiment--log-failure-analysis (target error-category error-details)
