@@ -994,7 +994,7 @@ EXIT-CODE defaults to 1."
        (delete-directory project-root t))))
 
 (ert-deftest regression/auto-experiment/loop-delay-skips-stale-run ()
-  "Delayed next-experiment callbacks should not restart after the run ends."
+  "Delayed next-experiment callbacks should return accumulated results when stale."
   (let* ((project-root (file-name-as-directory (make-temp-file "aw-project" t)))
          (gptel-auto-experiment-delay-between 5)
          (gptel-auto-experiment-max-per-target 2)
@@ -1004,7 +1004,8 @@ EXIT-CODE defaults to 1."
          (gptel-auto-workflow--run-project-root project-root)
          (gptel-auto-workflow--current-project project-root)
          scheduled-next
-         (invocation-count 0))
+         (invocation-count 0)
+         completed-results)
     (unwind-protect
         (progn
           (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
@@ -1023,17 +1024,23 @@ EXIT-CODE defaults to 1."
                        (funcall cb (list :target "target"
                                          :id 1
                                          :score-after 0.4
-                                         :kept nil
-                                         :agent-output "no-op")))))
+                                          :kept nil
+                                          :agent-output "no-op")))))
             (with-temp-buffer
               (setq default-directory project-root)
-              (gptel-auto-experiment-loop "target" (lambda (&rest _) nil)))
+              (gptel-auto-experiment-loop
+               "target"
+               (lambda (results)
+                 (setq completed-results results))))
             (should (= invocation-count 1))
             (should (functionp scheduled-next))
             (setq gptel-auto-workflow--running nil
                   gptel-auto-workflow--run-id "run-2")
             (funcall scheduled-next)
-            (should (= invocation-count 1))))
+            (should (= invocation-count 1))
+            (should (= (length completed-results) 1))
+            (should (equal (plist-get (car completed-results) :target) "target"))
+            (should (equal (plist-get (car completed-results) :id) 1))))
       (delete-directory project-root t))))
 
 (ert-deftest regression/gptel-agent/truncate-buffer-prefixes-modeline-temp-artifacts ()

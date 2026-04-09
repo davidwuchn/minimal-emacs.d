@@ -5140,20 +5140,22 @@ Adapts max-experiments based on API error rate."
                             (when hard-timeout
                               (message "[auto-experiment] Hard timeout for %s in experiment %d; stopping remaining experiments for this target"
                                        target exp-id))
-                            (let ((continue
-                                 (lambda ()
-                                   (if (gptel-auto-workflow--run-callback-live-p run-id)
-                                       (gptel-auto-workflow--call-in-run-context
-                                        workflow-root
-                                        (lambda () (run-next next-exp-id))
-                                        loop-buffer
-                                        workflow-root)
-                                     (message "[auto-experiment] Skipping stale continuation for %s; run %s is no longer active"
-                                              target run-id)))))
-                              (if (> gptel-auto-experiment-delay-between 0)
-                                  (run-with-timer gptel-auto-experiment-delay-between nil
-                                                  continue)
-                               (funcall continue)))))))))
+                             (let ((continue
+                                  (lambda ()
+                                    (if (gptel-auto-workflow--run-callback-live-p run-id)
+                                        (gptel-auto-workflow--call-in-run-context
+                                         workflow-root
+                                         (lambda () (run-next next-exp-id))
+                                         loop-buffer
+                                         workflow-root)
+                                      (progn
+                                        (message "[auto-experiment] Run %s no longer active; returning accumulated results for %s"
+                                                 run-id target)
+                                        (funcall callback (nreverse results)))))))
+                               (if (> gptel-auto-experiment-delay-between 0)
+                                   (run-with-timer gptel-auto-experiment-delay-between nil
+                                                   continue)
+                                (funcall continue)))))))))
       (gptel-auto-workflow--call-in-run-context
        workflow-root
        (lambda () (run-next 1))
