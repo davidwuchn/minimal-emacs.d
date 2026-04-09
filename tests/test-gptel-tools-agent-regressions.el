@@ -302,14 +302,40 @@ EXIT-CODE defaults to 1."
                (lambda (&rest _args) nil))
               ((symbol-function 'message)
                (lambda (&rest _args) nil)))
-      (with-temp-buffer
-        (gptel-auto-experiment-grade
-         "HYPOTHESIS: timeout cleanup probe"
-         (lambda (_result)
-           (error "grade timeout callback boom"))))
+       (with-temp-buffer
+         (gptel-auto-experiment-grade
+          "HYPOTHESIS: timeout cleanup probe"
+          (lambda (_result)
+            (error "grade timeout callback boom"))))
        (should (functionp timeout-callback))
        (should-error (funcall timeout-callback))
        (should (zerop (hash-table-count gptel-auto-experiment--grade-state))))))
+
+(ert-deftest regression/auto-experiment/grade-forwards-configured-timeout ()
+  "Grade requests should forward the configured timeout to the grader subagent."
+  (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment-use-subagents t)
+        (gptel-auto-experiment-grade-timeout 137)
+        captured-timeout
+        result)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (&rest _args) :fake-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (_output _expected _forbidden cb &optional timeout)
+                 (setq captured-timeout timeout)
+                 (funcall cb '(:score 9 :total 9 :passed t :details "graded"))))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-grade
+         "HYPOTHESIS: forward grade timeout"
+         (lambda (grade)
+           (setq result grade))))
+      (should result)
+      (should (= captured-timeout 137)))))
 
 (ert-deftest regression/auto-experiment/grade-includes-worktree-diff-evidence ()
   "Grader input should include concrete git evidence from the experiment worktree."

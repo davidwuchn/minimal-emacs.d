@@ -3983,9 +3983,10 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                 "replaces working code without clear improvement")
               (lambda (result)
                 (gptel-auto-experiment--finish-grade
-                 grade-id callback result t))))
-        (gptel-auto-experiment--finish-grade
-         grade-id callback (list :score 100 :passed t) t)))))
+                 grade-id callback result t))
+              gptel-auto-experiment-grade-timeout))
+         (gptel-auto-experiment--finish-grade
+          grade-id callback (list :score 100 :passed t) t)))))
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
