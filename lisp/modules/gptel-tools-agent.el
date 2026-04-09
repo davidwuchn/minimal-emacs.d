@@ -3201,21 +3201,28 @@ staging branch is regenerated from `main' at the start of each workflow run."
     (message "[auto-workflow] Pushing staging to origin")
     (gptel-auto-workflow--with-staging-worktree
      (lambda ()
-       (let* ((staging-q (shell-quote-argument staging))
-              (remote-result
-               (gptel-auto-workflow--git-result
-                (format "git ls-remote --exit-code --heads origin %s" staging-q)
-                60))
-              (remote-head
-               (when (and (= 0 (cdr remote-result))
-                          (string-match
-                           "\\`\\([0-9a-f]\\{40\\}\\)\trefs/heads/"
-                           (car remote-result)))
-                 (match-string 1 (car remote-result))))
-              (push-command
-               (if remote-head
-                   (format "git push %s origin %s"
-                           (shell-quote-argument
+        (cl-labels
+            ((parse-remote-head (output)
+               (let ((pattern (format "^\\([0-9a-f]\\{40\\}\\)\trefs/heads/%s$"
+                                      (regexp-quote staging)))
+                     head)
+                 (dolist (line (split-string (or output "") "\n" t) head)
+                   (when (and (null head)
+                              (string-match pattern line))
+                     (setq head (match-string 1 line)))))))
+          (let* ((staging-q (shell-quote-argument staging))
+               (remote-result
+                (gptel-auto-workflow--git-result
+                 (format "git ls-remote --exit-code --heads origin %s" staging-q)
+                 60))
+               (remote-head
+                (when (and (= 0 (cdr remote-result))
+                           (parse-remote-head (car remote-result)))
+                  (parse-remote-head (car remote-result))))
+               (push-command
+                (if remote-head
+                    (format "git push %s origin %s"
+                            (shell-quote-argument
                             (format "--force-with-lease=%s:%s"
                                     staging
                                     remote-head))
@@ -3225,11 +3232,11 @@ staging branch is regenerated from `main' at the start of each workflow run."
                (gptel-auto-workflow--git-result
                 push-command
                 180)))
-          (if (= 0 (cdr push-result))
-              t
-            (message "[auto-workflow] Failed to push staging: %s"
-                    (my/gptel--sanitize-for-logging (car push-result) 160))
-           nil))))))
+           (if (= 0 (cdr push-result))
+               t
+             (message "[auto-workflow] Failed to push staging: %s"
+                      (my/gptel--sanitize-for-logging (car push-result) 160))
+             nil)))))))
 
 
 (defun gptel-auto-workflow--current-staging-head ()

@@ -5897,8 +5897,36 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                     (cons "" 1)))))
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
+       (should (gptel-auto-workflow--push-staging))
+       (should (member "git ls-remote --exit-code --heads origin staging" commands))
+       (should (member expected-push commands)))))
+
+(ert-deftest regression/auto-workflow/push-staging-parses-noisy-remote-head-output ()
+  "Staging push should still force-with-lease when ls-remote prints SSH noise."
+  (let* ((commands nil)
+         (remote-head "5043dae3e83ee7ea00e044870e04a40cf986d196")
+         (expected-push
+          (format "git push %s origin %s"
+                  (shell-quote-argument
+                   (format "--force-with-lease=%s:%s" "staging" remote-head))
+                  (shell-quote-argument "staging"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--with-staging-worktree)
+               (lambda (fn) (funcall fn)))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (push command commands)
+                 (cond
+                  ((string-match-p "\\`git ls-remote --exit-code --heads origin staging\\'" command)
+                   (cons (format "mux_client_request_session: read from master failed: Broken pipe\n%s\trefs/heads/staging\n"
+                                 remote-head)
+                         0))
+                  ((equal command expected-push)
+                   (cons "" 0))
+                  (t
+                   (cons "" 1)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
       (should (gptel-auto-workflow--push-staging))
-      (should (member "git ls-remote --exit-code --heads origin staging" commands))
       (should (member expected-push commands)))))
 
 (ert-deftest regression/auto-workflow/push-staging-uses-plain-push-when-remote-missing ()
