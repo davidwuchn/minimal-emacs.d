@@ -4831,8 +4831,74 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               (should-not (equal status-file
                                  (expand-file-name "var/tmp/cron/auto-workflow-status.sexp"
                                                    proj-root)))
-               (should (equal captured-args '("unit")))
-               (should-not (file-exists-p status-file))))
+                (should (equal captured-args '("unit")))
+                (should-not (file-exists-p status-file))))
+        (delete-directory proj-root t)
+        (delete-directory worktree t)))))
+
+(ert-deftest regression/auto-experiment/run-tests-hydrates-linked-worktree-submodules ()
+  "Experiment tests should hydrate top-level submodules before running in a linked worktree."
+  (let* ((proj-root (make-temp-file "aw-tests-root" t))
+         (worktree (make-temp-file "aw-tests-worktree" t))
+         hydrate-dir
+         captured-program
+         captured-args)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () proj-root))
+              ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+               (lambda (&rest _) worktree))
+              ((symbol-function 'file-executable-p)
+               (lambda (_file) t))
+              ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
+               (lambda (dir)
+                 (setq hydrate-dir dir)
+                 (cons "Hydrated submodules" 0)))
+              ((symbol-function 'call-process)
+               (lambda (program _in buffer _display &rest args)
+                 (setq captured-program program)
+                 (setq captured-args args)
+                 (with-current-buffer buffer
+                   (insert "tests ok"))
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (unwind-protect
+          (let ((result (gptel-auto-experiment-run-tests)))
+            (should (car result))
+            (should (equal (cdr result) "tests ok"))
+            (should (equal hydrate-dir worktree))
+            (should (equal captured-program
+                           (expand-file-name "scripts/run-tests.sh" worktree)))
+            (should (equal captured-args '("unit"))))
+        (delete-directory proj-root t)
+        (delete-directory worktree t)))))
+
+(ert-deftest regression/auto-experiment/run-tests-fails-on-submodule-hydration-error ()
+  "Experiment tests should fail fast when linked worktree submodules cannot be hydrated."
+  (let* ((proj-root (make-temp-file "aw-tests-root" t))
+         (worktree (make-temp-file "aw-tests-worktree" t))
+         call-process-called)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () proj-root))
+              ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+               (lambda (&rest _) worktree))
+              ((symbol-function 'file-executable-p)
+               (lambda (_file) t))
+              ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
+               (lambda (_dir)
+                 (cons "Missing shared submodule repo for packages/gptel" 1)))
+              ((symbol-function 'call-process)
+               (lambda (&rest _args)
+                 (setq call-process-called t)
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (unwind-protect
+          (let ((result (gptel-auto-experiment-run-tests)))
+            (should-not (car result))
+            (should (string-match-p "Missing shared submodule repo for packages/gptel"
+                                    (cdr result)))
+            (should-not call-process-called))
         (delete-directory proj-root t)
         (delete-directory worktree t)))))
 

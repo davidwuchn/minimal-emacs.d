@@ -3572,6 +3572,8 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (worktree (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)
                        proj-root))
+         (hydrate-submodules-p (and proj-root worktree
+                                    (not (file-equal-p proj-root worktree))))
          (default-directory worktree)
          (isolated-status-file (let ((path (make-temp-file "auto-workflow-status-" nil ".sexp")))
                                  (delete-file path)
@@ -3582,22 +3584,36 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
          (test-script (expand-file-name "scripts/run-tests.sh" worktree))
          (output-buffer (generate-new-buffer "*test-output*"))
          result)
-    (unwind-protect
-        (if (not (file-executable-p test-script))
-            (progn
-              (message "[auto-experiment] Test script not found or not executable: %s" test-script)
-              (cons t "No test script - skipping"))
-          (message "[auto-experiment] Running tests...")
-          (let ((exit-code (call-process test-script nil output-buffer nil "unit")))
-            (with-current-buffer output-buffer
-              (setq result (cons (zerop exit-code) (buffer-string))))
-            (when (car result)
-              (message "[auto-experiment] ✓ Tests passed"))
-            result))
-      (when (buffer-live-p output-buffer)
-        (kill-buffer output-buffer))
-      (when (file-exists-p isolated-status-file)
-        (delete-file isolated-status-file)))))
+     (unwind-protect
+         (if (not (file-executable-p test-script))
+             (progn
+               (message "[auto-experiment] Test script not found or not executable: %s" test-script)
+               (cons t "No test script - skipping"))
+           (let* (;; Linked worktrees need the same shared-repo hydration that
+                  ;; staging uses; otherwise package submodules stay empty and
+                  ;; `require' fails before any ERT cases even run.
+                  (hydrate-result (when hydrate-submodules-p
+                                    (gptel-auto-workflow--hydrate-staging-submodules worktree)))
+                  (hydrate-pass (or (not hydrate-submodules-p)
+                                    (= 0 (cdr hydrate-result)))))
+             (if (not hydrate-pass)
+                 (progn
+                   (with-current-buffer output-buffer
+                     (insert (car hydrate-result) "\n"))
+                   (message "[auto-experiment] ✗ Submodule hydration failed: %s"
+                            (my/gptel--sanitize-for-logging (car hydrate-result) 200))
+                   (cons nil (with-current-buffer output-buffer (buffer-string))))
+               (message "[auto-experiment] Running tests...")
+               (let ((exit-code (call-process test-script nil output-buffer nil "unit")))
+                 (with-current-buffer output-buffer
+                   (setq result (cons (zerop exit-code) (buffer-string))))
+                 (when (car result)
+                   (message "[auto-experiment] ✓ Tests passed"))
+                 result))))
+       (when (buffer-live-p output-buffer)
+         (kill-buffer output-buffer))
+       (when (file-exists-p isolated-status-file)
+         (delete-file isolated-status-file)))))
 
 (defcustom gptel-auto-experiment-require-tests t
   "When non-nil, require tests to pass before merging experiment to staging.
