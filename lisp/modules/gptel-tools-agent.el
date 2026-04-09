@@ -960,6 +960,8 @@ large-result truncation, and result caching."
 (defun my/gptel--deliver-subagent-result (callback result)
   "Deliver RESULT to CALLBACK, truncating large results to a temp file."
   (cl-block my/gptel--deliver-subagent-result
+    (unless callback
+      (cl-return-from my/gptel--deliver-subagent-result))
     (unless (stringp result)
       (funcall callback (or result ""))
       (cl-return-from my/gptel--deliver-subagent-result))
