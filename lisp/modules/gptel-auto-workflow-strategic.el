@@ -88,7 +88,9 @@ Findings stored in var/tmp/research-findings.md for analyzer."
 (defun gptel-auto-workflow--target-in-root-repo-p (abs-path proj-root)
   "Return non-nil when ABS-PATH belongs to the same git repo as PROJ-ROOT."
   (let ((project-git-root (locate-dominating-file proj-root ".git"))
-        (target-git-root (locate-dominating-file abs-path ".git")))
+        (target-git-root (locate-dominating-file
+                          (file-name-directory (directory-file-name abs-path))
+                          ".git")))
     (and project-git-root
          target-git-root
          (file-equal-p (expand-file-name project-git-root)
