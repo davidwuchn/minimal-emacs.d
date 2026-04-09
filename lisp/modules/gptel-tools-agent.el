@@ -960,6 +960,8 @@ large-result truncation, and result caching."
 (defun my/gptel--deliver-subagent-result (callback result)
   "Deliver RESULT to CALLBACK, truncating large results to a temp file."
   (cl-block my/gptel--deliver-subagent-result
+    (unless callback
+      (cl-return-from my/gptel--deliver-subagent-result))
     (unless (stringp result)
       (funcall callback (or result ""))
       (cl-return-from my/gptel--deliver-subagent-result))
@@ -1349,7 +1351,7 @@ TIMESTAMP defaults to `current-time'."
   "Treat worktree-context messages as executor activity."
   (my/gptel--agent-task-note-context-activity))
 
-(unless (advice-member-p #'my/gptel--agent-task-note-message-activity 'message)
+(unless (advice-member-p 'message #'my/gptel--agent-task-note-message-activity)
   (advice-add 'message :before #'my/gptel--agent-task-note-message-activity))
 
 (defun my/gptel--agent-task-note-curl-activity (&rest _args)
@@ -1357,8 +1359,7 @@ TIMESTAMP defaults to `current-time'."
   (my/gptel--agent-task-note-active-activity))
 
 (with-eval-after-load 'gptel-request
-  (unless (advice-member-p #'my/gptel--agent-task-note-curl-activity
-                           'gptel-curl--get-args)
+  (unless (advice-member-p 'gptel-curl--get-args #'my/gptel--agent-task-note-curl-activity)
     (advice-add 'gptel-curl--get-args :before
                 #'my/gptel--agent-task-note-curl-activity)))
 
@@ -2708,7 +2709,8 @@ Maximum response: 1000 characters."
 Accept explicit APPROVED/BLOCKED markers, blocker-free reviewer markdown,
 and analysis-only reviewer summaries that cite current lines without
 surfacing blocking markers or issue details."
-  (let* ((normalized (replace-regexp-in-string "|" "\n" response))
+  (when (stringp response)
+    (let* ((normalized (replace-regexp-in-string "|" "\n" response))
          (case-fold-search t)
          (approved (string-match
                     (rx (or line-start "\n")
@@ -2809,7 +2811,7 @@ surfacing blocking markers or issue details."
            (not unverified)
            (not blocking-summary))
       t)
-     (t nil))))
+     (t nil)))))
 
 (defun gptel-auto-workflow--fix-review-issues (optimize-branch review-output callback)
   "Try to fix issues found in review for OPTIMIZE-BRANCH.
@@ -4414,8 +4416,13 @@ RETRY-COUNT tracks current retry attempt."
                                              previous-results callback (1+ retries)))
                                           retry-buffer
                                           workflow-root)
-                                       (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
-                                                experiment-id run-id)))))
+                                       (progn
+                                          (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
+                                                   experiment-id run-id)
+                                          (funcall callback
+                                                   (list :target target
+                                                         :id experiment-id
+                                                         :stale-run t)))))))
                 (when hard-timeout
                   (message "[auto-exp] Hard executor timeout during experiment %d; skipping retries"
                            experiment-id))
