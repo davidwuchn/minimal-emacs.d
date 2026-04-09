@@ -3795,7 +3795,7 @@ Scores based on commit message + code diff (not just stat)."
            (changed-files (shell-command-to-string
                            (format "cd %s && git diff --name-only HEAD~1 2>/dev/null | grep '\\.el$'"
                                    worktree-quoted))))
-      (when (string-match-p "\\.el$" changed-files)
+      (when (string-match-p "\\.el$" (string-trim-right changed-files))
         (let ((total-score 0.0)
               (file-count 0))
           (dolist (file (split-string changed-files "\n" t))
