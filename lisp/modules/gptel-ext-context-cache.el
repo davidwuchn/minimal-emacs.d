@@ -592,16 +592,9 @@ Run asynchronously. Use for bulk cache warming."
          (let ((count 0))
            (dolist (entry data)
              (let* ((id (alist-get 'id entry))
-                    (cw (alist-get 'context_length entry))
-                    (pricing (alist-get 'pricing entry))
-                    (input-price (and pricing (alist-get 'prompt pricing)))
-                    (output-price (and pricing (alist-get 'completion pricing))))
+                    (cw (alist-get 'context_length entry)))
                (when (and (stringp id) (integerp cw) (> cw 0))
                  (puthash id cw my/gptel--context-window-cache)
-                 (puthash id (list :context-window cw
-                                   :pricing-input (and (numberp input-price) input-price)
-                                   :pricing-output (and (numberp output-price) output-price))
-                          my/gptel--model-metadata-cache)
                  (cl-incf count))))
            (message "OpenRouter: cached %d models" count)))
        "gptel-openrouter-all-models"
