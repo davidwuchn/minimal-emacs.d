@@ -126,7 +126,7 @@ FIELD should be a keyword like :score.
 For alist lookup, converts :score to \\='score symbol."
   (or (plist-get obj field)
       (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
-        (cdr (assq alist-key obj)))))
+        (cdr (assoc alist-key obj)))))
 
 (defun gptel-benchmark--plist-get (plist field &optional default)
   "Get FIELD from PLIST with optional DEFAULT value.
