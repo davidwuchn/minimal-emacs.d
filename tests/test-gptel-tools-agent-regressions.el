@@ -1431,10 +1431,11 @@ EXIT-CODE defaults to 1."
 (ert-deftest regression/auto-experiment/run-with-retry-skips-stale-run ()
   "Retry timers should not restart an experiment after its run has ended."
   (let ((runs 0)
-        scheduled-retry
-        (gptel-auto-experiment-max-retries 3)
-        (gptel-auto-experiment-retry-delay 5)
-        (gptel-auto-workflow--run-id "run-1")
+         scheduled-retry
+         final-result
+         (gptel-auto-experiment-max-retries 3)
+         (gptel-auto-experiment-retry-delay 5)
+         (gptel-auto-workflow--run-id "run-1")
         (gptel-auto-workflow--running t))
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
                (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
@@ -1451,7 +1452,8 @@ EXIT-CODE defaults to 1."
                (lambda (&rest _) nil)))
       (gptel-auto-experiment--run-with-retry
        "lisp/modules/gptel-agent-loop.el" 1 5 0.4 0.5 nil
-       (lambda (_result) nil))
+       (lambda (result)
+         (setq final-result result)))
       ;; Simulate the first attempt completing with a retryable timeout after the
       ;; helper has captured the active run identity.
       (setq gptel-auto-workflow--running nil
@@ -1459,7 +1461,11 @@ EXIT-CODE defaults to 1."
       (let ((captured scheduled-retry))
         (should captured)
         (funcall captured))
-      (should (= runs 1)))))
+      (should (= runs 1))
+      (should (plist-get final-result :stale-run))
+      (should (equal (plist-get final-result :target)
+                     "lisp/modules/gptel-agent-loop.el"))
+      (should (= (plist-get final-result :id) 1)))))
 
 (ert-deftest regression/auto-experiment/retry-success-preserves-full-result-shape ()
   "Successful validation retries should keep the normal result/logging shape."

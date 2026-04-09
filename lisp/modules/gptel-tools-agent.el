@@ -4414,8 +4414,13 @@ RETRY-COUNT tracks current retry attempt."
                                              previous-results callback (1+ retries)))
                                           retry-buffer
                                           workflow-root)
-                                       (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
-                                                experiment-id run-id)))))
+                                       (progn
+                                          (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
+                                                   experiment-id run-id)
+                                          (funcall callback
+                                                   (list :target target
+                                                         :id experiment-id
+                                                         :stale-run t)))))))
                 (when hard-timeout
                   (message "[auto-exp] Hard executor timeout during experiment %d; skipping retries"
                            experiment-id))
