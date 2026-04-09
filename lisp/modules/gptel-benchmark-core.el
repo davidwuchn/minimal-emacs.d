@@ -207,9 +207,16 @@ FIELD should be a keyword like :overall-score."
     (and scores (plist-get scores field))))
 
 (defun gptel-benchmark--accumulate-score (total score)
-  "Accumulate SCORE into TOTAL, treating nil as 0.
-Returns the new accumulated total."
-  (+ total (or score 0)))
+  "Accumulate SCORE into TOTAL.
+Returns the new accumulated total.
+SCORE must be a number or nil; non-numeric values signal error."
+  (unless (numberp total)
+    (signal 'wrong-type-argument (list 'numberp total)))
+  (let ((normalized-score (cond
+                           ((numberp score) score)
+                           ((null score) 0)
+                           (t (signal 'wrong-type-argument (list 'numberp score))))))
+    (+ total normalized-score)))
 
 (defun gptel-benchmark--accumulate-scores (totals scores-alist)
   "Accumulate multiple SCORES into TOTALS alist.
