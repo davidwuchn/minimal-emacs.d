@@ -88,7 +88,7 @@ Plists are converted to alists automatically."
 Handles plists by converting to alists."
   (cond
    ((null data) nil)
-   ((and (listp data) (keywordp (car data)) (not (consp (cadr data))))
+   ((and (listp data) (keywordp (car data)) (zerop (mod (length data) 2)))
     (gptel-benchmark--plist-to-alist data))
    ((listp data)
     (mapcar #'gptel-benchmark--to-json-format data))
