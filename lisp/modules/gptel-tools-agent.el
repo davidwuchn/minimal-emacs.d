@@ -1947,6 +1947,8 @@ This branch is NEVER deleted and NEVER auto-merged to main."
 (defvar gptel-auto-workflow--staging-worktree-dir nil)
 (defvar gptel-auto-workflow--review-retry-count 0
   "Retry count for current review cycle.")
+(defvar gptel-auto-workflow--review-error-retry-count 0
+  "Retry count for transient reviewer transport failures.")
 (defvar gptel-auto-workflow--review-max-retries 2
   "Maximum retries when review is blocked. 0 = no retry.")
 
@@ -2820,7 +2822,13 @@ If `gptel-auto-workflow-research-before-fix' is nil, executor handles directly."
              gptel-auto-workflow--review-retry-count gptel-auto-workflow--review-max-retries)
     (if (not gptel-auto-workflow-research-before-fix)
         (gptel-auto-workflow--fix-directly review-output callback)
-      (gptel-auto-workflow--research-then-fix review-output callback))))
+       (gptel-auto-workflow--research-then-fix review-output callback))))
+
+(defun gptel-auto-workflow--review-retryable-error-p (review-output)
+  "Return non-nil when REVIEW-OUTPUT reflects a transient reviewer failure."
+  (when (stringp review-output)
+    (memq (car (gptel-auto-experiment--categorize-error review-output))
+          '(:api-rate-limit :api-error :timeout))))
 
 (defun gptel-auto-workflow--fix-directly (review-output callback)
   "Let executor fix REVIEW-OUTPUT issues directly (faster)."
@@ -3306,6 +3314,7 @@ NOTE: Human must manually merge staging to main after review."
            (gptel-auto-workflow--make-idempotent-callback completion-callback))))
     (gptel-auto-workflow--assert-main-untouched)
     (setq gptel-auto-workflow--review-retry-count 0)
+    (setq gptel-auto-workflow--review-error-retry-count 0)
     (message "[auto-workflow] Starting staging flow for %s" optimize-branch)
     (gptel-auto-workflow--review-changes
      optimize-branch
@@ -3322,182 +3331,220 @@ REVIEW-RESULT is (approved-p . review-output).
 When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
   (let* ((approved (car review-result))
          (review-output (cdr review-result))
+         (review-error (and (not approved)
+                            (gptel-auto-workflow--review-retryable-error-p review-output)))
+         (run-id (gptel-auto-workflow--current-run-id))
          (finish (gptel-auto-workflow--make-idempotent-callback
                   (lambda (success)
                     (when completion-callback
                       (funcall completion-callback success))))))
-    (cl-labels ()
-      (if (not approved)
-          (if (< gptel-auto-workflow--review-retry-count
-                 gptel-auto-workflow--review-max-retries)
-              (progn
-                (cl-incf gptel-auto-workflow--review-retry-count)
-                (message "[auto-workflow] Review blocked, attempting fix...")
-                (gptel-auto-workflow--fix-review-issues
-                 optimize-branch
-                 review-output
-                 (lambda (fix-result)
-                   (let ((fix-success (car fix-result))
-                         (fix-output (cdr fix-result)))
-                     (if fix-success
-                         (progn
-                           (message "[auto-workflow] Fix applied, re-reviewing...")
-                           (gptel-auto-workflow--review-changes
-                            optimize-branch
-                            (lambda (re-review-result)
-                              (gptel-auto-workflow--staging-flow-after-review
-                               optimize-branch
-                               re-review-result
-                               completion-callback))))
-                       (message "[auto-workflow] Fix failed: %s"
-                                (my/gptel--sanitize-for-logging fix-output 200))
-                       (gptel-auto-experiment-log-tsv
-                        (gptel-auto-workflow--current-run-id)
-                        (list :target "staging-review"
-                              :id 0
-                              :hypothesis "Staging review fix"
-                              :score-before 0
-                              :score-after 0
-                              :kept nil
-                              :duration 0
-                              :grader-quality 0
-                              :grader-reason "fix-failed"
-                               :comparator-reason
-                               (truncate-string-to-width fix-output 200)
-                               :analyzer-patterns ""
-                               :agent-output review-output))
-                        (funcall finish nil))))))
-            (message "[auto-workflow] ✗ Review BLOCKED (max retries): %s"
-                     (my/gptel--sanitize-for-logging review-output 200))
-            (gptel-auto-experiment-log-tsv
-             (gptel-auto-workflow--current-run-id)
-             (list :target "staging-review"
-                   :id 0
-                   :hypothesis "Staging review"
-                   :score-before 0
-                   :score-after 0
-                   :kept nil
-                   :duration 0
-                   :grader-quality 0
-                   :grader-reason "review-blocked-max-retries"
-                    :comparator-reason
-                    (truncate-string-to-width review-output 200)
-                    :analyzer-patterns ""
-                    :agent-output review-output))
-            (funcall finish nil))
-        ;; Check for scope creep before merging
-        (let* ((scope-check (gptel-auto-experiment--check-scope))
-               (scope-ok (car scope-check))
-               (changed-files (cdr scope-check)))
-          (if (not scope-ok)
-              (progn
-                (message "[auto-workflow] ✗ Scope creep BLOCKED merge: %d files (max: %d)"
-                         (length changed-files) gptel-auto-experiment-max-changed-files)
-                (gptel-auto-experiment-log-tsv
-                 (gptel-auto-workflow--current-run-id)
-                 (list :target "staging-scope"
-                       :id 0
-                       :hypothesis "Staging scope check"
-                       :score-before 0
-                       :score-after 0
-                       :kept nil
-                       :duration 0
-                       :grader-quality 0
-                       :grader-reason "scope-creep-blocked"
-                       :comparator-reason
-                       (format "Too many files: %s" (mapconcat #'identity changed-files ", "))
-                       :analyzer-patterns ""
-                       :agent-output ""))
-                (funcall finish nil))
-            (let* ((staging-base (gptel-auto-workflow--current-staging-head))
-                   (merge-success
-                    (gptel-auto-workflow--merge-to-staging optimize-branch)))
-          (if (not merge-success)
-              (progn
-                (message "[auto-workflow] ✗ Merge to staging failed, aborting")
-                (gptel-auto-experiment-log-tsv
-                 (gptel-auto-workflow--current-run-id)
-                 (list :target "staging-merge"
-                       :id 0
-                       :hypothesis "Staging merge"
-                       :score-before 0
-                       :score-after 0
-                       :kept nil
-                       :duration 0
-                       :grader-quality 0
-                       :grader-reason "staging-merge-failed"
-                        :comparator-reason
-                        (format "Failed to merge %s to staging" optimize-branch)
-                        :analyzer-patterns ""
-                        :agent-output ""))
-                (funcall finish nil))
-            (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
-                                (gptel-auto-workflow--create-staging-worktree))))
-              (if (not worktree)
-                  (progn
-                    (message "[auto-workflow] ✗ Failed to create staging worktree")
-                    (gptel-auto-experiment-log-tsv
-                     (gptel-auto-workflow--current-run-id)
-                     (list :target "staging-worktree"
-                           :id 0
-                           :hypothesis "Staging worktree"
-                           :score-before 0
-                           :score-after 0
-                           :kept nil
-                           :duration 0
-                           :grader-quality 0
-                            :grader-reason "staging-worktree-failed"
-                            :comparator-reason "Failed to create staging worktree"
-                            :analyzer-patterns ""
-                            :agent-output ""))
-                    (gptel-auto-workflow--reset-staging-after-failure staging-base)
-                    (funcall finish nil))
-                (let* ((verification (gptel-auto-workflow--verify-staging))
-                       (tests-passed (car verification))
-                       (output (or (cdr verification) "")))
-                   (if (not tests-passed)
-                       (progn
-                         (message "[auto-workflow] ✗ Staging verification FAILED")
-                         (gptel-auto-experiment-log-tsv
-                          (gptel-auto-workflow--current-run-id)
-                         (list :target "staging-verification"
-                               :id 0
-                               :hypothesis "Staging verification"
-                               :score-before 0
-                               :score-after 0
-                               :kept nil
-                               :duration 0
-                               :grader-quality 0
-                                :grader-reason "staging-verification-failed"
-                                 :comparator-reason
-                                  (truncate-string-to-width output 200)
-                                  :analyzer-patterns ""
-                                  :agent-output output))
-                         (gptel-auto-workflow--reset-staging-after-failure staging-base)
-                         (funcall finish nil))
-                     (message "[auto-workflow] ✓ Staging verification PASSED")
-                     (if (gptel-auto-workflow--push-staging)
-                         (progn
-                           (gptel-auto-workflow--delete-staging-worktree)
-                          (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")
-                          (funcall finish t))
-                      (message "[auto-workflow] ✗ Staging push FAILED")
+    (cond
+     (review-error
+      (if (< gptel-auto-workflow--review-error-retry-count
+             gptel-auto-workflow--review-max-retries)
+          (progn
+            (cl-incf gptel-auto-workflow--review-error-retry-count)
+            (message "[auto-workflow] Review failed transiently, retrying review (%d/%d)..."
+                     gptel-auto-workflow--review-error-retry-count
+                     gptel-auto-workflow--review-max-retries)
+            (run-with-timer
+             gptel-auto-experiment-retry-delay nil
+             (lambda ()
+               (if (gptel-auto-workflow--run-callback-live-p run-id)
+                   (gptel-auto-workflow--review-changes
+                    optimize-branch
+                    (lambda (retry-review-result)
+                      (gptel-auto-workflow--staging-flow-after-review
+                       optimize-branch
+                       retry-review-result
+                       completion-callback)))
+                 (message "[auto-workflow] Skipping stale review retry for %s; run %s is no longer active"
+                          optimize-branch run-id)))))
+        (message "[auto-workflow] ✗ Review failed (max retries): %s"
+                 (my/gptel--sanitize-for-logging review-output 200))
+        (gptel-auto-experiment-log-tsv
+         (gptel-auto-workflow--current-run-id)
+         (list :target "staging-review"
+               :id 0
+               :hypothesis "Staging review"
+               :score-before 0
+               :score-after 0
+               :kept nil
+               :duration 0
+               :grader-quality 0
+               :grader-reason "review-failed-max-retries"
+               :comparator-reason (truncate-string-to-width review-output 200)
+               :analyzer-patterns ""
+               :agent-output review-output))
+        (funcall finish nil)))
+     ((not approved)
+      (if (< gptel-auto-workflow--review-retry-count
+             gptel-auto-workflow--review-max-retries)
+          (progn
+            (cl-incf gptel-auto-workflow--review-retry-count)
+            (message "[auto-workflow] Review blocked, attempting fix...")
+            (gptel-auto-workflow--fix-review-issues
+             optimize-branch
+             review-output
+             (lambda (fix-result)
+               (let ((fix-success (car fix-result))
+                     (fix-output (cdr fix-result)))
+                 (if fix-success
+                     (progn
+                       (message "[auto-workflow] Fix applied, re-reviewing...")
+                       (gptel-auto-workflow--review-changes
+                        optimize-branch
+                        (lambda (re-review-result)
+                          (gptel-auto-workflow--staging-flow-after-review
+                           optimize-branch
+                           re-review-result
+                           completion-callback))))
+                   (message "[auto-workflow] Fix failed: %s"
+                            (my/gptel--sanitize-for-logging fix-output 200))
+                   (gptel-auto-experiment-log-tsv
+                    (gptel-auto-workflow--current-run-id)
+                    (list :target "staging-review"
+                          :id 0
+                          :hypothesis "Staging review fix"
+                          :score-before 0
+                          :score-after 0
+                          :kept nil
+                          :duration 0
+                          :grader-quality 0
+                          :grader-reason "fix-failed"
+                          :comparator-reason (truncate-string-to-width fix-output 200)
+                          :analyzer-patterns ""
+                          :agent-output review-output))
+                   (funcall finish nil))))))
+        (message "[auto-workflow] ✗ Review BLOCKED (max retries): %s"
+                 (my/gptel--sanitize-for-logging review-output 200))
+        (gptel-auto-experiment-log-tsv
+         (gptel-auto-workflow--current-run-id)
+         (list :target "staging-review"
+               :id 0
+               :hypothesis "Staging review"
+               :score-before 0
+               :score-after 0
+               :kept nil
+               :duration 0
+               :grader-quality 0
+               :grader-reason "review-blocked-max-retries"
+               :comparator-reason (truncate-string-to-width review-output 200)
+               :analyzer-patterns ""
+               :agent-output review-output))
+        (funcall finish nil)))
+     (t
+      (let* ((scope-check (gptel-auto-experiment--check-scope))
+             (scope-ok (car scope-check))
+             (changed-files (cdr scope-check)))
+        (if (not scope-ok)
+            (progn
+              (message "[auto-workflow] ✗ Scope creep BLOCKED merge: %d files (max: %d)"
+                       (length changed-files) gptel-auto-experiment-max-changed-files)
+              (gptel-auto-experiment-log-tsv
+               (gptel-auto-workflow--current-run-id)
+               (list :target "staging-scope"
+                     :id 0
+                     :hypothesis "Staging scope check"
+                     :score-before 0
+                     :score-after 0
+                     :kept nil
+                     :duration 0
+                     :grader-quality 0
+                     :grader-reason "scope-creep-blocked"
+                     :comparator-reason
+                     (format "Too many files: %s" (mapconcat #'identity changed-files ", "))
+                     :analyzer-patterns ""
+                     :agent-output ""))
+              (funcall finish nil))
+          (let* ((staging-base (gptel-auto-workflow--current-staging-head))
+                 (merge-success
+                  (gptel-auto-workflow--merge-to-staging optimize-branch)))
+            (if (not merge-success)
+                (progn
+                  (message "[auto-workflow] ✗ Merge to staging failed, aborting")
+                  (gptel-auto-experiment-log-tsv
+                   (gptel-auto-workflow--current-run-id)
+                   (list :target "staging-merge"
+                         :id 0
+                         :hypothesis "Staging merge"
+                         :score-before 0
+                         :score-after 0
+                         :kept nil
+                         :duration 0
+                         :grader-quality 0
+                         :grader-reason "staging-merge-failed"
+                         :comparator-reason
+                         (format "Failed to merge %s to staging" optimize-branch)
+                         :analyzer-patterns ""
+                         :agent-output ""))
+                  (funcall finish nil))
+              (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
+                                  (gptel-auto-workflow--create-staging-worktree))))
+                (if (not worktree)
+                    (progn
+                      (message "[auto-workflow] ✗ Failed to create staging worktree")
                       (gptel-auto-experiment-log-tsv
                        (gptel-auto-workflow--current-run-id)
-                       (list :target "staging-push"
+                       (list :target "staging-worktree"
                              :id 0
-                             :hypothesis "Staging push"
+                             :hypothesis "Staging worktree"
                              :score-before 0
                              :score-after 0
                              :kept nil
                              :duration 0
                              :grader-quality 0
-                              :grader-reason "staging-push-failed"
-                                :comparator-reason "Failed to push staging"
-                                :analyzer-patterns ""
-                                :agent-output output))
-                       (gptel-auto-workflow--reset-staging-after-failure staging-base)
-                       (funcall finish nil))))))))))))))
+                             :grader-reason "staging-worktree-failed"
+                             :comparator-reason "Failed to create staging worktree"
+                             :analyzer-patterns ""
+                             :agent-output ""))
+                      (gptel-auto-workflow--reset-staging-after-failure staging-base)
+                      (funcall finish nil))
+                  (let* ((verification (gptel-auto-workflow--verify-staging))
+                         (tests-passed (car verification))
+                         (output (or (cdr verification) "")))
+                    (if (not tests-passed)
+                        (progn
+                          (message "[auto-workflow] ✗ Staging verification FAILED")
+                          (gptel-auto-experiment-log-tsv
+                           (gptel-auto-workflow--current-run-id)
+                           (list :target "staging-verification"
+                                 :id 0
+                                 :hypothesis "Staging verification"
+                                 :score-before 0
+                                 :score-after 0
+                                 :kept nil
+                                 :duration 0
+                                 :grader-quality 0
+                                 :grader-reason "staging-verification-failed"
+                                 :comparator-reason (truncate-string-to-width output 200)
+                                 :analyzer-patterns ""
+                                 :agent-output output))
+                          (gptel-auto-workflow--reset-staging-after-failure staging-base)
+                          (funcall finish nil))
+                      (message "[auto-workflow] ✓ Staging verification PASSED")
+                      (if (gptel-auto-workflow--push-staging)
+                          (progn
+                            (gptel-auto-workflow--delete-staging-worktree)
+                            (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")
+                            (funcall finish t))
+                        (message "[auto-workflow] ✗ Staging push FAILED")
+                        (gptel-auto-experiment-log-tsv
+                         (gptel-auto-workflow--current-run-id)
+                         (list :target "staging-push"
+                               :id 0
+                               :hypothesis "Staging push"
+                               :score-before 0
+                               :score-after 0
+                               :kept nil
+                               :duration 0
+                               :grader-quality 0
+                               :grader-reason "staging-push-failed"
+                               :comparator-reason "Failed to push staging"
+                               :analyzer-patterns ""
+                               :agent-output output))
+                        (gptel-auto-workflow--reset-staging-after-failure staging-base)
+                        (funcall finish nil))))))))))))))
 
 
 ;;; Multi-Project Support
