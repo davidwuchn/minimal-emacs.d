@@ -3192,6 +3192,70 @@ EXIT-CODE defaults to 1."
               '("/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1/var/tmp/experiments/optimize/agent-riven-exp2"
                 "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1"))))))
 
+(ert-deftest regression/auto-workflow/discard-worktree-buffers-kills-tracked-gptel-buffer ()
+  "Worktree cleanup should kill tracked gptel buffers before path reuse."
+  (let* ((project-root (make-temp-file "aw-worktree" t))
+         (worktree-dir
+          (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1" project-root))
+         (worktree-root (file-name-as-directory worktree-dir))
+         (gptel-auto-workflow--project-buffers (make-hash-table :test 'equal))
+         (gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal))
+         (tracked (generate-new-buffer "*gptel-agent:agent-riven-exp1@test*"))
+         (other (generate-new-buffer "*notes*"))
+         (aborted nil))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer tracked
+            (setq-local default-directory worktree-root))
+          (with-current-buffer other
+            (setq-local default-directory worktree-root))
+          (puthash worktree-root tracked gptel-auto-workflow--worktree-buffers)
+          (puthash worktree-root tracked gptel-auto-workflow--project-buffers)
+          (cl-letf (((symbol-function 'gptel-abort)
+                     (lambda (buf)
+                       (push buf aborted))))
+            (should (= (gptel-auto-workflow--discard-worktree-buffers worktree-dir) 1))
+            (should (equal aborted (list tracked)))
+            (should-not (buffer-live-p tracked))
+            (should (buffer-live-p other))
+            (should-not (gethash worktree-root gptel-auto-workflow--worktree-buffers))
+            (should-not (gethash worktree-root gptel-auto-workflow--project-buffers))))
+      (when (buffer-live-p tracked)
+        (kill-buffer tracked))
+      (when (buffer-live-p other)
+        (kill-buffer other))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/delete-worktree-discards-stale-buffers-without-directory ()
+  "Deleting worktree state should discard routed buffers even if the path is already gone."
+  (let* ((target "lisp/modules/gptel-tools-agent.el")
+         (worktree-dir "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1")
+         (gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+         (discarded nil)
+         (calls nil))
+    (puthash target
+             (list :worktree-dir worktree-dir
+                   :current-branch "optimize/agent-riven-exp1")
+             gptel-auto-workflow--worktree-state)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--discard-worktree-buffers)
+               (lambda (path)
+                 (push path discarded)
+                 1))
+              ((symbol-function 'file-exists-p)
+               (lambda (_path) nil))
+              ((symbol-function 'call-process)
+               (lambda (&rest args)
+                 (push args calls)
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-workflow-delete-worktree target)
+      (should (equal discarded (list worktree-dir)))
+      (should-not calls)
+      (should (equal (gethash target gptel-auto-workflow--worktree-state)
+                     '(:worktree-dir nil :current-branch nil))))))
+
 (ert-deftest regression/auto-workflow/headless-lock-prompt-auto-grabs-lock ()
   "Headless mode should auto-resolve file lock prompts."
   (let ((gptel-auto-workflow--headless t))
@@ -5601,9 +5665,50 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (lambda (args)
           (equal (last args 6)
                  '("worktree" "add" "-b"
-                   "optimize/cache-riven-exp1"
-                    "/tmp/project/var/tmp/experiments/optimize/cache-riven-exp1"
-                    "origin/main")))
+                    "optimize/cache-riven-exp1"
+                     "/tmp/project/var/tmp/experiments/optimize/cache-riven-exp1"
+                     "origin/main")))
+        calls)))))
+
+(ert-deftest regression/auto-workflow/create-worktree-discards-stale-worktree-buffers ()
+  "Experiment worktree creation should discard stale worktree buffers first."
+  (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+        (discarded nil)
+        (calls nil)
+        (stale-worktree "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1"))
+    (cl-letf (((symbol-function 'system-name) (lambda () "riven"))
+              ((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--staging-main-ref)
+               (lambda () "origin/main"))
+              ((symbol-function 'gptel-auto-workflow--branch-worktree-paths)
+               (lambda (_branch _proj-root) nil))
+              ((symbol-function 'gptel-auto-workflow--discard-worktree-buffers)
+               (lambda (path)
+                 (push path discarded)
+                 1))
+              ((symbol-function 'make-directory)
+               (lambda (&rest _) t))
+              ((symbol-function 'file-exists-p)
+               (lambda (_path) nil))
+              ((symbol-function 'call-process)
+               (lambda (&rest args)
+                 (push args calls)
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (equal (gptel-auto-workflow-create-worktree
+                      "lisp/modules/gptel-tools-agent.el" 1)
+                     stale-worktree))
+      (should (equal discarded (list stale-worktree)))
+      (should
+       (cl-some
+        (lambda (args)
+          (equal (last args 6)
+                 '("worktree" "add" "-b"
+                   "optimize/agent-riven-exp1"
+                   "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1"
+                   "origin/main")))
         calls)))))
 
 (ert-deftest regression/auto-workflow/run-with-targets-rebinds-run-root-between-targets ()
@@ -5800,6 +5905,33 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (regexp-quote
                 "git worktree add --force /tmp/project/var/tmp/experiments/staging-verify staging")
                captured)))))
+
+(ert-deftest regression/auto-workflow/create-staging-worktree-discards-stale-buffers ()
+  "Staging worktree creation should discard routed buffers before path reuse."
+  (let ((gptel-auto-workflow--run-project-root "/tmp/project")
+        (discarded nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--ensure-staging-branch-exists)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--discard-worktree-buffers)
+               (lambda (path)
+                 (push path discarded)
+                 1))
+              ((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (&rest _) ""))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (&rest _) (cons "" 0)))
+              ((symbol-function 'file-exists-p)
+               (lambda (_path) nil))
+              ((symbol-function 'make-directory)
+               (lambda (&rest _) t))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (equal (gptel-auto-workflow--create-staging-worktree)
+                     "/tmp/project/var/tmp/experiments/staging-verify"))
+      (should (equal discarded
+                     '("/tmp/project/var/tmp/experiments/staging-verify"))))))
 
 (ert-deftest regression/auto-workflow/analyzer-agent-declares-bash-tool ()
   "Analyzer agent should declare Bash so live tool calls match FSM tools."
