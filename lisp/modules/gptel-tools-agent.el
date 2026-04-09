@@ -2708,7 +2708,8 @@ Maximum response: 1000 characters."
 Accept explicit APPROVED/BLOCKED markers, blocker-free reviewer markdown,
 and analysis-only reviewer summaries that cite current lines without
 surfacing blocking markers or issue details."
-  (let* ((normalized (replace-regexp-in-string "|" "\n" response))
+  (when (stringp response)
+    (let* ((normalized (replace-regexp-in-string "|" "\n" response))
          (case-fold-search t)
          (approved (string-match
                     (rx (or line-start "\n")
@@ -2809,7 +2810,7 @@ surfacing blocking markers or issue details."
            (not unverified)
            (not blocking-summary))
       t)
-     (t nil))))
+     (t nil)))))
 
 (defun gptel-auto-workflow--fix-review-issues (optimize-branch review-output callback)
   "Try to fix issues found in review for OPTIMIZE-BRANCH.
