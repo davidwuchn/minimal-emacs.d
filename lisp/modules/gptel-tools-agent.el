@@ -1349,7 +1349,7 @@ TIMESTAMP defaults to `current-time'."
   "Treat worktree-context messages as executor activity."
   (my/gptel--agent-task-note-context-activity))
 
-(unless (advice-member-p #'my/gptel--agent-task-note-message-activity 'message)
+(unless (advice-member-p 'message #'my/gptel--agent-task-note-message-activity)
   (advice-add 'message :before #'my/gptel--agent-task-note-message-activity))
 
 (defun my/gptel--agent-task-note-curl-activity (&rest _args)
@@ -1357,8 +1357,7 @@ TIMESTAMP defaults to `current-time'."
   (my/gptel--agent-task-note-active-activity))
 
 (with-eval-after-load 'gptel-request
-  (unless (advice-member-p #'my/gptel--agent-task-note-curl-activity
-                           'gptel-curl--get-args)
+  (unless (advice-member-p 'gptel-curl--get-args #'my/gptel--agent-task-note-curl-activity)
     (advice-add 'gptel-curl--get-args :before
                 #'my/gptel--agent-task-note-curl-activity)))
 
