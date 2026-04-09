@@ -599,8 +599,8 @@ Run asynchronously. Use for bulk cache warming."
                (when (and (stringp id) (integerp cw) (> cw 0))
                  (puthash id cw my/gptel--context-window-cache)
                  (puthash id (list :context-window cw
-                                   :pricing-input (and (numberp input-price) (* input-price 1000000))
-                                   :pricing-output (and (numberp output-price) (* output-price 1000000)))
+                                   :pricing-input (and (numberp input-price) input-price)
+                                   :pricing-output (and (numberp output-price) output-price))
                           my/gptel--model-metadata-cache)
                  (cl-incf count))))
            (message "OpenRouter: cached %d models" count)))
