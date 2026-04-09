@@ -2672,6 +2672,12 @@ REVIEW CRITERIA:
 - Critical: Proven correctness bug in current code
 - Security: eval of untrusted input, shell injection, nil without guard
 
+REVIEW METHOD:
+- If the diff introduces a call to an existing helper/function, inspect that helper's
+  current definition before blocking on unknown behavior.
+- Do not block solely because a referenced helper is outside the diff when you can
+  verify it from the current file/repo.
+
 OUTPUT: First line must be exactly 'APPROVED' or 'BLOCKED: [reason]'.
 You may include structured markdown after that verdict line.
 

@@ -2868,8 +2868,32 @@ EXIT-CODE defaults to 1."
       (gptel-auto-workflow--review-changes
        "optimize/test-branch"
        (lambda (result) (setq review-result result)))
-      (should (= captured-timeout 600))
-      (should (car review-result)))))
+       (should (= captured-timeout 600))
+       (should (car review-result)))))
+
+(ert-deftest regression/auto-workflow/review-changes-prompt-requires-helper-verification ()
+  "Review prompt should tell the reviewer to inspect referenced helpers before blocking."
+  (let ((gptel-auto-workflow-require-review t)
+        (gptel-auto-experiment-use-subagents t)
+        captured-prompt
+        review-result)
+    (cl-letf (((symbol-function 'shell-command-to-string)
+               (lambda (&rest _) "diff --git a/file b/file\n+ (my/gptel--deliver-subagent-result callback result)\n"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description prompt callback &optional _timeout)
+                 (setq captured-prompt prompt)
+                 (funcall callback "APPROVED")))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (gptel-auto-workflow--review-changes
+       "optimize/test-branch"
+       (lambda (result) (setq review-result result)))
+      (should (car review-result))
+      (should (string-match-p
+               "inspect that helper's[[:space:]\n]+current definition"
+               captured-prompt))
+      (should (string-match-p
+               "Do not block solely because a referenced helper is outside the diff"
+               captured-prompt)))))
 
 (ert-deftest regression/auto-workflow/review-changes-keeps-higher-global-timeout ()
   "Review dispatch should not shorten a larger global task timeout."
@@ -5689,7 +5713,14 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (goto-char (point-min))
       (should (re-search-forward "First line must be exactly one of:" nil t))
       (should (re-search-forward "`APPROVED`" nil t))
-      (should (re-search-forward "`BLOCKED: \\[short reason\\]`" nil t)))))
+      (should (re-search-forward "`BLOCKED: \\[short reason\\]`" nil t))
+      (goto-char (point-min))
+      (should (re-search-forward
+               "If a diff introduces a call to an existing helper/function"
+               nil t))
+      (should (re-search-forward
+               "appearing in the diff is not, by itself, a blocker"
+               nil t)))))
 
 (ert-deftest regression/auto-workflow/push-staging-uses-force-with-lease-when-remote-exists ()
   "Staging push should use force-with-lease against the current remote head."

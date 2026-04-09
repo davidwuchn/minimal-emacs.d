@@ -49,6 +49,10 @@ DO NOT:
 - Invent new findings after initial read
 - Trust your memory of line numbers from previous reviews
 - Introduce new locations beyond verified evidence unless you read and verify them yourself
+
+If a diff introduces a call to an existing helper/function, read that helper's
+current definition before blocking on "unknown behavior". The implementation not
+appearing in the diff is not, by itself, a blocker when the code is available to inspect.
 </verification_first>
 
 <review_framework>
