@@ -1634,8 +1634,8 @@ Uses hash table keyed by task-id to support parallel execution."
                 (funcall restore-origin-fsm)))
             (when launch-error
               (let* ((state (gethash task-id my/gptel--agent-task-state))
-                     (timeout-timer (plist-get state :timeout-timer))
-                     (progress-timer (plist-get state :progress-timer))
+                     (timeout-timer (and state (plist-get state :timeout-timer)))
+                     (progress-timer (and state (plist-get state :progress-timer)))
                      (request-buf (and state
                                        (my/gptel--agent-task-request-buffer state))))
                 (when state
