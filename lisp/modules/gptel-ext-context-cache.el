@@ -296,18 +296,23 @@ for a partial match (case-insensitive).  Returns nil if not found."
            (my/gptel--alist-partial-match alist key)))))
 
 (defun my/gptel--alist-partial-match (alist search-str)
-  "Find first entry in ALIST where key partially matches SEARCH-STR (case-insensitive).
+  "Find best matching entry in ALIST where key partially matches SEARCH-STR (case-insensitive).
 Returns the cdr (value) of the matching entry, or nil if no match.
-Matches if the alist key is a prefix of SEARCH-STR."
+Matches if the alist key is a prefix of SEARCH-STR.
+When multiple entries match, returns the one with the longest key for most specific match."
   (when (and (listp alist) (stringp search-str))
-    (let ((search-lower (downcase search-str)))
-      (catch 'found
-        (dolist (entry alist)
-          (when (and (consp entry)
-                     (stringp (car entry))
-                     (string-prefix-p (downcase (car entry)) search-lower))
-            (throw 'found (cdr entry))))
-        nil))))
+    (let ((search-lower (downcase search-str))
+          best-match
+          (best-key-len 0))
+      (dolist (entry alist)
+        (when (and (consp entry)
+                   (stringp (car entry))
+                   (string-prefix-p (downcase (car entry)) search-lower))
+          (let ((key-len (length (car entry))))
+            (when (> key-len best-key-len)
+              (setq best-key-len key-len)
+              (setq best-match (cdr entry))))))
+      best-match)))
 
 (defun my/gptel--plist-get (plist key &optional default)
   "Get value from PLIST for KEY, returning DEFAULT if not found.
