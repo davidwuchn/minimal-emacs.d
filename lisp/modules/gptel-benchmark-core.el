@@ -195,8 +195,8 @@ Handles both (run . scores) cons cells and plists with :scores key.
 Returns nil for nil or malformed input."
   (cond
    ((null r) nil)
-   ((and (consp r) (listp (cdr r))) (cdr r))
-   ((listp r) (plist-get r :scores))
+   ((and (listp r) (keywordp (car r))) (plist-get r :scores))
+   ((consp r) (when (listp (cdr r)) (cdr r)))
    (t nil)))
 
 (defun gptel-benchmark--get-score (r field)
