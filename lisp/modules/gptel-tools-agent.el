@@ -750,6 +750,15 @@ Checks both TTL configuration and hash table initialization."
   (and (> my/gptel-subagent-cache-ttl 0)
        (hash-table-p my/gptel--subagent-cache)))
 
+(defun my/gptel--subagent-cache-allowed-p (agent-type)
+  "Return non-nil when AGENT-TYPE is safe to serve from the subagent cache.
+Executor results are side-effectful during auto-workflow: reusing cached prose
+after a worktree is recreated would skip reapplying the file edits that prose
+describes."
+  (not (and (equal agent-type "executor")
+            (or gptel-auto-workflow--current-target
+                gptel-auto-workflow--current-project))))
+
 (defun my/gptel--cacheable-subagent-result-p (result)
   "Return non-nil when RESULT is safe to reuse from the subagent cache.
 Failure-shaped responses must not be cached, otherwise a transient API
@@ -771,7 +780,8 @@ quota error can poison later workflow attempts with immediate cache hits."
 (defun my/gptel--subagent-cache-get (agent-type prompt &optional files include-history include-diff)
   "Get cached result for (AGENT-TYPE, PROMPT, ...) if still valid.
 Returns nil if cache disabled, not found, or expired."
-  (when (my/gptel--subagent-cache-enabled-p)
+  (when (and (my/gptel--subagent-cache-enabled-p)
+             (my/gptel--subagent-cache-allowed-p agent-type))
     (let* ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff))
            (cached (gethash key my/gptel--subagent-cache)))
       (when cached
@@ -789,6 +799,7 @@ Returns nil if cache disabled, not found, or expired."
   "Cache RESULT for (AGENT-TYPE, PROMPT, ...).
 Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
   (when (and (my/gptel--subagent-cache-enabled-p)
+             (my/gptel--subagent-cache-allowed-p agent-type)
              (my/gptel--cacheable-subagent-result-p result))
     (let ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff)))
       (puthash key (cons (float-time) result) my/gptel--subagent-cache)
@@ -1623,8 +1634,8 @@ Uses hash table keyed by task-id to support parallel execution."
                 (funcall restore-origin-fsm)))
             (when launch-error
               (let* ((state (gethash task-id my/gptel--agent-task-state))
-                     (timeout-timer (plist-get state :timeout-timer))
-                     (progress-timer (plist-get state :progress-timer))
+                     (timeout-timer (and state (plist-get state :timeout-timer)))
+                     (progress-timer (and state (plist-get state :progress-timer)))
                      (request-buf (and state
                                        (my/gptel--agent-task-request-buffer state))))
                 (when state
@@ -2661,6 +2672,12 @@ REVIEW CRITERIA:
 - Critical: Proven correctness bug in current code
 - Security: eval of untrusted input, shell injection, nil without guard
 
+REVIEW METHOD:
+- If the diff introduces a call to an existing helper/function, inspect that helper's
+  current definition before blocking on unknown behavior.
+- Do not block solely because a referenced helper is outside the diff when you can
+  verify it from the current file/repo.
+
 OUTPUT: First line must be exactly 'APPROVED' or 'BLOCKED: [reason]'.
 You may include structured markdown after that verdict line.
 
@@ -3572,6 +3589,8 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (worktree (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)
                        proj-root))
+         (hydrate-submodules-p (and proj-root worktree
+                                    (not (file-equal-p proj-root worktree))))
          (default-directory worktree)
          (isolated-status-file (let ((path (make-temp-file "auto-workflow-status-" nil ".sexp")))
                                  (delete-file path)
@@ -3582,22 +3601,36 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
          (test-script (expand-file-name "scripts/run-tests.sh" worktree))
          (output-buffer (generate-new-buffer "*test-output*"))
          result)
-    (unwind-protect
-        (if (not (file-executable-p test-script))
-            (progn
-              (message "[auto-experiment] Test script not found or not executable: %s" test-script)
-              (cons t "No test script - skipping"))
-          (message "[auto-experiment] Running tests...")
-          (let ((exit-code (call-process test-script nil output-buffer nil "unit")))
-            (with-current-buffer output-buffer
-              (setq result (cons (zerop exit-code) (buffer-string))))
-            (when (car result)
-              (message "[auto-experiment] ✓ Tests passed"))
-            result))
-      (when (buffer-live-p output-buffer)
-        (kill-buffer output-buffer))
-      (when (file-exists-p isolated-status-file)
-        (delete-file isolated-status-file)))))
+     (unwind-protect
+         (if (not (file-executable-p test-script))
+             (progn
+               (message "[auto-experiment] Test script not found or not executable: %s" test-script)
+               (cons t "No test script - skipping"))
+           (let* (;; Linked worktrees need the same shared-repo hydration that
+                  ;; staging uses; otherwise package submodules stay empty and
+                  ;; `require' fails before any ERT cases even run.
+                  (hydrate-result (when hydrate-submodules-p
+                                    (gptel-auto-workflow--hydrate-staging-submodules worktree)))
+                  (hydrate-pass (or (not hydrate-submodules-p)
+                                    (= 0 (cdr hydrate-result)))))
+             (if (not hydrate-pass)
+                 (progn
+                   (with-current-buffer output-buffer
+                     (insert (car hydrate-result) "\n"))
+                   (message "[auto-experiment] ✗ Submodule hydration failed: %s"
+                            (my/gptel--sanitize-for-logging (car hydrate-result) 200))
+                   (cons nil (with-current-buffer output-buffer (buffer-string))))
+               (message "[auto-experiment] Running tests...")
+               (let ((exit-code (call-process test-script nil output-buffer nil "unit")))
+                 (with-current-buffer output-buffer
+                   (setq result (cons (zerop exit-code) (buffer-string))))
+                 (when (car result)
+                   (message "[auto-experiment] ✓ Tests passed"))
+                 result))))
+       (when (buffer-live-p output-buffer)
+         (kill-buffer output-buffer))
+       (when (file-exists-p isolated-status-file)
+         (delete-file isolated-status-file)))))
 
 (defcustom gptel-auto-experiment-require-tests t
   "When non-nil, require tests to pass before merging experiment to staging.
@@ -3983,9 +4016,10 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                 "replaces working code without clear improvement")
               (lambda (result)
                 (gptel-auto-experiment--finish-grade
-                 grade-id callback result t))))
-        (gptel-auto-experiment--finish-grade
-         grade-id callback (list :score 100 :passed t) t)))))
+                 grade-id callback result t))
+              gptel-auto-experiment-grade-timeout))
+         (gptel-auto-experiment--finish-grade
+          grade-id callback (list :score 100 :passed t) t)))))
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.

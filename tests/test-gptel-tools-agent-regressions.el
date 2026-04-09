@@ -302,14 +302,40 @@ EXIT-CODE defaults to 1."
                (lambda (&rest _args) nil))
               ((symbol-function 'message)
                (lambda (&rest _args) nil)))
-      (with-temp-buffer
-        (gptel-auto-experiment-grade
-         "HYPOTHESIS: timeout cleanup probe"
-         (lambda (_result)
-           (error "grade timeout callback boom"))))
+       (with-temp-buffer
+         (gptel-auto-experiment-grade
+          "HYPOTHESIS: timeout cleanup probe"
+          (lambda (_result)
+            (error "grade timeout callback boom"))))
        (should (functionp timeout-callback))
        (should-error (funcall timeout-callback))
        (should (zerop (hash-table-count gptel-auto-experiment--grade-state))))))
+
+(ert-deftest regression/auto-experiment/grade-forwards-configured-timeout ()
+  "Grade requests should forward the configured timeout to the grader subagent."
+  (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment-use-subagents t)
+        (gptel-auto-experiment-grade-timeout 137)
+        captured-timeout
+        result)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (&rest _args) :fake-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (_output _expected _forbidden cb &optional timeout)
+                 (setq captured-timeout timeout)
+                 (funcall cb '(:score 9 :total 9 :passed t :details "graded"))))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-grade
+         "HYPOTHESIS: forward grade timeout"
+         (lambda (grade)
+           (setq result grade))))
+      (should result)
+      (should (= captured-timeout 137)))))
 
 (ert-deftest regression/auto-experiment/grade-includes-worktree-diff-evidence ()
   "Grader input should include concrete git evidence from the experiment worktree."
@@ -2842,8 +2868,32 @@ EXIT-CODE defaults to 1."
       (gptel-auto-workflow--review-changes
        "optimize/test-branch"
        (lambda (result) (setq review-result result)))
-      (should (= captured-timeout 600))
-      (should (car review-result)))))
+       (should (= captured-timeout 600))
+       (should (car review-result)))))
+
+(ert-deftest regression/auto-workflow/review-changes-prompt-requires-helper-verification ()
+  "Review prompt should tell the reviewer to inspect referenced helpers before blocking."
+  (let ((gptel-auto-workflow-require-review t)
+        (gptel-auto-experiment-use-subagents t)
+        captured-prompt
+        review-result)
+    (cl-letf (((symbol-function 'shell-command-to-string)
+               (lambda (&rest _) "diff --git a/file b/file\n+ (my/gptel--deliver-subagent-result callback result)\n"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description prompt callback &optional _timeout)
+                 (setq captured-prompt prompt)
+                 (funcall callback "APPROVED")))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (gptel-auto-workflow--review-changes
+       "optimize/test-branch"
+       (lambda (result) (setq review-result result)))
+      (should (car review-result))
+      (should (string-match-p
+               "inspect that helper's[[:space:]\n]+current definition"
+               captured-prompt))
+      (should (string-match-p
+               "Do not block solely because a referenced helper is outside the diff"
+               captured-prompt)))))
 
 (ert-deftest regression/auto-workflow/review-changes-keeps-higher-global-timeout ()
   "Review dispatch should not shorten a larger global task timeout."
@@ -3467,6 +3517,17 @@ EXIT-CODE defaults to 1."
      "Error: Task executor could not finish task \"x\". Error details: (:code \"throttling\" :message \"hour allocated quota exceeded.\")")
     (should (= (hash-table-count my/gptel--subagent-cache) 0))
     (should-not (my/gptel--subagent-cache-get "executor" "prompt"))))
+
+(ert-deftest regression/subagent-cache/disables-executor-cache-during-auto-workflow ()
+  "Executor cache should be disabled while auto-workflow owns the target worktree."
+  (let ((my/gptel-subagent-cache-ttl 300)
+        (my/gptel--subagent-cache (make-hash-table :test 'equal))
+        (gptel-auto-workflow--current-target "lisp/modules/gptel-tools-agent.el"))
+    (my/gptel--subagent-cache-put "executor" "prompt" "cached result")
+    (should (= (hash-table-count my/gptel--subagent-cache) 0))
+    (should-not (my/gptel--subagent-cache-get "executor" "prompt"))
+    (my/gptel--subagent-cache-put "reviewer" "prompt" "review ok")
+    (should (equal (my/gptel--subagent-cache-get "reviewer" "prompt") "review ok"))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status ()
   "Wrapper status should reset stale running snapshots when the worker is gone."
@@ -4805,8 +4866,74 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               (should-not (equal status-file
                                  (expand-file-name "var/tmp/cron/auto-workflow-status.sexp"
                                                    proj-root)))
-               (should (equal captured-args '("unit")))
-               (should-not (file-exists-p status-file))))
+                (should (equal captured-args '("unit")))
+                (should-not (file-exists-p status-file))))
+        (delete-directory proj-root t)
+        (delete-directory worktree t)))))
+
+(ert-deftest regression/auto-experiment/run-tests-hydrates-linked-worktree-submodules ()
+  "Experiment tests should hydrate top-level submodules before running in a linked worktree."
+  (let* ((proj-root (make-temp-file "aw-tests-root" t))
+         (worktree (make-temp-file "aw-tests-worktree" t))
+         hydrate-dir
+         captured-program
+         captured-args)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () proj-root))
+              ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+               (lambda (&rest _) worktree))
+              ((symbol-function 'file-executable-p)
+               (lambda (_file) t))
+              ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
+               (lambda (dir)
+                 (setq hydrate-dir dir)
+                 (cons "Hydrated submodules" 0)))
+              ((symbol-function 'call-process)
+               (lambda (program _in buffer _display &rest args)
+                 (setq captured-program program)
+                 (setq captured-args args)
+                 (with-current-buffer buffer
+                   (insert "tests ok"))
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (unwind-protect
+          (let ((result (gptel-auto-experiment-run-tests)))
+            (should (car result))
+            (should (equal (cdr result) "tests ok"))
+            (should (equal hydrate-dir worktree))
+            (should (equal captured-program
+                           (expand-file-name "scripts/run-tests.sh" worktree)))
+            (should (equal captured-args '("unit"))))
+        (delete-directory proj-root t)
+        (delete-directory worktree t)))))
+
+(ert-deftest regression/auto-experiment/run-tests-fails-on-submodule-hydration-error ()
+  "Experiment tests should fail fast when linked worktree submodules cannot be hydrated."
+  (let* ((proj-root (make-temp-file "aw-tests-root" t))
+         (worktree (make-temp-file "aw-tests-worktree" t))
+         call-process-called)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () proj-root))
+              ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+               (lambda (&rest _) worktree))
+              ((symbol-function 'file-executable-p)
+               (lambda (_file) t))
+              ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
+               (lambda (_dir)
+                 (cons "Missing shared submodule repo for packages/gptel" 1)))
+              ((symbol-function 'call-process)
+               (lambda (&rest _args)
+                 (setq call-process-called t)
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (unwind-protect
+          (let ((result (gptel-auto-experiment-run-tests)))
+            (should-not (car result))
+            (should (string-match-p "Missing shared submodule repo for packages/gptel"
+                                    (cdr result)))
+            (should-not call-process-called))
         (delete-directory proj-root t)
         (delete-directory worktree t)))))
 
@@ -5586,7 +5713,14 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (goto-char (point-min))
       (should (re-search-forward "First line must be exactly one of:" nil t))
       (should (re-search-forward "`APPROVED`" nil t))
-      (should (re-search-forward "`BLOCKED: \\[short reason\\]`" nil t)))))
+      (should (re-search-forward "`BLOCKED: \\[short reason\\]`" nil t))
+      (goto-char (point-min))
+      (should (re-search-forward
+               "If a diff introduces a call to an existing helper/function"
+               nil t))
+      (should (re-search-forward
+               "appearing in the diff is not, by itself, a blocker"
+               nil t)))))
 
 (ert-deftest regression/auto-workflow/push-staging-uses-force-with-lease-when-remote-exists ()
   "Staging push should use force-with-lease against the current remote head."
