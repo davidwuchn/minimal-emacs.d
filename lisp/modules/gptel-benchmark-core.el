@@ -126,7 +126,7 @@ FIELD should be a keyword like :score.
 For alist lookup, converts :score to \\='score symbol."
   (or (plist-get obj field)
       (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
-        (cdr (assq alist-key obj)))))
+        (cdr (assoc alist-key obj)))))
 
 (defun gptel-benchmark--plist-get (plist field &optional default)
   "Get FIELD from PLIST with optional DEFAULT value.
@@ -207,22 +207,31 @@ FIELD should be a keyword like :overall-score."
     (and scores (plist-get scores field))))
 
 (defun gptel-benchmark--accumulate-score (total score)
-  "Accumulate SCORE into TOTAL, treating nil as 0.
-Returns the new accumulated total."
-  (+ total (or score 0)))
+  "Accumulate SCORE into TOTAL.
+Returns the new accumulated total.
+SCORE must be a number or nil; non-numeric values signal error."
+  (unless (numberp total)
+    (signal 'wrong-type-argument (list 'numberp total)))
+  (let ((normalized-score (cond
+                           ((numberp score) score)
+                           ((null score) 0)
+                           (t (signal 'wrong-type-argument (list 'numberp score))))))
+    (+ total normalized-score)))
 
 (defun gptel-benchmark--accumulate-scores (totals scores-alist)
-  "Accumulate multiple SCORES into TOTALS alist.
+  "Build new alist with scores from SCORES-ALIST accumulated into TOTALS.
 TOTALS is an alist of (score-type . accumulated-value).
 SCORES-ALIST is an alist of (score-type . current-score).
-Returns updated TOTALS alist with all scores accumulated.
-Handles nil scores by treating them as 0."
-  (dolist (pair totals totals)
-    (let ((type (car pair))
-          (value (cdr pair)))
-      (setcdr pair (gptel-benchmark--accumulate-score
-                    value
-                    (alist-get type scores-alist))))))
+Returns a NEW alist with all scores accumulated.
+Handles nil scores by treating them as 0. Does not mutate input."
+  (mapcar (lambda (pair)
+            (let ((type (car pair))
+                  (prev-total (cdr pair)))
+              (cons type
+                    (gptel-benchmark--accumulate-score
+                     prev-total
+                     (alist-get type scores-alist)))))
+          totals))
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist.
