@@ -113,6 +113,10 @@ Architectural disagreement alone is Style or Hardening, NOT Critical.
 
 <output_format>
 ```
+First line must be exactly one of:
+- `APPROVED`
+- `BLOCKED: [short reason]`
+
 ## Summary
 [1-2 sentence overall assessment]
 
@@ -150,6 +154,9 @@ Architectural disagreement alone is Style or Hardening, NOT Critical.
 ## Action Items
 - [ ] [Blocker/Critical items only]
 ```
+
+If there are no blocker/critical findings, still start with `APPROVED` before the
+structured sections below.
 </output_format>
 
 <invocation_examples>

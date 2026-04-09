@@ -2661,11 +2661,11 @@ REVIEW CRITERIA:
 - Critical: Proven correctness bug in current code
 - Security: eval of untrusted input, shell injection, nil without guard
 
-OUTPUT: If NO blockers or critical issues, start with 'APPROVED'.
-If blockers/critical found, start with 'BLOCKED: [reason]'.
+OUTPUT: First line must be exactly 'APPROVED' or 'BLOCKED: [reason]'.
+You may include structured markdown after that verdict line.
 
 Maximum response: 1000 characters."
-                                  (truncate-string-to-width diff-content 3000 nil nil "..."))))
+                                   (truncate-string-to-width diff-content 3000 nil nil "..."))))
       (message "[auto-workflow] Reviewing changes in %s..." optimize-branch)
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-call-subagent))
@@ -2686,9 +2686,9 @@ Maximum response: 1000 characters."
 (defun gptel-auto-workflow--review-approved-p (response)
   "Return non-nil when RESPONSE approves a staging review.
 
-Accept both the older explicit APPROVED/BLOCKED markers and the newer
-reviewer markdown shape that summarizes \"No blockers\" and uses
-non-blocking sections like \"No Issue\" or \"Praise\"."
+Accept explicit APPROVED/BLOCKED markers, blocker-free reviewer markdown,
+and analysis-only reviewer summaries that cite current lines without
+surfacing blocking markers or issue details."
   (let* ((normalized (replace-regexp-in-string "|" "\n" response))
          (case-fold-search t)
          (approved (string-match
@@ -2727,6 +2727,26 @@ non-blocking sections like \"No Issue\" or \"Praise\"."
                            "Proven Correctness Bugs"
                            word-end)
                        normalized))
+         (analysis-summary (string-match-p
+                            (rx (or "Based on my analysis"
+                                    "Overall assessment"
+                                    "After reviewing"
+                                    "After examining"
+                                    "I reviewed"
+                                    "I examined"))
+                            normalized))
+         (analysis-line-reference (string-match-p
+                                   (rx (or (seq ".el:" (+ digit))
+                                           (seq "line " (+ digit))))
+                                   normalized))
+         (issue-label (string-match-p
+                       (rx (or line-start "\n")
+                           (* blank)
+                           (? "-")
+                           (* blank)
+                           "Issue:"
+                           (+ blank))
+                       normalized))
          (action-items (string-match-p
                         (rx (or line-start "\n")
                             (* blank)
@@ -2736,7 +2756,20 @@ non-blocking sections like \"No Issue\" or \"Praise\"."
                       (rx (or line-start "\n")
                           (* blank)
                           "UNVERIFIED")
-                      normalized)))
+                      normalized))
+         (blocking-summary (string-match-p
+                            (rx (or "introduces a correctness bug"
+                                    "introduces a runtime error"
+                                    "introduces a security"
+                                    "can signal"
+                                    "can crash"
+                                    "can fail"
+                                    "will signal"
+                                    "will crash"
+                                    "will fail"
+                                    "logic failure"
+                                    "state corruption"))
+                            normalized)))
     (cond
      ((and blocked
            (or (not approved)
@@ -2745,8 +2778,17 @@ non-blocking sections like \"No Issue\" or \"Praise\"."
      (approved t)
      ((and (or no-blockers non-blocking-section)
            (not bug-section)
+           (not issue-label)
            (not action-items)
            (not unverified))
+      t)
+     ((and analysis-summary
+           analysis-line-reference
+           (not bug-section)
+           (not issue-label)
+           (not action-items)
+           (not unverified)
+           (not blocking-summary))
       t)
      (t nil))))
 

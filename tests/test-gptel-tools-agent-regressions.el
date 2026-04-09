@@ -2904,6 +2904,46 @@ EXIT-CODE defaults to 1."
       (should (car review-result))
       (should (string-match-p "No blockers" (cdr review-result))))))
 
+(ert-deftest regression/auto-workflow/review-changes-accepts-analysis-only-output ()
+  "Review parsing should accept verdict-less reviewer analysis with no issue markers."
+  (let ((gptel-auto-workflow-require-review t)
+        (gptel-auto-experiment-use-subagents t)
+        review-result)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () test-auto-workflow--repo-root))
+              ((symbol-function 'shell-command-to-string)
+               (lambda (&rest _) "diff --git a/file b/file"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional _timeout)
+                 (funcall callback
+                          "Reviewer result for task: Review changes before merge | Let me examine the context around this change to provide a thorough review. Based on my analysis: | **Validation function** (`gptel-auto-workflow--validate-non-empty-string`): Exists at line 33, properly validates string type and non-empty content. | **Callers of `ensure-merge-source-ref`**: Only one caller at line 2981, passing `optimize-branch`. | **Data flow analysis**: | - `optimize-branch` originates from `experiment-branch` and stays non-nil through this path.")))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (gptel-auto-workflow--review-changes
+       "optimize/test-branch"
+       (lambda (result) (setq review-result result)))
+      (should (car review-result))
+      (should (string-match-p "Based on my analysis" (cdr review-result))))))
+
+(ert-deftest regression/auto-workflow/review-changes-keeps-analysis-issue-output-blocked ()
+  "Review parsing should still reject analysis-only output that contains issue details."
+  (let ((gptel-auto-workflow-require-review t)
+        (gptel-auto-experiment-use-subagents t)
+        review-result)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () test-auto-workflow--repo-root))
+              ((symbol-function 'shell-command-to-string)
+               (lambda (&rest _) "diff --git a/file b/file"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional _timeout)
+                 (funcall callback
+                          "Reviewer result for task: Review changes before merge | Based on my analysis: | **lisp/modules/gptel-tools-agent.el:2981** | - Issue: `optimize-branch` can be nil here, which will signal in `shell-quote-argument`. | - Fix: Validate the merge source ref before quoting it.")))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (gptel-auto-workflow--review-changes
+       "optimize/test-branch"
+       (lambda (result) (setq review-result result)))
+      (should-not (car review-result))
+      (should (string-match-p "Issue:" (cdr review-result))))))
+
 (ert-deftest regression/auto-workflow/review-changes-keeps-proven-bug-output-blocked ()
   "Review parsing should reject sectioned reviewer output with proven bugs."
   (let ((gptel-auto-workflow-require-review t)
@@ -5536,6 +5576,17 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (should (re-search-forward "Do not run `git add`, `git commit`, `git push`" nil t))
       (should (re-search-forward "Leave edits uncommitted in the worktree" nil t))
       (should (re-search-forward "`COMMIT:` must be `not committed`" nil t)))))
+
+(ert-deftest regression/auto-workflow/reviewer-agent-requires-explicit-verdict ()
+  "Reviewer agent should require an explicit APPROVED/BLOCKED verdict line."
+  (let ((file (expand-file-name "assistant/agents/reviewer.md"
+                                (gptel-auto-workflow--project-root))))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (should (re-search-forward "First line must be exactly one of:" nil t))
+      (should (re-search-forward "`APPROVED`" nil t))
+      (should (re-search-forward "`BLOCKED: \\[short reason\\]`" nil t)))))
 
 (ert-deftest regression/auto-workflow/push-staging-uses-force-with-lease-when-remote-exists ()
   "Staging push should use force-with-lease against the current remote head."
