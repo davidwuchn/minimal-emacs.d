@@ -4389,7 +4389,7 @@ Also logs agent-output snippet for debugging when category is :unknown."
 (defun gptel-auto-experiment--adaptive-max-experiments (original-max)
   "Return adjusted experiment count based on API error rate."
   (if (gptel-auto-experiment--should-reduce-experiments-p)
-      (let ((halved (ash (max 1 original-max) -1)))
+      (let ((halved (max 1 (ash original-max -1))))
         (message "[auto-workflow] Reducing experiments from %d to %d due to API errors"
                  original-max halved)
         halved)
