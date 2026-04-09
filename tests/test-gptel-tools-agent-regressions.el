@@ -47,9 +47,17 @@ EXIT-CODE defaults to 1."
               "import json, sys\n"
               (format "with Path(%S).open('a', encoding='utf-8') as handle:\n" log-file)
               "    handle.write(json.dumps(sys.argv) + \"\\n\")\n"
-              (format "raise SystemExit(%d)\n" (or exit-code 1))))
+               (format "raise SystemExit(%d)\n" (or exit-code 1))))
     (set-file-modes file #o755)
     file))
+
+(defun test-auto-workflow--argv-eval-payload (argv)
+  "Return the `--eval' payload from fake emacsclient ARGV, or nil."
+  (when (vectorp argv)
+    (let* ((argv-list (append argv nil))
+           (eval-pos (cl-position "--eval" argv-list :test #'equal)))
+      (when (and eval-pos (< (1+ eval-pos) (length argv-list)))
+        (nth (1+ eval-pos) argv-list)))))
 
 (defun test-auto-workflow--exercise-grade-callback-order (order)
   "Return grade callback results after exercising ORDER."
@@ -3686,6 +3694,65 @@ EXIT-CODE defaults to 1."
       (delete-directory status-dir t)
       (delete-directory fake-bin t))))
 
+(ert-deftest regression/auto-workflow/cron-wrapper-status-disables-alternate-editor-fallback ()
+  "Wrapper status should disable emacsclient alternate-editor fallback for named daemons."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        "ALTERNATE_EDITOR=")
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "from pathlib import Path\n"
+                    "import json, sys\n"
+                    (format "with Path(%S).open('a', encoding='utf-8') as handle:\n" argv-log)
+                    "    handle.write(json.dumps(sys.argv) + \"\\n\")\n"
+                    "argv = sys.argv\n"
+                    "if '-a' in argv:\n"
+                    "    idx = argv.index('-a')\n"
+                    "    if idx + 1 < len(argv) and argv[idx + 1] == 'false':\n"
+                    "        raise SystemExit(1)\n"
+                    "print('(:running t :kept 9 :total 9 :phase \"running\" :results \"var/tmp/experiments/ghost/results.tsv\")')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 0 :total 3 :phase \"running\" :results \"var/tmp/experiments/2026-04-02/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running nil" output))
+            (should (string-match-p ":phase \"idle\"" output))
+            (should (string-match-p "2026-04-02/results.tsv" output)))
+          (let* ((entries (with-temp-buffer
+                            (insert-file-contents argv-log)
+                            (mapcar #'json-read-from-string
+                                    (split-string (buffer-string) "\n" t)))))
+            (should
+             (seq-some
+              (lambda (argv)
+                (let* ((argv-list (append argv nil))
+                       (a-pos (seq-position argv-list "-a" #'equal)))
+                  (and a-pos
+                       (< (1+ a-pos) (length argv-list))
+                       (equal (nth (1+ a-pos) argv-list) "false"))))
+              entries))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log)))))
+
 (ert-deftest regression/auto-workflow/cron-wrapper-status-keeps-running-on-active-probe-timeout ()
   "Wrapper status should preserve running snapshots when the active probe times out."
   (let* ((repo-root test-auto-workflow--repo-root)
@@ -4281,11 +4348,7 @@ EXIT-CODE defaults to 1."
                                     (split-string (buffer-string) "\n" t))))
                  (elisp-payloads
                   (delq nil
-                        (mapcar (lambda (argv)
-                                  (when (and (vectorp argv)
-                                             (>= (length argv) 5)
-                                             (equal (aref argv 3) "--eval"))
-                                    (aref argv 4)))
+                        (mapcar #'test-auto-workflow--argv-eval-payload
                                 entries))))
             (should (seq-some
                      (lambda (elisp)
@@ -4340,11 +4403,7 @@ EXIT-CODE defaults to 1."
                                     (split-string (buffer-string) "\n" t))))
                  (elisp-payloads
                   (delq nil
-                        (mapcar (lambda (argv)
-                                  (when (and (vectorp argv)
-                                             (>= (length argv) 5)
-                                             (equal (aref argv 3) "--eval"))
-                                    (aref argv 4)))
+                        (mapcar #'test-auto-workflow--argv-eval-payload
                                 entries))))
             (should (seq-some
                      (lambda (elisp)
@@ -4401,11 +4460,7 @@ EXIT-CODE defaults to 1."
                                     (split-string (buffer-string) "\n" t))))
                  (elisp-payloads
                   (delq nil
-                        (mapcar (lambda (argv)
-                                  (when (and (vectorp argv)
-                                             (>= (length argv) 5)
-                                             (equal (aref argv 3) "--eval"))
-                                    (aref argv 4)))
+                        (mapcar #'test-auto-workflow--argv-eval-payload
                                 entries))))
             (should (seq-some
                      (lambda (elisp)

@@ -124,7 +124,7 @@ import sys
 emacsclient, server_name, elisp, timeout = sys.argv[1], sys.argv[2], sys.argv[3], float(sys.argv[4])
 try:
     proc = subprocess.run(
-        [emacsclient, "-s", server_name, "--eval", elisp],
+        [emacsclient, "-a", "false", "-s", server_name, "--eval", elisp],
         capture_output=True,
         text=True,
         timeout=timeout,
