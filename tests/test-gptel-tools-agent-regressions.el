@@ -3494,6 +3494,17 @@ EXIT-CODE defaults to 1."
     (should (= (hash-table-count my/gptel--subagent-cache) 0))
     (should-not (my/gptel--subagent-cache-get "executor" "prompt"))))
 
+(ert-deftest regression/subagent-cache/disables-executor-cache-during-auto-workflow ()
+  "Executor cache should be disabled while auto-workflow owns the target worktree."
+  (let ((my/gptel-subagent-cache-ttl 300)
+        (my/gptel--subagent-cache (make-hash-table :test 'equal))
+        (gptel-auto-workflow--current-target "lisp/modules/gptel-tools-agent.el"))
+    (my/gptel--subagent-cache-put "executor" "prompt" "cached result")
+    (should (= (hash-table-count my/gptel--subagent-cache) 0))
+    (should-not (my/gptel--subagent-cache-get "executor" "prompt"))
+    (my/gptel--subagent-cache-put "reviewer" "prompt" "review ok")
+    (should (equal (my/gptel--subagent-cache-get "reviewer" "prompt") "review ok"))))
+
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status ()
   "Wrapper status should reset stale running snapshots when the worker is gone."
   (let* ((repo-root test-auto-workflow--repo-root)

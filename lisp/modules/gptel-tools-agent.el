@@ -750,6 +750,15 @@ Checks both TTL configuration and hash table initialization."
   (and (> my/gptel-subagent-cache-ttl 0)
        (hash-table-p my/gptel--subagent-cache)))
 
+(defun my/gptel--subagent-cache-allowed-p (agent-type)
+  "Return non-nil when AGENT-TYPE is safe to serve from the subagent cache.
+Executor results are side-effectful during auto-workflow: reusing cached prose
+after a worktree is recreated would skip reapplying the file edits that prose
+describes."
+  (not (and (equal agent-type "executor")
+            (or gptel-auto-workflow--current-target
+                gptel-auto-workflow--current-project))))
+
 (defun my/gptel--cacheable-subagent-result-p (result)
   "Return non-nil when RESULT is safe to reuse from the subagent cache.
 Failure-shaped responses must not be cached, otherwise a transient API
@@ -771,7 +780,8 @@ quota error can poison later workflow attempts with immediate cache hits."
 (defun my/gptel--subagent-cache-get (agent-type prompt &optional files include-history include-diff)
   "Get cached result for (AGENT-TYPE, PROMPT, ...) if still valid.
 Returns nil if cache disabled, not found, or expired."
-  (when (my/gptel--subagent-cache-enabled-p)
+  (when (and (my/gptel--subagent-cache-enabled-p)
+             (my/gptel--subagent-cache-allowed-p agent-type))
     (let* ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff))
            (cached (gethash key my/gptel--subagent-cache)))
       (when cached
@@ -789,6 +799,7 @@ Returns nil if cache disabled, not found, or expired."
   "Cache RESULT for (AGENT-TYPE, PROMPT, ...).
 Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
   (when (and (my/gptel--subagent-cache-enabled-p)
+             (my/gptel--subagent-cache-allowed-p agent-type)
              (my/gptel--cacheable-subagent-result-p result))
     (let ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff)))
       (puthash key (cons (float-time) result) my/gptel--subagent-cache)
