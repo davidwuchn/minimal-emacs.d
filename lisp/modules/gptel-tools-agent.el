@@ -5386,23 +5386,39 @@ Prevents workflow from hanging indefinitely due to callback failures."
     (let ((stuck-minutes (and gptel-auto-workflow--last-progress-time
                               (/ (float-time (time-subtract (current-time) gptel-auto-workflow--last-progress-time))
                                  60))))
-        (if (and stuck-minutes (> stuck-minutes gptel-auto-workflow--max-stuck-minutes))
-            (progn
-              (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
-                       stuck-minutes)
-              (setq gptel-auto-workflow--running nil
-                    gptel-auto-workflow--cron-job-running nil
-                    gptel-auto-workflow--run-project-root nil
-                    gptel-auto-workflow--current-project nil
-                    gptel-auto-workflow--current-target nil)
-              (setq gptel-auto-workflow--stats
-                    (plist-put gptel-auto-workflow--stats :phase "idle"))
-              (gptel-auto-workflow--persist-status)
-              (when gptel-auto-workflow--watchdog-timer
-                (cancel-timer gptel-auto-workflow--watchdog-timer)
-                (setq gptel-auto-workflow--watchdog-timer nil)))
-          ;; Still running normally, check again in 5 minutes
-          t))))
+      (cond
+       ((null stuck-minutes)
+        (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
+        (setq gptel-auto-workflow--running nil
+              gptel-auto-workflow--cron-job-running nil
+              gptel-auto-workflow--run-project-root nil
+              gptel-auto-workflow--current-project nil
+              gptel-auto-workflow--current-target nil)
+        (setq gptel-auto-workflow--stats
+              (plist-put gptel-auto-workflow--stats :phase "idle"))
+        (gptel-auto-workflow--persist-status)
+        (when gptel-auto-workflow--watchdog-timer
+          (cancel-timer gptel-auto-workflow--watchdog-timer)
+          (setq gptel-auto-workflow--watchdog-timer nil))
+        nil)
+       ((> stuck-minutes gptel-auto-workflow--max-stuck-minutes)
+        (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
+                 stuck-minutes)
+        (setq gptel-auto-workflow--running nil
+              gptel-auto-workflow--cron-job-running nil
+              gptel-auto-workflow--run-project-root nil
+              gptel-auto-workflow--current-project nil
+              gptel-auto-workflow--current-target nil)
+        (setq gptel-auto-workflow--stats
+              (plist-put gptel-auto-workflow--stats :phase "idle"))
+        (gptel-auto-workflow--persist-status)
+        (when gptel-auto-workflow--watchdog-timer
+          (cancel-timer gptel-auto-workflow--watchdog-timer)
+          (setq gptel-auto-workflow--watchdog-timer nil))
+        nil)
+       (t
+        ;; Still running normally, check again in 5 minutes
+        t)))))
 
 (defun gptel-auto-workflow--update-progress ()
   "Update progress timestamp for watchdog tracking."
