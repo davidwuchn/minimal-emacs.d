@@ -1945,10 +1945,43 @@ EXIT-CODE defaults to 1."
       (funcall (cdr (assoc "three" callbacks)) '((:target "three" :kept nil)))
       (should (= (plist-get gptel-auto-workflow--stats :kept) 2))
       (funcall (cdr (assoc "four" callbacks)) '((:target "four" :kept t)))
-      (should (= (plist-get gptel-auto-workflow--stats :kept) 3))
-      (funcall (cdr (assoc "five" callbacks)) '((:target "five" :kept nil)))
-      (should (= (plist-get gptel-auto-workflow--stats :kept) 3))
-      (should (= (gptel-auto-workflow--kept-target-count completed) 3)))))
+       (should (= (plist-get gptel-auto-workflow--stats :kept) 3))
+       (funcall (cdr (assoc "five" callbacks)) '((:target "five" :kept nil)))
+       (should (= (plist-get gptel-auto-workflow--stats :kept) 3))
+       (should (= (gptel-auto-workflow--kept-target-count completed) 3)))))
+
+(ert-deftest regression/auto-workflow/log-tsv-updates-live-kept-count ()
+  "Durable kept rows should update live kept status before a target finishes."
+  (let* ((tmpdir (make-temp-file "gptel-live-kept" t))
+         (run-id "run-live-kept")
+         (gptel-auto-workflow--running t)
+         (gptel-auto-workflow--run-id run-id)
+         (gptel-auto-workflow--stats '(:phase "running" :total 5 :kept 0))
+         (persist-count 0))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () tmpdir))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda () (cl-incf persist-count))))
+      (unwind-protect
+          (progn
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 1 :target "one" :kept t))
+            (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 2 :target "one" :kept t))
+            (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 3 :target "two" :kept nil))
+            (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 4 :target "two" :kept t))
+            (should (= (plist-get gptel-auto-workflow--stats :kept) 2))
+            (should (= persist-count 4)))
+        (delete-directory tmpdir t)))))
 
 (ert-deftest regression/auto-workflow/run-with-targets-stops-on-quota-exhaustion ()
   "Workflow should stop remaining targets once provider quota is exhausted."

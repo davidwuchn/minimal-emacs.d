@@ -4262,6 +4262,45 @@ Example HYPOTHESES:
     (let ((s (if (stringp str) str (format "%s" str))))
       (replace-regexp-in-string "[\t\n\r]+" " | " s))))
 
+(defun gptel-auto-workflow--kept-target-count-from-results-file (file)
+  "Return the number of distinct kept targets recorded in TSV FILE."
+  (if (not (file-exists-p file))
+      0
+    (with-temp-buffer
+      (insert-file-contents file)
+      (forward-line 1)
+      (let ((seen (make-hash-table :test 'equal))
+            (count 0))
+        (while (not (eobp))
+          (let* ((fields (split-string
+                          (buffer-substring-no-properties
+                           (line-beginning-position)
+                           (line-end-position))
+                          "\t"))
+                 (target (nth 1 fields))
+                 (decision (nth 7 fields)))
+            (when (and (equal decision "kept")
+                       (stringp target)
+                       (not (string-empty-p target))
+                       (not (gethash target seen)))
+              (puthash target t seen)
+              (cl-incf count)))
+          (forward-line 1))
+        count))))
+
+(defun gptel-auto-workflow--sync-live-kept-count (run-id results-file)
+  "Refresh live workflow kept count from RESULTS-FILE for active RUN-ID."
+  (when (and gptel-auto-workflow--running
+             (stringp run-id)
+             (equal run-id (gptel-auto-workflow--current-run-id)))
+    (setq gptel-auto-workflow--stats
+          (plist-put
+           gptel-auto-workflow--stats
+           :kept
+           (gptel-auto-workflow--kept-target-count-from-results-file
+            results-file)))
+    (gptel-auto-workflow--persist-status)))
+
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
   "Append EXPERIMENT to results.tsv for RUN-ID."
   (let* ((base-dir (gptel-auto-workflow--worktree-base-root))
@@ -4291,12 +4330,13 @@ Example HYPOTHESES:
                          (gptel-auto-workflow--plist-get experiment :score-before 0))
                       (if (gptel-auto-workflow--plist-get experiment :kept nil) "kept" "discarded")
                       (gptel-auto-workflow--plist-get experiment :duration 0)
-                      (gptel-auto-workflow--plist-get experiment :grader-quality "?")
-                      (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
-                      (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
-                      (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
-                      truncated-output))
-      (write-region (point-min) (point-max) file))))
+                       (gptel-auto-workflow--plist-get experiment :grader-quality "?")
+                       (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))
+                       (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
+                       (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
+                       truncated-output))
+      (write-region (point-min) (point-max) file))
+    (gptel-auto-workflow--sync-live-kept-count run-id file)))
 
 ;;; Error Analysis and Adaptive Workflow
 
