@@ -1680,8 +1680,9 @@ INCLUDE-HISTORY defaults to `my/gptel-subagent-include-history-default' when nil
     ;; Convert string params to booleans at entry point for cleaner internal API
     (let ((include-history-bool (my/gptel--string-to-bool include-history))
           (include-diff-bool (my/gptel--string-to-bool include-diff)))
-      ;; Apply defaults for nil boolean values
-      (when (null include-history-bool)
+      ;; Apply defaults only when input is nil, not when explicitly "false"
+      ;; (my/gptel--string-to-bool returns nil for both, so check original input)
+      (when (null include-history)
         (setq include-history-bool my/gptel-subagent-include-history-default))
       (my/gptel--agent-task-with-timeout callback agent-name description prompt files
                                          include-history-bool include-diff-bool))))
@@ -4242,11 +4243,9 @@ RETRY-COUNT tracks current retry attempt."
                   (or gptel-auto-experiment--quota-exhausted
                       (gptel-auto-experiment--quota-exhausted-p agent-output)))
                   (api-rate-limit-category
-                   (or (memq error-type '(:api-rate-limit))
-                       (member error-type '(":api-rate-limit"))))
+                   (memq error-type '(:api-rate-limit)))
                   (timeout-category
-                   (or (memq error-type '(:timeout))
-                       (member error-type '(":timeout"))))
+                   (memq error-type '(:timeout)))
                   (retryable-category
                    (or api-rate-limit-category
                        (and (not hard-timeout)
@@ -4940,7 +4939,7 @@ Adapts max-experiments based on API error rate."
                            (when (and score-after (> score-after best-score))
                              (setq best-score score-after
                                    no-improvement-count 0))
-                           (when (and score-after (<= score-after best-score))
+                           (when (and score-after (< score-after best-score))
                              (cl-incf no-improvement-count))
                             (when hard-timeout
                               (message "[auto-experiment] Hard timeout for %s in experiment %d; stopping remaining experiments for this target"
