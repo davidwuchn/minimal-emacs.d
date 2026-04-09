@@ -502,7 +502,7 @@ Handles API key lookup, process creation, JSON parsing, and error handling."
                    :connection-type 'pipe
                    :sentinel
                    (lambda (p _event)
-                     (when (memq (process-status p) '(exit signal))
+                     (when (memq (process-status p) '(exit signal deleted))
                        (setq my/gptel--openrouter-context-window-fetch-inflight nil)
                        (unwind-protect
                            (when (= (process-exit-status p) 0)
