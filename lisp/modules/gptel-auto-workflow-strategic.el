@@ -253,8 +253,9 @@ Otherwise, convert using princ representation."
 (defun gptel-auto-workflow--filter-valid-targets (candidates proj-root max-targets)
   "Filter CANDIDATES to valid target files.
 Returns list of validated relative paths, up to MAX-TARGETS."
-  (let ((targets '()))
-    (dolist (file candidates)
+  (let ((targets '())
+        (candidates-list (if (listp candidates) candidates (list candidates))))
+    (dolist (file candidates-list)
       (when (< (length targets) max-targets)
         (setq targets (gptel-auto-workflow--validate-and-add-target
                        file proj-root targets max-targets))))
@@ -407,13 +408,12 @@ LLM decides if available, otherwise uses static list."
                     (null targets))
                (message "[auto-workflow] Analyzer transient failure; using static targets")
                (funcall callback static-targets))
-              (targets
-                (progn
-                    (message "[auto-workflow] Analyzer selected %d targets" (length targets))
-                   (funcall callback targets)))
-             (t
-              (message "[auto-workflow] Using static targets")
-              (funcall callback static-targets)))))
+              ((null targets)
+               (message "[auto-workflow] Analyzer returned no targets; using static targets")
+               (funcall callback static-targets))
+              (t
+               (message "[auto-workflow] Analyzer selected %d targets" (length targets))
+               (funcall callback targets)))))
          (funcall callback static-targets)))))
 
 ;;; Periodic Research
