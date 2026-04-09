@@ -18,6 +18,7 @@
 ;; Do not initialize it here, or later `defvar' initializers in the projects
 ;; module will be skipped and leave the shared table bound to nil.
 (defvar gptel-auto-workflow--project-buffers)
+(defvar gptel-auto-workflow--worktree-buffers)
 (defvar gptel-auto-workflow--current-project nil)
 (defvar gptel-auto-workflow--run-project-root nil)
 (defvar gptel-agent-loop--bypass nil)
@@ -2053,6 +2054,41 @@ Each item is a plist with keys :branch and :path."
         (kill-buffer buffer)))
     (nreverse entries)))
 
+(defun gptel-auto-workflow--discard-worktree-buffers (worktree-dir)
+  "Abort, kill, and unregister live gptel buffers rooted at WORKTREE-DIR."
+  (when (and (stringp worktree-dir)
+             (> (length worktree-dir) 0))
+    (let* ((root (file-name-as-directory (expand-file-name worktree-dir)))
+           (tracked
+            (delete-dups
+             (delq nil
+                   (list (and (hash-table-p gptel-auto-workflow--worktree-buffers)
+                              (gethash root gptel-auto-workflow--worktree-buffers))
+                         (and (hash-table-p gptel-auto-workflow--project-buffers)
+                              (gethash root gptel-auto-workflow--project-buffers))))))
+           (killed 0))
+      (dolist (buf (delete-dups (append tracked (buffer-list))))
+        (when (buffer-live-p buf)
+          (with-current-buffer buf
+            (let ((buf-dir
+                   (and (stringp default-directory)
+                        (file-name-as-directory
+                         (expand-file-name default-directory)))))
+              (when (and buf-dir
+                         (string-prefix-p root buf-dir)
+                         (or (memq buf tracked)
+                             (string-prefix-p "*gptel-agent:" (buffer-name buf))))
+                (when (fboundp 'gptel-abort)
+                  (ignore-errors (gptel-abort buf)))
+                (let ((kill-buffer-query-functions nil))
+                  (kill-buffer buf))
+                (cl-incf killed))))))
+      (when (hash-table-p gptel-auto-workflow--worktree-buffers)
+        (remhash root gptel-auto-workflow--worktree-buffers))
+      (when (hash-table-p gptel-auto-workflow--project-buffers)
+        (remhash root gptel-auto-workflow--project-buffers))
+      killed)))
+
 (defun gptel-auto-workflow-create-worktree (target &optional experiment-id)
   "Create worktree for TARGET. EXPERIMENT-ID creates numbered branch.
 Stores worktree-dir, current-branch in hash table keyed by TARGET.
@@ -2074,9 +2110,11 @@ If branch exists locally, deletes it first to avoid conflicts."
             (setq base-ref (gptel-auto-workflow--staging-main-ref))
             (unless base-ref
               (error "missing main ref for experiment worktree"))
+            (gptel-auto-workflow--discard-worktree-buffers worktree-dir)
             (call-process "git" nil stderr-buffer nil "worktree" "prune")
             (dolist (existing-worktree
                      (gptel-auto-workflow--branch-worktree-paths branch proj-root))
+              (gptel-auto-workflow--discard-worktree-buffers existing-worktree)
               (message "[auto-workflow] Removing stale worktree for %s: %s"
                        branch existing-worktree)
               (call-process "git" nil stderr-buffer nil
@@ -2085,6 +2123,7 @@ If branch exists locally, deletes it first to avoid conflicts."
                 (delete-directory existing-worktree t)))
             ;; Remove existing worktree if present (stale from previous run)
             (when (file-exists-p worktree-dir)
+              (gptel-auto-workflow--discard-worktree-buffers worktree-dir)
               (call-process "git" nil stderr-buffer nil "worktree" "remove" "-f" worktree-dir)
               ;; Stale nested bug fallout can leave a plain directory here even
               ;; when Git no longer considers it an attached worktree.
@@ -2127,20 +2166,22 @@ Uses git CLI directly to avoid magit issues."
   (let* ((state (gethash target gptel-auto-workflow--worktree-state))
          (worktree-dir (plist-get state :worktree-dir))
          (branch (plist-get state :current-branch)))
-    (when (and worktree-dir (file-exists-p worktree-dir))
-      (let ((proj-root (gptel-auto-workflow--worktree-base-root)))
-        (condition-case err
-            (let ((default-directory proj-root))
-              ;; Remove worktree
-              (let ((exit-code (call-process "git" nil nil nil
-                                             "worktree" "remove" worktree-dir)))
-                (unless (eq exit-code 0)
-                  (error "git worktree remove failed with exit code %s" exit-code)))
-              ;; Delete the branch
-              (when branch
-                (call-process "git" nil nil nil "branch" "-D" branch)))
-          (error
-           (message "[auto-workflow] Failed to delete worktree: %s" err)))))
+    (when worktree-dir
+      (gptel-auto-workflow--discard-worktree-buffers worktree-dir)
+      (when (file-exists-p worktree-dir)
+        (let ((proj-root (gptel-auto-workflow--worktree-base-root)))
+          (condition-case err
+              (let ((default-directory proj-root))
+                ;; Remove worktree
+                (let ((exit-code (call-process "git" nil nil nil
+                                               "worktree" "remove" worktree-dir)))
+                  (unless (eq exit-code 0)
+                    (error "git worktree remove failed with exit code %s" exit-code)))
+                ;; Delete the branch
+                (when branch
+                  (call-process "git" nil nil nil "branch" "-D" branch)))
+            (error
+             (message "[auto-workflow] Failed to delete worktree: %s" err))))))
     (gptel-auto-workflow--clear-worktree-state target)))
 
 ;;; Staging Branch Protection
@@ -2288,6 +2329,7 @@ Returns worktree path or nil on failure."
      (lambda ()
         (unless (gptel-auto-workflow--ensure-staging-branch-exists)
           (error "staging branch %s is unavailable" branch))
+        (gptel-auto-workflow--discard-worktree-buffers worktree-dir)
         (when (or (file-exists-p worktree-dir)
                   (string-match-p (regexp-quote worktree-dir)
                                   (gptel-auto-workflow--git-cmd "git worktree list" 60)))
@@ -2320,11 +2362,12 @@ NOTE: Staging branch is never deleted, only the worktree."
       (gptel-auto-workflow--with-error-handling
        "delete staging worktree"
        (lambda ()
-         (gptel-auto-workflow--cleanup-staging-submodule-worktrees worktree)
-         (ignore-errors
-            (gptel-auto-workflow--git-cmd
-             (format "git worktree remove --force %s"
-                     (shell-quote-argument worktree))
+          (gptel-auto-workflow--discard-worktree-buffers worktree)
+          (gptel-auto-workflow--cleanup-staging-submodule-worktrees worktree)
+          (ignore-errors
+             (gptel-auto-workflow--git-cmd
+              (format "git worktree remove --force %s"
+                      (shell-quote-argument worktree))
              180))
          (when (file-exists-p worktree)
            (ignore-errors (delete-directory worktree t))))))
@@ -5140,20 +5183,22 @@ Adapts max-experiments based on API error rate."
                             (when hard-timeout
                               (message "[auto-experiment] Hard timeout for %s in experiment %d; stopping remaining experiments for this target"
                                        target exp-id))
-                            (let ((continue
-                                 (lambda ()
-                                   (if (gptel-auto-workflow--run-callback-live-p run-id)
-                                       (gptel-auto-workflow--call-in-run-context
-                                        workflow-root
-                                        (lambda () (run-next next-exp-id))
-                                        loop-buffer
-                                        workflow-root)
-                                     (message "[auto-experiment] Skipping stale continuation for %s; run %s is no longer active"
-                                              target run-id)))))
-                              (if (> gptel-auto-experiment-delay-between 0)
-                                  (run-with-timer gptel-auto-experiment-delay-between nil
-                                                  continue)
-                               (funcall continue)))))))))
+                             (let ((continue
+                                  (lambda ()
+                                    (if (gptel-auto-workflow--run-callback-live-p run-id)
+                                        (gptel-auto-workflow--call-in-run-context
+                                         workflow-root
+                                         (lambda () (run-next next-exp-id))
+                                         loop-buffer
+                                         workflow-root)
+                                      (progn
+                                        (message "[auto-experiment] Run %s no longer active; returning accumulated results for %s"
+                                                 run-id target)
+                                        (funcall callback (nreverse results)))))))
+                               (if (> gptel-auto-experiment-delay-between 0)
+                                   (run-with-timer gptel-auto-experiment-delay-between nil
+                                                   continue)
+                                (funcall continue)))))))))
       (gptel-auto-workflow--call-in-run-context
        workflow-root
        (lambda () (run-next 1))
@@ -5766,16 +5811,17 @@ Only removes worktrees if no gptel processes are running."
     (when (= active-processes 0)
       (let ((default-directory proj-root))
         (call-process "git" nil nil nil "worktree" "prune"))
-      (let ((attached-worktrees
-             (sort (copy-sequence (gptel-auto-workflow--optimize-worktrees proj-root))
-                   (lambda (a b)
-                     (> (length (plist-get a :path))
-                        (length (plist-get b :path)))))))
+        (let ((attached-worktrees
+               (sort (copy-sequence (gptel-auto-workflow--optimize-worktrees proj-root))
+                     (lambda (a b)
+                       (> (length (plist-get a :path))
+                          (length (plist-get b :path)))))))
         (dolist (entry attached-worktrees)
           (let ((path (plist-get entry :path))
                 (branch (plist-get entry :branch)))
             (condition-case err
                 (progn
+                  (gptel-auto-workflow--discard-worktree-buffers path)
                   (call-process "git" nil nil nil "worktree" "remove" "-f" path)
                   (when (file-exists-p path)
                     (delete-directory path t))
@@ -5789,6 +5835,7 @@ Only removes worktrees if no gptel processes are running."
             (when (file-exists-p dir)
               (condition-case err
                   (progn
+                    (gptel-auto-workflow--discard-worktree-buffers dir)
                     (delete-directory dir t)
                     (cl-incf removed))
                 (error
