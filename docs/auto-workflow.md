@@ -657,7 +657,7 @@ RunAgent("code", "optimize gptel-tools-code.el following docs/auto-workflow.md")
 ```
 - [ ] Worktree created: git worktree add -b experiment-N var/tmp/experiments/{run-id}/worktrees/N
 - [ ] Changes implemented
-- [ ] Tests pass: ./scripts/verify-nucleum.sh
+- [ ] Tests pass: ./scripts/verify-nucleus.sh
 - [ ] Benchmark after
 - [ ] Improvement confirmed
 - [ ] Ready for review
