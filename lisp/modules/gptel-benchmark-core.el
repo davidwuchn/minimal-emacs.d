@@ -64,12 +64,13 @@ Use `gptel-benchmark--cancelled' to check if cancelled."
 
 (defun gptel-benchmark-read-json (file)
   "Read and parse JSON from FILE.
-Returns nil if file does not exist or contains invalid JSON."
+Returns nil if file does not exist or contains invalid JSON.
+JSON arrays are normalized to lists for consistent handling."
   (condition-case nil
       (with-temp-buffer
         (insert-file-contents file)
         (goto-char (point-min))
-        (json-read))
+        (gptel-benchmark--ensure-list (json-read)))
     (file-error nil)
     (json-error nil)
     (end-of-file nil)))
