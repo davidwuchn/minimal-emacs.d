@@ -4326,7 +4326,7 @@ Then on a new line, briefly explain why (1 sentence)."
                                 :improvement (list :score (- score-after score-before)
                                                    :quality (- quality-after quality-before)
                                                    :combined (- combined-after combined-before)))))))))
-      (let ((keep (> combined-after combined-before)))
+      (let ((keep (>= (- combined-after combined-before) 0.005)))
         (funcall callback
                  (list :keep keep
                        :reasoning (format "Local: Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
