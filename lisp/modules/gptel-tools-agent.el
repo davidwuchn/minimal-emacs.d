@@ -2963,10 +2963,22 @@ If `gptel-auto-workflow-research-before-fix' is nil, executor handles directly."
        (gptel-auto-workflow--research-then-fix review-output callback))))
 
 (defun gptel-auto-workflow--review-retryable-error-p (review-output)
-  "Return non-nil when REVIEW-OUTPUT reflects a transient reviewer failure."
+  "Return non-nil when REVIEW-OUTPUT reflects a reviewer failure worth retrying.
+
+This covers transient transport/provider failures plus contract failures where
+the reviewer admits it could not verify the diff or locate the relevant file."
   (when (stringp review-output)
-    (memq (car (gptel-auto-experiment--categorize-error review-output))
-          '(:api-rate-limit :api-error :timeout))))
+    (let ((case-fold-search t))
+      (or (memq (car (gptel-auto-experiment--categorize-error review-output))
+                '(:api-rate-limit :api-error :timeout))
+          (string-match-p
+           (rx (or line-start "\n")
+               (* blank)
+               "UNVERIFIED")
+           review-output)
+          (string-match-p "did not meet verification contract" review-output)
+          (string-match-p "cannot access the file directly" review-output)
+          (string-match-p "cannot locate the file" review-output)))))
 
 (defun gptel-auto-workflow--fix-directly (review-output callback)
   "Let executor fix REVIEW-OUTPUT issues directly (faster)."
