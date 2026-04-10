@@ -492,12 +492,18 @@ can consume lists, vectors, plists, and alists as readable data."
                  (if (gptel-tool-async tool-spec)
                      (apply (gptel-tool-function tool-spec)
                             (lambda (result)
-                              (funcall callback (gptel--to-string result)))
+                              (funcall callback
+                                       (if (fboundp 'gptel--to-string)
+                                           (gptel--to-string result)
+                                         (format "%s" result))))
                             arg-values)
                    (let ((result (condition-case inner-err
                                      (apply (gptel-tool-function tool-spec) arg-values)
                                    (error (format "Error: %s" (error-message-string inner-err))))))
-                     (funcall callback (gptel--to-string result)))))))
+                     (funcall callback
+                              (if (fboundp 'gptel--to-string)
+                                  (gptel--to-string result)
+                                (format "%s" result))))))))
           (if (gptel-sandbox--confirm-required-p tool-spec arg-values)
               (gptel-sandbox--maybe-aggregate-confirm
                state
