@@ -1,128 +1,146 @@
 ---
-title: Subagent Architecture in gptel.el
+title: Subagent Architecture and Best Practices
 status: active
 category: knowledge
-tags: [gptel, subagent, agent-architecture, debugging, workflow]
+tags: [subagent, gptel, agent-design, architecture, debugging]
 ---
 
-# Subagent Architecture in gptel.el
+# Subagent Architecture and Best Practices
 
 ## Overview
 
-A **subagent** is a specialized agent spawned by the parent gptel process to handle specific tasks in isolation. Subagents provide context isolation, parallel execution, and dedicated tool profiles—making them ideal for tasks like code review, grading, or any work that shouldn't pollute the parent agent's context.
+A **subagent** is a specialized autonomous agent spawned by a parent agent to handle specific tasks with context isolation, dedicated tooling, and independent model selection. Unlike skills, subagents run in their own execution context and can be parallelized.
 
-## Core Components
+**Key Characteristics:**
 
-### Key Variables and Functions
+| Characteristic | Subagent | Skill |
+|---------------|----------|-------|
+| Execution Context | Isolated | Shared with parent |
+| Parallel Execution | ✅ Yes | ❌ No |
+| Tool Profile | Dedicated | Inherited |
+| Model Selection | Independent | Parent's model |
+| Context Pollution | None | Possible |
 
-| Symbol | Type | Purpose |
-|--------|------|---------|
-| `gptel-agent--task` | function | Main task dispatcher for subagents |
-| `gptel-agent--agents` | alist | Registry of available subagent definitions |
-| `gptel-auto-workflow--task-override` | advice | Routes tasks to appropriate subagent |
-| `gptel-model` | variable | Current model for the parent agent |
+## When to Use Subagents
 
-### Required Load Order
+### Decision Matrix
 
+Use this matrix to decide between subagent, skill, or protocol for your task:
+
+| Task Type | Use | Reasoning |
+|-----------|-----|-----------|
+| Pure procedure, no deps | Protocol (`mementum/knowledge/`) | No external dependencies needed |
+| Has external tools/API | Skill (`assistant/skills/`) | Needs scripts, REPL, API access |
+| Context isolation required | Subagent (`eca/prompts/`) | Won't pollute parent context |
+| Parallel execution needed | Subagent | Can run concurrently with parent |
+| Dedicated/cheaper model | Subagent | Use gpt-5.4-mini for reviews |
+| Shared context preferred | Skill | Inherits parent's conversation |
+
+### Signal Examples
+
+**Use Subagent When You See:**
+- "Review these changes without affecting the main task"
+- "Run multiple analyses in parallel"
+- "Use a specialized toolset that differs from parent"
+- "Isolate memory/context between tasks"
+- "Reduce costs by using a smaller model"
+
+**Use Skill When You See:**
+- "Extend the current conversation's capabilities"
+- "Need access to parent's full context"
+- "Quick, stateless operation"
+- "Tool wrapper around existing functionality"
+
+## Subagent Implementation Patterns
+
+### Pattern 1: Basic Subagent Definition
+
+Subagents are defined in `eca/prompts/` with a standardized structure:
+
+```markdown
+# {name}_agent.md
+
+You are a specialized {task} agent.
+
+## Your Role
+[Detailed role description]
+
+## Tools Available
+- Read (readonly access)
+- Grep (search)
+- Glob (file discovery)
+- [Subagent-specific tools]
+
+## Constraints
+- Do not modify files directly
+- Report findings to parent agent
+- Use context isolation
 ```
-gptel.el (core)
-  └── gptel-agent.el (agent machinery)
-        └── gptel-tools-agent.el (tool integration)
+
+### Pattern 2: Subagent Configuration
+
+Define subagent tool profiles in `eca/config.json`:
+
+```json
+{
+  "agents": {
+    "reviewer": {
+      "model": "qwen3.5-plus",
+      "tools": ["Read", "Grep", "Glob", "Code_Usages"],
+      "context-window": 128000
+    },
+    "grader": {
+      "model": "qwen3.5-plus",
+      "tools": ["Read", "Grep"],
+      "timeout": 60
+    }
+  }
+}
 ```
 
-**Critical**: `gptel-tools-agent.el` must require `gptel-agent` to have access to `gptel-agent--task`:
+### Pattern 3: TDD for Subagent Development
+
+Follow test-driven development when building subagent functionality:
+
+```bash
+# 1. Write tests first
+./scripts/run-tests.sh grader-subagent
+
+# 2. Run tests to reveal actual behavior
+# Tests should fail initially
+
+# 3. Implement the fix
+# Tests guide the implementation
+
+# 4. Verify all tests pass
+# Final verification
+```
+
+**Example Test Structure** (`tests/test-grader-subagent.el`):
 
 ```elisp
-;; CORRECT: gptel-tools-agent.el
-(require 'gptel-agent)  ; Must come BEFORE using gptel-agent--task
-(require 'gptel-tools)   ; Tool definitions
+(ert-deftest test-grader-subagent-uses-llm ()
+  "Grader should use LLM when gptel-agent is loaded."
+  (should (fboundp 'gptel-agent--task)))
 
-(defun gptel-tools-agent--do-grading ()
-  "Execute grading via LLM subagent."
-  (when (fboundp 'gptel-agent--task)
-    (gptel-agent--task "grade" :system grader-system-prompt ...)))
+(ert-deftest test-grader-subagent-json-parsing ()
+  "Grader should handle its output format correctly."
+  (let ((output (grader-parse "{\"score\": 85, \"feedback\": \"good\"}")))
+    (should (= 85 (alist-get 'score output)))))
 ```
 
-### Agent Registry Structure
+## Debugging Subagent Issues
 
-```elisp
-(defvar gptel-agent--agents
-  '(("reviewer" . ,reviewer-config)
-    ("grader"   . ,grader-config))
-  "Alist of subagent name → configuration.")
+### Common Failure Mode: Local Fallback
+
+**Problem**: Subagent always falls back to local processing instead of using LLM.
+
+**Root Cause Chain** (grader-subagent-debug-session):
+
 ```
-
-## Decision Matrix: Subagent vs Skill vs Protocol
-
-Choose based on task requirements:
-
-| Criteria | Subagent | Skill | Protocol |
-|----------|----------|-------|----------|
-| Context isolation | ✅ Full | ❌ Shared | ❌ Shared |
-| Parallel execution | ✅ Yes | ❌ Sequential | ❌ Sequential |
-| Dedicated model | ✅ Yes | ❌ No | ❌ No |
-| External tools/API | ✅ Via tool profile | ✅ Native | ❌ None |
-| Setup complexity | Medium | Low | Lowest |
-| Use case | Code review, grading | REPL, API calls | Pure procedures |
-
-### When to Use Subagent
-
-```elisp
-;; Subagent is appropriate when:
-(when (or context-isolation-needed      ; Review shouldn't pollute parent
-          parallel-execution-needed      ; Spawn and continue work
-          dedicated-model-desired        ; Use cheaper model for review
-          readonly-tool-profile-needed)   ; Restricted tool access
-  (gptel-agent--task "task-name" ...))
-```
-
-### When to Use Skill
-
-```elisp
-;; Skill is appropriate when:
-(when (or (has-shell-dependencies task)   ; Needs REPL, CLI tools
-          (requires-external-api task)     ; Calls external services
-          (is-pure-procedure task))         ; No side effects, no deps
-  (mementum/skill-invoke "skill-name"))
-```
-
-## Common Issues and Debugging Patterns
-
-### Issue 1: Function Not Defined (fboundp returns nil)
-
-**Symptom**: Subagent falls back to local processing, never uses LLM.
-
-**Root Cause Chain**:
-```
-gptel-tools-agent.el does NOT require gptel-agent
-  → gptel-agent--task is never defined
-  → (fboundp 'gptel-agent--task) returns nil
-  → Falls back to local grading
-```
-
-**Debug Flow**:
-```elisp
-;; Step 1: Check what's loaded
-(list :gptel-agent-loaded (featurep 'gptel-agent)
-      :gptel-agent--task-fbound (fboundp 'gptel-agent--task)
-      :gptel-agent--agents-count (length gptel-agent--agents))
-;; → (:gptel-agent-loaded nil 
-;;    :gptel-agent--task-fbound nil 
-;;    :gptel-agent--agents-count 0)
-```
-
-**Fix**:
-```elisp
-;; In lisp/modules/gptel-tools-agent.el
-(require 'gptel-agent)  ; ADD THIS LINE
-```
-
-### Issue 2: Variable Shadowing
-
-**Symptom**: `gptel-agent--agents` is nil even after requiring.
-
-**Root Cause**: Redefining with `defvar` shadows the original:
-
-```elisp
-;; WRONG: This shadows gptel-agent.el's 
-...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-dxzHXu.txt. Use Read tool if you need more]...
+1. Module requires chain broken
+   ↓
+2. gptel-agent--task never defined
+   ↓
+3. (fbo
+...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-GxsKac.txt. Use Read tool if you need more]...
