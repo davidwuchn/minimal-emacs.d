@@ -3259,9 +3259,8 @@ staging branch is regenerated from `main' at the start of each workflow run."
                  (format "git ls-remote --exit-code --heads origin %s" staging-q)
                  60))
                (remote-head
-                (when (and (= 0 (cdr remote-result))
-                           (parse-remote-head (car remote-result)))
-                  (parse-remote-head (car remote-result))))
+                (and (= 0 (cdr remote-result))
+                     (parse-remote-head (car remote-result))))
                (push-command
                 (if remote-head
                     (format "git push %s origin %s"
