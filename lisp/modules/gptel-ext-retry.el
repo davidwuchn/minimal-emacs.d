@@ -344,17 +344,16 @@ Returns the number of image parts removed, or 0 if nothing was done."
                (content (plist-get msg :content)))
           (when (and content (sequencep content) (not (stringp content)) (> (length content) 0))
             (let* ((original-length (length content))
-                   (as-list (if (vectorp content) (append content nil) content))
-                   (filtered-list
-                    (cl-remove-if
-                     (lambda (part)
-                       (and (listp part)
-                            (equal (plist-get part :type) "image_url")
-                            (cl-incf removed)))
-                     as-list))
-                   (filtered (if (vectorp content) (vconcat filtered-list) filtered-list)))
+                   (image-p (lambda (part)
+                              (and (listp part)
+                                   (equal (plist-get part :type) "image_url"))))
+                   (filtered
+                    (if (vectorp content)
+                        (vconcat (cl-remove-if image-p content))
+                      (cl-remove-if image-p content))))
               (when (< (length filtered) original-length)
-                (plist-put msg :content filtered)))))))
+                (plist-put msg :content filtered)
+                (cl-incf removed (length (cl-remove-if-not image-p (append content nil))))))))))
     removed))
 
 ;; --- Constants for Transient Error Detection ---
