@@ -1,8 +1,44 @@
 # Mementum State
 
-> Last session: 2026-04-10 10:30
+> Last session: 2026-04-10 19:25
 
-## Total Improvements: 218+ Real Code Fixes (6 new today)
+## Total Improvements: 218+ Real Code Fixes (7 new today)
+
+### Session Summary: 2026-04-10 Evening (Paren Fix + Sync)
+
+**Action:** Fixed unbalanced parentheses in gptel-agent-loop.el, synced all remotes
+
+**Result:** ✅ 1354 ERT tests (0 unexpected), 28/28 E2E, all remotes in sync
+
+**Bug Fixed:**
+- **gptel-agent-loop.el:665** — Unbalanced parentheses (8 closes, needed 9)
+  - Introduced by merge of `optimize/loop-neopi5-exp3` (commit `e45c03ab`)
+  - File had paren balance of 1 (should be 0), causing `end-of-file during parsing`
+  - Fixed by adding one `)` to close the `cl-progv` form
+  - Commit: `d9dd7c20` — ⊘ fix: balance parentheses in gptel-agent-loop--request
+
+**Key Insights:**
+- Remote main (`origin/main`) contained the unbalanced paren bug — it was merged from staging without catching it
+- The bug only manifests in batch mode (non-interactive load). Interactive Emacs may have cached the old .elc file
+- Always verify paren balance after merges that touch complex nested forms
+- Python script for paren counting: `count = sum(1 for c in content if c == '(') - sum(1 for c in content if c == ')')`
+
+**Sync Status:**
+- **main:** `fd86c03a` — origin ↔ upstream in sync
+- **staging:** `46fc41d6` — origin ↔ upstream in sync
+
+**New Optimize Branches on Origin:**
+- `sandbox-onepi5-exp1`
+- `tools-riven-exp1`
+- `cache-neopi5-exp4`
+- `loop-neopi5-exp4`
+- `retry-neopi5-exp4`
+- `strategic-onepi5-exp5`
+- `core-onepi5-exp4/5`
+
+**Auto-Workflow Status:**
+- Run `2026-04-10T180001Z-034e` started at 18:00
+- Previous run `2026-04-10T075542Z-fdef`: 6 kept, 12 discarded (33% keep rate)
 
 ### Session Summary: 2026-04-10 (Auto-Workflow Run Complete)
 
