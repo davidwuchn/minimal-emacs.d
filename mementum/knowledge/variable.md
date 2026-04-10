@@ -1,125 +1,127 @@
 ---
-title: Variable Usage Patterns and Pitfalls
+title: Variable Scope and Expansion
 status: active
 category: knowledge
-tags: [shell, elisp, environment, debugging, portability]
+tags: [shell, emacs-lisp, cron, environment, portability]
 ---
 
-# Variable Usage Patterns and Pitfalls
+# Variable Scope and Expansion
 
 ## Overview
 
-Variables are fundamental to portable, maintainable configuration. This page synthesizes patterns for working with variables across different contexts—shell scripts, crontab entries, and Emacs Lisp—with emphasis on common pitfalls and their solutions.
+Variables behave differently across contexts—shell scripts, crontab entries, and Emacs Lisp each have distinct scoping rules. Understanding these differences prevents silent failures where variables appear to be set but expand to empty strings or unexpected values.
 
-## 1. Environment Variables in Shell Contexts
+## Shell Variables in Cron
 
-### The Cron Variable Expansion Problem
+### The Problem
 
-**Problem:** Cron has a non-obvious behavior: variables set *within* a crontab file exist in cron's parsing environment but are **not passed** to the shell executing the command.
+Cron runs commands in a restricted environment. Variables set in the crontab file are **not** passed to the executing shell.
 
-**Broken Pattern:**
+**Broken pattern:**
 ```crontab
-# WRONG: LOGDIR is set in cron's env, not the shell's env
 LOGDIR=$HOME/.emacs.d/var/tmp/cron
-0 * * * * /path/to/script.sh >> $LOGDIR/auto-workflow.log 2>&1
+*/15 * * * * /path/to/script.sh >> $LOGDIR/auto-workflow.log 2>&1
 ```
 
-When cron executes this, the shell receives `$LOGDIR` as a literal string, which expands to empty since the shell has no `LOGDIR` variable defined.
+Here, `$LOGDIR` is set in cron's context, but when `/bin/sh -c` executes the command, `LOGDIR` is undefined. The redirect becomes `>> /auto-workflow.log 2>&1`—writing to root filesystem, not your log directory.
 
-**Correct Pattern:**
+### The Fix
+
+Use variable syntax that expands in cron's own context, or reference environment variables directly:
+
 ```crontab
-# RIGHT: Use HOME directly or export in the command
-0 * * * * /path/to/script.sh >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+*/15 * * * * /path/to/script.sh >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 ```
 
-**Alternative with Export:**
-```crontab
-# If you need a variable, export it in the same line
-0 * * * * export LOGDIR=$HOME/.emacs.d/var/tmp/cron && /path/to/script.sh >> $LOGDIR/auto-workflow.log 2>&1
+**Rule:** Only use `$ENV_VAR` syntax in crontab for variables that exist in the system environment. Define custom paths inline or use absolute paths.
+
+### Debugging Cron Variables
+
+```bash
+# View cron job execution logs
+journalctl -u cron --since "today" | grep -E "CMD|specific-job-name"
+
+# Verify crontab syntax
+crontab -l
+
+# Check cron daemon status (Debian/Ubuntu)
+systemctl status cron
+
+# On macOS
+sudo launchctl list | grep cron
 ```
 
-### Why This Happens
-
-| Context | Variable Visibility | Expansion Point |
-|---------|---------------------|-----------------|
-| Crontab `VAR=value` | Cron daemon process only | Not propagated to child shell |
-| Shell script `VAR=value` | Current shell session | Immediately available |
-| `export VAR=value` | Current shell + child processes | Available everywhere |
-
-### Rule of Thumb
-
-> **In crontab:** Never assume variables set at the top of the file are available in commands. Either inline the full path or use `export` on the same command line.
+| Command | System | Purpose |
+|---------|--------|---------|
+| `journalctl -u cron` | Debian/Ubuntu | View cron logs |
+| `systemctl --user status emacs` | Linux (user) | Emacs daemon status |
+| `launchctl list` | macOS | List launchd jobs |
 
 ---
 
-## 2. Path Portability with $HOME
-
-### Hardcoded Paths Break Portability
-
-**The Problem:** Absolute paths like `/Users/davidwu/...` work on macOS but fail on Linux, BSD, or other users' machines.
-
-**Common Offenders:**
-```
-/Users/davidwu/.emacs.d/scripts
-/Users/davidwu/workspace/nucleus
-/Users/davidwu/.local/bin
-```
-
-### Portable Alternatives
-
-| Hardcoded (Bad) | Portable (Good) | Use Case |
-|-----------------|-----------------|----------|
-| `/Users/davidwu` | `$HOME` | Shell scripts, crontab |
-| `/Users/davidwu/workspace/project` | `$(git rev-parse --show-toplevel)` | Git-aware scripts |
-| `~/project` | `$HOME/project` or `$(cd ~/project && pwd)` | Makefiles |
-
-### Implementation Example
-
-**Before (broken on Linux):**
-```bash
-#!/bin/bash
-SCRIPT_DIR="/Users/davidwu/.emacs.d/scripts"
-source "$SCRIPT_DIR/common.sh"
-```
-
-**After (portable):**
-```bash
-#!/bin/bash
-# Method 1: Use $HOME
-SCRIPT_DIR="$HOME/.emacs.d/scripts"
-
-# Method 2: Relative to script location
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts"
-
-# Method 3: Git-aware (if in a repo)
-SCRIPT_DIR="$(git rev-parse --show-toplevel)/scripts"
-```
-
-### Detection Command
-
-Find all hardcoded paths that need fixing:
-```bash
-grep -rn "/Users/davidwu" . --include="*.sh" --include="*.el" --include="*.md"
-```
-
-### Files Commonly Affected
-
-| File Type | Pattern to Find | Fix Required |
-|-----------|------------------|--------------|
-| Shell scripts | `"/Users/.*"` | Replace with `$HOME` |
-| Emacs config | `"/Users/.*"` | Replace with `~` or `$HOME` |
-| Documentation | `"$HOME"` | Verify paths are relative |
-| Cron files | Any absolute path | Audit for system-specific paths |
-
----
-
-## 3. Emacs Lisp: defvar Patterns
+## Emacs Lisp Variable Declarations
 
 ### Forward Declaration with defvar
 
-When a variable is defined in one file but used in another, use `defvar` without a docstring for the forward declaration.
+Use `(defvar symbol)` without a docstring when declaring a variable defined elsewhere. This prevents duplicate definition warnings and compiler errors.
 
-**Anti-Pattern (Duplicate Definition):**
+**Correct:**
 ```elisp
-;; In gptel-tool
-...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-LuUR51.txt. Use Read tool if you need more]...
+;; In gptel-auto-workflow.el - primary definition with docstring
+(defvar gptel-auto-workflow--worktree-state nil
+  "Hash table caching worktree state per buffer.")
+
+;; In gptel-tools-agent.el - forward declaration only
+(defvar gptel-auto-workflow--worktree-state)
+```
+
+**Incorrect (duplicate definition):**
+```elisp
+(defvar gptel-auto-workflow--worktree-state nil
+  "Hash table for worktree state. Defined in gptel-tools-agent.el.")
+```
+
+### Why No Docstring?
+
+- The docstring lives with the **primary definition**—one source of truth
+- Without a docstring, `defvar` acts as a compiler hint only
+- Re-declaring with a docstring can cause the compiler to overwrite the original value
+- Cleaner separation between "defines here" and "uses here" modules
+
+### Lexical Binding Gotcha
+
+When `lexical-binding: t` is enabled, `let` creates lexical bindings by default. For special (dynamic) variables, you must use `defvar` first:
+
+```elisp
+;; Without defvar - lexical binding, has no effect on global value
+(let ((gptel-auto-workflow--worktree-state (make-hash-table)))
+  (message "Inside let: %s" gptel-auto-workflow--worktree-state))  ; local only
+
+;; With defvar - dynamic binding, affects global value
+(defvar gptel-auto-workflow--worktree-state)
+(let ((gptel-auto-workflow--worktree-state (make-hash-table)))
+  (message "Inside let: %s" gptel-auto-workflow--worktree-state))  ; global affected
+```
+
+---
+
+## Path Portability Patterns
+
+### Use Environment Variables, Not Hardcoded Paths
+
+**Never hardcode user-specific paths:**
+```bash
+# ✗ Breaks on Linux, servers, other users
+/path/to /Users/davidwu/workspace/...
+
+# ✓ Portable
+$HOME/workspace/...
+$(git rev-parse --show-toplevel)/...
+```
+
+### Detection Commands
+
+```bash
+# Find all hardcoded paths in codebase
+grep -rn "/Users/davidwu" . --include="*.sh" --include="*
+...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-QsIIHl.txt. Use Read tool if you need more]...
