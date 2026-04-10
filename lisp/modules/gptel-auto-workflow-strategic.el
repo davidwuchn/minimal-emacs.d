@@ -325,10 +325,11 @@ Logs when fallback to regex parsing is used."
   "Parse JSON from RESPONSE to extract targets.
 Returns nil if parsing fails or no targets found.
 Logs parsing failures for debugging."
-  (unless (and (stringp response) (not (string-empty-p response)))
-    (message "[auto-workflow] Empty response in parse-json-targets")
-    (return-from gptel-auto-workflow--parse-json-targets nil))
-  (condition-case err
+  (cl-block gptel-auto-workflow--parse-json-targets
+    (unless (and (stringp response) (not (string-empty-p response)))
+      (message "[auto-workflow] Empty response in parse-json-targets")
+      (cl-return-from gptel-auto-workflow--parse-json-targets nil))
+    (condition-case err
       (with-temp-buffer
         (insert response)
         (goto-char (point-min))
@@ -360,16 +361,17 @@ Logs parsing failures for debugging."
      nil)
     (error
      (message "[auto-workflow] Target parse error: %s" (error-message-string err))
-     nil)))
+     nil))))
 
 (defun gptel-auto-workflow--parse-regex-targets (response proj-root max-targets)
   "Parse RESPONSE using regex fallback to extract targets.
 Returns list of validated file paths."
-  (unless (and (stringp response) (not (string-empty-p response)))
-    (message "[auto-workflow] Empty response in parse-regex-targets")
-    (return-from gptel-auto-workflow--parse-regex-targets nil))
-  (with-temp-buffer
-    (insert response)
+  (cl-block gptel-auto-workflow--parse-regex-targets
+    (unless (and (stringp response) (not (string-empty-p response)))
+      (message "[auto-workflow] Empty response in parse-regex-targets")
+      (cl-return-from gptel-auto-workflow--parse-regex-targets nil))
+    (with-temp-buffer
+      (insert response)
     (goto-char (point-min))
     (let ((candidates '()))
       (while (re-search-forward "lisp/modules/[a-zA-Z0-9_/.-]+\\.el" nil t)
@@ -380,7 +382,7 @@ Returns list of validated file paths."
           (push (gptel-auto-workflow--normalize-target-candidate (match-string 1))
                 candidates)))
       (gptel-auto-workflow--filter-valid-targets
-       (nreverse candidates) proj-root max-targets))))
+       (nreverse candidates) proj-root max-targets)))))
 
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
