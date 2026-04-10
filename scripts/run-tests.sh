@@ -46,12 +46,12 @@ run_unit_tests() {
         $(find tests -name "test-*.el" -exec echo "-l {}" \;) \
         --eval "(ert-run-tests-batch-and-exit \"$PATTERN\")" 2>&1) || true
     
-    echo "$output" | grep -E "FAILED|unexpected|0 unexpected" | head -30
-    if [ -z "$(echo "$output" | grep -E "FAILED|unexpected")" ]; then
+    grep -E "FAILED|unexpected|0 unexpected" <<< "$output" | head -30
+    if [ -z "$(grep -E "FAILED|unexpected" <<< "$output")" ]; then
         echo "$output" | tail -5
     fi
     
-    if echo "$output" | grep -q "0 unexpected"; then
+    if grep -q "0 unexpected" <<< "$output"; then
         pass "All ERT tests passed"
         return 0
     else
