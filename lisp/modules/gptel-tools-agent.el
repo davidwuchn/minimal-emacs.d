@@ -605,6 +605,10 @@ If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
   "Fast-forward TARGET-BRANCH to match SOURCE-BRANCH.
 ACTION-NAME is used in log messages (e.g., \"Synced\", \"Promoted\").
 All shell commands have timeout protection to prevent deadlocks."
+  (unless (and (gptel-auto-workflow--non-empty-string-p source-branch)
+               (gptel-auto-workflow--non-empty-string-p target-branch)
+               (gptel-auto-workflow--non-empty-string-p action-name))
+    (error "[auto-workflow] sync-branches: source-branch, target-branch, and action-name must be non-empty strings"))
   (let ((default-directory (gptel-auto-workflow--default-dir))
         (original-branch (gptel-auto-workflow--git-cmd
                           "git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main")))
