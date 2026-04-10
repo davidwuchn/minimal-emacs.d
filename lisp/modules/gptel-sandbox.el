@@ -82,6 +82,9 @@ gptel preset.")
 
 ;;; Internal Helpers
 
+(defvar gptel-sandbox--missing-marker (make-symbol "gptel-sandbox-missing")
+  "Sentinel value for detecting missing symbol lookups in sandbox env.")
+
 (defun gptel-sandbox--parse-forms (code)
   "Parse CODE into a list of Lisp forms."
   (let ((forms nil)
@@ -202,10 +205,8 @@ Supported shape:
 
 (defun gptel-sandbox--lookup (symbol env)
   "Look up SYMBOL in ENV or signal an error."
-  (let ((marker (list 'missing))
-        (value nil))
-    (setq value (gethash symbol env marker))
-    (if (eq value marker)
+  (let ((value (gethash symbol env gptel-sandbox--missing-marker)))
+    (if (eq value gptel-sandbox--missing-marker)
         (error "Unknown symbol in Programmatic sandbox: %S" symbol)
       value)))
 
