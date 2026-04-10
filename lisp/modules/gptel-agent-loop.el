@@ -662,7 +662,7 @@ Cache behavior:
                 :in-place t
                 :callback callback)
               (when (fboundp 'my/gptel--seed-fsm-tools)
-                (my/gptel--seed-fsm-tools child-fsm request-tools))))))))
+                (my/gptel--seed-fsm-tools child-fsm request-tools)))))))))
 
 (defun gptel-agent-loop--make-timeout-timer (state)
   "Create timeout timer for STATE."
