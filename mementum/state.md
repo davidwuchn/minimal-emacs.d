@@ -1,8 +1,38 @@
 # Mementum State
 
-> Last session: 2026-04-11 00:05
+> Last session: 2026-04-11 00:45
 
 ## Total Improvements: 218+ Real Code Fixes (9 new today)
+
+### Session Summary: 2026-04-11 Early Morning (Staging Merge + Sync)
+
+**Action:** Merged staging to main, synced with origin, verified all tests
+
+**Result:** ✅ main includes core-onepi5-exp1/2/5 and cache-riven-exp5 optimizations
+
+**Sync Status:**
+- **main:** `a5a73c0` — Merge remote-tracking branch 'origin/main' ✅
+- **staging:** `fe0510e` — Merge remote-tracking branch 'origin/staging' ✅
+- **Submodules:** 6 submodules synced
+- **Tests:** 1361 run, 1295 pass, 66 skipped, 0 fail ✅
+
+**Merged Optimizations:**
+- `core-onepi5-exp1/2/5` — gptel-benchmark-core improvements
+- `cache-riven-exp5` — context-cache optimizations
+- All passed verification (grader 8-9/9, tests passing)
+
+**Workflow Status:**
+- Last run: `2026-04-11T004520Z-ab48` — idle
+- Previous successful run: `2026-04-10T190001Z-b0c4` — 5/5 kept (gptel-sandbox.el)
+- Next scheduled: 03:00 (auto-workflow)
+
+**Cron Status:**
+- Auto-workflow: 23:00, 03:00, 07:00, 11:00, 15:00, 19:00 (6 runs/day)
+- Research: every 4 hours
+- Mementum: Sunday 04:00
+- Instincts: Sunday 05:00
+
+---
 
 ### Session Summary: 2026-04-11 Early Morning (Remote Sync)
 
