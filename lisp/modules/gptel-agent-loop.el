@@ -639,13 +639,14 @@ Cache behavior:
                                     (when (buffer-live-p (plist-get fsm-info :buffer))
                                      (plist-get fsm-info :buffer))
                                    (current-buffer)))
-                   (where (or (let ((tm (gptel-agent-loop--task-tracking-marker state)))
-                                (and (markerp tm) (marker-position tm) tm))
-                              (let ((tm (plist-get fsm-info :tracking-marker)))
-                                (and (markerp tm) (marker-position tm) tm))
-                              (let ((pos (plist-get fsm-info :position)))
-                                (and (markerp pos) (marker-position pos) pos))
-                              (with-current-buffer parent-buf (point-marker))))
+                   (where (or
+                           (let ((tm (gptel-agent-loop--task-tracking-marker state)))
+                             (and (markerp tm) (marker-position tm) tm))
+                           (let ((tm (plist-get fsm-info :tracking-marker)))
+                             (and (markerp tm) (marker-position tm) tm))
+                           (let ((pos (plist-get fsm-info :position)))
+                             (and (markerp pos) (marker-position pos) pos))
+                           (with-current-buffer parent-buf (point-marker))))
                    (tracking-marker
                     (or (gptel-agent-loop--task-tracking-marker state)
                         ;; If where is already in parent-buf, use it directly.
