@@ -275,22 +275,28 @@ When CACHE-RESULT is non-nil, cache the delivered string first.
 Guards against delivering to a killed parent buffer by checking
 `gptel-agent-loop--task-parent-buffer' and
 `gptel-agent-loop--task-tracking-marker'."
-  (unless (gptel-agent-loop--task-finished state)
-    (setf (gptel-agent-loop--task-finished state) t)
-    (gptel-agent-loop--cleanup-state state)
-    ;; Clean up marker to allow GC. Check if still live first.
-    (let ((marker (gptel-agent-loop--task-tracking-marker state)))
-      (when (and marker (markerp marker))
-        (if (marker-buffer marker)
-            (set-marker marker nil)  ; Detach from buffer, allow GC
-          (message "[RunAgent] Warning: tracking marker no longer live"))
-        (setf (gptel-agent-loop--task-tracking-marker state) nil)))
-    (when cache-result
-      (gptel-agent-loop--maybe-cache-put state result))
-    (if (fboundp 'my/gptel--deliver-subagent-result)
-        (my/gptel--deliver-subagent-result
-         (gptel-agent-loop--task-main-cb state) result)
-      (funcall (gptel-agent-loop--task-main-cb state) result))))
+  (cl-block gptel-agent-loop--deliver-result
+    (unless (and state result (gptel-agent-loop--task-main-cb state))
+    (message "[RunAgent] Error: Invalid args to deliver-result, dropping: %s"
+             (if (stringp result)
+                 (substring result 0 (min 50 (length result)))
+               result))
+    (cl-return-from gptel-agent-loop--deliver-result))
+  (let ((main-cb (gptel-agent-loop--task-main-cb state)))
+    (unless (gptel-agent-loop--task-finished state)
+      (setf (gptel-agent-loop--task-finished state) t)
+      (gptel-agent-loop--cleanup-state state)
+      (let ((marker (gptel-agent-loop--task-tracking-marker state)))
+        (when (and marker (markerp marker))
+          (if (marker-buffer marker)
+              (set-marker marker nil)
+            (message "[RunAgent] Warning: tracking marker no longer live"))
+          (setf (gptel-agent-loop--task-tracking-marker state) nil)))
+      (when cache-result
+        (gptel-agent-loop--maybe-cache-put state result))
+      (if (fboundp 'my/gptel--deliver-subagent-result)
+          (my/gptel--deliver-subagent-result main-cb result)
+        (funcall main-cb result))))))
 
 (defun gptel-agent-loop--deliver-aborted (state)
   "Deliver timeout/abort result for STATE once."
