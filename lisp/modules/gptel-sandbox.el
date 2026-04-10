@@ -215,6 +215,18 @@ Supported shape:
         (error "Unknown symbol in Programmatic sandbox: %S" symbol)
       value)))
 
+(defun gptel-sandbox--short-circuit-eval (forms env initial-value stop-pred)
+  "Evaluate FORMS sequentially with short-circuit logic.
+INITIAL-VALUE is the starting value. STOP-PRED is called on each result;
+when non-nil, evaluation short-circuits and returns that result.
+Used by `and' and `or' to share short-circuit evaluation logic."
+  (let ((value initial-value))
+    (catch 'gptel-sandbox-short-circuit
+      (dolist (form forms value)
+        (setq value (gptel-sandbox--eval-expr form env))
+        (when (funcall stop-pred value)
+          (throw 'gptel-sandbox-short-circuit value))))))
+
 (defun gptel-sandbox--eval-expr (expr env)
   "Evaluate pure sandbox expression EXPR in ENV.
 This evaluator intentionally excludes general function application and only
@@ -260,19 +272,9 @@ supports a small, explicit whitelist of pure operations."
       ('filter
        (gptel-sandbox--eval-map-like expr env t))
       ('and
-       (let ((value t))
-         (catch 'gptel-sandbox-short-circuit
-           (dolist (form (cdr expr) value)
-             (setq value (gptel-sandbox--eval-expr form env))
-             (unless value
-               (throw 'gptel-sandbox-short-circuit value))))))
+       (gptel-sandbox--short-circuit-eval (cdr expr) env t #'not))
       ('or
-       (let ((value nil))
-         (catch 'gptel-sandbox-short-circuit
-           (dolist (form (cdr expr) value)
-             (setq value (gptel-sandbox--eval-expr form env))
-             (when value
-               (throw 'gptel-sandbox-short-circuit value))))))
+       (gptel-sandbox--short-circuit-eval (cdr expr) env nil #'identity))
       ((or 'equal 'string= '= '< '> '<= '>=)
        (apply (car expr)
               (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env))
