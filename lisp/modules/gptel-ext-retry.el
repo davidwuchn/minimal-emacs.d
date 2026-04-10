@@ -324,13 +324,11 @@ Returns the number of messages truncated, or 0 if nothing was done."
   "Collect indices of messages in MESSAGES vector matching PREDICATE.
 PREDICATE is a function that takes a message plist and returns non-nil if it matches.
 Returns a list of indices in ascending order."
-  (let ((indices '()))
-    (when (and messages (> (length messages) 0))
-      (dotimes (i (length messages))
-        (let ((msg (aref messages i)))
-          (when (funcall predicate msg)
-            (push i indices))))
-      (nreverse indices))))
+  (when (and messages (> (length messages) 0))
+    (cl-loop for i from 0 below (length messages)
+             for msg = (aref messages i)
+             when (funcall predicate msg)
+             collect i)))
 
 (defun my/gptel--strip-images-from-messages (info)
   "Strip image content from all messages in INFO to reduce payload.
