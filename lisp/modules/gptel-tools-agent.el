@@ -5898,6 +5898,8 @@ Only removes worktrees if no gptel processes are running."
 (defun gptel-auto-workflow--run-with-targets (targets completion-callback)
   "Run experiments for TARGETS sequentially."
   (let* ((run-id (gptel-auto-workflow--current-run-id))
+         (callback-run-id (and gptel-auto-workflow--running
+                               gptel-auto-workflow--run-id))
          (proj-root (gptel-auto-workflow--default-dir))
          (run-buffer (current-buffer))
          (all-results '())
@@ -5935,35 +5937,38 @@ Only removes worktrees if no gptel processes are running."
            (funcall finish))
          (run-next (remaining-targets)
            (if (null remaining-targets)
-                (finish-run)
+               (finish-run)
               (let ((target (car remaining-targets)))
                 (setq gptel-auto-workflow--current-target target)
                 (let ((target-complete
                        (gptel-auto-workflow--make-idempotent-callback
                         (lambda (results)
-                          (setq all-results (append all-results results))
-                          (setq kept-count
-                                (gptel-auto-workflow--kept-target-count all-results))
-                          (setq gptel-auto-workflow--stats
-                                (plist-put gptel-auto-workflow--stats :kept kept-count))
+                          (if (not (gptel-auto-workflow--run-callback-live-p callback-run-id))
+                              (message "[auto-workflow] Ignoring stale target completion for %s; run %s is no longer active"
+                                       target run-id)
+                            (setq all-results (append all-results results))
+                            (setq kept-count
+                                  (gptel-auto-workflow--kept-target-count all-results))
+                            (setq gptel-auto-workflow--stats
+                                  (plist-put gptel-auto-workflow--stats :kept kept-count))
                             (gptel-auto-workflow--persist-status)
-                           (if gptel-auto-experiment--quota-exhausted
-                               (progn
-                                 (message "[auto-workflow] Provider quota exhausted; stopping remaining targets")
-                                 (finish-run))
-                             (if (buffer-live-p run-buffer)
-                                 (with-current-buffer run-buffer
-                                   (let ((default-directory proj-root)
-                                         (gptel-auto-workflow--project-root-override proj-root)
-                                         (gptel-auto-workflow--current-project proj-root)
-                                         (gptel-auto-workflow--run-project-root proj-root))
-                                     (run-next (cdr remaining-targets))))
-                               (let ((default-directory proj-root)
-                                     (gptel-auto-workflow--project-root-override proj-root)
-                                     (gptel-auto-workflow--current-project proj-root)
-                                     (gptel-auto-workflow--run-project-root proj-root))
-                                 (run-next (cdr remaining-targets)))))))))
-                   (gptel-auto-experiment-loop target target-complete))))))
+                            (if gptel-auto-experiment--quota-exhausted
+                                (progn
+                                  (message "[auto-workflow] Provider quota exhausted; stopping remaining targets")
+                                  (finish-run))
+                              (if (buffer-live-p run-buffer)
+                                  (with-current-buffer run-buffer
+                                    (let ((default-directory proj-root)
+                                          (gptel-auto-workflow--project-root-override proj-root)
+                                          (gptel-auto-workflow--current-project proj-root)
+                                          (gptel-auto-workflow--run-project-root proj-root))
+                                      (run-next (cdr remaining-targets))))
+                                (let ((default-directory proj-root)
+                                      (gptel-auto-workflow--project-root-override proj-root)
+                                      (gptel-auto-workflow--current-project proj-root)
+                                      (gptel-auto-workflow--run-project-root proj-root))
+                                  (run-next (cdr remaining-targets))))))))))
+                  (gptel-auto-experiment-loop target target-complete))))))
       (if (buffer-live-p run-buffer)
           (with-current-buffer run-buffer
             (let ((default-directory proj-root)

@@ -2054,6 +2054,41 @@ EXIT-CODE defaults to 1."
         (should (equal completed '((:target "one" :kept t)
                                    (:target "two" :kept nil))))))))
 
+(ert-deftest regression/auto-workflow/run-with-targets-ignores-stale-target-completion ()
+  "Stale target callbacks should not advance the workflow after force-stop."
+  (let ((gptel-auto-workflow--stats nil)
+        (gptel-auto-workflow--running t)
+        (gptel-auto-workflow--run-id "run-stale")
+        (gptel-auto-workflow--current-target nil)
+        (started '())
+        (callbacks '())
+        (completed nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--run-callback-live-p)
+               (lambda (_run-id) nil))
+              ((symbol-function 'gptel-auto-experiment-loop)
+               (lambda (target cb)
+                 (push target started)
+                 (push (cons target cb) callbacks)))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda (&rest _) nil))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-workflow--run-with-targets
+       '("one" "two")
+       (lambda (results)
+         (setq completed results)))
+      (setq gptel-auto-workflow--running nil
+            gptel-auto-workflow--current-target nil
+            gptel-auto-workflow--stats '(:phase "idle" :kept 0 :total 2))
+      (funcall (cdr (assoc "one" callbacks)) '((:target "one" :kept t)))
+      (should (equal (nreverse started) '("one")))
+      (should-not completed)
+      (should (equal (plist-get gptel-auto-workflow--stats :phase) "idle"))
+      (should-not gptel-auto-workflow--running)
+      (should-not gptel-auto-workflow--current-target))))
+
 (ert-deftest regression/auto-workflow/force-stop-updates-phase ()
   "Force stop should persist the idle phase in workflow stats."
   (let ((gptel-auto-workflow--stats nil)
