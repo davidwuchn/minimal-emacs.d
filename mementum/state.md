@@ -1,8 +1,40 @@
 # Mementum State
 
-> Last session: 2026-04-11 01:10
+> Last session: 2026-04-11 08:00
 
-## Total Improvements: 223+ Real Code Fixes (14 new today)
+## Total Improvements: 234+ Real Code Fixes (25 new today)
+
+### Session Summary: 2026-04-11 Early Morning (Workflow Run Complete + Sync)
+
+**Action:** Monitored workflow run `2026-04-10T214113Z-27a0` to completion, synced all remotes
+
+**Result:** ✅ 11 experiments kept across 3 targets, all remotes in sync
+
+**Workflow Run `2026-04-10T214113Z-27a0` (21:41 - 01:30, ~4 hours):**
+| Target | Kept | Discarded | Notes |
+|--------|------|-----------|-------|
+| gptel-ext-retry.el | 0 | 2 | tests-failed, retry-grade-failed |
+| gptel-tools-code.el | 0 | 2 | tests-failed, :timeout |
+| gptel-ext-context-cache.el | 5 | 0 | All kept (Quality: 0.50→0.92) |
+| gptel-agent-loop.el | 5 | 0 | All kept (Quality: 0.50→0.88) |
+| gptel-tools-agent.el | 1 | 1 | 1 kept, 1 retry-grade-failed |
+
+**Total: 11 kept / 18 completed (61% keep rate)**
+
+**Key Issues Remaining:**
+- Staging-merge failing for exp3 (loop-imacpro) - merge conflicts
+- Staging-review failing frequently - reviewer can't access files in worktrees
+- score_after is 0.00 when tests fail (Eight Keys scoring can't calculate)
+- Daemon crashes intermittently during workflow runs (pipe connection lost)
+
+**Sync Status:**
+- **main:** `e700a688` — origin ↔ upstream in sync
+- **staging:** `9607d318` — origin ↔ upstream in sync
+
+**New Optimize Branches on Origin:**
+- `agent-neopi5-exp4`, `loop-neopi5-exp2/5`, `retry-neopi5-exp5`
+- `sanitize-neopi5-exp1/2/3/4/5`, `sanitize-riven-exp3/4/5`
+- `utils-riven-exp4/5`, `core-riven-exp4`
 
 ### Session Summary: 2026-04-11 Early Morning (Sandbox Experiments Merged)
 
