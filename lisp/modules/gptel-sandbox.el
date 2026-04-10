@@ -241,9 +241,10 @@ supports a small, explicit whitelist of pure operations."
       ('quote
        (cadr expr))
       ('if
-          (if (gptel-sandbox--eval-expr (nth 1 expr) env)
-              (gptel-sandbox--eval-expr (nth 2 expr) env)
-            (gptel-sandbox--eval-expr (nth 3 expr) env)))
+          (let ((cond-result (gptel-sandbox--eval-expr (nth 1 expr) env)))
+            (if cond-result
+                (gptel-sandbox--eval-expr (nth 2 expr) env)
+              (gptel-sandbox--eval-expr (nth 3 expr) env))))
       ('setq
        (gptel-sandbox--eval-setq-pairs (cdr expr) env))
       ('when
