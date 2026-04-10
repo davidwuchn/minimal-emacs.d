@@ -1,121 +1,136 @@
 ---
-title: Git Worktree Management in gptel-auto-workflow
+title: Git Worktrees in Auto-Experiment Workflows
 status: active
 category: knowledge
-tags: [git, worktree, automation, debugging, experiments]
+tags: [git, worktree, auto-experiment, debugging, resource-management]
 ---
 
-# Git Worktree Management in gptel-auto-workflow
+# Git Worktrees in Auto-Experiment Workflows
 
 ## Overview
 
-Git worktrees allow multiple working directories to be attached to a single repository. In the gptel-auto-workflow system, worktrees enable parallel experiment execution where each experiment runs in its own isolated directory while sharing the same `.git` database.
+Git worktrees enable running experiments in isolated working directories while sharing the same `.git` repository. This is essential for the auto-experiment system, which needs to test code changes without disrupting the main development branch. This knowledge page covers common pitfalls, cleanup patterns, and timing considerations for worktree management.
 
-This page documents critical lessons learned about worktree management, including a significant verification bug, cleanup patterns, and timing issues that caused experiment failures.
+## The Worktree Path Resolution Problem
 
-## How Worktrees Are Used in Auto-Workflow
+### The Bug
 
-### Architecture
-
-```
-Main Repository ($GIT_DIR)
-├── worktree: agent-exp1    (var/tmp/experiments/optimize/agent-exp1)
-├── worktree: core-exp1     (var/tmp/experiments/optimize/core-exp1)
-├── worktree: tools-exp1    (var/tmp/experiments/optimize/tools-exp1)
-└── main working directory  (~/projects/gptel/)
-```
-
-### Creation Pattern
-
-Each experiment creates a dedicated worktree:
-
-| Step | Action | Command |
-|------|--------|---------|
-| 1 | Create experiment branch | `git branch experiment-branch` |
-| 2 | Create worktree | `git worktree add <path> <branch>` |
-| 3 | Run experiment in worktree | Changes isolated to worktree |
-| 4 | On success | Merge to staging |
-| 5 | On failure | Worktree preserved for debugging |
-
-### Key Properties
-
-| Property | Main Repo | Worktree |
-|----------|-----------|----------|
-| `.git` reference | Points to self | Points to main repo |
-| Commit history | Shared | Shared (read-only) |
-| Working directory | Main | Isolated |
-| Branch association | `HEAD` | Specific branch |
-| Path computation | Relative to cwd | Relative to script location |
-
-## Critical Bug: Verification Against Wrong Directory
-
-### Symptom
-
-Auto-workflow experiments always failed with `verification-failed` even after the grader passed 9/9 cases.
+Auto-workflow experiments consistently failed with `verification-failed` even after the grader passed all 9 tests.
 
 ### Root Cause
 
-The `gptel-auto-experiment-benchmark` function ran the verification script using a path computed from `proj-root`:
+The `gptel-auto-experiment-benchmark` function invokes `verify-nucleus.sh` using a path computed from `proj-root`:
 
 ```elisp
-;; BEFORE (buggy code) - lisp/modules/gptel-tools-agent.el:1634
-(let* ((proj-root (gptel-auto-workflow--get-proj-root))
-       (verify-script (expand-file-name "scripts/verify-nucleus.sh" proj-root))
-       ...)
-  (gptel-auto-experiment-run-command
-   verify-script
-   (list "--file" target-file)
-   :directory worktree-path))
+(expand-file-name "scripts/verify-nucleus.sh" proj-root)
 ```
 
-**The Problem:** `verify-nucleus.sh` computes its `$DIR` from the script's own location:
+However, `default-directory` is set to the worktree. The verification script computes its `$DIR` variable based on its own location in the **main repository**, causing it to validate main repo code instead of the worktree changes.
 
-```bash
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DIR="$(dirname "$SCRIPT_DIR")"
-```
+### Key Insight
 
-Since the script lives in the **main repository**, `$DIR` pointed to the **main repo code**, not the worktree changes.
-
-### Why This Went Undetected
-
-1. The script ran successfully (exit code 0)
-2. The grader logic in the main repo passed
-3. But the actual worktree changes were never validated
-4. Experiments could merge broken code
+Worktrees share `.git` but have separate working directories. Scripts that hardcode paths relative to their location will **not** see worktree-specific changes.
 
 ### The Fix
 
-Skip nucleus script validation in experiment benchmark:
+Skip nucleus script validation in experiment benchmark mode:
 
-```elisp
-;; AFTER (fixed code)
-(let* ((proj-root (gptel-auto-workflow--get-proj-root))
-       ...)
-  ;; Syntax validation still works because it targets worktree file directly
-  ;; Executor runs verification in worktree context
-  ;; Full validation happens in staging flow
-  (when (gptel-auto-experiment--syntax-valid-p target-file)
-    ...))
+| Validation Layer | Target | Works in Worktree? |
+|-----------------|--------|-------------------|
+| Code syntax validation | Worktree file | ✅ Yes |
+| Executor verification | Worktree context | ✅ Yes |
+| Nucleus script | Main repo location | ❌ No |
+| Full validation | Staging flow | ✅ Yes |
+
+### Verification Result
+
 ```
-
-### Verification Results
-
-After the fix, experiments return:
-
-```elisp
 (:passed t :nucleus-passed t :nucleus-skipped t)
 ```
 
-The `nucleus-skipped: t` indicates the script was intentionally skipped because:
-- Syntax validation targets the actual worktree file
-- Executor runs verification in correct context
-- Staging flow provides full validation
+### Affected File
 
-## Worktree Deletion Timing Bug
+```
+lisp/modules/gptel-tools-agent.el:1634 - gptel-auto-experiment-benchmark
+```
 
-### Symptom
+---
 
-"No such file or directory" errors during auto-workflow experiments, specifically when `run-next` attempted to start subsequent exp
-...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-whdoO3.txt. Use Read tool if you need more]...
+## Worktree Cleanup Patterns
+
+### When to Clean Up
+
+Merged experiment worktrees should be cleaned up to prevent accumulation. Without cleanup, the `var/tmp/experiments/` directory grows unbounded with stale branches.
+
+### Symptoms of Accumulation
+
+- Many stale worktrees in `var/tmp/experiments/`
+- Experiment branches merged to staging but not deleted
+- Worktree count grows without bound
+- Disk space wasted on obsolete experiment code
+
+### Detection Script
+
+Use this script to identify merged experiment worktrees:
+
+```bash
+git worktree list | grep optimize | awk '{print $3}' | sed 's/\[//' | sed 's/\]//' | while read branch; do
+  if git log staging --oneline | grep -q "Merge $branch"; then
+    echo "MERGED: $branch"
+  fi
+done
+```
+
+### Cleanup Commands
+
+```bash
+# Remove the worktree directory
+git worktree remove <path> --force
+
+# Delete the branch
+git branch -D <branch>
+```
+
+### Prevention Strategies
+
+1. **Auto-workflow cleanup**: Add cleanup logic to the workflow that runs after successful merges
+2. **Periodic cleanup**: Schedule a periodic job to remove merged worktrees
+3. **Auto-deletion**: Automatically delete after successful merge to staging
+4. **Manual review**: Include cleanup step in post-merge checklist
+
+### Example Cleanup Session
+
+Cleaned 7 merged worktrees in one session:
+
+| Branch | Status |
+|--------|--------|
+| agent-exp1 | Merged, deleted |
+| agent-exp2 | Merged, deleted |
+| core-exp2 | Merged, deleted |
+| strategic-exp1 | Merged, deleted |
+| strategic-exp2 | Merged, deleted |
+| tools-exp1 | Merged, deleted |
+| tools-exp2 | Merged, deleted |
+
+**Location**: `var/tmp/experiments/optimize/`
+
+---
+
+## Worktree Deletion Timing
+
+### The Bug
+
+"No such file or directory" errors during auto-workflow experiments, causing cascade failures.
+
+### Root Cause
+
+Worktree deletion happened at the **START** of `run-next`, before the next experiment could use it.
+
+### Buggy Timeline
+
+```
+1. Experiment 1 creates worktree
+2. Experiment 1 completes successfully
+3. run-next(2) is called
+4.
+...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-axXroD.txt. Use Read tool if you need more]...
