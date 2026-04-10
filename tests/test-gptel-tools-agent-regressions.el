@@ -4049,6 +4049,29 @@ EXIT-CODE defaults to 1."
     (my/gptel--subagent-cache-put "reviewer" "prompt" "review ok")
     (should (equal (my/gptel--subagent-cache-get "reviewer" "prompt") "review ok"))))
 
+(ert-deftest regression/subagent-cache/does-not-store-retryable-reviewer-failures ()
+  "Retryable reviewer failures should never poison the reviewer cache."
+  (let ((my/gptel-subagent-cache-ttl 300)
+        (my/gptel--subagent-cache (make-hash-table :test 'equal)))
+    (my/gptel--subagent-cache-put
+     "reviewer"
+     "prompt"
+     "UNVERIFIED - explorer evidence did not meet verification contract")
+    (should (= (hash-table-count my/gptel--subagent-cache) 0))
+    (should-not (my/gptel--subagent-cache-get "reviewer" "prompt"))))
+
+(ert-deftest regression/subagent-cache/purges-legacy-retryable-reviewer-cache-entry ()
+  "Cache reads should evict already-cached retryable reviewer failures."
+  (let* ((my/gptel-subagent-cache-ttl 300)
+         (my/gptel--subagent-cache (make-hash-table :test 'equal))
+         (key (my/gptel--subagent-cache-key "reviewer" "prompt")))
+    (puthash key
+             (cons (float-time)
+                   "UNVERIFIED - explorer evidence did not meet verification contract")
+             my/gptel--subagent-cache)
+    (should-not (my/gptel--subagent-cache-get "reviewer" "prompt"))
+    (should (= (hash-table-count my/gptel--subagent-cache) 0))))
+
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status ()
   "Wrapper status should reset stale running snapshots when the worker is gone."
   (let* ((repo-root test-auto-workflow--repo-root)

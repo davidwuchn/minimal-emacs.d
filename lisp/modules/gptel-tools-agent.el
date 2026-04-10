@@ -775,23 +775,27 @@ describes."
             (or gptel-auto-workflow--current-target
                 gptel-auto-workflow--current-project))))
 
-(defun my/gptel--cacheable-subagent-result-p (result)
+(defun my/gptel--cacheable-subagent-result-p (result &optional agent-type)
   "Return non-nil when RESULT is safe to reuse from the subagent cache.
-Failure-shaped responses must not be cached, otherwise a transient API
-quota error can poison later workflow attempts with immediate cache hits."
+AGENT-TYPE can further restrict cacheability for agent-specific failures.
+Failure-shaped responses must not be cached, otherwise transient transport
+or reviewer-contract failures can poison later workflow attempts with
+immediate cache hits."
   (or (not (stringp result))
-      (not (string-match-p
-            (concat
-             "\\`Error:"
-             "\\|\\`Warning:.*not available"
-             "\\|throttling"
-             "\\|rate.limit"
-             "\\|quota exceeded"
-             "\\|HTTP 429"
-             "\\|hour allocated quota exceeded"
-             "\\|failed to finish"
-             "\\|could not finish")
-            result))))
+      (and (not (string-match-p
+                 (concat
+                  "\\`Error:"
+                  "\\|\\`Warning:.*not available"
+                  "\\|throttling"
+                  "\\|rate.limit"
+                  "\\|quota exceeded"
+                  "\\|HTTP 429"
+                  "\\|hour allocated quota exceeded"
+                  "\\|failed to finish"
+                  "\\|could not finish")
+                 result))
+           (not (and (equal agent-type "reviewer")
+                     (gptel-auto-workflow--review-retryable-error-p result))))))
 
 (defun my/gptel--subagent-cache-get (agent-type prompt &optional files include-history include-diff)
   "Get cached result for (AGENT-TYPE, PROMPT, ...) if still valid.
@@ -803,20 +807,20 @@ Returns nil if cache disabled, not found, or expired."
       (when cached
         (let ((timestamp (car cached))
               (result (cdr cached)))
-          (if (> (- (float-time) timestamp) my/gptel-subagent-cache-ttl)
-              (progn (remhash key my/gptel--subagent-cache) nil)
-            (if (my/gptel--cacheable-subagent-result-p result)
-                result
-              (progn
-                (remhash key my/gptel--subagent-cache)
-                nil))))))))
+            (if (> (- (float-time) timestamp) my/gptel-subagent-cache-ttl)
+                (progn (remhash key my/gptel--subagent-cache) nil)
+              (if (my/gptel--cacheable-subagent-result-p result agent-type)
+                  result
+                (progn
+                  (remhash key my/gptel--subagent-cache)
+                  nil))))))))
 
 (defun my/gptel--subagent-cache-put (agent-type prompt result &optional files include-history include-diff)
   "Cache RESULT for (AGENT-TYPE, PROMPT, ...).
 Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
   (when (and (my/gptel--subagent-cache-enabled-p)
-             (my/gptel--subagent-cache-allowed-p agent-type)
-             (my/gptel--cacheable-subagent-result-p result))
+              (my/gptel--subagent-cache-allowed-p agent-type)
+              (my/gptel--cacheable-subagent-result-p result agent-type))
     (let ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff)))
       (puthash key (cons (float-time) result) my/gptel--subagent-cache)
       ;; Evict oldest entries if over limit
