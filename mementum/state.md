@@ -1,8 +1,36 @@
 # Mementum State
 
-> Last session: 2026-04-10 20:05
+> Last session: 2026-04-10 21:25
 
 ## Total Improvements: 218+ Real Code Fixes (8 new today)
+
+### Session Summary: 2026-04-10 Late Evening (Workflow Daemon Restart + Monitoring)
+
+**Action:** Restarted workflow daemon to pick up paren fix, monitored new run
+
+**Result:** ✅ Workflow running without scan-error, but 0 kept experiments (all discarded)
+
+**Workflow Run `2026-04-10T204452Z-6fdb`:**
+- Target: `lisp/modules/gptel-auto-workflow-strategic.el` (5 experiments)
+- Results: 4 completed, all discarded (no Eight Keys score improvement)
+- Issue: Experiments making good code changes but not improving Eight Keys score enough
+- Note: 5th experiment may have timed out or failed
+
+**Key Observations:**
+- Scan-error fixed after daemon restart (was from stale gptel-agent-loop.el in memory)
+- Workflow now runs cleanly without parentheses errors
+- All experiments discarded because Eight Keys score stayed at 0.40 (no improvement)
+- Code quality scores were high (0.92+) but Eight Keys score didn't change
+- This suggests targets may be well-optimized or scoring threshold too strict
+
+**Cron Status:**
+- macOS schedule: 10AM, 2PM, 6PM (next run: 10AM tomorrow)
+- Research cron: every 4 hours
+- Weekly mementum/instincts: Sunday 4AM/5AM
+
+**Sync Status:**
+- **main:** `694af19d` — origin ↔ upstream in sync
+- **staging:** `afa39965` — origin ↔ upstream in sync
 
 ### Session Summary: 2026-04-10 Evening (Test Script Fix + Sync)
 
