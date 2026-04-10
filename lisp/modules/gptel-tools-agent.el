@@ -3949,26 +3949,21 @@ BLOCKS is the list of block names currently in scope."
           (if (symbolp name) (cons name blocks) blocks))))
       ((or 'cl-defun 'cl-defmacro 'cl-defsubst)
        (let ((name (nth 1 form))
-             (args (nth 2 form))
              (body (nthcdr 3 form)))
-         (or (gptel-auto-experiment--invalid-cl-return-target args blocks)
-             (gptel-auto-experiment--invalid-cl-return-target-in-forms
-              body
-              (if (symbolp name) (cons name blocks) blocks)))))
+         (gptel-auto-experiment--invalid-cl-return-target-in-forms
+          body
+          (if (symbolp name) (cons name blocks) blocks))))
       ((or 'cl-labels 'cl-flet)
        (let ((bindings (nth 1 form))
              (body (nthcdr 2 form)))
          (or (cl-some
               (lambda (binding)
-                (if (and (consp binding) (symbolp (car binding)))
-                    (let ((name (car binding))
-                          (args (cadr binding))
-                          (fbody (cddr binding)))
-                      (or (gptel-auto-experiment--invalid-cl-return-target args blocks)
-                          (gptel-auto-experiment--invalid-cl-return-target-in-forms
-                           fbody
-                           (cons name blocks))))
-                  (gptel-auto-experiment--invalid-cl-return-target binding blocks)))
+                (when (and (consp binding) (symbolp (car binding)))
+                  (let ((name (car binding))
+                        (fbody (cddr binding)))
+                    (gptel-auto-experiment--invalid-cl-return-target-in-forms
+                     fbody
+                     (cons name blocks)))))
               bindings)
              (gptel-auto-experiment--invalid-cl-return-target-in-forms
               body blocks))))
