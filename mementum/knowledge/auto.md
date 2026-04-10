@@ -1,17 +1,15 @@
 ---
-title: Auto-Workflow Knowledge
+title: Auto-Workflow System
 status: active
 category: knowledge
 tags: [auto-workflow, gptel, emacs, automation, agent]
 ---
 
-# Auto-Workflow Knowledge
+# Auto-Workflow System
 
-Auto-workflow is an autonomous Emacs AI agent system that automatically optimizes code targets without human intervention. This knowledge page consolidates the core patterns, rules, and troubleshooting guidance for running auto-workflow effectively.
+The auto-workflow system enables autonomous AI-driven code improvement in Emacs. It runs unattended, optimizes targets, and never requires human input to proceed.
 
-## Branching Strategy
-
-Auto-workflow uses a strict branching model to isolate experimental changes from production code until reviewed.
+## Branching Rules
 
 ### Branch Format
 
@@ -21,87 +19,74 @@ All auto-workflow experiments use the following branch naming convention:
 optimize/{target-name}-{hostname}-exp{N}
 ```
 
-**Examples:**
+| Component | Description | Example |
+|-----------|-------------|---------|
+| `optimize/` | Prefix indicating optimization branch | `optimize/` |
+| `{target-name}` | Name of file or target being optimized | `retry-imacpro.taila8bdd.ts.net` |
+| `{hostname}` | Machine identifier | `exp1` |
+| `exp{N}` | Experiment number | `exp1` |
 
-| Branch Name | Target | Hostname | Experiment # |
-|-------------|--------|----------|--------------|
-| `optimize/retry-imacpro.taila8bdd.ts.net-exp1` | retry | imacpro.taila8bdd.ts.net | 1 |
-| `optimize/utils-imacpro.taila8bdd.ts.net-exp3` | utils | imacpro.taila8bdd.ts.net | 3 |
-| `optimize/main-imacpro.taila8bdd.ts.net-exp2` | main | imacpro.taila8bdd.ts.net | 2 |
+**Full Example:**
+```
+optimize/retry-imacpro.taila8bdd.ts.net-exp1
+```
+
+### Workflow Flow
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Create Branch  │────▶│  Work in Tree   │────▶│  Commit Changes │
+│  optimize/...   │     │  (isolated)     │     │  to optimize/   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                                                         │
+                                                         ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Merge via PR   │◀────│  Human Review   │◀────│   Push to Origin│
+│  (main branch)  │     │  (gatekeeper)   │     │  optimize/...   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
 
 ### The Branching Rule
 
-```
-λ auto-workflow-branching(x).
-    change(x) → branch(optimize/{target}-{hostname}-exp{N})
-    | push(optimize/...) → origin/optimize/...
-    | ¬push(main)
-    | human_review → merge(main)
-```
-
-**Key Constraints:**
-- Changes are NEVER pushed directly to `main`
-- Always push to `origin optimize/...` branch
-- Human must review and merge via PR
-- Multiple machines can optimize the same target without conflict
-
-### Workflow Execution Flow
-
-```mermaid
-graph TD
-    A[Start Experiment] --> B[Create Worktree: optimize/target-expN]
-    B --> C[Executor Makes Changes in Worktree]
-    C --> D{Improvement Found?}
-    D -->|Yes| E[Commit to optimize branch]
-    D -->|No| F[Log and Continue]
-    E --> G[Push to origin optimize/...]
-    G --> H[Human Reviews via PR]
-    H --> I[Merge to Main]
-```
-
-**Step-by-Step:**
-
-1. **Create worktree** with optimize branch
-   ```bash
-   git worktree add -b optimize/retry-exp1 ../retry-exp1 origin/main
-   ```
-
-2. **Executor makes changes** in worktree (isolated from main)
-
-3. **If improvement** → commit to optimize branch
-   ```bash
-   cd ../retry-exp1
-   git add -A
-   git commit -m "Improve retry logic"
-   ```
-
-4. **Push to origin optimize/...** (NOT main!)
-   ```bash
-   git push origin optimize/retry-exp1
-   ```
-
-5. **Human reviews** and merges to main via PR
-
-### Code Location
-
-The branch push logic lives in `gptel-tools-agent.el:1134`:
-
 ```elisp
+;; gptel-tools-agent.el:1134
 (when gptel-auto-experiment-auto-push
   (magit-git-success "push" "origin" gptel-auto-workflow--current-branch))
 ```
 
-**Critical Rule:** Always verify the current branch before pushing. A common mistake is pushing directly to main, which violates the branching rule.
+**Key Principles:**
+- Changes push to `origin/optimize/...` — NOT `main`
+- Each experiment runs in an isolated worktree
+- Human review required before merging to main
+- Multiple machines can optimize the same target without conflict
 
----
+### CLI Commands for Branching
+
+```bash
+# Create new experiment branch
+git worktree add -b optimize/retry-imacpro.taila8bdd.ts.net-exp1 ../worktrees/exp1 ~/.emacs.d
+
+# Push experiment branch
+git push origin optimize/retry-imacpro.taila8bdd.ts.net-exp1
+
+# List all experiment branches
+git branch -a | grep optimize/
+```
 
 ## The "Never Ask" Principle
 
-Auto-workflow is fully autonomous. It never pauses to ask the user for input, confirmation, or clarification.
+### The Core Rule
 
-### The Principle
+Auto-workflow is **fully autonomous**. It never blocks to ask the user for:
 
-```
+- Confirmation
+- Input
+- Decision
+- Clarification
+
+### The Autonomous Lambda
+
+```elisp
 λ autonomous(x).
     fail(x) → retry(x)
     | retry(x) → retry(x)
@@ -110,74 +95,66 @@ Auto-workflow is fully autonomous. It never pauses to ask the user for input, co
     | ¬stop_for_input
 ```
 
-### What This Means
-
-Auto-workflow never asks for:
-- Confirmation ("Proceed?")
-- Input ("What should I do?")
-- Decision ("Which option?")
-- Clarification ("What do you mean?")
-
-Instead, it implements automatic retry and fallback patterns.
-
 ### Retry Pattern Implementation
 
 ```elisp
 (defun gptel-auto-workflow--with-retry (fn max-retries delay)
   "Call FN with automatic retry on failure, never ask user.
-MAX-RETRY attempts with DELAY seconds between each."
+MAX-DELRIES is number of attempts before giving up.
+DELAY is seconds to wait between retries."
   (let ((attempts 0)
         (last-error nil))
     (while (< attempts max-retries)
       (cl-incf attempts)
       (condition-case err
-          (funcall fn)  ; Try the operation
+          (progn
+            (funcall fn)
+            (cl-return t))  ; Success - return immediately
         (error
-         (setq last-error err)
+         (setq last-error (cadr err))
          (when (< attempts max-retries)
-           (message "[Retry %d/%d] %s"
-                    attempts max-retries
-                    (error-message-string err))
-           (sleep-for delay))))  ; Brief pause, then retry
-    (when last-error
-      (signal (car last-error) (cdr last-error)))))
+           (message "[Retry] Attempt %d/%d failed: %s"
+                    attempts max-retries last-error)
+           (sleep-for delay))))))
+    (message "[Auto-Workflow] All %d retries exhausted: %s"
+             max-retries last-error)
+    nil))
 ```
 
-### Failure Response Matrix
+### What NOT to Use in Auto-Workflow
 
-| Failure | Don't Do This | Do This |
-|---------|---------------|---------|
-| Worktree create fails | Ask user "Retry?" | Retry automatically with exponential backoff |
-| Test fails | Ask "Continue?" | Log and continue to next target |
+| Function | Reason | Alternative |
+|----------|--------|-------------|
+| `y-or-n-p` | Blocks for input | Retry automatically |
+| `yes-or-no-p` | Blocks for input | Log and continue |
+| `read-from-minibuffer` | Requires input | Use defaults or config |
+| `completing-read` | Requires input | Use predefined list |
+| `user-error` (for recoverable) | May stop flow | Use `message` + continue |
+
+### Failure Handling Table
+
+| Failure Type | Don't Do This | Do This |
+|--------------|---------------|---------|
+| Worktree create fails | Ask user "Retry?" | `gptel-auto-workflow--with-retry` |
+| Test fails | Ask "Continue?" | Log failure, move to next target |
 | LLM timeout | Ask "What now?" | Retry with shorter prompt |
-| Push fails | Ask "Force push?" | Retry with fresh auth |
-| Buffer killed | Ask "Recreate?" | Recreate buffer automatically |
+| Push fails | Ask "Force push?" | Retry with fresh auth token |
+| Buffer killed | Ask "Restore?" | Check liveness, recreate buffer |
 
-### Prohibited Functions
+### Why This Matters
 
-**Never use these in auto-workflow code:**
-- `y-or-n-p`
-- `yes-or-no-p`
-- `read-from-minibuffer`
-- `completing-read`
-- `read-string`
-- `user-error` (for recoverable issues)
-
-**Always use instead:**
-- Retry logic with `condition-case`
-- Fallback paths
-- Error logging with `message`
-- Continue to next task
-
----
+- Auto-workflow runs at 2 AM unattended
+- No human is watching to answer questions
+- Each failure is an opportunity to retry
+- Eventual success > immediate failure
 
 ## Multi-Project Configuration
 
-Auto-workflow can run against multiple projects using Emacs' built-in `.dir-locals.el` mechanism.
+### Using .dir-locals.el
+
+Auto-workflow supports multiple projects via Emacs' built-in `.dir-locals.el` mechanism.
 
 ### Project Detection Priority
-
-`gptel-auto-workflow--project-root` now checks in this order:
 
 1. **Override variable** (from .dir-locals.el)
    - Variable: `gptel-auto-workflow--project-root-override`
@@ -186,43 +163,18 @@ Auto-workflow can run against multiple projects using Emacs' built-in `.dir-loca
 3. **Fallback**
    - Default: `~/.emacs.d/`
 
-### Configuration via .dir-locals.el
+### Configuration Example
 
 Place `.dir-locals.el` in your project root:
 
 ```elisp
 ((nil
   . ((gptel-auto-workflow--project-root-override . "/path/to/project")
-     (gptel-auto-workflow-targets . ("src/main.el" "src/utils.el" "src/config.el"))
+     (gptel-auto-workflow-targets . ("src/main.el" "src/utils.el"))
      (gptel-auto-experiment-max-per-target . 5)
      (gptel-auto-experiment-time-budget . 1200)
      (gptel-backend . gptel--dashscope)
-     (gptel-model . qwen3.5-plus)
-     (gptel-auto-experiment-auto-push . t))))
-```
-
-### Usage for Git Projects
-
-1. Create `.dir-locals.el` in project root
-2. Set `gptel-auto-workflow-targets` for that project
-3. Auto-workflow will use git root automatically
-
-```bash
-cd ~/my-project
-git init  # if not already a git repo
-# Create .dir-locals.el with targets
-```
-
-### Usage for Non-Git Projects
-
-1. Create `.dir-locals.el` in project root
-2. Set `gptel-auto-workflow--project-root-override` to absolute path
-3. Auto-workflow will use that path instead of git detection
-
-```elisp
-((nil
-  . ((gptel-auto-workflow--project-root-override . "/Users/me/projects/legacy-code")
-     (gptel-auto-workflow-targets . ("main.pl" "utils.pl" "config.pl")))))
+     (gptel-model . qwen3.5-plus))))
 ```
 
 ### Manual Project Switching
@@ -231,119 +183,103 @@ git init  # if not already a git repo
 M-x gptel-auto-workflow-set-project-root
 ```
 
-This prompts for a new project root path and updates the workflow context.
+Or programmatically:
 
----
+```elisp
+(setq gptel-auto-workflow--project-root-override "/my/project")
+```
 
-## Session Architecture (Per Worktree)
-
-Each experiment runs in its own Git worktree with isolated context:
+### Session Architecture (Per Worktree)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  WORKTREE: optimize/target-exp1                         │
-│  (default-directory: /path/to/worktree)                │
+│  (default-directory: worktree path)                     │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐       │
 │  │  analyzer   │ │  executor   │ │   grader    │       │
-│  │  subagent   │ │  subagent   │ │  subagent   │
+│  │  subagent   │ │  subagent   │ │  subagent   │       │
 │  └─────────────┘ └─────────────┘ └─────────────┘       │
-│  All subagents share worktree context                  │
-│  default-directory = worktree path                     │
+│  All share worktree context                             │
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Key Points:**
-- Each worktree has its own `default-directory`
-- All subagents (analyzer, executor, grader) share the same worktree context
-- Changes are committed to the worktree branch, not main
-- Worktrees are automatically cleaned up after merge
+Each experiment worktree has its own `default-directory`, and all subagents within that worktree share the same working directory context.
 
----
+## Troubleshooting
 
-## Common Bugs and Fixes
-
-### E2E Bug: Deleted Buffer
+### E2E Bug: Deleted Buffer Error
 
 **Symptoms:**
-- Project buffer `*gptel-agent:.emacs.d*` gets deleted during execution
-- Executor runs for 560s+ without completing changes
+- Error message: `Selecting deleted buffer`
+- Executor runs 560s+ without completing
 - No results logged to TSV file
-- Error: `gptel callback error: (error "Selecting deleted buffer")`
+- Project buffer `*gptel-agent:.emacs.d*` gets deleted during execution
 
 **Root Cause:**
-The `gptel-auto-workflow--advice-task-override` advice overrides `current-buffer` to return a fixed project buffer. If that buffer is killed during async execution, all callbacks fail.
+The advice `gptel-auto-workflow--advice-task-override` overrides `current-buffer` to return a fixed project buffer. If that buffer is killed during async execution, all callbacks fail with the deleted buffer error.
 
 **Fix Applied:**
 
 ```elisp
-;; 1. Protect buffer from being killed during runs
-(add-hook 'kill-buffer-query-functions
-          #'gptel-auto-workflow--protect-buffer-hook)
+;; 1. Protect buffer from being killed during execution
+(defun gptel-auto-workflow--protect-buffer (buffer)
+  (push buffer kill-buffer-query-functions))
 
-(defun gptel-auto-workflow--protect-buffer-hook ()
-  "Prevent killing project buffer during active workflow."
-  (if (and (boundp 'gptel-auto-workflow--running)
-           gptel-auto-workflow--running
-           (string-match-p "gptel-agent" (buffer-name)))
-      (progn
-        (message "Refusing to kill buffer during workflow")
-        nil)  ; Don't kill
-    t))
-
-;; 2. Check buffer liveness in current-buffer override
-(defun gptel-auto-workflow--current-buffer-override ()
-  "Override current-buffer to return project buffer."
-  (let ((buf (get-buffer gptel-auto-workflow--project-buffer-name)))
-    (if (and buf (buffer-live-p buf))
-        buf
-      ;; Buffer was killed, fall back to original
-      (funcall gptel-auto-workflow--original-current-buffer))))
+;; 2. Check buffer liveness before each call
+(defun gptel-auto-workflow--current-buffer-safe ()
+  "Return current buffer, checking for deleted buffers."
+  (if (buffer-live-p gptel-auto-workflow--project-buffer)
+      gptel-auto-workflow--project-buffer
+    (current-buffer)))  ; Fall back to original
 ```
 
-**Result:**
-- E2E test passed - experiment completed in 230s with `kept` decision
+**Results After Fix:**
+- Experiment completed in 230s (down from 560s+)
 - Score improved: 0.40 → 0.41
 - Commit `bae1b73` merged to staging
 
-### Branch Push to Main Mistake
+### Common Error Patterns
 
-**Error:** On 2026-03-25, auto-workflow changes were pushed directly to main, violating the branching rule.
+| Error | Likely Cause | Fix |
+|-------|--------------|-----|
+| `Selecting deleted buffer` | Buffer killed during async | Check `buffer-live-p` before use |
+| `Wrong type argument: bufferp, nil` | Buffer not created | Ensure worktree exists first |
+| `Git worktree not found` | Worktree path invalid | Check `default-directory` |
+| `Remote branch not found` | Didn't push to origin | Verify `git push` succeeded |
 
-**Prevention:**
-Always verify branch before pushing:
+### Debugging Commands
 
 ```elisp
-(defun gptel-auto-workflow--safe-push ()
-  "Push only if on optimize branch, never main."
-  (let ((current-branch (magit-git-string "rev-parse" "--abbrev-ref" "HEAD")))
-    (if (string-prefix-p "optimize/" current-branch)
-        (magit-git-success "push" "origin" current-branch)
-      (error "Refusing to push: not on optimize branch (currently %s)"
-             current-branch))))
+;; Check current buffer liveness
+(buffer-live-p (get-buffer "*gptel-agent:.emacs.d*"))
+
+;; List all worktrees
+(magit-git-success "worktree" "list")
+
+;; Check current experiment branch
+(gptel-auto-workflow--current-branch)
+
+;; Verify project root detection
+(gptel-auto-workflow--project-root)
 ```
 
----
+## Anti-Patterns to Avoid
 
-## Configuration Variables Quick Reference
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `gptel-auto-workflow--project-root-override` | Manual project path | `nil` |
-| `gptel-auto-workflow-targets` | Files to optimize | `("init.el")` |
-| `gptel-auto-experiment-max-per-target` | Max experiments per target | `3` |
-| `gptel-auto-experiment-time-budget` | Time budget in seconds | `3600` |
-| `gptel-auto-experiment-auto-push` | Auto-push to origin | `t` |
-| `gptel-backend` | LLM backend to use | `gptel--dashscope` |
-| `gptel-model` | Model name | `qwen3.5-plus` |
-
----
+1. **Pushing directly to main** — Always use optimize branch flow
+2. **Blocking for user input** — Use retry logic instead
+3. **Hardcoding project paths** — Use `.dir-locals.el` for multi-project
+4. **Assuming buffer exists** — Check `buffer-live-p` before use
+5. **No fallback on failure** — Always log and continue
 
 ## Related
 
-- [gptel-tools-agent.el](lisp/modules/gptel-tools-agent.el) - Main implementation
-- [Git Worktree Documentation](https://git-scm.com/docs/git-worktree) - Worktree management
-- [Emacs .dir-locals.el](https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html) - Per-directory settings
-- [Magit Documentation](https://magit.vc/manual/) - Git porcelain for Emacs
-- [Auto-Workflow E2E Tests](test/gptel-auto-workflow-e2e.el) - Test suite
+- [gptel-agent Configuration](/gptel-agent-config)
+- [Worktree Management](/git-worktree)
+- [Emacs Directory Variables](/dir-locals)
+- [Magit Branching](/magit-branching)
+- [Subagent Architecture](/subagents)
+- [TSV Logging](/tsv-logging)
 
 ---
+
+*This knowledge page covers the core auto-workflow system. For advanced topics, see the advanced automation patterns document.*
