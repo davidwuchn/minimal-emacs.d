@@ -125,6 +125,11 @@ gptel preset.")
   (puthash '_ value env)
   (puthash 'it value env))
 
+(defun gptel-sandbox--bind-last-value (value env)
+  "Bind VALUE to last-result placeholders `_` and `it` in ENV."
+  (puthash '_ value env)
+  (puthash 'it value env))
+
 (defun gptel-sandbox--normalize-binding (binding)
   "Normalize a let-style BINDING into `(SYMBOL VALUE-FORM)'."
   (cond
@@ -544,9 +549,7 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
     (`(tool-call ,tool-name . ,arg-forms)
      (gptel-sandbox--execute-tool
       (lambda (value)
-        ;; tool-call without setq: only bind _ and it
-        (puthash (quote _) value env)
-        (puthash (quote it) value env)
+        (gptel-sandbox--bind-last-value value env)
         (funcall callback (list :continue t :done nil)))
       tool-name arg-forms env state))
     (`(result ,expr)
