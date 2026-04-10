@@ -211,7 +211,7 @@ Returns nil if file doesn't exist or isn't readable."
       (ignore-errors
         (gptel-auto-workflow--signal-pids "-TERM" pids))
       (when (process-live-p process)
-        (accept-process-output process 0.1 nil t))
+        (accept-process-output process 0.1 nil))
       (sleep-for 0.05)
       (ignore-errors
         (gptel-auto-workflow--signal-pids
@@ -255,9 +255,8 @@ Uses robust timeout mechanism to prevent blocking indefinitely."
           ;; Poll with short timeout to avoid blocking indefinitely
           (while (and (not done)
                       (< (float-time (time-subtract (current-time) start-time)) timeout-seconds))
-            ;; Use 0.1s timeout in accept-process-output with non-blocking flag
-            ;; The 't' as last arg prevents indefinite blocking
-            (accept-process-output process 0.1 nil t)
+            ;; Use 0.1s timeout in accept-process-output
+            (accept-process-output process 0.1 nil)
             ;; Small delay to prevent busy-waiting
             (sit-for 0.01))
           ;; Cancel timer if still active
