@@ -64,12 +64,13 @@ Use `gptel-benchmark--cancelled' to check if cancelled."
 
 (defun gptel-benchmark-read-json (file)
   "Read and parse JSON from FILE.
-Returns nil if file does not exist or contains invalid JSON."
+Returns nil if file does not exist or contains invalid JSON.
+JSON arrays are normalized to lists for consistent handling."
   (condition-case nil
       (with-temp-buffer
         (insert-file-contents file)
         (goto-char (point-min))
-        (json-read))
+        (gptel-benchmark--ensure-list (json-read)))
     (file-error nil)
     (json-error nil)
     (end-of-file nil)))
@@ -372,17 +373,17 @@ RESULTS should contain :eight-keys-scores in each entry."
   "Analyze RESULTS for patterns, issues, and generate recommendations."
   (let ((issues (make-hash-table :test 'equal))
         (recommendations '())
-        (total (length results))
+        (total (length (or results nil)))
         (low-scores 0)
         (high-scores 0)
         (threshold 0.7))
     (dolist (r results)
       (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall (gptel-benchmark--plist-get scores :overall-score 0)))
-        (cond
-         ((< overall threshold) (cl-incf low-scores))
-         ((>= overall 0.9) (cl-incf high-scores)))
+             (overall (if scores (plist-get scores :overall-score) 0)))
         (when scores
+          (cond
+           ((< overall threshold) (cl-incf low-scores))
+           ((>= overall 0.9) (cl-incf high-scores)))
           (dolist (mapping gptel-benchmark--score-type-map)
             (let* ((score-type (car mapping))
                    (issue-type (cdr mapping))
