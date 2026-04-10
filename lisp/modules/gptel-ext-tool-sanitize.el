@@ -165,6 +165,7 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                  (new-fps (mapcar #'my/gptel--tool-call-fingerprint tool-use))
                  (fps (append fps new-fps)))
             (plist-put info :doom-loop-fingerprints fps)
+            (setf (gptel-fsm-info fsm) info)
             (dolist (fp new-fps)
               (let* ((n my/gptel-doom-loop-threshold)
                      (tail (reverse fps))
