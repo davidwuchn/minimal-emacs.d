@@ -488,7 +488,6 @@ Handles API key lookup, process creation, JSON parsing, and error handling."
         (connect-timeout (or connect-timeout 10))
         (max-time (or max-time 120)))
     (unless my/gptel--openrouter-context-window-fetch-inflight
-      (setq my/gptel--openrouter-context-window-fetch-inflight t)
       (let* ((key (condition-case err
                        (gptel-api-key-from-auth-source "api.openrouter.com" "api")
                      (error
@@ -497,9 +496,9 @@ Handles API key lookup, process creation, JSON parsing, and error handling."
              (buf (generate-new-buffer (format " *%s*" process-name))))
         (if (not (and (stringp key) (not (string-empty-p key))))
             (progn
-              (setq my/gptel--openrouter-context-window-fetch-inflight nil)
               (when (buffer-live-p buf) (kill-buffer buf))
               (message "OpenRouter: no API key found"))
+          (setq my/gptel--openrouter-context-window-fetch-inflight t)
           (let* ((cmd (my/gptel--openrouter-curl-command url connect-timeout max-time key))
                  (proc
                   (make-process
@@ -510,22 +509,21 @@ Handles API key lookup, process creation, JSON parsing, and error handling."
                    :connection-type 'pipe
                    :sentinel
                    (lambda (p _event)
-                     (when (memq (process-status p) '(exit signal deleted))
-                       (setq my/gptel--openrouter-context-window-fetch-inflight nil)
-                       (unwind-protect
-                           (when (= (process-exit-status p) 0)
-                             (with-current-buffer buf
-                               (goto-char (point-min))
-                               (condition-case err
-                                   (let* ((json-object-type 'alist)
-                                          (json-array-type 'list)
-                                          (json-key-type 'symbol)
-                                          (obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
-                                          (data (alist-get 'data obj)))
-                                     (funcall callback data))
-                                 (error
-                                  (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
-                         (when (buffer-live-p buf) (kill-buffer buf))))))))
+                     (setq my/gptel--openrouter-context-window-fetch-inflight nil)
+                     (unwind-protect
+                         (when (= (process-exit-status p) 0)
+                           (with-current-buffer buf
+                             (goto-char (point-min))
+                             (condition-case err
+                                 (let* ((json-object-type 'alist)
+                                        (json-array-type 'list)
+                                        (json-key-type 'symbol)
+                                        (obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
+                                        (data (alist-get 'data obj)))
+                                   (funcall callback data))
+                               (error
+                                (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
+                       (when (buffer-live-p buf) (kill-buffer buf)))))))
             (process-put proc 'my/gptel-managed t)
             proc))))))
 
