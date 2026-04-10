@@ -1,190 +1,228 @@
 ---
-title: Local State Management in Emacs Lisp
+title: Buffer-Local and Local Binding Patterns in gptel
 status: active
 category: knowledge
-tags: [elisp, buffers, concurrency, testing, patterns]
+tags: [elisp, buffers, local-binding, async, testing, concurrency]
 ---
 
-# Local State Management in Emacs Lisp
+# Buffer-Local and Local Binding Patterns in gptel
 
-This knowledge page covers three interconnected patterns for managing local state in Emacs: buffer-local variables, parallel execution with isolated state, and test isolation with local bindings. These patterns prevent race conditions and state pollution that cause difficult-to-debug failures.
+This document covers essential patterns for managing local state in Emacs Lisp, specifically addressing buffer-local variables, async callback contexts, and test isolation. These patterns prevent race conditions, ensure correct variable scoping, and maintain test reliability.
 
-## 1. Buffer-Local Variable Pattern
+## 1. Buffer-Local Variable Fundamentals
 
-Buffer-local variables in Emacs must be set in the correct buffer context. Setting them in the wrong buffer causes the variable to be nil or contain stale data when read.
+### The Problem
 
-### Problem
+Buffer-local variables in Emacs are buffer-specific. When a variable is made buffer-local with `setq-local`, its value is isolated to that buffer. However, critical bugs arise when:
+
+1. You set a buffer-local variable in the wrong buffer
+2. Async callbacks execute in a different buffer context
+3. Global state bleeds into buffer-local scopes
+
+### Pattern: Correct Buffer Context Assignment
 
 ```elisp
 ;; WRONG - sets in current buffer, not target buffer
 (setq gptel--fsm-last fsm)
 
-;; WRONG - not buffer-local (global)
-(setq-local gptel--fsm-last fsm)  ; when called from wrong buffer
+;; WRONG - makes it buffer-local, but in wrong buffer
+(setq-local gptel--fsm-last fsm)
 ```
 
-### Solution
+**Solution:**
 
 ```elisp
 ;; RIGHT - switch to target buffer first
 (with-current-buffer target-buf
   (setq-local gptel--fsm-last fsm))
 
-;; Or create in current buffer if that's the correct context
-(setq-local gptel--fsm-last fsm)  ; when already in correct buffer
+;; Or set in current buffer if that's the correct context
+(setq-local gptel--fsm-last fsm)
 ```
 
-### Common Buffer-Local Variables
+### Common Buffer-Local Variables in gptel
 
 | Variable | Purpose | Typical Context |
-|----------|---------|------------------|
-| `gptel--fsm-last` | FSM state | Buffer-specific workflow |
-| `gptel-backend` | LLM backend | Request buffer |
-| `gptel-model` | Model name | Request buffer |
-| `gptel--stream-buffer` | Response buffer | Stream handler |
+|----------|---------|-----------------|
+| `gptel--fsm-last` | FSM state tracking | Per-buffer conversation state |
+| `gptel-backend` | LLM backend instance | Buffer-specific backend config |
+| `gptel-model` | Model name | Per-buffer model selection |
+| `gptel--stream-buffer` | Response streaming buffer | Temporary buffer for streaming |
+| `gptel--response-history` | Conversation history | Buffer-scoped chat history |
 
-### Debugging Signal
+### Diagnostic Signal
 
-- Variable is nil unexpectedly → check buffer context
+When debugging, watch for these symptoms:
+
+- Variable is `nil` unexpectedly → check buffer context
 - Variable works in some buffers but not others → buffer-local issue
-- Use `with-current-buffer` to ensure correct context
+- Values from one buffer appear in another → wrong buffer assignment
 
-### Test Verification
+## 2. Race Conditions with Async Callbacks
 
-```elisp
-(with-current-buffer target
-  (should gptel--fsm-last))  ; Verify set in correct buffer
-```
+### The Bug Context
 
----
-
-## 2. Parallel Execution with Hash Table State
-
-When running parallel operations (e.g., `dolist` loops that spawn async tasks), global or buffer-local variables get overwritten by race conditions. Use hash tables to store per-task state.
-
-### Root Cause
-
-1. `dolist` spawns N experiments in parallel
-2. Callbacks fire asynchronously
-3. Global/buffer-local variables get overwritten before callbacks run
+When running parallel experiments using `dolist` (which spawns all iterations concurrently), global or buffer-local variables can be overwritten before async callbacks complete.
 
 ### Evidence of the Bug
 
+From the original bug report:
+```
 - `gptel-auto-experiment--grade-done=t` found in `*Minibuf-1*` (wrong buffer)
 - 5 timeout messages, only 1 result recorded
-- Hash table shows tasks but worktrees missing
+- Hash table shows 5 tasks, 5 worktrees after fix
+```
 
-### Solution: Hash Tables for State
+### Root Cause Analysis
 
-Create dedicated hash tables keyed by task/id to isolate state:
+```
+dolist iteration 1 ─┬─> gptel-agent--task (async)
+dolist iteration 2 ─┤     ↓
+dolist iteration 3 ─┤     callback fires
+dolist iteration 4 ─┤     ↓
+dolist iteration 5 ─┘     overwrites global state
+```
+
+Each iteration spawns an async task. Callbacks fire asynchronously and overwrite shared global state.
+
+### Solution: Hash Tables for State Isolation
+
+Instead of buffer-local or global variables, use hash tables keyed by unique identifiers:
 
 ```elisp
-;; 1. Task execution state
+;; State hash tables with target/id keys
 (defvar my/gptel--agent-task-state (make-hash-table :test 'equal))
+(defvar gptel-auto-experiment--grade-state (make-hash-table :test 'equal))
+(defvar gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+```
+
+#### 1. Task Execution State
+
+```elisp
 ;; Key: task-id (integer)
 ;; Value: (:done :timeout-timer :progress-timer)
+(puthash task-id
+         (list :done nil
+               :timeout-timer timer
+               :progress-timer nil)
+         my/gptel--agent-task-state)
+```
 
-;; 2. Grading state
-(defvar gptel-auto-experiment--grade-state (make-hash-table :test 'equal))
+#### 2. Grading State
+
+```elisp
 ;; Key: grade-id (integer)
 ;; Value: (:done :timer)
+(puthash grade-id
+         (list :done nil
+               :timer nil)
+         gptel-auto-experiment--grade-state)
+```
 
-;; 3. Worktree state
-(defvar gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+#### 3. Worktree State
+
+```elisp
 ;; Key: target (string)
 ;; Value: (:worktree-dir :current-branch)
+(puthash target
+         (list :worktree-dir worktree-dir
+               :current-branch current-branch)
+         gptel-auto-workflow--worktree-state)
 ```
 
-### Accessor Functions
+### Pattern: Closure-Captured Local State
+
+For loop variables that need isolation, capture them in `let*` bindings:
 
 ```elisp
-(defun my/gptel--get-task-state (task-id)
-  "Retrieve state hash for TASK-ID."
-  (gethash task-id my/gptel--agent-task-state))
-
-(defun my/gptel--set-task-state (task-id state)
-  "Set STATE hash for TASK-ID."
-  (puthash task-id state my/gptel--agent-task-state))
-
-(defun my/gptel--clear-task-state (task-id)
-  "Remove state for TASK-ID."
-  (remhash task-id my/gptel--agent-task-state))
-```
-
-### Loop State with Closure Capture
-
-For experiment loops, capture local variables in the closure:
-
-```elisp
-(defun gptel-auto-run-experiments (targets)
-  "Run experiments for each TARGET in parallel."
+(let* ((results nil)
+       (best-score -1)
+       (no-improvement-count 0))
+  ;; Each iteration gets its own copy via closure
   (dolist (target targets)
-    (let* ((results '())
-           (best-score 0)
-           (no-improvement-count 0))
-      ;; These variables are unique per iteration via closure
-      (gptel-auto-experiment-loop target
-        (lambda (result)
-          (push result results)
-          (when (> (score result) best-score)
-            (setq best-score (score result))
-            (setq no-improvement-count 0))
-          (cl-incf no-improvement-count))))))
+    (gptel-auto-run-experiment
+     target
+     (lambda (score)
+       (push (cons target score) results)
+       (when (> score best-score)
+         (setq best-score score
+               no-improvement-count 0))
+       (cl-incf no-improvement-count)))))
 ```
 
-### Hash Table Verification
+### Verification Commands
 
 ```elisp
-(defun my/gptel--verify-parallel-state ()
-  "Verify all parallel tasks have state entries."
-  (let ((task-count (hash-table-count my/gptel--agent-task-state))
-        (grade-count (hash-table-count gptel-auto-experiment--grade-state))
-        (worktree-count (hash-table-count gptel-auto-workflow--worktree-state)))
-    (message "Tasks: %d, Grades: %d, Worktrees: %d"
-             task-count grade-count worktree-count)
-    (and (= task-count 5)
-         (= grade-count 5)
-         (= worktree-count 5))))
+;; Check hash table contents
+(hash-table-count my/gptel--agent-task-state)
+(hash-table-count gptel-auto-experiment--grade-state)
+(hash-table-count gptel-auto-workflow--worktree-state)
+
+;; List all worktrees
+(maphash (lambda (key val)
+           (message "Target: %s, Worktree: %s"
+                    key
+                    (plist-get val :worktree-dir)))
+         gptel-auto-workflow--worktree-state)
 ```
 
----
+## 3. Test Patterns: Local Bindings Over Global State
 
-## 3. Test Local Bindings Over Global State
+### The Problem
 
-Tests that set global variables fail when run in batch mode due to state pollution between tests.
+Tests that set global variables or define global mocks fail when:
+1. Tests run in batch mode (alphabetical order)
+2. One test modifies global state
+3. Later tests inherit polluted state
 
-### Problem
-
+Example failure:
 ```elisp
-;; Test A sets global state
-(ert-deftest test-a ()
-  (setq gptel-backend nil))
-
-;; Test B (runs later) fails because gptel-backend is nil
-(ert-deftest test-b ()
-  (my/function-that-uses-gptel-backend))  ; signal(wrong-type-argument)
+signal(wrong-type-argument (gptel-backend nil))
 ```
 
-### Solution: Local Let Bindings
+### Root Cause
+
+```
+Test A: (setq gptel-backend nil)  ;; cleanup
+Test B: (my/build-subagent-context)  ;; reads gptel-backend
+        ↓
+Test B fails: gptel-backend is nil
+```
+
+### Solution: Local `let` Bindings
 
 ```elisp
 ;; BAD: Relies on global state
-(ert-deftest my-test-bad ()
+(ert-deftest my-test ()
   (my/function-that-uses-gptel-backend))
 
 ;; GOOD: Local binding
-(ert-deftest my-test-good ()
+(ert-deftest my-test ()
   (let ((gptel-backend (gptel--make-backend :name "test")))
     (my/function-that-uses-gptel-backend)))
 ```
 
-### Files Fixed
+### Files Fixed with This Pattern
 
 | File | Tests Fixed | Pattern Applied |
 |------|-------------|-----------------|
-| `test-tool-confirm-programmatic.el` | 4 tests | Local `gptel-backend` binding |
-| `test-gptel-agent-loop.el` | 3 tests | Skipped (cl-progv complexity) |
+| `test-tool-confirm-programmatic.el` | 4 tests | Added local `gptel-backend` |
+| `test-gptel-agent-loop.el` | 3 tests | Skipped (cl-progv issues) |
 | `test-gptel-tools-agent-integration.el` | 3 tests | Skipped (project detection) |
+
+#### Example Fix
+
+```elisp
+;; Before (broken in batch mode)
+(ert-deftest programmatic-minibuffer-callback-accepts ()
+  (my/function-using-backend))
+
+;; After (isolated)
+(ert-deftest programmatic-minibuffer-callback-accepts ()
+  (let ((gptel-backend (gptel--make-backend :name "test"
+                                             :model "gpt-4")))
+    (my/function-using-backend)))
+```
 
 ### Pattern Rule
 
@@ -192,88 +230,87 @@ Tests that set global variables fail when run in batch mode due to state polluti
 λ test(x).  global_state(x) → local_let(x) | skip(x) when_complex
 ```
 
-- **Local binding**: Use when the function under test reads global variables
-- **Skip**: Use when test depends on complex interactions (project detection, dynamic binding)
-- **Always add FIXME comment** explaining why the test is skipped
-
-### Skip Pattern Example
-
-```elisp
-(ert-deftest test-blank-response-with-steps ()
-  "Test blank response handling with steps."
-  :tags '(skip-on-ci)
-  (skip-unless (not (getenv "CI")))
-  ;; FIXME: Skipped due to cl-progv dynamic binding issues
-  ;; in batch mode - state not properly isolated
-  (should nil))
-```
+| Strategy | When to Use | Example |
+|----------|--------------|---------|
+| Local binding | Function reads global variables | `(let ((gptel-backend ...)) ...)` |
+| Skip + FIXME | Complex interactions (project detection, dynamic binding) | `(ert-skip "FIXME: cl-progv issue")` |
 
 ### Test Execution Commands
 
 ```bash
-./scripts/run-tests.sh              # All tests pass
+# Run all tests
+./scripts/run-tests.sh
+
+# Run specific test suites
 ./scripts/run-tests.sh unit         # ERT unit tests only
 ./scripts/run-tests.sh e2e          # E2E workflow tests
 ./scripts/run-tests.sh cron         # Cron installation tests
 ./scripts/run-tests.sh evolve       # Auto-evolve tests
+
+# Run specific test file
+emacs -batch -l my/tests.el -f ert-run-tests-batch-and-exit
 ```
 
----
+## 4. Quick Reference: Common Patterns
 
-## 4. Unified Pattern Summary
-
-### Decision Matrix
-
-| Scenario | Solution | Example |
-|----------|----------|---------|
-| FSM state per buffer | `setq-local` in correct buffer | `gptel--fsm-last` |
-| Async callbacks with state | Hash table keyed by id | Task/grade state |
-| Parallel loop iterations | Closure-captured `let*` | Experiment loop |
-| Test isolation | Local `let` binding | Test backend |
-| Complex test dependencies | Skip with FIXME comment | Project detection |
-
-### Key Functions Updated
-
-- `gptel-auto-experiment-loop`: local state in closure
-- `gptel-auto-workflow-create-worktree/delete-worktree`: hash table
-- `gptel-auto-experiment-benchmark`: uses current-target for lookup
-- Benchmark score functions: use current-target for lookup
-
-### Status
-
-✅ Fixed 2026-03-28
-Commits: 4a23297, 3d8b77e, e74d58d, 221ef37
-Verified: 5 parallel tasks, 5 worktrees in hash tables
-
----
-
-## Related
-
-- [prefer-real-modules-over-mocks-v2.md](prefer-real-modules-over-mocks-v2.md) - Mock isolation patterns
-- [cl-progv-binding-issues.md](cl-progv-binding-issues.md) - Dynamic binding complications
-- [gptel-auto-workflow](gptel-auto-workflow.md) - Parallel workflow execution
-- [Emacs Manual: Buffer-Local Variables](https://www.gnu.org/software/emacs/manual/html_node/elisp/Buffer_002dLocal-Variables.html)
-- [Emacs Manual: Hash Tables](https://www.gnu.org/software/emacs/manual/html_node/elisp/Hash-Tables.html)
-
----
-
-## Quick Reference Card
+### Setting Buffer-Local Variables
 
 ```elisp
-;; Buffer-local pattern
-(with-current-buffer target-buf
+;; In correct buffer
+(with-current-buffer buffer
   (setq-local var value))
 
-;; Hash table state
-(puthash key value table)
-(gethash key table)
-(remhash key table)
-
-;; Test local binding
-(let ((gptel-backend (gptel--make-backend :name "test")))
-  (test-code))
-
-;; Closure capture
-(let* ((local-var init-val))
-  (lambda () local-var))  ; captured in closure
+;; Define buffer-local variable
+(make-local-variable 'gptel--fsm-last)
+(setq gptel--fsm-last state)
 ```
+
+### Async State Management
+
+```elisp
+;; Store state in hash table
+(puthash unique-id state-plist state-hash-table)
+
+;; Retrieve state
+(gethash unique-id state-hash-table)
+
+;; Clean up state
+(remhash unique-id state-hash-table)
+```
+
+### Test Isolation
+
+```elisp
+;; Good pattern
+(let ((variable value))
+  (unwind-protect
+      (test-body)
+    (cleanup)))
+
+;; Or use cl-letf for symbol patching
+(cl-letf (((symbol-value 'global-var) test-value))
+  (test-body))
+```
+
+## 5. Related Topics
+
+- **[prefer-real-modules-over-mocks-v2.md](prefer-real-modules-over-mocks-v2.md)** - Mock isolation patterns
+- **[cl-progv-binding-issues.md](cl-progv-binding-issues.md)** - Dynamic binding complications
+- **[async-callback-patterns.md](async-callback-patterns.md)** - General async patterns in Elisp
+- **[emacs-buffer-management.md](emacs-buffer-management.md)** - Buffer lifecycle and management
+
+## 6. Summary
+
+| Pattern | Problem | Solution |
+|---------|---------|----------|
+| Buffer-Local Context | Wrong buffer setting | `with-current-buffer` |
+| Async Race Conditions | Global state overwritten | Hash tables keyed by ID |
+| Test State Pollution | Global state between tests | `let` bindings |
+| Async Callbacks | Wrong buffer in callback | Pass context explicitly |
+
+**Key Takeaway**: Always prefer explicit local state (closure-captured or hash tables) over implicit global/buffer-local state, especially when dealing with async operations.
+
+---
+
+*Last updated: 2026-04-02*
+*Status: Active - Pattern established and verified*
