@@ -2,246 +2,242 @@
 title: Buffer Management in Emacs
 status: active
 category: knowledge
-tags: [buffers, elisp, pattern, debugging, concurrency]
+tags: [buffers, emacs-lisp, concurrency, patterns, async]
 ---
 
 # Buffer Management in Emacs
 
-Buffer-local variables are a powerful mechanism in Emacs for maintaining state specific to individual buffers. However, they introduce subtle complexities that can lead to hard-to-debug issues, especially in concurrent or async contexts. This page synthesizes key patterns, bugs, and solutions discovered through the gptel-auto-workflow development.
+Buffer-local variables and proper buffer context management are critical for writing robust Emacs Lisp code, especially when dealing with asynchronous operations, parallel execution, or multi-buffer workflows. This page synthesizes common pitfalls and patterns for working with buffers in gptel and related projects.
 
-## Buffer-Local Variables: The Core Pattern
+## 1. Buffer-Local Variable Pattern
 
-### The Fundamental Principle
+### The Core Problem
 
-Buffer-local variables must be set **in the correct buffer context**. This is the single most important rule for working with buffer-local state.
+Buffer-local variables must be set in the **correct buffer context**. Setting them in the wrong buffer leads to unexpected `nil` values or state corruption.
 
-### Correct vs. Incorrect Patterns
+### The Anti-Patterns
 
 ```elisp
-;; ❌ WRONG - sets in current buffer, not target buffer
+;; WRONG - sets in current buffer, not target buffer
 (setq gptel--fsm-last fsm)
 
-;; ❌ WRONG - buffer-local but set in wrong buffer
-(with-current-buffer wrong-buffer
-  (setq-local gptel--fsm-last fsm))
+;; WRONG - not buffer-local (global variable)
+(setq-local gptel--fsm-last fsm)  ; when in wrong buffer
 
-;; ✅ CORRECT - switch to target buffer first
+;; WRONG - variable not declared buffer-local
+(setq gptel-backend (alist-get backend models))  ; clobbers global
+```
+
+### The Solution
+
+```elisp
+;; RIGHT - switch to target buffer first
 (with-current-buffer target-buf
   (setq-local gptel--fsm-last fsm))
 
-;; ✅ CORRECT - if current buffer IS the correct context
-(setq-local gptel--fsm-last fsm)
+;; RIGHT - create in current buffer if that's the correct context
+(setq-local gptel--fsm-last fsm)  ; when already in target buffer
 ```
 
-### Common Buffer-Local Variables in gptel
+### Common Buffer-Local Variables
 
 | Variable | Purpose |
 |----------|---------|
-| `gptel--fsm-last` | FSM state tracking |
-| `gptel-backend` | LLM backend configuration |
-| `gptel-model` | Model name for API calls |
-| `gptel--stream-buffer` | Response streaming buffer |
-| `gptel-auto-workflow--headless` | Headless execution flag |
+| `gptel--fsm-last` | FSM state |
+| `gptel-backend` | LLM backend |
+| `gptel-model` | Model name |
+| `gptel--stream-buffer` | Response buffer |
+| `default-directory` | Current directory |
+| `gptel-auto-workflow--headless` | Headless mode flag |
 
-### Signal of Buffer-Local Issues
+### Detection Pattern
 
-Watch for these symptoms:
-- Variable is `nil` unexpectedly → check buffer context
-- Variable works in some buffers but not others → buffer-local issue
-- Race conditions in async code → likely global state problem
-
-### Test Pattern
+Use this to verify buffer-local variables are set correctly:
 
 ```elisp
-;; Verify variable is set in correct buffer
+;; Test that variable is set in correct buffer
 (with-current-buffer target
-  (should gptel--fsm-last)
-  (should gptel-backend))
+  (should gptel--fsm-last))
+
+;; Debug: check which buffer has the value
+(dolist (buf (buffer-list))
+  (when (buffer-local-value 'gptel--fsm-last buf)
+    (message "Found in: %s" buf)))
 ```
 
-## The Buffer-Local Callback Context Bug
+## 2. Buffer Context in Async Callbacks
 
 ### The Problem
 
-Parallel execution with `dolist` spawned multiple experiments simultaneously, but callbacks from `gptel-agent--task` fired asynchronously and overwrote global/buffer-local variables, causing race conditions.
-
-### Symptoms Observed
-
-- `gptel-auto-experiment--grade-done=t` found in `*Minibuf-1*` (wrong buffer)
-- 5 timeout messages, only 1 result recorded
-- Hash table inconsistency: 5 tasks but only partial results
-
-### Root Cause Analysis
+When using `dolist` or `mapc` to spawn parallel tasks, callbacks fire asynchronously and may execute in the **wrong buffer context**, causing race conditions.
 
 ```elisp
-;; This spawns all 5 experiments in parallel
+;; PROBLEM: All 5 iterations spawn immediately, but callbacks
+;;          fire later in an unpredictable buffer context
 (dolist (target targets)
-  (gptel-auto-workflow--run-with-targets target))
+  (gptel-agent--task ...))  ; callbacks overwrite global state!
 ```
 
-The sequence of events:
-1. `dolist` iterates and starts 5 async tasks
-2. Callbacks fire in unpredictable order
-3. Global variables get overwritten by whichever callback runs last
-4. State from target A appears in target B's buffer
+### The Solution: Hash Tables for State Management
 
-### The Fix: Hash Tables for State Management
-
-Instead of buffer-local variables for async state, use hash tables keyed by target/id:
+Instead of relying on buffer-local or global variables, use hash tables keyed by unique identifiers:
 
 ```elisp
-;; 1. Agent task state - keyed by task-id (integer)
+;; Three hash tables for different state types
+
 (defvar my/gptel--agent-task-state (make-hash-table :test 'equal))
-;; Value: (:done :timeout-timer :progress-timer)
-
-;; 2. Grading state - keyed by grade-id (integer)
 (defvar gptel-auto-experiment--grade-state (make-hash-table :test 'equal))
-;; Value: (:done :timer)
-
-;; 3. Worktree state - keyed by target (string)
 (defvar gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
-;; Value: (:worktree-dir :current-branch)
 ```
 
-### Experiment Loop Local Variables
+### State Hash Table Structure
 
-For closure-captured state in loops, use `let*` to create independent copies:
+| Hash Table | Key Type | Value Structure |
+|------------|----------|-----------------|
+| `my/gptel--agent-task-state` | task-id (integer) | `(:done :timeout-timer :progress-timer)` |
+| `gptel-auto-experiment--grade-state` | grade-id (integer) | `(:done :timer)` |
+| `gptel-auto-workflow--worktree-state` | target (string) | `(:worktree-dir :current-branch)` |
+
+### Closure-Captured Local Variables
+
+For loop-iteration state that shouldn't be shared:
 
 ```elisp
-(let* ((results nil)
-       (best-score 0)
-       (no-improvement-count 0))
-  ;; Each iteration gets its own binding - no shared state
-  (dolist (target targets)
-    (lambda ()
-      ;; This closure captures THIS iteration's bindings
-      (run-experiment target))))
+(dolist (target targets)
+  (let* ((results nil)
+         (best-score 0)
+         (no-improvement-count 0))
+    ;; Each iteration gets its own binding via closure
+    (gptel-agent--task
+     (lambda (response)
+       ;; Uses captured `target`, `results`, etc.
+       (cl-incf no-improvement-count)))))
 ```
 
-### Key Functions Updated
+### Lookup Pattern
 
-| Function | Change |
-|----------|--------|
-| `gptel-auto-experiment-loop` | Local state in closure |
-| `gptel-auto-workflow-create-worktree` | Uses hash table |
-| `gptel-auto-workflow-delete-worktree` | Uses hash table |
-| `gptel-auto-experiment-benchmark` | Uses `current-target` for lookup |
-| Benchmark score functions | Use `current-target` for lookup |
-
-### Verification
-
-After the fix:
-```
-Hash table entries: 5 tasks, 5 worktrees
-All 5 parallel tasks completed successfully
-No cross-contamination of state
-```
-
-## dir-locals.el in Non-File Buffers
-
-### The Discovery
-
-Setting `default-directory` alone does **NOT** auto-load `.dir-locals.el` for non-file buffers. You must call `hack-dir-local-variables-non-file-buffer` explicitly.
-
-### Critical Requirement: Trailing Slash
-
-The `default-directory` **MUST have a trailing slash** for `hack-dir-local-variables-non-file-buffer` to work:
+Always use explicit lookup instead of relying on buffer context:
 
 ```elisp
-;; ❌ WRONG - no trailing slash
-(file-name-directory "~/.emacs.d")  ; => "~/"
-;; locate-dominating-file fails to find .dir-locals.el
+;; WRONG - relies on buffer being correct
+(benchmark-score gptel-auto-experiment--current-target)
 
-;; ✅ CORRECT - with trailing slash
-(file-name-directory "~/.emacs.d/") ; => "~/.emacs.d/"
-;; locate-dominating-file finds .dir-locals.el
+;; RIGHT - explicit lookup
+(benchmark-score (gethash target gptel-auto-workflow--worktree-state))
 ```
 
-### The Fix
+## 3. Directory Local Variables in Non-File Buffers
+
+### The Problem
+
+Setting `default-directory` alone does **NOT** auto-load `.dir-locals.el`. Emacs only auto-loads it when visiting files.
+
+### The Critical Detail: Trailing Slash
+
+`locate-dominating-file` requires a **trailing slash** on directories:
 
 ```elisp
-(let ((root (file-name-as-directory (expand-file-name project-root))))
-  (with-current-buffer buf
-    (setq-local default-directory root)  ;; MUST have trailing slash!
-    (hack-dir-local-variables-non-file-buffer)
-    ...))
+;; WRONG - no trailing slash, locate-dominating-file fails
+(setq default-directory (file-name-directory "~/.emacs.d"))
+;; => "~/"
+
+;; RIGHT - with trailing slash
+(setq default-directory (file-name-as-directory "~/.emacs.d"))
+;; => "~/.emacs.d/"
 ```
 
-### Additional Tip: Safe Variables for Dir-Locals
+### Complete Pattern
 
-Use `:safe #'always` in `defcustom` to mark variables as safe:
+```elisp
+(defun gptel-auto-workflow--setup-dir-locals (buf project-root)
+  "Load .dir-locals.el for PROJECT-ROOT into buffer BUF."
+  (let ((root (file-name-as-directory (expand-file-name project-root))))
+    (with-current-buffer buf
+      (setq-local default-directory root)  ;; MUST have trailing slash!
+      (hack-dir-local-variables-non-file-buffer))))
+```
+
+### Safe Variables for Dir-Locals
+
+Use `:safe #'always` in `defcustom` to avoid prompts:
 
 ```elisp
 (defcustom gptel-auto-workflow-projects nil
   "List of project configurations."
-  :type '(repeat (cons string plist))
-  :safe #'always)
+  :type '(repeat string)
+  :safe #'always)  ;; Prevents prompts in daemon mode
 ```
 
-Without this, Emacs prompts for confirmation, which hangs in daemon mode (no UI to display the prompt).
+Without `:safe #'always`, Emacs prompts for confirmation in daemon mode, which hangs because there's no UI to display the prompt.
 
-## Kill Buffer Query Functions: Inverted Logic Trap
+## 4. Kill Buffer Query Functions
 
-### The Problem
+### The Inverted Logic Problem
 
-The "Buffer X modified; kill anyway?" prompt appeared during auto-workflow execution, blocking headless operation.
+`kill-buffer-query-functions` has **inverted semantics** compared to most hooks:
+
+| Return Value | Meaning |
+|--------------|---------|
+| `t` | Allow the kill (proceed) |
+| `nil` | Block the kill (prevent) |
 
 ### The Bug
 
 ```elisp
-;; ❌ WRONG - inverted logic
+;; WRONG - inverted logic
 (defun gptel-auto-workflow--suppress-kill-buffer-query ()
   (not gptel-auto-workflow--headless))
-```
 
-When `gptel-auto-workflow--headless` is `t`:
-- `(not t)` = `nil`
-- `kill-buffer-query-functions` interprets `nil` as "block the kill"
+;; When headless = t:
+;;   (not t) = nil
+;;   nil means "block the kill" ← OPPOSITE of intended!
+```
 
 ### The Fix
 
-For `kill-buffer-query-functions`:
-- Return `t` = allow killing
-- Return `nil` = block killing
-
 ```elisp
-;; ✅ CORRECT
+;; CORRECT - return t to allow killing in headless mode
 (defun gptel-auto-workflow--suppress-kill-buffer-query ()
   (or gptel-auto-workflow--headless t))
 ```
 
-### General Rule for Query Functions
+### Adding to the Hook
 
-When adding hooks to `*-query-functions`, understand the return value semantics:
-- `nil` often means "block/prevent"
-- `t` often means "allow/proceed"
+```elisp
+(add-hook 'kill-buffer-query-functions
+          #'gptel-auto-workflow--suppress-kill-buffer-query)
+```
 
-Always test the actual behavior, not just the docstring intent.
+### Testing the Hook
 
-### Location
+```elisp
+;; Verify the function returns correct value
+(message "Query result: %s"
+         (funcall #'gptel-auto-workflow--suppress-kill-buffer-query))
+;; => t when headless, nil otherwise
+```
 
-`gptel-tools-agent.el:2695-2698`
+## 5. Summary: Buffer Management Patterns
 
-## Common Pitfalls Summary
+| Pattern | Use When | Key Function |
+|---------|----------|--------------|
+| `with-current-buffer` | Setting buffer-local vars | Context switching |
+| Hash tables with IDs | Parallel async operations | State isolation |
+| Closure-captured `let*` | Loop iteration state | Per-iteration binding |
+| `file-name-as-directory` | Paths for dir-locals | Trailing slash |
+| `hack-dir-local-variables-non-file-buffer` | Loading .dir-locals | Explicit loading |
+| Return `t` in `*-query-functions` | Allowing actions | Hook semantics |
 
-| Pitfall | Symptom | Solution |
-|---------|---------|----------|
-| Setting buffer-local in wrong buffer | Variable nil unexpectedly | Use `with-current-buffer` |
-| Global state in async code | Race conditions | Use hash tables keyed by id |
-| Missing trailing slash on `default-directory` | `.dir-locals.el` not loaded | Use `file-name-as-directory` |
-| Inverted query function logic | Prompt blocks execution | Return `t` to allow, `nil` to block |
-| Not calling `hack-dir-local-variables` | Dir-locals ignored in non-file buffers | Call explicitly |
+## Related
 
-## Related Topics
-
-- [FSM Pattern] - State machine implementation using buffer-local variables
-- [Async Patterns] - Handling concurrent operations in Emacs
-- [Project Management] - Multi-project support with dir-locals
-- [Headless Operation] - Running Emacs without a frame
+- [[auto-workflow]] - Workflow automation using these patterns
+- [[fsm]] - Finite state machines using buffer-local state
+- [[concurrency]] - Async task management
+- [[dir-locals]] - Directory local variables
+- [[gptel-agent]] - Agent execution with callback handling
 
 ---
 
 **Status**: Active  
-**Last Updated**: 2026-04-02  
-**Pattern Origin**: gptel-auto-workflow development  
-**Commits**: 4a23297, 3d8b77e, e74d58d, 221ef37
+**Synthesized**: 2026-04-02  
+**Sources**: Commits 4a23297, 3d8b77e, e74d58d, 221ef37
