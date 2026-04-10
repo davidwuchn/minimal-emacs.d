@@ -2,147 +2,227 @@
 title: Subagent Architecture and Debugging
 status: active
 category: knowledge
-tags: [subagent, emacs, gptel, debugging, eca]
+tags: [subagent, gptel, agent, debugging, emacs-lisp, architecture]
 ---
 
 # Subagent Architecture and Debugging
 
-This knowledge page covers subagent implementation patterns, debugging techniques, and decision frameworks for when to use subagents in the Emacs AI assistant ecosystem.
+Subagents are specialized LLM-powered components that operate with context isolation from the parent agent. They are designed for parallel execution, dedicated tooling, and model selection. This document covers subagent architecture, common pitfalls, and debugging patterns.
 
-## Overview
-
-A **subagent** is a specialized AI agent spawned by a parent agent to handle isolated tasks. Subagents provide:
-- **Context isolation** - Subagent context won't pollute parent
-- **Parallel execution** - Can run concurrently with parent tasks
-- **Tool profile restriction** - Can limit to readonly tools
-- **Dedicated model** - Can use cheaper/faster models
-
-## Architecture
-
-### Subagent Types vs Other Patterns
-
-| Pattern | Location | Use Case |
-|---------|----------|----------|
-| Protocol | `mementum/knowledge/` | Pure procedures, no external dependencies |
-| Skill | `assistant/skills/` | Has external tools/API, needs REPL |
-| Subagent | `eca/prompts/` | Context isolation, parallel execution |
-
-### Core Files
+## Architecture Overview
 
 ```
-lisp/modules/
-├── gptel-tools-agent.el      # Subagent tool integration
-├── gptel-agent.el            # Core agent definitions
-└── gptel-auto-workflow-projects.el  # Workflow routing
+┌─────────────────────────────────────────────────────────────────┐
+│                      Parent Agent (gptel)                       │
+│                         parent-buf                              │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+              ┌────────────────┼────────────────┐
+              │                │                │
+              ▼                ▼                ▼
+     ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+     │   Grader     │  │  Reviewer    │  │   Executor   │
+     │  Subagent    │  │  Subagent    │  │  Subagent    │
+     │ context-isol │  │ context-isol │  │ context-isol │
+     │ readonly-tool│  │ readonly-tool│  │ write-tool   │
+     │ cheap-model  │  │ cheap-model  │  │ fast-model   │
+     └──────────────┘  └──────────────┘  └──────────────┘
 ```
 
----
+### Key Components
 
-## When to Use Subagents
+| Component | File | Purpose |
+|-----------|------|---------|
+| `gptel-agent--task` | `gptel-agent.el` | Core task execution function |
+| `gptel-agent--agents` | `gptel-agent.el` | Agent registry |
+| `gptel-tools-agent.el` | Tools module | Provides tool access for subagents |
+| `gptel-auto-workflow` | Workflow engine | Manages multi-agent orchestration |
 
-### Decision Matrix
+## Decision Matrix: Subagent vs Skill vs Protocol
 
-Use this matrix to determine whether a task should be implemented as a subagent, skill, or protocol:
+When deciding how to implement an agent capability, use this matrix:
 
-| Task Characteristic | Use Subagent | Use Skill | Use Protocol |
-|---------------------|--------------|-----------|---------------|
-| Context isolation needed | ✓ | | |
-| Parallel execution required | ✓ | | |
-| Dedicated model desired | ✓ | | |
-| Has external API/tools | | ✓ | |
-| Has REPL dependencies | | ✓ | |
-| Pure procedure, no deps | | | ✓ |
-| Shared context with parent | | ✓ | |
+| Criteria | Protocol | Skill | Subagent |
+|----------|----------|-------|----------|
+| **External deps** | None | Scripts, REPL, API | API, tools |
+| **Context isolation** | No | Shared | Yes |
+| **Parallel execution** | No | No | Yes |
+| **Dedicated model** | No | No | Yes |
+| **State management** | Stateless | Minimal | Stateful |
+| **Tool profile** | None | Custom | Limited/readonly |
 
-### Code Reviewer Example
-
-The code reviewer is a prime candidate for subagent implementation because:
-
-1. **Context isolation** - Review comments shouldn't pollute parent agent's context
-2. **Parallel execution** - Parent can spawn reviewer and continue other work
-3. **Tool profile** - Reviewer only needs readonly tools (file reading)
-4. **Dedicated model** - Can use cheaper model (e.g., gpt-5.4-mini) for review
-5. **Already defined** - `eca/config.json` has reviewer subagent configured
-
----
-
-## Debugging Subagent Issues
-
-### Case Study: Grader Subagent Not Using LLM
-
-**Problem**: Grader subagent always fell back to local grading, never used LLM.
-
-**Symptoms**:
-- Grader uses local grading instead of LLM
-- `gptel-agent--task` appears undefined
-
-#### Root Cause Chain
+### When to Use Each
 
 ```
-gptel-tools-agent.el did NOT require gptel-agent
-        ↓
-gptel-agent--task was never defined (fboundp returned nil)
-        ↓
-gptel-agent--agents was declared nil (shadowing)
-        ↓
-(fboundp 'gptel-agent--task) → nil → local grading fallback
+Protocols:    mementum/knowledge/{name}-protocol.md
+              → Pure procedures, no dependencies
+
+Skills:       assistant/skills/{name}/
+              → Has external tools/API, needs REPL
+
+Subagents:    eca/prompts/{name}_agent.md
+              → Context isolation, parallel execution, dedicated model
 ```
 
-#### TDD Approach to Fix
+### Example: Reviewer Implementation
 
-1. **Write tests first**: Create test file to reveal actual behavior
+```json
+// eca/config.json
+{
+  "subagents": {
+    "reviewer": {
+      "system-prompt": "You are a code reviewer...",
+      "model": "gpt-4.4-mini",
+      "tools": ["git-diff", "read-only-fs"],
+      "context-isolation": true
+    }
+  }
+}
+```
+
+**Why Reviewer is a Subagent**:
+1. **Context isolation** - Review comments won't pollute parent context
+2. **Parallel execution** - Parent spawns reviewer, continues other work
+3. **Tool profile** - Only needs readonly tools (git diff, file read)
+4. **Dedicated model** - Can use cheaper model for review tasks
+
+## Common Pitfall: Overlay Conflicts
+
+### Problem Description
+
+Overlays from subagent execution appearing in wrong buffers (e.g., `*Messages*`) despite routing fixes.
+
+### Root Cause
+
+**Two conflicting advices on the same function**:
+
+```elisp
+;; OLD - Line 461 in gptel-tools-agent.el
+(defadvice gptel-agent--task (:override my/gptel-agent--task-override)
+  "Old override advice that replaces function entirely"
+  (let ((parent-buf (or ad--arg1 (current-buffer))))
+    ;; Creates overlays in parent-buf - which may be *Messages*!
+    ...))
+
+;; NEW - Line 212 in gptel-auto-workflow-projects.el
+(defadvice gptel-agent--task (:around gptel-auto-workflow--advice-task-override)
+  "New around advice that wraps original"
+  ;; Better behavior but conflicts with old advice
+  ...)
+```
+
+**Why it fails**:
+- `:override` advice completely replaces the original function
+- Creates overlays in `parent-buf` 
+- If FSM was created in `*Messages*`, overlays appear there
+- `:override` and `:around` on same function = unpredictable behavior
+
+### Solution Pattern
+
+```elisp
+;; 1. REMOVE the old override advice
+;; Delete or comment out the :override advice entirely
+
+;; 2. MERGE caching logic into single :around advice
+(defadvice gptel-agent--task (:around gptel-auto-workflow--advice-task-override)
+  "Combined advice with caching and workflow routing"
+  (let ((cache-key (cons (ad-get-arg 0) (ad-get-arg 1))))
+    (if (and gptel-agent--cache-enabled
+             (gethash cache-key gptel-agent--task-cache))
+        (gethash cache-key gptel-agent--task-cache)
+      (setq ad-return-value 
+            (let ((result (ad-advice-continue)))
+              ;; Post-process result, create overlays in correct buffer
+              result)))))
+
+;; 3. Add headless buffer suppression
+(defun suppress-buffer-kill-query ()
+  "Suppress buffer-modified queries in headless mode."
+  (when noninteractive
+    (setq kill-buffer-query-functions nil)))
+```
+
+### Verification Commands
+
+```bash
+# Check for advice conflicts
+grep -n "defadvice gptel-agent--task" lisp/modules/*.el
+
+# List all advice on a function
+(ad-advice-delete-regexp "gptel-agent--task")
+```
+
+## Debug Pattern: Grader Subagent Always Falls Back to Local
+
+### Symptom
+
+Grader subagent always uses local grading instead of LLM-powered grading.
+
+### Debugging Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    TDD Approach                              │
+│  1. Write test first → reveals actual behavior               │
+│  2. Tests guide fix → don't guess                           │
+│  3. Verify fix → tests must pass                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Root Cause Chain Analysis
+
+```
+fboundp → nil → local fallback
+    │
+    ├── gptel-tools-agent.el does NOT require gptel-agent
+    │       │
+    │       └── (require 'gptel-agent) MISSING
+    │
+    ├── gptel-agent--task never defined
+    │       │
+    │       └── (fboundp 'gptel-agent--task) returns nil
+    │
+    └── gptel-agent--agents declared nil (shadowing)
+            │
+            └── (defvar gptel-agent--agents nil) - redundant!
+```
+
+### Test-Driven Fix
 
 ```elisp
 ;; tests/test-grader-subagent.el
-(ert-deftest test-grader-subagent-llm-available ()
-  "Verify gptel-agent--task is available."
-  (should (fboundp 'gptel-agent--task)))
+(ert-deftest test-grader-uses-llm ()
+  "Test that grader uses LLM when available."
+  (require 'gptel-tools-agent)
+  (should (fboundp 'gptel-agent--task))
+  (should (> (length gptel-agent--agents) 0)))
 
-(ert-deftest test-grader-subagent-agents-loaded ()
-  "Verify gptel-agent--agents is populated."
-  (should (seq-length gptel-agent--agents)))
-
-(ert-deftest test-grader-use-llm ()
-  "Verify grader uses LLM when available."
-  (should gptel-agent-loaded))
+(ert-deftest test-grader-model-selection ()
+  "Test that grader uses correct model."
+  (let ((grader-model (alist-get 'grader gptel-agent--agents)))
+    (should (string-match-p "qwen" grader-model))))
 ```
 
-2. **Run tests** - Tests reveal actual failure points
-3. **Trace the failure** - Follow the root cause chain
-4. **Apply fix** - Targeted changes based on test feedback
-
-#### Fixes Applied
-
-**File: `lisp/modules/gptel-tools-agent.el`**
+### Fixes Applied
 
 ```elisp
-;; BEFORE: Missing require
-;; (defvar gptel-agent--agents nil)  ; This shadowed the real variable!
+;; lisp/modules/gptel-tools-agent.el - ADD require at top
+(require 'gptel-agent)  ; <-- This was missing!
+(require 'gptel-core)
 
-;; AFTER: Proper require at top
-(require 'gptel-agent)  ; This loads gptel-agent--task definition
+;; REMOVE redundant variable declaration
+;; (defvar gptel-agent--agents nil)  ; DELETE THIS LINE
+
+;; Fix JSON parser for grader output format
+(defun gptel-benchmark-parse-grader-output (json-string)
+  "Parse grader JSON with flexible format handling."
+  (let ((parsed (json-parse-string json-string :object-type 'alist)))
+    (or (alist-get 'score parsed)
+        (alist-get 'result parsed)
+        (alist-get 'data parsed))))
 ```
 
-**File: `lisp/modules/gptel-benchmark-subagent.el`**
-
-```elisp
-;; Fixed JSON parser to handle grader output format
-(defun gptel-benchmark--parse-grader-output (output)
-  "Parse grader OUTPUT into structured result."
-  (let ((json-array-type 'list))
-    (when (string-match "^{" output)
-      (json-read-from-string output))))
-```
-
-#### Verification
-
-Run verification commands:
-
-```bash
-./scripts/run-tests.sh grader
-```
-
-Expected results:
+### Verification Output
 
 ```
 :gptel-agent-loaded t
@@ -152,154 +232,134 @@ Expected results:
 :executor-model "qwen3.5-plus"
 ```
 
----
+### Run Tests
 
-### Case Study: Subagent Overlay Conflict
-
-**Problem**: Subagent overlays appearing in *Messages* buffer despite routing fixes.
-
-**Symptoms**:
-- Overlays appear in wrong buffer (*Messages*)
-- Executor and Grader overlays visible where they shouldn't
-- "Buffer gptel.el modified; kill anyway?" prompts in headless mode
-
-#### Root Cause
-
-**TWO conflicting advices** on `gptel-agent--task`:
-
-1. Old advice (line 461): `my/gptel-agent--task-override` with `:override`
-2. New advice (projects.el:212): `gptel-auto-workflow--advice-task-override` with `:around`
-
-The old `:override` advice completely replaces the original function and creates overlays in `parent-buf`, which can be `*Messages*` if the FSM was created there.
-
-#### Solution
-
-1. **Remove old `:override` advice**
-
-```elisp
-;; REMOVE THIS from gptel-tools-agent.el:461
-(defun my/gptel-agent--task-override (orig-fn &rest args)
-  "Override gptel-agent--task to add custom behavior."
-  (apply orig-fn args))
+```bash
+./scripts/run-tests.sh grader
+# or
+emacs -batch -l tests/test-grader-subagent.el -f ert-run-tests-batch-and-exit
 ```
-
-2. **Merge caching logic into new `:around` advice**
-
-```elisp
-;; In gptel-auto-workflow-projects.el:212
-(defun gptel-auto-workflow--advice-task-override (orig-fn &rest args)
-  "Around advice that adds caching without overriding behavior."
-  (let ((cache-key (car args)))
-    (or (gethash cache-key gptel-workflow--cache)
-        (let ((result (apply orig-fn args)))
-          (puthash cache-key result gptel-workflow--cache)
-          result))))
-```
-
-3. **Add headless mode suppression**
-
-```elisp
-;; Suppress kill-buffer query in headless mode
-(advice-add 'kill-buffer-query :around
-            (lambda (orig-fn &rest args)
-              (if gptel-headless-mode
-                  (progn
-                    (dolist (buf (buffer-list))
-                      (when (buffer-modified-p buf)
-                        (set-buffer-modified-p nil)))
-                    t)
-                (apply orig-fn args))))
-```
-
-#### Pattern: Advice Type Consistency
-
-> **Key Pattern**: Multiple advices on same function with different types (`:override` vs `:around`) causes unpredictable behavior. Use ONE advice type.
-
----
 
 ## Implementation Patterns
 
-### Pattern 1: Subagent Registration
+### Pattern 1: Creating a New Subagent
 
 ```elisp
-;; Register a subagent in eca/config.json
+;; Define in eca/prompts/executor_agent.md
+# You are an Executor subagent
+
+## Capabilities
+- Execute code in sandbox
+- Run tests
+- Report results
+
+## Tool Profile
+- shell-command
+- read-file
+- write-file (temporary)
+
+## Context
+- Isolated from parent
+- Uses cheaper model
+```
+
+```json
+// eca/config.json - Register subagent
 {
   "subagents": {
-    "reviewer": {
-      "prompt": "eca/prompts/reviewer_agent.md",
-      "model": "gpt-4o-mini",
-      "tools": ["read-file", "search"]
+    "executor": {
+      "prompt-file": "eca/prompts/executor_agent.md",
+      "model": "qwen3.5-plus",
+      "timeout": 300,
+      "max-tokens": 8192
     }
   }
 }
 ```
 
-### Pattern 2: Subagent Invocation
+### Pattern 2: Spawning Subagent from Parent
 
 ```elisp
-;; Spawn subagent from parent
-(gptel-agent--task
- :name "reviewer"
- :context parent-context
- :task "Review the following code changes..."
- :callback #'handle-review-results)
+(defun spawn-grader-subagent (code test-cases)
+  "Spawn grader subagent with CODE and TEST-CASES."
+  (gptel-agent--task
+   (list
+    :name "grader"
+    :system "You are a code grading assistant..."
+    :prompt (format "Grade this code:\n%s\n\nTests:\n%s" 
+                    code test-cases)
+    :model (or (alist-get 'grader gptel-agent--agents)
+               gptel-default-model)
+    :context-isolation t)))
 ```
 
-### Pattern 3: Debug Subagent State
+### Pattern 3: Checking Subagent Availability
 
 ```elisp
-(defun gptel-debug-subagent-state ()
-  "Display subagent state for debugging."
-  (message "=== Subagent Debug State ===")
-  (message "gptel-agent-loaded: %s" (featurep 'gptel-agent))
-  (message "gptel-agent--task fbound: %s" (fboundp 'gptel-agent--task))
-  (message "Agents count: %s" (seq-length gptel-agent--agents))
-  (message "Active tasks: %s" gptel-agent--active-tasks))
+(defun subagent-available-p (subagent-name)
+  "Check if SUBAGENT-NAME is available and loaded."
+  (and (fboundp 'gptel-agent--task)
+       (alist-get subagent-name gptel-agent--agents)
+       t))
+
+(defun get-subagent-model (subagent-name)
+  "Get the model configured for SUBAGENT-NAME."
+  (or (alist-get 'model 
+                (alist-get subagent-name gptel-agent--agents))
+      gptel-default-model))
 ```
 
-Run with `M-x gptel-debug-subagent-state`.
+## Debugging Checklist
 
----
+When subagent behavior is unexpected:
+
+- [ ] **Require chain** - Are all required modules loaded?
+  ```elisp
+  ;; Check: (require 'gptel-agent) present in tools module
+  (featurep 'gptel-agent)  ; should be t
+  ```
+
+- [ ] **Function defined** - Is `gptel-agent--task` available?
+  ```elisp
+  (fboundp 'gptel-agent--task)  ; should be t
+  ```
+
+- [ ] **Agents registered** - Are subagents in registry?
+  ```elisp
+  (hash-table-keys gptel-agent--agents)  ; list of available
+  ```
+
+- [ ] **Advice conflicts** - Multiple advices on same function?
+  ```elisp
+  ;; Check for multiple :override/:around advices
+  (ad-advice-delete-regexp "gptel-agent--task")
+  ```
+
+- [ ] **Buffer routing** - Correct buffer for overlays?
+  ```elisp
+  (buffer-name (current-buffer))  ; should be workflow buffer
+  ```
+
+## Key Files Reference
+
+| File | Purpose | Key Functions |
+|------|---------|----------------|
+| `lisp/modules/gptel-agent.el` | Core agent implementation | `gptel-agent--task`, `gptel-agent--agents` |
+| `lisp/modules/gptel-tools-agent.el` | Tools for subagents | `gptel-tools-agent-execute` |
+| `lisp/modules/gptel-auto-workflow-projects.el` | Workflow orchestration | `gptel-auto-workflow--advice-task-override` |
+| `lisp/modules/gptel-benchmark-subagent.el` | Grader subagent | JSON parsing, grading logic |
+| `tests/test-grader-subagent.el` | Tests | 8 tests for grader behavior |
 
 ## Related
 
-- [ECA Configuration](./eca-config.md) - Subagent configuration
-- [Protocol Patterns](./protocol-patterns.md) - When to use protocols
-- [Skill Architecture](./skill-architecture.md) - Skill vs subagent decisions
-- [gptel-agent Debugging](./gptel-debugging.md) - General agent debugging
-- [Workflow Routing](./workflow-routing.md) - Task routing between agents
+- [[gptel-agent-architecture]] - Core agent system
+- [[gptel-tools-agent]] - Tool system for agents
+- [[gptel-auto-workflow]] - Multi-agent orchestration
+- [[skill-vs-subagent]] - When to use each pattern
+- [[protocol-development]] - Protocol-based procedures
 
 ---
 
-## Quick Reference
-
-### Common Debug Commands
-
-```bash
-# Run subagent tests
-./scripts/run-tests.sh grader
-
-# Check if agent is loaded
-M-x gptel-debug-subagent-state
-
-# Force reload agent module
-M-x gptel-agent-reload
-```
-
-### Key Variables
-
-| Variable | Purpose |
-|----------|---------|
-| `gptel-agent--agents` | Registered subagent list |
-| `gptel-agent--task` | Main task execution function |
-| `gptel-agent--active-tasks` | Currently running tasks |
-| `gptel-workflow--cache` | Task result cache |
-
-### File Quick Links
-
-```
-lisp/modules/
-├── gptel-tools-agent.el           # Line 461 - old advice
-├── gptel-agent.el                 # Core agent definitions  
-└── gptel-auto-workflow-projects.el # Line 212 - new advice
-```
+*Last updated: 2026-03-29*
+*Status: Active - Maintained*
+*Tags: subagent, debugging, emacs-lisp, gptel*
