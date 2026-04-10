@@ -1,194 +1,195 @@
 ---
-title: Variable Handling Patterns
+title: Variable
 status: active
 category: knowledge
-tags: [variables, cron, elisp, shell, paths, portability]
+tags: [shell, cron, elisp, environment, path, portability]
 ---
 
-# Variable Handling Patterns
+# Variable
 
-This knowledge page covers critical patterns for working with variables across different contexts: shell environments, cron jobs, and Emacs Lisp. Understanding how variables are expanded, scoped, and declared prevents common bugs.
+Variables are symbolic names that store values. This knowledge page covers critical patterns for working with variables across different contexts: shell environment, Emacs Lisp, and path resolution.
 
-## 1. Variable Expansion in Cron Jobs
+## Environment Variables in Cron
 
 ### The Problem
 
-Cron jobs have a unique environment model that often surprises developers. Variables defined in the crontab itself are **not** passed to the executed command's shell.
+Cron has its own limited environment. Variables set within a crontab entry are **not** inherited by the shell executing the command.
 
-### Root Cause
-
-When you define a variable in crontab:
-
+**Failing Pattern:**
 ```crontab
+# This sets LOGDIR in cron's environment, NOT in the shell
 LOGDIR=$HOME/.emacs.d/var/tmp/cron
-* * * * * some-command >> $LOGDIR/auto-workflow.log 2>&1
+0 * * * * some-command >> $LOGDIR/auto-workflow.log 2>&1
 ```
 
-The crontab sets `LOGDIR` in cron's environment, but the shell executing your command doesn't inherit it. The result: `$LOGDIR` expands to an empty string.
+When cron executes the command, `$LOGDIR` expands to empty string because the shell doesn't have `LOGDIR` in its environment.
 
-### Verification Command
+### The Fix
+
+Use direct variable expansion from the shell's inherited environment:
+
+```crontab
+0 * * * * some-command >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+```
+
+### Detection Command
 
 ```bash
 journalctl -u cron --since "today" | grep -E "davidwu|CMD"
 ```
 
-This reveals cron commands with unexpanded variables in the logs.
+This reveals cron commands with unexpanded variables appearing as empty strings in log output.
 
-### The Fix
+### Files Affected
 
-Use direct variable references or inline the path:
-
-```crontab
-* * * * * some-command >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
-```
-
-### Comparison Table
-
-| Approach | Works in Cron? | Portable? | Readable? |
-|----------|---------------|-----------|-----------|
-| Custom variable (`$LOGDIR`) | ❌ No | ✅ Yes | ✅ Yes |
-| Direct variable (`$HOME`) | ✅ Yes | ✅ Yes | ✅ Yes |
-| Hardcoded path (`/Users/davidwu/...`) | ✅ Yes | ❌ No | ✅ Yes |
+| File | System |
+|------|--------|
+| `cron.d/auto-workflow-pi5` | Debian/Pi5 |
+| `cron.d/auto-workflow` | macOS |
 
 ---
 
-## 2. Emacs Lisp: Declaring External Variables
+## Emacs Lisp: defvar for External Variables
 
-### The Pattern
+### Forward Declaration Pattern
 
-When a variable is defined in one file but referenced in another, use `defvar` without a docstring to declare it. This acts as a forward declaration.
+When a variable is defined in one file but used in another, use `defvar` without a docstring as a forward declaration.
 
-### Correct Usage
-
+**Incorrect:**
 ```elisp
-;; In gptel-tools-agent.el (primary definition)
-(defvar gptel-auto-workflow--worktree-state nil
-  "Hash table for worktree state.")
-```
-
-```elisp
-;; In other-file.el (reference only)
-(defvar gptel-auto-workflow--worktree-state)
-```
-
-### Incorrect Usage (Duplicate Definition)
-
-```elisp
-;; DON'T DO THIS - creates duplicate definition with compiler warning
 (defvar gptel-auto-workflow--worktree-state nil
   "Hash table for worktree state. Defined in gptel-tools-agent.el.")
 ```
 
-### Why It Matters
+**Correct:**
+```elisp
+(defvar gptel-auto-workflow--worktree-state)
+```
+
+### Why This Works
 
 | Aspect | With Docstring | Without Docstring |
 |--------|---------------|-------------------|
-| Compiler warning | ⚠️ Duplicate definition | ✅ Silent |
-| Docstring source | ❌ Duplicated | ✅ Single source |
-| Variable exists | ✅ Yes | ✅ Yes |
-| Value override | ❌ May override original | ✅ Respects original |
+| Definition | Creates/redefines variable | Forward declaration only |
+| Compiler warning | None (redefinition) | None |
+| Source of truth | This file overrides | Original definition file |
 
-### Critical: lexical-binding Warning
+The docstring duplicates information and may override the original definition. Without it, the compiler knows the variable exists but leaves the original definition intact.
 
-With `lexical-binding: t`, `let` bindings for "special" (dynamic) variables require `defvar` first:
+### Warning: lexical-binding
+
+With `lexical-binding: t`, `let` bindings for special variables require `defvar` first:
 
 ```elisp
-;; Without defvar - this creates a lexical binding, NOT a dynamic one
-(let ((some-var "local-value"))
-  (func-that-uses-var))  ; Won't see "local-value"!
+(defvar some-special-variable)  ; Required before let with lexical-binding
 
-;; With defvar - this correctly binds the special variable
-(defvar some-var)
-(let ((some-var "local-value"))
-  (func-that-uses-var))  ; Will see "local-value"
+(let (some-special-variable)
+  (setq some-special-variable '(value))
+  ;; Without defvar above, this would create a lexical binding
+  ;; that doesn't affect the global/dynamic value
+  (some-function))
 ```
 
 ---
 
-## 3. Cross-Platform Path Variables
+## Path Variables: Portability
 
-### The Principle
+### The Problem
 
-Always use environment variables for paths instead of hardcoded values. This ensures portability across different systems and users.
+Hardcoded paths like `/Users/davidwu` break portability across systems and users.
 
-### Recommended Variables
-
-| Variable | Use Case | Example |
-|----------|----------|---------|
-| `$HOME` | User home directory | `$HOME/.emacs.d/init.el` |
-| `$PWD` | Current working directory | Logs: `$PWD/logs/app.log` |
-| `$(git rev-parse --show-toplevel)` | Project root | `$PROJECT_ROOT/AGENTS.md` |
-| `$USER` | Current username | `/home/$USER/` |
-
-### Anti-Pattern: Hardcoded Paths
-
+**Avoid:**
 ```bash
-# BAD - won't work on different machines
-/Users/davidwu/.emacs.d/scripts/run-tests.sh
-
-# GOOD - works everywhere
-$HOME/.emacs.d/scripts/run-tests.sh
+# Never hardcode usernames
+/Users/davidwu/workspace/...
 ```
 
-### Systemd-Specific Patterns
-
-On Linux systems with systemd (Debian, Pi5):
-
+**Prefer:**
 ```bash
-# Check user service status
-systemctl --user status emacs
+# Use HOME for user directories
+$HOME/workspace/...
 
-# Restart the daemon (NOT pkill)
-systemctl --user restart emacs
-
-# View user service logs
-journalctl --user -u emacs
+# Use git rev-parse for project roots
+$(git rev-parse --show-toplevel)/relative/path
 ```
 
-**Critical:** Never use `pkill -f "emacs --daemon"` on systemd systems—it leaves stale socket files.
+### Portable Path Pattern
 
-### Detection Commands
+```bash
+# In shell scripts
+SCRIPT_DIR="${HOME}/.emacs.d/scripts"
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 
-Find hardcoded paths in your codebase:
+# In crontab (inherits HOME)
+0 * * * * ${HOME}/.emacs.d/scripts/auto-workflow.sh >> /tmp/workflow.log
+```
+
+### Detection Command
 
 ```bash
 grep -rn "/Users/davidwu" . --include="*.sh" --include="*.el" --include="*.md"
 ```
 
-Find all path variables needing updates:
+### Files Fixed
+
+| File | Purpose |
+|------|---------|
+| `scripts/run-tests.sh` | Unified test runner |
+| `scripts/verify-integration.sh` | Integration verification |
+| `AGENTS.md` | Agent documentation |
+
+---
+
+## Systemd Environment
+
+### Service Management
+
+On Debian/Linux with systemd user services:
 
 ```bash
-grep -rn '\$HOME\|\$PWD\|HOME\|PWD' . --include="*.sh" | head -20
+# Check status
+systemctl --user status emacs
+
+# Restart daemon (NOT pkill)
+systemctl --user restart emacs
+
+# View logs
+journalctl --user -u emacs
+```
+
+### Critical Warning
+
+**Never use `pkill -f "emacs --daemon"`** on systemd systems. This leaves stale socket files and prevents the service from starting cleanly.
+
+Instead, rely on systemd to manage the daemon lifecycle.
+
+### Environment Variables in Systemd
+
+Systemd services have a sanitized environment. Pass variables explicitly:
+
+```ini
+[Service]
+Environment="HOME=/home/username"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
 ```
 
 ---
 
-## 4. Variable Scope Summary
+## Actionable Patterns Checklist
 
-### Environment Comparison
-
-| Context | Variable Source | Inheritance | Expansion Time |
-|---------|----------------|-------------|----------------|
-| Bash shell | Environment or script | Child inherits | Runtime |
-| Cron job | Crontab only | ❌ Not inherited | Parse time |
-| Emacs Lisp | `defvar` / `defcustom` | Dynamic binding | Load time |
-| Systemd unit | `[Service]` section | Inherited | Service start |
-
-### Actionable Patterns
-
-1. **Cron jobs:** Never use custom variables; use `$HOME`, `$PATH` directly
-2. **Emacs external refs:** Use bare `(defvar name)` without docstring
-3. **Paths:** Always prefer `$HOME` over hardcoded `/Users/username`
-4. **Systemd:** Use `systemctl --user` commands, never `pkill` for daemons
+- [ ] **Cron**: Use `$HOME` directly, never custom variables from crontab
+- [ ] **Elisp**: Use `(defvar var-name)` without docstring for forward declarations
+- [ ] **Paths**: Use `$HOME` or `$(git rev-parse --show-toplevel)` instead of hardcoded paths
+- [ ] **Systemd**: Use `systemctl --user` commands, never `pkill` for Emacs daemon
+- [ ] **Detection**: Run grep commands to find hardcoded paths or unexpanded variables
 
 ---
 
 ## Related
 
-- [Cron Configuration](../system/cron-configuration.md)
-- [Emacs Package Development](../development/emacs-package-dev.md)
-- [Shell Scripting Best Practices](../scripts/shell-patterns.md)
-- [Systemd User Services](../system/systemd-user-services.md)
-- [Path Handling in Scripts](../scripts/path-handling.md)
-
----
+- [Cron](./cron.md)
+- [Emacs Lisp](./elisp.md)
+- [Shell](./shell.md)
+- [Systemd](./systemd.md)
+- [Path Resolution](./path-resolution.md)
+- [Emacs Daemon](./emacs-daemon.md)
