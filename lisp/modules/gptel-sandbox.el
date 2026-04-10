@@ -312,9 +312,9 @@ supports a small, explicit whitelist of pure operations."
     (dolist (arg spec-args (nreverse values))
       (let* ((name (plist-get arg :name))
              (key (intern (concat ":" name)))
-             (value-form (gethash key arg-map :gptel-sandbox-missing)))
+             (value-form (gethash key arg-map gptel-sandbox--missing-marker)))
         (cond
-         ((eq value-form :gptel-sandbox-missing)
+         ((eq value-form gptel-sandbox--missing-marker)
           (if (plist-get arg :optional)
               (push nil values)
             (error "Missing required argument %s for tool %s"
