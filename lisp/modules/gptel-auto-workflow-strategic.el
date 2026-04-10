@@ -257,11 +257,9 @@ Otherwise, convert using princ representation."
 Returns list of validated relative paths, up to MAX-TARGETS."
   (let ((targets '())
         (candidates-list (if (listp candidates) candidates (list candidates))))
-    (dolist (file candidates-list)
-      (when (< (length targets) max-targets)
-        (setq targets (gptel-auto-workflow--validate-and-add-target
-                       file proj-root targets max-targets))))
-    (reverse targets)))
+    (dolist (file candidates-list targets)
+      (setq targets (gptel-auto-workflow--validate-and-add-target
+                     file proj-root targets max-targets)))))
 
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list.
