@@ -110,7 +110,7 @@ RunAgent was registered, leaving it out of the buffer's tool list."
               (message "gptel: skipping malformed tool call \
 (name=%S, available-tools=%S)"
                        name
-                       (mapcar (lambda (ts) (gptel-tool-name ts)) tools))
+                       (mapcar (lambda (ts) (or (ignore-errors (gptel-tool-name ts)) "<unknown>")) tools))
               (plist-put tc :result
                          (format "Error: unknown or nil tool %S called by model" name))
               (push tc pruned))))))
@@ -163,12 +163,13 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
         (when tool-use
           (let* ((fps (or (plist-get info :doom-loop-fingerprints) '()))
                  (new-fps (mapcar #'my/gptel--tool-call-fingerprint tool-use))
-                 (fps (append fps new-fps)))
+                 (fps (append fps new-fps))
+                 (history-fps (butlast fps (length new-fps)))
+                 (tail (reverse history-fps)))
             (plist-put info :doom-loop-fingerprints fps)
             (setf (gptel-fsm-info fsm) info)
             (dolist (fp new-fps)
               (let* ((n my/gptel-doom-loop-threshold)
-                     (tail (reverse fps))
                      (run (length (seq-take-while (lambda (f) (equal f fp)) tail))))
                 (when (>= run n)
                   (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
