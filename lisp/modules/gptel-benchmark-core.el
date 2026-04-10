@@ -211,12 +211,12 @@ FIELD should be a keyword like :overall-score."
   "Accumulate SCORE into TOTAL.
 Returns the new accumulated total.
 SCORE must be a number or nil; non-numeric values signal error."
-  (unless (numberp total)
-    (signal 'wrong-type-argument (list 'numberp total)))
+  (unless (or (numberp score) (null score))
+    (signal 'wrong-type-argument (list '(or numberp null) score)))
   (let ((normalized-score (cond
                            ((numberp score) score)
                            ((null score) 0)
-                           (t (signal 'wrong-type-argument (list 'numberp score))))))
+                           (t (signal 'wrong-type-argument (list '(or numberp null) score))))))
     (+ total normalized-score)))
 
 (defun gptel-benchmark--accumulate-scores (totals scores-alist)
