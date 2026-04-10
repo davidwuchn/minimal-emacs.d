@@ -19,9 +19,52 @@
       (should-not
        (gptel-auto-workflow--parse-targets
         "Error: Task analyzer could not finish task. Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"))
-      (should gptel-auto-workflow--analyzer-quota-exhausted)
-      (should-not gptel-auto-workflow--analyzer-transient-failure)
-      (should-not gptel-auto-experiment--quota-exhausted))))
+       (should gptel-auto-workflow--analyzer-quota-exhausted)
+       (should-not gptel-auto-workflow--analyzer-transient-failure)
+       (should-not gptel-auto-experiment--quota-exhausted))))
+
+(ert-deftest regression/auto-workflow-strategic/ask-analyzer-uses-dedicated-time-budget ()
+  "Target selection should use the dedicated analyzer timeout budget."
+  (let ((gptel-auto-experiment-use-subagents t)
+        (gptel-auto-workflow-analyzer-time-budget 120)
+        (my/gptel-agent-task-timeout 60)
+        captured-timeout
+        parsed-targets)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--gather-context)
+               (lambda () '(:git-history "" :file-sizes "" :file-list "" :todos "")))
+              ((symbol-function 'gptel-auto-workflow--build-analyzer-prompt)
+               (lambda (&rest _) "Prompt body"))
+              ((symbol-function 'gptel-auto-workflow--parse-targets)
+               (lambda (_response) '("lisp/modules/target.el")))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_type _description _prompt callback &optional timeout)
+                 (setq captured-timeout timeout)
+                 (funcall callback "[]"))))
+      (gptel-auto-workflow--ask-analyzer-with-findings
+       nil
+       (lambda (targets)
+         (setq parsed-targets targets)))
+      (should (= captured-timeout 120))
+      (should (equal parsed-targets '("lisp/modules/target.el"))))))
+
+(ert-deftest regression/auto-workflow-strategic/ask-analyzer-keeps-higher-global-timeout ()
+  "Analyzer target selection should not shorten a larger global timeout."
+  (let ((gptel-auto-experiment-use-subagents t)
+        (gptel-auto-workflow-analyzer-time-budget 120)
+        (my/gptel-agent-task-timeout 300)
+        captured-timeout)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--gather-context)
+               (lambda () '(:git-history "" :file-sizes "" :file-list "" :todos "")))
+              ((symbol-function 'gptel-auto-workflow--build-analyzer-prompt)
+               (lambda (&rest _) "Prompt body"))
+              ((symbol-function 'gptel-auto-workflow--parse-targets)
+               (lambda (_response) nil))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_type _description _prompt callback &optional timeout)
+                 (setq captured-timeout timeout)
+                 (funcall callback "[]"))))
+      (gptel-auto-workflow--ask-analyzer-with-findings nil #'ignore)
+      (should (= captured-timeout 300)))))
 
 (ert-deftest regression/auto-workflow-strategic/select-targets-falls-back-on-analyzer-transient-failure ()
   "Transient analyzer failures should use static targets."

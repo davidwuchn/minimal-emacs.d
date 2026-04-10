@@ -58,6 +58,13 @@ Findings stored in var/tmp/research-findings.md for analyzer."
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-analyzer-time-budget 120
+  "Minimum timeout in seconds for analyzer target selection.
+Target selection can require more context synthesis than the default subagent
+timeout, so keep a dedicated budget to avoid unnecessary static fallbacks."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
 (defvar gptel-auto-workflow--research-timer nil
   "Timer for periodic researcher runs.")
 
@@ -200,6 +207,8 @@ OUTPUT JSON ONLY:
 CALLBACK receives list of target files."
   (let* ((context (gptel-auto-workflow--gather-context))
          (max-targets gptel-auto-workflow-max-targets-per-run)
+         (analyzer-timeout (max my/gptel-agent-task-timeout
+                                gptel-auto-workflow-analyzer-time-budget))
          (prompt (gptel-auto-workflow--build-analyzer-prompt
                   context research-findings max-targets)))
     (if (and gptel-auto-experiment-use-subagents
@@ -210,8 +219,9 @@ CALLBACK receives list of target files."
            'analyzer
            "Select targets"
            prompt
-           (lambda (result)
-             (funcall callback (gptel-auto-workflow--parse-targets result)))))
+            (lambda (result)
+              (funcall callback (gptel-auto-workflow--parse-targets result)))
+           analyzer-timeout))
       (funcall callback nil))))
 
 (defun gptel-auto-workflow--validate-and-add-target (file proj-root targets max-targets)
