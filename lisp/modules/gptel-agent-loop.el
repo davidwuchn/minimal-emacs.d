@@ -644,7 +644,7 @@ Cache behavior:
                         ;; If where is already in parent-buf, use it directly.
                         ;; If it's from a foreign buffer (fsm-info), don't copy
                         ;; its position across buffers — create a fresh marker instead.
-                        (if (eq (marker-buffer where) parent-buf)
+                        (if (and where (eq (marker-buffer where) parent-buf))
                             where
                           (with-current-buffer parent-buf (point-marker)))))
                    (callback (gptel-agent-loop--make-callback state prompt use-tools)))
