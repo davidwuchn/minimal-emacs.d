@@ -312,13 +312,10 @@ Returns the number of messages truncated, or 0 if nothing was done."
   "Collect indices of messages in MESSAGES vector matching PREDICATE.
 PREDICATE is a function that takes a message plist and returns non-nil if it matches.
 Returns a list of indices in ascending order."
-  (let ((indices '()))
-    (when (and messages (> (length messages) 0))
-      (dotimes (i (length messages))
-        (let ((msg (aref messages i)))
-          (when (funcall predicate msg)
-            (push i indices))))
-      (nreverse indices))))
+  (when (and messages (> (length messages) 0))
+    (cl-loop for i below (length messages)
+             when (funcall predicate (aref messages i))
+             collect i)))
 
 (defun my/gptel--strip-images-from-messages (info)
   "Strip image content from all messages in INFO to reduce payload.
@@ -342,21 +339,15 @@ Returns the number of image parts removed, or 0 if nothing was done."
                (content (plist-get msg :content)))
           (when (and content (sequencep content) (not (stringp content)) (> (length content) 0))
             (let* ((original-length (length content))
-                   (filtered
-                    (if (vectorp content)
-                        (vconcat
-                         (cl-remove-if
-                          (lambda (part)
-                            (and (listp part)
-                                 (equal (plist-get part :type) "image_url")
-                                 (cl-incf removed)))
-                          content))
-                      (cl-remove-if
-                       (lambda (part)
-                         (and (listp part)
-                              (equal (plist-get part :type) "image_url")
-                              (cl-incf removed)))
-                       content))))
+                   (as-list (if (vectorp content) (append content nil) content))
+                   (filtered-list
+                    (cl-remove-if
+                     (lambda (part)
+                       (and (listp part)
+                            (equal (plist-get part :type) "image_url")
+                            (cl-incf removed)))
+                     as-list))
+                   (filtered (if (vectorp content) (vconcat filtered-list) filtered-list)))
               (when (< (length filtered) original-length)
                 (plist-put msg :content filtered)))))))
     removed))
