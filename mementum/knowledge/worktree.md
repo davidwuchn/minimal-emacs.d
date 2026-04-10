@@ -1,104 +1,121 @@
 ---
-title: Git Worktree Patterns for Auto-Workflow Experiments
+title: Git Worktree Management in gptel-auto-workflow
 status: active
 category: knowledge
-tags: [git, worktree, auto-workflow, debugging, experiments]
+tags: [git, worktree, automation, debugging, experiments]
 ---
 
-# Git Worktree Patterns for Auto-Workflow Experiments
+# Git Worktree Management in gptel-auto-workflow
 
 ## Overview
 
-Git worktrees enable parallel experiment development by creating isolated working directories attached to the same repository. This knowledge page synthesizes patterns learned from debugging auto-workflow experiment failures and establishing sustainable cleanup practices.
+Git worktrees allow multiple working directories to be attached to a single repository. In the gptel-auto-workflow system, worktrees enable parallel experiment execution where each experiment runs in its own isolated directory while sharing the same `.git` database.
 
-**Core Challenge**: Worktrees share `.git` but have separate working directories. Scripts that hardcode paths relative to script location won't see worktree changes—causing subtle validation bugs.
+This page documents critical lessons learned about worktree management, including a significant verification bug, cleanup patterns, and timing issues that caused experiment failures.
 
----
+## How Worktrees Are Used in Auto-Workflow
 
-## Pattern 1: The Verification-Failed Worktree Bug
+### Architecture
 
-### Problem Statement
+```
+Main Repository ($GIT_DIR)
+├── worktree: agent-exp1    (var/tmp/experiments/optimize/agent-exp1)
+├── worktree: core-exp1     (var/tmp/experiments/optimize/core-exp1)
+├── worktree: tools-exp1    (var/tmp/experiments/optimize/tools-exp1)
+└── main working directory  (~/projects/gptel/)
+```
 
-Auto-workflow experiments always failed with `verification-failed` after the grader passed 9/9 tests. The system appeared to be working correctly during execution but failed at the final validation step.
+### Creation Pattern
 
-### Root Cause Analysis
+Each experiment creates a dedicated worktree:
 
-The `gptel-auto-experiment-benchmark` function ran `verify-nucleus.sh` using a path computed from `proj-root`:
+| Step | Action | Command |
+|------|--------|---------|
+| 1 | Create experiment branch | `git branch experiment-branch` |
+| 2 | Create worktree | `git worktree add <path> <branch>` |
+| 3 | Run experiment in worktree | Changes isolated to worktree |
+| 4 | On success | Merge to staging |
+| 5 | On failure | Worktree preserved for debugging |
+
+### Key Properties
+
+| Property | Main Repo | Worktree |
+|----------|-----------|----------|
+| `.git` reference | Points to self | Points to main repo |
+| Commit history | Shared | Shared (read-only) |
+| Working directory | Main | Isolated |
+| Branch association | `HEAD` | Specific branch |
+| Path computation | Relative to cwd | Relative to script location |
+
+## Critical Bug: Verification Against Wrong Directory
+
+### Symptom
+
+Auto-workflow experiments always failed with `verification-failed` even after the grader passed 9/9 cases.
+
+### Root Cause
+
+The `gptel-auto-experiment-benchmark` function ran the verification script using a path computed from `proj-root`:
 
 ```elisp
-;; lisp/modules/gptel-tools-agent.el:1634
-(expand-file-name "scripts/verify-nucleus.sh" proj-root)
+;; BEFORE (buggy code) - lisp/modules/gptel-tools-agent.el:1634
+(let* ((proj-root (gptel-auto-workflow--get-proj-root))
+       (verify-script (expand-file-name "scripts/verify-nucleus.sh" proj-root))
+       ...)
+  (gptel-auto-experiment-run-command
+   verify-script
+   (list "--file" target-file)
+   :directory worktree-path))
 ```
 
-However, `default-directory` was set to the worktree directory. The verification script computes its `$DIR` variable from its own location (in the main repo), so it validated code in the main repository rather than the worktree changes.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Main Repo: ~/projects/nucleus                               │
-│ └── scripts/verify-nucleus.sh                               │
-│     └── Computes $DIR = ~/projects/nucleus (from script loc)│
-│         └── Validates main repo code (WRONG!)               │
-├─────────────────────────────────────────────────────────────┤
-│ Worktree: ~/var/tmp/experiments/optimize/worktree-name       │
-│ └── Modified experiment code                                │
-│     └── Changes NOT visible to validation (BUG!)           │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### The Fix
-
-Skip nucleus script validation in experiment benchmark contexts:
-
-```elisp
-;; In gptel-auto-experiment-benchmark
-;; Instead of running full nucleus validation:
-;; - Code syntax validation still works (targets worktree file directly)
-;; - Executor already runs verification in worktree context  
-;; - Full validation happens in staging flow anyway
-```
-
-**Result**: `(:passed t :nucleus-passed t :nucleus-skipped t)`
-
-### Key Insight
-
-```
-┌────────────────────────────────────────────────────────────┐
-│ WORKTREE SHARED STATE vs ISOLATED WORKING DIRECTORY        │
-├────────────────────────────────────────────────────────────┤
-│ ✓ .git is shared (branches, commits, refs)                  │
-│ ✗ Working directory is isolated                            │
-│ ✗ Scripts computing paths from __FILE__ or script location │
-│   will resolve to main repo, not worktree                  │
-└────────────────────────────────────────────────────────────┘
-```
-
-**Rule**: When working with worktrees, always compute paths relative to explicitly passed directory parameters, never from script location.
-
----
-
-## Pattern 2: Worktree Cleanup After Merge
-
-### Problem: Stale Worktree Accumulation
-
-Without automated cleanup, merged experiment worktrees accumulate indefinitely:
-
-**Symptoms:**
-- Many stale worktrees in `var/tmp/experiments/`
-- Experiment branches merged to staging but not deleted
-- Worktree count grows without bound
-- Confusion about which experiments are active vs. merged
-
-### Detection Script
-
-Identify merged worktrees that should be cleaned:
+**The Problem:** `verify-nucleus.sh` computes its `$DIR` from the script's own location:
 
 ```bash
 #!/bin/bash
-# detect-merged-worktrees.sh
-# Finds worktrees whose branches have been merged to staging
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DIR="$(dirname "$SCRIPT_DIR")"
+```
 
-git worktree list | grep optimize | awk '{print $3}' | \
-  sed 's/\[//' | sed 's/\]//' | \
-  while read branch; do
-    if git log st
-...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-tkf3Wb.txt. Use Read tool if you need more]...
+Since the script lives in the **main repository**, `$DIR` pointed to the **main repo code**, not the worktree changes.
+
+### Why This Went Undetected
+
+1. The script ran successfully (exit code 0)
+2. The grader logic in the main repo passed
+3. But the actual worktree changes were never validated
+4. Experiments could merge broken code
+
+### The Fix
+
+Skip nucleus script validation in experiment benchmark:
+
+```elisp
+;; AFTER (fixed code)
+(let* ((proj-root (gptel-auto-workflow--get-proj-root))
+       ...)
+  ;; Syntax validation still works because it targets worktree file directly
+  ;; Executor runs verification in worktree context
+  ;; Full validation happens in staging flow
+  (when (gptel-auto-experiment--syntax-valid-p target-file)
+    ...))
+```
+
+### Verification Results
+
+After the fix, experiments return:
+
+```elisp
+(:passed t :nucleus-passed t :nucleus-skipped t)
+```
+
+The `nucleus-skipped: t` indicates the script was intentionally skipped because:
+- Syntax validation targets the actual worktree file
+- Executor runs verification in correct context
+- Staging flow provides full validation
+
+## Worktree Deletion Timing Bug
+
+### Symptom
+
+"No such file or directory" errors during auto-workflow experiments, specifically when `run-next` attempted to start subsequent exp
+...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-whdoO3.txt. Use Read tool if you need more]...
