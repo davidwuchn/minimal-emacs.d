@@ -13,12 +13,14 @@
 (require 'gptel)
 (require 'gptel-request)
 (require 'gptel-agent-loop)
+(require 'gptel-benchmark-llm)
 (require 'gptel-benchmark-subagent)
 (require 'gptel-ext-retry)
 (require 'gptel-ext-fsm)
 (require 'gptel-ext-fsm-utils)
 (require 'gptel-tools-agent)
 (require 'gptel-agent-tools)
+(require 'gptel-auto-workflow-projects)
 
 ;; Root of the .emacs.d repo, used by tests that run shell scripts.
 ;; Derived at load time from the test file's own path.
@@ -184,6 +186,66 @@ EXIT-CODE defaults to 1."
                 :grade-calls grade-call
                 :bench-calls bench-call))
       (delete-directory worktree t))))
+
+(ert-deftest regression/auto-experiment/stale-executor-callback-is-ignored ()
+  "Old experiment callbacks should not log results into a newer run."
+  (let* ((project-root (make-temp-file "aw-project" t))
+         (worktree (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1"
+                                     project-root))
+         (worktree-buf (generate-new-buffer " *aw-stale-executor*"))
+         captured-callback
+         callback-result
+         logged-results
+         grade-count
+         bench-count)
+    (unwind-protect
+        (progn
+          (make-directory worktree t)
+          (with-current-buffer worktree-buf
+            (setq-local default-directory (file-name-as-directory worktree)))
+          (let ((gptel-auto-workflow--run-id "run-old")
+                (gptel-auto-workflow--running t))
+            (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                       (lambda (&rest _) worktree))
+                      ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                       (lambda (&rest _) worktree-buf))
+                      ((symbol-function 'gptel-auto-experiment-analyze)
+                       (lambda (_previous-results cb)
+                         (funcall cb nil)))
+                      ((symbol-function 'gptel-auto-experiment-build-prompt)
+                       (lambda (&rest _) "prompt"))
+                      ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                       (lambda (_timeout cb &rest _args)
+                         (setq captured-callback cb)))
+                      ((symbol-function 'gptel-auto-experiment-grade)
+                       (lambda (&rest _args)
+                         (cl-incf grade-count)))
+                      ((symbol-function 'gptel-auto-experiment-benchmark)
+                       (lambda (&rest _args)
+                         (cl-incf bench-count)))
+                      ((symbol-function 'gptel-auto-experiment-log-tsv)
+                       (lambda (_run-id exp-result)
+                         (push exp-result logged-results)))
+                      ((symbol-function 'message)
+                       (lambda (&rest _) nil)))
+              (gptel-auto-experiment-run
+               "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+               (lambda (result)
+                 (setq callback-result result)))
+              (should captured-callback)
+              (setq gptel-auto-workflow--run-id "run-new")
+              (funcall captured-callback
+                       "Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s total runtime.")
+              (should (plist-get callback-result :stale-run))
+              (should (equal (plist-get callback-result :target)
+                             "lisp/modules/gptel-tools-agent.el"))
+              (should (= (plist-get callback-result :id) 1))
+              (should-not logged-results)
+              (should (zerop (or grade-count 0)))
+              (should (zerop (or bench-count 0))))))
+      (when (buffer-live-p worktree-buf)
+        (kill-buffer worktree-buf))
+      (delete-directory project-root t))))
 
 (ert-deftest regression/auto-workflow/fix-directly-requires-git-success ()
   "Direct review fixes should fail if git add/commit fails."
@@ -994,7 +1056,7 @@ EXIT-CODE defaults to 1."
        (delete-directory project-root t))))
 
 (ert-deftest regression/auto-experiment/loop-delay-skips-stale-run ()
-  "Delayed next-experiment callbacks should not restart after the run ends."
+  "Delayed next-experiment callbacks should return accumulated results when stale."
   (let* ((project-root (file-name-as-directory (make-temp-file "aw-project" t)))
          (gptel-auto-experiment-delay-between 5)
          (gptel-auto-experiment-max-per-target 2)
@@ -1004,7 +1066,8 @@ EXIT-CODE defaults to 1."
          (gptel-auto-workflow--run-project-root project-root)
          (gptel-auto-workflow--current-project project-root)
          scheduled-next
-         (invocation-count 0))
+         (invocation-count 0)
+         completed-results)
     (unwind-protect
         (progn
           (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
@@ -1023,17 +1086,23 @@ EXIT-CODE defaults to 1."
                        (funcall cb (list :target "target"
                                          :id 1
                                          :score-after 0.4
-                                         :kept nil
-                                         :agent-output "no-op")))))
+                                          :kept nil
+                                          :agent-output "no-op")))))
             (with-temp-buffer
               (setq default-directory project-root)
-              (gptel-auto-experiment-loop "target" (lambda (&rest _) nil)))
+              (gptel-auto-experiment-loop
+               "target"
+               (lambda (results)
+                 (setq completed-results results))))
             (should (= invocation-count 1))
             (should (functionp scheduled-next))
             (setq gptel-auto-workflow--running nil
                   gptel-auto-workflow--run-id "run-2")
             (funcall scheduled-next)
-            (should (= invocation-count 1))))
+            (should (= invocation-count 1))
+            (should (= (length completed-results) 1))
+            (should (equal (plist-get (car completed-results) :target) "target"))
+            (should (equal (plist-get (car completed-results) :id) 1))))
       (delete-directory project-root t))))
 
 (ert-deftest regression/gptel-agent/truncate-buffer-prefixes-modeline-temp-artifacts ()
@@ -1945,10 +2014,43 @@ EXIT-CODE defaults to 1."
       (funcall (cdr (assoc "three" callbacks)) '((:target "three" :kept nil)))
       (should (= (plist-get gptel-auto-workflow--stats :kept) 2))
       (funcall (cdr (assoc "four" callbacks)) '((:target "four" :kept t)))
-      (should (= (plist-get gptel-auto-workflow--stats :kept) 3))
-      (funcall (cdr (assoc "five" callbacks)) '((:target "five" :kept nil)))
-      (should (= (plist-get gptel-auto-workflow--stats :kept) 3))
-      (should (= (gptel-auto-workflow--kept-target-count completed) 3)))))
+       (should (= (plist-get gptel-auto-workflow--stats :kept) 3))
+       (funcall (cdr (assoc "five" callbacks)) '((:target "five" :kept nil)))
+       (should (= (plist-get gptel-auto-workflow--stats :kept) 3))
+       (should (= (gptel-auto-workflow--kept-target-count completed) 3)))))
+
+(ert-deftest regression/auto-workflow/log-tsv-updates-live-kept-count ()
+  "Durable kept rows should update live kept status before a target finishes."
+  (let* ((tmpdir (make-temp-file "gptel-live-kept" t))
+         (run-id "run-live-kept")
+         (gptel-auto-workflow--running t)
+         (gptel-auto-workflow--run-id run-id)
+         (gptel-auto-workflow--stats '(:phase "running" :total 5 :kept 0))
+         (persist-count 0))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () tmpdir))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda () (cl-incf persist-count))))
+      (unwind-protect
+          (progn
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 1 :target "one" :kept t))
+            (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 2 :target "one" :kept t))
+            (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 3 :target "two" :kept nil))
+            (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 4 :target "two" :kept t))
+            (should (= (plist-get gptel-auto-workflow--stats :kept) 2))
+            (should (= persist-count 4)))
+        (delete-directory tmpdir t)))))
 
 (ert-deftest regression/auto-workflow/run-with-targets-stops-on-quota-exhaustion ()
   "Workflow should stop remaining targets once provider quota is exhausted."
@@ -2013,6 +2115,41 @@ EXIT-CODE defaults to 1."
         (should (= completion-count 1))
         (should (equal completed '((:target "one" :kept t)
                                    (:target "two" :kept nil))))))))
+
+(ert-deftest regression/auto-workflow/run-with-targets-ignores-stale-target-completion ()
+  "Stale target callbacks should not advance the workflow after force-stop."
+  (let ((gptel-auto-workflow--stats nil)
+        (gptel-auto-workflow--running t)
+        (gptel-auto-workflow--run-id "run-stale")
+        (gptel-auto-workflow--current-target nil)
+        (started '())
+        (callbacks '())
+        (completed nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--run-callback-live-p)
+               (lambda (_run-id) nil))
+              ((symbol-function 'gptel-auto-experiment-loop)
+               (lambda (target cb)
+                 (push target started)
+                 (push (cons target cb) callbacks)))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda (&rest _) nil))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-workflow--run-with-targets
+       '("one" "two")
+       (lambda (results)
+         (setq completed results)))
+      (setq gptel-auto-workflow--running nil
+            gptel-auto-workflow--current-target nil
+            gptel-auto-workflow--stats '(:phase "idle" :kept 0 :total 2))
+      (funcall (cdr (assoc "one" callbacks)) '((:target "one" :kept t)))
+      (should (equal (nreverse started) '("one")))
+      (should-not completed)
+      (should (equal (plist-get gptel-auto-workflow--stats :phase) "idle"))
+      (should-not gptel-auto-workflow--running)
+      (should-not gptel-auto-workflow--current-target))))
 
 (ert-deftest regression/auto-workflow/force-stop-updates-phase ()
   "Force stop should persist the idle phase in workflow stats."
@@ -2498,8 +2635,131 @@ EXIT-CODE defaults to 1."
               (should (= (length callback-results) 1))
               (should (string-match-p "timed out after 42s" (car callback-results)))
               (should (= (hash-table-count my/gptel--agent-task-state) 0))))
+       (when (buffer-live-p request-buf)
+         (kill-buffer request-buf))))))
+
+(ert-deftest regression/subagent/timeout-aborts-generic-request-buffer-in-staging-worktree ()
+  "Timeout cleanup should abort generic request buffers even inside the staging worktree."
+  (let ((my/gptel-agent-task-timeout 42)
+        (my/gptel-subagent-progress-interval 10)
+        (scheduled-timeout nil)
+        (aborted-buffers nil)
+        (discarded nil)
+        (callback-results nil)
+        (now 0))
+    (clrhash my/gptel--agent-task-state)
+    (let* ((project-root (make-temp-file "aw-project" t))
+           (staging-dir (expand-file-name "var/tmp/experiments/staging-verify" project-root))
+           (request-buf (generate-new-buffer " *gptel-request-timeout-staging*"))
+           (gptel-auto-workflow--staging-worktree-dir staging-dir))
+      (unwind-protect
+          (progn
+            (make-directory staging-dir t)
+            (with-current-buffer request-buf
+              (setq-local default-directory (file-name-as-directory staging-dir)))
+            (cl-letf (((symbol-function 'run-at-time)
+                       (lambda (secs repeat fn &rest _args)
+                         (if (and (null repeat)
+                                  (= secs my/gptel-agent-task-timeout))
+                             (setq scheduled-timeout fn)
+                           :fake-progress)))
+                      ((symbol-function 'current-time)
+                       (lambda ()
+                         (seconds-to-time now)))
+                      ((symbol-function 'time-since)
+                       (lambda (then)
+                         (seconds-to-time (- now (float-time then)))))
+                      ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
+                      ((symbol-function 'gptel-auto-workflow--state-active-p)
+                       (lambda (state) (and state (not (plist-get state :done)))))
+                      ((symbol-function 'gptel-abort)
+                       (lambda (buffer)
+                         (push buffer aborted-buffers)))
+                      ((symbol-function 'gptel-auto-workflow--discard-worktree-buffers)
+                       (lambda (path)
+                         (push path discarded)
+                         0))
+                      ((symbol-function 'my/gptel--call-gptel-agent-task)
+                       (lambda (&rest _args)
+                         (my/gptel--register-agent-task-buffer request-buf)))
+                      ((symbol-function 'message) (lambda (&rest _) nil)))
+              (with-temp-buffer
+                (my/gptel--agent-task-with-timeout
+                 (lambda (result) (push result callback-results))
+                 "analyzer" "desc" "prompt")
+                (should (functionp scheduled-timeout))
+                (setq now 100)
+                (funcall scheduled-timeout)
+                (should (equal aborted-buffers (list request-buf)))
+                (should-not discarded)
+                (should (= (length callback-results) 1))
+                (should (string-match-p "timed out after 42s" (car callback-results)))
+                (should (= (hash-table-count my/gptel--agent-task-state) 0)))))
         (when (buffer-live-p request-buf)
-          (kill-buffer request-buf))))))
+          (kill-buffer request-buf))
+        (delete-directory project-root t)))))
+
+(ert-deftest regression/subagent/timeout-discards-routed-worktree-buffer ()
+  "Timeout cleanup should discard routed worktree buffers to stop stale writes."
+  (let ((my/gptel-agent-task-timeout 42)
+        (my/gptel-subagent-progress-interval 10)
+        (scheduled-timeout nil)
+        (discarded nil)
+        (callback-results nil)
+        (now 0))
+    (clrhash my/gptel--agent-task-state)
+    (let* ((project-root (make-temp-file "aw-project" t))
+           (worktree-dir (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1"
+                                           project-root))
+           (request-buf (generate-new-buffer "*gptel-agent:agent-riven-exp1@test*"))
+           (gptel-auto-workflow--current-project (file-name-as-directory project-root))
+           (gptel-auto-workflow--worktree-state (make-hash-table :test 'equal)))
+      (unwind-protect
+          (progn
+            (make-directory worktree-dir t)
+            (puthash "target"
+                     (list :worktree-dir worktree-dir
+                           :current-branch "optimize/agent-riven-exp1")
+                     gptel-auto-workflow--worktree-state)
+            (with-current-buffer request-buf
+              (setq-local default-directory (file-name-as-directory worktree-dir)))
+            (cl-letf (((symbol-function 'run-at-time)
+                       (lambda (secs repeat fn &rest _args)
+                         (if (and (null repeat)
+                                  (= secs my/gptel-agent-task-timeout))
+                             (setq scheduled-timeout fn)
+                           :fake-progress)))
+                      ((symbol-function 'current-time)
+                       (lambda ()
+                         (seconds-to-time now)))
+                      ((symbol-function 'time-since)
+                       (lambda (then)
+                         (seconds-to-time (- now (float-time then)))))
+                      ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
+                      ((symbol-function 'gptel-auto-workflow--state-active-p)
+                       (lambda (state) (and state (not (plist-get state :done)))))
+                      ((symbol-function 'gptel-abort) (lambda (&rest _) nil))
+                      ((symbol-function 'gptel-auto-workflow--discard-worktree-buffers)
+                       (lambda (path)
+                         (push path discarded)))
+                      ((symbol-function 'my/gptel--call-gptel-agent-task)
+                       (lambda (&rest _args)
+                         (my/gptel--register-agent-task-buffer request-buf)))
+                      ((symbol-function 'message) (lambda (&rest _) nil)))
+              (with-temp-buffer
+                (my/gptel--agent-task-with-timeout
+                 (lambda (result) (push result callback-results))
+                 "executor" "desc" "prompt")
+                (should (functionp scheduled-timeout))
+                (setq now 100)
+                (funcall scheduled-timeout)
+                (should (equal discarded (list (file-name-as-directory worktree-dir))))
+                (should (= (length callback-results) 1))
+                (should (string-match-p "timed out after 42s" (car callback-results)))
+                (should (= (hash-table-count my/gptel--agent-task-state) 0)))))
+        (when (buffer-live-p request-buf)
+          (kill-buffer request-buf))
+        (delete-directory project-root t)))))
 
 (ert-deftest regression/subagent/timeout-aborts-routed-request-buffer-with-dead-origin ()
   "Timeout abort should still target the live request buffer after origin buffer death."
@@ -2851,7 +3111,7 @@ EXIT-CODE defaults to 1."
         review-result)
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () test-auto-workflow--repo-root))
-              ((symbol-function 'shell-command-to-string)
+              ((symbol-function 'gptel-auto-workflow--review-diff-content)
                (lambda (&rest _) "diff --git a/file b/file"))
               ((symbol-function 'gptel-benchmark-call-subagent)
                (lambda (_agent _description _prompt callback &optional _timeout)
@@ -2864,6 +3124,33 @@ EXIT-CODE defaults to 1."
       (should (car review-result))
       (should (string-match-p "APPROVED" (cdr review-result))))))
 
+(ert-deftest regression/auto-workflow/review-approved-p-accepts-bold-verdict-line ()
+  "Approval parsing should accept the `**APPROVED**' verdict shape seen in live runs."
+  (should
+   (gptel-auto-workflow--review-approved-p
+    "Reviewer result for task: Review changes before merge | I need to verify the actual file contents before reviewing. Let me read the relevant section.I cannot access the file directly. However, I can analyze the diff provided. | ## Analysis of Diff | **APPROVED** | ### Summary | The diff improves type safety.")))
+
+(ert-deftest regression/auto-workflow/review-diff-content-uses-tip-commit-only ()
+  "Review diff should match the exact tip commit that staging merge cherry-picks."
+  (let (commands)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--ensure-merge-source-ref)
+               (lambda (_branch) "optimize/test-branch"))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (cmd &optional _timeout)
+                 (push cmd commands)
+                 (cond
+                  ((equal cmd "git rev-parse optimize/test-branch")
+                   (cons "abc1234\n" 0))
+                  ((equal cmd "git diff --find-renames abc1234^ abc1234")
+                   (cons "diff --git a/file b/file" 0))
+                  (t
+                   (cons (format "unexpected command: %s" cmd) 1))))))
+      (should (equal (gptel-auto-workflow--review-diff-content "optimize/test-branch")
+                     "diff --git a/file b/file"))
+      (should (equal (nreverse commands)
+                     '("git rev-parse optimize/test-branch"
+                       "git diff --find-renames abc1234^ abc1234"))))))
+
 (ert-deftest regression/auto-workflow/review-changes-uses-review-time-budget ()
   "Review dispatch should use the dedicated review timeout budget."
   (let ((gptel-auto-workflow-require-review t)
@@ -2872,7 +3159,7 @@ EXIT-CODE defaults to 1."
         (my/gptel-agent-task-timeout 300)
         captured-timeout
         review-result)
-    (cl-letf (((symbol-function 'shell-command-to-string)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--review-diff-content)
                (lambda (&rest _) "diff --git a/file b/file"))
               ((symbol-function 'gptel-benchmark-call-subagent)
                (lambda (_agent _description _prompt callback &optional timeout)
@@ -2891,8 +3178,9 @@ EXIT-CODE defaults to 1."
         (gptel-auto-experiment-use-subagents t)
         captured-prompt
         review-result)
-    (cl-letf (((symbol-function 'shell-command-to-string)
-               (lambda (&rest _) "diff --git a/file b/file\n+ (my/gptel--deliver-subagent-result callback result)\n"))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--review-diff-content)
+               (lambda (&rest _)
+                 "diff --git a/file b/file\n+ (my/gptel--deliver-subagent-result callback result)\n"))
               ((symbol-function 'gptel-benchmark-call-subagent)
                (lambda (_agent _description prompt callback &optional _timeout)
                  (setq captured-prompt prompt)
@@ -2963,6 +3251,64 @@ EXIT-CODE defaults to 1."
        (lambda (success)
          (setq completion-result success)))
       (should completion-result)
+       (should (= review-calls 1))
+       (should-not fix-called)
+       (should-not logged-results))))
+
+(ert-deftest regression/auto-workflow/retry-review-on-unverified-reviewer-output ()
+  "Invalid reviewer outputs should retry review instead of entering fix-review-issues."
+  (let ((gptel-auto-workflow--review-retry-count 0)
+        (gptel-auto-workflow--review-error-retry-count 0)
+        (gptel-auto-workflow--review-max-retries 2)
+        (gptel-auto-experiment-retry-delay 5)
+        (review-calls 0)
+        (fix-called nil)
+        (logged-results nil)
+        completion-result)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--review-changes)
+               (lambda (_branch callback)
+                 (cl-incf review-calls)
+                 (funcall callback '(t . "APPROVED"))))
+              ((symbol-function 'gptel-auto-workflow--fix-review-issues)
+               (lambda (&rest _args)
+                 (setq fix-called t)
+                 (error "fix-review-issues should not be called for unverified reviewer output")))
+              ((symbol-function 'gptel-auto-workflow--current-run-id)
+               (lambda () "run-1234"))
+              ((symbol-function 'gptel-auto-workflow--run-callback-live-p)
+               (lambda (_run-id) t))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'gptel-auto-experiment--check-scope)
+               (lambda () '(t)))
+              ((symbol-function 'gptel-auto-workflow--current-staging-head)
+               (lambda () "staging-base"))
+              ((symbol-function 'gptel-auto-workflow--merge-to-staging)
+               (lambda (_branch) t))
+              ((symbol-function 'gptel-auto-workflow--create-staging-worktree)
+               (lambda () "/tmp/staging-worktree"))
+              ((symbol-function 'gptel-auto-workflow--verify-staging)
+               (lambda () '(t . "ok")))
+              ((symbol-function 'gptel-auto-workflow--push-staging)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--delete-staging-worktree)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-experiment-log-tsv)
+               (lambda (_run-id result)
+                 (push result logged-results)))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-workflow--staging-flow-after-review
+       "optimize/test-branch"
+       '(
+         nil
+         .
+         "Reviewer result for task: Review changes before merge | I need to read the current file to verify the variable names referenced in the diff.I cannot locate the file `gptel-ext-context-cache.el` at any path. The file does not exist in the workspace. | ``` | UNVERIFIED - explorer evidence did not meet verification contract | ```")
+       (lambda (success)
+         (setq completion-result success)))
+      (should completion-result)
       (should (= review-calls 1))
       (should-not fix-called)
       (should-not logged-results))))
@@ -2974,7 +3320,7 @@ EXIT-CODE defaults to 1."
         (gptel-auto-workflow-review-time-budget 600)
         (my/gptel-agent-task-timeout 900)
         captured-timeout)
-    (cl-letf (((symbol-function 'shell-command-to-string)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--review-diff-content)
                (lambda (&rest _) "diff --git a/file b/file"))
               ((symbol-function 'gptel-benchmark-call-subagent)
                (lambda (_agent _description _prompt callback &optional timeout)
@@ -2993,7 +3339,7 @@ EXIT-CODE defaults to 1."
         review-result)
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () test-auto-workflow--repo-root))
-              ((symbol-function 'shell-command-to-string)
+              ((symbol-function 'gptel-auto-workflow--review-diff-content)
                (lambda (&rest _) "diff --git a/file b/file"))
               ((symbol-function 'gptel-benchmark-call-subagent)
                (lambda (_agent _description _prompt callback &optional _timeout)
@@ -3013,7 +3359,7 @@ EXIT-CODE defaults to 1."
         review-result)
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () test-auto-workflow--repo-root))
-              ((symbol-function 'shell-command-to-string)
+              ((symbol-function 'gptel-auto-workflow--review-diff-content)
                (lambda (&rest _) "diff --git a/file b/file"))
               ((symbol-function 'gptel-benchmark-call-subagent)
                (lambda (_agent _description _prompt callback &optional _timeout)
@@ -3033,7 +3379,7 @@ EXIT-CODE defaults to 1."
         review-result)
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () test-auto-workflow--repo-root))
-              ((symbol-function 'shell-command-to-string)
+              ((symbol-function 'gptel-auto-workflow--review-diff-content)
                (lambda (&rest _) "diff --git a/file b/file"))
               ((symbol-function 'gptel-benchmark-call-subagent)
                (lambda (_agent _description _prompt callback &optional _timeout)
@@ -3053,7 +3399,7 @@ EXIT-CODE defaults to 1."
         review-result)
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () test-auto-workflow--repo-root))
-              ((symbol-function 'shell-command-to-string)
+              ((symbol-function 'gptel-auto-workflow--review-diff-content)
                (lambda (&rest _) "diff --git a/file b/file"))
               ((symbol-function 'gptel-benchmark-call-subagent)
                (lambda (_agent _description _prompt callback &optional _timeout)
@@ -3073,7 +3419,7 @@ EXIT-CODE defaults to 1."
         review-result)
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () test-auto-workflow--repo-root))
-              ((symbol-function 'shell-command-to-string)
+              ((symbol-function 'gptel-auto-workflow--review-diff-content)
                (lambda (&rest _) "diff --git a/file b/file"))
               ((symbol-function 'gptel-benchmark-call-subagent)
                (lambda (_agent _description _prompt callback &optional _timeout)
@@ -3151,6 +3497,95 @@ EXIT-CODE defaults to 1."
        (equal (nreverse deleted)
               '("/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1/var/tmp/experiments/optimize/agent-riven-exp2"
                 "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1"))))))
+
+(ert-deftest regression/auto-workflow/discard-worktree-buffers-kills-tracked-gptel-buffer ()
+  "Worktree cleanup should kill tracked gptel buffers before path reuse."
+  (let* ((project-root (make-temp-file "aw-worktree" t))
+         (worktree-dir
+          (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1" project-root))
+         (worktree-root (file-name-as-directory worktree-dir))
+         (gptel-auto-workflow--project-buffers (make-hash-table :test 'equal))
+         (gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal))
+         (tracked (generate-new-buffer "*gptel-agent:agent-riven-exp1@test*"))
+         (other (generate-new-buffer "*notes*"))
+         (aborted nil))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer tracked
+            (setq-local default-directory worktree-root))
+          (with-current-buffer other
+            (setq-local default-directory worktree-root))
+          (puthash worktree-root tracked gptel-auto-workflow--worktree-buffers)
+          (puthash worktree-root tracked gptel-auto-workflow--project-buffers)
+          (cl-letf (((symbol-function 'gptel-abort)
+                     (lambda (buf)
+                       (push buf aborted))))
+            (should (= (gptel-auto-workflow--discard-worktree-buffers worktree-dir) 1))
+            (should (equal aborted (list tracked)))
+            (should-not (buffer-live-p tracked))
+            (should (buffer-live-p other))
+            (should-not (gethash worktree-root gptel-auto-workflow--worktree-buffers))
+            (should-not (gethash worktree-root gptel-auto-workflow--project-buffers))))
+      (when (buffer-live-p tracked)
+        (kill-buffer tracked))
+      (when (buffer-live-p other)
+       (kill-buffer other))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/discard-worktree-buffers-allows-uninitialized-shared-tables ()
+  "Worktree cleanup should tolerate shared buffer tables that have not been initialized yet."
+  (let* ((project-root (make-temp-file "aw-worktree" t))
+         (worktree-dir
+          (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1" project-root))
+         (saved-worktree-bound (boundp 'gptel-auto-workflow--worktree-buffers))
+         (saved-worktree-value (and saved-worktree-bound gptel-auto-workflow--worktree-buffers))
+         (saved-project-bound (boundp 'gptel-auto-workflow--project-buffers))
+         (saved-project-value (and saved-project-bound gptel-auto-workflow--project-buffers)))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (when saved-worktree-bound
+            (makunbound 'gptel-auto-workflow--worktree-buffers))
+          (when saved-project-bound
+            (makunbound 'gptel-auto-workflow--project-buffers))
+          (should (= (gptel-auto-workflow--discard-worktree-buffers worktree-dir) 0)))
+      (if saved-worktree-bound
+          (setq gptel-auto-workflow--worktree-buffers saved-worktree-value)
+        (ignore-errors (makunbound 'gptel-auto-workflow--worktree-buffers)))
+      (if saved-project-bound
+          (setq gptel-auto-workflow--project-buffers saved-project-value)
+        (ignore-errors (makunbound 'gptel-auto-workflow--project-buffers)))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/delete-worktree-discards-stale-buffers-without-directory ()
+  "Deleting worktree state should discard routed buffers even if the path is already gone."
+  (let* ((target "lisp/modules/gptel-tools-agent.el")
+         (worktree-dir "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1")
+         (gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+         (discarded nil)
+         (calls nil))
+    (puthash target
+             (list :worktree-dir worktree-dir
+                   :current-branch "optimize/agent-riven-exp1")
+             gptel-auto-workflow--worktree-state)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--discard-worktree-buffers)
+               (lambda (path)
+                 (push path discarded)
+                 1))
+              ((symbol-function 'file-exists-p)
+               (lambda (_path) nil))
+              ((symbol-function 'call-process)
+               (lambda (&rest args)
+                 (push args calls)
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-workflow-delete-worktree target)
+      (should (equal discarded (list worktree-dir)))
+      (should-not calls)
+      (should (equal (gethash target gptel-auto-workflow--worktree-state)
+                     '(:worktree-dir nil :current-branch nil))))))
 
 (ert-deftest regression/auto-workflow/headless-lock-prompt-auto-grabs-lock ()
   "Headless mode should auto-resolve file lock prompts."
@@ -3233,9 +3668,9 @@ EXIT-CODE defaults to 1."
         (gptel-auto-workflow--current-project "/tmp/project")
         (gptel-agent-loop--bypass nil)
         (observed-bypass nil))
-    (cl-letf (((symbol-function 'gptel-agent--task)
+    (cl-letf (((symbol-function 'my/gptel-agent--task-override)
                (lambda (&rest _args)
-                 (setq observed-bypass gptel-agent-loop--bypass))))
+                  (setq observed-bypass gptel-agent-loop--bypass))))
       (my/gptel--call-gptel-agent-task #'ignore "executor" "desc" "prompt")
       (should observed-bypass))))
 
@@ -3249,15 +3684,15 @@ EXIT-CODE defaults to 1."
         (observed-bypass nil))
     (cl-letf (((symbol-function 'my/gptel-agent--task-override)
                (lambda (&rest _args)
-                  (setq called 'override
-                        observed-bypass gptel-agent-loop--bypass)))
-              ((symbol-function 'gptel-agent--task)
-               (lambda (&rest _args)
-                  (setq called 'raw-task
-                        observed-bypass gptel-agent-loop--bypass))))
-      (my/gptel--call-gptel-agent-task #'ignore "executor" "desc" "prompt")
-      (should (eq called 'raw-task))
-      (should observed-bypass))))
+                   (setq called 'override
+                         observed-bypass gptel-agent-loop--bypass)))
+               ((symbol-function 'gptel-agent--task)
+                (lambda (&rest _args)
+                   (setq called 'raw-task
+                         observed-bypass gptel-agent-loop--bypass))))
+       (my/gptel--call-gptel-agent-task #'ignore "executor" "desc" "prompt")
+       (should (eq called 'override))
+       (should observed-bypass))))
 
 (ert-deftest regression/auto-workflow/runagent-bypass-prefers-safe-task-override ()
   "RunAgent bypass should use the safe task override for auto-workflow."
@@ -3409,8 +3844,43 @@ EXIT-CODE defaults to 1."
         (my/gptel--agent-task-with-timeout
          #'ignore
          "executor" "desc" "prompt")
-        (should (gptel-fsm-p captured-fsm))
-        (should (plist-get (gptel-fsm-info captured-fsm) :disable-auto-retry))))))
+         (should (gptel-fsm-p captured-fsm))
+         (should (plist-get (gptel-fsm-info captured-fsm) :disable-auto-retry))))))
+
+(ert-deftest regression/auto-workflow/subagent-wrapper-reseeds-request-fsm-tools ()
+  "Wrapped subagent launches should restore missing FSM tools from the request buffer."
+  (let ((my/gptel-agent-task-timeout nil)
+        (captured-fsm nil)
+        (request-buf (generate-new-buffer " *gptel-request-fsm-tools*")))
+    (clrhash my/gptel--agent-task-state)
+    (unwind-protect
+        (with-temp-buffer
+          (setq-local gptel--fsm-last 'parent-fsm)
+          (cl-letf (((symbol-function 'my/gptel--build-subagent-context)
+                     (lambda (prompt &rest _) prompt))
+                    ((symbol-function 'my/gptel--call-gptel-agent-task)
+                     (lambda (_callback _agent-type _description _prompt)
+                       (with-current-buffer request-buf
+                         (setq-local gptel-tools '("Code_Map" "Read" "Bash"))
+                         (setq-local gptel--fsm-last (gptel-make-fsm))
+                         (setq captured-fsm gptel--fsm-last)
+                         (setf (gptel-fsm-info captured-fsm)
+                               (list :buffer request-buf
+                                     :position (point-marker)
+                                     :tracking-marker (point-marker))))
+                       (my/gptel--register-agent-task-buffer request-buf)))
+                    ((symbol-function 'run-at-time) (lambda (&rest _) :fake-timer))
+                    ((symbol-function 'timerp) (lambda (&rest _) nil))
+                    ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (my/gptel--agent-task-with-timeout
+             #'ignore
+             "executor" "desc" "prompt")
+            (should (gptel-fsm-p captured-fsm))
+            (should (equal (plist-get (gptel-fsm-info captured-fsm) :tools)
+                           '("Code_Map" "Read" "Bash")))))
+      (when (buffer-live-p request-buf)
+        (kill-buffer request-buf)))))
 
 (ert-deftest regression/auto-workflow/safe-task-override-marks-request-fsm-before-send ()
   "Safe task override should mark request FSMs no-retry before dispatch."
@@ -3601,6 +4071,29 @@ EXIT-CODE defaults to 1."
     (my/gptel--subagent-cache-put "reviewer" "prompt" "review ok")
     (should (equal (my/gptel--subagent-cache-get "reviewer" "prompt") "review ok"))))
 
+(ert-deftest regression/subagent-cache/does-not-store-retryable-reviewer-failures ()
+  "Retryable reviewer failures should never poison the reviewer cache."
+  (let ((my/gptel-subagent-cache-ttl 300)
+        (my/gptel--subagent-cache (make-hash-table :test 'equal)))
+    (my/gptel--subagent-cache-put
+     "reviewer"
+     "prompt"
+     "UNVERIFIED - explorer evidence did not meet verification contract")
+    (should (= (hash-table-count my/gptel--subagent-cache) 0))
+    (should-not (my/gptel--subagent-cache-get "reviewer" "prompt"))))
+
+(ert-deftest regression/subagent-cache/purges-legacy-retryable-reviewer-cache-entry ()
+  "Cache reads should evict already-cached retryable reviewer failures."
+  (let* ((my/gptel-subagent-cache-ttl 300)
+         (my/gptel--subagent-cache (make-hash-table :test 'equal))
+         (key (my/gptel--subagent-cache-key "reviewer" "prompt")))
+    (puthash key
+             (cons (float-time)
+                   "UNVERIFIED - explorer evidence did not meet verification contract")
+             my/gptel--subagent-cache)
+    (should-not (my/gptel--subagent-cache-get "reviewer" "prompt"))
+    (should (= (hash-table-count my/gptel--subagent-cache) 0))))
+
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status ()
   "Wrapper status should reset stale running snapshots when the worker is gone."
   (let* ((repo-root test-auto-workflow--repo-root)
@@ -3683,7 +4176,10 @@ EXIT-CODE defaults to 1."
                     "if expr == 't':\n"
                     "    print('t')\n"
                     "elif 'gptel-auto-workflow-status' in expr:\n"
-                    "    print('(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-04/results.tsv\")')\n"
+                    "    if 'load-file' in expr:\n"
+                    "        print('(:running nil :kept 0 :total 0 :phase \"idle\" :run-id \"bad-status\" :results \"var/tmp/experiments/bad-status/results.tsv\")')\n"
+                    "    else:\n"
+                    "        print('(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-04/results.tsv\")')\n"
                     "else:\n"
                     "    print('nil')\n"
                     "raise SystemExit(0)\n"))
@@ -3695,8 +4191,13 @@ EXIT-CODE defaults to 1."
           (let ((output (shell-command-to-string (format "%s status" script))))
             (should (string-match-p ":running t" output))
             (should (string-match-p ":kept 1" output))
-             (should (string-match-p ":total 5" output))
-             (should (string-match-p ":phase \"running\"" output))))
+            (should (string-match-p ":total 5" output))
+            (should (string-match-p ":phase \"running\"" output)))
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running t" (buffer-string)))
+            (should (string-match-p ":kept 1" (buffer-string)))
+            (should (string-match-p ":phase \"running\"" (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t))))
 
@@ -3842,7 +4343,10 @@ EXIT-CODE defaults to 1."
                     "    if count == 1:\n"
                     "        print('nil')\n"
                     "    else:\n"
-                    "        print('(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-07/results.tsv\")')\n"
+                    "        if 'load-file' in expr:\n"
+                    "            print('(:running nil :kept 0 :total 0 :phase \"idle\" :run-id \"bad-active\" :results \"var/tmp/experiments/bad-active/results.tsv\")')\n"
+                    "        else:\n"
+                    "            print('(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-07/results.tsv\")')\n"
                     "else:\n"
                     "    print('nil')\n"
                     "raise SystemExit(0)\n"))
@@ -3854,6 +4358,106 @@ EXIT-CODE defaults to 1."
           (let ((output (shell-command-to-string (format "%s status" script))))
             (should (string-match-p ":running t" output))
             (should (string-match-p ":kept 1" output))
+            (should (string-match-p ":phase \"running\"" output)))
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running t" (buffer-string)))
+            (should (string-match-p ":phase \"running\"" (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-status-keeps-running-on-ambiguous-active-probe ()
+  "Wrapper status should preserve an active snapshot when the active probe is ambiguous."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (calls-file (expand-file-name "status-calls.txt" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "import pathlib, sys\n"
+                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    (format "calls_path = pathlib.Path(%S)\n" calls-file)
+                    "if expr == 't':\n"
+                    "    print('t')\n"
+                    "elif 'gptel-auto-workflow-status' in expr:\n"
+                    "    count = int(calls_path.read_text() or '0') if calls_path.exists() else 0\n"
+                    "    count += 1\n"
+                    "    calls_path.write_text(str(count))\n"
+                    "    print('nil')\n"
+                    "else:\n"
+                    "    print('nil')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-07/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
+            (should (string-match-p ":phase \"running\"" output)))
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running t" (buffer-string)))
+            (should (string-match-p ":phase \"running\"" (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-status-retries-transient-daemon-ping ()
+  "Wrapper status should not clear a live snapshot after one transient daemon ping failure."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (calls-file (expand-file-name "status-calls.txt" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "import pathlib, sys\n"
+                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    (format "calls_path = pathlib.Path(%S)\n" calls-file)
+                    "count = int(calls_path.read_text() or '0') if calls_path.exists() else 0\n"
+                    "if 'gptel-auto-workflow-status' in expr:\n"
+                    "    count += 1\n"
+                    "    calls_path.write_text(str(count))\n"
+                    "    raise SystemExit(1)\n"
+                    "elif expr == 't':\n"
+                    "    count += 1\n"
+                    "    calls_path.write_text(str(count))\n"
+                    "    if count == 2:\n"
+                    "        raise SystemExit(1)\n"
+                    "    print('t')\n"
+                    "else:\n"
+                    "    print('nil')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-07/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
             (should (string-match-p ":phase \"running\"" output)))
           (with-temp-buffer
             (insert-file-contents status-file)
@@ -3885,8 +4489,8 @@ EXIT-CODE defaults to 1."
                     "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
                     "if expr == 't':\n"
                     "    print('t')\n"
-                    "elif 'gptel-auto-workflow--cron-job-running' in expr:\n"
-                    "    print('nil')\n"
+                    "elif 'gptel-auto-workflow-status' in expr:\n"
+                    "    print('(:running nil :kept 0 :total 0 :phase \"idle\" :results \"var/tmp/experiments/2026-04-03/results.tsv\")')\n"
                     "else:\n"
                     "    print('nil')\n"
                     "raise SystemExit(0)\n"))
@@ -4574,6 +5178,74 @@ EXIT-CODE defaults to 1."
          (should (eq captured-fsm request-fsm))
          (should (eq gptel--fsm-last request-fsm))))))
 
+(ert-deftest regression/auto-workflow/safe-task-override-reseeds-child-fsm-tools ()
+  "Safe task override should restore child FSM tools after request startup."
+  (let* ((expected-tools '("ApplyPatch" "Edit" "TodoWrite"))
+         (gptel-agent--agents '(("executor" . nil)))
+         request-fsm)
+    (with-temp-buffer
+      (setq-local gptel--fsm-last 'previous-fsm)
+      (cl-letf (((symbol-function 'gptel--preset-syms)
+                 (lambda (&rest _) '(gptel-tools gptel-use-tools)))
+                ((symbol-function 'gptel--apply-preset)
+                 (lambda (&rest _)
+                   (setq gptel-use-tools t
+                         gptel-tools expected-tools)))
+                ((symbol-function 'gptel--update-status) (lambda (&rest _) nil))
+                ((symbol-function 'gptel-agent--task-overlay) (lambda (&rest _) nil))
+                ((symbol-function 'gptel-request)
+                 (lambda (_prompt &rest plist)
+                   (setq request-fsm (plist-get plist :fsm))
+                   (setf (gptel-fsm-info request-fsm)
+                         (list :buffer (plist-get plist :buffer)
+                               :tools '("ApplyPatch")))
+                   request-fsm))
+                ((symbol-function 'my/gptel--subagent-cache-get) (lambda (&rest _) nil)))
+        (my/gptel-agent--task-override #'ignore "executor" "desc" "prompt")
+        (should (equal (plist-get (gptel-fsm-info request-fsm) :tools)
+                       expected-tools))))))
+
+(ert-deftest regression/auto-workflow/agent-loop-request-reseeds-child-fsm-tools ()
+  "RunAgent loop requests should restore child FSM tools after startup."
+  (let* ((expected-tools '("ApplyPatch" "Edit" "TodoWrite"))
+         (gptel-agent--agents '(("executor" . nil)))
+         (state (gptel-agent-loop--task-create
+                 :id 'task-1
+                 :agent-type "executor"
+                 :description "desc"
+                 :prompt "prompt"
+                 :main-cb #'ignore))
+         request-fsm)
+    (with-temp-buffer
+      (setq-local gptel--fsm-last
+                  (gptel-make-fsm :table gptel-send--transitions
+                                  :handlers nil
+                                  :info (list :buffer (current-buffer)
+                                              :position (point-marker))))
+      (cl-letf (((symbol-function 'gptel--preset-syms)
+                 (lambda (&rest _) '(gptel-tools gptel-use-tools)))
+                ((symbol-function 'gptel--apply-preset)
+                 (lambda (&rest _)
+                   (setq gptel-use-tools t
+                         gptel-tools expected-tools)))
+                ((symbol-function 'gptel--update-status) (lambda (&rest _) nil))
+                ((symbol-function 'gptel-agent--task-overlay) (lambda (&rest _) nil))
+                ((symbol-function 'gptel-agent-loop--make-callback)
+                 (lambda (&rest _) #'ignore))
+                ((symbol-function 'gptel-agent-loop--maybe-cache-get)
+                 (lambda (&rest _) nil))
+                ((symbol-function 'gptel-request)
+                 (lambda (_prompt &rest plist)
+                   (setq request-fsm (plist-get plist :fsm))
+                   (setf (gptel-fsm-info request-fsm)
+                         (list :buffer (plist-get plist :buffer)
+                               :tools '("ApplyPatch")))
+                   request-fsm))
+                ((symbol-function 'message) (lambda (&rest _) nil)))
+        (gptel-agent-loop--request state "prompt" t nil)
+        (should (equal (plist-get (gptel-fsm-info request-fsm) :tools)
+                       expected-tools))))))
+
 (ert-deftest regression/auto-workflow/timeout-wrapper-keeps-child-fsm-after-async-launch ()
   "Timeout wrapper should not restore the parent FSM after async startup."
   (ert-skip "Flaky test - FSM async issues")
@@ -4733,6 +5405,70 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
        (should-not (member "git fetch origin" commands))
        (should-not (member "git submodule update --init --recursive" commands)))))
 
+(ert-deftest regression/auto-workflow/merge-to-staging-treats-empty-post-commit-picks-as-applied ()
+  "Empty commits after a successful no-commit cherry-pick should not fail staging."
+  (let ((commands nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--ensure-staging-branch-exists)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--ensure-merge-source-ref)
+               (lambda (_branch) "optimize/test-exp1"))
+              ((symbol-function 'gptel-auto-workflow--with-staging-worktree)
+               (lambda (fn) (funcall fn)))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (push command commands)
+                 (cond
+                  ((string-match-p "git rev-parse --verify origin/staging" command)
+                   (cons "origin/staging" 0))
+                  ((string-match-p "git rev-parse optimize/test-exp1" command)
+                   (cons "abc123" 0))
+                  ((string-match-p "git cherry-pick --no-commit abc123" command)
+                   (cons "" 0))
+                  ((string-match-p "git commit -m " command)
+                   (cons "位于分支 staging 无文件要提交，工作区干净" 1))
+                  (t (cons "" 0)))))
+              ((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (command &optional _timeout)
+                 (push command commands)
+                 (cond
+                  ((string-match-p "rev-parse -q --verify CHERRY_PICK_HEAD" command)
+                   "")
+                  ((string-match-p "diff --name-only --diff-filter=U" command)
+                   "")
+                  ((string-match-p "status --porcelain" command)
+                   "")
+                  (t ""))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (gptel-auto-workflow--merge-to-staging "optimize/test-exp1"))
+      (setq commands (nreverse commands))
+      (should (member "git cherry-pick --no-commit abc123" commands))
+      (should-not (seq-some (lambda (command)
+                              (string-match-p "git merge -X theirs optimize/test-exp1 --no-ff" command))
+                            commands)))))
+
+(ert-deftest regression/auto-workflow/prepare-staging-merge-base-skips-checkout-when-already-on-staging ()
+  "Preparing staging should reset directly when already on the staging branch."
+  (let ((commands nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (push command commands)
+                 (cond
+                  ((string-match-p "git branch --show-current" command)
+                   (cons "staging\n" 0))
+                  ((string-match-p "git reset --hard origin/staging" command)
+                   (cons "" 0))
+                  ((string-match-p "git checkout staging" command)
+                   (cons "lisp/modules/gptel-benchmark-core.el: needs merge" 1))
+                  (t (cons "" 0)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (gptel-auto-workflow--prepare-staging-merge-base "origin/staging"))
+      (setq commands (nreverse commands))
+      (should (member "git branch --show-current" commands))
+      (should (member "git reset --hard origin/staging" commands))
+      (should-not (member "git checkout staging" commands)))))
+
 (ert-deftest regression/auto-workflow/merge-to-staging-reprepares-before-merge-fallback ()
   "Fallback merge should start from a freshly reset staging worktree."
   (let ((commands nil))
@@ -4746,6 +5482,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda (command &optional _timeout)
                  (push command commands)
                  (cond
+                  ((string-match-p "git branch --show-current" command)
+                   (cons "staging\n" 0))
                   ((string-match-p "git rev-parse --verify origin/staging" command)
                    (cons "origin/staging" 0))
                   ((string-match-p "git rev-parse optimize/test-exp1" command)
@@ -4780,6 +5518,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda (command &optional _timeout)
                  (push command commands)
                  (cond
+                  ((string-match-p "git branch --show-current" command)
+                   (cons "staging\n" 0))
                   ((string-match-p "git rev-parse --verify origin/staging" command)
                    (cons "origin/staging" 0))
                   ((string-match-p "git rev-parse optimize/test-exp1" command)
@@ -5561,9 +6301,50 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (lambda (args)
           (equal (last args 6)
                  '("worktree" "add" "-b"
-                   "optimize/cache-riven-exp1"
-                    "/tmp/project/var/tmp/experiments/optimize/cache-riven-exp1"
-                    "origin/main")))
+                    "optimize/cache-riven-exp1"
+                     "/tmp/project/var/tmp/experiments/optimize/cache-riven-exp1"
+                     "origin/main")))
+        calls)))))
+
+(ert-deftest regression/auto-workflow/create-worktree-discards-stale-worktree-buffers ()
+  "Experiment worktree creation should discard stale worktree buffers first."
+  (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+        (discarded nil)
+        (calls nil)
+        (stale-worktree "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1"))
+    (cl-letf (((symbol-function 'system-name) (lambda () "riven"))
+              ((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--staging-main-ref)
+               (lambda () "origin/main"))
+              ((symbol-function 'gptel-auto-workflow--branch-worktree-paths)
+               (lambda (_branch _proj-root) nil))
+              ((symbol-function 'gptel-auto-workflow--discard-worktree-buffers)
+               (lambda (path)
+                 (push path discarded)
+                 1))
+              ((symbol-function 'make-directory)
+               (lambda (&rest _) t))
+              ((symbol-function 'file-exists-p)
+               (lambda (_path) nil))
+              ((symbol-function 'call-process)
+               (lambda (&rest args)
+                 (push args calls)
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (equal (gptel-auto-workflow-create-worktree
+                      "lisp/modules/gptel-tools-agent.el" 1)
+                     stale-worktree))
+      (should (equal discarded (list stale-worktree)))
+      (should
+       (cl-some
+        (lambda (args)
+          (equal (last args 6)
+                 '("worktree" "add" "-b"
+                   "optimize/agent-riven-exp1"
+                   "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1"
+                   "origin/main")))
         calls)))))
 
 (ert-deftest regression/auto-workflow/run-with-targets-rebinds-run-root-between-targets ()
@@ -5761,6 +6542,33 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                 "git worktree add --force /tmp/project/var/tmp/experiments/staging-verify staging")
                captured)))))
 
+(ert-deftest regression/auto-workflow/create-staging-worktree-discards-stale-buffers ()
+  "Staging worktree creation should discard routed buffers before path reuse."
+  (let ((gptel-auto-workflow--run-project-root "/tmp/project")
+        (discarded nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--ensure-staging-branch-exists)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--discard-worktree-buffers)
+               (lambda (path)
+                 (push path discarded)
+                 1))
+              ((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (&rest _) ""))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (&rest _) (cons "" 0)))
+              ((symbol-function 'file-exists-p)
+               (lambda (_path) nil))
+              ((symbol-function 'make-directory)
+               (lambda (&rest _) t))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (equal (gptel-auto-workflow--create-staging-worktree)
+                     "/tmp/project/var/tmp/experiments/staging-verify"))
+      (should (equal discarded
+                     '("/tmp/project/var/tmp/experiments/staging-verify"))))))
+
 (ert-deftest regression/auto-workflow/analyzer-agent-declares-bash-tool ()
   "Analyzer agent should declare Bash so live tool calls match FSM tools."
   (let ((file (expand-file-name "assistant/agents/analyzer.md"
@@ -5864,8 +6672,36 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                     (cons "" 1)))))
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
+       (should (gptel-auto-workflow--push-staging))
+       (should (member "git ls-remote --exit-code --heads origin staging" commands))
+       (should (member expected-push commands)))))
+
+(ert-deftest regression/auto-workflow/push-staging-parses-noisy-remote-head-output ()
+  "Staging push should still force-with-lease when ls-remote prints SSH noise."
+  (let* ((commands nil)
+         (remote-head "5043dae3e83ee7ea00e044870e04a40cf986d196")
+         (expected-push
+          (format "git push %s origin %s"
+                  (shell-quote-argument
+                   (format "--force-with-lease=%s:%s" "staging" remote-head))
+                  (shell-quote-argument "staging"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--with-staging-worktree)
+               (lambda (fn) (funcall fn)))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (push command commands)
+                 (cond
+                  ((string-match-p "\\`git ls-remote --exit-code --heads origin staging\\'" command)
+                   (cons (format "mux_client_request_session: read from master failed: Broken pipe\n%s\trefs/heads/staging\n"
+                                 remote-head)
+                         0))
+                  ((equal command expected-push)
+                   (cons "" 0))
+                  (t
+                   (cons "" 1)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
       (should (gptel-auto-workflow--push-staging))
-      (should (member "git ls-remote --exit-code --heads origin staging" commands))
       (should (member expected-push commands)))))
 
 (ert-deftest regression/auto-workflow/push-staging-uses-plain-push-when-remote-missing ()
@@ -6037,6 +6873,271 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (should-not (seq-some (lambda (command)
                               (string-match-p "git push -u origin staging" command))
                             commands)))))
+
+(ert-deftest regression/mementum/synthesize-candidate-captures-project-context ()
+  "Late direct-LLM synthesis callbacks should reuse the captured project context."
+  (let* ((project-root (file-name-as-directory (make-temp-file "mementum-project" t)))
+         (gptel-auto-workflow--project-root-override project-root)
+         (gptel-auto-workflow--run-project-root project-root)
+         (gptel-auto-workflow--current-project project-root)
+         (gptel-auto-workflow--headless t)
+         (captured-callback nil)
+         (captured-context nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--read-file-contents)
+                   (lambda (_file) "memory"))
+                  ((symbol-function 'gptel-benchmark-llm-synthesize-knowledge)
+                   (lambda (_topic _memories &optional callback)
+                     (setq captured-callback callback)))
+                  ((symbol-function 'gptel-mementum--handle-synthesis-result)
+                   (lambda (_topic _files _result)
+                     (setq captured-context
+                           (list :default-directory default-directory
+                                 :project-root (gptel-auto-workflow--project-root)
+                                 :current-project gptel-auto-workflow--current-project
+                                 :headless gptel-auto-workflow--headless))))
+                  ((symbol-function 'message)
+                   (lambda (&rest _) nil)))
+          (should (gptel-mementum-synthesize-candidate
+                   (list :topic "workflow"
+                          :files '("/tmp/a.md" "/tmp/b.md" "/tmp/c.md"))))
+          (should captured-callback)
+          (let ((gptel-auto-workflow--project-root-override "/tmp/project")
+                (gptel-auto-workflow--run-project-root "/tmp/project")
+                (gptel-auto-workflow--current-project "/tmp/project")
+                (gptel-auto-workflow--headless nil)
+                (default-directory "/tmp/project/"))
+            (funcall captured-callback "result"))
+          (should (equal (plist-get captured-context :default-directory) project-root))
+          (should (equal (plist-get captured-context :project-root) project-root))
+           (should (equal (plist-get captured-context :current-project) project-root))
+           (should (plist-get captured-context :headless)))
+       (delete-directory project-root t))))
+
+(ert-deftest regression/mementum/stale-synthesis-callback-is-ignored ()
+  "Late direct-LLM synthesis callbacks should not write after the run stops."
+  (let* ((project-root (file-name-as-directory (make-temp-file "mementum-project" t)))
+         (gptel-auto-workflow--project-root-override project-root)
+         (gptel-auto-workflow--run-project-root project-root)
+         (gptel-auto-workflow--current-project project-root)
+         (gptel-auto-workflow--headless t)
+         (gptel-auto-workflow--running t)
+         (gptel-auto-workflow--run-id "run-1")
+         (gptel-mementum--pending-llm-buffers nil)
+         (captured-callback nil)
+         (handled nil)
+         (messages nil))
+    (unwind-protect
+        (with-temp-buffer
+          (cl-letf (((symbol-function 'gptel-auto-workflow--read-file-contents)
+                     (lambda (_file) "memory"))
+                    ((symbol-function 'gptel-benchmark-llm-synthesize-knowledge)
+                     (lambda (_topic _memories &optional callback)
+                       (setq captured-callback callback)))
+                    ((symbol-function 'gptel-mementum--handle-synthesis-result)
+                     (lambda (&rest _) (setq handled t)))
+                    ((symbol-function 'message)
+                     (lambda (fmt &rest args)
+                       (push (apply #'format fmt args) messages))))
+            (should (gptel-mementum-synthesize-candidate
+                     (list :topic "workflow"
+                           :files '("/tmp/a.md" "/tmp/b.md" "/tmp/c.md"))))
+            (should captured-callback)
+            (should (equal gptel-mementum--pending-llm-buffers (list (current-buffer))))
+            (setq gptel-auto-workflow--running nil
+                  gptel-auto-workflow--run-id "run-2")
+            (funcall captured-callback "result")
+            (should-not handled)
+            (should-not gptel-mementum--pending-llm-buffers)
+            (should (seq-some
+                     (lambda (msg)
+                       (string-match-p "Ignoring stale synthesis for 'workflow'" msg))
+                     messages))))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/mementum/synthesize-candidate-falls-back-to-researcher ()
+  "Mementum synthesis should still support researcher fallback when forced."
+  (let ((gptel-agent--agents '(("researcher") ("executor")))
+        (captured-agent nil)
+        (captured-callback nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--read-file-contents)
+               (lambda (_file) "memory"))
+              ((symbol-function 'gptel-agent--task)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (type _description _prompt callback &optional _timeout)
+                 (setq captured-agent type
+                       captured-callback callback)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (gptel-mementum-synthesize-candidate
+               (list :topic "workflow"
+                     :files '("/tmp/a.md" "/tmp/b.md" "/tmp/c.md"))
+               nil
+               'researcher))
+      (should (eq captured-agent 'researcher))
+      (should captured-callback))))
+
+(ert-deftest regression/mementum/weekly-job-uses-synchronous-synthesis ()
+  "Weekly maintenance should handle synthesis results before returning."
+  (let ((gptel-auto-workflow--project-root-override "/tmp/project")
+        (gptel-auto-workflow--run-project-root "/tmp/project")
+        (gptel-auto-workflow--current-project "/tmp/project")
+        (gptel-auto-workflow--headless t)
+        (calls nil)
+        (messages nil))
+    (cl-letf (((symbol-function 'gptel-mementum-build-index)
+               (lambda () (push 'index calls)))
+              ((symbol-function 'gptel-mementum-decay-skills)
+               (lambda () (push 'decay calls)))
+              ((symbol-function 'gptel-mementum-check-synthesis-candidates)
+               (lambda () (list (list :topic "workflow"
+                                      :files '("/tmp/a.md" "/tmp/b.md" "/tmp/c.md")))))
+              ((symbol-function 'gptel-auto-workflow--read-file-contents)
+               (lambda (_file) "memory"))
+              ((symbol-function 'gptel-mementum-ensure-agents)
+               (lambda () 'llm))
+              ((symbol-function 'gptel-benchmark-llm-synthesize-knowledge-sync)
+               (lambda (&rest _)
+                  (push 'sync-llm calls)
+                  "result"))
+              ((symbol-function 'gptel-mementum--handle-synthesis-result)
+               (lambda (&rest _)
+                  (push 'handled calls)))
+              ((symbol-function 'message)
+                (lambda (fmt &rest args)
+                  (push (apply #'format fmt args) messages))))
+      (gptel-mementum-weekly-job)
+      (should (equal (nreverse calls) '(index decay sync-llm handled)))
+      (should (seq-some (lambda (msg)
+                          (string-match-p "\\[mementum\\] Direct LLM available, processing 1 candidates" msg))
+                        messages))
+      (should (seq-some (lambda (msg)
+                          (string-match-p "\\[mementum\\] Synthesized 1/1 candidates" msg))
+                        messages))
+       (should (seq-some (lambda (msg)
+                           (string-match-p "\\[mementum\\] Weekly maintenance complete\\. Synthesized: 1" msg))
+                         messages)))))
+
+(ert-deftest regression/mementum/weekly-batch-stops-after-run-id-changes ()
+  "Weekly synthesis should stop once its captured run id is no longer active."
+  (let ((gptel-auto-workflow--project-root-override "/tmp/project")
+        (gptel-auto-workflow--run-project-root "/tmp/project")
+        (gptel-auto-workflow--current-project "/tmp/project")
+        (gptel-auto-workflow--headless t)
+        (gptel-auto-workflow--running t)
+        (gptel-auto-workflow--run-id "run-1")
+        (topics nil)
+        (handled nil)
+        (messages nil))
+    (cl-letf (((symbol-function 'gptel-mementum-build-index)
+               (lambda () nil))
+              ((symbol-function 'gptel-mementum-decay-skills)
+               (lambda () nil))
+              ((symbol-function 'gptel-mementum-check-synthesis-candidates)
+               (lambda ()
+                 (list (list :topic "workflow"
+                             :files '("/tmp/a.md" "/tmp/b.md" "/tmp/c.md"))
+                       (list :topic "skills"
+                             :files '("/tmp/d.md" "/tmp/e.md" "/tmp/f.md")))))
+              ((symbol-function 'gptel-auto-workflow--read-file-contents)
+               (lambda (_file) "memory"))
+              ((symbol-function 'gptel-mementum-ensure-agents)
+               (lambda () 'llm))
+              ((symbol-function 'gptel-benchmark-llm-synthesize-knowledge-sync)
+               (lambda (topic &rest _)
+                 (push topic topics)
+                 (setq gptel-auto-workflow--run-id "run-2")
+                 "result"))
+              ((symbol-function 'gptel-mementum--handle-synthesis-result)
+               (lambda (&rest _)
+                 (setq handled t)))
+              ((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) messages))))
+      (gptel-mementum-weekly-job)
+      (should (equal (nreverse topics) '("workflow")))
+      (should-not handled)
+      (should (seq-some
+               (lambda (msg)
+                 (string-match-p "Ignoring stale synthesis for 'workflow'" msg))
+               messages))
+      (should (seq-some
+               (lambda (msg)
+                 (string-match-p "Stopping stale synthesis batch; run run-1 is no longer active" msg))
+               messages)))))
+
+(ert-deftest regression/mementum/sync-synthesis-timeout-aborts-request-buffer ()
+  "Timed-out direct LLM synthesis should abort the in-flight request buffer."
+  (let ((aborted nil)
+        (messages nil))
+    (with-temp-buffer
+      (cl-letf (((symbol-function 'gptel-benchmark-llm-synthesize-knowledge)
+                 (lambda (&rest _) nil))
+                ((symbol-function 'gptel-abort)
+                 (lambda (buffer)
+                   (setq aborted buffer)))
+                ((symbol-function 'message)
+                 (lambda (fmt &rest args)
+                   (push (apply #'format fmt args) messages))))
+        (should-not
+         (gptel-benchmark-llm-synthesize-knowledge-sync "workflow" '("memory") 0))
+        (should (eq aborted (current-buffer)))
+        (should (seq-some (lambda (msg)
+                            (string-match-p "Timeout waiting for synthesis after 0s" msg))
+                          messages))))))
+
+(ert-deftest regression/auto-workflow/force-stop-aborts-pending-mementum-llm-buffers ()
+  "Force-stop should abort tracked direct-LLM synthesis requests."
+  (let ((aborted nil)
+        (buffer (generate-new-buffer "*mementum-llm*"))
+        (gptel-auto-workflow--stats (list :phase "instincts"))
+        (gptel-mementum--pending-llm-buffers nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'my/gptel--reset-agent-task-state)
+                   (lambda () nil))
+                  ((symbol-function 'gptel-auto-experiment--reset-grade-state)
+                   (lambda () nil))
+                  ((symbol-function 'gptel-auto-workflow--persist-status)
+                   (lambda () nil))
+                  ((symbol-function 'gptel-abort)
+                   (lambda (buf)
+                     (push buf aborted)))
+                  ((symbol-function 'message)
+                   (lambda (&rest _) nil)))
+          (setq gptel-mementum--pending-llm-buffers (list buffer)
+                gptel-auto-workflow--running t
+                gptel-auto-workflow--cron-job-running t
+                gptel-auto-workflow--current-project "/tmp/project"
+                gptel-auto-workflow--run-project-root "/tmp/project"
+                gptel-auto-workflow--current-target "topic")
+          (gptel-auto-workflow-force-stop)
+          (should (equal aborted (list buffer)))
+          (should-not gptel-mementum--pending-llm-buffers))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(ert-deftest regression/mementum/direct-synthesis-prompt-requires-full-page ()
+  "Direct LLM synthesis prompts should demand a full inline knowledge page."
+  (let ((prompt (gptel-benchmark--make-synthesis-prompt "workflow" '("memory one" "memory two"))))
+    (should (string-match-p "Minimum 50 lines of actual content" prompt))
+    (should (string-match-p "Return the complete knowledge page inline" prompt))
+    (should (string-match-p "Generate the complete knowledge page now" prompt))))
+
+(ert-deftest regression/mementum/direct-llm-request-binds-model-without-model-keyword ()
+  "Direct LLM synthesis should bind `gptel-model' instead of passing `:model'."
+  (let ((gptel-benchmark-llm-model 'test-model)
+        (captured-args nil)
+        (captured-model nil))
+    (cl-letf (((symbol-function 'gptel-request)
+               (lambda (_prompt &rest args)
+                 (setq captured-args args
+                       captured-model gptel-model)
+                 'queued)))
+      (gptel-benchmark-llm-synthesize-knowledge "workflow" '("memory one" "memory two"))
+      (should (eq captured-model 'test-model))
+      (should-not (memq :model captured-args))
+      (should (memq :callback captured-args)))))
 
 (provide 'test-gptel-tools-agent-regressions)
 

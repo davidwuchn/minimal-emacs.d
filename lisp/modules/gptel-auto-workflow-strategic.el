@@ -88,7 +88,9 @@ Findings stored in var/tmp/research-findings.md for analyzer."
 (defun gptel-auto-workflow--target-in-root-repo-p (abs-path proj-root)
   "Return non-nil when ABS-PATH belongs to the same git repo as PROJ-ROOT."
   (let ((project-git-root (locate-dominating-file proj-root ".git"))
-        (target-git-root (locate-dominating-file abs-path ".git")))
+        (target-git-root (locate-dominating-file
+                          (file-name-directory (directory-file-name abs-path))
+                          ".git")))
     (and project-git-root
          target-git-root
          (file-equal-p (expand-file-name project-git-root)
@@ -255,11 +257,9 @@ Otherwise, convert using princ representation."
 Returns list of validated relative paths, up to MAX-TARGETS."
   (let ((targets '())
         (candidates-list (if (listp candidates) candidates (list candidates))))
-    (dolist (file candidates-list)
-      (when (< (length targets) max-targets)
-        (setq targets (gptel-auto-workflow--validate-and-add-target
-                       file proj-root targets max-targets))))
-    (reverse targets)))
+    (dolist (file candidates-list targets)
+      (setq targets (gptel-auto-workflow--validate-and-add-target
+                     file proj-root targets max-targets)))))
 
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list.
@@ -325,10 +325,11 @@ Logs when fallback to regex parsing is used."
   "Parse JSON from RESPONSE to extract targets.
 Returns nil if parsing fails or no targets found.
 Logs parsing failures for debugging."
-  (unless (and (stringp response) (not (string-empty-p response)))
-    (message "[auto-workflow] Empty response in parse-json-targets")
-    (return-from gptel-auto-workflow--parse-json-targets nil))
-  (condition-case err
+  (cl-block gptel-auto-workflow--parse-json-targets
+    (unless (and (stringp response) (not (string-empty-p response)))
+      (message "[auto-workflow] Empty response in parse-json-targets")
+      (cl-return-from gptel-auto-workflow--parse-json-targets nil))
+    (condition-case err
       (with-temp-buffer
         (insert response)
         (goto-char (point-min))
@@ -360,16 +361,17 @@ Logs parsing failures for debugging."
      nil)
     (error
      (message "[auto-workflow] Target parse error: %s" (error-message-string err))
-     nil)))
+     nil))))
 
 (defun gptel-auto-workflow--parse-regex-targets (response proj-root max-targets)
   "Parse RESPONSE using regex fallback to extract targets.
 Returns list of validated file paths."
-  (unless (and (stringp response) (not (string-empty-p response)))
-    (message "[auto-workflow] Empty response in parse-regex-targets")
-    (return-from gptel-auto-workflow--parse-regex-targets nil))
-  (with-temp-buffer
-    (insert response)
+  (cl-block gptel-auto-workflow--parse-regex-targets
+    (unless (and (stringp response) (not (string-empty-p response)))
+      (message "[auto-workflow] Empty response in parse-regex-targets")
+      (cl-return-from gptel-auto-workflow--parse-regex-targets nil))
+    (with-temp-buffer
+      (insert response)
     (goto-char (point-min))
     (let ((candidates '()))
       (while (re-search-forward "lisp/modules/[a-zA-Z0-9_/.-]+\\.el" nil t)
@@ -380,7 +382,7 @@ Returns list of validated file paths."
           (push (gptel-auto-workflow--normalize-target-candidate (match-string 1))
                 candidates)))
       (gptel-auto-workflow--filter-valid-targets
-       (nreverse candidates) proj-root max-targets))))
+       (nreverse candidates) proj-root max-targets)))))
 
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
@@ -431,12 +433,16 @@ Findings available to analyzer during target selection.
 Findings are cached per-project."
   (interactive)
   (let ((proj-root (or (gptel-auto-workflow--project-root)
-                       (expand-file-name "~/.emacs.d/"))))
+                       (expand-file-name "~/.emacs.d/")))
+        ;; Normalize key to ensure consistent cache lookups
+        (cache-key (let ((root (or (gptel-auto-workflow--project-root)
+                                   (expand-file-name "~/.emacs.d/"))))
+                     (directory-file-name (file-name-directory root)))))
     (message "[research] Starting periodic research for %s..." proj-root)
     (gptel-auto-workflow--research-patterns
      (lambda (findings)
-       ;; Cache in hash table per-project
-       (puthash proj-root findings gptel-auto-workflow--research-findings-cache)
+       ;; Cache in hash table per-project (use normalized key)
+       (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
        (let ((file (gptel-auto-workflow--research-file)))
          (make-directory (file-name-directory file) t)
          (with-temp-file file
@@ -452,9 +458,13 @@ Findings are cached per-project."
 Returns empty string if no cache exists.
 Findings are cached per-project."
   (let ((proj-root (or (gptel-auto-workflow--project-root)
-                       (expand-file-name "~/.emacs.d/"))))
+                       (expand-file-name "~/.emacs.d/")))
+        ;; Normalize key to ensure consistent cache lookups
+        (cache-key (let ((root (or (gptel-auto-workflow--project-root)
+                                   (expand-file-name "~/.emacs.d/"))))
+                     (directory-file-name (file-name-directory root)))))
     ;; First check in-memory cache for this project
-    (let ((cached (gethash proj-root gptel-auto-workflow--research-findings-cache)))
+    (let ((cached (gethash cache-key gptel-auto-workflow--research-findings-cache)))
       (if (and (stringp cached) (not (string-empty-p cached)))
           (progn
             (message "[research] Using in-memory findings for %s (%d chars)"
@@ -478,8 +488,8 @@ Findings are cached per-project."
                          (if content-start
                              (buffer-substring content-start (point-max))
                            "")))))
-                ;; Cache in hash table for this project
-                (puthash proj-root findings gptel-auto-workflow--research-findings-cache)
+                ;; Cache in hash table for this project (use normalized key)
+                (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
                 (message "[research] Loaded cached findings for %s (%d chars)"
                          proj-root (length findings))
                 findings)
@@ -516,8 +526,12 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
   (interactive)
   (let ((proj-root (or (gptel-auto-workflow--project-root)
                        (expand-file-name "~/.emacs.d/")))
+        ;; Normalize key to ensure consistent cache lookups
+        (cache-key (let ((root (or (gptel-auto-workflow--project-root)
+                                   (expand-file-name "~/.emacs.d/"))))
+                     (directory-file-name (file-name-directory root))))
         (findings nil))
-    (setq findings (or (gethash proj-root
+    (setq findings (or (gethash cache-key
                                 gptel-auto-workflow--research-findings-cache
                                 "")
                        ""))

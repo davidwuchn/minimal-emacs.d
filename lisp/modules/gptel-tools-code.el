@@ -479,6 +479,11 @@ NEW-CODE must also be non-empty."
 (defun gptel-tools-code--map-file (file_path)
   "Get a high-level outline of all functions and classes in FILE_PATH.
 Returns a formatted string with the file map, or an error message."
+  (cond
+   ((not file_path)
+    (error "gptel-tools-code--map-file: file_path is nil"))
+   ((not (stringp file_path))
+    (error "gptel-tools-code--map-file: file_path must be a string, got %s" (type-of file_path))))
   (condition-case err
       (with-timeout (5 (format "Error: Code_Map timed out after 5 seconds on %s" file_path))
         (with-current-buffer (find-file-noselect file_path)
@@ -497,6 +502,11 @@ Returns a formatted string with the file map, or an error message."
 (defun gptel-tools-code--inspect-node (node_name &optional file_path)
   "Extract the code block for NODE_NAME, optionally from FILE_PATH.
 When FILE_PATH is nil, searches the entire project workspace."
+  (cond
+   ((not node_name)
+    (error "gptel-tools-code--inspect-node: node_name is nil"))
+   ((not (stringp node_name))
+    (error "gptel-tools-code--inspect-node: node_name must be a string, got %s" (type-of node_name))))
   (condition-case err
       (with-timeout (10 (format "Error: Code_Inspect timed out for '%s'" node_name))
         (if file_path

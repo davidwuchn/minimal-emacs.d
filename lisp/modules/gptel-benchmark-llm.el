@@ -19,6 +19,8 @@
 (require 'gptel-benchmark-memory)
 
 (declare-function gptel-request "gptel")
+(declare-function gptel-abort "gptel" (buffer))
+(defvar gptel-model)
 
 ;;; Customization
 
@@ -64,15 +66,22 @@ CALLBACK receives synthesized content."
 
 ;;; LLM Request Functions
 
+(defun gptel-benchmark--call-llm-request (prompt callback)
+  "Call `gptel-request' with PROMPT and CALLBACK.
+When `gptel-benchmark-llm-model' is non-nil, bind `gptel-model' dynamically
+instead of passing an unsupported `:model' keyword."
+  (let ((gptel-model (or gptel-benchmark-llm-model
+                         (and (boundp 'gptel-model) gptel-model))))
+    (gptel-request prompt
+      :callback callback)))
+
 (defun gptel-benchmark--llm-request-suggestions (name type anti-patterns callback)
   "Send LLM request for improvement suggestions."
   (let* ((prompt (gptel-benchmark--make-improvement-prompt name type anti-patterns))
-         (default-callback (lambda (response)
-                             (gptel-benchmark--parse-suggestions response))))
+         (default-callback (lambda (response &rest _)
+                              (gptel-benchmark--parse-suggestions response))))
     (condition-case err
-        (gptel-request prompt
-          :model gptel-benchmark-llm-model
-          :callback (or callback default-callback))
+        (gptel-benchmark--call-llm-request prompt (or callback default-callback))
       (error
        (message "[llm] Error requesting suggestions: %s" err)
        (gptel-benchmark--fallback-suggestions name type anti-patterns callback)))))
@@ -80,12 +89,10 @@ CALLBACK receives synthesized content."
 (defun gptel-benchmark--llm-request-analysis (name type results callback)
   "Send LLM request for results analysis."
   (let* ((prompt (gptel-benchmark--make-analysis-prompt name type results))
-         (default-callback (lambda (response)
-                             (gptel-benchmark--parse-analysis response))))
+         (default-callback (lambda (response &rest _)
+                              (gptel-benchmark--parse-analysis response))))
     (condition-case err
-        (gptel-request prompt
-          :model gptel-benchmark-llm-model
-          :callback (or callback default-callback))
+        (gptel-benchmark--call-llm-request prompt (or callback default-callback))
       (error
        (message "[llm] Error requesting analysis: %s" err)
        (gptel-benchmark--fallback-analysis results callback)))))
@@ -93,12 +100,10 @@ CALLBACK receives synthesized content."
 (defun gptel-benchmark--llm-request-synthesis (topic memories callback)
   "Send LLM request for knowledge synthesis."
   (let* ((prompt (gptel-benchmark--make-synthesis-prompt topic memories))
-         (default-callback (lambda (response)
-                             (gptel-benchmark--parse-synthesis response))))
+         (default-callback (lambda (response &rest _)
+                              (gptel-benchmark--parse-synthesis response))))
     (condition-case err
-        (gptel-request prompt
-          :model gptel-benchmark-llm-model
-          :callback (or callback default-callback))
+        (gptel-benchmark--call-llm-request prompt (or callback default-callback))
       (error
        (message "[llm] Error requesting synthesis: %s" err)
        (gptel-benchmark--fallback-synthesis topic memories callback)))))
@@ -162,18 +167,55 @@ Be concise and specific." type name
 
 (defun gptel-benchmark--make-synthesis-prompt (topic memories)
   "Create prompt for knowledge synthesis."
-  (format "Synthesize the following memories about '%s' into a knowledge page.
+  (format "Synthesize the following memories into a knowledge page.
 
-## Memories
+TOPIC: %s
+
+REQUIREMENTS:
+1. Minimum 50 lines of actual content
+2. Concrete examples (code, tables, commands)
+3. Actionable patterns (not just descriptions)
+4. Cross-references to related topics
+5. Return the full markdown page directly in your final response
+
+IMPORTANT:
+- Return the complete knowledge page inline, not a summary
+- Do not describe what you would write; write the page itself
+- Start with frontmatter and include the full document body
+
+OUTPUT FORMAT:
+---
+title: [Title]
+status: active
+category: knowledge
+tags: [tag1, tag2]
+---
+
+# [Title]
+
+## [Section 1]
+
+[Content with examples]
+
+## [Section 2]
+
+[Content with patterns]
+
+## Related
+
+- [Related topics]
+
+---
+
+MEMORIES TO SYNTHESIZE:
+
 %s
 
-Create a concise knowledge page that:
-1. Identifies common patterns
-2. Extracts key insights
-3. Provides actionable guidance
+---
 
-Format as markdown with frontmatter." topic
-          (mapconcat (lambda (m) (format "- %s" m)) memories "\n")))
+Generate the complete knowledge page now. Start with the frontmatter and include ALL content. Do not truncate or summarize."
+          topic
+          (mapconcat #'identity memories "\n\n---\n\n")))
 
 ;;; Response Parsing
 
@@ -248,13 +290,36 @@ Returns suggestions directly, blocking until complete."
         (timeout-count 0))
     (gptel-benchmark-llm-suggest-improvements
      name type anti-patterns
-     (lambda (suggestions)
+     (lambda (suggestions &rest _)
        (setq result suggestions done t)))
     (while (and (not done) (< timeout-count 600)) ; max 60s at 0.1s intervals
       (sit-for 0.1)
       (cl-incf timeout-count))
+     (unless done
+       (message "[llm] Timeout waiting for suggestions after 60s"))
+     result))
+
+(defun gptel-benchmark-llm-synthesize-knowledge-sync (topic memories &optional timeout-seconds)
+  "Synchronous version of `gptel-benchmark-llm-synthesize-knowledge'.
+Returns synthesized knowledge content directly. TIMEOUT-SECONDS defaults to 300."
+  (let ((result nil)
+         (done nil)
+         (timeout-count 0)
+         (limit (* 10 (or timeout-seconds 300)))
+         (request-buffer (current-buffer)))
+    (gptel-benchmark-llm-synthesize-knowledge
+     topic memories
+      (lambda (content &rest _)
+        (setq result content
+              done t)))
+    (while (and (not done) (< timeout-count limit))
+      (sit-for 0.1)
+      (cl-incf timeout-count))
     (unless done
-      (message "[llm] Timeout waiting for suggestions after 60s"))
+      (message "[llm] Timeout waiting for synthesis after %ss" (or timeout-seconds 300))
+      (when (and (buffer-live-p request-buffer)
+                 (fboundp 'gptel-abort))
+        (ignore-errors (gptel-abort request-buffer))))
     result))
 
 ;;; Provide

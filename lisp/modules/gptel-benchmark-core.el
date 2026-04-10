@@ -64,12 +64,13 @@ Use `gptel-benchmark--cancelled' to check if cancelled."
 
 (defun gptel-benchmark-read-json (file)
   "Read and parse JSON from FILE.
-Returns nil if file does not exist or contains invalid JSON."
+Returns nil if file does not exist or contains invalid JSON.
+JSON arrays are normalized to lists for consistent handling."
   (condition-case nil
       (with-temp-buffer
         (insert-file-contents file)
         (goto-char (point-min))
-        (json-read))
+        (gptel-benchmark--ensure-list (json-read)))
     (file-error nil)
     (json-error nil)
     (end-of-file nil)))
@@ -88,7 +89,7 @@ Plists are converted to alists automatically."
 Handles plists by converting to alists."
   (cond
    ((null data) nil)
-   ((and (listp data) (keywordp (car data)) (not (consp (cadr data))))
+   ((and (listp data) (keywordp (car data)) (zerop (mod (length data) 2)))
     (gptel-benchmark--plist-to-alist data))
    ((listp data)
     (mapcar #'gptel-benchmark--to-json-format data))
@@ -195,8 +196,12 @@ Handles both (run . scores) cons cells and plists with :scores key.
 Returns nil for nil or malformed input."
   (cond
    ((null r) nil)
-   ((and (consp r) (listp (cdr r))) (cdr r))
-   ((listp r) (plist-get r :scores))
+   ((and (listp r) (keywordp (car r)))
+    (let ((scores (plist-get r :scores)))
+      (when (listp scores) scores)))
+   ((consp r)
+    (let ((scores (cdr r)))
+      (when (listp scores) scores)))
    (t nil)))
 
 (defun gptel-benchmark--get-score (r field)
@@ -279,10 +284,7 @@ Returns plist with :total-tests, :passed-tests, and average scores."
                         (:constraint-score . 0.0))))
     (dolist (r results)
       (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall (and scores (plist-get scores :overall-score)))
-             (efficiency (and scores (plist-get scores :efficiency-score)))
-             (completion (and scores (plist-get scores :completion-score)))
-             (constraints (and scores (plist-get scores :constraint-score))))
+             (overall (and scores (plist-get scores :overall-score))))
         (cl-incf total)
         (when scores
           (setq score-totals
@@ -372,17 +374,17 @@ RESULTS should contain :eight-keys-scores in each entry."
   "Analyze RESULTS for patterns, issues, and generate recommendations."
   (let ((issues (make-hash-table :test 'equal))
         (recommendations '())
-        (total (length results))
+        (total (length (or results nil)))
         (low-scores 0)
         (high-scores 0)
         (threshold 0.7))
     (dolist (r results)
       (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall (gptel-benchmark--plist-get scores :overall-score 0)))
-        (cond
-         ((< overall threshold) (cl-incf low-scores))
-         ((>= overall 0.9) (cl-incf high-scores)))
+             (overall (if scores (plist-get scores :overall-score) 0)))
         (when scores
+          (cond
+           ((< overall threshold) (cl-incf low-scores))
+           ((>= overall 0.9) (cl-incf high-scores)))
           (dolist (mapping gptel-benchmark--score-type-map)
             (let* ((score-type (car mapping))
                    (issue-type (cdr mapping))

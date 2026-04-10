@@ -8,6 +8,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'nucleus-tools)
 
 (defvar nucleus-agent-tool-contracts)  ; defined in nucleus-tools.el
 (defvar nucleus-agents-dir)            ; defined in nucleus-prompts.el
@@ -182,18 +183,18 @@ Model is read from YAML frontmatter in code_agent.md and plan_agent.md."
           (patch-agent (name tools)
             (when-let ((cell (assoc name gptel-agent--agents)))
               (when tools
-                (setf (plist-get (cdr cell) :tools) tools))
-              (when-let* ((sys (plist-get (cdr cell) :system))
-                          (sys (sys->string sys))
-                          sys)
-                (setf (plist-get (cdr cell) :system) sys)))))
+                 (setf (plist-get (cdr cell) :tools) tools))
+               (when-let* ((sys (plist-get (cdr cell) :system))
+                           (sys (sys->string sys))
+                           sys)
+                 (setf (plist-get (cdr cell) :system) sys)))))
 
          (dolist (contract nucleus-agent-tool-contracts)
-           (patch-agent (car contract) (nucleus-get-tools (cdr contract))))
-          ;; Validate immediately after patching
-         (when (and (boundp 'nucleus-tools-strict-validation)
-                    nucleus-tools-strict-validation)
-           (nucleus--validate-agent-tool-contracts))
+            (patch-agent (car contract) (nucleus--declared-tools (cdr contract))))
+           ;; Validate immediately after patching
+          (when (and (boundp 'nucleus-tools-strict-validation)
+                     nucleus-tools-strict-validation)
+            (nucleus--validate-agent-tool-contracts))
           ;; Agent tool contracts (counts must match nucleus-toolsets):
           ;; - executor:     :executor   (29 tools) - code changes & execution
           ;; - researcher:   :researcher (19 tools) - exploration & research
@@ -208,8 +209,8 @@ Model is read from YAML frontmatter in code_agent.md and plan_agent.md."
 Signals an error if any agent has incorrect tools."
   (when (and (boundp 'gptel-agent--agents) gptel-agent--agents)
     (let ((expected
-           (mapcar (lambda (c) (cons (car c) (nucleus-get-tools (cdr c))))
-                   nucleus-agent-tool-contracts)))
+           (mapcar (lambda (c) (cons (car c) (nucleus--declared-tools (cdr c))))
+                    nucleus-agent-tool-contracts)))
       (cl-loop for (agent-name . expected-tools) in expected
                for cell = (assoc agent-name gptel-agent--agents)
                when cell
