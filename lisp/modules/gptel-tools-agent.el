@@ -3175,6 +3175,36 @@ Returns non-nil on success, nil on failure."
           nil)
       t)))
 
+(defun gptel-auto-workflow--empty-cherry-pick-state-p (&optional output allow-missing-head)
+  "Return non-nil when the current worktree reflects an already-applied cherry-pick.
+When ALLOW-MISSING-HEAD is non-nil, also treat a clean worktree plus localized
+empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD' is absent."
+  (let ((cherry-pick-head
+         (ignore-errors
+           (gptel-auto-workflow--git-cmd
+            "git rev-parse -q --verify CHERRY_PICK_HEAD 2>/dev/null"
+            30)))
+        (unmerged-files
+         (or (ignore-errors
+               (gptel-auto-workflow--git-cmd
+                "git diff --name-only --diff-filter=U 2>/dev/null"
+                30))
+             ""))
+        (worktree-status
+         (or (ignore-errors
+               (gptel-auto-workflow--git-cmd
+               "git status --porcelain 2>/dev/null"
+                30))
+             "")))
+    (and (or (gptel-auto-workflow--non-empty-string-p cherry-pick-head)
+             (and allow-missing-head
+                  (stringp output)
+                  (string-match-p
+                   "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty\\|nothing to commit\\|working tree clean\\|无文件要提交\\|工作区干净"
+                   output)))
+         (string-empty-p unmerged-files)
+         (string-empty-p worktree-status))))
+
 (defun gptel-auto-workflow--merge-to-staging (optimize-branch)
   "Merge OPTIMIZE-BRANCH to staging using cherry-pick.
 Cherry-pick the tip commit of OPTIMIZE-BRANCH onto staging.
@@ -3212,21 +3242,29 @@ Uses the staging worktree instead of switching branches in the root repo."
                                 (shell-quote-argument commit-hash))
                         180))
                       (cherry-output (car cherry-result)))
-                 (cond
-                  ((eq 0 (cdr cherry-result))
-                   (let ((commit-result
-                          (gptel-auto-workflow--git-result
-                           (format "git commit -m %s" (shell-quote-argument merge-message))
-                           60)))
-                     (if (eq 0 (cdr commit-result))
-                         t
-                       (message "[auto-workflow] Commit failed after cherry-pick: %s"
-                                (my/gptel--sanitize-for-logging (car commit-result) 160))
-                       nil)))
-                  ((string-match-p "The previous cherry-pick is now empty" cherry-output)
-                   (message "[auto-workflow] Cherry-pick empty (already in staging)")
-                   (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
-                   t)
+                  (cond
+                   ((eq 0 (cdr cherry-result))
+                    (let ((commit-result
+                           (gptel-auto-workflow--git-result
+                            (format "git commit -m %s" (shell-quote-argument merge-message))
+                            60)))
+                      (cond
+                       ((eq 0 (cdr commit-result))
+                        t)
+                       ((gptel-auto-workflow--empty-cherry-pick-state-p (car commit-result) t)
+                        (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --skip" 60))
+                        (message "[auto-workflow] Cherry-pick empty after apply (already in staging)")
+                        t)
+                       (t
+                        (message "[auto-workflow] Commit failed after cherry-pick: %s"
+                                 (my/gptel--sanitize-for-logging (car commit-result) 160))
+                        nil))))
+                   ((or (gptel-auto-workflow--empty-cherry-pick-state-p cherry-output t)
+                        (string-match-p "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
+                                        cherry-output))
+                    (message "[auto-workflow] Cherry-pick empty (already in staging)")
+                    (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                    t)
                   (t
                     (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
                     (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
