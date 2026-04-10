@@ -6131,8 +6131,8 @@ Returns formatted string with key names and signals."
                (score (plist-get item :score))
                (signals (plist-get item :signals))
                (def (alist-get key gptel-benchmark-eight-keys-definitions))
-               (name (plist-get def :name))
-               (symbol (plist-get def :symbol)))
+               (name (if def (plist-get def :name) "Unknown"))
+               (symbol (if def (plist-get def :symbol) "?")))
           (push (format "- %s %s: %.0f%% (focus: %s)"
                         symbol name (* 100 score)
                         (string-join (or signals '("improve")) ", "))
