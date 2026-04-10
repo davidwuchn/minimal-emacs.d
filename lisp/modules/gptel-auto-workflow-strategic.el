@@ -431,12 +431,16 @@ Findings available to analyzer during target selection.
 Findings are cached per-project."
   (interactive)
   (let ((proj-root (or (gptel-auto-workflow--project-root)
-                       (expand-file-name "~/.emacs.d/"))))
+                       (expand-file-name "~/.emacs.d/")))
+        ;; Normalize key to ensure consistent cache lookups
+        (cache-key (let ((root (or (gptel-auto-workflow--project-root)
+                                   (expand-file-name "~/.emacs.d/"))))
+                     (directory-file-name (file-name-directory root)))))
     (message "[research] Starting periodic research for %s..." proj-root)
     (gptel-auto-workflow--research-patterns
      (lambda (findings)
-       ;; Cache in hash table per-project
-       (puthash proj-root findings gptel-auto-workflow--research-findings-cache)
+       ;; Cache in hash table per-project (use normalized key)
+       (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
        (let ((file (gptel-auto-workflow--research-file)))
          (make-directory (file-name-directory file) t)
          (with-temp-file file
@@ -452,9 +456,13 @@ Findings are cached per-project."
 Returns empty string if no cache exists.
 Findings are cached per-project."
   (let ((proj-root (or (gptel-auto-workflow--project-root)
-                       (expand-file-name "~/.emacs.d/"))))
+                       (expand-file-name "~/.emacs.d/")))
+        ;; Normalize key to ensure consistent cache lookups
+        (cache-key (let ((root (or (gptel-auto-workflow--project-root)
+                                   (expand-file-name "~/.emacs.d/"))))
+                     (directory-file-name (file-name-directory root)))))
     ;; First check in-memory cache for this project
-    (let ((cached (gethash proj-root gptel-auto-workflow--research-findings-cache)))
+    (let ((cached (gethash cache-key gptel-auto-workflow--research-findings-cache)))
       (if (and (stringp cached) (not (string-empty-p cached)))
           (progn
             (message "[research] Using in-memory findings for %s (%d chars)"
@@ -478,8 +486,8 @@ Findings are cached per-project."
                          (if content-start
                              (buffer-substring content-start (point-max))
                            "")))))
-                ;; Cache in hash table for this project
-                (puthash proj-root findings gptel-auto-workflow--research-findings-cache)
+                ;; Cache in hash table for this project (use normalized key)
+                (puthash cache-key findings gptel-auto-workflow--research-findings-cache)
                 (message "[research] Loaded cached findings for %s (%d chars)"
                          proj-root (length findings))
                 findings)
@@ -516,8 +524,12 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
   (interactive)
   (let ((proj-root (or (gptel-auto-workflow--project-root)
                        (expand-file-name "~/.emacs.d/")))
+        ;; Normalize key to ensure consistent cache lookups
+        (cache-key (let ((root (or (gptel-auto-workflow--project-root)
+                                   (expand-file-name "~/.emacs.d/"))))
+                     (directory-file-name (file-name-directory root))))
         (findings nil))
-    (setq findings (or (gethash proj-root
+    (setq findings (or (gethash cache-key
                                 gptel-auto-workflow--research-findings-cache
                                 "")
                        ""))
