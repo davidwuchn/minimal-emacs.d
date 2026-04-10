@@ -4213,6 +4213,58 @@ EXIT-CODE defaults to 1."
       (delete-directory status-dir t)
       (delete-directory fake-bin t))))
 
+(ert-deftest regression/auto-workflow/cron-wrapper-status-retries-transient-daemon-ping ()
+  "Wrapper status should not clear a live snapshot after one transient daemon ping failure."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (calls-file (expand-file-name "status-calls.txt" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "import pathlib, sys\n"
+                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    (format "calls_path = pathlib.Path(%S)\n" calls-file)
+                    "count = int(calls_path.read_text() or '0') if calls_path.exists() else 0\n"
+                    "if 'gptel-auto-workflow-status' in expr:\n"
+                    "    count += 1\n"
+                    "    calls_path.write_text(str(count))\n"
+                    "    raise SystemExit(1)\n"
+                    "elif expr == 't':\n"
+                    "    count += 1\n"
+                    "    calls_path.write_text(str(count))\n"
+                    "    if count == 2:\n"
+                    "        raise SystemExit(1)\n"
+                    "    print('t')\n"
+                    "else:\n"
+                    "    print('nil')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-07/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
+            (should (string-match-p ":phase \"running\"" output)))
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running t" (buffer-string)))
+            (should (string-match-p ":phase \"running\"" (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t))))
+
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status-after-daemon-restart ()
   "Wrapper auto-workflow should clear stale running status when daemon is alive but idle."
   (let* ((repo-root test-auto-workflow--repo-root)
