@@ -125,9 +125,10 @@ JSON parsing returns vectors for arrays; this normalizes to lists."
   "Get FIELD from OBJ, handling both plist and alist formats.
 FIELD should be a keyword like :score.
 For alist lookup, converts :score to \\='score symbol."
-  (or (plist-get obj field)
-      (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
-        (cdr (assoc alist-key obj)))))
+  (when obj
+    (or (plist-get obj field)
+        (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
+          (cdr (assoc alist-key obj))))))
 
 (defun gptel-benchmark--plist-get (plist field &optional default)
   "Get FIELD from PLIST with optional DEFAULT value.
@@ -215,10 +216,9 @@ FIELD should be a keyword like :overall-score."
   "Accumulate SCORE into TOTAL.
 Returns the new accumulated total.
 SCORE must be a number or nil; non-numeric values signal error."
-  (let ((normalized-score (cond
-                           ((numberp score) score)
-                           ((null score) 0)
-                           (t (signal 'wrong-type-argument (list '(or numberp null) score))))))
+  (unless (or (numberp score) (null score))
+    (signal 'wrong-type-argument (list '(or numberp null) score)))
+  (let ((normalized-score (if (numberp score) score 0)))
     (+ total normalized-score)))
 
 (defun gptel-benchmark--accumulate-scores (totals scores-alist)
