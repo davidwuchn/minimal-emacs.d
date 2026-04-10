@@ -163,24 +163,27 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
         (when tool-use
           (let* ((fps (or (plist-get info :doom-loop-fingerprints) '()))
                  (new-fps (mapcar #'my/gptel--tool-call-fingerprint tool-use))
-                 (fps (append fps new-fps))
-                 (history-fps (butlast fps (length new-fps)))
-                 (tail (reverse history-fps)))
-            (plist-put info :doom-loop-fingerprints fps)
-            (setf (gptel-fsm-info fsm) info)
+                 (n my/gptel-doom-loop-threshold)
+                 (fps-end (last fps))
+                 (prev-fp (car fps-end)))
+            (plist-put info :doom-loop-fingerprints (append fps new-fps))
             (dolist (fp new-fps)
-              (let* ((n my/gptel-doom-loop-threshold)
-                     (run (length (seq-take-while (lambda (f) (equal f fp)) tail))))
-                (when (>= run n)
+              (let ((current-run
+                     (if (and prev-fp (equal prev-fp fp))
+                         (1+ (or (get 'doom-loop :current-run) 0))
+                       1)))
+                (put 'doom-loop :current-run current-run)
+                (when (>= current-run n)
                   (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
-                           (car (split-string fp ":")) run)
+                           (car (split-string fp ":")) current-run)
                   (funcall (plist-get info :callback)
                            (format "gptel: doom-loop aborted — tool \"%s\" called %d consecutive times \
 with identical arguments.  Try a different approach or break the task into smaller steps."
-                                   (car (split-string fp ":")) run)
+                                   (car (split-string fp ":")) current-run)
                            info)
                   (gptel--fsm-transition fsm 'DONE)
-                  (cl-return-from my/gptel--detect-doom-loop))))))))))
+                  (cl-return-from my/gptel--detect-doom-loop))
+                (setq prev-fp fp)))))))))
 
 ;; --- Duplicate Tool Name Guard ---
 ;; gptel--parse-tools maps gptel-tools directly to JSON without deduplication.
