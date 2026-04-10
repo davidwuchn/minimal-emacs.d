@@ -53,10 +53,45 @@
                            (file-name-as-directory worktree-dir)))
             (should (equal (buffer-name captured-buffer) "*aw-worktree*"))))
       (delete-directory project-root t)
+       (when (get-buffer "*aw-project-root*")
+         (kill-buffer "*aw-project-root*"))
+        (when (get-buffer "*aw-worktree*")
+          (kill-buffer "*aw-worktree*")))))
+
+(ert-deftest regression/auto-workflow-projects/executor-routing-refuses-project-root-fallback-without-worktree ()
+  "Executor routing should fail closed instead of editing the project root."
+  (let* ((project-root (make-temp-file "aw-project" t))
+         (gptel-auto-workflow--current-project project-root)
+         (gptel-auto-workflow--current-target "lisp/modules/gptel-ext-context-cache.el")
+         (gptel-auto-workflow-worktree-base nil)
+         (captured-result nil)
+         (task-called nil))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'my/gptel--subagent-cache-get) (lambda (&rest _) nil))
+                    ((symbol-function 'my/gptel-agent--task-override)
+                     (lambda (&rest _args)
+                       (setq task-called t)))
+                    ((symbol-function 'gptel-auto-workflow--get-project-for-context)
+                     (lambda ()
+                       (cons project-root (get-buffer-create "*aw-project-root*"))))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                     (lambda (_target) nil))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (let ((default-directory project-root))
+              (gptel-auto-workflow--advice-task-override
+               (lambda (&rest _args)
+                 (setq task-called t))
+               (lambda (result) (setq captured-result result))
+               "executor"
+               "Fix review issues"
+               "prompt")))
+          (should-not task-called)
+          (should (string-match-p "Missing worktree context for executor task"
+                                  captured-result)))
+      (delete-directory project-root t)
       (when (get-buffer "*aw-project-root*")
-        (kill-buffer "*aw-project-root*"))
-       (when (get-buffer "*aw-worktree*")
-         (kill-buffer "*aw-worktree*")))))
+        (kill-buffer "*aw-project-root*")))))
 
 (ert-deftest regression/auto-workflow-projects/task-routing-exposes-buffer-tools-during-launch ()
   "Routed placeholder FSM info should inherit the target buffer's tools."
