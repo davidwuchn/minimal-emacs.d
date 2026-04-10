@@ -1,134 +1,74 @@
 ---
-title: Autonomous Research Agent System
+title: Autonomous Research Agent
 status: active
 category: knowledge
-tags: [autonomous, agent, workflow, gptel, cron, testing, research-automation]
+tags: [autonomous, agent, workflow, cron, infrastructure, experimentation]
 ---
 
-# Autonomous Research Agent System
+# Autonomous Research Agent
 
-This knowledge page documents the autonomous research agent system, its components, test results, and operational infrastructure. The system enables automated hypothesis testing and code improvement through a multi-stage workflow.
+## Overview
 
-## Architecture Overview
+The Autonomous Research Agent is an Emacs-based system that runs self-directed experiments on codebases. It can create worktrees, execute changes via subagents, grade results, benchmark outcomes, and log decisions automatically.
 
-The autonomous research agent follows a sequential pipeline:
+## Architecture
+
+The autonomous workflow consists of six sequential stages:
 
 ```
-worktree → executor → grader → benchmark → comparator → log → cleanup
+gptel-auto-workflow-run
+  ├── worktree (magit-worktree)
+  ├── executor subagent (gptel-agent--task)
+  ├── grader subagent (LLM, JSON output)
+  ├── benchmark (Eight Keys scoring)
+  ├── comparator (keep/discard)
+  └── TSV log
 ```
 
-| Stage | Component | Function |
-|-------|-----------|----------|
-| 1 | Worktree | Create isolated Git worktree for experiment |
-| 2 | Executor | Run subagent to make code changes |
-| 3 | Grader | Evaluate change quality via LLM |
-| 4 | Benchmark | Score against quantitative metrics |
-| 5 | Comparator | Decide keep/discard based on score |
-| 6 | Log | Write results to TSV |
-| 7 | Cleanup | Remove worktree |
+### Component Status Matrix
 
-## Core Components
-
-### 1. Worktree Creation
-
-Creates an isolated branch for each experiment:
-
-```elisp
-(require 'magit)
-(require 'gptel)
-
-(defun gptel-auto-worktree-create (experiment-name)
-  "Create a new worktree for EXPERIMENT-NAME."
-  (let* ((branch-name (format "experiments/%s" experiment-name))
-         (worktree-path (expand-file-name
-                         (format "var/tmp/experiments/%s" experiment-name)
-                         user-emacs-directory)))
-    (magit-worktree-branch branch-name worktree-path)
-    worktree-path))
-```
-
-**Status:** ✓ Verified working (<1s)
-
-### 2. Executor Subagent
-
-Runs the main task in the worktree context:
-
-```elisp
-(defun gptel-auto-executor (target-file hypothesis callback)
-  "Execute experiment on TARGET-FILE with HYPOTHESIS."
-  (gptel-agent--task
-   (list :file target-file
-         :instruction (format "Improve the code. Hypothesis: %s" hypothesis)
-         :context "elisp")
-   (lambda (result)
-     (funcall callback result))))
-```
-
-**Status:** ✓ Verified working (80s average)
-
-### 3. Grader Subagent
-
-Evaluates change quality using LLM:
-
-```elisp
-(gptel-benchmark-grade
- output
- '("hypothesis clearly stated" "change is minimal")
- '("large refactor" "no hypothesis")
- callback)
-```
-
-**Status:** ⚠️ Timeout issues observed - see Recommendations
-
-## Test Results
-
-### Full Pipeline Run (2026-03-24)
-
-| Step | Status | Duration | Details |
-|------|--------|----------|---------|
-| Worktree creation | ✓ Pass | <1s | optimize/retry-exp1 |
-| Executor subagent | ✓ Pass | 80s | Made docstring changes |
-| Grader subagent | ✓ Pass | 10s | 6/6 behaviors passed |
-| Benchmark | ✓ Pass | 10s | Score 1.0 (no change) |
-| Decision | ✓ Pass | <1s | Discarded (no improvement) |
+| Component | Status | Duration | Notes |
+|-----------|--------|----------|-------|
+| Worktree creation | ✓ Pass | <1s | Creates optimize/retry-exp1 |
+| Executor subagent | ✓ Pass | 50-80s | Makes code changes |
+| Grader subagent | ⚠️ Timeout | 5+ min | Needs timeout handling |
+| Benchmark | ✓ Pass | 10s | Eight Keys scoring |
+| Decision | ✓ Pass | <1s | Keep or discard |
 | TSV logging | ✓ Pass | <1s | results.tsv created |
 
-### Initial Test (with timeout issue)
+## Usage
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Worktree creation | ✓ Pass | Created `optimize/retry-exp1` |
-| Executor subagent | ✓ Pass | Completed in 50.5s |
-| Code improvement | ✓ Pass | Added 18 lines of docstrings |
-| Grading subagent | ⚠️ Timeout | No response after 5+ minutes |
-| results.tsv | ✗ Not created | Grading didn't complete |
+### Running the Workflow
 
-**Root Cause:** Grading subagent uses DashScope backend with no explicit timeout, no fallback mechanism.
+```elisp
+;; Execute a full autonomous experiment
+(gptel-auto-workflow-run "optimize" "improve code structure")
 
-## Example Output
-
-### Diff Applied
-
-```diff
-+ ;; Usage:
-+ ;;   This module automatically activates when loaded...
-+ ;; Customization:
-+ ;;   - `my/gptel-max-retries': Max retry attempts (default: 3)
+;; With explicit hypothesis
+(gptel-auto-workflow-run 
+  "feature X"
+  "Adding documentation improves maintainability")
 ```
 
-### TSV Log Entry
+### Manual Step Execution
 
+```elisp
+;; Create worktree manually
+(gptel-auto-worktree-create "experiment-name")
+
+;; Run executor on a file
+(gptel-agent--task "Add docstrings to improve clarity" 
+                  '((file . "lisp/modules/gptel-ext-retry.el")))
+
+;; Run grader
+(gptel-benchmark-grade output 
+                       '("hypothesis clearly stated")
+                       '("large refactor"))
 ```
-2026-03-24	optimize/retry-exp1	gptel-ext-retry.el	0.8	1.0	discarded	100s	6/6
-```
 
-**Format:** `date, experiment, target, pre-score, post-score, decision, duration, grader-score`
+## Timeout Handling
 
-## Recommendations & Patterns
-
-### Pattern 1: Timeout with Fallback
-
-Always wrap subagent calls with timeout handling:
+The grading subagent can hang due to LLM API delays. This fix adds timeout fallback:
 
 ```elisp
 (defun gptel-auto-experiment-grade (output callback)
@@ -151,36 +91,41 @@ Always wrap subagent calls with timeout handling:
          (funcall callback result))))))
 ```
 
-### Pattern 2: Progress Logging
+### Timeout Patterns
 
-Add logging at each step for debugging:
+| Scenario | Solution | Fallback |
+|----------|----------|----------|
+| Grading subagent hangs | 60s timer | Local grade (score 100) |
+| DashScope API slow | `run-with-timer` | Retry with exponential backoff |
+| Curl exit 28 (timeout) | Auto-retry | Log to var/tmp/cron/ |
 
-```elisp
-(defun gptel-auto-workflow-run (target hypothesis)
-  "Run full autonomous workflow."
-  (message "[auto-exp] Step 1: Creating worktree...")
-  (gptel-auto-worktree-create "exp1"
-    (lambda ()
-      (message "[auto-exp] Step 2: Running executor...")
-      (gptel-auto-executor target hypothesis
-        (lambda ()
-          (message "[auto-exp] Step 3: Grading...")
-          (gptel-auto-experiment-grade output callback))))))
+## Experiment Results Log
+
+Results are written to `var/tmp/experiments/YYYY-MM-DD/results.tsv`:
+
+```tsv
+timestamp	target	hypothesis	score_before	score_after	decision	duration	grader_status
+2026-03-24T10:30:00	gptel-ext-retry.el	Adding docstring to improve maintainability	1.00	1.00	discarded	100s	6/6 passed
 ```
 
-### Pattern 3: Heartbeat for Long Operations
+### Log Format
 
-```elisp
-;; Run heartbeat every 30 seconds during grading
-(run-with-timer 0 30
-  (lambda ()
-    (message "[auto-exp] Still grading... (%s)"
-              (format-time-string "%H:%M:%S"))))
-```
+| Column | Type | Description |
+|--------|------|-------------|
+| timestamp | ISO 8601 | When experiment started |
+| target | string | File or module modified |
+| hypothesis | string | Explicit claim about change |
+| score_before | float | Benchmark score prior |
+| score_after | float | Benchmark score after |
+| decision | enum | kept / discarded |
+| duration | seconds | Total experiment time |
+| grader_status | string | Subagent pass/fail count |
 
-## Infrastructure: Cron Scheduling
+## Infrastructure
 
-### Scheduled Jobs
+### Cron Scheduling
+
+The autonomous system runs on scheduled intervals:
 
 | Schedule | Job | Purpose |
 |----------|-----|---------|
@@ -191,79 +136,82 @@ Add logging at each step for debugging:
 ### Installation
 
 ```bash
-# Preview what will be installed
+# Preview cron changes
 ./scripts/install-cron.sh --dry-run
 
-# Install cron jobs
+# Install actual cron jobs
 ./scripts/install-cron.sh
-```
 
-### Required Directories
-
-```bash
-var/tmp/cron/          # Cron logs
-var/tmp/experiments/   # Experiment worktrees
-```
-
-### Logs
-
-```bash
+# Monitor logs
 tail -f var/tmp/cron/*.log
+```
+
+### Directory Structure
+
+```
+var/tmp/
+├── cron/           # Cron job logs
+├── experiments/    # Experiment worktrees
+│   └── YYYY-MM-DD/
+│       └── results.tsv
 ```
 
 ## Known Issues
 
-### Issue 1: API Timeouts
+### Issue 1: Grading Timeout
 
-- **Symptom:** DashScope slow, curl exit 28
-- **Fix:** Add retry logic with exponential backoff
+**Symptom:** Grader subagent hangs for 5+ minutes  
+**Root Cause:** No explicit timeout on LLM subagent calls  
+**Fix:** Wrap with `run-with-timer` as shown above
 
-### Issue 2: Metrics Don't Capture Quality
+### Issue 2: No Score Improvement for Docs
 
-- **Symptom:** Docstring additions show no score improvement
-- **Fix:** Add maintainability-specific metrics, separate scoring tracks (functional vs quality vs docs)
+**Symptom:** Adding docstrings yields no benchmark score change  
+**Root Cause:** Metrics don't capture documentation quality  
+**Fix:** Add maintainability-specific metrics, separate scoring tracks
 
-### Issue 3: Long Duration
+### Issue 3: Excessive Duration
 
-- **Symptom:** 100s for simple docstring change
-- **Fix:** Optimize evaluation overhead, reduce benchmark frequency
+**Symptom:** 100s for simple docstring changes  
+**Root Cause:** Full benchmark run for every change  
+**Fix:** Add quick-validation mode for non-functional changes
+
+### Issue 4: API Timeouts
+
+**Symptom:** DashScope slow, curl exit 28  
+**Root Cause:** Network latency, no retry logic  
+**Fix:** Add exponential backoff, log failures to cron logs
+
+## Improvement Recommendations
+
+1. **Add heartbeat logging** - Periodic "still grading..." messages to `*Messages*`
+2. **Separate scoring tracks** - Functional vs quality vs documentation
+3. **Weight scores by change category** - Docs get maintainability weights
+4. **Quick-validation mode** - Skip full benchmark for trivial changes
 
 ## Verdict
 
-**The Autonomous Research Agent is partially functional (60% complete).**
+**60% complete** - Core loop works (worktree → executor → changes → benchmark → decide → log). Grading subagent needs timeout handling to be production-ready.
 
-The core loop works:
-- ✓ Worktree creation
-- ✓ Executor subagent
-- ✓ Changes applied
-- ✓ Benchmark scoring
-- ✓ Decision logic
-- ✓ TSV logging
+## Code Diff Example
 
-Needs work:
-- ⚠️ Grading subagent timeout handling
-- ⚠️ Metric refinement for non-functional improvements
+Typical executor output adds documentation:
 
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `lisp/modules/gptel-ext-retry.el` | Target file for experiments |
-| `var/tmp/experiments/` | Worktree directory |
-| `var/tmp/cron/` | Cron logs |
-| `scripts/install-cron.sh` | Cron installation script |
-| `cron.d/auto-workflow` | Cron configuration |
+```diff
++ ;; Usage:
++ ;;   This module automatically activates when loaded...
++ ;; Customization:
++ ;;   - `my/gptel-max-retries': Max retry attempts (default: 3)
+```
 
 ## Related
 
-- [[gptel-agent]] - Agent framework used for executor/graders
-- [[magit-worktree]] - Worktree management
-- [[benchmarking]] - Eight Keys scoring system
-- [[cron-automation]] - Scheduled task infrastructure
-- [[research-automation]] - Hypothesis-driven experimentation
-- [[retry-logic]] - Retry mechanism in gptel-ext-retry
+- [Agent System](agent-system) - Subagent architecture
+- [Benchmark System](benchmark) - Eight Keys scoring
+- [Worktree Management](magit-worktree) - Git worktree operations
+- [Cron Infrastructure](cron) - Scheduled job system
+- [Logging Patterns](logging) - TSV and cron logging
 
 ---
 
-*Last updated: 2026-03-24*
-*Status: Active development*
+*Page Status: active | Last Updated: 2026-03-24 | Source: gptel-auto-workflow-run tests*
