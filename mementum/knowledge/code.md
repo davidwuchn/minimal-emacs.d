@@ -1,318 +1,220 @@
 ---
-title: Code Development Patterns and Best Practices
+title: Code Development Patterns and Techniques
 status: active
 category: knowledge
-tags: [code, efficiency, workflow, patterns, tdd, review, editing]
+tags: [workflow, code-agent, efficiency, tdd, review, editing]
 ---
 
-# Code Development Patterns and Best Practices
+# Code Development Patterns and Techniques
 
-This knowledge page consolidates discovered patterns for efficient code development, including code agent workflow optimization, surgical editing techniques, systematic review strategies, and test-driven development approaches.
+This knowledge page synthesizes patterns for efficient code development, from agent workflow optimization to systematic review strategies and surgical editing techniques.
+
+---
 
 ## Code Agent Efficiency Patterns
 
-### Task Type Performance Analysis
+Understanding how code agents perform across different task types enables better task design and workflow optimization.
 
-Code agent efficiency varies significantly by task type. Analysis across multiple benchmark cases reveals clear patterns:
+### Task Type Efficiency Analysis
+
+Based on benchmark analysis across 3 test cases:
 
 | Task Type | Efficiency | Steps | Pattern |
 |-----------|------------|-------|---------|
 | Simple edit | 0.82-0.90 | 5-6 | read → edit (direct) |
 | Exploration | 0.72 | 8 | glob → read×N → edit |
 
-**Key Finding:** Simple edit tasks achieve 18% higher efficiency than exploration tasks through direct path execution.
+### Eight Keys Alignment Metrics
 
-### Eight Keys Alignment Scores
+Track agent performance across vitality, clarity, and synthesis dimensions:
 
-The eight-keys framework measures code agent performance across multiple dimensions:
-
-| Key | Score | Description |
-|-----|-------|-------------|
-| vitality | 0.84 | Agent energy and continuation capability |
-| clarity | 0.81 | Context understanding and tool selection |
-| synthesis | 0.80 | Output quality and completion |
-| purpose | varies | Task-specific goal alignment |
-| wisdom | varies | Long-term pattern recognition |
-
-**Average Scores:** vitality (0.84), clarity (0.81), synthesis (0.80)
+| Key | code-001 | code-002 | code-003 | Avg |
+|-----|----------|----------|----------|-----|
+| vitality | 0.85 | 0.88 | 0.78 | 0.84 |
+| clarity | 0.82 | 0.90 | 0.72 | 0.81 |
+| synthesis | 0.80 | 0.85 | 0.75 | 0.80 |
 
 ### Anti-Pattern Detection
 
-No anti-patterns triggered in benchmark tests. All tests pass Wu Xing constraints:
+All tests pass Wu Xing constraints:
 
-```elisp
-;; Anti-pattern checks
-(wood-overgrowth   . t)  ;; steps <= 20
-(fire-excess       . t)  ;; efficiency >= 0.5
-(metal-rigidity    . t)  ;; tool-score >= 0.6
-(tool-misuse       . t)  ;; steps <= 15, continuations <= 3
-```
+- **wood-overgrowth**: ✓ (steps <= 20)
+- **fire-excess**: ✓ (efficiency >= 0.5)
+- **metal-rigidity**: ✓ (tool-score >= 0.6)
+- **tool-misuse**: ✓ (steps <= 15, continuations <= 3)
 
-### Improvement Opportunities
+### Improvement Strategies
 
-#### Exploration Task Optimization
-
-**Issue:** 2 continuations indicate context management problems.
-
-**Remedy (Fire → Water transition):**
-```elisp
-;; Before: Open-ended exploration
-(glob "*.el")  ;; Returns too many files
-
-;; After: Scoped exploration
-(glob "*.el" :max-count 5)  ;; Limit to 5 files
-(grep "defun" :max-count 10)
-```
-
-**Recommended Task Descriptions:**
-- Add scope hints: "Explore 3-5 key files in lisp/modules/"
-- Use max-depth for nested directory searches
+**For Exploration Tasks (code-003):**
+- Add exploration scope hints to task descriptions
+- Use `--max-count` or `--max-depth` in glob/grep
 - Budget: 3-5 files for exploration, 1-2 for targeted edits
 
-#### Phase Transition Patterns
-
-**Observation:** Simple edit tasks (code-001) went P1 → P3 directly (skipped P2).
-
-**Valid Pattern:**
-```
-P1 (Read) → P3 (Edit)  ;; Direct path for simple edits
-P1 → P2 → P3           ;; Full cycle for complex tasks
-```
-
-**Rule:** Skip P2 (planning) when task is clearly defined and scoped.
+**Phase Transition Pattern:**
+- Simple edits can skip P2 and go P1 → P3 directly
+- This is more efficient than full cycle for simple tasks
 
 ---
 
-## Surgical Edits for Nested Code
+## Surgical Editing for Nested Code
+
+When working with deeply nested code structures (10+ levels), precision editing prevents parentheses imbalance errors.
 
 ### The Problem
 
-Large edit operations on deeply nested code (10+ levels of nesting) easily break parentheses balance. This is common in Emacs Lisp configuration and complex data structures.
-
-### Failed Approach
+Large block replacements in nested structures often break due to mismatched parentheses:
 
 ```elisp
-;; BROKEN: Replaces entire block - high risk of mismatch
+;; This often breaks due to missing/mismatched parens
 (edit old-block new-block)
-;; Result: "Unmatched parenthesis" or structural breakage
 ```
 
-### Successful Approach: Minimal Edits
+### The Solution: Minimal Edits
 
-Follow the surgical pattern: make minimal changes, edit beginning first, then end, verify after each edit.
+Make incremental changes rather than wholesale replacements:
 
 ```elisp
-;; Step 1: Edit just the function call start
+;; Step 1: Edit just the function call
 (edit "gptel-auto-experiment-decide"
       "(let ((code-quality ...))
          (gptel-auto-experiment-decide")
 
-;; Step 2: Edit just the closing parens separately  
+;; Step 2: Edit just the closing parens
 (edit "exp-result))))))))))))"
-      "exp-result)))))))))))))")  ;; One more paren for let binding
+      "exp-result)))))))))))))")  ; one more paren for let
 ```
 
 ### Verification Commands
 
 ```bash
-# Check file loads without errors
+# Check file loads
 emacs --batch -l file.el
 
-# Check parentheses balance (handles hanging if balanced)
-timeout 10 emacs --batch --eval "(progn (find-file \"file.el\") (while t (forward-sexp)))"
-
-# Alternative: Use check-parens mode
-emacs --batch --eval "(setq check-parens t)" -f check-parens file.el
+# Check parentheses balance (will hang if unbalanced)
+timeout 10 emacs --batch --eval "(progn (find-file ...) (while t (forward-sexp)))"
 ```
 
-### The Symbol
-
-```
-λ surgical - minimal changes preserve structure
-```
-
-**Principle:** Change only what needs changing. Preserve surrounding structure intact.
+**Key Pattern:** λ surgical - minimal changes preserve structure
 
 ---
 
 ## Systematic Code Review Strategy
 
-### The Discovery
+Batch analysis across entire repos is more effective than single-file optimization.
 
-Batch analysis across entire repository is more effective than single-file optimization. Categorizing issues by severity and fixing in order yields measurable improvements.
-
-### Systematic Approach
+### The Approach
 
 1. **Scan entire codebase** with batch tools:
-   ```bash
-   # Compile all files and collect warnings
-   emacs --batch -f batch-byte-compile lisp/modules/*.el 2>&1 | grep Warning
-
-   # Find duplicate function definitions
-   grep -rh "(defun " lisp/ | sed 's/(defun \([^ ]*\).*/\1/' | \
-     sort | uniq -c | sort -rn | head
-
-   # Find docstring formatting issues
-   emacs --batch -f batch-byte-compile *.el 2>&1 | \
-     grep "docstring wider than 80"
-   ```
+   - `emacs --batch -f batch-byte-compile` for warnings/errors
+   - `grep` for duplicate definitions
+   - Count issues by category
 
 2. **Categorize by severity**:
-   
-   | Severity | Issue Type | Impact |
-   |----------|------------|--------|
-   | Critical | Duplicate functions | Runtime errors |
-   | High | Unused variables, free variables | Broken code |
-   | Medium | Docstring width, wrong quotes | Readability |
-   | Low | Missing declare-function | Warnings |
 
-3. **Fix in order:** Critical → High → Medium → Low
+   | Severity | Issue Type | Example |
+   |----------|------------|---------|
+   | Critical | Duplicate functions | Same defun name twice |
+   | High | Unused/free variables | Referenced undefined symbol |
+   | Medium | Docstring width | Line > 80 chars |
+   | Low | Missing declare-function | Undefined function reference |
 
-4. **Verify incrementally:** Run byte-compile after each category
+3. **Fix in order**: Critical → High → Medium → Low
 
-### Results Achieved
+4. **Verify incrementally**: Run byte-compile after each category
+
+### Practical Commands
+
+```bash
+# Find all warnings
+emacs --batch --eval "(setq byte-compile-error-on-warn nil)" \
+  -f batch-byte-compile lisp/modules/*.el 2>&1 | grep Warning
+
+# Find duplicate functions
+grep -rh "(defun " lisp/ | sed 's/(defun \([^ ]*\).*/\1/' | \
+  sort | uniq -c | sort -rn | head
+
+# Find docstring width issues
+emacs --batch -f batch-byte-compile *.el 2>&1 | \
+  grep "docstring wider than 80"
+```
+
+### Results
 
 - Found 5 categories of issues
 - Fixed 22 total issues across 6 files
 - Reduced warnings from ~20 to 1 (false positive)
 
-### Key Insight
-
-```
-Broad exploration → categorize → prioritize → fix systematically
-```
-
-This is more effective than narrow focus on one file or one strategy.
+**Key Insight:** Broad exploration → categorize → prioritize → fix systematically is more effective than narrow focus.
 
 ---
 
-## TDD Approach for Code Quality
+## TDD Approach for Code Quality Metric
+
+Test-driven development ensures metrics capture intended behavior before implementation.
 
 ### The Problem
 
-The code quality metric was discarding valid experiments. Old metric weighted docstrings at 40%, penalizing generated code without documentation. Code scoring 0.83 before could drop to 0.51 after changes, triggering discard even when eight-keys score was high.
+Old metric weighted docstrings at 40%, penalizing generated code without docs. Code scoring 0.83 could drop to 0.51 after changes, triggering discard even when eight-keys score was high.
 
-### TDD Solution
+### TDD Implementation
 
-#### Step 1: Write Tests First
+**Step 1: Write tests first**
+Created 6 new tests in test-grader-subagent.el:
+- `gptel-benchmark--positive-patterns-score` function existence
+- Error handling rewards
+- Bad naming penalties
+- Type predicate rewards
+- Weight distribution verification
+- Minimum score threshold (≥0.70 for good patterns without docs)
 
-Created 6 new tests in `test-grader-subagent.el`:
+**Step 2: Run tests to see failures**
+All 6 tests failed as expected
 
-```elisp
-;; Test existence of scoring function
-(should (fboundp 'gptel-benchmark--positive-patterns-score))
+**Step 3: Implement solution**
+Added `gptel-benchmark--positive-patterns-score` function scoring:
+- Error handling (40%): condition-case, user-error, error, signal
+- Naming conventions (30%): penalizes my-, foo-, bar- prefixes
+- Standard predicates (30%): null, stringp, listp, etc.
 
-;; Test error handling rewards
-(should (> (gptel-benchmark--positive-patterns-score 
-            "(condition-case err (progn) (error (message \"%s\" err)))")
-           0.5))
+**Step 4: Rebalance weights**
+- Docstrings: 20% (was 40%)
+- Positive patterns: 30% (new)
+- Length: 25%
+- Complexity: 25%
 
-;; Test bad naming penalties
-(should (< (gptel-benchmark--positive-patterns-score 
-            "(defun my-foo-bar () )")
-           0.3))
-
-;; Test standard predicate rewards
-(should (> (gptel-benchmark--positive-patterns-score 
-            "(when (stringp x) (listp y))")
-           0.4))
-
-;; Test weight distribution
-(should (= (length gptel-benchmark--score-weights) 4))
-
-;; Test minimum threshold for good patterns without docs
-(should (>= (gptel-benchmark--positive-patterns-score 
-             "(defun process (x) (when (numberp x) (1+ x)))")
-            0.70))
-```
-
-#### Step 2: Run Tests (All Failed as Expected)
-
-```bash
-;; Run the test suite
-emacs --batch -l test-grader-subagent.el -f ert-run-tests-batch-and-exit
-;; Result: 6 failed, 0 passed (expected)
-```
-
-#### Step 3: Implement the Function
-
-```elisp
-(defun gptel-benchmark--positive-patterns-score (code)
-  "Score CODE based on positive coding patterns.
-Returns value between 0-1."
-  (let ((score 0))
-    ;; Error handling (40% weight)
-    (when (or (string-match-p "condition-case" code)
-              (string-match-p "user-error" code)
-              (string-match-p "\\(error\\|signal\\)" code))
-      (setq score (+ score 0.4)))
-    
-    ;; Naming conventions (30% weight) - penalize bad names
-    (when (string-match-p "\\(my-\\|foo-\\|bar-\\)" code)
-      (setq score (- score 0.3)))
-    
-    ;; Standard predicates (30% weight)
-    (when (or (string-match-p "\\(stringp\\|listp\\|numberp\\|null\\)" code)
-              (string-match-p "when\\|if\\|cond" code))
-      (setq score (+ score 0.3)))
-    
-    (max 0 (min 1 score))))
-```
-
-#### Step 4: Rebalance Weights
-
-| Component | Old Weight | New Weight |
-|-----------|------------|------------|
-| Docstrings | 40% | 20% |
-| Positive Patterns | 0% | 30% |
-| Length | 30% | 25% |
-| Complexity | 30% | 25% |
-
-#### Step 5: Verify
-
-```bash
-;; Run full test suite
-emacs --batch -l test-grader-subagent.el -f ert-run-tests-batch-and-exit
-;; Result: 1303 tests, 0 unexpected failures
-```
+**Step 5: Verify**
+All tests pass (1303 tests, 0 unexpected)
 
 ### Result
 
-Code with good patterns but no docstrings now scores ≥0.70 instead of 0.51. Valid experiments with error handling and type checking are no longer discarded.
+Code with good patterns but no docstrings now scores ≥0.70 instead of 0.51. Valid experiments with error handling and type checking won't be discarded.
 
-### The TDD Cycle
-
-```
-test → fail → implement → pass
-```
-
-Tests encode requirements before code exists. This ensures the metric actually measures what matters.
+**Key Pattern:** TDD cycle: test → fail → implement → pass. Tests encode requirements before code exists.
 
 ---
 
 ## Actionable Patterns Summary
 
-| Pattern | When to Use | Key Command |
-|---------|-------------|-------------|
-| Direct Path (P1→P3) | Simple, scoped edits | Skip planning phase |
-| Scoped Exploration | Unknown codebase | `glob --max-count 5` |
-| Surgical Edits | Nested structures | Edit beginning, then end |
-| Batch Review | Entire repo analysis | `emacs --batch -f batch-byte-compile` |
+| Pattern | When to Use | Command/Tool |
+|---------|-------------|--------------|
+| Direct path (P1→P3) | Simple edit tasks | Skip exploration phase |
+| Scope hints | Exploration tasks | --max-count, --max-depth |
+| Minimal edits | Nested code | Edit boundaries incrementally |
+| Batch analysis | Code review | emacs --batch -f batch-byte-compile |
+| Severity ordering | Fix prioritization | Critical → High → Medium → Low |
 | TDD | Metric/function development | test → fail → implement → pass |
-| Severity Ordering | Multiple issues | Critical → High → Medium → Low |
 
 ---
 
 ## Related
 
-- [[Workflow Optimization]] - General efficiency patterns
-- [[Wu Xing Constraints]] - Anti-pattern detection system
-- [[Eight Keys Framework]] - Performance measurement
-- [[Emacs Lisp Patterns]] - Language-specific techniques
-- [[Test-Driven Development]] - Development methodology
+- [Workflow Optimization] - Eight Keys alignment and efficiency metrics
+- [Code Quality Metrics] - Weight balancing and threshold tuning
+- [Testing Patterns] - Test-driven development practices
+- [Emacs Configuration] - Batch compilation and verification
 
 ---
 
-*Synthesized from: code agent benchmarks, surgical edit observations, systematic review analysis, TDD metric improvement*
-*Category: code*
-*Last updated: 2026-03-24*
+*Synthesized: 2026-03-24*
+*Category: knowledge*
+*Tags: workflow, code-agent, efficiency, tdd, review, editing, benchmark*
