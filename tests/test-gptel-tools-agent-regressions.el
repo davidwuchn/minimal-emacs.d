@@ -20,6 +20,7 @@
 (require 'gptel-ext-fsm-utils)
 (require 'gptel-tools-agent)
 (require 'gptel-agent-tools)
+(require 'gptel-auto-workflow-projects)
 
 ;; Root of the .emacs.d repo, used by tests that run shell scripts.
 ;; Derived at load time from the test file's own path.
