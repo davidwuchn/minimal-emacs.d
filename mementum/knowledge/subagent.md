@@ -1,146 +1,115 @@
 ---
-title: Subagent Architecture and Best Practices
-status: active
-category: knowledge
-tags: [subagent, gptel, agent-design, architecture, debugging]
+title: subagent
+status: open
 ---
 
-# Subagent Architecture and Best Practices
+Synthesized from 3 memories.
 
-## Overview
+💡 grader-subagent-debug-session
 
-A **subagent** is a specialized autonomous agent spawned by a parent agent to handle specific tasks with context isolation, dedicated tooling, and independent model selection. Unlike skills, subagents run in their own execution context and can be parallelized.
+## Problem
+Grader subagent always fell back to local grading, never used LLM.
 
-**Key Characteristics:**
+## Root Cause Chain
+1. `gptel-tools-agent.el` did NOT require `gptel-agent`
+2. `gptel-agent--task` was never defined (fboundp returned nil)
+3. `gptel-agent--agents` was declared nil (shadowing)
+4. `(fboundp 'gptel-agent--task)` → nil → local grading fallback
 
-| Characteristic | Subagent | Skill |
-|---------------|----------|-------|
-| Execution Context | Isolated | Shared with parent |
-| Parallel Execution | ✅ Yes | ❌ No |
-| Tool Profile | Dedicated | Inherited |
-| Model Selection | Independent | Parent's model |
-| Context Pollution | None | Possible |
+## TDD Approach
+1. Wrote tests first: `tests/test-grader-subagent.el`
+2. Tests revealed actual behavior
+3. Tests guided fix
+4. Tests verify fix works
 
-## When to Use Subagents
+## Fixes Applied
+1. `(require 'gptel-agent)` at top of `gptel-tools-agent.el`
+2. Removed redundant `(defvar gptel-agent--agents nil)`
+3. Fixed JSON parser to handle grader output format
 
-### Decision Matrix
-
-Use this matrix to decide between subagent, skill, or protocol for your task:
-
-| Task Type | Use | Reasoning |
-|-----------|-----|-----------|
-| Pure procedure, no deps | Protocol (`mementum/knowledge/`) | No external dependencies needed |
-| Has external tools/API | Skill (`assistant/skills/`) | Needs scripts, REPL, API access |
-| Context isolation required | Subagent (`eca/prompts/`) | Won't pollute parent context |
-| Parallel execution needed | Subagent | Can run concurrently with parent |
-| Dedicated/cheaper model | Subagent | Use gpt-5.4-mini for reviews |
-| Shared context preferred | Skill | Inherits parent's conversation |
-
-### Signal Examples
-
-**Use Subagent When You See:**
-- "Review these changes without affecting the main task"
-- "Run multiple analyses in parallel"
-- "Use a specialized toolset that differs from parent"
-- "Isolate memory/context between tasks"
-- "Reduce costs by using a smaller model"
-
-**Use Skill When You See:**
-- "Extend the current conversation's capabilities"
-- "Need access to parent's full context"
-- "Quick, stateless operation"
-- "Tool wrapper around existing functionality"
-
-## Subagent Implementation Patterns
-
-### Pattern 1: Basic Subagent Definition
-
-Subagents are defined in `eca/prompts/` with a standardized structure:
-
-```markdown
-# {name}_agent.md
-
-You are a specialized {task} agent.
-
-## Your Role
-[Detailed role description]
-
-## Tools Available
-- Read (readonly access)
-- Grep (search)
-- Glob (file discovery)
-- [Subagent-specific tools]
-
-## Constraints
-- Do not modify files directly
-- Report findings to parent agent
-- Use context isolation
+## Verification
+```
+:gptel-agent-loaded t
+:gptel-agent--task-fbound t  
+:gptel-agent--agents-count 13
+:grader-model "qwen3.5-plus"
+:executor-model "qwen3.5-plus"
 ```
 
-### Pattern 2: Subagent Configuration
+## Key Files
+- `lisp/modules/gptel-tools-agent.el` - Added require
+- `lisp/modules/gptel-benchmark-subagent.el` - Fixed JSON parser
+- `tests/test-grader-subagent.el` - 8 tests, all pass
 
-Define subagent tool profiles in `eca/config.json`:
-
-```json
-{
-  "agents": {
-    "reviewer": {
-      "model": "qwen3.5-plus",
-      "tools": ["Read", "Grep", "Glob", "Code_Usages"],
-      "context-window": 128000
-    },
-    "grader": {
-      "model": "qwen3.5-plus",
-      "tools": ["Read", "Grep"],
-      "timeout": 60
-    }
-  }
-}
+## λ debug
+```
+λ bug. test → red → trace → fix → green
+λ verify. ./scripts/run-tests.sh grader
 ```
 
-### Pattern 3: TDD for Subagent Development
+---
+title: Reviewer as Subagent vs Skill
+φ: 0.85
+e: reviewer-is-subagent
+λ: when.choosing.skill.or.subagent
+Δ: 0.05
+evidence: 1
+---
 
-Follow test-driven development when building subagent functionality:
+💡 Code reviewer is better as subagent than skill. Key decision factors:
 
-```bash
-# 1. Write tests first
-./scripts/run-tests.sh grader-subagent
+## Decision Matrix
 
-# 2. Run tests to reveal actual behavior
-# Tests should fail initially
+| Task | Use | Why |
+|------|-----|-----|
+| Pure procedure (no deps) | Protocol → `mementum/knowledge/` | No external dependencies |
+| Has external tools/API | Skill → `assistant/skills/` | Needs scripts, REPL, API |
+| Context isolation needed | Subagent → `eca/prompts/` | Won't pollute parent |
+| Parallel execution | Subagent | Can run concurrently |
+| Dedicated model | Subagent | Cheaper/faster model option |
+| Shared context | Skill | Uses parent's context |
 
-# 3. Implement the fix
-# Tests guide the implementation
+## Reviewer → Subagent
 
-# 4. Verify all tests pass
-# Final verification
-```
+Reasons:
+1. **Context isolation** - Review shouldn't pollute parent agent's context
+2. **Parallel** - Parent can spawn reviewer and continue other work
+3. **Tool profile** - Reviewer only needs readonly tools
+4. **Dedicated model** - Can use cheaper model (gpt-5.4-mini) for review
+5. **Already defined** - eca/config.json has reviewer subagent
 
-**Example Test Structure** (`tests/test-grader-subagent.el`):
-
-```elisp
-(ert-deftest test-grader-subagent-uses-llm ()
-  "Grader should use LLM when gptel-agent is loaded."
-  (should (fboundp 'gptel-agent--task)))
-
-(ert-deftest test-grader-subagent-json-parsing ()
-  "Grader should handle its output format correctly."
-  (let ((output (grader-parse "{\"score\": 85, \"feedback\": \"good\"}")))
-    (should (= 85 (alist-get 'score output)))))
-```
-
-## Debugging Subagent Issues
-
-### Common Failure Mode: Local Fallback
-
-**Problem**: Subagent always falls back to local processing instead of using LLM.
-
-**Root Cause Chain** (grader-subagent-debug-session):
+## Structure
 
 ```
-1. Module requires chain broken
-   ↓
-2. gptel-agent--task never defined
-   ↓
-3. (fbo
-...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-GxsKac.txt. Use Read tool if you need more]...
+Protocols:    mementum/knowledge/{name}-protocol.md
+Tool Skills:  assistant/skills/{name}/ (with REPL/API deps)
+Subagents:    eca/prompts/{name}_agent.md (context isolation)
+```
+
+# Subagent Overlay Conflict
+
+**Date**: 2026-03-29
+
+**Problem**: Subagent overlays appearing in *Messages* buffer despite routing fixes.
+
+**Root Cause**: TWO conflicting advices on `gptel-agent--task`:
+1. `my/gptel-agent--task-override` with `:override` (old, line 461)
+2. `gptel-auto-workflow--advice-task-override` with `:around` (new, in projects.el)
+
+The old `:override` advice completely replaces the original function and creates overlays in `parent-buf`, which can be *Messages* if the FSM was created there.
+
+**Symptoms**:
+- Overlays still appear in *Messages* after "fixes"
+- Executor and Grader overlays visible in wrong buffer
+- "Buffer gptel.el modified; kill anyway?" prompts in headless mode
+
+**Solution**:
+1. Remove old `:override` advice
+2. Merge caching logic into new `:around` advice
+3. Add `kill-buffer` query suppression for headless mode
+
+**Files**:
+- `lisp/modules/gptel-tools-agent.el:461` - old advice registration
+- `lisp/modules/gptel-auto-workflow-projects.el:212` - new advice
+
+**Pattern**: Multiple advices on same function with different types (`:override` vs `:around`) causes unpredictable behavior. Use ONE advice type.
