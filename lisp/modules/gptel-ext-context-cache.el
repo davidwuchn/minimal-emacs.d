@@ -312,7 +312,7 @@ When multiple entries match, returns the one with the longest key for most speci
                    (stringp (car entry))
                    (string-prefix-p (downcase (car entry)) search-lower))
           (let ((key-len (length (car entry))))
-            (when (> key-len best-key-len)
+            (when (>= key-len best-key-len)
               (setq best-key-len key-len)
               (setq best-match (cdr entry))))))
       best-match)))
