@@ -1,8 +1,31 @@
 # Mementum State
 
-> Last session: 2026-04-10 19:25
+> Last session: 2026-04-10 20:05
 
-## Total Improvements: 218+ Real Code Fixes (7 new today)
+## Total Improvements: 218+ Real Code Fixes (8 new today)
+
+### Session Summary: 2026-04-10 Evening (Test Script Fix + Sync)
+
+**Action:** Fixed intermittent test failure in run-tests.sh, synced all remotes
+
+**Result:** ✅ 1354 ERT tests (0 unexpected), 28/28 E2E, all remotes in sync
+
+**Bug Fixed:**
+- **scripts/run-tests.sh:49-54** — `pipefail` causes grep to fail on pipe
+  - `echo "$output" | grep -q "0 unexpected"` fails intermittently with `set -euo pipefail`
+  - Root cause: `echo` exits before `grep` finishes reading, pipe closes with SIGPIPE
+  - Fix: Use here-strings (`<<< "$output"`) instead of pipes for grep checks
+  - Commit: `fa9818a0` — ⊘ fix: use here-strings instead of pipes for grep with pipefail
+
+**Key Insights:**
+- `set -euo pipefail` + `echo | grep` = intermittent failures in bash scripts
+- Here-strings (`<<<`) avoid pipe buffering issues entirely
+- The bug was masked when running with `bash -x` (debug mode) because timing changes
+- Always test scripts in the same mode they'll run in production
+
+**Sync Status:**
+- **main:** `fa9818a0` — origin ↔ upstream in sync
+- **staging:** `1e94f0b6` — origin ↔ upstream in sync
 
 ### Session Summary: 2026-04-10 Evening (Paren Fix + Sync)
 
