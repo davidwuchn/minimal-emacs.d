@@ -1,37 +1,19 @@
 ---
-title: Pattern Knowledge Page
+title: Emacs Development Patterns
 status: active
 category: knowledge
-tags: [pattern, elisp, emacs, buffer-local, fsm, scheduling, workflow, anti-pattern]
+tags: [elisp, pattern, anti-pattern, buffer-local, scheduling, fsm, modules, upstream]
 ---
 
-# Pattern Knowledge Page
+# Emacs Development Patterns
 
-This knowledge page catalogs actionable patterns and anti-patterns discovered through the auto-workflow development process. Each entry provides concrete implementation guidance, code examples, and cross-references to related patterns.
+This page catalogs recurring patterns and anti-patterns discovered in the gptel auto-workflow development process. These patterns guide code design decisions and help avoid common pitfalls.
 
----
+## 1. Buffer-Local Variable Pattern
 
-## Overview
+**Status**: Active Pattern
 
-| Pattern | Category | Status |
-|---------|----------|--------|
-| Buffer-Local Variable | Core | ✅ Active |
-| Cron-Based Scheduling | Infrastructure | ✅ Active |
-| FSM Creation | Auto-Workflow | ✅ Active |
-| LLM-Generated Syntax Error | Anti-Pattern | ⚠️ Detection |
-| Module Load Order | Core | ✅ Active |
-| Nested Defun | Anti-Pattern | ⚠️ Detection |
-| Nil Guard | Core | ✅ Active |
-| Upstream Cooperation | Workflow | ✅ Active |
-| Experiment Cleanup | Infrastructure | ✅ Active |
-
----
-
-## Buffer-Local Variable Pattern
-
-### Description
-
-Buffer-local variables must be set in the correct buffer context. Mixing buffer contexts leads to variables being nil in unexpected places or overwriting values in wrong buffers.
+Buffer-local variables must be set in the correct buffer context. This is critical for maintaining state across multiple gptel buffers.
 
 ### Problem
 
@@ -39,7 +21,7 @@ Buffer-local variables must be set in the correct buffer context. Mixing buffer 
 ;; WRONG - sets in current buffer, not target
 (setq gptel--fsm-last fsm)
 
-;; WRONG - not buffer-local, affects wrong buffer
+;; WRONG - not buffer-local
 (setq-local gptel--fsm-last fsm)  ; in wrong buffer
 ```
 
@@ -58,10 +40,10 @@ Buffer-local variables must be set in the correct buffer context. Mixing buffer 
 
 | Variable | Purpose |
 |----------|---------|
-| `gptel--fsm-last` | FSM state for conversation |
+| `gptel--fsm-last` | FSM state machine state |
 | `gptel-backend` | LLM backend configuration |
 | `gptel-model` | Model name |
-| `gptel--stream-buffer` | Response buffer for streaming |
+| `gptel--stream-buffer` | Response buffer |
 
 ### Signal
 
@@ -76,28 +58,22 @@ Buffer-local variables must be set in the correct buffer context. Mixing buffer 
   (should gptel--fsm-last))  ; Verify set in correct buffer
 ```
 
-### Related
-
-- [FSM Creation Pattern](#fsm-creation-pattern)
-- [Module Load Order Pattern](#module-load-order-pattern)
-
 ---
 
-## Cron-Based Scheduling for Emacs
+## 2. Cron-Based Scheduling Pattern
 
-### Description
+**Status**: Active Pattern
 
-Use cron for scheduled Emacs tasks instead of Emacs timers for tasks that need to survive restarts and follow standard Unix patterns.
+Use cron for scheduled Emacs tasks instead of Emacs timers for tasks that must survive daemon restarts.
 
 ### Why Cron Over Emacs Timers
 
-| Aspect | Cron | Emacs Timer |
-|--------|------|-------------|
-| Survives restart | ✅ Yes | ❌ No |
-| Standard Unix | ✅ Yes | Emacs-specific |
-| Log management | ✅ Easy | Manual |
-| Visibility | ✅ `crontab -l` | Inside Emacs |
-| Session-aware | ❌ No | ✅ Yes |
+| Cron | Emacs Timer |
+|------|-------------|
+| ✓ Survives restart | ✗ Lost on exit |
+| ✓ Standard Unix | Emacs-specific |
+| ✓ Easy logs | Manual handling |
+| ✓ `crontab -l` visibility | Inside Emacs |
 
 ### Implementation
 
@@ -133,22 +109,17 @@ LOGDIR=~/.emacs.d/var/tmp/cron
 
 ```
 λ schedule(x).    cron(x) > emacs_timer(x)
-                  | survives_restart(x) ∧ standard_unix(x)
-                  | session_aware(x) → emacs_timer(x)
+                | survives_restart(x) ∧ standard_unix(x)
+                | session_aware(x) → emacs_timer(x)
 ```
-
-### Related
-
-- [Experiment Cleanup Pattern](#experiment-worktree-cleanup-pattern)
-- [FSM Creation Pattern](#fsm-creation-pattern)
 
 ---
 
-## FSM Creation Pattern for Auto-Workflow
+## 3. FSM Creation Pattern for Auto-Workflow
 
-### Description
+**Status**: Active Pattern
 
-When creating fresh worktree buffers for auto-workflow experiments, the FSM must be explicitly created since `gptel-request` is never called.
+Create FSM (Finite State Machine) in worktree buffer setup to avoid nil FSM errors.
 
 ### Problem
 
@@ -172,6 +143,8 @@ In normal usage:
 
 ### Solution
 
+Create FSM in worktree buffer setup:
+
 ```elisp
 (require 'gptel-request)
 (require 'gptel-agent-tools)
@@ -190,12 +163,6 @@ In normal usage:
 2. **Set buffer-local**: Use `setq-local` in correct buffer
 3. **Proper FSM fields**: `:table`, `:handlers`, `:info`
 
-### Signal
-
-- Agent tasks need FSM in buffer
-- FSM is buffer-local variable
-- Create FSM before calling agent functions
-
 ### Verification
 
 Evidence of success:
@@ -204,18 +171,13 @@ Evidence of success:
 [nucleus] Subagent executor still running... (596.7s elapsed)
 ```
 
-### Related
-
-- [Buffer-Local Variable Pattern](#buffer-local-variable-pattern)
-- [Module Load Order Pattern](#module-load-order-pattern)
-
 ---
 
-## LLM-Generated Syntax Error Pattern (Anti-Pattern)
+## 4. LLM-Generated Syntax Error Anti-Pattern
 
-### Description
+**Status**: Anti-Pattern
 
-LLM-generated commits can introduce syntax errors while claiming to fix them. This anti-pattern documents detection and prevention strategies.
+LLM-generated commits can introduce syntax errors while claiming to fix them.
 
 ### Example
 
@@ -226,8 +188,8 @@ LLM-generated commits can introduce syntax errors while claiming to fix them. Th
 **Reality**: Added EXTRA closing paren → syntax error
 
 ```diff
--          :analysis-timestamp (format-time-string "%Y-%m-%dT%Y-%m-%dT%H:%M:%S"))))
-+          :analysis-timestamp (format-time-string "%Y-%m-%dT%Y-%m-%dT%H:%M:%S")))))
+-          :analysis-timestamp (format-time-string "%Y-%m-%dT%H-%M-%S"))))
++          :analysis-timestamp (format-time-string "%Y-%m-%dT%H-%M-%S")))))
 ```
 
 ### Root Cause
@@ -257,22 +219,17 @@ LLM-generated commits can introduce syntax errors while claiming to fix them. Th
 
 ### Signal
 
-- LLM claims "file loads successfully" → ❌ verify independently
-- Syntax-only changes → ✅ run syntax check
-- Parentheses fixes → ✅ count parens before/after
-
-### Related
-
-- [Module Load Order Pattern](#module-load-order-pattern)
-- [Nested Defun Anti-Pattern](#nested-defun-anti-pattern)
+- LLM claims "file loads successfully" → verify independently
+- Syntax-only changes → run syntax check
+- Parentheses fixes → count parens before/after
 
 ---
 
-## Module Load Order Pattern
+## 5. Module Load Order Pattern
 
-### Description
+**Status**: Active Pattern
 
-Require modules before using their variables/functions. Load order matters in Elisp, especially with cross-file dependencies.
+Require modules before using their variables/functions to avoid void variable errors.
 
 ### Problem
 
@@ -330,22 +287,15 @@ gptel → gptel-request → gptel-agent-tools → gptel-agent-tools
 3. Document dependencies in comments
 4. Test in clean Emacs instance
 
-### Related
-
-- [FSM Creation Pattern](#fsm-creation-pattern)
-- [Nil Guard Pattern](#nil-guard-pattern)
-
 ---
 
-## Nested Defun Anti-Pattern
+## 6. Nested Defun Anti-Pattern
 
-### Description
+**Status**: Anti-Pattern
 
-Nested `defun` inside another function is an anti-pattern that creates new function objects on every call and makes the function inaccessible from outside.
+Never define functions inside other functions. This creates new function objects on every call.
 
 ### Finding
-
-Found nested `defun` inside another function:
 
 ```elisp
 (defun outer-function ()
@@ -388,22 +338,17 @@ Move to top-level:
 - Code review: scan for defun at wrong indentation
 - Unit tests will fail if function is not defined at load time
 
-### Related
-
-- File: `lisp/modules/gptel-workflow-benchmark.el:709`
-- Fix: commit `25c63eb` then `9056845`
-
 ---
 
-## Nil Guard Pattern for Elisp
+## 7. Nil Guard Pattern
 
-### Description
+**Status**: Active Pattern
 
-Guard nil values before passing to functions expecting number-or-marker. Elisp functions like `=`, `make-overlay`, `copy-marker` throw `wrong-type-argument` when passed nil.
+Guard nil values before passing to functions expecting number-or-marker to prevent wrong-type-argument errors.
 
 ### Problem
 
-This crashes in process sentinels and FSM callbacks where edge cases (curl timeout, missing FSM info) can produce nil values.
+Elisp functions like `=`, `make-overlay`, `copy-marker` throw `wrong-type-argument` when passed nil. This crashes in process sentinels and FSM callbacks where edge cases (curl timeout, missing FSM info) can produce nil values.
 
 ### Solution
 
@@ -421,44 +366,37 @@ This crashes in process sentinels and FSM callbacks where edge cases (curl timeo
 
 ### Files Fixed
 
-| File | Line | Pattern |
-|------|------|---------|
-| `gptel-tools-agent.el` | 133-137 | marker fallback chain |
-| `gptel-agent-loop.el` | 506-512 | same pattern |
-| `gptel-ext-tool-confirm.el` | 337-340 | tool confirm guard |
-| `gptel-ext-retry.el` | 314-318 | `(numberp status)` guard |
+- `gptel-tools-agent.el:133-137` — marker fallback chain
+- `gptel-agent-loop.el:506-512` — same pattern
+- `gptel-ext-tool-confirm.el:337-340` — tool confirm guard
+- `gptel-ext-retry.el:314-318` — `(numberp status)` guard
 
 ### Commits
 
 - `57d96ab` — FSM markers nil
 - `aa4e5e8` — HTTP status nil
 
-### Related
-
-- [FSM Creation Pattern](#fsm-creation-pattern)
-- [Buffer-Local Variable Pattern](#buffer-local-variable-pattern)
-
 ---
 
-## Upstream Cooperation Pattern
+## 8. Upstream Cooperation Pattern
 
-### Description
+**Status**: Active Pattern
 
-Guidelines for maintaining a fork with local patches that overlap with upstream functionality.
+When maintaining a fork with local patches that overlap with upstream functionality, follow these guidelines.
 
-### Core Principles
+### Rules
 
 #### 1. Verify Before Removing
 
 ```
 λ upstream(x).    claim(x) → verify(grep, sed, read)
-                   | upstream_has(x) → safe_remove(local)
-                   | ¬upstream_has(x) → keep(local)
+                 | upstream_has(x) → safe_remove(local)
+                 | ¬upstream_has(x) → keep(local)
 ```
 
 Don't trust commit messages alone. Verify functions exist in upstream code.
 
-**Example**: Verified `gptel--update-wait` in `gptel.el:1180`, `gptel--handle-error` in `gptel.el:1349` before removing local equivalents.
+Example: Verified `gptel--update-wait` in `gptel.el:1180`, `gptel--handle-error` in `gptel.el:1349` before removing local equivalents.
 
 #### 2. Keep Defensive Workarounds
 
@@ -467,7 +405,7 @@ Upstream focuses on happy path. Local code should keep:
 - Defensive safety nets
 - Error recovery for corrupted state
 
-**Example**: Kept `my/gptel--recover-fsm-on-error` (error+STOP limbo) and subagent error logging—upstream doesn't have these.
+Example: Kept `my/gptel--recover-fsm-on-error` (error+STOP limbo) and subagent error logging—upstream doesn't have these.
 
 #### 3. Commentary as Migration Log
 
@@ -489,7 +427,7 @@ Tests for local-specific code stay local. Don't try to upstream tests that only 
 
 ```
 λ sync(x).    fetch(origin) → log(HEAD..origin) → merge_or_rebase
-              | review(changelog) → adapt(local_patches)
+             | review(changelog) → adapt(local_patches)
 ```
 
 ### Pattern
@@ -514,48 +452,35 @@ upstream = general_core + happy_path
 
 ```
 λ contribute(x).    general_fix(x) → PR(upstream)
-                    | general_feature(x) → PR(upstream)
-                    | edge_case(x) → local_patch
-                    | project_specific(x) → local_only
-                    | security(x) → PR(upstream) ∧ local_pending
+                  | general_feature(x) → PR(upstream)
+                  | edge_case(x) → local_patch
+                  | project_specific(x) → local_only
+                  | security(x) → PR(upstream) ∧ local_pending
 ```
 
-### PR Workflow
+### Sync Protocol
 
-```bash
-# 1. Create clean branch from upstream
-git checkout -b fix-nil-tool-names upstream/master
-
-# 2. Cherry-pick or re-implement minimal fix
-# 3. Commit with clear message
-# 4. Push to fork
-git push origin fix-nil-tool-names
-
-# 5. Create PR against upstream
-gh pr create --repo karthink/gptel --head davidwuchn:fix-nil-tool-names --base master
+```
+λ sync_cycle().    weekly → fetch(upstream) → review(changelog)
+                    | breaking_change → adapt(local)
+                    | feature_overlap → evaluate(keep_or_remove)
+                    | commit(Δ) → note(upstream_version)
 ```
 
-### What We Did NOT Upstream
+### Ratio Target
 
-| Local Code | Reason |
-|------------|--------|
-| `my/gptel--sanitize-tool-calls` | Defensive pre-check, upstream handles in parser |
-| `my/gptel--nil-tool-call-p` | Redundant with PR fix |
-| "invalid" tool registration | Defensive fallback pattern |
-| Doom-loop detection | Defensive, not a bug fix |
-
-### Related
-
-- [Module Load Order Pattern](#module-load-order-pattern)
-- [LLM-Generated Syntax Error Pattern](#llm-generated-syntax-error-pattern-anti-pattern)
+```
+70% upstream contributions (bugs, security, general improvements)
+30% local patches (edge cases, defensive code, project-specific)
+```
 
 ---
 
-## Experiment Worktree Cleanup Pattern
+## 9. Experiment Worktree Cleanup Pattern
 
-### Description
+**Status**: Active Pattern
 
-Merged experiment worktrees should be cleaned up to prevent accumulation. Stale worktrees consume resources and create confusion.
+Merged experiment worktrees should be cleaned up to prevent accumulation.
 
 ### Symptoms
 
@@ -590,103 +515,49 @@ git branch -D <branch>
 
 Cleaned 7 merged worktrees (agent-exp1, agent-exp2, core-exp2, strategic-exp1, strategic-exp2, tools-exp1, tools-exp2)
 
-**Location**: `var/tmp/experiments/optimize/`
-
-### Related
-
-- [Cron-Based Scheduling](#cron-based-scheduling-for-emacs)
-
----
-
-## Cross-Reference Matrix
-
-| Pattern | Related Topics |
-|---------|----------------|
-| Buffer-Local Variable | FSM Creation, Nil Guard |
-| Cron-Based Scheduling | Experiment Cleanup |
-| FSM Creation | Buffer-Local, Module Load Order |
-| LLM-Generated Syntax Error | Module Load Order, Nested Defun |
-| Module Load Order | FSM Creation, Buffer-Local |
-| Nested Defun | LLM-Generated Syntax Error |
-| Nil Guard | FSM Creation, Buffer-Local |
-| Upstream Cooperation | Module Load Order, LLM-Generated Syntax Error |
-| Experiment Cleanup | Cron-Based Scheduling |
-
----
-
-## Pattern Decision Flowchart
-
-```
-                    ┌─────────────────┐
-                    │  Need to add    │
-                    │  new code?      │
-                    └────────┬────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              ▼                             ▼
-        ┌─────────────┐               ┌─────────────┐
-        │ General    │               │ Project    │
-        │ feature?  │               │ specific?  │
-        └─────┬─────┘               └─────┬─────┘
-              │                             │
-     ┌────────┴────────┐         ┌────────┴────────┐
-     ▼                 ▼         ▼                  ▼
-┌─────────┐      ┌─────────┐ ┌─────────┐      ┌─────────┐
-│ Bug fix │      │ Feature │ │ Keep    │      │ Keep    │
-│?        │      │?        │ │ local   │      │ local   │
-└────┬────┘      └────┬────┘ └────┬────┘      └────┬────┘
-     │                 │          │                 │
-     ▼                 ▼          ▼                 ▼
-┌─────────┐      ┌─────────┐ ┌─────────┐      ┌─────────┐
-│ PR to    │      │ Propose  │ │ No PR   │      │ No PR   │
-│ upstream│      │ upstream│ │ needed  │      │ needed  │
-└─────────┘      └─────────┘ └─────────┘      └─────────┘
-```
-
----
-
-## Quick Reference Commands
-
-### Check Buffer Context
-
-```elisp
-(current-buffer)           ; Get current buffer
-(with-current-buffer BUF    ; Execute in buffer context
-  ...)
-(buffer-local-value VAR BUF ; Get buffer-local value
-```
-
-### Verify Load Order
-
-```elisp
-(require 'gptel-request)  ; Require with error if missing
-(featurep 'gptel)         ; Check if loaded
-```
-
-### Syntax Check
-
-```elisp
-emacs -Q --batch -l my.el  ; Load and check syntax
-forward-sexp              ; Check parentheses
-```
-
-### Worktree Management
-
-```bash
-git worktree list           ; List all worktrees
-git worktree add <path> <branch>  ; Add worktree
-git worktree remove <path> --force ; Remove worktree
-```
+**Location:** `var/tmp/experiments/optimize/`
 
 ---
 
 ## Related
 
-- [Knowledge: Auto-Workflow](auto-workflow.md)
-- [Knowledge: Project Facts](project-facts.md)
-- [Knowledge: FSM Architecture](fsm.md)
-- [AGENTS.md](../AGENTS.md) — `λ upstream(x)` rule
+- [Auto-Workflow](./auto-workflow.md) - Main automation system
+- [FSM State Machine](./fsm.md) - FSM implementation details
+- [gptel Modules](./gptel-modules.md) - Module architecture
+- [Upstream Contributing](./contributing.md) - Contribution guidelines
+- [Buffer Management](./buffers.md) - Buffer handling patterns
 
 ---
 
-*This knowledge page is maintained as part of the auto-workflow system and updated as new patterns are discovered.*
+## Pattern Summary
+
+| Pattern | Type | Key Action |
+|---------|------|-------------|
+| Buffer-Local Variables | Pattern | Use `with-current-buffer` |
+| Cron Scheduling | Pattern | Use cron for persistent tasks |
+| FSM Creation | Pattern | Create FSM in worktree buffer |
+| LLM Syntax Errors | Anti-Pattern | Always verify with `forward-sexp` |
+| Module Load Order | Pattern | Use `require` before functions |
+| Nested Defun | Anti-Pattern | Move functions to top-level |
+| Nil Guard | Pattern | Check before passing to functions |
+| Upstream Cooperation | Pattern | PR general, keep defensive local |
+| Worktree Cleanup | Pattern | Clean after merge to staging |
+
+---
+
+## Quick Reference Commands
+
+```bash
+# Check Elisp syntax
+emacs --batch --eval "(progn (setq load-path (cons \".\" load-path)) (load-file \"file.el\") (message \"OK\"))"
+
+# Clean up worktrees
+git worktree list
+git worktree remove /path/to/worktree --force
+
+# Check cron jobs
+crontab -l
+
+# Verify upstream functions
+grep -n "function-name" /path/to/upstream/*.el
+```
