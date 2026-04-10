@@ -235,14 +235,19 @@ Handles nil scores by treating them as 0. Does not mutate input."
           totals))
 
 (defun gptel-benchmark--extract-score-types (scores)
-  "Extract standard score types from SCORES plist.
+  "Extract standard score types from SCORES plist or alist.
 Returns alist of (score-type . value) for the four standard scores.
-Handles nil values gracefully by returning 0.0 for missing scores."
+Handles nil values gracefully by returning 0.0 for missing scores.
+Handles both plist format (keyword keys) and alist format (symbol or keyword keys)."
   (when scores
-    (list (cons :overall-score (or (plist-get scores :overall-score) 0.0))
-          (cons :efficiency-score (or (plist-get scores :efficiency-score) 0.0))
-          (cons :completion-score (or (plist-get scores :completion-score) 0.0))
-          (cons :constraint-score (or (plist-get scores :constraint-score) 0.0)))))
+    (let ((get-fn (if (and (listp scores) (keywordp (car scores)))
+                      (lambda (k) (plist-get scores k))
+                    (lambda (k) (or (alist-get k scores)
+                                   (alist-get (gptel-benchmark--keyword-to-alist-key k) scores))))))
+      (list (cons :overall-score (or (funcall get-fn :overall-score) 0.0))
+            (cons :efficiency-score (or (funcall get-fn :efficiency-score) 0.0))
+            (cons :completion-score (or (funcall get-fn :completion-score) 0.0))
+            (cons :constraint-score (or (funcall get-fn :constraint-score) 0.0))))))
 
 (defun gptel-benchmark--calculate-average (score-totals total score-type)
   "Calculate average for SCORE-TYPE from SCORE-TOTALS over TOTAL items.
@@ -272,7 +277,11 @@ Returns plist with :total-tests, :passed-tests, and average scores."
                         (:constraint-score . 0.0))))
     (dolist (r results)
       (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall-score (and scores (plist-get scores :overall-score))))
+             (overall-score (and scores
+                                  (if (and (listp scores) (keywordp (car scores)))
+                                      (plist-get scores :overall-score)
+                                    (or (alist-get :overall-score scores)
+                                        (alist-get 'overall-score scores))))))
         (cl-incf total)
         (when scores
           (setq score-totals
