@@ -125,6 +125,11 @@ gptel preset.")
   (puthash '_ value env)
   (puthash 'it value env))
 
+(defun gptel-sandbox--bind-last-value (value env)
+  "Bind VALUE to last-result placeholders `_` and `it` in ENV."
+  (puthash '_ value env)
+  (puthash 'it value env))
+
 (defun gptel-sandbox--normalize-binding (binding)
   "Normalize a let-style BINDING into `(SYMBOL VALUE-FORM)'."
   (cond
@@ -447,13 +452,16 @@ CALLBACK receives non-nil when approved and nil when rejected."
   (setq text (gptel-sandbox--render-result text))
   (if (<= (length text) my/gptel-programmatic-result-limit)
       text
-    (let ((temp-file (if (fboundp 'my/gptel-make-temp-file)
-                         (my/gptel-make-temp-file "programmatic-" nil ".txt")
-                       (make-temp-file "programmatic-" nil ".txt"))))
+    (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
+                          (my/gptel-make-temp-file "programmatic-" nil ".txt")
+                        (make-temp-file "programmatic-" nil ".txt")))
+           (suffix "\n...[Programmatic result truncated. Full result saved to: %s]...")
+           (max-text-len (max 0 (- my/gptel-programmatic-result-limit
+                                   (length (format suffix temp-file))))))
       (with-temp-file temp-file
         (insert text))
-      (format "%s\n...[Programmatic result truncated. Full result saved to: %s]..."
-              (substring text 0 my/gptel-programmatic-result-limit)
+      (format (concat "%s" suffix)
+              (substring text 0 (min max-text-len (length text)))
               temp-file))))
 
 (defun gptel-sandbox--format-error (message)
@@ -492,12 +500,18 @@ can consume lists, vectors, plists, and alists as readable data."
                  (if (gptel-tool-async tool-spec)
                      (apply (gptel-tool-function tool-spec)
                             (lambda (result)
-                              (funcall callback (gptel--to-string result)))
+                              (funcall callback
+                                       (if (fboundp 'gptel--to-string)
+                                           (gptel--to-string result)
+                                         (format "%s" result))))
                             arg-values)
                    (let ((result (condition-case inner-err
                                      (apply (gptel-tool-function tool-spec) arg-values)
                                    (error (format "Error: %s" (error-message-string inner-err))))))
-                     (funcall callback (gptel--to-string result)))))))
+                     (funcall callback
+                              (if (fboundp 'gptel--to-string)
+                                  (gptel--to-string result)
+                                (format "%s" result))))))))
           (if (gptel-sandbox--confirm-required-p tool-spec arg-values)
               (gptel-sandbox--maybe-aggregate-confirm
                state
@@ -538,9 +552,7 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
     (`(tool-call ,tool-name . ,arg-forms)
      (gptel-sandbox--execute-tool
       (lambda (value)
-        ;; tool-call without setq: only bind _ and it
-        (puthash (quote _) value env)
-        (puthash (quote it) value env)
+        (gptel-sandbox--bind-last-value value env)
         (funcall callback (list :continue t :done nil)))
       tool-name arg-forms env state))
     (`(result ,expr)

@@ -4813,13 +4813,13 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                              (gptel-auto-experiment-log-tsv
                               run-id exp-result)
                               (funcall callback exp-result)))
-                       ;; Grader passed - commit changes, then run benchmark
-                       (let ((commit-dir (or (gptel-auto-workflow--get-worktree-dir target)
-                                             (gptel-auto-workflow--project-root))))
-                         (when commit-dir
-                           (let ((default-directory commit-dir))
-                             (magit-git-success "add" "-A")
-                             (magit-git-success "commit" "-m" (format "WIP: experiment %s" target)))))
+                        ;; Grader passed - commit changes, then run benchmark
+                        (let ((commit-dir (or (gptel-auto-workflow--get-worktree-dir target)
+                                              (gptel-auto-workflow--project-root))))
+                          (when commit-dir
+                            (let ((default-directory commit-dir))
+                              (magit-git-success "add" "-A")
+                              (magit-git-success "commit" "-m" (format "WIP: experiment %s\n\nHYPOTHESIS: %s" target (or hypothesis "Improve code quality"))))))
                        (let* ((bench (gptel-auto-experiment-benchmark t))
                               (passed (plist-get bench :passed))
                               (validation-error (plist-get bench :validation-error))
