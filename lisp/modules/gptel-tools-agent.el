@@ -6546,7 +6546,8 @@ REQUEST-BUFFER is removed from direct-LLM tracking after delivery."
               (gptel-auto-workflow--project-root-override project-root)
               (gptel-auto-workflow--run-project-root project-root)
               (gptel-auto-workflow--headless headless))
-          (gptel-mementum--handle-synthesis-result topic files result)))
+          (gptel-mementum--handle-synthesis-result topic files result)
+          t))
     (when request-buffer
       (gptel-mementum--untrack-llm-request-buffer request-buffer))))
 
@@ -6568,11 +6569,13 @@ REQUEST-BUFFER is removed from direct-LLM tracking after delivery."
    (t
     (gptel-mementum--synthesis-agent))))
 
-(defun gptel-mementum-synthesize-candidate (candidate &optional synchronous synthesis-backend)
+(defun gptel-mementum-synthesize-candidate (candidate &optional synchronous synthesis-backend callback-run-id)
   "Synthesize CANDIDATE into knowledge page with human approval.
 CANDIDATE is plist with :topic :count :files.
 Implements λ termination(x): synthesis ≡ AI | approval ≡ human.
 Returns t if synthesis was initiated, nil otherwise.
+
+CALLBACK-RUN-ID freezes the owning workflow identity for stale-callback checks.
 
 Note: Call `gptel-mementum-ensure-agents' first for batch processing."
   (let* ((topic (plist-get candidate :topic))
@@ -6592,25 +6595,26 @@ Note: Call `gptel-mementum-ensure-agents' first for batch processing."
           (message "[mementum] Synthesizing %d memories for topic: %s" (length memories-content) topic)
           (let ((backend (or synthesis-backend
                              (gptel-mementum--synthesis-backend)))
-                (callback-run-id (and gptel-auto-workflow--running
-                                      (gptel-auto-workflow--current-run-id))))
+                (captured-run-id (or callback-run-id
+                                     (and gptel-auto-workflow--running
+                                          (gptel-auto-workflow--current-run-id)))))
             (pcase backend
              ('llm
               (let ((request-buffer (current-buffer)))
-                (when callback-run-id
+                (when captured-run-id
                   (gptel-mementum--track-llm-request-buffer request-buffer))
                 (if synchronous
                     (gptel-mementum--deliver-synthesis-result
                      project-root headless topic files
                      (gptel-benchmark-llm-synthesize-knowledge-sync
                       topic memories-content 300)
-                     callback-run-id request-buffer)
+                     captured-run-id request-buffer)
                   (gptel-benchmark-llm-synthesize-knowledge
                    topic memories-content
                    (lambda (result &rest _)
                      (gptel-mementum--deliver-synthesis-result
                       project-root headless topic files result
-                      callback-run-id request-buffer))))))
+                      captured-run-id request-buffer))))))
               ((pred symbolp)
                (if (and (fboundp 'gptel-benchmark-call-subagent)
                         (fboundp 'gptel-agent--task))
@@ -6623,18 +6627,18 @@ Note: Call `gptel-mementum-ensure-agents' first for batch processing."
                          (format "Synthesize knowledge: %s" topic)
                          synthesis-prompt
                          300)
-                        callback-run-id)
+                        captured-run-id)
                      (gptel-benchmark-call-subagent
                       backend
                       (format "Synthesize knowledge: %s" topic)
                       synthesis-prompt
                       (lambda (result)
                         (gptel-mementum--deliver-synthesis-result
-                         project-root headless topic files result callback-run-id))
+                         project-root headless topic files result captured-run-id))
                       300))
                  (message "[mementum] Skip '%s': no synthesis subagent available" topic)))
             (_
-             (message "[mementum] Skip '%s': no synthesis backend available" topic))))
+              (message "[mementum] Skip '%s': no synthesis backend available" topic))))
           t))))
 
 (defun gptel-mementum-ensure-agents ()
@@ -6673,18 +6677,29 @@ fallback subagent symbol such as `researcher' or `executor'."
 Ensures agents are loaded once before processing batch."
   (let* ((cands (or candidates (gptel-mementum-check-synthesis-candidates)))
          (synthesized 0)
-         (backend (gptel-mementum-ensure-agents)))
+         (backend (gptel-mementum-ensure-agents))
+         (batch-run-id (and gptel-auto-workflow--running
+                            (gptel-auto-workflow--current-run-id)))
+         (stopped nil))
     ;; Setup agents once for entire batch (not per-candidate)
     (if backend
         (progn
           (message "[mementum] %s available, processing %d candidates"
                    (pcase backend
-                     ('llm "Direct LLM")
-                     (_ (capitalize (symbol-name backend))))
+                      ('llm "Direct LLM")
+                      (_ (capitalize (symbol-name backend))))
                    (length cands))
           (dolist (candidate cands)
-            (when (gptel-mementum-synthesize-candidate candidate synchronous backend)
-              (cl-incf synthesized))))
+            (unless stopped
+              (if (and batch-run-id
+                       (not (gptel-auto-workflow--run-callback-live-p batch-run-id)))
+                  (progn
+                    (setq stopped t)
+                    (message "[mementum] Stopping stale synthesis batch; run %s is no longer active"
+                             batch-run-id))
+                (when (gptel-mementum-synthesize-candidate
+                       candidate synchronous backend batch-run-id)
+                  (cl-incf synthesized))))))
       (message "[mementum] No synthesis backend available, skipping synthesis"))
     (message "[mementum] %s %d/%d candidates"
              (if synchronous "Synthesized" "Queued")
