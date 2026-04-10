@@ -714,21 +714,25 @@ Enables headless suppression to auto-approve synthesis prompts."
     ;; Ensure gptel-tools-agent is loaded for mementum functions
     (unless (featurep 'gptel-tools-agent)
       (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)))
-    (setq gptel-auto-workflow--current-project root)
     ;; Enable headless suppression for cron runs (auto-approve y-or-n-p)
     (unless headless-was-enabled
       (gptel-auto-workflow--enable-headless-suppression))
-    (condition-case err
-        (progn
-          (gptel-mementum-weekly-job)
-          (message "[mementum] ✓ Completed: %s" root))
-      (error
-       (message "[mementum] ✗ Failed: %s - %s" root err)
-       nil))
-    ;; Restore headless state
-    (unless headless-was-enabled
-      (gptel-auto-workflow--disable-headless-suppression))
-    (setq gptel-auto-workflow--current-project nil)))
+    (unwind-protect
+        (let ((gptel-auto-workflow--current-project root)
+              (gptel-auto-workflow--project-root-override root)
+              (gptel-auto-workflow--run-project-root root))
+          (condition-case err
+              (progn
+                (gptel-mementum-weekly-job)
+                (message "[mementum] ✓ Completed: %s" root)
+                t)
+            (error
+             (message "[mementum] ✗ Failed: %s - %s" root err)
+             nil)))
+      ;; Restore headless state
+      (unless headless-was-enabled
+        (gptel-auto-workflow--disable-headless-suppression))
+      (setq gptel-auto-workflow--current-project nil))))
 
 (defun gptel-auto-workflow-run-all-mementum ()
   "Run mementum weekly job for all configured projects.
@@ -740,9 +744,9 @@ To be called from cron - runs mementum maintenance for each project."
     (dolist (project-root gptel-auto-workflow-projects)
       (message "[mementum] Processing project: %s" project-root)
       (condition-case err
-          (progn
-            (gptel-auto-workflow-run-mementum-for-project project-root)
-            (push (cons project-root 'success) results))
+          (if (gptel-auto-workflow-run-mementum-for-project project-root)
+              (push (cons project-root 'success) results)
+            (push (cons project-root 'error) results))
         (error
          (push (cons project-root (format "error: %s" err)) results)
          (message "[mementum] ✗ Failed: %s - %s" project-root err))))
@@ -773,21 +777,25 @@ Enables headless suppression for cron runs."
     ;; Ensure gptel-benchmark-instincts is loaded
     (unless (featurep 'gptel-benchmark-instincts)
       (load-file (expand-file-name "lisp/modules/gptel-benchmark-instincts.el" root)))
-    (setq gptel-auto-workflow--current-project root)
     ;; Enable headless suppression for cron runs
     (unless headless-was-enabled
       (gptel-auto-workflow--enable-headless-suppression))
-    (condition-case err
-        (progn
-          (gptel-benchmark-instincts-weekly-job)
-          (message "[instincts] ✓ Completed: %s" root))
-      (error
-       (message "[instincts] ✗ Failed: %s - %s" root err)
-       nil))
-    ;; Restore headless state
-    (unless headless-was-enabled
-      (gptel-auto-workflow--disable-headless-suppression))
-    (setq gptel-auto-workflow--current-project nil)))
+    (unwind-protect
+        (let ((gptel-auto-workflow--current-project root)
+              (gptel-auto-workflow--project-root-override root)
+              (gptel-auto-workflow--run-project-root root))
+          (condition-case err
+              (progn
+                (gptel-benchmark-instincts-weekly-job)
+                (message "[instincts] ✓ Completed: %s" root)
+                t)
+            (error
+             (message "[instincts] ✗ Failed: %s - %s" root err)
+             nil)))
+      ;; Restore headless state
+      (unless headless-was-enabled
+        (gptel-auto-workflow--disable-headless-suppression))
+      (setq gptel-auto-workflow--current-project nil))))
 
 (defun gptel-auto-workflow-run-all-instincts ()
   "Run instincts weekly job for all configured projects.
@@ -799,9 +807,9 @@ To be called from cron - runs instincts evolution for each project."
     (dolist (project-root gptel-auto-workflow-projects)
       (message "[instincts] Processing project: %s" project-root)
       (condition-case err
-          (progn
-            (gptel-auto-workflow-run-instincts-for-project project-root)
-            (push (cons project-root 'success) results))
+          (if (gptel-auto-workflow-run-instincts-for-project project-root)
+              (push (cons project-root 'success) results)
+            (push (cons project-root 'error) results))
         (error
          (push (cons project-root (format "error: %s" err)) results)
          (message "[instincts] ✗ Failed: %s - %s" project-root err))))
