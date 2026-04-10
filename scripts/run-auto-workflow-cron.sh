@@ -157,38 +157,27 @@ check_worker_daemon() {
 }
 
 daemon_reports_active_workflow() {
-    local body="(let ((root \"$ROOT_LISP\"))
-                  (setq minimal-emacs-user-directory root)
-                  (setq user-emacs-directory root)
-                  (dolist (dir (list (expand-file-name \"lisp\" root)
-                                     (expand-file-name \"lisp/modules\" root)
-                                     (expand-file-name \"packages/gptel\" root)
-                                     (expand-file-name \"packages/gptel-agent\" root)
-                                     (expand-file-name \"packages/ai-code\" root)))
-                    (when (file-directory-p dir)
-                      (add-to-list 'load-path dir)))
-                  (defvar gptel--tool-preview-alist nil)
-                  (require 'gptel)
-                  (unless (fboundp 'gptel--format-tool-call)
-                    (defun gptel--format-tool-call (name arg-values)
-                      (format \"(%s %s)\n\"
-                              (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
-                              (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
-                  (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
-                  (gptel-auto-workflow-status))"
+    local body="(and (fboundp 'gptel-auto-workflow-status)
+                     (gptel-auto-workflow-status))"
     local output
     local rc
     if output="$(run_emacsclient_eval "$(wrap_emacs_eval "$body")" 2 2>/dev/null)"; then
+        if ! printf '%s' "$output" | grep -q ':phase '; then
+            return 2
+        fi
         if printf '%s' "$output" | grep -q ':running t'; then
             return 0
         fi
-        return 1
+        if printf '%s' "$output" | grep -Eq ':phase "(idle|complete|skipped|quota-exhausted)"'; then
+            return 1
+        fi
+        return 0
     else
         rc=$?
         if [ "$rc" -eq 124 ]; then
             return 2
         fi
-        return 1
+        return 2
     fi
 }
 
@@ -397,25 +386,8 @@ case "$ACTION" in
                  (gptel-auto-workflow-queue-all-instincts))"
         ;;
     status)
-        ELISP="(let ((root \"$ROOT_LISP\"))
-                 (setq minimal-emacs-user-directory root)
-                 (setq user-emacs-directory root)
-                 (dolist (dir (list (expand-file-name \"lisp\" root)
-                                    (expand-file-name \"lisp/modules\" root)
-                                    (expand-file-name \"packages/gptel\" root)
-                                    (expand-file-name \"packages/gptel-agent\" root)
-                                    (expand-file-name \"packages/ai-code\" root)))
-                   (when (file-directory-p dir)
-                     (add-to-list 'load-path dir)))
-                 (defvar gptel--tool-preview-alist nil)
-                 (require 'gptel)
-                 (unless (fboundp 'gptel--format-tool-call)
-                   (defun gptel--format-tool-call (name arg-values)
-                     (format \"(%s %s)\n\"
-                             (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
-                             (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
-                  (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
-                  (gptel-auto-workflow-status))"
+        ELISP="(and (fboundp 'gptel-auto-workflow-status)
+                    (gptel-auto-workflow-status))"
         ;;
     messages)
         ELISP="(let ((outfile \"$MESSAGES_LISP\")
@@ -438,6 +410,7 @@ cd "$DIR"
 if [ "$ACTION" = "status" ]; then
     if output="$(run_emacsclient_eval "$EVAL_ELISP" 5 2>/dev/null)" &&
        printf '%s' "$output" | grep -q ':phase '; then
+        printf '%s\n' "$output" >"$STATUS_FILE"
         printf '%s\n' "$output"
         exit 0
     fi
