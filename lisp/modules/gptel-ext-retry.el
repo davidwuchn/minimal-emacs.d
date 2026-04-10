@@ -97,19 +97,7 @@ for byte-level operations (~3.5 bytes/token)."
   :type 'integer
   :group 'gptel)
 
-(defconst my/gptel--retry-base-delay 4.0
-  "Initial delay in seconds for exponential backoff on transient errors.
-Used by `my/gptel-auto-retry' to compute retry delays.")
-
-(defconst my/gptel--retry-backoff-factor 2.0
-  "Multiplier for exponential backoff delay on each retry attempt.
-Used by `my/gptel-auto-retry' to compute retry delays.")
-
-(defconst my/gptel--retry-max-delay 30.0
-  "Maximum delay in seconds for exponential backoff retries.
-Prevents excessively long waits when many retries are needed.")
-
-(defun my/gptel--trim-tool-results-for-retry (info &optional retry-count)
+(defun my/gptel--trim-tool-results-for-retry (info &optional retry-count force-trim-p)
   "Trim old tool-result content in INFO's :data :messages to reduce payload.
 
 Progressive trimming: on each successive retry, fewer tool results are kept
@@ -129,8 +117,13 @@ while progressively reducing payload size on successive retries.
 If `my/gptel-trim-min-bytes' is non-zero, trimming only proceeds when
 the byte savings would meet or exceed that threshold.
 
+FORCE-TRIM-P, when non-nil, bypasses the `my/gptel-retry-keep-recent-tool-results'
+nil check. Used by compaction passes to ensure trimming occurs even if the user
+has disabled retry trimming (nil). This allows pre-send compaction to work
+independently of retry settings.
+
 Returns the number of messages truncated, or 0 if nothing was done."
-  (if (null my/gptel-retry-keep-recent-tool-results)
+  (if (and (null my/gptel-retry-keep-recent-tool-results) (null force-trim-p))
       0
     (let* ((data (plist-get info :data))
            (messages (and data (plist-get data :messages)))
@@ -725,7 +718,7 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
                    (or my/gptel-retry-keep-recent-tool-results 2)))
               (my/gptel--run-compaction-pass
                info 1 limit 'bytes 'trimmed-total 'pass
-               (lambda (i) (my/gptel--trim-tool-results-for-retry i 1))
+               (lambda (i) (my/gptel--trim-tool-results-for-retry i 1 t))
                "gptel: Pass 1: trimmed %d tool result(s), now %dKB")
               (my/gptel--run-compaction-pass
                info 2 limit 'bytes 'trimmed-total 'pass
@@ -742,7 +735,7 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
                "gptel: Pass 4: trimmed %d context image(s), now %dKB")
               (my/gptel--run-compaction-pass
                info 5 limit 'bytes 'trimmed-total 'pass
-               (lambda (i) (my/gptel--trim-tool-results-for-retry i 3))
+               (lambda (i) (my/gptel--trim-tool-results-for-retry i 3 t))
                "gptel: Pass 5: truncated %d remaining tool results, now %dKB")
               (my/gptel--run-compaction-pass
                info 6 limit 'bytes 'trimmed-total 'pass
