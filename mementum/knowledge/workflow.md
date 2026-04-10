@@ -2,53 +2,18 @@
 title: Auto-Workflow System
 status: active
 category: knowledge
-tags: [workflow, automation, gptel, autonomous, testing]
+tags: [workflow, automation, gptel, agent, emacs]
 ---
 
 # Auto-Workflow System
 
-The auto-workflow system enables autonomous AI-driven code improvement with human oversight. It creates isolated experiment branches, runs improvement attempts, evaluates results, and logs outcomes without requiring user interaction.
+The auto-workflow system enables autonomous code improvement through a structured pipeline that creates experiments in isolated worktrees, evaluates changes via graders, and logs results for analysis. This document covers the branching model, bug fixes, autonomy principles, multi-project support, upstream PR workflow, and benchmark integration.
 
-## Core Architecture
+## Branching Model
 
-```
-gptel-auto-workflow-run
-  → worktree (magit-worktree)
-  → executor subagent (gptel-agent--task)
-  → grader subagent (LLM, JSON output)
-  → benchmark (Eight Keys scoring)
-  → comparator (keep/discard)
-  → TSV log
-```
+### The Auto-Workflow Branching Rule
 
-## Branching Rules
-
-### Naming Convention
-
-```
-optimize/{target-name}-{hostname}-exp{N}
-```
-
-**Example**: `optimize/retry-imacpro.taila8bdd.ts.net-exp1`
-
-### Flow
-
-1. Create worktree with optimize branch
-2. Executor makes changes in worktree (isolated from main)
-3. If improvement → commit to optimize branch
-4. Push to `origin optimize/...` (NOT main!)
-5. Human reviews and merges to main via PR
-
-### Code Location
-
-`gptel-tools-agent.el:1134`:
-
-```elisp
-(when gptel-auto-experiment-auto-push
-  (magit-git-success "push" "origin" gptel-auto-workflow--current-branch))
-```
-
-### Lambda Definition
+Auto-workflow creates experimental branches in the `optimize/` namespace to isolate AI-generated changes from the main branch until human review.
 
 ```
 λ auto-workflow-branching(x).
@@ -58,25 +23,122 @@ optimize/{target-name}-{hostname}-exp{N}
     | human_review → merge(main)
 ```
 
-### Critical Rule
+**Branch Format**: `optimize/{target-name}-{hostname}-exp{N}`
 
-**Never push directly to main.** Always push to `optimize/...` branch first, then merge via PR after human review.
+| Component | Description | Example |
+|-----------|-------------|---------|
+| namespace | Always `optimize/` | `optimize/` |
+| target | File or feature being improved | `retry-imacpro.taila8bdd.ts.net` |
+| hostname | Machine identifier | `taila8bdd.ts.net` |
+| expN | Experiment iteration | `exp1` |
 
----
+**Full Example**: `optimize/retry-imacpro.taila8bdd.ts.net-exp1`
 
-## Autonomous Principle
+### Branch Flow
 
-### The Core Rule
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    BRANCH WORKFLOW                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   1. create        2. executor          3. push                │
+│   ┌──────┐        ┌──────────┐        ┌──────────────┐        │
+│   │main  │───fork─→│optimize/ │───push─→│origin        │        │
+│   │      │        │expN work-│        │optimize/expN │        │
+│   │      │        │tree      │        │              │        │
+│   └──────┘        └──────────┘        └──────────────┘        │
+│                       │                                     │   │
+│                       │ 4. human review                    │   │
+│                       └───────────────merge──────────────┘   │
+│                                      ↓                       │
+│                               ┌──────────────┐               │
+│                               │    main      │               │
+│                               │ (reviewed)   │               │
+│                               └──────────────┘               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-Auto-workflow is fully autonomous. It **never** asks the user for:
-- Confirmation
-- Input
-- Decision
-- Clarification
+### Implementation
 
-Instead, it retries, tries alternative approaches, logs failures, and continues.
+**Elisp Code** (`gptel-tools-agent.el:1134`):
+```elisp
+(when gptel-auto-experiment-auto-push
+  (magit-git-success "push" "origin" gptel-auto-workflow--current-branch))
+```
 
-### Lambda Definition
+**Git Commands**:
+```bash
+# Create worktree with optimize branch
+git worktree add -b optimize/target-exp1 /path/to/worktree main
+
+# Push to origin (NOT main!)
+git push origin optimize/target-exp1
+
+# After human review, merge to main
+git checkout main
+git merge origin/optimize/target-exp1
+```
+
+### Common Mistake
+
+⚠️ **Never push auto-workflow changes directly to main.** This violates the branching rule and bypasses human review.
+
+```bash
+# WRONG - direct push to main
+git push origin main
+
+# CORRECT - push to optimize branch
+git push origin optimize/target-exp1
+```
+
+## E2E Bug: Deleted Buffer
+
+### Symptoms
+
+During end-to-end testing, auto-workflow fails with:
+- Error: `gptel callback error: (error "Selecting deleted buffer")`
+- Project buffer `*gptel-agent:.emacs.d*` gets deleted during execution
+- Executor runs 560+ seconds without completing
+- No results logged to TSV file
+
+### Root Cause
+
+The advice `gptel-auto-workflow--advice-task-override` overrides `current-buffer` to return a fixed project buffer. If that buffer is killed during async execution, all callbacks fail.
+
+### Fix Applied
+
+```elisp
+;; 1. Prevent buffer kill during runs
+(add-to-list 'kill-buffer-query-functions 
+             #'gptel-auto-workflow--protect-buffer)
+
+;; 2. Check buffer liveness each call
+(defun gptel-auto-workflow--current-buffer-safe ()
+  "Return current buffer, checking liveness."
+  (if (buffer-live-p gptel-auto-workflow--project-buffer)
+      gptel-auto-workflow--project-buffer
+    (funcall original-current-buffer)))
+
+;; 3. Save original before overriding
+(defvar gptel-auto-workflow--original-current-buffer 
+        (symbol-function 'current-buffer))
+```
+
+### Results
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Duration | 560s+ (timeout) | 230s |
+| Result | Failed | Passed (kept) |
+| Score | 0.40 | 0.41 |
+| Commit | — | bae1b73 |
+
+## Autonomy Principle
+
+### The Rule: Never Ask User
+
+Auto-workflow is fully autonomous. It never halts for user input.
 
 ```
 λ autonomous(x).
@@ -87,58 +149,91 @@ Instead, it retries, tries alternative approaches, logs failures, and continues.
     | ¬stop_for_input
 ```
 
-### Prohibited Functions
+### What This Means
 
-| Never Use | Always Use Instead |
-|-----------|-------------------|
-| `y-or-n-p` | Retry logic |
-| `yes-or-no-p` | Fallback paths |
-| `read-from-minibuffer` | Error logging |
-| `completing-read` | Continue to next task |
-| `user-error` (recoverable) | Log and continue |
+| Never Do This | Always Do This |
+|---------------|----------------|
+| `y-or-n-p` | Retry automatically |
+| `yes-or-no-p` | Log and continue |
+| `read-from-minibuffer` | Try alternative approach |
+| `completing-read` | Fallback path |
+| `user-error` (recoverable) | Error logging |
 
 ### Retry Pattern
 
 ```elisp
-(defun with-retry (fn max-retries)
+(defun gptel-auto-workflow--with-retry (fn max-retries &optional delay)
   "Call FN, retry on failure, never ask user."
-  (let ((attempts 0))
+  (let ((attempts 0)
+        (delay (or delay 1)))
     (while (< attempts max-retries)
       (cl-incf attempts)
       (condition-case err
-          (funcall fn)  ; Try
+          (funcall fn)
         (error
+         (message "Attempt %d/%d failed: %s" 
+                  attempts max-retries (error-message-string err))
          (when (< attempts max-retries)
-           (sit-for 1)))))))  ; Brief pause, then retry
+           (sleep-for delay)))))))
+
+;; Usage: never block on user input
+(gptel-auto-workflow--with-retry 
+ (lambda () (gptel-agent--task "fix-bug")) 
+ 3)
 ```
 
-### Why This Matters
+### Failure Handling Table
 
-- Auto-workflow runs at 2 AM unattended
-- No human is watching to answer questions
-- Each failure is an opportunity to try again
-- Eventual success > immediate failure
+| Failure | Recovery Strategy |
+|---------|-------------------|
+| Worktree create fails | Retry with exponential backoff |
+| Test fails | Log, continue to next target |
+| LLM timeout | Retry with shorter prompt |
+| Push fails | Retry with fresh auth |
+| API rate limit | Wait and retry |
 
----
+### Verification Results
+
+**Date**: 2026-03-24
+
+| Step | Status | Duration | Details |
+|------|--------|----------|---------|
+| Worktree creation | ✓ | <1s | optimize/retry-exp1 |
+| Executor subagent | ✓ | 80s | Made docstring changes |
+| Grader subagent | ✓ | 10s | 6/6 behaviors passed |
+| Benchmark | ✓ | 10s | Score 1.0 (no change) |
+| Decision | ✓ | <1s | Discarded (no improvement) |
+| TSV logging | ✓ | <1s | results.tsv created |
+
+**Full Flow Verified**:
+```
+gptel-auto-workflow-run
+  → worktree (magit-worktree)
+  → executor subagent (gptel-agent--task)
+  → grader subagent (LLM, JSON output)
+  → benchmark (Eight Keys scoring)
+  → comparator (keep/discard)
+  → TSV log
+```
 
 ## Multi-Project Configuration
 
 ### Using .dir-locals.el
 
-Use Emacs' built-in `.dir-locals.el` mechanism for per-project configuration.
+Auto-workflow supports multiple projects via Emacs' built-in `.dir-locals.el` mechanism.
 
 ### Project Detection Priority
 
-`gptel-auto-workflow--project-root` checks in order:
-
-1. **Override variable** (from .dir-locals.el)
-   - `gptel-auto-workflow--project-root-override`
-2. **Git root** (auto-detected)
-   - `git rev-parse --show-toplevel`
-3. **Fallback**
-   - `~/.emacs.d/`
+```
+gptel-auto-workflow--project-root:
+  1. gptel-auto-workflow--project-root-override  (from .dir-locals.el)
+  2. git rev-parse --show-toplevel              (auto-detected)
+  3. ~/.emacs.d/                                (fallback)
+```
 
 ### Configuration Example
+
+Create `.dir-locals.el` in project root:
 
 ```elisp
 ((nil
@@ -150,63 +245,41 @@ Use Emacs' built-in `.dir-locals.el` mechanism for per-project configuration.
      (gptel-model . qwen3.5-plus))))
 ```
 
-### Session Architecture (Per Worktree)
+### Manual Switching
+
+```elisp
+M-x gptel-auto-workflow-set-project-root
+```
+
+### Session Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  WORKTREE: optimize/target-exp1                         │
-│  (default-directory: worktree path)                     │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐       │
-│  │  analyzer   │ │  executor   │ │   grader    │       │
-│  │  subagent   │ │  subagent   │ │  subagent   │       │
-│  └─────────────┘ └─────────────┘ └─────────────┘       │
-│  All share worktree context                             │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  WORKTREE: optimize/target-exp1                             │
+│  (default-directory: worktree path)                          │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐            │
+│  │  analyzer   │ │  executor   │ │   grader    │            │
+│  │  subagent   │ │  subagent   │ │  subagent   │            │
+│  └─────────────┘ └─────────────┘ └─────────────┘            │
+│  All share worktree context                                  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 Each experiment worktree has its own context, and all subagents within that worktree share the same `default-directory`.
 
----
-
-## E2E Bug: Deleted Buffer
-
-### Symptoms
-
-- Project buffer `*gptel-agent:.emacs.d*` gets deleted during execution
-- Executor runs for 560s+ without completing changes
-- No results logged to TSV file
-- Error: `gptel callback error: (error "Selecting deleted buffer")`
-
-### Root Cause
-
-The `gptel-auto-workflow--advice-task-override` advice overrides `current-buffer` to return a fixed project buffer. If that buffer is killed during async execution, all callbacks fail.
-
-### Fix Applied
-
-1. Added `kill-buffer-query-functions` protection to prevent buffer kill during runs
-2. Made `current-buffer` override check liveness each call, fall back if killed
-3. Saved original `current-buffer` function before overriding to avoid recursion
-
-### Result
-
-- E2E test passed - experiment completed in 230s with `kept` decision
-- Score improved: 0.40 → 0.41
-- Commit `bae1b73` merged to staging
-
----
-
 ## Upstream PR Workflow
+
+### When to Create Upstream PR
 
 When local defensive code reveals an upstream bug, extract the minimal fix for PR while keeping defensive layers local.
 
-### Workflow Lambda
-
 ```
-λ pr_workflow(x).    discover(bug) → check(upstream_has_fix)
-                     | ¬upstream_has_fix → create_branch(upstream/master)
-                     | implement(minimal_fix) > defensive_framework
-                     | commit(clear_message) → push(fork)
-                     | gh_pr_create(upstream_repo) → wait_review
+λ pr_workflow(x).
+    discover(bug) → check(upstream_has_fix)
+    | ¬upstream_has_fix → create_branch(upstream/master)
+    | implement(minimal_fix) > defensive_framework
+    | commit(clear_message) → push(fork)
+    | gh_pr_create(upstream_repo) → wait_review
 ```
 
 ### Commands
@@ -234,114 +307,92 @@ gh pr create --repo <upstream-owner>/<upstream-repo> \
              --body "<problem>\n<root-cause>\n<solution>\n<testing>"
 ```
 
-### PR Template Sections
+### PR Template
 
 1. **Problem** — What breaks, when, for whom
 2. **Root Cause** — Why it happens (code-level)
 3. **Solution** — What changed and why
 4. **Testing** — How it was verified
 
-### Minimal vs Defensive Approach
+### Minimal vs Defensive
 
-| Approach | Upstream | Local |
-|----------|----------|-------|
-| Fix bug in happy path | ✅ PR | — |
-| Add edge case handling | ⚠️ Maybe | ✅ Keep |
-| Defensive safety net | ❌ No | ✅ Keep |
-| Framework for resilience | ❌ No | ✅ Keep |
+| Approach | Upstream PR | Keep Local |
+|----------|-------------|------------|
+| Fix bug in happy path | ✅ | — |
+| Add edge case handling | ⚠️ Maybe | ✅ |
+| Defensive safety net | ❌ No | ✅ |
+| Framework for resilience | ❌ No | ✅ |
 
-### Example
-
-**PR #1305** — gptel nil/null tool names
+**Example**: PR #1305 for gptel nil/null tool names
 - Core fix: `cond` instead of `if` in streaming parser
 - Left local: `my/gptel--sanitize-tool-calls`, doom-loop detection
 - Result: 20 lines added, 16 deleted, clean fix
 
----
+## Benchmark System
 
-## Benchmark System Improvements
+### Workflow Anti-Patterns
 
-### Gaps Closed
+Four workflow-specific patterns added to `gptel-benchmark-anti-patterns`:
 
-1. **CI Integration** - evolution.yml now processes workflow benchmarks from `benchmarks/workflows/`
+| Pattern | Description | Detection |
+|---------|-------------|-----------|
+| phase-violation | Skipping required phases (P1→P3 without P2) | Check phase sequence |
+| tool-misuse | >15 tool calls or >3 continuations | Count calls per turn |
+| context-overflow | Too much exploration without action | Measure explore/act ratio |
+| no-verification | Edit without read | Verify read before write |
 
-2. **Anti-patterns** - Added 4 workflow-specific patterns:
-   - `phase-violation`: Skipping required phases (P1→P3 without P2)
-   - `tool-misuse`: Too many tool calls (>15 steps or >3 continuations)
-   - `context-overflow`: Too much exploration without action
-   - `no-verification`: Edit without read (changes not verified)
+### CI Integration
 
-3. **Memory Retrieval** - `gptel-workflow-retrieve-memories` searches mementum for relevant context
+`evolution.yml` now processes workflow benchmarks from `benchmarks/workflows/`:
 
-4. **Trend Analysis** - `gptel-workflow-benchmark-trend-analysis` returns direction/velocity/recommendation
-
-5. **Nil Guards** - All anti-pattern detection now handles missing plist fields gracefully
-
----
-
-## Verification Results
-
-### Test Results (2026-03-24)
-
-| Step | Status | Duration | Details |
-|------|--------|----------|---------|
-| Worktree creation | ✓ | <1s | optimize/retry-exp1 |
-| Executor subagent | ✓ | 80s | Made docstring changes |
-| Grader subagent | ✓ | 10s | 6/6 behaviors passed |
-| Benchmark | ✓ | 10s | Score 1.0 (no change) |
-| Decision | ✓ | <1s | Discarded (no improvement) |
-| TSV logging | ✓ | <1s | results.tsv created |
-
-### Experiment 1 Results
-
-```
-target: gptel-ext-retry.el
-hypothesis: Adding docstring to improve maintainability
-score: 1.00 → 1.00 (no change)
-decision: discarded
-duration: 100s
-grader: 6/6 passed
+```yaml
+- name: Workflow Benchmarks
+  run: |
+    emacs --batch \
+          --eval "(setq gptel-benchmark-dir \"benchmarks/workflows/\")" \
+          -l gptel-workflow-benchmark.el \
+          -f gptel-workflow-run-all
 ```
 
-### Analyzer Recommendations
+### Memory Retrieval
 
-1. Add maintainability-specific metrics
-2. Reduce evaluation overhead (100s excessive)
-3. Separate scoring tracks: functional vs quality vs docs
-4. Weight scores by change category
+```elisp
+(gptel-workflow-retrieve-memories query)
+;; Returns relevant context from mementum
+```
 
----
+### Trend Analysis
 
-## Key Files
+```elisp
+(gptel-workflow-benchmark-trend-analysis)
+;; Returns: (direction velocity recommendation)
+;; direction: improving/degrading/stable
+;; velocity: changes per period
+;; recommendation: actionable improvement
+```
 
-| File | Purpose |
-|------|---------|
-| `gptel-tools-agent.el` | Main workflow implementation |
-| `var/tmp/experiments/2026-03-24/results.tsv` | Experiment log |
-| `.dir-locals.el` | Per-project configuration |
-| `benchmarks/workflows/` | Benchmark definitions |
-| `evolution.yml` | CI workflow for benchmarks |
+### Nil Guards
 
----
+All anti-pattern detection now handles missing plist fields gracefully:
+
+```elisp
+;; Before: would error on missing :phase
+(when (eq (plist-get turn :phase) 'verify) ...)
+
+;; After: safe access
+(when (eq (plist-get turn :phase 'unknown) 'verify) ...)
+```
 
 ## Related
 
-- [gptel-agent][gptel-agent] - The underlying agent system
-- [git-worktree][git-worktree] - Emacs worktree integration
-- [benchmark-system][benchmark-system] - Scoring and evaluation
-- [autonomous-principles][autonomous-principles] - Core autonomy rules
-- [upstream-contribution][upstream-contribution] - PR workflow patterns
-- [dir-locals][dir-locals] - Emacs per-directory configuration
+- [gptel-agent](./gptel-agent.md) — Executor subagent implementation
+- [benchmark-system](./benchmark-system.md) — Scoring and comparison
+- [memory-system](./memory-system.md) — Mementum integration
+- [project-configuration](./project-configuration.md) — .dir-locals.el details
+- [git-worktree](./git-worktree.md) — Worktree management
 
 ---
 
-## Lambda Summary
-
-```
-λ workflow. worktree → executor → grader → benchmark → decide → log
-λ branch. optimize/{target}-{hostname}-exp{N}
-λ autonomous. fail → retry → retry → log_continue → ¬ask
-λ multi-project. .dir-locals.el → per-project targets
-λ pr. minimal_fix → upstream, defensive → local
-λ verified. All steps work, TSV created
-```
+**Status**: Active  
+**Last Updated**: 2026-03-28  
+**Key Files**: `lisp/modules/gptel-tools-agent.el`, `.dir-locals.el`
