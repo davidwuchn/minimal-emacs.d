@@ -1,8 +1,31 @@
 # Mementum State
 
-> Last session: 2026-04-10 21:25
+> Last session: 2026-04-10 21:35
 
-## Total Improvements: 218+ Real Code Fixes (8 new today)
+## Total Improvements: 218+ Real Code Fixes (9 new today)
+
+### Session Summary: 2026-04-10 Late Evening (Eight Keys Scoring Fix)
+
+**Action:** Fixed experiment commit message to include hypothesis for Eight Keys scoring
+
+**Result:** ✅ Experiments now commit with descriptive messages that Eight Keys scoring can detect
+
+**Bug Fixed:**
+- **gptel-tools-agent.el:4822** — Experiment commit message was generic "WIP: experiment <target>"
+  - Eight Keys scoring uses commit messages + code diffs to calculate scores
+  - Generic commit messages prevented score detection, causing all experiments to be discarded
+  - Fix: Include hypothesis in commit message: "WIP: experiment <target>\n\nHYPOTHESIS: <hypothesis>"
+  - Commit: `939ca163` — ⊘ fix: include hypothesis in experiment commit message for Eight Keys scoring
+
+**Key Insights:**
+- Eight Keys scoring relies on commit messages to understand the intent of changes
+- Generic commit messages like "WIP: experiment" don't provide enough context for scoring
+- Including the hypothesis in the commit message allows the scoring system to detect improvements
+- This fix should significantly improve the keep rate for experiments
+
+**Sync Status:**
+- **main:** `ad9860e4` — origin ↔ upstream in sync
+- **staging:** `939ca163` — origin ↔ upstream in sync
 
 ### Session Summary: 2026-04-10 Late Evening (Workflow Daemon Restart + Monitoring)
 
