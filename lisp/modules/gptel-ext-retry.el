@@ -97,6 +97,18 @@ for byte-level operations (~3.5 bytes/token)."
   :type 'integer
   :group 'gptel)
 
+(defconst my/gptel--retry-base-delay 4.0
+  "Initial delay in seconds for exponential backoff on transient errors.
+Used by `my/gptel-auto-retry' to compute retry delays.")
+
+(defconst my/gptel--retry-backoff-factor 2.0
+  "Multiplier for exponential backoff delay on each retry attempt.
+Used by `my/gptel-auto-retry' to compute retry delays.")
+
+(defconst my/gptel--retry-max-delay 30.0
+  "Maximum delay in seconds for exponential backoff retries.
+Prevents excessively long waits when many retries are needed.")
+
 (defun my/gptel--trim-tool-results-for-retry (info &optional retry-count)
   "Trim old tool-result content in INFO's :data :messages to reduce payload.
 
@@ -524,9 +536,9 @@ TEST: Verify with network failure simulation — should retry 3 times with
              (not subagent-p)
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
              (my/gptel--transient-error-p error-data http-status))
-        (let* ((base-delay 4.0)
-               (factor 2.0)
-               (delay (min 30.0 (* base-delay (expt factor retries))))
+        (let* ((delay (min my/gptel--retry-max-delay
+                            (* my/gptel--retry-base-delay
+                               (expt my/gptel--retry-backoff-factor retries))))
                (error-msg (my/gptel--format-error-message error-data http-status)))
           (if my/gptel-max-retries
               (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..."
