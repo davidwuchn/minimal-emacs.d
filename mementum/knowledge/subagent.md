@@ -1,91 +1,128 @@
 ---
-title: Subagent Patterns for gptel-auto-workflow
+title: Subagent Architecture in gptel.el
 status: active
 category: knowledge
-tags: [subagent, agent, delegation, context-isolation, parallel]
-related: [mementum/memories/reviewer-as-subagent.md, mementum/memories/grader-subagent-debug-session.md, mementum/memories/subagent-overlay-conflict.md]
+tags: [gptel, subagent, agent-architecture, debugging, workflow]
 ---
 
-# Subagent Patterns for gptel-auto-workflow
+# Subagent Architecture in gptel.el
 
-Patterns for delegating work to subagents in auto-workflow experiments.
+## Overview
 
-## Decision Matrix: Skill vs Subagent vs Protocol
+A **subagent** is a specialized agent spawned by the parent gptel process to handle specific tasks in isolation. Subagents provide context isolation, parallel execution, and dedicated tool profiles—making them ideal for tasks like code review, grading, or any work that shouldn't pollute the parent agent's context.
 
-| Task Type | Use | Why |
-|-----------|-----|-----|
-| Pure procedure (no deps) | Protocol → `mementum/knowledge/` | No external dependencies |
-| Has external tools/API | Skill → `assistant/skills/` | Needs scripts, REPL, API |
-| Context isolation needed | Subagent → `eca/prompts/` | Won't pollute parent |
-| Parallel execution | Subagent | Can run concurrently |
-| Dedicated model | Subagent | Cheaper/faster model option |
-| Shared context | Skill | Uses parent's context |
+## Core Components
 
-## Reviewer → Subagent
+### Key Variables and Functions
 
-**Why reviewer should be a subagent:**
+| Symbol | Type | Purpose |
+|--------|------|---------|
+| `gptel-agent--task` | function | Main task dispatcher for subagents |
+| `gptel-agent--agents` | alist | Registry of available subagent definitions |
+| `gptel-auto-workflow--task-override` | advice | Routes tasks to appropriate subagent |
+| `gptel-model` | variable | Current model for the parent agent |
 
-1. **Context isolation** - Review shouldn't pollute parent agent's context
-2. **Parallel** - Parent can spawn reviewer and continue other work
-3. **Tool profile** - Reviewer only needs readonly tools
-4. **Dedicated model** - Can use cheaper model for review
-5. **Already defined** - `eca/config.json` has reviewer subagent
+### Required Load Order
 
-## Grader Subagent Debug Pattern
+```
+gptel.el (core)
+  └── gptel-agent.el (agent machinery)
+        └── gptel-tools-agent.el (tool integration)
+```
 
-**Problem:** Grader subagent always fell back to local grading, never used LLM.
+**Critical**: `gptel-tools-agent.el` must require `gptel-agent` to have access to `gptel-agent--task`:
 
-**Root Cause Chain:**
-1. `gptel-tools-agent.el` did NOT require `gptel-agent`
-2. `gptel-agent--task` was never defined (fboundp returned nil)
-3. `gptel-agent--agents` was declared nil (shadowing)
-4. `(fboundp 'gptel-agent--task)` → nil → local grading fallback
-
-**TDD Approach:**
-1. Wrote tests first: `tests/test-grader-subagent.el`
-2. Tests revealed actual behavior
-3. Tests guided fix
-4. Tests verify fix works
-
-**Fixes:**
 ```elisp
-(require 'gptel-agent)  ;; At top of gptel-tools-agent.el
-;; Remove redundant: (defvar gptel-agent--agents nil)
+;; CORRECT: gptel-tools-agent.el
+(require 'gptel-agent)  ; Must come BEFORE using gptel-agent--task
+(require 'gptel-tools)   ; Tool definitions
+
+(defun gptel-tools-agent--do-grading ()
+  "Execute grading via LLM subagent."
+  (when (fboundp 'gptel-agent--task)
+    (gptel-agent--task "grade" :system grader-system-prompt ...)))
 ```
 
-**Verification:**
+### Agent Registry Structure
+
+```elisp
+(defvar gptel-agent--agents
+  '(("reviewer" . ,reviewer-config)
+    ("grader"   . ,grader-config))
+  "Alist of subagent name → configuration.")
 ```
-:gptel-agent-loaded t
-:gptel-agent--task-fbound t  
-:gptel-agent--agents-count 13
+
+## Decision Matrix: Subagent vs Skill vs Protocol
+
+Choose based on task requirements:
+
+| Criteria | Subagent | Skill | Protocol |
+|----------|----------|-------|----------|
+| Context isolation | ✅ Full | ❌ Shared | ❌ Shared |
+| Parallel execution | ✅ Yes | ❌ Sequential | ❌ Sequential |
+| Dedicated model | ✅ Yes | ❌ No | ❌ No |
+| External tools/API | ✅ Via tool profile | ✅ Native | ❌ None |
+| Setup complexity | Medium | Low | Lowest |
+| Use case | Code review, grading | REPL, API calls | Pure procedures |
+
+### When to Use Subagent
+
+```elisp
+;; Subagent is appropriate when:
+(when (or context-isolation-needed      ; Review shouldn't pollute parent
+          parallel-execution-needed      ; Spawn and continue work
+          dedicated-model-desired        ; Use cheaper model for review
+          readonly-tool-profile-needed)   ; Restricted tool access
+  (gptel-agent--task "task-name" ...))
 ```
 
-## Overlay Conflict Pattern
+### When to Use Skill
 
-**Problem:** Subagent overlays appearing in wrong buffers (e.g., *Messages*).
+```elisp
+;; Skill is appropriate when:
+(when (or (has-shell-dependencies task)   ; Needs REPL, CLI tools
+          (requires-external-api task)     ; Calls external services
+          (is-pure-procedure task))         ; No side effects, no deps
+  (mementum/skill-invoke "skill-name"))
+```
 
-**Root Cause:** TWO conflicting advices on same function:
-1. Old `:override` advice completely replaces original
-2. New `:around` advice wraps original
+## Common Issues and Debugging Patterns
 
-**Solution:**
-1. Remove old `:override` advice
-2. Merge caching logic into new `:around` advice
-3. Use ONE advice type per function
+### Issue 1: Function Not Defined (fboundp returns nil)
 
-**Pattern:** Multiple advices on same function with different types causes unpredictable behavior.
+**Symptom**: Subagent falls back to local processing, never uses LLM.
 
-## Key Principles
+**Root Cause Chain**:
+```
+gptel-tools-agent.el does NOT require gptel-agent
+  → gptel-agent--task is never defined
+  → (fboundp 'gptel-agent--task) returns nil
+  → Falls back to local grading
+```
 
-1. **Require dependencies** - `gptel-agent` must be loaded before checking `fboundp`
-2. **Single advice type** - Use either `:override` OR `:around`, not both
-3. **Context isolation** - Subagents don't pollute parent's context
-4. **Tool profiles** - Subagents can have restricted tool sets
-5. **Model selection** - Subagents can use cheaper/faster models
-6. **TDD for debugging** - Write tests to reveal actual behavior
+**Debug Flow**:
+```elisp
+;; Step 1: Check what's loaded
+(list :gptel-agent-loaded (featurep 'gptel-agent)
+      :gptel-agent--task-fbound (fboundp 'gptel-agent--task)
+      :gptel-agent--agents-count (length gptel-agent--agents))
+;; → (:gptel-agent-loaded nil 
+;;    :gptel-agent--task-fbound nil 
+;;    :gptel-agent--agents-count 0)
+```
 
-## Related Memories
+**Fix**:
+```elisp
+;; In lisp/modules/gptel-tools-agent.el
+(require 'gptel-agent)  ; ADD THIS LINE
+```
 
-- `reviewer-as-subagent.md` - Decision matrix for reviewer
-- `grader-subagent-debug-session.md` - Debug pattern with TDD
-- `subagent-overlay-conflict.md` - Multiple advice conflict
+### Issue 2: Variable Shadowing
+
+**Symptom**: `gptel-agent--agents` is nil even after requiring.
+
+**Root Cause**: Redefining with `defvar` shadows the original:
+
+```elisp
+;; WRONG: This shadows gptel-agent.el's 
+...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-dxzHXu.txt. Use Read tool if you need more]...
