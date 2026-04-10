@@ -1,8 +1,38 @@
 # Mementum State
 
-> Last session: 2026-04-08 21:00
+> Last session: 2026-04-10 09:35
 
-## Total Improvements: 218+ Real Code Fixes (7 new today)
+## Total Improvements: 218+ Real Code Fixes (4 new today)
+
+### Session Summary: 2026-04-10 (Auto-Workflow Run + Sync)
+
+**Action:** Monitored auto-workflow run `2026-04-10T075542Z-fdef`, synced remotes
+
+**Result:** ✅ 4 kept experiments merged to staging, 6 discarded
+
+**Auto-Workflow Results (07:55 run):**
+| # | Target | Decision | Notes |
+|---|--------|----------|-------|
+| 1 | gptel-tools-agent.el | ✅ kept | Removed redundant `parse-remote-head` call |
+| 2 | gptel-tools-agent.el | ✅ kept | Added nil validation for `def` |
+| 3 | gptel-tools-agent.el | ❌ discarded | Agent timeout (918s) |
+| 1 | gptel-ext-context-cache.el | ❌ discarded | Agent error |
+| 2 | gptel-ext-context-cache.el | ✅ kept | Fixed inflight flag reset in error paths |
+| 3 | gptel-ext-context-cache.el | ❌ discarded | Model metadata cache seeding issue |
+| 1 | gptel-ext-retry.el | ❌ discarded | Image-filtering extraction (score -0.40) |
+| 2 | gptel-ext-retry.el | ❌ discarded | Hard executor timeout |
+| 1 | gptel-agent-loop.el | ✅ kept | Loop optimization |
+
+**Kept Commits (merged to staging):**
+- `499c4c06` - optimize/agent-imacpro.taila8bdd.ts.net-exp1
+- `adaf25d7` - optimize/agent-imacpro.taila8bdd.ts.net-exp2
+- `c36dbd2e` - optimize/cache-imacpro.taila8bdd.ts.net-exp2
+- `a081b163` - optimize/loop-imacpro.taila8bdd.ts.net-exp1
+
+**Sync Status:**
+- **main:** `0f2bb904` (fix: harden weekly project runs)
+- **staging:** `b65a6a7d` (Merge optimize/loop-imacpro.taila8bdd.ts.net-exp1)
+- Both remotes (origin + upstream) in sync
 
 ### Session Summary: 2026-04-08 (TDD Code Quality Metric + Staging Fix)
 
