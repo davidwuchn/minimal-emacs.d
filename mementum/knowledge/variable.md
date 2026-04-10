@@ -1,98 +1,224 @@
 ---
-title: Variables in Shell and Emacs Lisp
+title: Variable Handling in Practice
 status: active
 category: knowledge
-tags: [shell, emacs-lisp, cron, portability, debugging, path]
+tags: [cron, emacs-lisp, shell, paths, portability, best-practices]
 ---
 
-# Variables in Shell and Emacs Lisp
+# Variable Handling in Practice
 
-## Introduction
+This knowledge page covers critical patterns and pitfalls in variable handling across multiple contexts: shell scripting, cron scheduling, and Emacs Lisp. These topics share a common theme: variables not behaving as expected due to scope, expansion timing, or binding issues.
 
-Variables are fundamental to both shell scripting and Emacs Lisp programming. They enable configuration, environment management, and dynamic behavior. However, variable scoping, expansion timing, and environment inheritance create subtle bugs that can be difficult to diagnose. This page synthesizes practical knowledge about variables across shell (bash) and Emacs Lisp contexts, with emphasis on portability and debugging techniques.
+---
 
-## Variable Expansion in Shell Environments
+## Shell Variables in Cron: The Expansion Problem
 
-### The Cron Variable Expansion Problem
+### The Problem
 
-One of the most insidious variable bugs occurs in crontab files. Variables *appear* to be set correctly, but commands fail silently because the variable isn't visible to the shell that executes them.
+Cron jobs often fail to expand custom variables defined in the crontab file itself. This leads to silent failures where logs appear empty or files are created in unexpected locations.
 
-**Root Cause:** Crontab format allows variable assignment at the top of the file:
+### Root Cause
 
-```crontab
-LOGDIR=$HOME/.emacs.d/var/tmp/cron
-0 * * * * /path/to/script.sh >> $LOGDIR/auto-workflow.log 2>&1
-```
+Cron has a two-stage execution model that causes confusion:
 
-However, cron sets these variables in its own environment table. When cron invokes the shell to run the command, it passes the command string directly. The receiving shell process has *no knowledge* of `LOGDIR`—it only inherits the environment variables that cron explicitly exports.
+1. **Crontab parsing**: When cron reads the crontab, variables like `LOGDIR=$HOME/.logs` are set in cron's environment
+2. **Command execution**: The command runs in a subshell that does **not** inherit these custom variables—only the standard environment variables like `$HOME`, `$PATH`, and `$USER`
 
-**Why This Happens:**
-
-| Crontab Line | What It Does | What It Doesn't Do |
-|--------------|--------------|-------------------|
-| `VAR=value` | Sets in cron's env table | Exports to child shell |
-| `0 * * * * cmd $VAR` | String interpolation happens | Shell gets literal `$VAR` text |
-
-The command string `$LOGDIR/auto-workflow.log` is interpolated by cron (which knows `LOGDIR`), but the *shell* that receives the command sees the literal text `$LOGDIR` and expands it to empty string since `LOGDIR` doesn't exist in its environment.
-
-**Fix Pattern:** Always use variables that are guaranteed to exist in the execution environment:
+### Demonstration
 
 ```crontab
-# WRONG - LOGDIR not visible to shell
+# WRONG: LOGDIR is not visible to the command
 LOGDIR=$HOME/.emacs.d/var/tmp/cron
-0 * * * * /path/to/script.sh >> $LOGDIR/log.txt
+*/5 * * * * some-command >> $LOGDIR/auto-workflow.log 2>&1
 
-# CORRECT - $HOME is in the inherited environment
-0 * * * * /path/to/script.sh >> $HOME/.emacs.d/var/tmp/cron/log.txt
+# CORRECT: Use $HOME directly in the command
+*/5 * * * * some-command >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
 ```
 
-### Environment Inheritance Chain
+### Detection Commands
 
-Understanding the environment inheritance chain helps predict variable visibility:
+```bash
+# View cron entries that may have expansion issues
+crontab -l | grep -E '\$[A-Z_]+'
 
+# Check systemd-cron logs (Debian/Pi5)
+journalctl -u cron --since "today" | grep -E "CMD|auto-workflow"
+
+# Search for unexpanded variables in logs
+grep -r '\$LOGDIR\|\$CUSTOM' /var/log/cron* 2>/dev/null
 ```
-User Session (shell, SSH)
-    ↓ exports
-Systemd User Service
-    ↓ inherits + adds
-Cron Daemon
-    ↓ for each job
-New Shell Process (subcommand)
-```
 
-Each boundary is a potential point of variable loss. Variables must be:
-1. Exported (`export VAR=value` or `VAR=value; export VAR`)
-2. Passed explicitly (`VAR=value command`)
-3. Or use universally available variables (`$HOME`, `$USER`, `$PATH`)
+### Files Affected
 
-## Emacs Lisp Variable Patterns
+| File | System | Issue |
+|------|--------|-------|
+| `/etc/cron.d/auto-workflow-pi5` | Pi5 (Debian) | LOGDIR not expanded |
+| `/etc/cron.d/auto-workflow` | macOS | LOGDIR not expanded |
 
-### Forward Declarations with defvar
+---
 
-Emacs Lisp uses dynamic binding by default. When a variable is defined in one file and used in another, `defvar` serves as a forward declaration that tells the compiler "this variable exists" without creating a duplicate definition.
+## Emacs Lisp: Forward Declaration of Variables
 
-**The Problem with Docstrings in Forward Declarations:**
+### The Pattern
+
+When a variable is defined in one Emacs Lisp file but referenced in another, use `defvar` without a docstring to create a forward declaration. This avoids compiler warnings about undefined variables and prevents duplicate definitions.
+
+### Before (Problematic)
 
 ```elisp
-;; WRONG - Compiler re-defines with docstring, losing original metadata
+;; ❌ DON'T do this in the consuming file
 (defvar gptel-auto-workflow--worktree-state nil
   "Hash table for worktree state. Defined in gptel-tools-agent.el.")
 ```
 
-This pattern has two issues:
-1. The docstring duplicates information from the primary definition
-2. If loaded before the real definition, it sets the variable's documentation string incorrectly
+**Problems:**
+- Duplicates the docstring from the primary definition
+- May confuse readers about the "true" source of the variable
+- Compiler sees this as a new definition, not a reference
 
-**Correct Forward Declaration Pattern:**
+### After (Correct)
 
 ```elisp
-;; CORRECT - Minimal forward declaration
+;; ✅ DO this in the consuming file
 (defvar gptel-auto-workflow--worktree-state)
 ```
 
-The bare `defvar` without value or docstring:
-- Tells the compiler the symbol exists as a variable
-- Prevents "variable not defined" warnings
-- Doesn't override any existing definition or documentation
-- Is idempotent—loadi
-...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-klHRio.txt. Use Read tool if you need more]...
+**Benefits:**
+- Satisfies the compiler (no "void variable" warning)
+- Does not override the original definition
+- Acts as a forward declaration
+
+### The Lexical Binding Caveat
+
+When `lexical-binding: t` is enabled, `defvar` becomes essential for dynamic binding:
+
+```elisp
+;;; -*- lexical-binding: t; -*-
+
+;; Without defvar, this let binding is lexical (local only)
+(let ((gptel-auto-workflow--worktree-state (make-hash-table)))
+  (message "This creates a local binding, not affecting global state"))
+
+;; With defvar first, the let binding affects the special (dynamic) variable
+(defvar gptel-auto-workflow--worktree-state)
+(let ((gptel-auto-workflow--worktree-state (make-hash-table)))
+  (message "This modifies the global special variable"))
+```
+
+### Quick Reference: defvar Forms
+
+| Form | Use Case |
+|------|----------|
+| `(defvar symbol)` | Forward declaration, no default |
+| `(defvar symbol init-value)` | Define with default value |
+| `(defvar symbol init-value "doc")` | Full definition with documentation |
+| `(defvar symbol init-value "doc" :variable t)` | Customizable via `customize` |
+
+---
+
+## Cross-Platform Path Handling
+
+### The Principle
+
+Never hardcode user-specific paths like `/Users/davidwu`. Always use environment variables or runtime detection for portable scripts.
+
+### Environment Variables for Paths
+
+```bash
+# Preferred: HOME is universal across Unix-like systems
+$HOME/.emacs.d/scripts
+
+# For Git projects: detect project root
+PROJECT_ROOT=$(git rev-parse --show-toplevel)
+
+# Fallback chain
+SCRIPT_DIR="${HOME}/.emacs.d/scripts"
+[ -d "$SCRIPT_DIR" ] || SCRIPT_DIR="./scripts"
+```
+
+### Pattern Matrix
+
+| Pattern | Use | Avoid |
+|---------|-----|-------|
+| `$HOME` | User home directory | Hardcoded `/Users/username` |
+| `$(git rev-parse --show-toplevel)` | Project root in Git repos | Relative paths from unknown location |
+| `$PWD` | Current working directory | Assuming specific directory |
+| `${0%/*}` | Script's own directory | Hardcoded script paths |
+
+### Files Updated with Portable Paths
+
+```bash
+# Scripts converted from hardcoded to portable
+scripts/run-tests.sh           # Now uses $HOME fallback
+scripts/verify-integration.sh  # Now uses $HOME fallback
+
+# Documentation updated
+AGENTS.md                      # References $HOME/workspace/nucleus/
+```
+
+### Systemd Service Management (Debian)
+
+On Debian-based systems (including Raspberry Pi OS), manage the Emacs daemon via systemd, not process signals:
+
+```bash
+# Check daemon status
+systemctl --user status emacs
+
+# Restart (NOT pkill)
+systemctl --user restart emacs
+
+# View logs
+journalctl --user -u emacs -f
+
+# NEVER use pkill - it leaves stale socket files
+# pkill -f "emacs --daemon"  ❌
+```
+
+### Detection Commands
+
+```bash
+# Find hardcoded paths that break portability
+grep -rn "/Users/davidwu" . \
+  --include="*.sh" \
+  --include="*.el" \
+  --include="*.md"
+
+# Find potential path issues in cron configs
+grep -rn "\$HOME\|\$LOGDIR\|/home/" /etc/cron.d/
+```
+
+---
+
+## Unified Pattern: Variable Scope Cheat Sheet
+
+| Context | Scope Type | Solution |
+|---------|-----------|----------|
+| Cron crontab | Command doesn't inherit crontab vars | Use `$HOME` directly in command |
+| Shell script | Inherited from parent | Export variables or use inline |
+| Emacs Lisp (lexical) | Local by default | Use `defvar` for special variables |
+| Emacs Lisp (dynamic) | Global by default | Use `let` to shadow |
+| Cross-platform scripts | OS-dependent paths | Use `$HOME`, detect at runtime |
+
+---
+
+## Actionable Checklist
+
+- [ ] When writing cron commands, use `$HOME` directly—never custom crontab variables
+- [ ] In Emacs Lisp files that reference variables from other files, add `(defvar variable-name)` without docstring
+- [ ] Enable `lexical-binding: t`? Add `defvar` for any variables you intend to bind dynamically with `let`
+- [ ] Replace all `/Users/davidwu` with `$HOME` in scripts and documentation
+- [ ] Use `$(git rev-parse --show-toplevel)` for project-relative paths in Git repositories
+- [ ] On Debian, manage Emacs daemon with `systemctl --user`, never `pkill`
+- [ ] Run detection commands before deploying scripts to new environments
+
+---
+
+## Related
+
+- [Cron Configuration](/cron-configuration)
+- [Emacs Lisp Development](/emacs-lisp-development)
+- [Shell Script Best Practices](/shell-script-best-practices)
+- [Systemd User Services](/systemd-user-services)
+- [Path Handling in Emacs](/path-handling-emacs)
+- [Project Detection with Git](/git-project-detection)
+- [Environment Variables Reference](/environment-variables)

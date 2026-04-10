@@ -1,202 +1,260 @@
 ---
-title: Cron-Based Scheduling for Auto-Workflow
+title: Cron Scheduling for Emacs Automation
 status: active
 category: knowledge
-tags: [cron, scheduling, daemon, macos, linux]
-related: [mementum/knowledge/emacs-daemon-patterns.md]
+tags: [cron, emacs, automation, scheduling, devops, infrastructure]
 ---
 
-# Cron-Based Scheduling for Auto-Workflow
+# Cron Scheduling for Emacs Automation
 
-Patterns for scheduling auto-workflow, researcher, and mementum tasks via cron.
+This page documents the cron-based scheduling infrastructure for Emacs automation, including common pitfalls, fixes, and best practices for running Emacs functions on a schedule.
 
-## Platform-Specific Schedules
+## Overview
 
-### macOS (Interactive Use)
+Cron is the standard Unix scheduler used to trigger Emacs functions at specific times. This approach is preferred over Emacs timers for tasks that must survive system restarts and operate independently of user sessions.
 
-Schedule during daylight hours when user is typically active:
+| Feature | Cron | Emacs Timer |
+|---------|------|-------------|
+| Survives restart | ✓ | ✗ |
+| Standard Unix tool | ✓ | Emacs-specific |
+| Logs to files | ✓ | Manual handling |
+| Visibility (`crontab -l`) | ✓ | Internal only |
+| Session awareness | ✗ | ✓ |
 
-```
-0 10,14,18 * * * auto-workflow  # 10AM, 2PM, 6PM (3 runs/day)
-0 */4 * * * research            # Every 4 hours
-0 4 * * 0 mementum              # Sunday 4AM
-0 5 * * 0 instincts             # Sunday 5AM
-```
+## Basic Cron Configuration
 
-### Linux/Pi5 (24/7 Headless)
+### Required Environment Variables
 
-Higher frequency for continuous operation:
-
-```
-0 23,3,7,11,15,19 * * * auto-workflow  # 6 runs/day
-0 */4 * * * research
-0 4 * * 0 mementum
-0 5 * * 0 instincts
-```
-
-## Cron Environment Setup
-
-**PATH Issues:**
-
-Cron has minimal environment. Must set PATH explicitly:
+Cron runs with a minimal environment. Always set explicit `PATH` and `SHELL`:
 
 ```cron
 SHELL=/bin/bash
-PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$HOME/.emacs.d/bin
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin
+LOGDIR=/Users/davidwu/.emacs.d/var/tmp/cron
 ```
 
-**Variable Expansion:**
+### Common Cron File Locations
 
-Cron doesn't expand `$HOME` in some contexts. Use absolute paths or set in wrapper:
+- User crontab: `crontab -e`
+- System cron: `/etc/cron.d/` (Debian/Ubuntu)
+- Launchd: `~/Library/LaunchAgents/` (macOS)
+
+### Installation Script
+
+Create `scripts/install-cron.sh` for easy deployment:
 
 ```bash
-# Bad - may not expand
-0 10 * * * $HOME/.emacs.d/scripts/run.sh
+#!/bin/bash
+set -e
 
-# Good - explicit path
-0 10 * * * /Users/davidwu/.emacs.d/scripts/run.sh
+CRON_DIR="$(cd "$(dirname "$0")/../cron.d" && pwd)"
+CRON_USER="davidwu"
+CRON_FILE="$CRON_DIR/auto-workflow"
+
+install_cron() {
+    local target="/etc/cron.d/auto-workflow"
+    echo "Installing $CRON_FILE to $target..."
+    sudo cp "$CRON_FILE" "$target"
+    sudo chmod 644 "$target"
+}
+
+case "${1:-}" in
+    --dry-run)
+        echo "Would install: $CRON_FILE"
+        cat "$CRON_FILE"
+        ;;
+    --install)
+        install_cron
+        ;;
+    *)
+        echo "Usage: $0 --dry-run|--install"
+        exit 1
+        ;;
+esac
 ```
 
-## XDG_RUNTIME_DIR for Linux
-
-Linux needs XDG_RUNTIME_DIR for some tools:
+## Cron File Example
 
 ```cron
-XDG_RUNTIME_DIR=/run/user/1000
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin
+LOGDIR=/Users/davidwu/.emacs.d/var/tmp/cron
+
+# Ensure log directory exists
+@replay mkdir -p $LOGDIR
+
+# Daily at 2:00 AM - Auto workflow
+0 2 * * * davidwu /usr/local/bin/emacsclient -e '(gptel-auto-workflow-run)' >> $LOGDIR/auto-workflow.log 2>&1
+
+# Weekly Sunday at 4:00 AM - Mementum synthesis
+0 4 * * 0 davidwu /usr/local/bin/emacsclient -e '(gptel-benchmark-mementum-weekly-job)' >> $LOGDIR/mementum-weekly.log 2>&1
+
+# Weekly Sunday at 5:00 AM - Instincts evolution
+0 5 * * 0 davidwu /usr/local/bin/emacsclient -e '(gptel-benchmark-instincts-weekly-job)' >> $LOGDIR/instincts-weekly.log 2>&1
 ```
 
-Set dynamically in install script:
+## Scheduled Jobs Reference
+
+| Schedule | Time | Function | Purpose |
+|----------|------|----------|---------|
+| Daily | 2:00 AM | `gptel-auto-workflow-run` | Overnight experiments |
+| Weekly | Sunday 4:00 AM | `gptel-benchmark-mementum-weekly-job` | Synthesis + decay |
+| Weekly | Sunday 5:00 AM | `gptel-benchmark-instincts-weekly-job` | Evolution |
+| Daily | 4:00 AM | `my/cleanup-temp-files` | Cleanup temp files |
+
+## Infrastructure Setup
+
+### Required Directories
 
 ```bash
-if [ "$machine" = "pi5" ] || [ "$machine" = "linux" ]; then
-    echo "XDG_RUNTIME_DIR=/run/user/$(id -u)"
-fi
+mkdir -p var/tmp/cron
+mkdir -p var/tmp/experiments
 ```
 
-## Common Errors and Fixes
-
-### args-out-of-range
-
-**Cause:** Script expects arguments but cron passes none.
-
-**Fix:** Provide default in script:
+### Log Monitoring
 
 ```bash
-ACTION="${1:-auto-workflow}"
-```
+# Follow all cron logs
+tail -f var/tmp/cron/*.log
 
-### PATH Not Set
-
-**Symptom:** `emacsclient: command not found`
-
-**Fix:** Set PATH in crontab or use absolute path to emacsclient.
-
-### Variable Not Expanded
-
-**Symptom:** `$HOME` appears literally in error messages.
-
-**Fix:** Expand in wrapper script or use `%HOMEPATH%` on Windows.
-
-## Log Directory Setup
-
-Ensure log directory exists before cron runs:
-
-```cron
-@reboot mkdir -p $HOME/.emacs.d/var/tmp/cron
-```
-
-## Installation Script
-
-**Location:** `scripts/install-cron.sh`
-
-### Usage
-
-```bash
-# Install crontab (auto-detect platform)
-./scripts/install-cron.sh
-
-# Preview without installing
-./scripts/install-cron.sh --dry-run
-
-# Render crontab to stdout
-./scripts/install-cron.sh --render
-```
-
-### Machine Detection
-
-Script auto-detects machine type:
-
-| Machine | Detection | Schedule |
-|---------|-----------|----------|
-| macOS | `uname -s = "Darwin"` | 10AM, 2PM, 6PM |
-| Pi5 | hostname contains `pi5\|raspberrypi\|onepi` | 6 runs/day |
-| Linux | `uname -s = "Linux"` | Same as Pi5 |
-| Single | Fallback | Every 4 hours |
-
-### Section-Based Rendering
-
-Cron template (`cron.d/auto-workflow`) has sections:
-
-```
-# -----------------------------------------------------------------
-# PI5: Linux systemd (24/7 headless) - SECTION: pi5
-# -----------------------------------------------------------------
-#0 23,3,7,11,15,19 * * * ...
-
-# -----------------------------------------------------------------
-# MACOS: Daylight hours (interactive use) - SECTION: macos
-# -----------------------------------------------------------------
-#0 10,14,18 * * * ...
-```
-
-Script:
-1. Finds section matching machine type
-2. Uncomments lines starting with `#0 ` in that section
-3. Other sections stay commented
-4. Injects PATH and XDG_RUNTIME_DIR
-
-### PATH Differences by Platform
-
-```bash
-# macOS (homebrew)
-PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin
-
-# Linux
-PATH=/usr/local/bin:/usr/bin:/bin
-```
-
-### Log Directory
-
-Script creates on install:
-
-```bash
-mkdir -p var/tmp/cron var/tmp/experiments
-```
-
-And via crontab on reboot:
-
-```cron
-@reboot mkdir -p $HOME/.emacs.d/var/tmp/cron
-```
-
-## Verification
-
-After installing crontab:
-
-```bash
-./scripts/run-auto-workflow-cron.sh status
-```
-
-Check logs:
-
-```bash
+# Check specific log
 tail -f var/tmp/cron/auto-workflow.log
 ```
 
+## Common Issues and Fixes
+
+### Issue 1: PATH Not Found
+
+**Symptom:**
+```
+/bin/bash: emacsclient: command not found
+```
+
+**Cause:** Cron has minimal PATH (`/usr/bin:/bin` only)
+
+**Fix:** Set explicit PATH in cron file:
+
+```cron
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin
+```
+
+**Verification:**
+
+```bash
+# Test what cron sees
+* * * * * env > /tmp/cron-env.txt 2>&1
+
+# Compare with interactive shell
+diff /tmp/cron-env.txt <(env)
+
+# Test with minimal environment
+env -i PATH=/usr/bin:/bin HOME=$HOME /bin/bash -c 'which emacsclient'
+```
+
+### Issue 2: Variable Expansion Bug
+
+**Symptom:** Logs are empty, cron runs but output is lost
+
+**Cause:** Cron variables set in crontab don't expand in the shell command:
+
+```cron
+# WRONG - LOGDIR not available in shell
+LOGDIR=$HOME/.emacs.d/var/tmp/cron
+0 2 * * * echo "test" >> $LOGDIR/test.log
+```
+
+**Fix:** Use `$HOME` directly or environment variable in the command:
+
+```cron
+# CORRECT - use $HOME directly
+0 2 * * * echo "test" >> $HOME/.emacs.d/var/tmp/cron/test.log
+```
+
+**Detection:**
+
+```bash
+journalctl -u cron --since "today" | grep -E "davidwu|CMD"
+```
+
+### Issue 3: args-out-of-range Error
+
+**Symptom:**
+```
+[auto-workflow] Cron error: (args-out-of-range 1 0 7)
+```
+
+**Cause:** Substring operations on empty or short strings in `gptel-tools-agent.el`
+
+**Affected locations:**
+- Line 114: `(substring commit-hash 0 7)` - empty git commit hash
+- Line 142: `(substring (car o) 0 7)` - orphan hash empty/short
+- Lines 204-205: Branch commits "none" or empty
+- Lines 3414-3416: Malformed date format parsing
+
+**Fix:** Add length guards before substring operations:
+
+```elisp
+;; Before (crashes on short strings):
+(substring commit-hash 0 7)
+
+;; After (safe):
+(if (>= (length commit-hash) 7)
+    (substring commit-hash 0 7)
+  commit-hash)
+```
+
+For date parsing with nil checks:
+
+```elisp
+;; Before:
+(let* ((date-str (match-string 1 content))
+       (last-tested (encode-time ...))
+       (age (- now (float-time last-tested))))
+  (when (> age four-weeks) ...))
+
+;; After:
+(let* ((date-str (match-string 1 content))
+       (last-tested (when (>= (length date-str) 10)
+                      (encode-time ...)))
+       (age (when last-tested
+              (- now (float-time last-tested)))))
+  (when (and age (> age four-weeks)) ...))
+```
+
+**Files modified:** `lisp/modules/gptel-tools-agent.el`
+
+**Verification:** After fix, workflow runs without errors:
+```
+[auto-workflow] Synced staging with main (origin/ -> 04948b5)
+[auto-workflow] Found 3 orphan(s): 1 97974b8 97974b8
+[auto-workflow] ⚠ Found 3 orphan commit(s) from previous run
+```
+
+## Decision Framework
+
+When to use cron vs Emacs timers:
+
+```
+λ schedule(x).    cron(x) > emacs_timer(x)
+                  | survives_restart(x) ∧ standard_unix(x)
+                  | session_aware(x) → emacs_timer(x)
+```
+
+**Use Cron for:**
+- Tasks that must run overnight
+- Tasks that must survive system restart
+- Integration with standard Unix tooling
+
+**Use Emacs Timer for:**
+- Session-aware notifications (while user is working)
+- Interactive prompts
+- Context-dependent triggers
+- Quick testing during development
+
 ## Related
 
-- `mementum/knowledge/emacs-daemon-patterns.md` - Daemon server name isolation
-- `mementum/memories/cron-scheduling-pattern.md` - Original pattern
-- `mementum/memories/cron-path-environment.md` - PATH issues
-- `mementum/memories/cron-variable-expansion.md` - Variable expansion bug
-- `mementum/memories/cron-args-out-of-range-fix.md` - Default arguments fix
+- [Emacs Daemon](./emacs-daemon.md) - Running Emacs as a background service
+- [GPTel Auto Workflow](./gptel-auto-workflow.md) - Automated git workflow using LLMs
+- [Elisp Error Handling](./elisp-error-handling.md) - Debugging techniques for Emacs Lisp
+- [Environment Variables](./environment-variables.md) - PATH and shell configuration
+- [Cron Expression Syntax](https://man7.org/linux/man-pages/man5/crontab.5.html) - Full cron syntax reference

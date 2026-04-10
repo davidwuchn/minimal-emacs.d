@@ -34,6 +34,7 @@
 
 (declare-function my/gptel--coerce-fsm "gptel-ext-fsm-utils")
 (declare-function my/gptel--deliver-subagent-result "gptel-tools-agent")
+(declare-function my/gptel--seed-fsm-tools "gptel-tools-agent" (fsm tools))
 (declare-function my/gptel-agent--task-override "gptel-tools-agent"
                   (main-cb agent-type description prompt))
 (declare-function my/gptel--subagent-cache-get "gptel-tools-agent")
@@ -491,77 +492,108 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
           (let ((final-turn (not (plist-get info :tool-use))))
             (when final-turn
               (gptel-agent-loop--cleanup-overlay ov)
-              (cond
-               ((string-blank-p resp)
-                (if (= (gptel-agent-loop--task-step-count state) 0)
-                    (gptel-agent-loop--deliver-result
-                     state
-                     (format "Error: %s task '%s' returned empty response with no tool calls."
-                             (gptel-agent-loop--task-agent-type state)
-                             (gptel-agent-loop--task-description state)))
-                  (gptel-agent-loop--deliver-result
-                   state
-                   (gptel-agent-loop--build-final-result state "[empty response]"))))
-
-               ((and (gptel-agent-loop--task-max-steps-reached state)
-                     (not (gptel-agent-loop--task-summary-requested state)))
-                (gptel-agent-loop--append-output state resp)
-                (setf (gptel-agent-loop--task-summary-requested state) t)
-                (if gptel-agent-loop-hard-loop
-                    (gptel-agent-loop--schedule
-                     0.1
-                     (lambda ()
-                       (gptel-agent-loop--request
-                        state
-                        (gptel-agent-loop--summary-prompt-for state)
-                        nil
-                        nil)))
-                  (gptel-agent-loop--deliver-result
-                   state
-                   (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-                           (gptel-agent-loop--build-final-result state "")
-                           (gptel-agent-loop--task-step-count state)))))
-
-               ((and (gptel-agent-loop--task-summary-requested state)
-                     (not use-tools))
-                (gptel-agent-loop--deliver-result
-                 state
-                 (gptel-agent-loop--build-final-result state resp)
-                 t))
-
-               ((gptel-agent-loop--continuation-needed-p state resp)
-                (let ((cont-count (1+ (or (gptel-agent-loop--task-continuation-count state) 0))))
-                  (setf (gptel-agent-loop--task-continuation-count state) cont-count)
-                  (if gptel-agent-loop-hard-loop
-                      (progn
-                        (message "[RunAgent] Auto-continuing after %d steps (continuation %d/%d)..."
-                                 (gptel-agent-loop--task-step-count state)
-                                 cont-count gptel-agent-loop-max-continuations)
-                        (gptel-agent-loop--append-output state resp)
-                        (gptel-agent-loop--schedule
-                         0.1
-                         (lambda ()
-                           (gptel-agent-loop--request
-                            state
-                            (gptel-agent-loop--continuation-prompt-for state)
-                            t
-                            nil))))
-                    (gptel-agent-loop--deliver-result
-                     state
-                     (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-                             (gptel-agent-loop--build-final-result state "")
-                             (gptel-agent-loop--task-step-count state))))))
-
-               (t
-                (gptel-agent-loop--deliver-result
-                 state
-                 (gptel-agent-loop--build-final-result state resp)
-                 t)))))))
+              (gptel-agent-loop--handle-string-response state resp use-tools)))))
 
        ((eq resp 'abort)
         (gptel-agent-loop--cleanup-overlay ov)
         (setf (gptel-agent-loop--task-aborted state) t)
         (gptel-agent-loop--deliver-aborted state))))))
+
+(defun gptel-agent-loop--handle-empty-response (state resp)
+  "Handle empty string RESP for STATE.
+Returns non-nil if result was delivered."
+  (when (string-blank-p resp)
+    (if (= (gptel-agent-loop--task-step-count state) 0)
+        (gptel-agent-loop--deliver-result
+         state
+         (format "Error: %s task '%s' returned empty response with no tool calls."
+                 (gptel-agent-loop--task-agent-type state)
+                 (gptel-agent-loop--task-description state)))
+      (gptel-agent-loop--deliver-result
+       state
+       (gptel-agent-loop--build-final-result state "[empty response]")))
+    t))
+
+(defun gptel-agent-loop--handle-max-steps-reached (state resp)
+  "Handle STATE when max steps were reached and RESP is final turn.
+Returns non-nil if result was delivered."
+  (when (and (gptel-agent-loop--task-max-steps-reached state)
+             (not (gptel-agent-loop--task-summary-requested state)))
+    (gptel-agent-loop--append-output state resp)
+    (setf (gptel-agent-loop--task-summary-requested state) t)
+    (if gptel-agent-loop-hard-loop
+        (gptel-agent-loop--schedule
+         0.1
+         (lambda ()
+           (gptel-agent-loop--request
+            state
+            (gptel-agent-loop--summary-prompt-for state)
+            nil
+            nil)))
+      (gptel-agent-loop--deliver-result
+       state
+       (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
+               (gptel-agent-loop--build-final-result state "")
+               (gptel-agent-loop--task-step-count state))))
+    t))
+
+(defun gptel-agent-loop--handle-summary-turn (state resp use-tools)
+  "Handle STATE when summary was requested and RESP is summary turn.
+USE-TOOLS indicates whether tools were requested.
+Returns non-nil if result was delivered."
+  (when (and (gptel-agent-loop--task-summary-requested state)
+             (not use-tools))
+    (gptel-agent-loop--deliver-result
+     state
+     (gptel-agent-loop--build-final-result state resp)
+     t)
+    t))
+
+(defun gptel-agent-loop--handle-continuation (state resp)
+  "Handle STATE when continuation is needed after RESP.
+Returns non-nil if result was delivered."
+  (when (gptel-agent-loop--continuation-needed-p state resp)
+    (let ((cont-count (1+ (or (gptel-agent-loop--task-continuation-count state) 0))))
+      (setf (gptel-agent-loop--task-continuation-count state) cont-count)
+      (if gptel-agent-loop-hard-loop
+          (progn
+            (message "[RunAgent] Auto-continuing after %d steps (continuation %d/%d)..."
+                     (gptel-agent-loop--task-step-count state)
+                     cont-count gptel-agent-loop-max-continuations)
+            (gptel-agent-loop--append-output state resp)
+            (gptel-agent-loop--schedule
+             0.1
+             (lambda ()
+               (gptel-agent-loop--request
+                state
+                (gptel-agent-loop--continuation-prompt-for state)
+                t
+                nil))))
+        (gptel-agent-loop--deliver-result
+         state
+         (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
+                 (gptel-agent-loop--build-final-result state "")
+                 (gptel-agent-loop--task-step-count state)))))
+    t))
+
+(defun gptel-agent-loop--handle-final-response (state resp)
+  "Handle STATE when RESP is a final response to deliver.
+Returns non-nil if result was delivered."
+  (gptel-agent-loop--deliver-result
+   state
+   (gptel-agent-loop--build-final-result state resp)
+   t)
+  t)
+
+(defun gptel-agent-loop--handle-string-response (state resp use-tools)
+  "Handle string response RESP for STATE.
+USE-TOOLS indicates whether tools were requested on this turn.
+Returns non-nil if result was delivered."
+  (or (gptel-agent-loop--handle-empty-response state resp)
+      (gptel-agent-loop--handle-max-steps-reached state resp)
+      (gptel-agent-loop--handle-summary-turn state resp use-tools)
+      (gptel-agent-loop--handle-continuation state resp)
+      (gptel-agent-loop--handle-final-response state resp)))
 
 (defun gptel-agent-loop--request (state prompt use-tools allow-cache)
   "Start or continue a subagent request for STATE.
@@ -587,18 +619,19 @@ Cache behavior:
                                     :use-context nil
                                     :stream my/gptel-subagent-stream)
                               (cdr (assoc agent-type gptel-agent--agents))))
-               (syms (cons 'gptel--preset (gptel--preset-syms preset)))
-               (vals (mapcar (lambda (sym)
-                               (if (boundp sym) (symbol-value sym) nil))
-                             syms)))
+                (syms (cons 'gptel--preset (gptel--preset-syms preset)))
+                (vals (mapcar (lambda (sym)
+                                (if (boundp sym) (symbol-value sym) nil))
+                              syms)))
           (cl-progv syms vals
             (gptel--apply-preset preset)
-            (let* ((parent-fsm (and (fboundp 'my/gptel--coerce-fsm)
+            (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
+                   (parent-fsm (and (fboundp 'my/gptel--coerce-fsm)
                                     (my/gptel--coerce-fsm gptel--fsm-last)))
-                   (fsm-info (ignore-errors
-                               (and parent-fsm (gptel-fsm-info parent-fsm))))
-                   (parent-buf (or (gptel-agent-loop--task-parent-buffer state)
-                                   (when (buffer-live-p (plist-get fsm-info :buffer))
+                    (fsm-info (ignore-errors
+                                (and parent-fsm (gptel-fsm-info parent-fsm))))
+                    (parent-buf (or (gptel-agent-loop--task-parent-buffer state)
+                                    (when (buffer-live-p (plist-get fsm-info :buffer))
                                      (plist-get fsm-info :buffer))
                                    (current-buffer)))
                    (where (or (let ((tm (gptel-agent-loop--task-tracking-marker state)))
@@ -613,20 +646,23 @@ Cache behavior:
                         ;; If where is already in parent-buf, use it directly.
                         ;; If it's from a foreign buffer (fsm-info), don't copy
                         ;; its position across buffers — create a fresh marker instead.
-                        (if (eq (marker-buffer where) parent-buf)
+                        (if (and where (eq (marker-buffer where) parent-buf))
                             where
                           (with-current-buffer parent-buf (point-marker)))))
-                   (callback (gptel-agent-loop--make-callback state prompt use-tools)))
+                   (callback (gptel-agent-loop--make-callback state prompt use-tools))
+                   (child-fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)))
               (setf (gptel-agent-loop--task-parent-buffer state) parent-buf
                     (gptel-agent-loop--task-tracking-marker state) tracking-marker)
               (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
               (gptel-request prompt
                 :context (gptel-agent--task-overlay tracking-marker agent-type description)
-                :fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)
+                :fsm child-fsm
                 :position tracking-marker
                 :buffer parent-buf
                 :in-place t
-                :callback callback))))))))
+                :callback callback)
+              (when (fboundp 'my/gptel--seed-fsm-tools)
+                (my/gptel--seed-fsm-tools child-fsm request-tools)))))))))
 
 (defun gptel-agent-loop--make-timeout-timer (state)
   "Create timeout timer for STATE."

@@ -18,6 +18,10 @@
 (require 'cl-lib)
 (require 'nucleus-presets)
 
+(defvar gptel-agent--agents)
+(defvar gptel-backend)
+(defvar nucleus-agents-dir)
+
 (ert-deftest test-nucleus-read-agent-model-from-yaml ()
   "Test reading model from YAML frontmatter."
   (cl-letf (((symbol-function 'gptel-agent-read-file)
@@ -54,6 +58,32 @@
   "Test that missing file returns nil."
   (let ((model (nucleus--read-agent-model "/nonexistent/file.md")))
     (should (null model))))
+
+(ert-deftest test-nucleus-override-agent-presets-keeps-declared-tools-before-registration ()
+  "Agent contracts should keep declared tool names even before registration completes."
+  (let ((gptel-agent--agents '(("executor" :system "Executor system")))
+        (gptel-backend 'test-backend)
+        (nucleus-agents-dir "/tmp")
+        (nucleus-tools-strict-validation nil))
+    (cl-letf (((symbol-function 'gptel-get-preset)
+               (lambda (_name)
+                 '(:description "preset")))
+              ((symbol-function 'gptel-make-preset)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-agent-read-file)
+               (lambda (&rest _)
+                 (list 'agent :model "minimax-m2.5" :system "Test system")))
+              ((symbol-function 'file-readable-p)
+               (lambda (_file) t))
+              ((symbol-function 'nucleus--refresh-open-gptel-buffers)
+               (lambda () nil))
+              ((symbol-function 'gptel-get-tool)
+               (lambda (name)
+                 (not (member name '("TodoWrite" "Code_Map" "Grep" "Read" "Edit"))))))
+      (nucleus--override-gptel-agent-presets)
+      (let ((tools (plist-get (cdr (assoc "executor" gptel-agent--agents)) :tools)))
+        (dolist (name '("TodoWrite" "Code_Map" "Grep" "Read" "Edit"))
+          (should (member name tools)))))))
 
 ;;; Provide the test suite
 
