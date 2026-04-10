@@ -19,6 +19,7 @@
 (require 'gptel-benchmark-memory)
 
 (declare-function gptel-request "gptel")
+(declare-function gptel-abort "gptel" (buffer))
 (defvar gptel-model)
 
 ;;; Customization
@@ -302,19 +303,23 @@ Returns suggestions directly, blocking until complete."
   "Synchronous version of `gptel-benchmark-llm-synthesize-knowledge'.
 Returns synthesized knowledge content directly. TIMEOUT-SECONDS defaults to 300."
   (let ((result nil)
-        (done nil)
-        (timeout-count 0)
-        (limit (* 10 (or timeout-seconds 300))))
+         (done nil)
+         (timeout-count 0)
+         (limit (* 10 (or timeout-seconds 300)))
+         (request-buffer (current-buffer)))
     (gptel-benchmark-llm-synthesize-knowledge
      topic memories
-     (lambda (content &rest _)
-       (setq result content
-             done t)))
+      (lambda (content &rest _)
+        (setq result content
+              done t)))
     (while (and (not done) (< timeout-count limit))
       (sit-for 0.1)
       (cl-incf timeout-count))
     (unless done
-      (message "[llm] Timeout waiting for synthesis after %ss" (or timeout-seconds 300)))
+      (message "[llm] Timeout waiting for synthesis after %ss" (or timeout-seconds 300))
+      (when (and (buffer-live-p request-buffer)
+                 (fboundp 'gptel-abort))
+        (ignore-errors (gptel-abort request-buffer))))
     result))
 
 ;;; Provide

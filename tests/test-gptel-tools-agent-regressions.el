@@ -6310,8 +6310,49 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
             (funcall captured-callback "result"))
           (should (equal (plist-get captured-context :default-directory) project-root))
           (should (equal (plist-get captured-context :project-root) project-root))
-          (should (equal (plist-get captured-context :current-project) project-root))
-          (should (plist-get captured-context :headless)))
+           (should (equal (plist-get captured-context :current-project) project-root))
+           (should (plist-get captured-context :headless)))
+       (delete-directory project-root t))))
+
+(ert-deftest regression/mementum/stale-synthesis-callback-is-ignored ()
+  "Late direct-LLM synthesis callbacks should not write after the run stops."
+  (let* ((project-root (file-name-as-directory (make-temp-file "mementum-project" t)))
+         (gptel-auto-workflow--project-root-override project-root)
+         (gptel-auto-workflow--run-project-root project-root)
+         (gptel-auto-workflow--current-project project-root)
+         (gptel-auto-workflow--headless t)
+         (gptel-auto-workflow--running t)
+         (gptel-auto-workflow--run-id "run-1")
+         (gptel-mementum--pending-llm-buffers nil)
+         (captured-callback nil)
+         (handled nil)
+         (messages nil))
+    (unwind-protect
+        (with-temp-buffer
+          (cl-letf (((symbol-function 'gptel-auto-workflow--read-file-contents)
+                     (lambda (_file) "memory"))
+                    ((symbol-function 'gptel-benchmark-llm-synthesize-knowledge)
+                     (lambda (_topic _memories &optional callback)
+                       (setq captured-callback callback)))
+                    ((symbol-function 'gptel-mementum--handle-synthesis-result)
+                     (lambda (&rest _) (setq handled t)))
+                    ((symbol-function 'message)
+                     (lambda (fmt &rest args)
+                       (push (apply #'format fmt args) messages))))
+            (should (gptel-mementum-synthesize-candidate
+                     (list :topic "workflow"
+                           :files '("/tmp/a.md" "/tmp/b.md" "/tmp/c.md"))))
+            (should captured-callback)
+            (should (equal gptel-mementum--pending-llm-buffers (list (current-buffer))))
+            (setq gptel-auto-workflow--running nil
+                  gptel-auto-workflow--run-id "run-2")
+            (funcall captured-callback "result")
+            (should-not handled)
+            (should-not gptel-mementum--pending-llm-buffers)
+            (should (seq-some
+                     (lambda (msg)
+                       (string-match-p "Ignoring stale synthesis for 'workflow'" msg))
+                     messages))))
       (delete-directory project-root t))))
 
 (ert-deftest regression/mementum/synthesize-candidate-falls-back-to-researcher ()
@@ -6374,9 +6415,59 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (should (seq-some (lambda (msg)
                           (string-match-p "\\[mementum\\] Synthesized 1/1 candidates" msg))
                         messages))
-      (should (seq-some (lambda (msg)
-                          (string-match-p "\\[mementum\\] Weekly maintenance complete\\. Synthesized: 1" msg))
-                        messages)))))
+       (should (seq-some (lambda (msg)
+                           (string-match-p "\\[mementum\\] Weekly maintenance complete\\. Synthesized: 1" msg))
+                         messages)))))
+
+(ert-deftest regression/mementum/sync-synthesis-timeout-aborts-request-buffer ()
+  "Timed-out direct LLM synthesis should abort the in-flight request buffer."
+  (let ((aborted nil)
+        (messages nil))
+    (with-temp-buffer
+      (cl-letf (((symbol-function 'gptel-benchmark-llm-synthesize-knowledge)
+                 (lambda (&rest _) nil))
+                ((symbol-function 'gptel-abort)
+                 (lambda (buffer)
+                   (setq aborted buffer)))
+                ((symbol-function 'message)
+                 (lambda (fmt &rest args)
+                   (push (apply #'format fmt args) messages))))
+        (should-not
+         (gptel-benchmark-llm-synthesize-knowledge-sync "workflow" '("memory") 0))
+        (should (eq aborted (current-buffer)))
+        (should (seq-some (lambda (msg)
+                            (string-match-p "Timeout waiting for synthesis after 0s" msg))
+                          messages))))))
+
+(ert-deftest regression/auto-workflow/force-stop-aborts-pending-mementum-llm-buffers ()
+  "Force-stop should abort tracked direct-LLM synthesis requests."
+  (let ((aborted nil)
+        (buffer (generate-new-buffer "*mementum-llm*"))
+        (gptel-auto-workflow--stats (list :phase "instincts"))
+        (gptel-mementum--pending-llm-buffers nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'my/gptel--reset-agent-task-state)
+                   (lambda () nil))
+                  ((symbol-function 'gptel-auto-experiment--reset-grade-state)
+                   (lambda () nil))
+                  ((symbol-function 'gptel-auto-workflow--persist-status)
+                   (lambda () nil))
+                  ((symbol-function 'gptel-abort)
+                   (lambda (buf)
+                     (push buf aborted)))
+                  ((symbol-function 'message)
+                   (lambda (&rest _) nil)))
+          (setq gptel-mementum--pending-llm-buffers (list buffer)
+                gptel-auto-workflow--running t
+                gptel-auto-workflow--cron-job-running t
+                gptel-auto-workflow--current-project "/tmp/project"
+                gptel-auto-workflow--run-project-root "/tmp/project"
+                gptel-auto-workflow--current-target "topic")
+          (gptel-auto-workflow-force-stop)
+          (should (equal aborted (list buffer)))
+          (should-not gptel-mementum--pending-llm-buffers))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
 
 (ert-deftest regression/mementum/direct-synthesis-prompt-requires-full-page ()
   "Direct LLM synthesis prompts should demand a full inline knowledge page."

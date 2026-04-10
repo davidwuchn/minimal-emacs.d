@@ -5522,6 +5522,7 @@ Prevents workflow from hanging indefinitely due to callback failures."
 Interactive command to recover from hung workflow state."
   (interactive)
   (my/gptel--reset-agent-task-state)
+  (gptel-mementum--reset-synthesis-state)
   (gptel-auto-experiment--reset-grade-state)
   (setq gptel-auto-workflow--running nil
         gptel-auto-workflow--cron-job-running nil
@@ -5851,6 +5852,7 @@ Only removes worktrees if no gptel processes are running."
         (cleaned 0))
     (when proj-root
       (my/gptel--reset-agent-task-state)
+      (gptel-mementum--reset-synthesis-state)
       (gptel-auto-experiment--reset-grade-state)
       (gptel-auto-workflow--cleanup-old-worktrees)
       (dolist (timer (copy-sequence timer-list))
@@ -6509,14 +6511,44 @@ Returns list of synthesis candidates."
                (mapcar (lambda (c) (plist-get c :topic)) candidates)))
     candidates))
 
-(defun gptel-mementum--deliver-synthesis-result (project-root headless topic files result)
-  "Handle synthesis RESULT for TOPIC/FILES inside PROJECT-ROOT context."
-  (let ((default-directory project-root)
-        (gptel-auto-workflow--current-project project-root)
-        (gptel-auto-workflow--project-root-override project-root)
-        (gptel-auto-workflow--run-project-root project-root)
-        (gptel-auto-workflow--headless headless))
-    (gptel-mementum--handle-synthesis-result topic files result)))
+(defvar gptel-mementum--pending-llm-buffers nil
+  "Buffers with active direct-LLM mementum synthesis requests.")
+
+(defun gptel-mementum--track-llm-request-buffer (buffer)
+  "Remember BUFFER as hosting an active direct-LLM synthesis request."
+  (when (buffer-live-p buffer)
+    (cl-pushnew buffer gptel-mementum--pending-llm-buffers)))
+
+(defun gptel-mementum--untrack-llm-request-buffer (buffer)
+  "Forget BUFFER from active direct-LLM synthesis tracking."
+  (setq gptel-mementum--pending-llm-buffers
+        (delq buffer gptel-mementum--pending-llm-buffers)))
+
+(defun gptel-mementum--reset-synthesis-state ()
+  "Abort and clear tracked direct-LLM synthesis requests."
+  (dolist (buffer (delete-dups (delq nil gptel-mementum--pending-llm-buffers)))
+    (when (and (buffer-live-p buffer)
+               (fboundp 'gptel-abort))
+      (ignore-errors (gptel-abort buffer))))
+  (setq gptel-mementum--pending-llm-buffers nil))
+
+(defun gptel-mementum--deliver-synthesis-result (project-root headless topic files result
+                                                              &optional run-id request-buffer)
+  "Handle synthesis RESULT for TOPIC/FILES inside PROJECT-ROOT context.
+When RUN-ID is stale, ignore RESULT instead of writing new knowledge pages.
+REQUEST-BUFFER is removed from direct-LLM tracking after delivery."
+  (unwind-protect
+      (if (not (gptel-auto-workflow--run-callback-live-p run-id))
+          (message "[mementum] Ignoring stale synthesis for '%s'; run %s is no longer active"
+                   topic run-id)
+        (let ((default-directory project-root)
+              (gptel-auto-workflow--current-project project-root)
+              (gptel-auto-workflow--project-root-override project-root)
+              (gptel-auto-workflow--run-project-root project-root)
+              (gptel-auto-workflow--headless headless))
+          (gptel-mementum--handle-synthesis-result topic files result)))
+    (when request-buffer
+      (gptel-mementum--untrack-llm-request-buffer request-buffer))))
 
 (defun gptel-mementum--synthesis-agent ()
   "Return the preferred agent symbol for mementum synthesis, or nil."
@@ -6559,40 +6591,48 @@ Note: Call `gptel-mementum-ensure-agents' first for batch processing."
         (let ((synthesis-prompt (gptel-mementum--build-synthesis-prompt topic memories-content)))
           (message "[mementum] Synthesizing %d memories for topic: %s" (length memories-content) topic)
           (let ((backend (or synthesis-backend
-                             (gptel-mementum--synthesis-backend))))
+                             (gptel-mementum--synthesis-backend)))
+                (callback-run-id (and gptel-auto-workflow--running
+                                      (gptel-auto-workflow--current-run-id))))
             (pcase backend
-            ('llm
-             (if synchronous
-                 (gptel-mementum--deliver-synthesis-result
-                  project-root headless topic files
-                  (gptel-benchmark-llm-synthesize-knowledge-sync
-                   topic memories-content 300))
-               (gptel-benchmark-llm-synthesize-knowledge
-                topic memories-content
-                (lambda (result)
-                  (gptel-mementum--deliver-synthesis-result
-                   project-root headless topic files result)))))
-             ((pred symbolp)
-              (if (and (fboundp 'gptel-benchmark-call-subagent)
-                       (fboundp 'gptel-agent--task))
-                  (if (and synchronous
-                           (fboundp 'gptel-benchmark-call-subagent-sync))
-                      (gptel-mementum--deliver-synthesis-result
-                       project-root headless topic files
-                       (gptel-benchmark-call-subagent-sync
-                        backend
-                        (format "Synthesize knowledge: %s" topic)
-                        synthesis-prompt
-                        300))
-                    (gptel-benchmark-call-subagent
-                     backend
-                     (format "Synthesize knowledge: %s" topic)
-                     synthesis-prompt
-                     (lambda (result)
+             ('llm
+              (let ((request-buffer (current-buffer)))
+                (when callback-run-id
+                  (gptel-mementum--track-llm-request-buffer request-buffer))
+                (if synchronous
+                    (gptel-mementum--deliver-synthesis-result
+                     project-root headless topic files
+                     (gptel-benchmark-llm-synthesize-knowledge-sync
+                      topic memories-content 300)
+                     callback-run-id request-buffer)
+                  (gptel-benchmark-llm-synthesize-knowledge
+                   topic memories-content
+                   (lambda (result &rest _)
+                     (gptel-mementum--deliver-synthesis-result
+                      project-root headless topic files result
+                      callback-run-id request-buffer))))))
+              ((pred symbolp)
+               (if (and (fboundp 'gptel-benchmark-call-subagent)
+                        (fboundp 'gptel-agent--task))
+                   (if (and synchronous
+                            (fboundp 'gptel-benchmark-call-subagent-sync))
                        (gptel-mementum--deliver-synthesis-result
-                        project-root headless topic files result))
-                     300))
-                (message "[mementum] Skip '%s': no synthesis subagent available" topic)))
+                        project-root headless topic files
+                        (gptel-benchmark-call-subagent-sync
+                         backend
+                         (format "Synthesize knowledge: %s" topic)
+                         synthesis-prompt
+                         300)
+                        callback-run-id)
+                     (gptel-benchmark-call-subagent
+                      backend
+                      (format "Synthesize knowledge: %s" topic)
+                      synthesis-prompt
+                      (lambda (result)
+                        (gptel-mementum--deliver-synthesis-result
+                         project-root headless topic files result callback-run-id))
+                      300))
+                 (message "[mementum] Skip '%s': no synthesis subagent available" topic)))
             (_
              (message "[mementum] Skip '%s': no synthesis backend available" topic))))
           t))))
