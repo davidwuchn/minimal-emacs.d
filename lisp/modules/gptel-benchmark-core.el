@@ -134,7 +134,7 @@ For alist lookup, converts :score to \\='score symbol."
 Returns DEFAULT if FIELD is not present or value is nil.
 FIELD should be a keyword like :score."
   (let ((val (plist-get plist field)))
-    (if val val default)))
+    (if (null val) default val)))
 
 ;;; Historical Tracking
 
@@ -211,12 +211,12 @@ FIELD should be a keyword like :overall-score."
   "Accumulate SCORE into TOTAL.
 Returns the new accumulated total.
 SCORE must be a number or nil; non-numeric values signal error."
-  (unless (numberp total)
-    (signal 'wrong-type-argument (list 'numberp total)))
+  (unless (or (numberp score) (null score))
+    (signal 'wrong-type-argument (list '(or numberp null) score)))
   (let ((normalized-score (cond
                            ((numberp score) score)
                            ((null score) 0)
-                           (t (signal 'wrong-type-argument (list 'numberp score))))))
+                           (t (signal 'wrong-type-argument (list '(or numberp null) score))))))
     (+ total normalized-score)))
 
 (defun gptel-benchmark--accumulate-scores (totals scores-alist)
@@ -256,22 +256,14 @@ Returns 0.0 if TOTAL is zero to avoid division by zero."
 RESULTS is a list of (run . scores) cons cells or plists with :scores.
 Returns plist with :total-tests, :passed-tests, and average scores."
   (cl-block summarize
-    (when gptel-benchmark--cancelled
-      (cl-return-from summarize
-        (list :total-tests 0
-              :passed-tests 0
-              :avg-overall 0.0
-              :avg-efficiency 0.0
-              :avg-completion 0.0
-              :avg-constraints 0.0)))
-    (when (null results)
-      (cl-return-from summarize
-        (list :total-tests 0
-              :passed-tests 0
-              :avg-overall 0.0
-              :avg-efficiency 0.0
-              :avg-completion 0.0
-              :avg-constraints 0.0)))
+    (let ((empty-result (list :total-tests 0
+                              :passed-tests 0
+                              :avg-overall 0.0
+                              :avg-efficiency 0.0
+                              :avg-completion 0.0
+                              :avg-constraints 0.0)))
+      (when (or gptel-benchmark--cancelled (null results))
+        (cl-return-from summarize empty-result)))
   (let ((total 0)
         (passed 0)
         (score-totals '((:overall-score . 0.0)
@@ -280,14 +272,14 @@ Returns plist with :total-tests, :passed-tests, and average scores."
                         (:constraint-score . 0.0))))
     (dolist (r results)
       (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall (and scores (plist-get scores :overall-score))))
+             (overall-score (and scores (plist-get scores :overall-score))))
         (cl-incf total)
         (when scores
           (setq score-totals
                 (gptel-benchmark--accumulate-scores
                  score-totals
                  (gptel-benchmark--extract-score-types scores))))
-        (when (>= (or overall 0) 0.7)
+        (when (>= (or overall-score 0) 0.7)
           (cl-incf passed))))
     (cl-return-from summarize
       (list :total-tests total
