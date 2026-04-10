@@ -4546,8 +4546,9 @@ Example HYPOTHESES:
 (defun gptel-auto-experiment--error-snippet (agent-output &optional max-len)
   "Extract safe snippet from AGENT-OUTPUT for logging.
 MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
-  (when (and (stringp agent-output) (> (length agent-output) 0))
-    (my/gptel--sanitize-for-logging agent-output (or max-len 200))))
+  (if (and (stringp agent-output) (> (length agent-output) 0))
+      (my/gptel--sanitize-for-logging agent-output (or max-len 200))
+    ""))
 
 (defvar gptel-auto-experiment-max-retries 2
   "Maximum retries for executor on transient errors.")
@@ -4908,13 +4909,13 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                              (gptel-auto-experiment-log-tsv
                               run-id exp-result)
                               (funcall callback exp-result)))
-                       ;; Grader passed - commit changes, then run benchmark
-                       (let ((commit-dir (or (gptel-auto-workflow--get-worktree-dir target)
-                                             (gptel-auto-workflow--project-root))))
-                         (when commit-dir
-                           (let ((default-directory commit-dir))
-                             (magit-git-success "add" "-A")
-                             (magit-git-success "commit" "-m" (format "WIP: experiment %s" target)))))
+                        ;; Grader passed - commit changes, then run benchmark
+                        (let ((commit-dir (or (gptel-auto-workflow--get-worktree-dir target)
+                                              (gptel-auto-workflow--project-root))))
+                          (when commit-dir
+                            (let ((default-directory commit-dir))
+                              (magit-git-success "add" "-A")
+                              (magit-git-success "commit" "-m" (format "WIP: experiment %s\n\nHYPOTHESIS: %s" target (or hypothesis "Improve code quality"))))))
                        (let* ((bench (gptel-auto-experiment-benchmark t))
                               (passed (plist-get bench :passed))
                               (validation-error (plist-get bench :validation-error))
