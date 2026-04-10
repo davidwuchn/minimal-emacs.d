@@ -4450,8 +4450,9 @@ Example HYPOTHESES:
 (defun gptel-auto-experiment--error-snippet (agent-output &optional max-len)
   "Extract safe snippet from AGENT-OUTPUT for logging.
 MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
-  (when (and (stringp agent-output) (> (length agent-output) 0))
-    (my/gptel--sanitize-for-logging agent-output (or max-len 200))))
+  (if (and (stringp agent-output) (> (length agent-output) 0))
+      (my/gptel--sanitize-for-logging agent-output (or max-len 200))
+    ""))
 
 (defvar gptel-auto-experiment-max-retries 2
   "Maximum retries for executor on transient errors.")
