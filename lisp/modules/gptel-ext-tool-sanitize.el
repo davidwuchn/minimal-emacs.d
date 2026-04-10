@@ -175,11 +175,11 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                 (put 'doom-loop :current-run current-run)
                 (when (>= current-run n)
                   (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
-                           (car (split-string fp ":")) current-run)
+                           (car (split-string fp ":" t)) run)
                   (funcall (plist-get info :callback)
                            (format "gptel: doom-loop aborted — tool \"%s\" called %d consecutive times \
 with identical arguments.  Try a different approach or break the task into smaller steps."
-                                   (car (split-string fp ":")) current-run)
+                                   (car (split-string fp ":" t)) run)
                            info)
                   (gptel--fsm-transition fsm 'DONE)
                   (cl-return-from my/gptel--detect-doom-loop))
