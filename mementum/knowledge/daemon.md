@@ -1,34 +1,19 @@
 ---
-title: Emacs Daemon
+title: Emacs Daemon Management
 status: active
 category: knowledge
 tags: [emacs, daemon, emacsclient, launchctl, systemd, process-management]
 ---
 
-# Emacs Daemon
+# Emacs Daemon Management
 
-The Emacs daemon (`emacs --daemon`) runs a headless Emacs server that can serve multiple client connections. This is essential for workflows requiring fast startup, remote access, and persistent state across sessions.
+The Emacs daemon (`emacs --daemon`) runs a headless Emacs server that can accept connections from `emacsclient`. This provides faster startup times and shared state across editing sessions. However, daemon mode introduces unique challenges around process management, configuration loading, and theme application.
 
 ## Starting the Daemon
 
-### macOS with launchctl
+### macOS via launchctl (Recommended for Production)
 
-The recommended approach for production use on macOS:
-
-```bash
-# Load (start) the daemon
-launchctl load ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
-
-# Unload (stop) the daemon
-launchctl unload ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
-
-# Restart the daemon
-launchctl unload ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist && \
-  sleep 2 && \
-  launchctl load ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
-```
-
-**launchd plist configuration** (`~/Library/LaunchAgents/org.gnu.emacs.daemon.plist`):
+Create a launch agent plist at `~/Library/LaunchAgents/org.gnu.emacs.daemon.plist`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -55,128 +40,109 @@ launchctl unload ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist && \
 </plist>
 ```
 
-### Debian/Linux with systemd
-
-Always use `systemctl --user` for daemon management:
+Then manage with launchctl:
 
 ```bash
-# Start the daemon
+# Start daemon
+launchctl load ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
+
+# Stop daemon
+launchctl unload ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
+
+# Restart daemon
+launchctl unload ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist && \
+  sleep 2 && \
+  launchctl load ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
+```
+
+### Debian/Linux via systemctl (Recommended)
+
+Create `~/.config/systemd/user/emacs.service`:
+
+```ini
+[Unit]
+Description=Emacs Daemon
+After=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/emacs --daemon
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Then manage with systemd:
+
+```bash
+# Reload systemd
+systemctl --user daemon-reload
+
+# Start daemon
 systemctl --user start emacs
 
-# Stop the daemon
+# Stop daemon
 systemctl --user stop emacs
 
-# Restart the daemon
+# Restart daemon
 systemctl --user restart emacs
 
 # Check status
 systemctl --user status emacs
 ```
 
-**Why not use direct commands?** Direct `emacs --daemon` can conflict with systemd-managed instances, causing socket file conflicts at `/run/user/1000/emacs/server`.
-
-### Manual Development Mode
-
-For debugging and development:
+### Manual Start (Development)
 
 ```bash
-# Background daemon (preferred)
-emacs --bg-daemon=copilot-auto-workflow
+# Background daemon (recommended for development)
+MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 emacs --bg-daemon=copilot-auto-workflow
 
 # Foreground daemon (for debugging)
 emacs --fg-daemon
 ```
 
-## Single Daemon Enforcement Pattern
+## Managing the Daemon
 
-Running multiple Emacs daemons causes port conflicts, client confusion, and resource waste. **Always enforce single daemon** before starting:
+### Essential Commands
 
-```bash
-#!/bin/bash
-# Ensure only ONE Emacs daemon is running
+| Task | Command |
+|------|---------|
+| Check if daemon running | `pgrep -f "Emacs.*daemon"` |
+| Count daemon processes | `pgrep -f "Emacs.*daemon" | wc -l` |
+| Test daemon responsive | `emacsclient -e "(+ 1 1)"` |
+| View daemon logs | `tail -f /tmp/emacs-daemon.log` |
+| Kill all Emacs processes | `pkill -9 -f Emacs` |
 
-DAEMON_COUNT=$(pgrep -f "Emacs.*daemon" | wc -l)
-echo "Found $DAEMON_COUNT Emacs daemon process(es)"
-
-if [ "$DAEMON_COUNT" -gt 0 ]; then
-    echo "Killing all existing Emacs processes..."
-    pgrep -f "Emacs.*daemon" | while read pid; do
-        kill -9 $pid 2>/dev/null
-    done
-    
-    sleep 3
-    
-    # Clean up stale sockets
-    rm -rf /tmp/emacs$(id -u)/
-    rm -f /tmp/emacs*
-fi
-
-# Unload from launchctl/systemd first
-launchctl unload ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist 2>/dev/null
-
-# Start fresh daemon
-launchctl load ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
-sleep 5
-
-# Verify single daemon
-NEW_COUNT=$(pgrep -f "Emacs.*daemon" | wc -l)
-if [ "$NEW_COUNT" -eq 1 ]; then
-    echo "✅ Single daemon running successfully"
-    emacsclient -e "(+ 1 1)" && echo "✅ Daemon responsive"
-else
-    echo "❌ Expected 1 daemon, found $NEW_COUNT"
-    exit 1
-fi
-```
-
-### Quick Verification Commands
+### Verify Daemon is Running
 
 ```bash
-# Count daemon processes
+# Quick check - should return 1
 pgrep -f "Emacs.*daemon" | wc -l
 
-# Test client connection
-emacsclient -e "(+ 1 1)"
-
-# View daemon logs
-tail /tmp/emacs-daemon.log
-
-# Check launchctl status
-launchctl list | grep emacs
+# Or use emacsclient
+emacsclient -e "(user-emacs-directory)" && echo "✅ Daemon running"
 ```
 
-## Server Name Conflicts
-
-### Problem
-
-Multiple cron jobs or scripts using the **same server name** cause "already running" errors:
-
-```
-Unable to start daemon: Emacs server named X already running
-failed to start worker daemon: X
-```
-
-### Solution: Action-Specific Server Names
-
-Use unique server names per workflow:
-
-| Workflow | Server Name | Log File |
-|----------|-------------|----------|
-| Auto-workflow | `copilot-auto-workflow` | `copilot-auto-workflow.log` |
-| Researcher | `copilot-researcher` | `copilot-researcher.log` |
-| Benchmark | `copilot-benchmark` | `copilot-benchmark.log` |
+### Connect to Daemon
 
 ```bash
-# Start with unique server name
-emacs --bg-daemon=copilot-auto-workflow
-emacs --bg-daemon=copilot-researcher
+# Open new frame (GUI)
+emacsclient -c
+
+# Open new frame in terminal
+emacsclient -t
+
+# Evaluate expression without opening frame
+emacsclient -e "(message \"Hello\")"
+
+# Open file
+emacsclient /path/to/file
 ```
 
-**Note:** The environment variable `MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1` does not prevent server name conflicts—it only allows multiple daemon instances.
+## Anti-Pattern: Stale Compiled Files
 
-## Daemon Persistence Anti-Pattern
-
-### The Problem
+### Problem
 
 Compiled `.elc` files persist across daemon restarts, causing stale code to run:
 
@@ -187,14 +153,12 @@ Compiled `.elc` files persist across daemon restarts, causing stale code to run:
 
 ### Root Cause
 
-- Emacs daemon loads `.elc` if it exists
-- Restarting daemon doesn't recompile
-- Stale `.elc` files persist
+Emacs loads `.elc` if it exists, and restarting daemon doesn't recompile.
 
-### Solution: Clean Restart Procedure
+### Solution: Remove Stale .elc Files
 
 ```bash
-# Remove all compiled files
+# Remove all compiled files in lisp directory
 rm -f lisp/modules/*.elc
 
 # Kill all Emacs processes
@@ -209,53 +173,132 @@ MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 emacs --bg-daemon=copilot-auto-workflow
 
 ### Prevention Options
 
-**Option 1: Never compile**
-
+**Option 1: Never compile specific files**
 ```elisp
-;; -*- no-byte-compile: t; -*-
+;; -*- no-byte-compile: t; -*- at the top of the file
 ```
 
-**Option 2: Auto-recompile (prefer newer)**
-
+**Option 2: Prefer newer files**
 ```elisp
 ;; In early-init.el
 (setq load-prefer-newer t)  ; Prefer .el over .elc
 ```
 
 **Option 3: Clean before restart**
-
 ```bash
 # Always clean before daemon restart
 find . -name "*.elc" -delete
 ```
 
-### Detection Signal
-
-- Changes not reflected after restart
-- Debugging shows old code
-- Works in fresh Emacs but not daemon
-- Behavior different from fresh start
-
-### Verification Test
+### Test for Fresh Code
 
 ```bash
-# Verify fresh code loads correctly
 rm -f lisp/modules/*.elc
 emacs --batch -l lisp/modules/module.el -f some-function
 ```
 
+## Anti-Pattern: Server Name Conflicts
+
+### Problem
+
+Multiple cron jobs using the same Emacs daemon server name cause conflicts:
+
+```
+"Unable to start daemon: Emacs server named X already running"
+"failed to start worker daemon: X"
+```
+
+### Root Cause
+
+Different actions (researcher vs auto-workflow) using identical `SERVER_NAME`.
+
+### Solution: Use Unique Server Names
+
+```bash
+# Researcher daemon
+emacs --daemon=copilot-researcher
+
+# Auto-workflow daemon
+emacs --daemon=copilot-auto-workflow
+
+# Connect to specific daemon
+emacsclient -s copilot-researcher -e "(+ 1 1)"
+```
+
+### Log File Differentiation
+
+```bash
+# Separate logs per daemon
+emacs --daemon=copilot-researcher 2>/tmp/emacs-researcher.log
+emacs --daemon=copilot-auto-workflow 2>/tmp/emacs-auto-workflow.log
+```
+
+## Anti-Pattern: Multiple Daemons
+
+### Problem
+
+Running multiple Emacs daemons causes:
+- Port/socket conflicts
+- Client connection issues
+- Resource waste
+- Confusing behavior
+
+### Solution: Single Daemon Check Script
+
+```bash
+#!/bin/bash
+# Ensure only ONE Emacs daemon is running
+
+echo "=== CHECKING FOR EXISTING DAEMONS ==="
+
+# Count existing Emacs daemon processes
+DAEMON_COUNT=$(pgrep -f "Emacs.*daemon" | wc -l)
+echo "Found $DAEMON_COUNT Emacs daemon process(es)"
+
+if [ "$DAEMON_COUNT" -gt 0 ]; then
+    echo "Killing all existing Emacs processes..."
+    pgrep -f "Emacs.*daemon" | while read pid; do
+        echo "  Killing PID: $pid"
+        kill -9 $pid 2>/dev/null
+    done
+    
+    sleep 3
+    
+    # Clean up stale sockets
+    rm -rf /tmp/emacs$(id -u)/
+    rm -f /tmp/emacs*
+fi
+
+# Start fresh daemon (platform-specific)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    launchctl load ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
+else
+    systemctl --user restart emacs
+fi
+
+# Verify single daemon
+NEW_COUNT=$(pgrep -f "Emacs.*daemon" | wc -l)
+echo "Daemon processes: $NEW_COUNT"
+
+if [ "$NEW_COUNT" -eq 1 ]; then
+    echo "✅ Single daemon running successfully"
+    emacsclient -e "(+ 1 1)" 2>/dev/null && echo "✅ Daemon responsive"
+else
+    echo "❌ Expected 1 daemon, found $NEW_COUNT"
+    exit 1
+fi
+```
+
 ## Theme Management in Daemon Mode
 
-### The Problem
+### Problem
 
-When running as a daemon (`--daemon`):
-- Daemon starts without GUI/display
-- Theme settings applied during startup don't apply to new frames
-- New frames created via `emacsclient -c` don't inherit visual settings
+When running as daemon, GUI themes don't load automatically because:
+- Daemon starts headless without display
+- Theme settings apply to non-existent frames
+- New frames via `emacsclient -c` don't inherit settings
 
-### Solution: Reload on Frame Creation
-
-Use `after-make-frame-functions` to reload theme configuration:
+### Solution: Reload Theme File on Frame Creation
 
 ```elisp
 (defun my/reload-theme-setting-for-frame (frame)
@@ -270,49 +313,21 @@ Use `after-make-frame-functions` to reload theme configuration:
 ### Why This Works
 
 - **Single source of truth**: All theme logic stays in `theme-setting.el`
-- **Automatic consistency**: Changes to theme file apply to new frames
-- **Complete coverage**: Fonts, transparency, fullscreen, line numbers, header line
+- **Automatic consistency**: Changes to theme file automatically apply
+- **Complete coverage**: Fonts, transparency, fullscreen, line numbers all work
 - **Maintainable**: No duplicated code
 
-### Verification
+### Verify Theme Applied
 
 ```bash
-# Create new themed frame
 emacsclient -c -n
-
-# Check background color applied
 emacsclient -e "(face-attribute 'default :background)"
-; Should return "#262626" or your theme's background
-```
-
-## Cross-Module Function Visibility
-
-When defining functions in one module that are called from another (especially in async contexts):
-
-### Problem
-
-Function defined in `gptel-tools-agent.el` not visible in async callbacks from `gptel-benchmark-subagent.el`
-
-### Solution A: require + declare-function
-
-```elisp
-;; In gptel-benchmark-subagent.el
-(require 'gptel-tools-agent nil t)
-(declare-function gptel-auto-workflow--read-file-contents "gptel-tools-agent")
-```
-
-### Solution B: Autoload cookie
-
-```elisp
-;; In gptel-tools-agent.el
-;;;###autoload
-(defun gptel-auto-workflow--read-file-contents (filepath)
-  ...)
+# Should return "#262626" or your theme color
 ```
 
 ## Debugging Techniques
 
-### Check Syntax Errors
+### Check for Syntax Errors
 
 ```bash
 emacs --batch --eval '
@@ -326,12 +341,10 @@ emacs --batch --eval '
 
 ### Count Parentheses
 
-```bash
-python3 << 'EOF'
+```python
 with open("lisp/modules/gptel-tools-agent.el", "r") as f:
     content = f.read()
 print(f"Open: {content.count('(')}, Close: {content.count(')')}")
-EOF
 ```
 
 ### Find Exact Error Location
@@ -347,32 +360,43 @@ emacs --batch --eval '
        (message "Error at line %d" (line-number-at-pos)))))'
 ```
 
-## Common Issues Summary
+## Platform-Specific Notes
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Changes not reflected | Stale `.elc` files | Delete `.elc` files before restart |
-| "Server already running" | Same server name | Use unique server names |
-| Theme not applied | Daemon headless | Use `after-make-frame-functions` |
-| Client connection fails | Multiple daemons | Enforce single daemon |
-| "Void function" error | Cross-module visibility | Use `require` or `declare-function` |
-| systemd conflict | Direct commands vs systemctl | Use `systemctl --user` on Linux |
+### macOS
 
-## Best Practices
+- Use `launchctl` for production/auto-start
+- Use manual commands for development/debugging
+- GUI Emacs vs daemon: Choose one approach, not both
+- `MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1` doesn't prevent server name conflicts
 
-1. **Single daemon rule**: Always ensure only one daemon runs per server name
-2. **Platform-specific commands**: Use `launchctl` on macOS, `systemctl --user` on Linux
-3. **Clean restart**: Remove `.elc` files before restarting after code changes
-4. **Unique server names**: Different workflows = different server names
-5. **Prefer systemctl/launchctl**: Don't use `emacsclient --eval "(kill-emacs)"`—it can hang
-6. **Test incrementally**: Don't make multiple complex changes at once
-7. **Verify after restart**: Always test client connection after daemon restart
+### Debian/Linux
+
+- Always use `systemctl --user` for management
+- Don't use direct `emacs --daemon` if systemd is managing it
+- Socket file at `/run/user/1000/emacs/server` may already exist
+- `emacsclient --eval "(kill-emacs)"` can hang; use systemctl instead
+
+### Process Conflicts
+
+| Scenario | Issue | Resolution |
+|----------|-------|------------|
+| GUI Emacs + daemon | Separate servers, client connects to first | Use daemon + emacsclient -c only |
+| Multiple cron jobs | Server name conflicts | Unique names per action |
+| Stale socket | "Cannot connect to server" | Remove /tmp/emacs* files |
+
+## Key Principles
+
+1. **Single daemon rule**: Always ensure only one daemon runs
+2. **Unique server names**: Use action-specific names (e.g., `copilot-researcher` vs `copilot-auto-workflow`)
+3. **Clean before restart**: Remove `.elc` files to avoid stale code
+4. **Use proper tools**: launchctl (macOS) or systemctl (Linux), not direct commands
+5. **Theme reload hook**: Use `after-make-frame-functions` for daemon theme management
+6. **Verify after changes**: Always test with `emacsclient -e` after configuration changes
 
 ## Related
 
-- [Emacs Client Configuration](/emacs-client)
-- [Launch Agents](/launch-agents)
-- [Systemd User Services](/systemd)
-- [Theme Configuration](/theme-configuration)
-- [Process Management](/process-management)
-- [Cron Job Integration](/cron-integration)
+- [Emacs Configuration](emacs-configuration)
+- [Emacs Client](emacs-client)
+- [Launch Agents](launch-agents)
+- [Systemd Services](systemd-services)
+- [Process Management](process-management)
