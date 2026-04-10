@@ -13,6 +13,10 @@
 
 (defvar gptel-send--transitions)
 (declare-function gptel--transform-add-context "gptel-request" (callback fsm))
+(declare-function gptel-benchmark-llm-synthesize-knowledge "gptel-benchmark-llm"
+                  (topic memories &optional callback))
+(declare-function gptel-benchmark-llm-synthesize-knowledge-sync "gptel-benchmark-llm"
+                  (topic memories &optional timeout-seconds))
 
 ;; Forward declaration for variable defined in gptel-auto-workflow-projects.el.
 ;; Do not initialize it here, or later `defvar' initializers in the projects
@@ -6523,19 +6527,26 @@ Returns list of synthesis candidates."
      ((assoc "executor" gptel-agent--agents) 'executor)
      (t nil))))
 
-(defun gptel-mementum-synthesize-candidate (candidate &optional synchronous synthesis-agent)
+(defun gptel-mementum--synthesis-backend ()
+  "Return the preferred synthesis backend for mementum, or nil."
+  (cond
+   ((and (fboundp 'gptel-benchmark-llm-synthesize-knowledge)
+         (fboundp 'gptel-request))
+    'llm)
+   (t
+    (gptel-mementum--synthesis-agent))))
+
+(defun gptel-mementum-synthesize-candidate (candidate &optional synchronous synthesis-backend)
   "Synthesize CANDIDATE into knowledge page with human approval.
 CANDIDATE is plist with :topic :count :files.
 Implements λ termination(x): synthesis ≡ AI | approval ≡ human.
 Returns t if synthesis was initiated, nil otherwise.
 
-Note: Call gptel-mementum-ensure-agents first for batch processing."
+Note: Call `gptel-mementum-ensure-agents' first for batch processing."
   (let* ((topic (plist-get candidate :topic))
           (files (plist-get candidate :files))
           (project-root (gptel-auto-workflow--project-root))
           (headless (bound-and-true-p gptel-auto-workflow--headless))
-          (agent (or synthesis-agent
-                     (gptel-mementum--synthesis-agent)))
           (memories-content '()))
     (dolist (file files)
       (let ((content (gptel-auto-workflow--read-file-contents file)))
@@ -6545,83 +6556,96 @@ Note: Call gptel-mementum-ensure-agents first for batch processing."
         (progn
           (message "[mementum] Skip synthesis: only %d memories for '%s'" (length memories-content) topic)
           nil)
-      (let ((synthesis-prompt (gptel-mementum--build-synthesis-prompt topic memories-content)))
-        (message "[mementum] Synthesizing %d memories for topic: %s" (length memories-content) topic)
-        (if (and agent
-                 (fboundp 'gptel-benchmark-call-subagent)
-                 (fboundp 'gptel-agent--task))
-            (if (and synchronous
-                     (fboundp 'gptel-benchmark-call-subagent-sync))
-                (gptel-mementum--deliver-synthesis-result
-                 project-root headless topic files
-                 (gptel-benchmark-call-subagent-sync
-                  agent
-                  (format "Synthesize knowledge: %s" topic)
-                  synthesis-prompt
-                  300))
-               (gptel-benchmark-call-subagent
-               agent
-                (format "Synthesize knowledge: %s" topic)
-                synthesis-prompt
+        (let ((synthesis-prompt (gptel-mementum--build-synthesis-prompt topic memories-content)))
+          (message "[mementum] Synthesizing %d memories for topic: %s" (length memories-content) topic)
+          (let ((backend (or synthesis-backend
+                             (gptel-mementum--synthesis-backend))))
+            (pcase backend
+            ('llm
+             (if synchronous
+                 (gptel-mementum--deliver-synthesis-result
+                  project-root headless topic files
+                  (gptel-benchmark-llm-synthesize-knowledge-sync
+                   topic memories-content 300))
+               (gptel-benchmark-llm-synthesize-knowledge
+                topic memories-content
                 (lambda (result)
                   (gptel-mementum--deliver-synthesis-result
-                   project-root headless topic files result))
-                300))
-          (message "[mementum] Skip '%s': no synthesis subagent available" topic))
-        t))))
+                   project-root headless topic files result)))))
+             ((pred symbolp)
+              (if (and (fboundp 'gptel-benchmark-call-subagent)
+                       (fboundp 'gptel-agent--task))
+                  (if (and synchronous
+                           (fboundp 'gptel-benchmark-call-subagent-sync))
+                      (gptel-mementum--deliver-synthesis-result
+                       project-root headless topic files
+                       (gptel-benchmark-call-subagent-sync
+                        backend
+                        (format "Synthesize knowledge: %s" topic)
+                        synthesis-prompt
+                        300))
+                    (gptel-benchmark-call-subagent
+                     backend
+                     (format "Synthesize knowledge: %s" topic)
+                     synthesis-prompt
+                     (lambda (result)
+                       (gptel-mementum--deliver-synthesis-result
+                        project-root headless topic files result))
+                     300))
+                (message "[mementum] Skip '%s': no synthesis subagent available" topic)))
+            (_
+             (message "[mementum] Skip '%s': no synthesis backend available" topic))))
+          t))))
 
 (defun gptel-mementum-ensure-agents ()
-  "Ensure gptel-agent and executor are available for synthesis.
-Call once before processing multiple candidates. Returns the preferred
-read-only synthesis agent symbol when available, otherwise nil."
-  ;; Ensure gptel-agent is loaded
-  (unless (featurep 'gptel-agent)
-    ;; Add yaml to load-path (required for parsing agent markdown)
-    (let* ((base-dir (or (bound-and-true-p user-emacs-directory) 
-                         (expand-file-name "~/.emacs.d")))
-           (elpa-dir (expand-file-name "var/elpa/" base-dir))
-           (yaml-dir (car (directory-files elpa-dir t "\\`yaml-"))))
-      (when (and yaml-dir (file-directory-p yaml-dir))
-        (add-to-list 'load-path yaml-dir)))
-    (require 'gptel-agent nil t))
-  ;; Load gptel-benchmark-subagent for executor calls
-  (unless (fboundp 'gptel-benchmark-call-subagent)
-    (let ((base-dir (or (bound-and-true-p user-emacs-directory)
-                        (expand-file-name "~/.emacs.d"))))
-      (load-file (expand-file-name "lisp/modules/gptel-benchmark-subagent.el" base-dir))))
-  ;; Set up agent directories
-  (when (fboundp 'gptel-agent--update-agents)
-    (unless (and (boundp 'gptel-agent-dirs) gptel-agent-dirs)
-      (let* ((base-dir (or (bound-and-true-p user-emacs-directory) 
-                           (expand-file-name "~/.emacs.d")))
-             (pkg-agents (expand-file-name "packages/gptel-agent/agents/" base-dir)))
-        (setq gptel-agent-dirs
-              (cl-remove-if-not #'file-directory-p (list pkg-agents)))))
-    ;; Load agent definitions
-    (when (and (boundp 'gptel-agent-dirs) gptel-agent-dirs)
-      (or (and (boundp 'gptel-agent--agents) gptel-agent--agents)
-          (gptel-agent--update-agents))))
-  ;; Return preferred synthesis agent when available.
-  (and (fboundp 'gptel-benchmark-call-subagent)
-       (fboundp 'gptel-agent--task)
-       (gptel-mementum--synthesis-agent)))
+  "Ensure a synthesis backend is available for mementum.
+Returns `llm' when direct `gptel-request' synthesis is available, otherwise a
+fallback subagent symbol such as `researcher' or `executor'."
+  (let ((base-dir (or (bound-and-true-p user-emacs-directory)
+                      (expand-file-name "~/.emacs.d"))))
+    ;; Prefer direct, no-tool synthesis first.
+    (unless (or (fboundp 'gptel-benchmark-llm-synthesize-knowledge)
+                (featurep 'gptel-benchmark-llm))
+      (load-file (expand-file-name "lisp/modules/gptel-benchmark-llm.el" base-dir)))
+    (or (gptel-mementum--synthesis-backend)
+        (progn
+          ;; Ensure gptel-agent is loaded for subagent fallback.
+          (unless (featurep 'gptel-agent)
+            (let* ((elpa-dir (expand-file-name "var/elpa/" base-dir))
+                   (yaml-dir (car (directory-files elpa-dir t "\\`yaml-"))))
+              (when (and yaml-dir (file-directory-p yaml-dir))
+                (add-to-list 'load-path yaml-dir)))
+            (require 'gptel-agent nil t))
+          (unless (fboundp 'gptel-benchmark-call-subagent)
+            (load-file (expand-file-name "lisp/modules/gptel-benchmark-subagent.el" base-dir)))
+          (when (fboundp 'gptel-agent--update-agents)
+            (unless (and (boundp 'gptel-agent-dirs) gptel-agent-dirs)
+              (let ((pkg-agents (expand-file-name "packages/gptel-agent/agents/" base-dir)))
+                (setq gptel-agent-dirs
+                      (cl-remove-if-not #'file-directory-p (list pkg-agents)))))
+            (when (and (boundp 'gptel-agent-dirs) gptel-agent-dirs)
+              (or (and (boundp 'gptel-agent--agents) gptel-agent--agents)
+                  (gptel-agent--update-agents))))
+          (gptel-mementum--synthesis-backend)))))
 
 (defun gptel-mementum-synthesize-all-candidates (&optional candidates synchronous)
   "Synthesize all CANDIDATES (or detect if nil) with human approval.
 Ensures agents are loaded once before processing batch."
   (let* ((cands (or candidates (gptel-mementum-check-synthesis-candidates)))
          (synthesized 0)
-         (agent (gptel-mementum-ensure-agents)))
+         (backend (gptel-mementum-ensure-agents)))
     ;; Setup agents once for entire batch (not per-candidate)
-    (if agent
+    (if backend
         (progn
           (message "[mementum] %s available, processing %d candidates"
-                   (capitalize (symbol-name agent))
+                   (pcase backend
+                     ('llm "Direct LLM")
+                     (_ (capitalize (symbol-name backend))))
                    (length cands))
           (dolist (candidate cands)
-            (when (gptel-mementum-synthesize-candidate candidate synchronous agent)
+            (when (gptel-mementum-synthesize-candidate candidate synchronous backend)
               (cl-incf synthesized))))
-      (message "[mementum] No synthesis subagent available, skipping synthesis"))
+      (message "[mementum] No synthesis backend available, skipping synthesis"))
     (message "[mementum] %s %d/%d candidates"
              (if synchronous "Synthesized" "Queued")
              synthesized
