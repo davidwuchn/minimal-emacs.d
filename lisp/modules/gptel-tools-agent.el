@@ -1304,21 +1304,54 @@ Dynamic variable, let-bound around gptel-agent--task calls.")
      ((buffer-live-p request-buf) request-buf)
      ((buffer-live-p origin-buf) origin-buf))))
 
+(defun my/gptel--workflow-owned-worktree-root (dir)
+  "Return the known workflow-owned worktree root containing DIR, or nil."
+  (when (stringp dir)
+    (let ((expanded-dir (expand-file-name dir))
+          found)
+      (cond
+       ((and (stringp gptel-auto-workflow--staging-worktree-dir)
+             (my/gptel--path-within-directory-p expanded-dir
+                                               gptel-auto-workflow--staging-worktree-dir))
+        (file-name-as-directory
+         (expand-file-name gptel-auto-workflow--staging-worktree-dir)))
+       ((hash-table-p gptel-auto-workflow--worktree-state)
+        (maphash
+         (lambda (_target state)
+           (let ((candidate (plist-get state :worktree-dir)))
+             (when (and (null found)
+                        (stringp candidate)
+                        (my/gptel--path-within-directory-p expanded-dir candidate))
+               (setq found (file-name-as-directory (expand-file-name candidate))))))
+         gptel-auto-workflow--worktree-state)
+        found)))))
+
+(defun my/gptel--workflow-routed-worktree-buffer-p (buffer root)
+  "Return non-nil when BUFFER is a routed workflow buffer rooted at ROOT."
+  (let ((tracked
+         (delete-dups
+          (delq nil
+                (list (and (boundp 'gptel-auto-workflow--worktree-buffers)
+                           (hash-table-p gptel-auto-workflow--worktree-buffers)
+                           (gethash root gptel-auto-workflow--worktree-buffers))
+                      (and (boundp 'gptel-auto-workflow--project-buffers)
+                           (hash-table-p gptel-auto-workflow--project-buffers)
+                           (gethash root gptel-auto-workflow--project-buffers)))))))
+    (or (memq buffer tracked)
+        (string-prefix-p "*gptel-agent:" (buffer-name buffer)))))
+
 (defun my/gptel--agent-task-request-worktree-dir (state)
   "Return STATE request buffer's workflow-owned worktree dir when available."
   (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
-              ((buffer-live-p request-buf)))
+               ((buffer-live-p request-buf)))
     (with-current-buffer request-buf
       (let* ((dir (and (stringp default-directory)
                        (file-name-as-directory
                         (expand-file-name default-directory))))
-             (base (file-name-as-directory
-                    (expand-file-name
-                     (or gptel-auto-workflow-worktree-base "var/tmp/experiments")
-                     (gptel-auto-workflow--worktree-base-root)))))
-        (when (and dir
-                   (string-prefix-p base dir))
-          dir)))))
+             (root (and dir (my/gptel--workflow-owned-worktree-root dir))))
+        (when (and root
+                   (my/gptel--workflow-routed-worktree-buffer-p request-buf root))
+          root)))))
 
 (defun my/gptel--cleanup-agent-request-buffer (state)
   "Abort STATE's live request buffer and discard stale worktree buffers when possible."
@@ -2113,14 +2146,16 @@ Each item is a plist with keys :branch and :path."
   (when (and (stringp worktree-dir)
              (> (length worktree-dir) 0))
     (let* ((root (file-name-as-directory (expand-file-name worktree-dir)))
-           (tracked
-            (delete-dups
-             (delq nil
-                   (list (and (hash-table-p gptel-auto-workflow--worktree-buffers)
-                              (gethash root gptel-auto-workflow--worktree-buffers))
-                         (and (hash-table-p gptel-auto-workflow--project-buffers)
-                              (gethash root gptel-auto-workflow--project-buffers))))))
-           (killed 0))
+            (tracked
+             (delete-dups
+              (delq nil
+                    (list (and (boundp 'gptel-auto-workflow--worktree-buffers)
+                               (hash-table-p gptel-auto-workflow--worktree-buffers)
+                               (gethash root gptel-auto-workflow--worktree-buffers))
+                          (and (boundp 'gptel-auto-workflow--project-buffers)
+                               (hash-table-p gptel-auto-workflow--project-buffers)
+                               (gethash root gptel-auto-workflow--project-buffers))))))
+            (killed 0))
       (dolist (buf (delete-dups (append tracked (buffer-list))))
         (when (buffer-live-p buf)
           (with-current-buffer buf
@@ -2137,9 +2172,11 @@ Each item is a plist with keys :branch and :path."
                 (let ((kill-buffer-query-functions nil))
                   (kill-buffer buf))
                 (cl-incf killed))))))
-      (when (hash-table-p gptel-auto-workflow--worktree-buffers)
+      (when (and (boundp 'gptel-auto-workflow--worktree-buffers)
+                 (hash-table-p gptel-auto-workflow--worktree-buffers))
         (remhash root gptel-auto-workflow--worktree-buffers))
-      (when (hash-table-p gptel-auto-workflow--project-buffers)
+      (when (and (boundp 'gptel-auto-workflow--project-buffers)
+                 (hash-table-p gptel-auto-workflow--project-buffers))
         (remhash root gptel-auto-workflow--project-buffers))
       killed)))
 

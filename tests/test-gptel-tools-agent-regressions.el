@@ -2637,6 +2637,67 @@ EXIT-CODE defaults to 1."
        (when (buffer-live-p request-buf)
          (kill-buffer request-buf))))))
 
+(ert-deftest regression/subagent/timeout-aborts-generic-request-buffer-in-staging-worktree ()
+  "Timeout cleanup should abort generic request buffers even inside the staging worktree."
+  (let ((my/gptel-agent-task-timeout 42)
+        (my/gptel-subagent-progress-interval 10)
+        (scheduled-timeout nil)
+        (aborted-buffers nil)
+        (discarded nil)
+        (callback-results nil)
+        (now 0))
+    (clrhash my/gptel--agent-task-state)
+    (let* ((project-root (make-temp-file "aw-project" t))
+           (staging-dir (expand-file-name "var/tmp/experiments/staging-verify" project-root))
+           (request-buf (generate-new-buffer " *gptel-request-timeout-staging*"))
+           (gptel-auto-workflow--staging-worktree-dir staging-dir))
+      (unwind-protect
+          (progn
+            (make-directory staging-dir t)
+            (with-current-buffer request-buf
+              (setq-local default-directory (file-name-as-directory staging-dir)))
+            (cl-letf (((symbol-function 'run-at-time)
+                       (lambda (secs repeat fn &rest _args)
+                         (if (and (null repeat)
+                                  (= secs my/gptel-agent-task-timeout))
+                             (setq scheduled-timeout fn)
+                           :fake-progress)))
+                      ((symbol-function 'current-time)
+                       (lambda ()
+                         (seconds-to-time now)))
+                      ((symbol-function 'time-since)
+                       (lambda (then)
+                         (seconds-to-time (- now (float-time then)))))
+                      ((symbol-function 'cancel-timer) (lambda (&rest _) nil))
+                      ((symbol-function 'gptel-auto-workflow--state-active-p)
+                       (lambda (state) (and state (not (plist-get state :done)))))
+                      ((symbol-function 'gptel-abort)
+                       (lambda (buffer)
+                         (push buffer aborted-buffers)))
+                      ((symbol-function 'gptel-auto-workflow--discard-worktree-buffers)
+                       (lambda (path)
+                         (push path discarded)
+                         0))
+                      ((symbol-function 'my/gptel--call-gptel-agent-task)
+                       (lambda (&rest _args)
+                         (my/gptel--register-agent-task-buffer request-buf)))
+                      ((symbol-function 'message) (lambda (&rest _) nil)))
+              (with-temp-buffer
+                (my/gptel--agent-task-with-timeout
+                 (lambda (result) (push result callback-results))
+                 "analyzer" "desc" "prompt")
+                (should (functionp scheduled-timeout))
+                (setq now 100)
+                (funcall scheduled-timeout)
+                (should (equal aborted-buffers (list request-buf)))
+                (should-not discarded)
+                (should (= (length callback-results) 1))
+                (should (string-match-p "timed out after 42s" (car callback-results)))
+                (should (= (hash-table-count my/gptel--agent-task-state) 0)))))
+        (when (buffer-live-p request-buf)
+          (kill-buffer request-buf))
+        (delete-directory project-root t)))))
+
 (ert-deftest regression/subagent/timeout-discards-routed-worktree-buffer ()
   "Timeout cleanup should discard routed worktree buffers to stop stale writes."
   (let ((my/gptel-agent-task-timeout 42)
@@ -2649,11 +2710,16 @@ EXIT-CODE defaults to 1."
     (let* ((project-root (make-temp-file "aw-project" t))
            (worktree-dir (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1"
                                            project-root))
-           (request-buf (generate-new-buffer " *gptel-request-timeout-worktree*"))
-           (gptel-auto-workflow--current-project (file-name-as-directory project-root)))
+           (request-buf (generate-new-buffer "*gptel-agent:agent-riven-exp1@test*"))
+           (gptel-auto-workflow--current-project (file-name-as-directory project-root))
+           (gptel-auto-workflow--worktree-state (make-hash-table :test 'equal)))
       (unwind-protect
           (progn
             (make-directory worktree-dir t)
+            (puthash "target"
+                     (list :worktree-dir worktree-dir
+                           :current-branch "optimize/agent-riven-exp1")
+                     gptel-auto-workflow--worktree-state)
             (with-current-buffer request-buf
               (setq-local default-directory (file-name-as-directory worktree-dir)))
             (cl-letf (((symbol-function 'run-at-time)
@@ -3377,7 +3443,32 @@ EXIT-CODE defaults to 1."
       (when (buffer-live-p tracked)
         (kill-buffer tracked))
       (when (buffer-live-p other)
-        (kill-buffer other))
+       (kill-buffer other))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/auto-workflow/discard-worktree-buffers-allows-uninitialized-shared-tables ()
+  "Worktree cleanup should tolerate shared buffer tables that have not been initialized yet."
+  (let* ((project-root (make-temp-file "aw-worktree" t))
+         (worktree-dir
+          (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1" project-root))
+         (saved-worktree-bound (boundp 'gptel-auto-workflow--worktree-buffers))
+         (saved-worktree-value (and saved-worktree-bound gptel-auto-workflow--worktree-buffers))
+         (saved-project-bound (boundp 'gptel-auto-workflow--project-buffers))
+         (saved-project-value (and saved-project-bound gptel-auto-workflow--project-buffers)))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (when saved-worktree-bound
+            (makunbound 'gptel-auto-workflow--worktree-buffers))
+          (when saved-project-bound
+            (makunbound 'gptel-auto-workflow--project-buffers))
+          (should (= (gptel-auto-workflow--discard-worktree-buffers worktree-dir) 0)))
+      (if saved-worktree-bound
+          (setq gptel-auto-workflow--worktree-buffers saved-worktree-value)
+        (ignore-errors (makunbound 'gptel-auto-workflow--worktree-buffers)))
+      (if saved-project-bound
+          (setq gptel-auto-workflow--project-buffers saved-project-value)
+        (ignore-errors (makunbound 'gptel-auto-workflow--project-buffers)))
       (delete-directory project-root t))))
 
 (ert-deftest regression/auto-workflow/delete-worktree-discards-stale-buffers-without-directory ()
