@@ -288,26 +288,34 @@ Pricing is in USD per million tokens (input/output).")
   "Look up KEY in HASH-TABLE, falling back to ALIST partial match.
 Returns the value from hash table if found, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found."
-  (let ((hash-value (and (hash-table-p hash-table) (stringp key)
-                         (gethash key hash-table :not-found))))
-    (if (not (eq hash-value :not-found))
-        hash-value
-      (and (listp alist) (stringp key)
-           (my/gptel--alist-partial-match alist key)))))
+  (if (and (hash-table-p hash-table) (stringp key))
+      (let ((sentinel (make-symbol "gptel-cache-sentinel")))
+        (let ((hash-value (gethash key hash-table sentinel)))
+          (if (eq hash-value sentinel)
+              (and (listp alist) (stringp key)
+                   (my/gptel--alist-partial-match alist key))
+            hash-value)))
+    (and (listp alist) (stringp key)
+         (my/gptel--alist-partial-match alist key))))
 
 (defun my/gptel--alist-partial-match (alist search-str)
-  "Find first entry in ALIST where key partially matches SEARCH-STR (case-insensitive).
+  "Find best matching entry in ALIST where key partially matches SEARCH-STR (case-insensitive).
 Returns the cdr (value) of the matching entry, or nil if no match.
-Matches if the alist key is a prefix of SEARCH-STR."
+Matches if the alist key is a prefix of SEARCH-STR.
+When multiple entries match, returns the one with the longest key for most specific match."
   (when (and (listp alist) (stringp search-str))
-    (let ((search-lower (downcase search-str)))
-      (catch 'found
-        (dolist (entry alist)
-          (when (and (consp entry)
-                     (stringp (car entry))
-                     (string-prefix-p (downcase (car entry)) search-lower))
-            (throw 'found (cdr entry))))
-        nil))))
+    (let ((search-lower (downcase search-str))
+          best-match
+          (best-key-len 0))
+      (dolist (entry alist)
+        (when (and (consp entry)
+                   (stringp (car entry))
+                   (string-prefix-p (downcase (car entry)) search-lower))
+          (let ((key-len (length (car entry))))
+            (when (> key-len best-key-len)
+              (setq best-key-len key-len)
+              (setq best-match (cdr entry))))))
+      best-match)))
 
 (defun my/gptel--plist-get (plist key &optional default)
   "Get value from PLIST for KEY, returning DEFAULT if not found.
@@ -480,7 +488,6 @@ Handles API key lookup, process creation, JSON parsing, and error handling."
         (connect-timeout (or connect-timeout 10))
         (max-time (or max-time 120)))
     (unless my/gptel--openrouter-context-window-fetch-inflight
-      (setq my/gptel--openrouter-context-window-fetch-inflight t)
       (let* ((key (condition-case err
                        (gptel-api-key-from-auth-source "api.openrouter.com" "api")
                      (error
@@ -489,9 +496,9 @@ Handles API key lookup, process creation, JSON parsing, and error handling."
              (buf (generate-new-buffer (format " *%s*" process-name))))
         (if (not (and (stringp key) (not (string-empty-p key))))
             (progn
-              (setq my/gptel--openrouter-context-window-fetch-inflight nil)
               (when (buffer-live-p buf) (kill-buffer buf))
               (message "OpenRouter: no API key found"))
+          (setq my/gptel--openrouter-context-window-fetch-inflight t)
           (let* ((cmd (my/gptel--openrouter-curl-command url connect-timeout max-time key))
                  (proc
                   (make-process
@@ -502,22 +509,21 @@ Handles API key lookup, process creation, JSON parsing, and error handling."
                    :connection-type 'pipe
                    :sentinel
                    (lambda (p _event)
-                     (when (memq (process-status p) '(exit signal))
-                       (setq my/gptel--openrouter-context-window-fetch-inflight nil)
-                       (unwind-protect
-                           (when (= (process-exit-status p) 0)
-                             (with-current-buffer buf
-                               (goto-char (point-min))
-                               (condition-case err
-                                   (let* ((json-object-type 'alist)
-                                          (json-array-type 'list)
-                                          (json-key-type 'symbol)
-                                          (obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
-                                          (data (alist-get 'data obj)))
-                                     (funcall callback data))
-                                 (error
-                                  (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
-                         (when (buffer-live-p buf) (kill-buffer buf))))))))
+                     (setq my/gptel--openrouter-context-window-fetch-inflight nil)
+                     (unwind-protect
+                         (when (= (process-exit-status p) 0)
+                           (with-current-buffer buf
+                             (goto-char (point-min))
+                             (condition-case err
+                                 (let* ((json-object-type 'alist)
+                                        (json-array-type 'list)
+                                        (json-key-type 'symbol)
+                                        (obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
+                                        (data (alist-get 'data obj)))
+                                   (funcall callback data))
+                               (error
+                                (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
+                       (when (buffer-live-p buf) (kill-buffer buf)))))))
             (process-put proc 'my/gptel-managed t)
             proc))))))
 
@@ -592,16 +598,9 @@ Run asynchronously. Use for bulk cache warming."
          (let ((count 0))
            (dolist (entry data)
              (let* ((id (alist-get 'id entry))
-                    (cw (alist-get 'context_length entry))
-                    (pricing (alist-get 'pricing entry))
-                    (input-price (and pricing (alist-get 'prompt pricing)))
-                    (output-price (and pricing (alist-get 'completion pricing))))
+                    (cw (alist-get 'context_length entry)))
                (when (and (stringp id) (integerp cw) (> cw 0))
                  (puthash id cw my/gptel--context-window-cache)
-                 (puthash id (list :context-window cw
-                                   :pricing-input (and (numberp input-price) input-price)
-                                   :pricing-output (and (numberp output-price) output-price))
-                          my/gptel--model-metadata-cache)
                  (cl-incf count))))
            (message "OpenRouter: cached %d models" count)))
        "gptel-openrouter-all-models"
@@ -764,21 +763,19 @@ Use `my/gptel-show-provider-contract' to query.")
 
 Fallback order:
 1. Cached context window for model-id
-2. Known models table (popular models pre-seeded)
-3. gptel model tables (OpenAI, Gemini, etc.)
+2. gptel model tables (OpenAI, Gemini, etc.)
+3. Known models table (popular models pre-seeded)
 4. my/gptel-default-context-window (128k default)
 
 Note: We do NOT use gptel-max-tokens as it's for response length, not context window.
 Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-window-cache'."
-  (let* ((model-id (my/gptel--model-id-string gptel-model))
-         (window (and (stringp model-id)
-                      (my/gptel--cache-or-alist-lookup my/gptel--context-window-cache
-                                                       my/gptel--known-model-context-windows
-                                                       model-id))))
-    (if window
-        window
-(or (my/gptel--lookup-context-window-in-gptel-tables gptel-model)
-          my/gptel-default-context-window))))
+  (let ((model-id (my/gptel--model-id-string gptel-model)))
+    (cond
+     ((not (stringp model-id)) my/gptel-default-context-window)
+     ((gethash model-id my/gptel--context-window-cache))
+     ((my/gptel--lookup-context-window-in-gptel-tables gptel-model))
+     ((my/gptel--alist-partial-match my/gptel--known-model-context-windows model-id))
+     (t my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
 

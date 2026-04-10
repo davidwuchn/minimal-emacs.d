@@ -108,27 +108,32 @@ Tool contracts enforced in `nucleus--override-gptel-agent-presets':
   "Mapping from gptel-agent agent names to their expected nucleus toolset keys.
 Used by `nucleus--override-gptel-agent-presets' and contract validation.")
 
+(defun nucleus--declared-tools (set-name)
+  "Return declared tool names for SET-NAME without registration filtering.
+
+SET-NAME can be a symbol from `nucleus-toolsets' or a list of tool names.
+:snippets is derived from :nucleus (tools that have prompt snippets)."
+  (pcase set-name
+    (:snippets
+     ;; Derived from :nucleus — all tools get prompt snippets
+     (or (alist-get :nucleus nucleus-toolsets)
+         (user-error "Unknown toolset: :nucleus (needed for :snippets)")))
+    ((and (pred symbolp) name)
+     (or (alist-get name nucleus-toolsets)
+         (user-error "Unknown toolset: %S" name)))
+    ((and (pred listp) t-list) t-list)
+    (_ (user-error "Invalid toolset specifier: %S" set-name))))
+
 (defun nucleus-get-tools (set-name)
   "Return tool list for SET-NAME, filtering out unregistered tools.
 
 SET-NAME can be a symbol from `nucleus-toolsets' or a list of tool names.
-:snippets is derived from :nucleus (tools that have prompt snippets).
-Returns a list of tool name strings."
-  (let ((tools
-         (pcase set-name
-           (:snippets
-            ;; Derived from :nucleus — all tools get prompt snippets
-            (or (alist-get :nucleus nucleus-toolsets)
-                (user-error "Unknown toolset: :nucleus (needed for :snippets)")))
-           ((and (pred symbolp) name)
-            (or (alist-get name nucleus-toolsets)
-                (user-error "Unknown toolset: %S" name)))
-           ((and (pred listp) t-list) t-list)
-           (_ (user-error "Invalid toolset specifier: %S" set-name)))))
+Returns a list of currently registered tool name strings."
+  (let ((tools (nucleus--declared-tools set-name)))
     (seq-filter (lambda (tool-name)
                   (let ((found (if (fboundp 'gptel-get-tool)
                                    (ignore-errors (gptel-get-tool tool-name))
-                                 t)))
+                                  t)))
                     (unless found
                       (message "[nucleus] WARNING: Tool '%s' requested in set '%s' but not registered" tool-name set-name))
                     found))
@@ -281,7 +286,7 @@ Interactive command for debugging agent tool configuration."
     (user-error "gptel-agent--agents not available"))
   
   (let ((expected
-         (mapcar (lambda (c) (cons (car c) (nucleus-get-tools (cdr c))))
+         (mapcar (lambda (c) (cons (car c) (nucleus--declared-tools (cdr c))))
                  nucleus-agent-tool-contracts)))
     (let* ((results
             (cl-loop for (agent-name . expected-tools) in expected
@@ -323,11 +328,11 @@ Expected toolsets:
                                        actual-count
                                        (if missing (length missing) 0)
                                        (if extra (length extra) 0))))
-                 (length (nucleus-get-tools :executor))
-                 (length (nucleus-get-tools :researcher))
-                 (length (nucleus-get-tools :readonly))
-                 (length (nucleus-get-tools :explorer))
-                 (length (nucleus-get-tools :reviewer))))))))
+                  (length (nucleus--declared-tools :executor))
+                  (length (nucleus--declared-tools :researcher))
+                  (length (nucleus--declared-tools :readonly))
+                  (length (nucleus--declared-tools :explorer))
+                  (length (nucleus--declared-tools :reviewer))))))))
 
 (defun nucleus-test-tool-validation ()
   "Test tool contract validation with sample inputs.

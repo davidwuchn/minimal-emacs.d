@@ -594,6 +594,31 @@ tend to reset connections around 250-300KB."
   :type '(choice (const :tag "Disabled" nil) integer)
   :group 'gptel)
 
+(defun my/gptel--run-compaction-pass (info pass-num bytes-limit bytes-var trimmed-total-var pass-var trim-fn &optional pass-msg)
+  "Execute a single compaction pass in `my/gptel--compact-payload'.
+
+INFO is the FSM info plist with :data containing messages.
+PASS-NUM is the pass number (1-7) for logging.
+BYTES-LIMIT is the maximum allowed payload size.
+BYTES-VAR is a symbol bound to the current byte count (modified in-place).
+TRIMMED-TOTAL-VAR is a symbol bound to total items trimmed (modified in-place).
+PASS-VAR is a symbol bound to last executed pass number (modified in-place).
+TRIM-FN is a function of one argument (INFO) that returns items trimmed.
+PASS-MSG is a format string for logging when items were trimmed (gets `n' and `new-bytes' as args).
+
+Returns t if still over limit after pass, nil otherwise.
+BEHAVIOR: Only executes if still over BYTES-LIMIT. Updates byte tracking,
+  trimmed total, and pass number variables. Logs progress.
+EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
+  (when (> (symbol-value bytes-var) bytes-limit)
+    (let ((n (or (funcall trim-fn info) 0)))
+      (cl-incf (symbol-value trimmed-total-var) n)
+      (set bytes-var (my/gptel--estimate-payload-bytes info))
+      (set pass-var pass-num)
+      (when (and pass-msg (> n 0))
+        (message pass-msg n (/ (symbol-value bytes-var) 1024))))
+    (> (symbol-value bytes-var) bytes-limit)))
+
 (defconst my/gptel-model-context-bytes
   '((kimi-k2\.5        . 400000)   ; 131K tokens ≈ 460KB, leave room for output
     (kimi-for-coding    . 400000)
@@ -693,71 +718,37 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
           (when (> bytes limit)
             (message "gptel: Payload %dKB exceeds %dKB limit, compacting..."
                      (/ bytes 1024) (/ limit 1024))
-            ;; Pass 1: trim tool results (keep 2 recent)
-            (let ((my/gptel-retry-keep-recent-tool-results 
+            (let ((my/gptel-retry-keep-recent-tool-results
                    (or my/gptel-retry-keep-recent-tool-results 2)))
-              (let ((n (my/gptel--trim-tool-results-for-retry info 1)))
-                (cl-incf trimmed-total n)
-                (setq bytes (my/gptel--estimate-payload-bytes info))
-                (setq pass 1)
-                (when (> n 0)
-                  (message "gptel: Pass 1: trimmed %d tool result(s), now %dKB"
-                           n (/ bytes 1024)))))
-            ;; Pass 2: strip reasoning (if still over)
-            (when (> bytes limit)
-              (let ((n (my/gptel--trim-reasoning-content info)))
-                (cl-incf trimmed-total n)
-                (setq bytes (my/gptel--estimate-payload-bytes info))
-                (setq pass 2)
-                (when (> n 0)
-                  (message "gptel: Pass 2: stripped reasoning from %d message(s), now %dKB"
-                           n (/ bytes 1024)))))
-            ;; Pass 3: reduce tools array (if still over)
-            (when (> bytes limit)
-              (let ((n (my/gptel--reduce-tools-for-retry info)))
-                (cl-incf trimmed-total n)
-                (setq bytes (my/gptel--estimate-payload-bytes info))
-                (setq pass 3)
-                (when (> n 0)
-                  (message "gptel: Pass 3: removed %d unused tool def(s), now %dKB"
-                           n (/ bytes 1024)))))
-            ;; Pass 4: trim context images (oldest first)
-            (when (> bytes limit)
-              (let ((n (when (fboundp 'my/gptel--trim-context-images)
-                         (my/gptel--trim-context-images))))
-                (when (and n (> n 0))
-                  (cl-incf trimmed-total n)
-                  (setq bytes (my/gptel--estimate-payload-bytes info))
-                  (setq pass 4)
-                  (message "gptel: Pass 4: trimmed %d context image(s), now %dKB"
-                           n (/ bytes 1024)))))
-            ;; Pass 5: aggressive tool result trim (keep 0)
-            (when (> bytes limit)
-              (let ((n (my/gptel--trim-tool-results-for-retry info 3)))
-                (cl-incf trimmed-total n)
-                (setq bytes (my/gptel--estimate-payload-bytes info))
-                (setq pass 5)
-                (when (> n 0)
-                  (message "gptel: Pass 5: truncated %d remaining tool results, now %dKB"
-                           n (/ bytes 1024)))))
-            ;; Pass 6: truncate old user/assistant messages
-            (when (> bytes limit)
-              (let ((n (my/gptel--truncate-old-messages info)))
-                (cl-incf trimmed-total n)
-                (setq bytes (my/gptel--estimate-payload-bytes info))
-                (setq pass 6)
-                (when (> n 0)
-                  (message "gptel: Pass 6: truncated %d old message(s), now %dKB"
-                           n (/ bytes 1024)))))
-            ;; Pass 7: strip images from multimodal messages (last resort)
-            (when (> bytes limit)
-              (let ((n (my/gptel--strip-images-from-messages info)))
-                (cl-incf trimmed-total n)
-                (setq bytes (my/gptel--estimate-payload-bytes info))
-                (setq pass 7)
-                (when (> n 0)
-                  (message "gptel: Pass 7: stripped %d image(s) from messages, now %dKB"
-                           n (/ bytes 1024)))))
+              (my/gptel--run-compaction-pass
+               info 1 limit 'bytes 'trimmed-total 'pass
+               (lambda (i) (my/gptel--trim-tool-results-for-retry i 1))
+               "gptel: Pass 1: trimmed %d tool result(s), now %dKB")
+              (my/gptel--run-compaction-pass
+               info 2 limit 'bytes 'trimmed-total 'pass
+               #'my/gptel--trim-reasoning-content
+               "gptel: Pass 2: stripped reasoning from %d message(s), now %dKB")
+              (my/gptel--run-compaction-pass
+               info 3 limit 'bytes 'trimmed-total 'pass
+               #'my/gptel--reduce-tools-for-retry
+               "gptel: Pass 3: removed %d unused tool def(s), now %dKB")
+              (my/gptel--run-compaction-pass
+               info 4 limit 'bytes 'trimmed-total 'pass
+               (lambda (i) (and (fboundp 'my/gptel--trim-context-images)
+                               (my/gptel--trim-context-images)))
+               "gptel: Pass 4: trimmed %d context image(s), now %dKB")
+              (my/gptel--run-compaction-pass
+               info 5 limit 'bytes 'trimmed-total 'pass
+               (lambda (i) (my/gptel--trim-tool-results-for-retry i 3))
+               "gptel: Pass 5: truncated %d remaining tool results, now %dKB")
+              (my/gptel--run-compaction-pass
+               info 6 limit 'bytes 'trimmed-total 'pass
+               #'my/gptel--truncate-old-messages
+               "gptel: Pass 6: truncated %d old message(s), now %dKB")
+              (my/gptel--run-compaction-pass
+               info 7 limit 'bytes 'trimmed-total 'pass
+               #'my/gptel--strip-images-from-messages
+               "gptel: Pass 7: stripped %d image(s) from messages, now %dKB"))
             (if (> bytes limit)
                 (message "gptel: WARNING: Payload still %dKB after %d passes of compaction (limit %dKB)"
                          (/ bytes 1024) pass (/ limit 1024))
