@@ -5146,7 +5146,7 @@ Adapts max-experiments based on API error rate."
                              (< exp-id max-exp))
                     (message "[auto-workflow] Too many API errors (%d), stopping early for %s"
                              gptel-auto-experiment--api-error-count target)
-                    (setq max-exp exp-id))
+                    (setq max-exp (1- exp-id)))
                    (if (or (> exp-id max-exp)
                            (>= no-improvement-count threshold))
                        (progn
