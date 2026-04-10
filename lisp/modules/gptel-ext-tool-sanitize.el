@@ -57,10 +57,11 @@ Tries: exact, case-insensitive, underscore/hyphen normalization."
 (defun my/gptel--repair-tool-call (tc correct-name)
   "Repair tool call TC to use CORRECT-NAME.
 Messages the repair and updates the :name property in place."
-  (let ((current-name (plist-get tc :name)))
-    (unless (string= current-name correct-name)
-      (message "gptel: repairing tool call %S -> %S" current-name correct-name)
-      (plist-put tc :name correct-name))))
+  (when (and (listp tc) (stringp correct-name) (> (length correct-name) 0))
+    (let ((current-name (plist-get tc :name)))
+      (when (and (stringp current-name) (not (string= current-name correct-name)))
+        (message "gptel: repairing tool call %S -> %S" current-name correct-name)
+        (plist-put tc :name correct-name)))))
 
 (defun my/gptel--sanitize-tool-calls (fsm)
   "Remove nil/unknown-named tool calls from FSM before execution.
@@ -143,11 +144,12 @@ AND the same arguments count; different tools or different args do not."
   "Return a fingerprint string for tool call TC.
 The fingerprint is \"NAME:MD5(ARGS)\" so two calls are considered identical
 only when both the tool name and the serialized argument plist match."
-  (let* ((raw-name (plist-get tc :name))
-         (name (if (and raw-name (not (equal raw-name ""))) raw-name "nil"))
-         (args (plist-get tc :args))
-         (args-str (if args (format "%S" args) "nil")))
-    (concat name ":" (md5 args-str))))
+  (when (listp tc)
+    (let* ((raw-name (plist-get tc :name))
+           (name (if (and raw-name (not (equal raw-name ""))) raw-name "nil"))
+           (args (plist-get tc :args))
+           (args-str (if args (format "%S" args) "nil")))
+      (concat name ":" (md5 args-str)))))
 
 (cl-defun my/gptel--detect-doom-loop (fsm)
   "Abort FSM when the same tool call repeats `my/gptel-doom-loop-threshold' times.
