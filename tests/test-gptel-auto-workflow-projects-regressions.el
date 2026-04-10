@@ -55,8 +55,26 @@
       (delete-directory project-root t)
       (when (get-buffer "*aw-project-root*")
         (kill-buffer "*aw-project-root*"))
-      (when (get-buffer "*aw-worktree*")
-        (kill-buffer "*aw-worktree*")))))
+       (when (get-buffer "*aw-worktree*")
+         (kill-buffer "*aw-worktree*")))))
+
+(ert-deftest regression/auto-workflow-projects/task-routing-exposes-buffer-tools-during-launch ()
+  "Routed placeholder FSM info should inherit the target buffer's tools."
+  (let ((expected-tools '("Code_Map" "Read" "Bash")))
+    (unwind-protect
+        (with-temp-buffer
+          (setq-local gptel-use-tools t)
+          (setq-local gptel-tools expected-tools)
+          (let* ((marker (point-marker))
+                 (info (gptel-auto-workflow--routed-fsm-info
+                        '(:buffer other :position 1 :tracking-marker 1)
+                        (current-buffer)
+                        marker)))
+            (should (eq (plist-get info :buffer) (current-buffer)))
+            (should (eq (plist-get info :position) marker))
+            (should (eq (plist-get info :tracking-marker) marker))
+            (should (equal (plist-get info :tools) expected-tools))))
+      nil)))
 
 (ert-deftest regression/auto-workflow-projects/queue-helper-returns-before-job-runs ()
   "Queued cron work should not run inline in the `emacsclient' request."

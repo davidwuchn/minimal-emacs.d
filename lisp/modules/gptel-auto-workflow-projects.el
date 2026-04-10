@@ -93,8 +93,31 @@ project instead of the current buffer's `default-directory'."
           gptel-auto-workflow--current-project
           (and (boundp 'gptel-auto-workflow--project-root-override)
                gptel-auto-workflow--project-root-override)
-          (ignore-errors (gptel-auto-workflow--project-root))
-          default-directory)))))
+           (ignore-errors (gptel-auto-workflow--project-root))
+           default-directory)))))
+
+(defun gptel-auto-workflow--buffer-tool-snapshot (&optional buffer)
+  "Return BUFFER's active tool snapshot, or nil when tools are disabled."
+  (when-let* ((buf (or (and (buffer-live-p buffer) buffer)
+                       (current-buffer))))
+    (with-current-buffer buf
+      (and (boundp 'gptel-use-tools)
+           gptel-use-tools
+           (boundp 'gptel-tools)
+           gptel-tools
+           (copy-sequence gptel-tools)))))
+
+(defun gptel-auto-workflow--routed-fsm-info (info target-buf target-marker)
+  "Return FSM INFO rewritten for TARGET-BUF and TARGET-MARKER.
+Preserves routed buffer tool snapshots so early tool calls do not see a
+placeholder FSM with an empty `:tools' list."
+  (let ((updated-info (copy-sequence (or info '()))))
+    (setq updated-info (plist-put updated-info :buffer target-buf))
+    (setq updated-info (plist-put updated-info :position target-marker))
+    (setq updated-info (plist-put updated-info :tracking-marker target-marker))
+    (if-let ((buffer-tools (gptel-auto-workflow--buffer-tool-snapshot target-buf)))
+        (plist-put updated-info :tools buffer-tools)
+      updated-info)))
 
 (defun gptel-auto-workflow--get-worktree-buffer (worktree-dir)
   "Get or create a gptel-agent buffer for WORKTREE-DIR.
@@ -458,30 +481,28 @@ Also handles caching and result truncation from old advice."
               (progn
                 (when (fboundp 'my/gptel--register-agent-task-buffer)
                   (my/gptel--register-agent-task-buffer target-buf))
-                (with-current-buffer target-buf
-                  ;; Ensure FSM exists for agent task
-                  (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
+                 (with-current-buffer target-buf
+                   ;; Ensure FSM exists for agent task
+                   (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
                     ;; Create minimal FSM for agent context
-                    (setq-local gptel--fsm-last 
-                                (gptel-make-fsm 
-                                 :table (when (boundp 'gptel-send--transitions) gptel-send--transitions)
-                                 :handlers nil)))
-                   (let* ((default-directory (or worktree-dir project-root))
-                           (target-marker (point-marker))
-                           (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
-                           (orig-gptel-fsm-info (symbol-function 'gptel-fsm-info))
-                           (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
-                                     (list :buffer target-buf :position target-marker)))
-                           (modified-info (let ((updated-info (copy-sequence info)))
-                                            (setq updated-info
-                                                  (plist-put updated-info :buffer target-buf))
-                                            (setq updated-info
-                                                  (plist-put updated-info :position target-marker))
-                                            (plist-put updated-info :tracking-marker target-marker)))
-                           ;; Wrap callback to cache results
-                            (wrapped-cb (lambda (result)
-                                          (when (and (stringp result)
-                                                     (fboundp 'my/gptel--subagent-cache-put))
+                     (setq-local gptel--fsm-last 
+                                 (gptel-make-fsm 
+                                  :table (when (boundp 'gptel-send--transitions) gptel-send--transitions)
+                                  :handlers nil
+                                  :info (gptel-auto-workflow--routed-fsm-info
+                                         nil target-buf (point-marker)))))
+                    (let* ((default-directory (or worktree-dir project-root))
+                            (target-marker (point-marker))
+                            (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
+                            (orig-gptel-fsm-info (symbol-function 'gptel-fsm-info))
+                            (info (or (and parent-fsm (gptel-fsm-info parent-fsm))
+                                      (list :buffer target-buf :position target-marker)))
+                            (modified-info (gptel-auto-workflow--routed-fsm-info
+                                            info target-buf target-marker))
+                            ;; Wrap callback to cache results
+                             (wrapped-cb (lambda (result)
+                                           (when (and (stringp result)
+                                                      (fboundp 'my/gptel--subagent-cache-put))
                                             (my/gptel--subagent-cache-put agent-type prompt result))
                                           (funcall main-cb result)))
                             (task-runner (if (fboundp 'my/gptel-agent--task-override)

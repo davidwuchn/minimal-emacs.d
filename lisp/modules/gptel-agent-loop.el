@@ -34,6 +34,7 @@
 
 (declare-function my/gptel--coerce-fsm "gptel-ext-fsm-utils")
 (declare-function my/gptel--deliver-subagent-result "gptel-tools-agent")
+(declare-function my/gptel--seed-fsm-tools "gptel-tools-agent" (fsm tools))
 (declare-function my/gptel-agent--task-override "gptel-tools-agent"
                   (main-cb agent-type description prompt))
 (declare-function my/gptel--subagent-cache-get "gptel-tools-agent")
@@ -618,18 +619,19 @@ Cache behavior:
                                     :use-context nil
                                     :stream my/gptel-subagent-stream)
                               (cdr (assoc agent-type gptel-agent--agents))))
-               (syms (cons 'gptel--preset (gptel--preset-syms preset)))
-               (vals (mapcar (lambda (sym)
-                               (if (boundp sym) (symbol-value sym) nil))
-                             syms)))
+                (syms (cons 'gptel--preset (gptel--preset-syms preset)))
+                (vals (mapcar (lambda (sym)
+                                (if (boundp sym) (symbol-value sym) nil))
+                              syms)))
           (cl-progv syms vals
             (gptel--apply-preset preset)
-            (let* ((parent-fsm (and (fboundp 'my/gptel--coerce-fsm)
+            (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
+                   (parent-fsm (and (fboundp 'my/gptel--coerce-fsm)
                                     (my/gptel--coerce-fsm gptel--fsm-last)))
-                   (fsm-info (ignore-errors
-                               (and parent-fsm (gptel-fsm-info parent-fsm))))
-                   (parent-buf (or (gptel-agent-loop--task-parent-buffer state)
-                                   (when (buffer-live-p (plist-get fsm-info :buffer))
+                    (fsm-info (ignore-errors
+                                (and parent-fsm (gptel-fsm-info parent-fsm))))
+                    (parent-buf (or (gptel-agent-loop--task-parent-buffer state)
+                                    (when (buffer-live-p (plist-get fsm-info :buffer))
                                      (plist-get fsm-info :buffer))
                                    (current-buffer)))
                    (where (or (let ((tm (gptel-agent-loop--task-tracking-marker state)))
@@ -647,17 +649,20 @@ Cache behavior:
                         (if (and where (eq (marker-buffer where) parent-buf))
                             where
                           (with-current-buffer parent-buf (point-marker)))))
-                   (callback (gptel-agent-loop--make-callback state prompt use-tools)))
+                   (callback (gptel-agent-loop--make-callback state prompt use-tools))
+                   (child-fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)))
               (setf (gptel-agent-loop--task-parent-buffer state) parent-buf
                     (gptel-agent-loop--task-tracking-marker state) tracking-marker)
               (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
               (gptel-request prompt
                 :context (gptel-agent--task-overlay tracking-marker agent-type description)
-                :fsm (gptel-make-fsm :handlers gptel-agent-request--handlers)
+                :fsm child-fsm
                 :position tracking-marker
                 :buffer parent-buf
                 :in-place t
-                :callback callback))))))))
+                :callback callback)
+              (when (fboundp 'my/gptel--seed-fsm-tools)
+                (my/gptel--seed-fsm-tools child-fsm request-tools))))))))
 
 (defun gptel-agent-loop--make-timeout-timer (state)
   "Create timeout timer for STATE."
