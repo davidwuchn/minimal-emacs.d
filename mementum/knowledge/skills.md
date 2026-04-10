@@ -1,262 +1,310 @@
 ---
-title: Skills Architecture: Protocol vs Tool Skills
+title: Skill Architecture - Protocol vs Tool Skills
 status: active
 category: knowledge
-tags: [skills, architecture, protocol, tool, mementum, consolidation]
+tags: [skills, protocols, mementum, architecture, tooling]
 ---
 
-# Skills Architecture: Protocol vs Tool Skills
+# Skill Architecture: Protocol vs Tool Skills
 
 ## Overview
 
-This document defines the architecture for organizing skills in the Mementum system. Skills fall into two categories—**Protocol Skills** and **Tool Skills**—each with distinct storage patterns and execution models. Understanding this distinction prevents unnecessary indirection and ensures knowledge is accessible to the AI at the right layer.
+This document defines the foundational architecture for organizing skills in the system. Understanding the distinction between **Protocol Skills** and **Tool Skills** is essential for effective knowledge consolidation and skill management.
 
-## Key Distinction
+The core principle: **Store pure procedures in Mementum; wrap external dependencies in Skills.**
 
-The fundamental difference between Protocol and Tool skills lies in their dependencies:
+## The Two-Skill Taxonomy
 
-| Skill Type | Definition | Has External Dependencies | Storage Location |
-|------------|------------|---------------------------|------------------|
-| **Protocol** | Pure procedures, decision matrices, and patterns | No (self-contained) | `mementum/knowledge/{domain}-protocol.md` |
-| **Tool** | Requires external system (REPL, API, CLI, scripts) | Yes | Keep as skill, reference protocol |
+Skills in the system fall into two categories based on their dependencies:
 
-### Examples
+### Protocol Skills
 
-| Protocol Skills | Tool Skills |
-|-----------------|-------------|
-| learning-protocol | clojure-expert |
-| planning-protocol | reddit |
-| sarcasmotron | requesthunt |
-| tutor-protocol | seo-geo |
+Protocol skills contain pure procedures, decision matrices, and behavioral patterns that require no external systems. They are the "know-how" that drives execution.
+
+| Characteristic | Description |
+|----------------|-------------|
+| Dependencies | None (self-contained) |
+| Content | Procedures, decision matrices, patterns |
+| Storage | `mementum/knowledge/{name}-protocol.md` |
+| Examples | learning, planning, sarcasmotron, tutor |
+
+### Tool Skills
+
+Tool skills require external systems to function—REPLs, APIs, CLIs, or other runtime environments. They provide the interface between pure logic and concrete execution.
+
+| Characteristic | Description |
+|----------------|-------------|
+| Dependencies | REPL, API, CLI, external scripts |
+| Content | Tool wrappers, integration code, protocol reference |
+| Storage | `skills/{name}/` directory |
+| Examples | clojure-expert, reddit, requesthunt, seo-geo |
 
 ## How They Work Together
 
-Protocol and Tool skills form a layered architecture:
+The architecture creates a clean separation between **what to do** (protocol) and **how to interact with systems** (tool):
 
 ```
-┌─────────────────────────────────────────┐
-│           AGENTS.md                     │
-│    (references mementum protocols)      │
-└─────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────┐
-│      mementum/knowledge/*-protocol.md   │
-│   (pure procedures, no dependencies)   │
-└─────────────────────────────────────────┘
-                    │
-        ┌───────────┴───────────┐
-        ▼                       ▼
-┌───────────────┐       ┌───────────────┐
-│  Tool Skill   │       │  Tool Skill   │
-│  (REPL deps)  │       │  (API deps)   │
-└───────────────┘       └───────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        AGENTS.md                            │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Tool Skill (skill/)                       │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ depends: mementum/knowledge/{domain}-protocol.md    │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                           │                                 │
+│         ┌─────────────────┼─────────────────┐              │
+│         ▼                 ▼                 ▼              │
+│  ┌────────────┐   ┌────────────┐   ┌────────────┐          │
+│  │ REPL Tool  │   │  API Tool  │   │ CLI Tool   │          │
+│  └────────────┘   └────────────┘   └────────────┘          │
+└─────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+┌─────────────────────────────┐   ┌─────────────────────────────┐
+│  Protocol Skill (mementum)  │   │   Tool Executes → Result    │
+│                             │   └─────────────────────────────┘
+│  # {domain}-protocol.md     │
+│                             │
+│  ## Procedures             │
+│  ## Decision Matrices       │
+│  ## Behavioral Patterns     │
+└─────────────────────────────┘
 ```
 
-The AI reads the protocol via `orient()` and executes directly. Tool skills provide the execution environment.
+### Execution Flow
 
-## Protocol Skills
+```
+AI reads protocol (mementum/knowledge/learning-protocol.md)
+    │
+    ▼
+Understands procedures and decision matrices
+    │
+    ▼
+Determines need for external system
+    │
+    ▼
+Calls tool skill (e.g., clojure-expert) for REPL access
+    │
+    ▼
+Gets result → applies protocol logic → produces output
+```
 
-A Protocol skill contains **pure knowledge** that the AI can execute without external systems:
+## Skill Component Mapping to Mementum
 
-### Characteristics
+When consolidating skills, map components to their Mementum equivalents:
 
-- **Self-contained**: No REPL, API, or CLI dependencies
-- **Procedural**: Contains decision matrices, flows, and patterns
-- **Executable**: AI reads file → applies patterns → produces output
-- **Reusable**: Multiple tool skills can reference the same protocol
+| Skill Component | Mementum Equivalent | Storage Location |
+|-----------------|---------------------|------------------|
+| `λ(observe)` | `store` | `mementum/state.md` |
+| `λ(learn)` | `recall` | `mementum/knowledge/` |
+| `λ(evolve)` | `metabolize` | `mementum/memories/` |
+| `instincts/personal/` | `mementum/memories/` | `mementum/memories/` |
+| `instincts/library/` | `mementum/knowledge/` | `mementum/knowledge/` |
+| Session state | State tracking | `mementum/state.md` |
+| Project facts | Knowledge base | `mementum/knowledge/project-facts.md` |
+| Procedural content | Protocol | `mementum/knowledge/{domain}-protocol.md` |
 
-### Structure
+## Protocol Skill Pattern
 
-```markdown
+Protocol skills live in `mementum/knowledge/` and contain pure procedural content.
+
+### Frontmatter Structure
+
+```yaml
 ---
-title: {domain}-protocol
+title: Learning Protocol
 status: active
 category: protocol
----
-
-# {Domain} Protocol
-
-## Decision Matrix
-| Condition | Action |
-|-----------|--------|
-| X | Do Y |
-
-## Procedure
-1. Step one
-2. Step two
-3. Step three
-
-## Patterns
-### Pattern Name
-When [condition], apply [pattern].
-```
-
-### Example: Learning Protocol
-
-```markdown
----
-title: learning-protocol
-status: active
-category: protocol
+tags: [learning, protocol, procedures]
+depends: []
 ---
 
 # Learning Protocol
-
-## Observation Phase
-When encountering new information:
-1. Identify the core concept
-2. Map to existing knowledge structure
-3. Note gaps and uncertainties
-
-## Recall Test
-After processing:
-- Can I explain this to someone else?
-- Does this contradict existing beliefs?
-- Where would I apply this?
-
-## Metabolize Action
-If (new information conflicts with existing):
-   → Update belief structure
-   → Flag related knowledge for re-evaluation
-If (new information expands existing):
-   → Link to parent concept
-   → Update confidence score
 ```
 
-## Tool Skills
-
-A Tool skill requires external systems to function. It **provides the execution environment** while referencing a protocol for the procedure:
-
-### Characteristics
-
-- **External dependencies**: REPL, HTTP API, CLI, filesystem
-- **Bridge role**: Calls external system → returns result → protocol applies meaning
-- **Tool-heavy**: Contains `tools:` sections for system interaction
-- **References protocol**: Points to pure procedure in mementum
-
-### Structure
+### Content Structure
 
 ```markdown
----
-title: {name}
-status: active
-category: skill
-depends: mementum/knowledge/{domain}-protocol.md
----
+## Procedures
 
-# {Name} Skill
+### Observation Phase
+1. Identify information gap
+2. Query existing knowledge
+3. Determine learning strategy
 
-## Protocol Reference
-See mementum/knowledge/{domain}-protocol.md for idiomatic patterns.
+### Integration Phase
+1. Acquire new information
+2. Validate against existing model
+3. Update knowledge structure
 
-## Tool Integration
-This skill provides REPL/API tools for the protocol.
+### Application Phase
+1. Test understanding in context
+2. Refine based on feedback
+3. Consolidate into memory
 
-## Available Tools
-- tool-name: Description
+## Decision Matrix
+
+| Situation | Action |
+|-----------|--------|
+| Unknown topic | Query → Acquire → Validate |
+| Partial knowledge | Identify gaps → Targeted learning |
+| Known topic | Skip acquisition → Apply directly |
 ```
 
-### Example: Clojure Expert Skill
+## Tool Skill Pattern
 
-```markdown
----
-title: clojure-expert
-status: active
-category: skill
-depends: mementum/knowledge/clojure-protocol.md
----
+Tool skills live in `skills/{name}/` and wrap external dependencies.
 
-# Clojure Expert Skill
-
-## Protocol Reference
-See mementum/knowledge/clojure-protocol.md for idiomatic patterns.
-
-## Tool Integration
-This skill provides a Clojure REPL for code evaluation.
-
-## Available Tools
-- clojure-eval: Evaluate Clojure expression in REPL
-- clojure-load-file: Load and evaluate a file
-
-## Usage
-The AI uses clojure-eval to test hypotheses, then applies the 
-clojure-protocol patterns to interpret results.
-```
-
-## Mementum Consolidation
-
-Skills that are 90% protocol content should be consolidated into Mementum. This removes unnecessary indirection:
-
-### Component Mapping
-
-| Skill Component | Mementum Equivalent | Purpose |
-|-----------------|---------------------|---------|
-| `λ(observe)` | `store` | Persist observations |
-| `λ(learn)` | `recall` | Retrieve relevant knowledge |
-| `λ(evolve)` | `metabolize` | Update belief structures |
-| `instincts/personal/` | `mementum/memories/` | Personal knowledge base |
-| `instincts/library/` | `mementum/knowledge/` | General protocols and facts |
-| Session state | `mementum/state.md` | Current context |
-| Project facts | `mementum/knowledge/project-facts.md` | Project-specific knowledge |
-
-### Before vs After
+### Frontmatter Structure
 
 ```yaml
-# BEFORE: Indirection through skill wrapper
-AGENTS.md
-  → skills/
-    → continuous-learning/
-      → SKILL.md
-        → procedures
-        → memories
+---
+title: Clojure Expert
+status: active
+category: tool
+tags: [clojure, repl, expert]
+depends:
+  - mementum/knowledge/programming-protocol.md
+---
 
-# AFTER: Direct protocol access
-AGENTS.md
-  → mementum/
-    → knowledge/
-      → learning-protocol.md  # Direct execution
-    → memories/               # Personal knowledge
-    → state.md               # Current context
+# Clojure Expert
 ```
 
-## Decision Criteria
+### Content Structure
 
-Use these rules to determine where content belongs:
+```markdown
+## Protocol Reference
+
+See [mementum/knowledge/programming-protocol.md](mementum/knowledge/programming-protocol.md) for idiomatic patterns, code review criteria, and design principles.
+
+## Tool Integration
+
+This skill provides REPL access for Clojure development.
+
+### Available Tools
+
+- `clojure-eval`: Execute Clojure code in REPL
+- `clojure-load-file`: Load namespace and dependencies
+- `clojure-test`: Run test suite
+
+### Usage Example
+
+```
+User: "Write a function that computes Fibonacci"
+
+AI reads programming-protocol.md for approach
+    │
+    ▼
+Calls clojure-eval with generated code
+    │
+    ▼
+Gets result → validates against protocol → returns
+```
+
+## Architecture Before and After
+
+### Before (Indirect)
+
+```
+AGENTS.md → skills/ → SKILL.md → procedures → memories
+                └─ thin wrapper adds indirection
+```
+
+### After (Direct)
+
+```
+AGENTS.md → mementum/ → knowledge/protocol.md → direct execution
+                 │
+                 └─ pure procedure, no wrapper needed
+```
+
+## When to Apply Each Pattern
 
 | Condition | Action |
 |-----------|--------|
-| Skill contains only procedures/matrices | → Consolidate to `mementum/knowledge/{name}-protocol.md` |
-| Skill has REPL/API/CLI dependencies | → Keep skill, extract protocol, add `depends:` frontmatter |
-| Protocol applies to multiple skills | → Store in mementum, have skills reference it |
-| Content is personal/contextual | → Store in `mementum/memories/` |
-| Content is current session state | → Store in `mementum/state.md` |
+| Skill contains only procedures/matrices | Migrate to `mementum/knowledge/{name}-protocol.md` |
+| Skill requires REPL/API/scripts | Keep skill, extract protocol, add `depends:` |
+| Protocol shared across multiple skills | Single source in `mementum/knowledge/` |
+| Skill has persistent state | Use `mementum/state.md` |
+| Skill contains instincts/patterns | Use `mementum/memories/` |
 
-## Implementation Checklist
+## Migration Checklist
 
-When creating or reviewing a skill:
+When migrating a skill to this architecture:
 
-1. [ ] Does this skill require external systems (REPL, API, CLI)?
-2. [ ] If yes → keep as Tool skill, create protocol file
-3. [ ] If no → consolidate to `mementum/knowledge/{domain}-protocol.md`
-4. [ ] Does the protocol have dependencies? → Move deps to tool skill
-5. [ ] Can multiple tools use this protocol? → Ensure single protocol, multiple references
+1. [ ] Identify pure procedural content
+2. [ ] Extract protocol to `mementum/knowledge/{domain}-protocol.md`
+3. [ ] Identify external dependencies
+4. [ ] Keep tool wrapper in `skills/{name}/`
+5. [ ] Add `depends:` frontmatter to tool skill
+6. [ ] Add Protocol Reference section to tool skill
+7. [ ] Remove duplicate content from original skill
+8. [ ] Update AGENTS.md if referenced
 
-## Anti-Patterns to Avoid
+## Common Patterns
 
-- **Wrapper skills**: Skills that do nothing but wrap a protocol file
-- **Duplicate procedures**: Same decision matrix in multiple skills
-- **Deep indirection**: `AGENTS.md → skill → sub-skill → procedure` instead of direct access
+### Decision Matrix Pattern
 
-## Related Topics
+```markdown
+## Decision Matrix: Approach Selection
 
-- [Mementum Architecture](/mementum/architecture) - System overview
-- [Knowledge Base](/mementum/knowledge) - Protocol storage location
-- [Memories](/mementum/memories) - Personal knowledge layer
-- [State Management](/mementum/state) - Session context handling
-- [Tool Skills Catalog](/skills/catalog) - Available tool skills
-- [Protocol Patterns](/patterns/protocol) - Common protocol patterns
+| Context | Complexity | Available Time | Approach |
+|---------|------------|----------------|----------|
+| Unknown domain | Any | Limited | Research-first |
+| Known domain | High | Ample | Deep implementation |
+| Known domain | Low | Any | Direct implementation |
+| Time pressure | Any | Limited | Prototype-first |
+```
+
+### Tool Invocation Pattern
+
+```markdown
+## Tool Invocation
+
+When the protocol requires execution:
+
+1. Parse protocol requirements
+2. Select appropriate tool from available tools
+3. Construct tool input from protocol specifications
+4. Execute tool call
+5. Validate output against protocol expectations
+6. Return result or iterate
+```
+
+### Protocol Composition Pattern
+
+```markdown
+## Composing Protocols
+
+Multiple protocols can compose:
+
+- learning-protocol.md: How to learn new concepts
+- programming-protocol.md: How to implement correctly  
+- review-protocol.md: How to validate quality
+
+The AI chains these based on task requirements.
+```
+
+## Summary
+
+The skill architecture reduces indirection by separating concerns:
+
+- **Protocols** are pure knowledge—procedures, decisions, patterns—stored directly in Mementum
+- **Tools** are thin wrappers around external systems that reference protocols
+- **Skills** are either protocols (self-contained) or tools (dependent on external systems)
+
+This architecture simplifies maintenance, reduces duplication, and enables protocol sharing across multiple tool skills.
 
 ---
 
-This architecture ensures that knowledge is stored at the appropriate layer—pure procedures in Mementum protocols, execution environments in Tool skills, enabling direct and efficient AI execution.
+## Related
+
+- [Mementum Knowledge Structure](mementum/knowledge/)
+- [Tool Integration Patterns](skills/)
+- [State Management](mementum/state.md)
+- [Memory Organization](mementum/memories/)
+- [Project Knowledge](mementum/knowledge/project-facts.md)
