@@ -6507,7 +6507,16 @@ Returns list of synthesis candidates."
                (mapcar (lambda (c) (plist-get c :topic)) candidates)))
     candidates))
 
-(defun gptel-mementum-synthesize-candidate (candidate)
+(defun gptel-mementum--deliver-synthesis-result (project-root headless topic files result)
+  "Handle synthesis RESULT for TOPIC/FILES inside PROJECT-ROOT context."
+  (let ((default-directory project-root)
+        (gptel-auto-workflow--current-project project-root)
+        (gptel-auto-workflow--project-root-override project-root)
+        (gptel-auto-workflow--run-project-root project-root)
+        (gptel-auto-workflow--headless headless))
+    (gptel-mementum--handle-synthesis-result topic files result)))
+
+(defun gptel-mementum-synthesize-candidate (candidate &optional synchronous)
   "Synthesize CANDIDATE into knowledge page with human approval.
 CANDIDATE is plist with :topic :count :files.
 Implements λ termination(x): synthesis ≡ AI | approval ≡ human.
@@ -6516,6 +6525,8 @@ Returns t if synthesis was initiated, nil otherwise.
 Note: Call gptel-mementum-ensure-agents first for batch processing."
   (let* ((topic (plist-get candidate :topic))
          (files (plist-get candidate :files))
+         (project-root (gptel-auto-workflow--project-root))
+         (headless (bound-and-true-p gptel-auto-workflow--headless))
          (memories-content '()))
     (dolist (file files)
       (let ((content (gptel-auto-workflow--read-file-contents file)))
@@ -6532,13 +6543,23 @@ Note: Call gptel-mementum-ensure-agents first for batch processing."
                  (boundp 'gptel-agent--agents)
                  gptel-agent--agents
                  (assoc "executor" gptel-agent--agents))
-            (gptel-benchmark-call-subagent
-             'executor
-             (format "Synthesize knowledge: %s" topic)
-             synthesis-prompt
-             (lambda (result)
-               (gptel-mementum--handle-synthesis-result topic files result))
-             300)
+            (if (and synchronous
+                     (fboundp 'gptel-benchmark-call-subagent-sync))
+                (gptel-mementum--deliver-synthesis-result
+                 project-root headless topic files
+                 (gptel-benchmark-call-subagent-sync
+                  'executor
+                  (format "Synthesize knowledge: %s" topic)
+                  synthesis-prompt
+                  300))
+              (gptel-benchmark-call-subagent
+               'executor
+               (format "Synthesize knowledge: %s" topic)
+               synthesis-prompt
+               (lambda (result)
+                 (gptel-mementum--deliver-synthesis-result
+                  project-root headless topic files result))
+               300))
           (message "[mementum] Skip '%s': executor subagent not available" topic))
         t))))
 
@@ -6579,7 +6600,7 @@ Call once before processing multiple candidates. Returns t if executor available
        gptel-agent--agents
        (assoc "executor" gptel-agent--agents)))
 
-(defun gptel-mementum-synthesize-all-candidates (&optional candidates)
+(defun gptel-mementum-synthesize-all-candidates (&optional candidates synchronous)
   "Synthesize all CANDIDATES (or detect if nil) with human approval.
 Ensures agents are loaded once before processing batch."
   (let* ((cands (or candidates (gptel-mementum-check-synthesis-candidates)))
@@ -6589,10 +6610,13 @@ Ensures agents are loaded once before processing batch."
         (progn
           (message "[mementum] Executor available, processing %d candidates" (length cands))
           (dolist (candidate cands)
-            (when (gptel-mementum-synthesize-candidate candidate)
+            (when (gptel-mementum-synthesize-candidate candidate synchronous)
               (cl-incf synthesized))))
       (message "[mementum] Executor not available, skipping synthesis"))
-    (message "[mementum] Synthesized %d/%d candidates" synthesized (length cands))
+    (message "[mementum] %s %d/%d candidates"
+             (if synchronous "Synthesized" "Queued")
+             synthesized
+             (length cands))
     synthesized))
 
 (defun gptel-mementum--handle-synthesis-result (topic files result)
@@ -6697,7 +6721,7 @@ Implements λ synthesize(topic): ≥3 memories → candidate → human approval.
   (message "[mementum] Starting weekly maintenance...")
   (gptel-mementum-build-index)
   (gptel-mementum-decay-skills)
-  (let ((synthesized (gptel-mementum-synthesize-all-candidates)))
+  (let ((synthesized (gptel-mementum-synthesize-all-candidates nil t)))
     (message "[mementum] Weekly maintenance complete. Synthesized: %d" synthesized)))
 
 (defun gptel-mementum-synthesis-run ()
