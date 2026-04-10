@@ -336,9 +336,10 @@ a RunAgent task has finished successfully.")
 
 (defun gptel-agent-loop--seems-complete-p (resp)
   "Return non-nil when RESP looks like a completion message."
-  (let ((lower-resp (downcase resp)))
-    (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
-             gptel-agent-loop--completion-patterns)))
+  (and (stringp resp)
+       (let ((lower-resp (downcase resp)))
+         (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
+                  gptel-agent-loop--completion-patterns))))
 
 (defconst gptel-agent-loop--turn-skipped-pattern
   "gptel: turn skipped\\|all tool calls.*malformed"
@@ -348,8 +349,9 @@ gptel skipped a turn due to malformed tool calls.")
 
 (defun gptel-agent-loop--turn-skipped-p (resp)
   "Return non-nil when RESP matches malformed-tool skip output."
-  (let ((lower-resp (downcase resp)))
-    (string-match-p gptel-agent-loop--turn-skipped-pattern lower-resp)))
+  (and (stringp resp)
+       (let ((lower-resp (downcase resp)))
+         (string-match-p gptel-agent-loop--turn-skipped-pattern lower-resp))))
 
 (defconst gptel-agent-loop--planning-patterns
   '("\\blet me\\b"
@@ -369,8 +371,9 @@ when the model is talking about doing work but hasn't called tools.")
   "Return non-nil when RESP looks like planning text without tool calls.
 Detects common patterns where model talks about doing work
 but didn't call tools."
-  (let ((lower-resp (downcase resp)))
-    (and (>= (length resp) 30)
+  (and (stringp resp)
+       (>= (length resp) 30)
+       (let ((lower-resp (downcase resp)))
          (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
                   gptel-agent-loop--planning-patterns))))
 
@@ -388,9 +391,10 @@ when the model is concluding rather than planning more work.")
   "Return non-nil when RESP looks like model is about to finish.
 Detects patterns indicating the model is wrapping up,
 not planning more work."
-  (let ((lower-resp (downcase resp)))
-    (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
-             gptel-agent-loop--finishing-patterns)))
+  (and (stringp resp)
+       (let ((lower-resp (downcase resp)))
+         (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
+                  gptel-agent-loop--finishing-patterns))))
 
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP.
