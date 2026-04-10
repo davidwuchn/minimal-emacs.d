@@ -1,8 +1,44 @@
 # Mementum State
 
-> Last session: 2026-04-11 00:45
+> Last session: 2026-04-11 01:10
 
-## Total Improvements: 218+ Real Code Fixes (9 new today)
+## Total Improvements: 223+ Real Code Fixes (14 new today)
+
+### Session Summary: 2026-04-11 Early Morning (Sandbox Experiments Merged)
+
+**Action:** Merged sandbox-neopi5-exp5 (5 kept experiments) to staging and main
+
+**Result:** ✅ gptel-sandbox.el improvements now in main (nil guards, bug fixes, helper extraction)
+
+**Sync Status:**
+- **main:** `af13162` — Merge optimize/sandbox-neopi5-exp5 for verification ✅
+- **staging:** `a6f39a4` — Merge optimize/sandbox-neopi5-exp5 for verification ✅
+- **Submodules:** 6 submodules synced
+- **Tests:** 1361 run, 1295 pass, 66 skipped, 0 fail ✅
+
+**Merged Optimizations (sandbox-neopi5-exp5):**
+- `gptel-sandbox--lookup` — module-level constant for missing marker
+- `gptel-sandbox--execute-tool` — fallback for undefined gptel--to-string
+- `gptel-sandbox--bind-last-value` — extracted helper function (DRY)
+- `gptel-sandbox--eval-statement` — fixed symbol quoting bug (_ and it bindings)
+- `gptel-sandbox--truncate-result` — fixed truncation to respect limit
+
+**Previous Merges:**
+- `core-onepi5-exp1/2/5` — gptel-benchmark-core improvements
+- `cache-riven-exp5` — context-cache optimizations
+
+**Workflow Status:**
+- Last run: `2026-04-11T010318Z-f8df` — idle
+- Previous successful run: `2026-04-10T190001Z-b0c4` — 5/5 kept (gptel-sandbox.el)
+- Next scheduled: 03:00 (auto-workflow)
+
+**Cron Status:**
+- Auto-workflow: 23:00, 03:00, 07:00, 11:00, 15:00, 19:00 (6 runs/day)
+- Research: every 4 hours
+- Mementum: Sunday 04:00
+- Instincts: Sunday 05:00
+
+---
 
 ### Session Summary: 2026-04-11 Early Morning (Staging Merge + Sync)
 
