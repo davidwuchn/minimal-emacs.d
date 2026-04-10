@@ -134,7 +134,7 @@ For alist lookup, converts :score to \\='score symbol."
 Returns DEFAULT if FIELD is not present or value is nil.
 FIELD should be a keyword like :score."
   (let ((val (plist-get plist field)))
-    (if val val default)))
+    (if (null val) default val)))
 
 ;;; Historical Tracking
 
