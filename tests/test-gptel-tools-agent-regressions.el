@@ -3123,6 +3123,12 @@ EXIT-CODE defaults to 1."
       (should (car review-result))
       (should (string-match-p "APPROVED" (cdr review-result))))))
 
+(ert-deftest regression/auto-workflow/review-approved-p-accepts-bold-verdict-line ()
+  "Approval parsing should accept the `**APPROVED**' verdict shape seen in live runs."
+  (should
+   (gptel-auto-workflow--review-approved-p
+    "Reviewer result for task: Review changes before merge | I need to verify the actual file contents before reviewing. Let me read the relevant section.I cannot access the file directly. However, I can analyze the diff provided. | ## Analysis of Diff | **APPROVED** | ### Summary | The diff improves type safety.")))
+
 (ert-deftest regression/auto-workflow/review-changes-uses-review-time-budget ()
   "Review dispatch should use the dedicated review timeout budget."
   (let ((gptel-auto-workflow-require-review t)

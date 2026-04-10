@@ -2849,13 +2849,15 @@ surfacing blocking markers or issue details."
          (approved (string-match
                     (rx (or line-start "\n")
                         (* blank)
-                        (? (+ "#") (* blank))
+                        (* (any "#*>`*_"))
+                        (* blank)
                         "APPROVED" word-end)
                     normalized))
          (blocked (string-match
                    (rx (or line-start "\n")
                        (* blank)
-                       (? (+ "#") (* blank))
+                       (* (any "#*>`*_"))
+                       (* blank)
                        "BLOCKED" word-end)
                    normalized))
          (no-blockers (string-match-p
