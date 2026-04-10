@@ -1,111 +1,171 @@
 ---
-title: Cron Scheduling in Emacs Projects
+title: Cron Scheduling in Emacs Infrastructure
 status: active
 category: knowledge
 tags: [cron, emacs, scheduling, automation, devops]
 ---
 
-# Cron Scheduling in Emacs Projects
+# Cron Scheduling in Emacs Infrastructure
 
-This knowledge page covers cron setup, common pitfalls, and integration patterns for Emacs-based automation workflows.
+This page documents the cron-based scheduling system used for autonomous Emacs operations, including setup, common pitfalls, and integration patterns.
 
 ## Overview
 
-Cron is the standard Unix scheduler used to run automated tasks for the project. Unlike Emacs timers, cron survives system restarts and provides standardized logging. The project uses cron to run `emacsclient` commands that invoke Emacs Lisp functions.
+Cron is used to schedule automated Emacs tasks that must survive restarts and maintain standard Unix logging. This infrastructure supports autonomous workflows, weekly synthesis, and scheduled experiments.
 
-## Common Issues and Fixes
+## Installation
 
-### PATH Environment Variable
+### Quick Install
 
-Cron runs with a minimal environment that does not include user-specific PATH settings.
-
-**Problem:**
-```
-/bin/bash: emacsclient: command not found
+```bash
+./scripts/install-cron.sh --dry-run   # Preview configuration
+./scripts/install-cron.sh              # Install to cron.d
 ```
 
-**Root Cause:** Cron only has `/usr/bin:/bin` available by default. It does not load `.bashrc` or `.zshrc`.
+### Manual Install
 
-**Solution:** Set explicit PATH in the cron file:
+```bash
+sudo cp cron.d/auto-workflow /etc/cron.d/
+sudo chmod 644 /etc/cron.d/auto-workflow
+```
+
+### Directory Setup
+
+Ensure required directories exist before cron jobs run:
+
+```bash
+mkdir -p var/tmp/cron
+mkdir -p var/tmp/experiments
+mkdir -p ~/.emacs.d/var/tmp/cron
+```
+
+## Cron Configuration
+
+### Basic Structure
 
 ```cron
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin
+LOGDIR=~/.emacs.d/var/tmp/cron
 
-# Job definition
-0 2 * * * davidwu /usr/local/bin/emacsclient -e '(gptel-auto-workflow-run)' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+# Job definitions
+0 2 * * * davidwu emacsclient -e '(gptel-auto-workflow-run)' >> $LOGDIR/auto-workflow.log 2>&1
 ```
 
-**Verification:**
+### Scheduled Jobs
+
+| Schedule | Job | Purpose | Log File |
+|----------|-----|---------|----------|
+| Daily 2:00 AM | `auto-workflow-run` | Overnight experiments | `auto-workflow.log` |
+| Weekly Sun 4:00 AM | `mementum-weekly-job` | Synthesis + decay | `mementum-weekly.log` |
+| Weekly Sun 5:00 AM | `instincts-weekly-job` | Evolution | `instincts-weekly.log` |
+
+### Full Example: auto-workflow
+
+```cron
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin
+LOGDIR=/Users/davidwu/.emacs.d/var/tmp/cron
+
+# Ensure log directory exists
+@reboot mkdir -p $LOGDIR
+
+# Daily workflow at 2 AM
+0 2 * * * davidwu /usr/local/bin/emacsclient -e '(gptel-auto-workflow-run)' >> /Users/davidwu/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+
+# Weekly synthesis on Sunday at 4 AM
+0 4 * * 0 davidwu /usr/local/bin/emacsclient -e '(gptel-benchmark-mementum-weekly-job)' >> /Users/davidwu/.emacs.d/var/tmp/cron/mementum-weekly.log 2>&1
+```
+
+## Prerequisites
+
+### Emacs Daemon
+
+Cron requires the Emacs daemon to be running:
+
 ```bash
-# Check what cron sees:
-* * * * * env > /tmp/cron-env.txt 2>&1
+# Start manually
+emacs --daemon
 
-# Test with minimal environment:
-env -i PATH=/usr/bin:/bin HOME=$HOME /bin/bash -c 'which emacsclient'
+# Or let cron start it
+@reboot emacs --daemon
 ```
 
-### Variable Expansion in Crontab
+### Verify Daemon
 
-Custom variables set in crontab do not expand in the command portion.
+```bash
+# Check if daemon is running
+pgrep -f "emacs --daemon"
 
-**Problem:** Logs were empty because `$LOGDIR` expanded to empty string.
+# Connect test
+emacsclient -e "(+ 1 1)"
+```
 
-**Root Cause:** Setting `LOGDIR=value` in crontab only sets it in cron's environment, not in the shell that executes the command.
+## Common Issues and Solutions
 
-**Broken:**
+### Issue 1: Command Not Found
+
+**Error:**
+```
+/bin/bash: emacsclient: command not found
+```
+
+**Cause:** Cron runs with minimal environment, no user PATH.
+
+**Solution:** Set explicit PATH in cron file:
+
+```cron
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin
+```
+
+Also use full paths for commands when possible:
+
+```cron
+0 2 * * * davidwu /usr/local/bin/emacsclient -e '(func)' >> /path/to/log.log 2>&1
+```
+
+### Issue 2: Variable Not Expanded
+
+**Problem:** Custom variables like `LOGDIR` don't expand in the command part.
+
+**Cause:** Cron sets variables in its own environment, but the shell executing the command doesn't inherit them.
+
+**Wrong:**
 ```cron
 LOGDIR=$HOME/.emacs.d/var/tmp/cron
-0 2 * * * davidwu emacsclient -e '(func)' >> $LOGDIR/auto-workflow.log 2>&1
+0 2 * * * emacsclient >> $LOGDIR/file.log  # $LOGDIR is empty!
 ```
 
-**Fixed:**
+**Correct:** Use `$HOME` directly or set full path:
+
 ```cron
-0 2 * * * davidwu emacsclient -e '(func)' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
+0 2 * * * emacsclient >> $HOME/.emacs.d/var/tmp/cron/file.log 2>&1
 ```
 
-## Emacs Integration
-
-### Substring Out-of-Range Errors
-
-When cron invokes Emacs functions that process git data, `substring` operations can fail if strings are empty or shorter than expected.
+### Issue 3: args-out-of-range Error
 
 **Error:**
 ```
 [auto-workflow] Cron error: (args-out-of-range 1 0 7)
 ```
 
-**Affected locations in `gptel-tools-agent.el`:**
+**Cause:** `substring` calls in `gptel-tools-agent.el` assume strings are at least 7 characters.
 
-| Line | Code | Cause |
-|------|------|-------|
-| 114 | `(substring commit-hash 0 7)` | Empty git commit hash |
-| 142 | `(substring (car o) 0 7)` | Orphan hash empty/short |
-| 204-205 | `(substring staging-commit 0 7)` | Branch commits "none" or empty |
-| 3414-3416 | Date parsing substring | Malformed date format |
+**Problematic code:**
+```elisp
+(substring commit-hash 0 7)  ; crashes if empty or short
+```
 
-**Solution - Length guard pattern:**
+**Solution:** Add length guards:
 
 ```elisp
-;; Before (crashes on short strings):
-(substring commit-hash 0 7)
-
-;; After (safe):
+;; Safe substring for commit hashes
 (if (>= (length commit-hash) 7)
     (substring commit-hash 0 7)
   commit-hash)
-```
 
-**Solution - Date parsing with nil checks:**
-
-```elisp
-;; Before:
-(let* ((date-str (match-string 1 content))
-       (last-tested (encode-time ...))
-       (age (- now (float-time last-tested))))
-  (when (> age four-weeks) ...))
-
-;; After:
+;; Safe date parsing
 (let* ((date-str (match-string 1 content))
        (last-tested (when (>= (length date-str) 10)
                       (encode-time ...)))
@@ -114,59 +174,63 @@ When cron invokes Emacs functions that process git data, `substring` operations 
   (when (and age (> age four-weeks)) ...))
 ```
 
-## Infrastructure Setup
+**Files affected:** `lisp/modules/gptel-tools-agent.el` (lines 114, 142, 204-205, 3414-3416)
 
-### Installation Script
+## Debugging Cron Jobs
 
-The project includes `scripts/install-cron.sh` for easy cron deployment:
-
-```bash
-# Preview what will be installed
-./scripts/install-cron.sh --dry-run
-
-# Install cron jobs
-./scripts/install-cron.sh
-```
-
-### Required Directories
-
-Create these directories before cron jobs can write logs:
-
-| Directory | Purpose |
-|-----------|---------|
-| `var/tmp/cron/` | Log output for all cron jobs |
-| `var/tmp/experiments/` | Overnight experiment data |
+### View Cron Logs
 
 ```bash
-mkdir -p var/tmp/cron var/tmp/experiments
+# System journal
+journalctl -u cron --since "today"
+
+# Follow log files
+tail -f var/tmp/cron/*.log
+tail -f ~/.emacs.d/var/tmp/cron/*.log
 ```
 
-### Scheduled Jobs
+### Test Environment
 
-| Schedule | Job | Purpose |
-|----------|-----|---------|
-| Daily 2:00 AM | `auto-workflow-run` | Overnight experiments |
-| Weekly Sunday 4:00 AM | `mementum-weekly-job` | Synthesis + decay |
-| Weekly Sunday 5:00 AM | `instincts-weekly-job` | Evolution |
+Simulate cron's minimal environment:
 
-### Cron File Example
-
-```cron
-SHELL=/bin/bash
-PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin
-HOME=/Users/davidwu
-
-# Emacs daemon auto-start on reboot
-@reboot /usr/local/bin/emacs --daemon >> /tmp/emacs-daemon.log 2>&1
-
-# Daily auto-workflow at 2 AM
-0 2 * * * /usr/local/bin/emacsclient -e '(gptel-auto-workflow-run)' >> $HOME/.emacs.d/var/tmp/cron/auto-workflow.log 2>&1
-
-# Weekly synthesis on Sunday at 4 AM
-0 4 * * 0 /usr/local/bin/emacsclient -e '(gptel-benchmark-mementum-weekly-job)' >> $HOME/.emacs.d/var/tmp/cron/mementum-weekly.log 2>&1
+```bash
+env -i PATH=/usr/bin:/bin HOME=$HOME /bin/bash -c 'which emacsclient'
 ```
 
-## Decision Pattern: Cron vs Emacs Timers
+### Capture Environment
+
+```bash
+# Add to crontab temporarily
+* * * * * env > /tmp/cron-env.txt 2>&1
+
+# Compare with interactive shell
+diff /tmp/cron-env.txt <(env)
+```
+
+## Patterns
+
+### Pattern: Cron vs Emacs Timer
+
+| Criteria | Cron | Emacs Timer |
+|----------|------|-------------|
+| Survives restart | ✓ | ✗ |
+| Standard Unix tool | ✓ | ✗ |
+| Easy log management | ✓ | Manual |
+| Visibility (`crotab -l`) | ✓ | Internal only |
+| Session-aware | ✗ | ✓ |
+| Interactive prompts | ✗ | ✓ |
+
+**Use Cron for:**
+- Automated workflows that run overnight
+- Scheduled synthesis and evolution
+- Cleanup tasks independent of user session
+
+**Use Emacs Timer for:**
+- Notifications while user is working
+- Interactive prompts
+- Context-dependent triggers
+
+### Pattern: Lambda for Scheduling Choice
 
 ```
 λ schedule(x).    cron(x) > emacs_timer(x)
@@ -174,59 +238,26 @@ HOME=/Users/davidwu
                   | session_aware(x) → emacs_timer(x)
 ```
 
-| Use Cron | Use Emacs Timer |
-|----------|-----------------|
-| Survives reboot | Session-aware notifications |
-| Standard Unix tooling | Interactive prompts |
-| Visible via `crontab -l` | Context-dependent triggers |
-| Log rotation via external tools | While user is actively in Emacs |
-
-## Monitoring
-
-### View Logs
+## Verification Commands
 
 ```bash
-# Tail all cron logs
-tail -f var/tmp/cron/*.log
+# List installed crontabs
+crontab -l
+sudo cat /etc/cron.d/auto-workflow
 
-# Check specific job
-tail -f var/tmp/cron/auto-workflow.log
+# Check cron daemon status
+sudo systemctl status cron
+# or
+sudo launchctl list | grep cron
 
-# System journal (systemd)
-journalctl -u cron --since "today" | grep -E "davidwu|CMD"
+# Manual test of job
+emacsclient -e '(gptel-auto-workflow-run)'
 ```
-
-### Common Log Patterns
-
-**Success:**
-```
-[auto-workflow] Synced staging with main (origin/ -> 04948b5)
-[auto-workflow] Found 3 orphan(s): 1 97974b8 97974b8
-[auto-workflow] ⚠ Found 3 orphan commit(s) from previous run
-```
-
-**Error (pre-fix):**
-```
-[auto-workflow] Cron error: (args-out-of-range 1 0 7)
-```
-
-## Best Practices
-
-1. **Always set PATH** in cron files - avoids "command not found" errors
-2. **Use full paths** for commands when possible (e.g., `/usr/local/bin/emacsclient`)
-3. **Use `$HOME` directly** instead of custom variables in crontab
-4. **Add length guards** before substring operations in Emacs functions
-5. **Test with minimal environment** before deploying:
-   ```bash
-   env -i PATH=/usr/bin:/bin HOME=$HOME /bin/bash -c 'your-command'
-   ```
-6. **Ensure Emacs daemon** is running before cron jobs execute (either via `@reboot` or systemd)
-7. **Redirect both stdout and stderr** (`>> log 2>&1`) to capture all output
 
 ## Related
 
-- [[emacs-daemon]] - Emacs daemon configuration and startup
-- [[emacsclient]] - Client usage patterns and flags
-- [[gptel-tools-agent]] - Automation functions invoked by cron
-- [[logging]] - Log management and rotation
-- [[systemd]] - Alternative to cron on Linux systems
+- [Emacs Daemon](emacs-daemon) - Running Emacs as a background service
+- [gptel-auto-workflow](gptel-auto-workflow) - Automated Git workflow orchestration
+- [Emacs Timers](emacs-timers) - Alternative scheduling within Emacs
+- [Environment Variables](environment-variables) - PATH and configuration
+- [Error Handling](error-handling) - Debugging Elisp errors like args-out-of-range
