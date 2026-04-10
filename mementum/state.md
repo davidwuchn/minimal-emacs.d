@@ -1,8 +1,51 @@
 # Mementum State
 
-> Last session: 2026-04-08 21:00
+> Last session: 2026-04-10 10:30
 
-## Total Improvements: 218+ Real Code Fixes (7 new today)
+## Total Improvements: 218+ Real Code Fixes (6 new today)
+
+### Session Summary: 2026-04-10 (Auto-Workflow Run Complete)
+
+**Action:** Monitored auto-workflow run `2026-04-10T075542Z-fdef` to completion
+
+**Result:** ✅ 6 kept experiments, 12 discarded (33% keep rate)
+
+**Auto-Workflow Results (07:55 run, completed ~10:20):**
+| # | Target | Decision | Notes |
+|---|--------|----------|-------|
+| 1 | gptel-tools-agent.el | ✅ kept | Removed redundant `parse-remote-head` call |
+| 2 | gptel-tools-agent.el | ✅ kept | Added nil validation for `def` |
+| 3 | gptel-tools-agent.el | ❌ discarded | Agent timeout (918s) |
+| 1 | gptel-ext-context-cache.el | ❌ discarded | Agent error |
+| 2 | gptel-ext-context-cache.el | ✅ kept | Fixed inflight flag reset in error paths |
+| 3 | gptel-ext-context-cache.el | ❌ discarded | Model metadata cache seeding issue |
+| 1 | gptel-ext-retry.el | ❌ discarded | Image-filtering extraction (score -0.40) |
+| 2 | gptel-ext-retry.el | ❌ discarded | Hard executor timeout |
+| 1 | gptel-agent-loop.el | ✅ kept | Loop optimization |
+| 2 | gptel-agent-loop.el | ✅ kept | Loop optimization |
+| 3 | gptel-agent-loop.el | ❌ discarded | Score -0.40 |
+| 4 | gptel-agent-loop.el | ✅ kept | Loop optimization |
+| 5 | gptel-agent-loop.el | ❌ discarded | Score -0.40 |
+| 1 | gptel-tools-code.el | ❌ discarded | Score -0.40 |
+| 2 | gptel-tools-code.el | ❌ discarded | Score -0.40 |
+
+**Kept Commits:**
+- `499c4c06` - optimize/agent-imacpro.taila8bdd.ts.net-exp1 (gptel-tools-agent.el)
+- `adaf25d7` - optimize/agent-imacpro.taila8bdd.ts.net-exp2 (gptel-tools-agent.el)
+- `c36dbd2e` - optimize/cache-imacpro.taila8bdd.ts.net-exp2 (gptel-ext-context-cache.el)
+- `a081b163` - optimize/loop-imacpro.taila8bdd.ts.net-exp1 (gptel-agent-loop.el)
+- `56625ed0` - optimize/loop-imacpro.taila8bdd.ts.net-exp2 (gptel-agent-loop.el)
+- `8395ca78` - optimize/loop-imacpro.taila8bdd.ts.net-exp4 (gptel-agent-loop.el)
+
+**Sync Status:**
+- **main:** `0f2bb904` (fix: harden weekly project runs)
+- **staging:** `3993732c` (◈ update state.md: auto-workflow run complete)
+- Both remotes (origin + upstream) in sync
+
+**Notes:**
+- Daemon connection broke during run (pipe closed) but process survived
+- Workflow recovered and completed successfully
+- Next cron run scheduled for 14:00 today
 
 ### Session Summary: 2026-04-08 (TDD Code Quality Metric + Staging Fix)
 
