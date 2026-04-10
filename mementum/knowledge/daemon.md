@@ -2,144 +2,134 @@
 title: Emacs Daemon Management
 status: active
 category: knowledge
-tags: [emacs, daemon, systemd, launchctl, anti-pattern]
+tags: [daemon, emacs, process-management, troubleshooting, macos, linux]
 ---
 
 # Emacs Daemon Management
 
 ## Overview
 
-The Emacs daemon (`emacs --daemon`) runs Emacs as a persistent server process, allowing instant frame creation via `emacsclient`. This document synthesizes critical lessons for managing daemons across platforms, avoiding common pitfalls, and handling edge cases.
+Emacs daemon mode runs a persistent Emacs server in the background, allowing rapid client connections via `emacsclient` with near-instant startup times. This guide covers critical patterns, anti-patterns, and troubleshooting techniques for managing Emacs daemons across platforms.
 
-## Platform-Specific Management
+## Core Concepts
 
-### Linux (systemd)
+### What is an Emacs Daemon?
 
-On Debian and other systemd-based distributions, **always use `systemctl --user`** for daemon management:
+An Emacs daemon is a headless Emacs server process that:
+- Runs continuously in the background
+- Loads your init files once at startup
+- Serves multiple `emacsclient` connections
+- Maintains buffer, frame, and session state between connections
 
+### Why Use a Daemon?
+
+| Benefit | Description |
+|---------|-------------|
+| **Fast startup** | `emacsclient` connects in ~100ms vs ~2-5s for cold start |
+| **Session persistence** | Buffers and state survive client disconnections |
+| **Resource efficiency** | Single process handles multiple editor instances |
+| **Remote-friendly** | Can serve connections via `TRAMP` over SSH |
+
+## Critical Anti-Patterns
+
+### 1. Stale Compiled Files (.elc)
+
+**Problem:** Byte-compiled `.elc` files persist across daemon restarts, causing old code to run.
+
+**Symptom Sequence:**
+1. Edit `.el` source file
+2. Restart daemon
+3. Changes not reflected
+4. Old compiled code still executing
+
+**Root Cause:** Emacs daemon loads `.elc` if it exists, bypassing `.el` changes.
+
+**Recovery Command:**
 ```bash
-# Essential commands
-systemctl --user start emacs      # Start daemon
-systemctl --user stop emacs       # Stop daemon
-systemctl --user restart emacs    # Restart daemon
-systemctl --user status emacs     # Check status and recent logs
+# Remove all compiled files
+rm -f lisp/modules/*.elc
+
+# Kill all Emacs processes
+killall -9 Emacs
+
+# Remove temp/socket files
+rm -rf /tmp/emacs*
+
+# Start fresh daemon
+MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 emacs --bg-daemon=copilot-auto-workflow
 ```
 
-**Why not direct commands?**
-- systemd already manages the server socket at `/run/user/UID/emacs/server`
-- Direct `emacs --daemon` commands conflict with the systemd-managed instance
-- systemctl handles logging, crash recovery, and clean restarts
+**Prevention Options:**
 
-**Error to avoid:**
+| Option | Implementation | Trade-off |
+|--------|---------------|-----------|
+| **Never compile** | Add `;; -*- no-byte-compile: t; -*-` to file header | Loses bytecode optimization |
+| **Prefer newer** | `(setq load-prefer-newer t)` in early-init.el | Slight load time penalty |
+| **Clean on restart** | `find . -name "*.elc" -delete` before restart | Requires discipline/script |
+
+**Verification Test:**
 ```bash
-# DON'T do this - causes conflicts
-emacsclient --eval "(kill-emacs)"  # Can hang/timeout
-
-# DO this instead
-systemctl --user restart emacs
+rm -f lisp/modules/*.elc
+emacs --batch -l lisp/modules/module.el -f some-function
 ```
 
-### macOS (launchctl)
+### 2. Server Name Conflicts
 
-Use `launchctl` with a Launch Agent for production, manual commands for development:
+**Problem:** Multiple cron jobs or processes using the same daemon server name cause "already running" errors.
 
-#### Launch Agent Setup
+**Symptom Messages:**
+- `"Unable to start daemon: Emacs server named X already running"`
+- `"failed to start worker daemon: X"`
 
-Create `~/Library/LaunchAgents/org.gnu.emacs.daemon.plist`:
+**Root Cause:** Shared `SERVER_NAME` across independent processes.
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" 
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>org.gnu.emacs.daemon</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Applications/Emacs.app/Contents/MacOS/Emacs</string>
-        <string>--daemon=main</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/tmp/emacs-daemon.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/emacs-daemon-error.log</string>
-</dict>
-</plist>
-```
-
-#### launchctl Commands
-
+**Solution Pattern:**
 ```bash
-# Load (start) the daemon
-launchctl load ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
+# Use action-specific server names
+SERVER_NAME="copilot-auto-workflow"
+SERVER_NAME="copilot-researcher"
 
-# Unload (stop) the daemon
-launchctl unload ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
-
-# Restart with delay
-launchctl unload ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist && \
-  sleep 2 && \
-  launchctl load ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist
-
-# Check status
-launchctl list | grep emacs
+# Separate log files per daemon
+${SERVER_NAME}.log
 ```
 
-#### When to Use Each Approach
-
-| Scenario | Recommended Method |
-|----------|-------------------|
-| Auto-start on login | launchctl Launch Agent |
-| Production server | launchctl or systemd |
-| Development/debugging | Manual `emacs --daemon` |
-| Testing configuration | Manual (better error feedback) |
-| CI/CD pipelines | Direct commands with timeout |
+**Fix Reference:** Commit `939928cf`
 
 ## Single Daemon Rule
 
-**CRITICAL:** Only one Emacs daemon should run per user. Multiple daemons cause:
+**CRITICAL:** Only ONE Emacs daemon should run at any time.
 
-- Port/socket binding conflicts
-- `emacsclient` connects unpredictably
-- Duplicate resource usage
-- State inconsistency across frames
+### Why This Matters
 
-### Pre-Start Checklist
+| Issue | Consequence |
+|-------|-------------|
+| **Port binding** | Only one daemon can bind to server socket |
+| **Client confusion** | `emacsclient` connects to first available daemon |
+| **Resource waste** | Multiple daemons duplicate memory usage |
+| **State inconsistency** | Buffers and worktrees get confused |
 
-Run this script before starting any daemon:
+### Safe Daemon Start Script
 
 ```bash
 #!/bin/bash
-set -euo pipefail
+# ensure-single-daemon.sh - Safe daemon startup
 
-echo "=== Ensuring Single Emacs Daemon ==="
+echo "=== CHECKING FOR EXISTING DAEMONS ==="
 
-# Kill existing daemons
-for pid in $(pgrep -f "Emacs.*daemon" 2>/dev/null); do
-    echo "Killing PID $pid..."
-    kill -9 "$pid" 2>/dev/null || true
-done
+DAEMON_COUNT=$(pgrep -f "Emacs.*daemon" | wc -l)
+echo "Found $DAEMON_COUNT Emacs daemon process(es)"
 
-sleep 3
-
-# Verify
-if [ $(pgrep -f "Emacs.*daemon" | wc -l) -gt 0 ]; then
-    echo "Warning: Daemons still running, forcing..."
-    pkill -9 -f Emacs
-    sleep 2
-fi
-
-# Clean stale sockets
-rm -rf /tmp/emacs$(id -u)/ 2>/dev/null || true
-rm -f /tmp/emacs* 2>/dev/null || true
-
-# Unload launchctl if present
-launchctl unload ~/Library/LaunchAgents/org.gnu.emacs.daemon.plist 2>/dev/null || true
-
-echo "✅ Ready to sta
-...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-RbbU4W.txt. Use Read tool if you need more]...
+if [ "$DAEMON_COUNT" -gt 0 ]; then
+    echo "Killing existing Emacs processes..."
+    pgrep -f "Emacs.*daemon" | while read pid; do
+        echo "  Killing PID: $pid"
+        kill -9 $pid 2>/dev/null
+    done
+    sleep 3
+    
+    # Force kill any stragglers
+    REMAINING=$(pgrep -f "Emacs.*daemon" | wc -l)
+    if [ "$REMAINING" -gt 0 ]; then
+        echo "Forcing kill..."
+      
+...[Result too large, truncated. Full result saved to: /Users/davidwu/.emacs.d/tmp/gptel-subagent-result-UPatSv.txt. Use Read tool if you need more]...
