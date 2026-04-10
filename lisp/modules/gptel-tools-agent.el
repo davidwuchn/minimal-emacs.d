@@ -6514,7 +6514,16 @@ Returns list of synthesis candidates."
         (gptel-auto-workflow--headless headless))
     (gptel-mementum--handle-synthesis-result topic files result)))
 
-(defun gptel-mementum-synthesize-candidate (candidate &optional synchronous)
+(defun gptel-mementum--synthesis-agent ()
+  "Return the preferred agent symbol for mementum synthesis, or nil."
+  (when (and (boundp 'gptel-agent--agents)
+             gptel-agent--agents)
+    (cond
+     ((assoc "researcher" gptel-agent--agents) 'researcher)
+     ((assoc "executor" gptel-agent--agents) 'executor)
+     (t nil))))
+
+(defun gptel-mementum-synthesize-candidate (candidate &optional synchronous synthesis-agent)
   "Synthesize CANDIDATE into knowledge page with human approval.
 CANDIDATE is plist with :topic :count :files.
 Implements λ termination(x): synthesis ≡ AI | approval ≡ human.
@@ -6522,10 +6531,12 @@ Returns t if synthesis was initiated, nil otherwise.
 
 Note: Call gptel-mementum-ensure-agents first for batch processing."
   (let* ((topic (plist-get candidate :topic))
-         (files (plist-get candidate :files))
-         (project-root (gptel-auto-workflow--project-root))
-         (headless (bound-and-true-p gptel-auto-workflow--headless))
-         (memories-content '()))
+          (files (plist-get candidate :files))
+          (project-root (gptel-auto-workflow--project-root))
+          (headless (bound-and-true-p gptel-auto-workflow--headless))
+          (agent (or synthesis-agent
+                     (gptel-mementum--synthesis-agent)))
+          (memories-content '()))
     (dolist (file files)
       (let ((content (gptel-auto-workflow--read-file-contents file)))
         (when content
@@ -6536,34 +6547,33 @@ Note: Call gptel-mementum-ensure-agents first for batch processing."
           nil)
       (let ((synthesis-prompt (gptel-mementum--build-synthesis-prompt topic memories-content)))
         (message "[mementum] Synthesizing %d memories for topic: %s" (length memories-content) topic)
-        (if (and (fboundp 'gptel-benchmark-call-subagent)
-                 (fboundp 'gptel-agent--task)
-                 (boundp 'gptel-agent--agents)
-                 gptel-agent--agents
-                 (assoc "executor" gptel-agent--agents))
+        (if (and agent
+                 (fboundp 'gptel-benchmark-call-subagent)
+                 (fboundp 'gptel-agent--task))
             (if (and synchronous
                      (fboundp 'gptel-benchmark-call-subagent-sync))
                 (gptel-mementum--deliver-synthesis-result
                  project-root headless topic files
                  (gptel-benchmark-call-subagent-sync
-                  'executor
+                  agent
                   (format "Synthesize knowledge: %s" topic)
                   synthesis-prompt
                   300))
-              (gptel-benchmark-call-subagent
-               'executor
-               (format "Synthesize knowledge: %s" topic)
-               synthesis-prompt
-               (lambda (result)
-                 (gptel-mementum--deliver-synthesis-result
-                  project-root headless topic files result))
-               300))
-          (message "[mementum] Skip '%s': executor subagent not available" topic))
+               (gptel-benchmark-call-subagent
+               agent
+                (format "Synthesize knowledge: %s" topic)
+                synthesis-prompt
+                (lambda (result)
+                  (gptel-mementum--deliver-synthesis-result
+                   project-root headless topic files result))
+                300))
+          (message "[mementum] Skip '%s': no synthesis subagent available" topic))
         t))))
 
 (defun gptel-mementum-ensure-agents ()
   "Ensure gptel-agent and executor are available for synthesis.
-Call once before processing multiple candidates. Returns t if executor available."
+Call once before processing multiple candidates. Returns the preferred
+read-only synthesis agent symbol when available, otherwise nil."
   ;; Ensure gptel-agent is loaded
   (unless (featurep 'gptel-agent)
     ;; Add yaml to load-path (required for parsing agent markdown)
@@ -6591,26 +6601,27 @@ Call once before processing multiple candidates. Returns t if executor available
     (when (and (boundp 'gptel-agent-dirs) gptel-agent-dirs)
       (or (and (boundp 'gptel-agent--agents) gptel-agent--agents)
           (gptel-agent--update-agents))))
-  ;; Return t if executor is available
+  ;; Return preferred synthesis agent when available.
   (and (fboundp 'gptel-benchmark-call-subagent)
        (fboundp 'gptel-agent--task)
-       (boundp 'gptel-agent--agents)
-       gptel-agent--agents
-       (assoc "executor" gptel-agent--agents)))
+       (gptel-mementum--synthesis-agent)))
 
 (defun gptel-mementum-synthesize-all-candidates (&optional candidates synchronous)
   "Synthesize all CANDIDATES (or detect if nil) with human approval.
 Ensures agents are loaded once before processing batch."
   (let* ((cands (or candidates (gptel-mementum-check-synthesis-candidates)))
-         (synthesized 0))
+         (synthesized 0)
+         (agent (gptel-mementum-ensure-agents)))
     ;; Setup agents once for entire batch (not per-candidate)
-    (if (gptel-mementum-ensure-agents)
+    (if agent
         (progn
-          (message "[mementum] Executor available, processing %d candidates" (length cands))
+          (message "[mementum] %s available, processing %d candidates"
+                   (capitalize (symbol-name agent))
+                   (length cands))
           (dolist (candidate cands)
-            (when (gptel-mementum-synthesize-candidate candidate synchronous)
+            (when (gptel-mementum-synthesize-candidate candidate synchronous agent)
               (cl-incf synthesized))))
-      (message "[mementum] Executor not available, skipping synthesis"))
+      (message "[mementum] No synthesis subagent available, skipping synthesis"))
     (message "[mementum] %s %d/%d candidates"
              (if synchronous "Synthesized" "Queued")
              synthesized
@@ -6650,6 +6661,12 @@ REQUIREMENTS:
 2. Concrete examples (code, tables, commands)
 3. Actionable patterns (not just descriptions)
 4. Cross-references to related topics
+5. Return the full markdown page directly in your final response
+
+IMPORTANT:
+- Do not write files or edit the repository
+- Do not use tools when the memories below already contain enough context
+- Return the complete knowledge page inline, not a summary of what you wrote
 
 OUTPUT FORMAT:
 ---
