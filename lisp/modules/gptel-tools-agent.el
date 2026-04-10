@@ -3159,13 +3159,20 @@ do not fetch every remote head into `refs/remotes/origin/*'."
 Returns non-nil on success, nil on failure."
   (let* ((staging-q (shell-quote-argument gptel-auto-workflow-staging-branch))
          (reset-q (shell-quote-argument reset-target))
-         (setup-results (list
-                         (gptel-auto-workflow--git-result
-                          (format "git checkout %s" staging-q)
-                          60)
-                         (gptel-auto-workflow--git-result
-                          (format "git reset --hard %s" reset-q)
-                          180)))
+         (current-branch-result
+          (gptel-auto-workflow--git-result "git branch --show-current" 30))
+         (current-branch
+          (and (= 0 (cdr current-branch-result))
+               (string-trim (car current-branch-result))))
+         (setup-results
+          (append
+           (unless (equal current-branch gptel-auto-workflow-staging-branch)
+             (list (gptel-auto-workflow--git-result
+                    (format "git checkout %s" staging-q)
+                    60)))
+           (list (gptel-auto-workflow--git-result
+                  (format "git reset --hard %s" reset-q)
+                  180))))
          (failed-setup (cl-find-if (lambda (item) (/= 0 (cdr item)))
                                    setup-results)))
     (if failed-setup

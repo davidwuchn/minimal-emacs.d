@@ -5337,6 +5337,28 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                               (string-match-p "git merge -X theirs optimize/test-exp1 --no-ff" command))
                             commands)))))
 
+(ert-deftest regression/auto-workflow/prepare-staging-merge-base-skips-checkout-when-already-on-staging ()
+  "Preparing staging should reset directly when already on the staging branch."
+  (let ((commands nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (push command commands)
+                 (cond
+                  ((string-match-p "git branch --show-current" command)
+                   (cons "staging\n" 0))
+                  ((string-match-p "git reset --hard origin/staging" command)
+                   (cons "" 0))
+                  ((string-match-p "git checkout staging" command)
+                   (cons "lisp/modules/gptel-benchmark-core.el: needs merge" 1))
+                  (t (cons "" 0)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (gptel-auto-workflow--prepare-staging-merge-base "origin/staging"))
+      (setq commands (nreverse commands))
+      (should (member "git branch --show-current" commands))
+      (should (member "git reset --hard origin/staging" commands))
+      (should-not (member "git checkout staging" commands)))))
+
 (ert-deftest regression/auto-workflow/merge-to-staging-reprepares-before-merge-fallback ()
   "Fallback merge should start from a freshly reset staging worktree."
   (let ((commands nil))
@@ -5350,6 +5372,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda (command &optional _timeout)
                  (push command commands)
                  (cond
+                  ((string-match-p "git branch --show-current" command)
+                   (cons "staging\n" 0))
                   ((string-match-p "git rev-parse --verify origin/staging" command)
                    (cons "origin/staging" 0))
                   ((string-match-p "git rev-parse optimize/test-exp1" command)
@@ -5384,6 +5408,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda (command &optional _timeout)
                  (push command commands)
                  (cond
+                  ((string-match-p "git branch --show-current" command)
+                   (cons "staging\n" 0))
                   ((string-match-p "git rev-parse --verify origin/staging" command)
                    (cons "origin/staging" 0))
                   ((string-match-p "git rev-parse optimize/test-exp1" command)
