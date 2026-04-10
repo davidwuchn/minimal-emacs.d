@@ -1,273 +1,257 @@
 ---
-title: Git Worktrees in Auto-Workflow Systems
+title: Git Worktree Management in Auto-Workflow
 status: active
 category: knowledge
-tags: [git, worktree, automation, debugging, experiments, cleanup]
+tags: [git, worktree, automation, debugging, patterns]
 ---
 
-# Git Worktrees in Auto-Workflow Systems
-
-This document covers practical patterns for managing Git worktrees in automated experiment workflows, including common pitfalls, cleanup strategies, and timing considerations.
+# Git Worktree Management in Auto-Workflow
 
 ## Overview
 
-Worktrees allow multiple working directories to share a single Git repository. In auto-workflow systems, each experiment typically runs in its own worktree to isolate changes and enable parallel execution. However, this pattern introduces specific challenges around path resolution, resource cleanup, and timing of deletion operations.
+Git worktrees are a critical component of the auto-workflow system, enabling parallel experiment execution and isolated testing environments. This knowledge page documents key patterns, bugs, and best practices for managing worktrees in automated experiment workflows.
+
+## Core Concepts
+
+### What is a Worktree?
+
+A Git worktree allows multiple working directories to share a single repository. This is essential for running experiments in isolation while maintaining a shared git history.
+
+```
+Main Repository: ~/.emacs.d/
+Worktree:       var/tmp/experiments/optimize/agent-exp1/
+```
+
+### Worktree Structure
+
+| Component | Path | Purpose |
+|-----------|------|---------|
+| `.git` | Shared (symlink) | Git database |
+| Working directory | Unique per worktree | Actual code files |
+| Branch | Unique per worktree | Experiment branch |
 
 ---
 
-## The Verification-Script Path Bug
+## Key Patterns
 
-### Symptom
+### Pattern 1: Worktree Creation for Experiments
 
-Auto-workflow experiments consistently failed with `verification-failed` status even when the grader passed all 9/9 test cases.
+Worktrees are created for each experiment to ensure isolation:
 
-### Root Cause Analysis
+```bash
+git worktree add <path> -b <branch-name>
+```
 
-The benchmark runner (`gptel-auto-experiment-benchmark`) invoked verification scripts using an absolute path derived from `proj-root`:
+Example from auto-workflow:
+```bash
+git worktree add var/tmp/experiments/optimize/agent-exp1 -b optimize/agent-exp1
+```
+
+### Pattern 2: Worktree Cleanup After Merge
+
+When experiments are merged to staging, their worktrees should be cleaned up:
+
+```bash
+# Detection: Find merged experiment branches
+git worktree list | grep optimize | awk '{print $3}' | sed 's/\[//' | sed 's/\]//' | while read branch; do
+  if git log staging --oneline | grep -q "Merge $branch"; then
+    echo "MERGED: $branch"
+  fi
+done
+
+# Cleanup
+git worktree remove <path> --force
+git branch -D <branch>
+```
+
+**Example:** Cleaned 7 merged worktrees (agent-exp1, agent-exp2, core-exp2, strategic-exp1, strategic-exp2, tools-exp1, tools-exp2)
+
+---
+
+## Critical Bug: Verification Failed in Worktree
+
+### Problem
+
+Auto-workflow experiments always failed with `verification-failed` after grader passed 9/9.
+
+### Root Cause
+
+The `gptel-auto-experiment-benchmark` function ran `verify-nucleus.sh` with path from `proj-root`:
 
 ```elisp
 (expand-file-name "scripts/verify-nucleus.sh" proj-root)
 ```
 
-However, the `default-directory` was set to the experiment worktree. The verification script computes its `$DIR` variable relative to its own location (the main repository), causing it to validate main repo code rather than the worktree's experimental changes.
+However, `default-directory` was the worktree. The script computes `$DIR` from its own location (main repo), so it validated main repo code, not worktree changes.
+
+### The Bug in Detail
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Worktree: var/tmp/experiments/optimize/agent-exp1/        │
-│  └── default-directory points here                         │
-│                                                             │
-│  Script: scripts/verify-nucleus.sh (resolves to main repo) │
-│  └── $DIR computed from script location → main repo        │
-│                                                             │
-│  Result: Validates main repo, NOT worktree changes          │
-└─────────────────────────────────────────────────────────────┘
+Main Repo:     ~/.emacs.d/
+Worktree:      var/tmp/experiments/optimize/agent-exp1/
+Script Path:   ~/.emacs.d/scripts/verify-nucleus.sh (hardcoded to main repo)
+Script $DIR:   ~/.emacs.d/ (computed from script location)
+Validation:    Validates ~/.emacs.d/ instead of worktree!
 ```
 
-### The Fix
+### Solution
 
-Skip nucleus script validation in the experiment benchmark because:
-
-1. **Syntax validation still works** — Code syntax checks target the worktree file directly
-2. **Executor runs verification in worktree context** — The actual execution phase validates properly
-3. **Full validation occurs in staging flow** — Post-experiment merge to staging includes comprehensive checks
+Skip nucleus script validation in experiment benchmark:
+- Code syntax validation still works (targets worktree file)
+- Executor already runs verification in worktree context
+- Full validation happens in staging flow anyway
 
 ```elisp
-;; Before: Always ran verification
-(verify-nucleus proj-root)  ; Wrong: uses main repo paths
-
-;; After: Skip for benchmark, rely on executor + staging validation
-(when (not experiment-p)
-  (verify-nucleus proj-root))
+;; In gptel-auto-experiment-benchmark (lisp/modules/gptel-tools-agent.el:1634)
+;; Removed verification that used script path from main repo
 ```
 
-### Verification Result
+### Verification
 
+After fix:
 ```elisp
 (:passed t :nucleus-passed t :nucleus-skipped t)
 ```
 
 ---
 
-## Worktree Cleanup Pattern for Merged Experiments
+## Critical Bug: Worktree Deletion Timing
 
 ### Problem
 
-Experiment worktrees accumulate indefinitely after branches are merged to staging, consuming disk space and creating confusion about which worktrees are active.
+"No such file or directory" errors during auto-workflow experiments.
 
-### Symptoms
+### Timeline of the Bug
 
-- Multiple stale worktrees in `var/tmp/experiments/`
-- Experiment branches merged but not deleted
-- Unbounded worktree count growth
-
-### Detection Command
-
-```bash
-# List experiment worktrees and identify merged branches
-git worktree list | grep optimize | awk '{print $3}' | \
-  sed 's/\[//' | sed 's/\]//' | while read branch; do
-  if git log staging --oneline | grep -q "Merge $branch"; then
-    echo "MERGED: $branch"
-  fi
-done
-```
-
-### Cleanup Procedure
-
-```bash
-# Remove the worktree
-git worktree remove <path> --force
-
-# Delete the branch
-git branch -D <branch>
-```
-
-### Example Cleanup
-
-Cleaned 7 merged worktrees in a single session:
-
-| Worktree | Branch | Status |
-|----------|--------|--------|
-| agent-exp1 | optimize/agent-exp1 | Merged → Removed |
-| agent-exp2 | optimize/agent-exp2 | Merged → Removed |
-| core-exp2 | optimize/core-exp2 | Merged → Removed |
-| strategic-exp1 | optimize/strategic-exp1 | Merged → Removed |
-| strategic-exp2 | optimize/strategic-exp2 | Merged → Removed |
-| tools-exp1 | optimize/tools-exp1 | Merged → Removed |
-| tools-exp2 | optimize/tools-exp2 | Merged → Removed |
-
-### Prevention Strategies
-
-1. **Auto-cleanup in workflow** — The auto-workflow should remove worktrees after successful merge to staging
-2. **Periodic cleanup** — Run detection script weekly to identify stale worktrees
-3. **Auto-deletion on merge** — Configure workflow to delete experiment branch immediately after staging merge
-
----
-
-## Worktree Deletion Timing Bug
-
-### Problem
-
-"No such file or directory" errors occurred during multi-experiment runs, where subsequent experiments failed immediately after earlier ones completed.
-
-### Root Cause: Premature Deletion
-
-Worktrees were being deleted at the **start** of `run-next`, before the next experiment could use them:
-
-```
-Timeline:
 1. Experiment 1 creates worktree
-2. Experiment 1 completes successfully
-3. run-next(2) is called
-4. Line 2289: gptel-auto-worktree-delete-worktree DELETES worktree
-5. Experiment 2 tries to run in non-existent worktree → ERROR
-```
+2. Experiment 1 completes
+3. `run-next(2)` is called
+4. Line 2289: `gptel-auto-worktree-delete-worktree` DELETES worktree
+5. Experiment 2 tries to run in non-existent worktree → error
 
-Additionally, worktrees were deleted on **every failure** (grader failure, benchmark failure, timeout), preventing any retry mechanism from working.
+### Additional Issue
 
-### The Solution
+Worktree was deleted on every failure (grader failed, benchmark failed, timeout), preventing retry.
 
-**Remove all intermediate worktree deletions:**
+### Solution
 
-1. Remove `delete-worktree` calls during experiment execution
-2. Remove `delete-worktree` when target is marked done
-3. Only clean worktrees at the **start of the next workflow run**
+- Removed ALL `delete-worktree` calls during experiment execution
+- Removed delete-worktree when target is done
+- Worktrees only cleaned at START of next workflow run
+- Cleanup: `gptel-auto-worktree--cleanup-old-worktrees` in `gptel-auto-workflow-cron-safe`
+
+### Commits
+
+- `d06a47f` - Partial fix
+- `1834e09` - Final fix
 
 ### Why Keep Worktrees Until Next Run?
 
+1. After experiments complete, improvements may need to be merged to staging
+2. Staging merge happens AFTER workflow completes
+3. Only safe to delete at START of next run (clean slate for new experiments)
+
+### Pattern: Resource Lifecycle Management
+
+> Resources should only be cleaned up when truly done - for auto-workflow, that means at the START of the NEXT run, not the end of the current run.
+
+---
+
+## Worktree Commands Reference
+
+### Common Operations
+
+```bash
+# List all worktrees
+git worktree list
+
+# Create worktree
+git worktree add <path> -b <branch>
+
+# Remove worktree
+git worktree remove <path>
+
+# Force remove (if files exist)
+git worktree remove <path> --force
+
+# Prune stale worktree references
+git worktree prune
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Experiment completes                                       │
-│  └─> Worktree persists                                      │
-│       └─> Improvements may need merging to staging          │
-│            └─> Staging merge happens AFTER workflow         │
-│                 └─> Only safe to delete at START of next run │
-└─────────────────────────────────────────────────────────────┘
-```
 
-The worktree must survive until:
-- All experiments in the current run complete
-- Staging merge finishes
-- Next workflow run begins (providing a clean slate for new experiments)
+### Debugging Worktree Issues
 
-### Commit History
+```bash
+# Check which branch a worktree is on
+git worktree list
 
-| Commit | Description |
-|--------|-------------|
-| d06a47f | Partial fix |
-| 1834e09 | Final fix - complete removal of premature deletion |
+# Verify worktree is valid
+git -C <worktree-path> status
 
-### Pattern: Resource Lifetime Management
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Resource Lifetime                                          │
-├─────────────────────────────────────────────────────────────┤
-│  Created → Used by N experiments → All complete →           │
-│  Merge to staging → Workflow ends → START OF NEXT RUN      │
-│  → Only NOW safe to delete                                 │
-└─────────────────────────────────────────────────────────────┘
-
-WRONG: Delete at end of current operation
-RIGHT: Delete at start of next cycle
+# Check for file conflicts
+git -C <worktree-path> diff --name-only
 ```
 
 ---
 
-## Key Insights Summary
+## Best Practices
 
-### Worktrees Share .git, Not Working Directory
+### 1. Always Use Absolute Paths in Scripts
 
+When scripts need to reference files, use absolute paths or pass paths as arguments:
+
+```bash
+# BAD: Script computes path from its location
+$DIR/scripts/verify.sh
+
+# GOOD: Script accepts path as argument
+./verify.sh /absolute/path/to/worktree
 ```
-Main Repository          Worktree
-├── .git (shared)        ├── .git -> ../.git (pointer)
-├── src/                 ├── src/ (separate copy)
-└── scripts/             └── [no scripts/]
+
+### 2. Clean Up at Workflow Boundaries
+
+- Clean old worktrees at the START of a new workflow run
+- Never clean during experiment execution
+- Allow cleanup between workflow runs for merge operations
+
+### 3. Track Worktree State
+
+```elisp
+;; Store worktree path for later cleanup
+(setq current-worktree-path (expand-file-name "var/tmp/experiments/..." project-root))
 ```
 
-Scripts that compute paths relative to their own location will traverse into the main repo, not the worktree.
+### 4. Handle Failures Gracefully
 
-### Path Resolution in Shared-Repository Scenarios
+Never delete worktree on experiment failure - this prevents debugging and retry:
 
-| Scenario | Behavior | Risk |
-|----------|----------|------|
-| `expand-file-name` with `proj-root` | Resolves to main repo | Verification wrong |
-| Script-relative `$DIR` computation | Resolves to script location | Validates wrong tree |
-| `default-directory` in Elisp | Points to worktree | Context correct |
+```bash
+# BAD: Delete on every failure
+(when (or grader-failed benchmark-failed timeout)
+  (delete-worktree worktree-path))
 
-### Timing Principle
-
-> Resources should only be cleaned up when truly done. For automated workflows, "done" means at the **start of the next run**, not the **end of the current one**.
-
----
-
-## Action Checklist
-
-### For New Experiment Setup
-
-- [ ] Create worktree in `var/tmp/experiments/`
-- [ ] Set `default-directory` to worktree path
-- [ ] Verify all scripts use worktree-relative paths
-
-### For Experiment Completion
-
-- [ ] Do NOT delete worktree immediately
-- [ ] Allow staging merge to complete
-- [ ] Keep worktree accessible for debugging if needed
-
-### For Workflow Cleanup (Start of Next Run)
-
-- [ ] Call `gptel-auto-workflow--cleanup-old-worktrees`
-- [ ] Run in `gptel-auto-workflow-cron-safe`
-- [ ] Remove only worktrees from previous completed run
-
-### Periodic Maintenance
-
-- [ ] Run merged-worktree detection monthly
-- [ ] Clean up stale branches and worktrees
-- [ ] Verify disk usage in `var/tmp/experiments/`
+# GOOD: Keep until next workflow run
+;; Only cleanup in gptel-auto-workflow-cron-safe
+```
 
 ---
 
-## Related
+## Related Topics
 
-- [Git Worktrees](https://git-scm.com/docs/git-worktree) — Official documentation
-- [Auto-Workflow System](category:auto-workflow) — Parent system containing worktree management
-- [Staging Branch](topic:staging) — Merge target for experimental changes
-- [Experiment Benchmark](topic:experiment-benchmark) — Where verification bugs manifested
-- [Cron Workflow](topic:cron-automation) — Where cleanup runs scheduled
-- [Git Branch Management](topic:branch-lifecycle) — Branch creation and deletion patterns
-- [Path Resolution Bugs](topic:path-resolution) — General category of similar issues
+- [[auto-workflow]] - The automated experiment workflow system
+- [[staging]] - Where experiment results are merged
+- [[verification]] - Code verification process
+- [[git-branching]] - Branch management strategies
+- [[benchmark]] - Experiment benchmarking
 
 ---
 
-## File References
+## Summary
 
-| File | Line | Purpose |
-|------|------|---------|
-| `lisp/modules/gptel-tools-agent.el` | 1634 | `gptel-auto-experiment-benchmark` - verification invocation |
-| `lisp/modules/gptel-tools-agent.el` | 2289 | `gptel-auto-worktree-delete-worktree` - premature deletion (removed) |
+Worktree management is critical for reliable auto-workflow execution:
 
----
+1. **Path Resolution**: Scripts must not hardcode paths relative to their location - they won't see worktree changes
+2. **Cleanup Timing**: Delete worktrees at workflow boundaries, not during execution
+3. **Merge Cleanup**: Remove worktrees for experiments merged to staging
+4. **Failure Handling**: Keep worktrees on failure to enable debugging and retry
 
-*This page documents patterns discovered through debugging auto-workflow experiments. Update as new worktree-related issues arise.*
+Key insight: Worktrees share `.git` but have separate working directories. Scripts that compute paths from their own location will always target the main repo, not the worktree.
