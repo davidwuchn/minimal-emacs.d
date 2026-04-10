@@ -1,21 +1,21 @@
 ---
-title: Emacs Lisp Patterns
+title: Emacs Development Patterns and Anti-Patterns
 status: active
 category: knowledge
-tags: [pattern, elisp, emacs, buffer-local, fsm, scheduling, error-handling, upstream]
+tags: [elisp, pattern, anti-pattern, development, gptel, workflow]
 ---
 
-# Emacs Lisp Patterns
+# Emacs Development Patterns and Anti-Patterns
 
-This page documents recurring patterns and anti-patterns discovered during Emacs+gptel development, with actionable implementations, code examples, and cross-references.
+This knowledge page catalogs common patterns and anti-patterns encountered in Emacs Lisp development, particularly in the context of gptel and auto-workflow systems.
 
 ---
 
-## 1. Buffer-Local Variable Pattern
+## Buffer-Local Variable Pattern
 
 ### Pattern
 
-Buffer-local variables must be set in the correct buffer context using `with-current-buffer`.
+Buffer-local variables must be set in the correct buffer context.
 
 ### Problem
 
@@ -62,58 +62,7 @@ Buffer-local variables must be set in the correct buffer context using `with-cur
 
 ---
 
-## 2. Module Load Order Pattern
-
-### Pattern
-
-Require modules before using their variables/functions.
-
-### Problem
-
-```elisp
-;; ERROR: gptel--tool-preview-alist void
-(gptel-agent--task ...)  ; Uses gptel--tool-preview-alist
-```
-
-### Solutions
-
-#### 1. Forward Declaration
-
-```elisp
-(defvar gptel--tool-preview-alist nil)  ; Forward declare
-```
-
-#### 2. Require Dependencies
-
-```elisp
-(require 'gptel-request)
-(require 'gptel-agent-tools)
-```
-
-#### 3. Ensure Correct Load Order
-
-```elisp
-;; In run-auto-workflow-cron.sh:
-(setq load-path (cons "." load-path))
-(load-file "lisp/modules/gptel.el")
-(load-file "lisp/modules/gptel-agent-tools.el")
-```
-
-### Common Dependencies
-
-```
-gptel → gptel-request → gptel-agent-tools → gptel-agent-tools
-```
-
-### Signal
-
-- "Symbol's value as variable is void" → missing require/forward declaration
-- Function works interactively but not programmatically → load order
-- Works after manual require → missing dependency
-
----
-
-## 3. FSM Creation Pattern for Auto-Workflow
+## FSM Creation Pattern for Auto-Workflow
 
 ### Problem
 
@@ -165,9 +114,75 @@ Evidence of success:
 [nucleus] Subagent executor still running... (596.7s elapsed)
 ```
 
+FSM created successfully, experiments execute.
+
 ---
 
-## 4. Nil Guard Pattern for Elisp
+## Module Load Order Pattern
+
+### Pattern
+
+Require modules before using their variables/functions.
+
+### Problem
+
+```elisp
+;; ERROR: gptel--tool-preview-alist void
+(gptel-agent--task ...)  ; Uses gptel--tool-preview-alist
+```
+
+### Root Cause
+
+- Variable defined in `gptel.el`
+- Function in `gptel-agent-tools.el` uses it
+- If `gptel.el` not loaded, variable is void
+
+### Solutions
+
+#### 1. Forward Declaration
+
+```elisp
+(defvar gptel--tool-preview-alist nil)  ; Forward declare
+```
+
+#### 2. Require Dependencies
+
+```elisp
+(require 'gptel-request)
+(require 'gptel-agent-tools)
+```
+
+#### 3. Ensure Correct Load Order
+
+```elisp
+;; In run-auto-workflow-cron.sh:
+(setq load-path (cons "." load-path))
+(load-file "lisp/modules/gptel.el")
+(load-file "lisp/modules/gptel-agent-tools.el")
+```
+
+### Common Dependencies
+
+```
+gptel → gptel-request → gptel-agent-tools → gptel-agent-tools
+```
+
+### Signal
+
+- "Symbol's value as variable is void" → missing require/forward declaration
+- Works interactively but not programmatically → load order
+- Works after manual require → missing dependency
+
+### Best Practice
+
+1. Use `require` for dependencies
+2. Forward declare variables from other files
+3. Document dependencies in comments
+4. Test in clean Emacs instance
+
+---
+
+## Nil Guard Pattern for Elisp
 
 ### Pattern
 
@@ -193,64 +208,19 @@ Elisp functions like `=`, `make-overlay`, `copy-marker` throw `wrong-type-argume
 
 ### Files Fixed
 
-| File | Line | Pattern |
-|------|------|---------|
-| `gptel-tools-agent.el` | 133-137 | marker fallback chain |
-| `gptel-agent-loop.el` | 506-512 | same pattern |
-| `gptel-ext-tool-confirm.el` | 337-340 | tool confirm guard |
-| `gptel-ext-retry.el` | 314-318 | `(numberp status)` guard |
+- `gptel-tools-agent.el:133-137` — marker fallback chain
+- `gptel-agent-loop.el:506-512` — same pattern
+- `gptel-ext-tool-confirm.el:337-340` — tool confirm guard
+- `gptel-ext-retry.el:314-318` — `(numberp status)` guard
+
+### Commits
+
+- `57d96ab` — FSM markers nil
+- `aa4e5e8` — HTTP status nil
 
 ---
 
-## 5. Nested Defun Anti-Pattern Detection
-
-### Finding
-
-Nested `defun` inside another function:
-
-```elisp
-(defun outer-function ()
-  ...
-  (defun inner-function ()  ; WRONG - creates new function every call!
-    ...))
-```
-
-### Impact
-
-- Creates a new function object on every call to outer function
-- Function is inaccessible from outside (local binding)
-- Memory leak - function objects accumulate
-- Copy-paste error pattern - likely from refactoring
-
-### Detection Pattern
-
-Look for:
-- `defun` inside `let`, `when`, `if` blocks
-- Functions defined at indentation level > 0
-- Functions that appear to be helpers but are inside main functions
-
-### Fix Pattern
-
-Move to top-level:
-
-```elisp
-(defun inner-function ()
-  "Docstring."
-  ...)
-
-(defun outer-function ()
-  ...
-  (inner-function))
-```
-
-### Related
-
-- File: `lisp/modules/gptel-workflow-benchmark.el:709`
-- Fix: commit `25c63eb` then `9056845`
-
----
-
-## 6. Cron-Based Scheduling for Emacs
+## Cron-Based Scheduling for Emacs
 
 ### Pattern
 
@@ -305,9 +275,9 @@ LOGDIR=~/.emacs.d/var/tmp/cron
 
 ---
 
-## 7. LLM-Generated Syntax Error Pattern
+## LLM-Generated Syntax Error Pattern
 
-### Pattern
+### Anti-Pattern
 
 LLM-generated commits can introduce syntax errors while claiming to fix them.
 
@@ -357,13 +327,67 @@ LLM-generated commits can introduce syntax errors while claiming to fix them.
 
 ---
 
-## 8. Upstream Cooperation Pattern
+## Nested Defun Anti-Pattern Detection
+
+### Anti-Pattern
+
+Found nested `defun` inside another function:
+
+```elisp
+(defun outer-function ()
+  ...
+  (defun inner-function ()  ; WRONG - creates new function every call!
+    ...))
+```
+
+### Impact
+
+- Creates a new function object on every call to outer function
+- Function is inaccessible from outside (local binding)
+- Memory leak - function objects accumulate
+- Copy-paste error pattern - likely from refactoring
+
+### Detection Pattern
+
+Look for:
+- `defun` inside `let`, `when`, `if` blocks
+- Functions defined at indentation level > 0
+- Functions that appear to be helpers but are inside main functions
+
+### Fix Pattern
+
+Move to top-level:
+
+```elisp
+(defun inner-function ()
+  "Docstring."
+  ...)
+
+(defun outer-function ()
+  ...
+  (inner-function))
+```
+
+### Prevention
+
+- `M-x checkdoc` will flag some issues
+- Code review: scan for defun at wrong indentation
+- Unit tests will fail if function is not defined at load time
+
+### Related
+
+- File: `lisp/modules/gptel-workflow-benchmark.el:709`
+- Fix: commit `25c63eb` then `9056845`
+
+---
+
+## Upstream Cooperation Pattern
 
 ### Insight
 
 When maintaining a fork with local patches that overlap with upstream functionality:
 
-#### 1. Verify Before Removing
+### 1. Verify Before Removing
 
 ```
 λ upstream(x).    claim(x) → verify(grep, sed, read)
@@ -373,20 +397,18 @@ When maintaining a fork with local patches that overlap with upstream functional
 
 Don't trust commit messages alone. Verify functions exist in upstream code.
 
-Example: Verified `gptel--update-wait` in `gptel.el:1180`, `gptel--handle-error` in `gptel.el:1349` before removing local equivalents.
+**Example:** Verified `gptel--update-wait` in `gptel.el:1180`, `gptel--handle-error` in `gptel.el:1349` before removing local equivalents.
 
-#### 2. Keep Defensive Workarounds
+### 2. Keep Defensive Workarounds
 
 Upstream focuses on happy path. Local code should keep:
 - Edge case handlers upstream doesn't cover
 - Defensive safety nets
 - Error recovery for corrupted state
 
-Example: Kept `my/gptel--recover-fsm-on-error` (error+STOP limbo) and subagent error logging—upstream doesn't have these.
+**Example:** Kept `my/gptel--recover-fsm-on-error` (error+STOP limbo) and subagent error logging—upstream doesn't have these.
 
-#### 3. Commentary as Migration Log
-
-Document what moved where in file header:
+### 3. Commentary as Migration Log
 
 ```elisp
 ;;; Commentary:
@@ -398,18 +420,9 @@ Document what moved where in file header:
 
 Future readers know why code is minimal.
 
-#### 4. Test Fixes Stay Local
+### 4. Test Fixes Stay Local
 
-Tests for local-specific code stay local. Don't try to upstream tests that only validate local patches.
-
-#### 5. Sync Regularly
-
-```
-λ sync(x).    fetch(origin) → log(HEAD..origin) → merge_or_rebase
-              | review(changelog) → adapt(local_patches)
-```
-
-Check package updates, review changelogs, adapt local patches.
+Tests for local-specific code stay local. Don't upstream tests that only validate local patches.
 
 ### Pattern
 
@@ -448,9 +461,9 @@ upstream = general_core + happy_path
 
 ---
 
-## 9. Experiment Worktree Cleanup Pattern
+## Experiment Worktree Cleanup Pattern
 
-### Pattern
+### Anti-Pattern
 
 Merged experiment worktrees should be cleaned up to prevent accumulation.
 
@@ -487,85 +500,33 @@ git branch -D <branch>
 
 Cleaned 7 merged worktrees (agent-exp1, agent-exp2, core-exp2, strategic-exp1, strategic-exp2, tools-exp1, tools-exp2)
 
-### Location
-
-`var/tmp/experiments/optimize/`
+**Location:** `var/tmp/experiments/optimize/`
 
 ---
 
-## 10. PR Workflow Example (nil/null Tool Name Hangs FSM)
+## Summary Decision Matrix
 
-### Case Study
-
-**Discovery:** DashScope returns tool calls with nil/null function names, causing FSM to hang.
-
-### Process
-
-```bash
-# 1. Create clean branch from upstream
-git checkout -b fix-nil-tool-names upstream/master
-
-# 2. Cherry-pick or re-implement minimal fix
-#    (not the full defensive "invalid tool" pattern)
-# 3. Commit with clear message
-# 4. Push to fork
-git push origin fix-nil-tool-names
-
-# 5. Create PR against upstream
-gh pr create --repo karthink/gptel --head davidwuchn:fix-nil-tool-names --base master
-```
-
-### Key Insight
-
-```
-λ pr_scope(x).    minimal_fix(x) > defensive_framework(x)
-                  | clean_branch(upstream_master) > fork_branch(x)
-                  | general_benefit(x) → PR(upstream)
-                  | edge_case_only(x) → local_patch
-```
-
-**PR #1305:** https://github.com/karthink/gptel/pull/1305
-
-### What We Did NOT Upstream
-
-| Local Code | Reason |
-|------------|--------|
-| `my/gptel--sanitize-tool-calls` | Defensive pre-check, upstream handles in parser |
-| `my/gptel--nil-tool-call-p` | Redundant with PR fix |
-| "invalid" tool registration | Defensive fallback pattern |
-| Doom-loop detection | Defensive, not a bug fix |
-
----
-
-## Summary Table
-
-| Pattern | Type | Commits | Files Affected |
-|---------|------|--------|----------------|
-| Buffer-Local Variable | ✅ Pattern | - | gptel.el |
-| Module Load Order | ✅ Pattern | - | Multiple |
-| FSM Creation | ✅ Pattern | - | gptel-agent-tools.el |
-| Nil Guard | ✅ Pattern | 57d96ab, aa4e5e8 | Multiple |
-| Nested Defun | ❌ Anti-Pattern | 25c63eb, 9056845 | gptel-workflow-benchmark.el |
-| Cron Scheduling | ✅ Pattern | - | cron.d/* |
-| LLM Syntax Error | ❌ Anti-Pattern | 36bccd28 | Multiple |
-| Upstream Cooperation | ✅ Pattern | - | All local fork files |
-| Worktree Cleanup | ✅ Pattern | - | var/tmp/experiments/ |
+| Pattern | Use Case | Solution |
+|---------|---------|----------|
+| Buffer-Local | Per-buffer state | `with-current-buffer` + `setq-local` |
+| FSM Creation | Auto-workflow tasks | Create FSM before agent calls |
+| Module Load | Dependencies | `require` + forward declare |
+| Nil Guard | Edge cases | `(and (typep x) x)` patterns |
+| Cron | Scheduled tasks | `emacsclient` from cron |
+| Syntax Check | LLM commits | `forward-sexp` verification |
+| Nested Defun | Code structure | Move to top-level |
+| Upstream | Fork maintenance | Verify before removing |
 
 ---
 
 ## Related
 
-- [[auto-workflow]] - Automated workflow system
-- [[fsm]] - Finite state machine implementation
-- [[buffer-local]] - Buffer-local variable usage
-- [[gptel-modules]] - Module dependencies and load order
-- [[scheduling]] - Cron and timer scheduling
-- [[error-handling]] - Defensive coding patterns
-- [[upstream]] - Fork maintenance and contribution
-- [[anti-patterns]] - Patterns to avoid
-- [[project-facts]] - Architecture and modules
-- [[AGENTS.md]] - Agent rules including `λ upstream(x)`
+- [gptel-project-facts](project-facts.md) — architecture and modules
+- [AGENTS.md](../AGENTS.md) — `λ upstream(x)` rule
+- [gptel workflow benchmarks)](gptel-workflow-benchmark.el) — experiment tracking
+- [Cron scheduling scripts](../scripts/run-auto-workflow-cron.sh) — automated tasks
 
 ---
 
-*Captured: 2026-03-23 through 2026-04-06*
+*Last updated: 2026-04-06*
+*Category: pattern | Status: active*
