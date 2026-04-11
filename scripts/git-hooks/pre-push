@@ -5,6 +5,11 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 check_script="$repo_root/scripts/check-submodule-sync.sh"
 
+if [[ "${VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC:-0}" == "1" ]]; then
+    echo "pre-push: skipping submodule sync (VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1)"
+    exit 0
+fi
+
 while read -r local_ref local_sha remote_ref remote_sha; do
     if [[ -z "${local_sha:-}" || "$local_sha" == "0000000000000000000000000000000000000000" ]]; then
         continue

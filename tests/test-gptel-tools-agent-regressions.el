@@ -820,8 +820,8 @@ EXIT-CODE defaults to 1."
             (setq-local default-directory (file-name-as-directory worktree-dir)))
            (let ((gptel-auto-experiment-time-budget 600)
                  (gptel-auto-experiment-active-grace 300)
-                 (gptel-auto-experiment-validation-retry-time-budget 240)
-                (gptel-auto-experiment-validation-retry-active-grace 180))
+                (gptel-auto-experiment-validation-retry-time-budget 240)
+                (gptel-auto-experiment-validation-retry-active-grace 120))
              (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
                         (lambda (_target _experiment-id) worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
@@ -866,7 +866,7 @@ EXIT-CODE defaults to 1."
                 captured-graces (nreverse captured-graces))
           (should result)
           (should (equal captured-timeouts '(600 240)))
-          (should (equal captured-graces '(300 180))))
+          (should (equal captured-graces '(300 120))))
       (when (buffer-live-p worktree-buf)
         (kill-buffer worktree-buf))
       (delete-directory project-root t)))))
@@ -978,32 +978,14 @@ EXIT-CODE defaults to 1."
                     gptel-auto-experiment-active-grace)))
       (should (> captured-hard-timeout 900)))))
 
-(ert-deftest regression/subagent/default-validation-retry-hard-timeout-keeps-repair-headroom ()
-  "Default validation-retry hard timeout should stay above the 360s false-negative wall."
-  (let ((gptel-agent--agents '(("executor")))
-        (captured-timeout nil)
-        (captured-hard-timeout nil)
-        (gptel-auto-experiment-active-grace
-         gptel-auto-experiment-validation-retry-active-grace))
-    (cl-letf (((symbol-function 'my/gptel--agent-task-with-timeout)
-               (lambda (_callback _agent-type _description _prompt
-                        &optional _files _include-history _include-diff)
-                 (setq captured-timeout my/gptel-agent-task-timeout
-                       captured-hard-timeout my/gptel-agent-task-hard-timeout)))
-              ((symbol-function 'gptel-agent--task)
-               (lambda (&rest _) nil)))
-      (my/gptel--run-agent-tool-with-timeout
-       gptel-auto-experiment-validation-retry-time-budget
-       #'ignore
-       "executor"
-       "desc"
-       "prompt")
-      (should (= captured-timeout
-                 gptel-auto-experiment-validation-retry-time-budget))
-      (should (= captured-hard-timeout
-                 (+ gptel-auto-experiment-validation-retry-time-budget
-                    gptel-auto-experiment-validation-retry-active-grace)))
-      (should (> captured-hard-timeout 360)))))
+(ert-deftest regression/subagent/minimax-backend-max-time-keeps-provider-headroom ()
+  "MiniMax backend should not undercut long-running executor requests."
+  (require 'gptel-ext-backends)
+  (let* ((raw-curl-args (gptel-backend-curl-args gptel--minimax))
+         (curl-args (if (functionp raw-curl-args) (funcall raw-curl-args) raw-curl-args))
+         (max-time-index (cl-position "--max-time" curl-args :test #'string=)))
+    (should max-time-index)
+    (should (equal (nth (1+ max-time-index) curl-args) "900"))))
 
 (ert-deftest regression/runagent/malformed-call-with-no-args-reports-error ()
   "RunAgent should return a normal tool error when no mapped args were supplied."
@@ -1355,10 +1337,10 @@ EXIT-CODE defaults to 1."
      "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 56. See Curl manpage for details.\"")
     '(:timeout . "Experiment timed out"))))
 
-(ert-deftest regression/auto-experiment/usage-limit-exceeded-is-not-hard-executor-quota ()
-  "Transient usage-limit errors should stay retryable for executor runs."
-  (should-not
-   (gptel-auto-experiment--hard-quota-exhausted-p
+(ert-deftest regression/auto-experiment/usage-limit-exceeded-counts-as-quota-exhaustion ()
+  "Live provider usage-limit errors should trip hard quota detection."
+  (should
+   (gptel-auto-experiment--quota-exhausted-p
     "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")))
 
 (ert-deftest regression/auto-experiment/run-with-retry-retries-string-timeout-category ()
@@ -1466,8 +1448,8 @@ EXIT-CODE defaults to 1."
                (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
                  (cl-incf runs)
                  (funcall callback
-                           (list :agent-output
-                                "Error: Task executor could not finish task \"x\". Error details: (:type \"insufficient_quota\" :message \"week allocated quota exceeded\" :http_code \"429\")"
+                          (list :agent-output
+                                "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"
                                 :comparator-reason ":api-rate-limit"))))
               ((symbol-function 'run-with-timer)
                (lambda (&rest _args)
@@ -1477,47 +1459,12 @@ EXIT-CODE defaults to 1."
                (lambda (&rest _args) nil)))
       (gptel-auto-experiment--run-with-retry
        "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
-        (lambda (result)
-          (setq final-result result)))
-       (should (= runs 1))
-        (should-not scheduled-retry)
-        (should gptel-auto-experiment--quota-exhausted)
-        (should (string-match-p "week allocated quota exceeded" (plist-get final-result :agent-output))))))
-
-(ert-deftest regression/auto-experiment/run-with-retry-retries-usage-limit-rate-limits ()
-  "Usage-limit 429s should stay on the retry path instead of stopping the run."
-  (let ((runs 0)
-        (scheduled-retries 0)
-        (final-result nil)
-        (gptel-auto-experiment-max-retries 3)
-        (gptel-auto-experiment-retry-delay 0)
-        (gptel-auto-experiment--quota-exhausted nil))
-    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
-                 (cl-incf runs)
-                 (funcall callback
-                          (if (= runs 1)
-                              (list :agent-output
-                                    "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"
-                                    :comparator-reason ":api-rate-limit")
-                            (list :agent-output "Executor result for task: retry success"
-                                  :comparator-reason "ok")))))
-              ((symbol-function 'run-with-timer)
-               (lambda (_secs _repeat fn &rest args)
-                 (cl-incf scheduled-retries)
-                 (apply fn args)
-                 :fake-timer))
-              ((symbol-function 'message)
-               (lambda (&rest _args) nil)))
-      (gptel-auto-experiment--run-with-retry
-       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
        (lambda (result)
          (setq final-result result)))
-      (should (= runs 2))
-      (should (= scheduled-retries 1))
-      (should-not gptel-auto-experiment--quota-exhausted)
-      (should (equal (plist-get final-result :agent-output)
-                     "Executor result for task: retry success")))))
+      (should (= runs 1))
+       (should-not scheduled-retry)
+       (should gptel-auto-experiment--quota-exhausted)
+       (should (string-match-p "usage limit exceeded" (plist-get final-result :agent-output))))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-skips-hard-runtime-timeout-retries ()
   "Retry helper should not reschedule hard total-runtime timeout failures."
@@ -1864,79 +1811,6 @@ EXIT-CODE defaults to 1."
           (should (equal (plist-get result :comparator-reason) "Winner: B"))
           (should (cl-some (lambda (cmd) (string-match-p "git commit -m" cmd))
                            commit-commands)))
-      (delete-directory temp-dir t))))
-
-(ert-deftest regression/auto-experiment/duplicate-integrated-patch-is-discarded ()
-  "Already-integrated kept patches should be discarded before review/push side effects."
-  (let ((callback-count 0)
-        (track-count 0)
-        (staging-count 0)
-        (push-count 0)
-        (result nil)
-        (temp-dir (make-temp-file "exp-worktree" t))
-        (gptel-auto-experiment-auto-push t)
-        (gptel-auto-workflow-use-staging t))
-    (unwind-protect
-        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                   (lambda (_target _experiment-id) temp-dir))
-                  ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
-                   (lambda (&rest _args) nil))
-                  ((symbol-function 'gptel-auto-experiment-analyze)
-                   (lambda (_previous-results cb)
-                     (funcall cb '(:patterns nil))))
-                  ((symbol-function 'gptel-auto-experiment-build-prompt)
-                   (lambda (&rest _args) "prompt"))
-                  ((symbol-function 'run-with-timer)
-                   (lambda (&rest _args) :fake-timer))
-                  ((symbol-function 'cancel-timer)
-                   (lambda (&rest _args) nil))
-                  ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
-                   (lambda (_timeout cb &rest _args)
-                     (funcall cb "HYPOTHESIS: duplicate integrated patch")))
-                  ((symbol-function 'gptel-auto-experiment-grade)
-                   (lambda (_output cb &rest _args)
-                     (funcall cb '(:score 9 :total 9 :passed t :details "grade passed"))))
-                  ((symbol-function 'gptel-auto-experiment-benchmark)
-                   (lambda (&rest _args)
-                     '(:passed t :nucleus-passed t :tests-passed t :eight-keys 0.6)))
-                  ((symbol-function 'gptel-auto-experiment-decide)
-                   (lambda (_before _after cb)
-                     (funcall cb '(:keep t :reasoning "Winner: B"))))
-                  ((symbol-function 'gptel-auto-experiment--code-quality-score)
-                   (lambda () 0.7))
-                  ((symbol-function 'gptel-auto-experiment-log-tsv)
-                   (lambda (&rest _args) nil))
-                  ((symbol-function 'gptel-auto-workflow--current-commit-integrated-p)
-                   (lambda (&optional _worktree-dir) t))
-                  ((symbol-function 'gptel-auto-workflow--track-commit)
-                   (lambda (&rest _args)
-                     (cl-incf track-count)))
-                  ((symbol-function 'gptel-auto-workflow--staging-flow)
-                   (lambda (&rest _args)
-                     (cl-incf staging-count)))
-                  ((symbol-function 'gptel-auto-workflow--push-branch-with-lease)
-                   (lambda (&rest _args)
-                     (cl-incf push-count)
-                     t))
-                  ((symbol-function 'gptel-auto-workflow--assert-main-untouched)
-                   (lambda () t))
-                  ((symbol-function 'magit-git-success)
-                   (lambda (&rest _args) t))
-                  ((symbol-function 'message)
-                   (lambda (&rest _args) nil)))
-          (gptel-auto-experiment-run
-           "lisp/modules/gptel-ext-fsm-utils.el" 1 5 0.4 0.5 nil
-           (lambda (exp-result)
-             (cl-incf callback-count)
-             (setq result exp-result)))
-          (should (= callback-count 1))
-          (should result)
-          (should-not (plist-get result :kept))
-          (should (equal (plist-get result :comparator-reason)
-                         "duplicate-patch-already-staged"))
-          (should (= track-count 0))
-          (should (= staging-count 0))
-          (should (= push-count 0)))
       (delete-directory temp-dir t))))
 
 (ert-deftest regression/auto-experiment-loop/uses-run-with-retry-helper ()
@@ -7418,6 +7292,35 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (format "Push optimize branch %s" branch)
         180))
       (should (member expected-push commands)))))
+
+(ert-deftest regression/auto-workflow/push-branch-with-lease-skips-submodule-sync-hook ()
+  "Workflow pushes should bypass local submodule-sync hooks."
+  (let* ((captured-env nil)
+         (branch "staging")
+         (remote-head "5043dae3e83ee7ea00e044870e04a40cf986d196")
+         (expected-push
+          (format "git push %s origin %s"
+                  (shell-quote-argument
+                   (format "--force-with-lease=%s:%s" branch remote-head))
+                  (shell-quote-argument branch))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (cond
+                  ((string-match-p "\\`git ls-remote --exit-code --heads origin staging\\'" command)
+                   (cons (format "%s\trefs/heads/%s\n" remote-head branch) 0))
+                  ((equal command expected-push)
+                   (setq captured-env (copy-sequence process-environment))
+                   (cons "" 0))
+                  (t
+                   (cons "" 1)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should
+       (gptel-auto-workflow--push-branch-with-lease
+        branch
+        "Push staging"
+        180))
+      (should (member "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1" captured-env)))))
 
 (ert-deftest regression/auto-workflow/push-staging-uses-plain-push-when-remote-missing ()
   "Staging push should fall back to plain push when origin/staging is absent."

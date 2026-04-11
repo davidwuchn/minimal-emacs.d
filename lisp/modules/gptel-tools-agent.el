@@ -659,7 +659,9 @@ All shell commands have timeout protection to prevent deadlocks."
               (progn
                 (gptel-auto-workflow--git-cmd (format "git checkout %s" target-branch))
                 (gptel-auto-workflow--git-cmd (format "git merge origin/%s --ff-only" source-branch))
-                (gptel-auto-workflow--git-cmd (format "git push origin %s" target-branch))
+                (gptel-auto-workflow--with-skipped-submodule-sync
+                 (lambda ()
+                   (gptel-auto-workflow--git-cmd (format "git push origin %s" target-branch))))
                 (gptel-auto-workflow--git-cmd (format "git checkout %s" original-branch))
                 (message "[auto-workflow] %s %s to %s (%s -> %s)"
                          action-name target-branch source-branch
@@ -3524,19 +3526,21 @@ ACTION is a short description used in failure messages."
          (remote-head
           (and (= 0 (cdr remote-result))
                (gptel-auto-workflow--parse-remote-head branch (car remote-result))))
-         (push-command
-          (if remote-head
-              (format "git push %s origin %s"
-                      (shell-quote-argument
-                       (format "--force-with-lease=%s:%s"
-                               branch
-                               remote-head))
-                      branch-q)
-            (format "git push origin %s" branch-q)))
-         (push-result
-          (gptel-auto-workflow--git-result
-           push-command
-           (or timeout 180))))
+          (push-command
+           (if remote-head
+               (format "git push %s origin %s"
+                       (shell-quote-argument
+                        (format "--force-with-lease=%s:%s"
+                                branch
+                                remote-head))
+                       branch-q)
+             (format "git push origin %s" branch-q)))
+          (push-result
+           (gptel-auto-workflow--with-skipped-submodule-sync
+            (lambda ()
+              (gptel-auto-workflow--git-result
+               push-command
+               (or timeout 180))))))
     (if (= 0 (cdr push-result))
         t
       (message "[auto-workflow] %s failed: %s"
@@ -5847,10 +5851,10 @@ Automatically adds --no-pager to prevent blocking on pager output."
 
 (defconst gptel-auto-workflow--skip-submodule-sync-env
   "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
-  "Environment override used to skip expensive submodule sync checks in workflow commits.")
+  "Environment override used to skip workflow git-hook submodule sync checks.")
 
 (defun gptel-auto-workflow--with-skipped-submodule-sync (fn)
-  "Run FN with workflow commit hooks skipping cached submodule sync."
+  "Run FN with workflow git hooks skipping submodule sync."
   (let ((process-environment
          (cons gptel-auto-workflow--skip-submodule-sync-env
                process-environment)))
