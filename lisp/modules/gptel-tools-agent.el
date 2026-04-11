@@ -4887,33 +4887,108 @@ can use newer models without a restart."
     model))
 
 (defun gptel-auto-workflow--maybe-override-subagent-provider (agent-type preset)
-  "Return PRESET with a fallback provider for headless auto-workflow AGENT-TYPE."
+  "Return PRESET with a fallback provider for headless auto-workflow AGENT-TYPE.
+Respects `gptel-auto-experiment--forced-backend' when set by the fallback wrapper."
   (let ((backend (plist-get preset :backend)))
-    (if (and (gptel-auto-workflow--headless-provider-override-active-p)
-             (stringp backend)
-             (string= backend "MiniMax"))
-        (if-let ((candidate
-                  (seq-find
-                   (lambda (entry)
-                     (gptel-auto-workflow--backend-available-p (car entry)))
-                   gptel-auto-workflow-headless-subagent-fallbacks)))
-            (let* ((override (copy-sequence preset))
-                   (fallback-backend (car candidate))
-                   (fallback-model (cdr candidate))
-                   (backend-object
-                    (gptel-auto-workflow--backend-object fallback-backend))
-                   (model-symbol
-                    (gptel-auto-workflow--backend-model-symbol
-                     backend-object fallback-model)))
-              (setq override (plist-put override :backend
-                                        (or backend-object fallback-backend)))
-              (setq override (plist-put override :model
-                                        (or model-symbol fallback-model)))
-              (message "[auto-workflow] Using %s/%s for %s during headless run"
-                       fallback-backend fallback-model agent-type)
-              override)
-          preset)
+    (cond
+     ;; Forced backend from fallback wrapper takes priority
+     ((and gptel-auto-experiment--forced-backend
+           (consp gptel-auto-experiment--forced-backend))
+      (let* ((forced-backend-name (car gptel-auto-experiment--forced-backend))
+             (forced-model-name (cdr gptel-auto-experiment--forced-backend))
+             (backend-object (gptel-auto-workflow--backend-object forced-backend-name))
+             (model-symbol (gptel-auto-workflow--backend-model-symbol
+                            backend-object forced-model-name))
+             (override (copy-sequence preset)))
+        (setq override (plist-put override :backend
+                                  (or backend-object forced-backend-name)))
+        (setq override (plist-put override :model
+                                  (or model-symbol (intern forced-model-name))))
+        (message "[auto-workflow] Forced backend %s/%s for %s (rate-limit fallback)"
+                 forced-backend-name forced-model-name agent-type)
+        override))
+     ;; Normal headless fallback when primary is MiniMax
+     ((and (gptel-auto-workflow--headless-provider-override-active-p)
+           (stringp backend)
+           (string= backend "MiniMax"))
+      (if-let ((candidate
+                (seq-find
+                 (lambda (entry)
+                   (gptel-auto-workflow--backend-available-p (car entry)))
+                 gptel-auto-workflow-headless-subagent-fallbacks)))
+          (let* ((override (copy-sequence preset))
+                 (fallback-backend (car candidate))
+                 (fallback-model (cdr candidate))
+                 (backend-object
+                  (gptel-auto-workflow--backend-object fallback-backend))
+                 (model-symbol
+                  (gptel-auto-workflow--backend-model-symbol
+                   backend-object fallback-model)))
+            (setq override (plist-put override :backend
+                                      (or backend-object fallback-backend)))
+            (setq override (plist-put override :model
+                                      (or model-symbol fallback-model)))
+            (message "[auto-workflow] Using %s/%s for %s during headless run"
+                     fallback-backend fallback-model agent-type)
+            override)
+        preset))
+     (t preset))))
+
+(defvar gptel-auto-experiment--forced-backend nil
+  "When non-nil, force this backend for subagent requests.
+Format: (BACKEND-NAME . MODEL-NAME) strings.
+Used by the fallback wrapper to switch backends on rate-limit errors.")
+
+(defun gptel-auto-experiment--apply-backend-preset (backend-name model-name)
+  "Apply a preset for BACKEND-NAME with MODEL-NAME for the current request.
+Returns the preset plist, or nil when backend is unavailable."
+  (let* ((backend-object (gptel-auto-workflow--backend-object backend-name))
+         (model-symbol (and backend-object
+                            (gptel-auto-workflow--backend-model-symbol
+                             backend-object model-name)))
+         (preset (list :backend (or backend-object backend-name)
+                       :model (or model-symbol (intern model-name))
+                       :include-reasoning nil
+                       :use-tools t
+                       :use-context nil
+                       :stream my/gptel-subagent-stream)))
+    (when (and backend-object model-symbol)
+      (gptel--apply-preset preset)
       preset)))
+
+(defun gptel-auto-experiment--run-agent-with-backend-fallback (timeout callback agent-name description prompt &optional files include-history include-diff)
+  "Run agent with automatic backend fallback on rate-limit errors.
+
+Calls CALLBACK with the result. Tries the current backend first, then falls
+back through `gptel-auto-workflow-headless-subagent-fallbacks' on 429 errors.
+
+TIMEOUT, AGENT-NAME, DESCRIPTION, PROMPT, FILES, INCLUDE-HISTORY, and
+INCLUDE-DIFF are passed through to `my/gptel--run-agent-tool-with-timeout'."
+  (let* ((fallbacks (seq-filter
+                     (lambda (entry)
+                       (gptel-auto-workflow--backend-available-p (car entry)))
+                     gptel-auto-workflow-headless-subagent-fallbacks))
+         (tried-backends nil))
+    (cl-labels
+        ((handle-result
+          (output)
+          (if (and (stringp output)
+                   (gptel-auto-experiment--rate-limit-error-p output)
+                   fallbacks)
+              (let ((next-fallback (car fallbacks)))
+                (setq fallbacks (cdr fallbacks))
+                (push (car next-fallback) tried-backends)
+                (message "[auto-exp] Rate limit hit, switching to fallback %s/%s (tried: %s)"
+                         (car next-fallback) (cdr next-fallback)
+                         (string-join (cons "MiniMax" tried-backends) ", "))
+                (let ((gptel-auto-experiment--forced-backend next-fallback))
+                  (my/gptel--run-agent-tool-with-timeout
+                   timeout #'handle-result agent-name description prompt
+                   files include-history include-diff)))
+            (funcall callback output))))
+      (my/gptel--run-agent-tool-with-timeout
+       timeout #'handle-result agent-name description prompt
+       files include-history include-diff))))
 
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
   "Check if ERROR-OUTPUT is a transient/retryable error."
@@ -5209,14 +5284,14 @@ BASELINE-CODE-QUALITY is the initial code quality score."
          previous-results
          (lambda (analysis)
            (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
-             (let* ((patterns (when analysis (plist-get analysis :patterns)))
-                    (prompt (gptel-auto-experiment-build-prompt
-                             target experiment-id max-experiments analysis baseline)))
-               (setq executor-prompt prompt)
-                ;; Routing handled by gptel-auto-workflow--advice-task-override
-                (my/gptel--run-agent-tool-with-timeout
-                 experiment-timeout
-                 (lambda (agent-output)
+              (let* ((patterns (when analysis (plist-get analysis :patterns)))
+                     (prompt (gptel-auto-experiment-build-prompt
+                              target experiment-id max-experiments analysis baseline)))
+                (setq executor-prompt prompt)
+                 ;; Backend fallback wrapper handles rate-limit failover
+                 (gptel-auto-experiment--run-agent-with-backend-fallback
+                  experiment-timeout
+                  (lambda (agent-output)
                   (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
                     (if (gptel-auto-experiment--stale-run-p run-id)
                         (unless finished
@@ -5425,10 +5500,10 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                 (message "[auto-experiment] ✗ %s"
                                          (my/gptel--sanitize-for-logging validation-error 200))
                                 (magit-git-success "checkout" "--" ".")
-                                (let ((gptel-auto-experiment-active-grace
-                                       gptel-auto-experiment-validation-retry-active-grace))
-                                  (my/gptel--run-agent-tool-with-timeout
-                                   gptel-auto-experiment-validation-retry-time-budget
+                                 (let ((gptel-auto-experiment-active-grace
+                                        gptel-auto-experiment-validation-retry-active-grace))
+                                   (gptel-auto-experiment--run-agent-with-backend-fallback
+                                    gptel-auto-experiment-validation-retry-time-budget
                                    (lambda (retry-output)
                                      (let ((gptel-auto-experiment--grading-target target)
                                            (gptel-auto-experiment--grading-worktree experiment-worktree))

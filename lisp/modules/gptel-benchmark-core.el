@@ -204,12 +204,13 @@ Returns nil for nil or malformed input."
       (when (listp scores) scores)))
    (t nil)))
 
-(defun gptel-benchmark--get-score (r field)
+(defun gptel-benchmark--get-score (r field &optional scores)
   "Extract FIELD from scores in result entry R.
 Returns nil if R has no scores or FIELD is not present.
 FIELD should be a keyword like :overall-score.
-Handles both plist format (keyword keys) and alist format (symbol or keyword keys)."
-  (let ((scores (gptel-benchmark--extract-scores r)))
+Handles both plist format (keyword keys) and alist format (symbol or keyword keys).
+If SCORES is provided, uses it directly instead of re-extracting from R."
+  (let ((scores (or scores (gptel-benchmark--extract-scores r))))
     (and scores
          (if (and (listp scores) (keywordp (car scores)))
              (plist-get scores field)
@@ -282,7 +283,7 @@ Returns plist with :total-tests, :passed-tests, and average scores."
                           (:constraint-score . 0.0))))
       (dolist (r results)
         (let* ((scores (gptel-benchmark--extract-scores r))
-               (overall-score (gptel-benchmark--get-score r :overall-score)))
+               (overall-score (gptel-benchmark--get-score r :overall-score scores)))
           (cl-incf total)
           (when scores
             (setq score-totals
@@ -377,16 +378,15 @@ RESULTS should contain :eight-keys-scores in each entry."
         (high-scores 0)
         (threshold 0.7))
     (dolist (r results)
-      (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall (if scores (plist-get scores :overall-score) 0)))
-        (when scores
+      (let ((overall (gptel-benchmark--get-score r :overall-score)))
+        (when overall
           (cond
            ((< overall threshold) (cl-incf low-scores))
            ((>= overall 0.9) (cl-incf high-scores)))
           (dolist (mapping gptel-benchmark--score-type-map)
             (let* ((score-type (car mapping))
                    (issue-type (cdr mapping))
-                   (score (plist-get scores score-type)))
+                   (score (gptel-benchmark--get-score r score-type)))
               (when (and score (< score threshold))
                 (puthash issue-type (1+ (gethash issue-type issues 0)) issues)))))))
     (when (> low-scores 0)
