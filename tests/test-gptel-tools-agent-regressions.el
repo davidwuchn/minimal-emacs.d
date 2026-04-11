@@ -1640,10 +1640,92 @@ EXIT-CODE defaults to 1."
        "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
        (lambda (result)
          (setq final-result result)))
-      (should (= runs 3))
-      (should (equal (nreverse delays) '(5 10)))
-      (should (equal (plist-get final-result :agent-output)
-                     "Executor result for task: retry success")))))
+       (should (= runs 3))
+       (should (equal (nreverse delays) '(5 10)))
+       (should (equal (plist-get final-result :agent-output)
+                      "Executor result for task: retry success")))))
+
+(ert-deftest regression/auto-experiment/backend-fallback-switches-on-rate-limit ()
+  "Backend fallback wrapper should switch to next backend on 429 errors."
+  (let ((calls 0)
+        (final-result nil)
+        (used-backends nil))
+    (cl-letf (((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+               (lambda (_timeout callback _agent-name _description _prompt &rest _)
+                 (cl-incf calls)
+                 (if (= calls 1)
+                     ;; First call: rate limit error
+                     (funcall callback
+                              "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")
+                   ;; Second call: success with fallback
+                   (funcall callback "Executor result with DashScope"))))
+              ((symbol-function 'gptel-auto-workflow--backend-available-p)
+               (lambda (name)
+                 (push name used-backends)
+                 t))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-agent-with-backend-fallback
+       300
+       (lambda (result)
+         (setq final-result result))
+       "executor" "test" "test prompt")
+      (should (= calls 2))
+      (should (equal final-result "Executor result with DashScope"))
+      (should (member "DashScope" used-backends)))))
+
+(ert-deftest regression/auto-experiment/backend-fallback-returns-original-on-non-429 ()
+  "Backend fallback should not retry on non-rate-limit errors."
+  (let ((calls 0)
+        (final-result nil))
+    (cl-letf (((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+               (lambda (_timeout callback _agent-name _description _prompt &rest _)
+                 (cl-incf calls)
+                 (funcall callback "Error: Task timed out after 900s")))
+              ((symbol-function 'gptel-auto-workflow--backend-available-p)
+               (lambda (_name) t))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-agent-with-backend-fallback
+       300
+       (lambda (result)
+         (setq final-result result))
+       "executor" "test" "test prompt")
+      (should (= calls 1))
+      (should (equal final-result "Error: Task timed out after 900s")))))
+
+(ert-deftest regression/auto-experiment/backend-fallback-exhausts-all-backends ()
+  "Backend fallback should try all backends before giving up."
+  (let ((calls 0)
+        (final-result nil)
+        (tried-backends nil))
+    (cl-letf (((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+               (lambda (_timeout callback _agent-name _description _prompt &rest _)
+                 (cl-incf calls)
+                 (funcall callback
+                          "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")))
+              ((symbol-function 'gptel-auto-workflow--backend-available-p)
+               (lambda (name)
+                 (push name tried-backends)
+                 t))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-agent-with-backend-fallback
+       300
+       (lambda (result)
+         (setq final-result result))
+       "executor" "test" "test prompt")
+      ;; Should try MiniMax + all fallbacks (DashScope, DeepSeek, CF-Gateway, Gemini)
+      (should (= calls 5))
+      (should (string-match-p "rate_limit_error" final-result)))))
+
+(ert-deftest regression/auto-workflow/forced-backend-override-in-maybe-override ()
+  "gptel-auto-workflow--maybe-override-subagent-provider should respect forced backend."
+  (let ((preset '(:backend "MiniMax" :model minimax-m2.7-highspeed :use-tools t))
+        (gptel-auto-experiment--forced-backend '("DashScope" . "qwen3.6-plus")))
+    (let ((result (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
+      (should (string= (plist-get result :backend) "DashScope"))
+      (should (eq (plist-get result :model) 'qwen3.6-plus)))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-skips-hard-runtime-timeout-retries ()
   "Retry helper should not reschedule hard total-runtime timeout failures."
