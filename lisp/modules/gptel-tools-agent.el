@@ -1382,13 +1382,14 @@ request buffer for an active workflow task."
           root)))))
 
 (defun my/gptel--cleanup-agent-request-buffer (state)
-  "Abort STATE's live request buffer and discard stale worktree buffers when possible."
-  (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
-    (if-let ((worktree-dir (my/gptel--agent-task-request-worktree-dir state)))
-        (gptel-auto-workflow--discard-worktree-buffers worktree-dir)
-      (when (and (buffer-live-p request-buf)
-                 (fboundp 'gptel-abort))
-        (ignore-errors (gptel-abort request-buf))))))
+  "Abort STATE's live request buffer.
+Do not kill routed worktree buffers here: gptel process sentinels may still
+need the buffer to exist briefly after `gptel-abort'. Worktree lifecycle
+helpers handle explicit stale-buffer discards during recreate/delete flows."
+  (when-let* ((request-buf (my/gptel--agent-task-request-buffer state))
+              ((buffer-live-p request-buf))
+              ((fboundp 'gptel-abort)))
+    (ignore-errors (gptel-abort request-buf))))
 
 (defun my/gptel--agent-task-buffer-tick (buffer)
   "Return BUFFER's current modification tick when BUFFER is live."
