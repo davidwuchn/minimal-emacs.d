@@ -56,26 +56,6 @@
 - **staging:** `9af68b35` — origin ↔ upstream in sync ✅
 
 **Submodules:** All up-to-date (6 submodules)
-<<<<<<< HEAD
-=======
-
-**Action:** Fixed critical naming conflict in gptel-benchmark, merged staging to main
-
-**Result:** ✅ All remotes in sync, 1387 tests passing
-
-**Critical Fix:**
-- **gptel-benchmark-subagent.el:621** — Renamed `gptel-benchmark--extract-scores` to `gptel-benchmark--extract-overall-scores`
-  - Root cause: Two functions with same name in different files (`gptel-benchmark-core.el:193` and `gptel-benchmark-subagent.el:621`)
-  - This caused undefined behavior - whichever file loaded last would overwrite the other
-  - Fix: Renamed subagent version to avoid conflict
-  - Commit: `b731743b` — ⊘ fix: rename duplicate gptel-benchmark--extract-scores to avoid naming conflict
-
-**Merged to main:**
-- Benchmark core refactoring (simplified score extraction)
-- Naming conflict fix
-- All recent workflow improvements
->>>>>>> f8483c18 (◈ update state.md: backend fallback for rate-limit errors)
->>>>>>> origin/staging
 
 ### Session Summary: 2026-04-11 Early Morning (Workflow Run Complete + Sync)
 
