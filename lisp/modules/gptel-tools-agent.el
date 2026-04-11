@@ -2026,8 +2026,12 @@ time to apply and verify a focused fix."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-validation-retry-active-grace 120
-  "Extra wall-clock seconds active validation-retry calls may use beyond budget."
+(defcustom gptel-auto-experiment-validation-retry-active-grace 180
+  "Extra wall-clock seconds active validation-retry calls may use beyond budget.
+
+Focused repair retries still need headroom when the executor is actively making
+progress on a known fix, so this stays above the 360s false-negative wall seen
+in live validation retries."
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)

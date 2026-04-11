@@ -820,8 +820,8 @@ EXIT-CODE defaults to 1."
             (setq-local default-directory (file-name-as-directory worktree-dir)))
            (let ((gptel-auto-experiment-time-budget 600)
                  (gptel-auto-experiment-active-grace 300)
-                (gptel-auto-experiment-validation-retry-time-budget 240)
-                (gptel-auto-experiment-validation-retry-active-grace 120))
+                 (gptel-auto-experiment-validation-retry-time-budget 240)
+                (gptel-auto-experiment-validation-retry-active-grace 180))
              (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
                         (lambda (_target _experiment-id) worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
@@ -866,7 +866,7 @@ EXIT-CODE defaults to 1."
                 captured-graces (nreverse captured-graces))
           (should result)
           (should (equal captured-timeouts '(600 240)))
-          (should (equal captured-graces '(300 120))))
+          (should (equal captured-graces '(300 180))))
       (when (buffer-live-p worktree-buf)
         (kill-buffer worktree-buf))
       (delete-directory project-root t)))))
@@ -977,6 +977,33 @@ EXIT-CODE defaults to 1."
                  (+ gptel-auto-experiment-time-budget
                     gptel-auto-experiment-active-grace)))
       (should (> captured-hard-timeout 900)))))
+
+(ert-deftest regression/subagent/default-validation-retry-hard-timeout-keeps-repair-headroom ()
+  "Default validation-retry hard timeout should stay above the 360s false-negative wall."
+  (let ((gptel-agent--agents '(("executor")))
+        (captured-timeout nil)
+        (captured-hard-timeout nil)
+        (gptel-auto-experiment-active-grace
+         gptel-auto-experiment-validation-retry-active-grace))
+    (cl-letf (((symbol-function 'my/gptel--agent-task-with-timeout)
+               (lambda (_callback _agent-type _description _prompt
+                        &optional _files _include-history _include-diff)
+                 (setq captured-timeout my/gptel-agent-task-timeout
+                       captured-hard-timeout my/gptel-agent-task-hard-timeout)))
+              ((symbol-function 'gptel-agent--task)
+               (lambda (&rest _) nil)))
+      (my/gptel--run-agent-tool-with-timeout
+       gptel-auto-experiment-validation-retry-time-budget
+       #'ignore
+       "executor"
+       "desc"
+       "prompt")
+      (should (= captured-timeout
+                 gptel-auto-experiment-validation-retry-time-budget))
+      (should (= captured-hard-timeout
+                 (+ gptel-auto-experiment-validation-retry-time-budget
+                    gptel-auto-experiment-validation-retry-active-grace)))
+      (should (> captured-hard-timeout 360)))))
 
 (ert-deftest regression/runagent/malformed-call-with-no-args-reports-error ()
   "RunAgent should return a normal tool error when no mapped args were supplied."
