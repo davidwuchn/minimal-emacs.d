@@ -238,6 +238,7 @@ Returns updated targets list."
                           proj-root
                         (concat proj-root "/"))))
       (if (and (file-exists-p abs-path)
+               (file-regular-p abs-path)
                (string-prefix-p root-prefix abs-path)
                (gptel-auto-workflow--target-in-root-repo-p abs-path proj-root))
            (let ((rel-path (file-relative-name abs-path proj-root)))
