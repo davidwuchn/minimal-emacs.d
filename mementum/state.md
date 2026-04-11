@@ -1,14 +1,25 @@
 # Mementum State
 
-> Last session: 2026-04-11 22:35
+> Last session: 2026-04-11 23:30
 
-## Total Improvements: 240+ Real Code Fixes (31 new today)
+## Total Improvements: 242+ Real Code Fixes (33 new today)
 
-### Session Summary: 2026-04-11 Evening (Backend Fallback for Rate Limits)
+### Session Summary: 2026-04-11 Evening (Remote Sync + Submodule Update)
 
-**Action:** Added automatic backend fallback wrapper for auto-workflow rate-limit errors
+**Action:** Synced main and staging with origin/upstream, updated submodules
 
-**Result:** ✅ 1400 tests passing, staging pushed to origin and upstream
+**Result:** ✅ 1402 tests passing, all remotes in sync
+
+**Remote Changes (origin/main):**
+- **f9fe3904** — ⊘ fix: clamp comparator keep decisions
+  - gptel-tools-agent.el: +71 lines (comparator logic improvements)
+  - test-gptel-tools-agent-regressions.el: +49 lines (new tests)
+
+**Sync Status:**
+- **main:** `f9fe3904` — origin ↔ upstream in sync ✅
+- **staging:** `116495a6` — origin ↔ upstream in sync ✅
+
+**Submodules:** All up-to-date (6 submodules)
 
 **New Feature: Backend Fallback on 429 Errors**
 - When MiniMax hits the 5-hour rolling window rate limit (429), experiments now
