@@ -820,8 +820,8 @@ Returns nil if cache disabled, not found, or expired."
   "Cache RESULT for (AGENT-TYPE, PROMPT, ...).
 Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
   (when (and (my/gptel--subagent-cache-enabled-p)
-              (my/gptel--subagent-cache-allowed-p agent-type)
-              (my/gptel--cacheable-subagent-result-p result agent-type))
+             (my/gptel--subagent-cache-allowed-p agent-type)
+             (my/gptel--cacheable-subagent-result-p result agent-type))
     (let ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff)))
       (puthash key (cons (float-time) result) my/gptel--subagent-cache)
       ;; Evict oldest entries if over limit
@@ -2808,14 +2808,13 @@ cherry-pick, not the full branch delta against staging."
                            (shell-quote-argument commit-hash))
                    60))
                  (diff-output (car diff-result)))
-            (cond
-             ((string-empty-p diff-output)
-              "No changes detected in review commit.")
-             ((and (not (eq 0 (cdr diff-result)))
-                   (string-match-p "^fatal:" diff-output))
-              (format "Error generating diff: %s" diff-output))
-             (t
-              diff-output))))))))))
+             (cond
+              ((string-empty-p diff-output)
+               "No changes detected in review commit.")
+              ((not (eq 0 (cdr diff-result)))
+               (format "Error generating diff: %s" diff-output))
+              (t
+               diff-output))))))))))
 
 (defun gptel-auto-workflow--review-changes (optimize-branch callback)
   "Review changes in OPTIMIZE-BRANCH before merging to staging.
