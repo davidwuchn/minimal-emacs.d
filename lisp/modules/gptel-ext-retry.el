@@ -97,6 +97,18 @@ for byte-level operations (~3.5 bytes/token)."
   :type 'integer
   :group 'gptel)
 
+(defconst my/gptel--retry-base-delay 4.0
+  "Initial delay in seconds for exponential backoff on transient errors.
+Used by `my/gptel-auto-retry' to compute retry delays.")
+
+(defconst my/gptel--retry-backoff-factor 2.0
+  "Multiplier for exponential backoff delay on each retry attempt.
+Used by `my/gptel-auto-retry' to compute retry delays.")
+
+(defconst my/gptel--retry-max-delay 30.0
+  "Maximum delay in seconds for exponential backoff retries.
+Prevents excessively long waits when many retries are needed.")
+
 (defun my/gptel--trim-tool-results-for-retry (info &optional retry-count force-trim-p)
   "Trim old tool-result content in INFO's :data :messages to reduce payload.
 
@@ -318,8 +330,9 @@ Returns the number of messages truncated, or 0 if nothing was done."
 PREDICATE is a function that takes a message plist and returns non-nil if it matches.
 Returns a list of indices in ascending order."
   (when (and messages (> (length messages) 0))
-    (cl-loop for i below (length messages)
-             when (funcall predicate (aref messages i))
+    (cl-loop for i from 0 below (length messages)
+             for msg = (aref messages i)
+             when (funcall predicate msg)
              collect i)))
 
 (defun my/gptel--strip-images-from-messages (info)
@@ -344,16 +357,23 @@ Returns the number of image parts removed, or 0 if nothing was done."
                (content (plist-get msg :content)))
           (when (and content (sequencep content) (not (stringp content)) (> (length content) 0))
             (let* ((original-length (length content))
-                   (image-p (lambda (part)
-                              (and (listp part)
-                                   (equal (plist-get part :type) "image_url"))))
                    (filtered
                     (if (vectorp content)
-                        (vconcat (cl-remove-if image-p content))
-                      (cl-remove-if image-p content))))
+                        (vconcat
+                         (cl-remove-if
+                          (lambda (part)
+                            (and (listp part)
+                                 (equal (plist-get part :type) "image_url")
+                                 (cl-incf removed)))
+                          content))
+                      (cl-remove-if
+                       (lambda (part)
+                         (and (listp part)
+                              (equal (plist-get part :type) "image_url")
+                              (cl-incf removed)))
+                       content))))
               (when (< (length filtered) original-length)
-                (plist-put msg :content filtered)
-                (cl-incf removed (length (cl-remove-if-not image-p (append content nil))))))))))
+                (plist-put msg :content filtered)))))))
     removed))
 
 ;; --- Constants for Transient Error Detection ---
@@ -715,10 +735,10 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
                      (/ bytes 1024) (/ limit 1024))
             (let ((my/gptel-retry-keep-recent-tool-results
                    (or my/gptel-retry-keep-recent-tool-results 2)))
-              (my/gptel--run-compaction-pass
-               info 1 limit 'bytes 'trimmed-total 'pass
-               (lambda (i) (my/gptel--trim-tool-results-for-retry i 1 t))
-               "gptel: Pass 1: trimmed %d tool result(s), now %dKB")
+               (my/gptel--run-compaction-pass
+                info 1 limit 'bytes 'trimmed-total 'pass
+                (lambda (i) (my/gptel--trim-tool-results-for-retry i 1 t))
+                "gptel: Pass 1: trimmed %d tool result(s), now %dKB")
               (my/gptel--run-compaction-pass
                info 2 limit 'bytes 'trimmed-total 'pass
                #'my/gptel--trim-reasoning-content
@@ -732,10 +752,10 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
                (lambda (i) (and (fboundp 'my/gptel--trim-context-images)
                                (my/gptel--trim-context-images)))
                "gptel: Pass 4: trimmed %d context image(s), now %dKB")
-              (my/gptel--run-compaction-pass
-               info 5 limit 'bytes 'trimmed-total 'pass
-               (lambda (i) (my/gptel--trim-tool-results-for-retry i 3 t))
-               "gptel: Pass 5: truncated %d remaining tool results, now %dKB")
+               (my/gptel--run-compaction-pass
+                info 5 limit 'bytes 'trimmed-total 'pass
+                (lambda (i) (my/gptel--trim-tool-results-for-retry i 3 t))
+                "gptel: Pass 5: truncated %d remaining tool results, now %dKB")
               (my/gptel--run-compaction-pass
                info 6 limit 'bytes 'trimmed-total 'pass
                #'my/gptel--truncate-old-messages
