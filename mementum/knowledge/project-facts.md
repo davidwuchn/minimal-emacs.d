@@ -58,7 +58,7 @@ Custom gptel + nucleus Emacs configuration. gptel provides the LLM chat/FSM engi
 
 ## Active Backend
 
-Default: `gptel--minimax` / `minimax-m2.5` (`api.minimaxi.com`). Single source of truth in `gptel-config.el`. DashScope, Moonshot, DeepSeek, Gemini, OpenRouter, Copilot, and CF-Gateway remain defined in `gptel-ext-backends.el` as available alternatives.
+Default: `gptel--minimax` / `minimax-m2.7-highspeed` (`api.minimaxi.com`). Single source of truth in `gptel-config.el`. DashScope, Moonshot, DeepSeek, Gemini, OpenRouter, Copilot, and CF-Gateway remain defined in `gptel-ext-backends.el` as available alternatives.
 
 ## Toolsets (`nucleus-toolsets`)
 

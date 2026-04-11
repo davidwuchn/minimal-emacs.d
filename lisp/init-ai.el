@@ -44,10 +44,10 @@
   :type 'symbol
   :group 'gptel)
 
-(defcustom my/ai-code-gptel-helper-model 'minimax-m2.5
+(defcustom my/ai-code-gptel-helper-model 'minimax-m2.7-highspeed
   "Fast non-reasoning model used for ai-code helper requests.
 
-Uses MiniMax M2.5 for fast helper responses on simple tasks like headline
+Uses MiniMax M2.7 highspeed for fast helper responses on simple tasks like headline
 generation and prompt classification."
   :type 'symbol
   :group 'gptel)

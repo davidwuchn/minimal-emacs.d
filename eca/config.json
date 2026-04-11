@@ -180,6 +180,7 @@
       "url": "https://api.minimaxi.com/v1",
       "keyRc": "api.minimaxi.com",
       "models": {
+        "minimax-m2.7-highspeed": {},
         "minimax-m2.5": {},
         "minimax-m2.7": {}
       }

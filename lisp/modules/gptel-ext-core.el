@@ -81,7 +81,7 @@ ORIG is the original function, PATH is the file path."
 ;; PLAIN MODEL CONFIG + MODE HOOK
 ;; ==============================================================================
 
-(defcustom my/gptel-plain-model 'minimax-m2.5
+(defcustom my/gptel-plain-model 'minimax-m2.7-highspeed
   "Model for plain `gptel' buffers (no preset / non-agent sessions).
 Set to nil to use the global `gptel-model' default."
   :type '(choice (const :tag "Global default" nil) symbol)
