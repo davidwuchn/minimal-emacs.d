@@ -818,12 +818,12 @@ EXIT-CODE defaults to 1."
           (make-directory worktree-dir t)
           (with-current-buffer worktree-buf
             (setq-local default-directory (file-name-as-directory worktree-dir)))
-          (let ((gptel-auto-experiment-time-budget 600)
-                (gptel-auto-experiment-active-grace 300)
-                (gptel-auto-experiment-validation-retry-time-budget 180)
-                (gptel-auto-experiment-validation-retry-active-grace 60))
-            (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
-                       (lambda (_target _experiment-id) worktree-dir))
+           (let ((gptel-auto-experiment-time-budget 600)
+                 (gptel-auto-experiment-active-grace 300)
+                (gptel-auto-experiment-validation-retry-time-budget 240)
+                (gptel-auto-experiment-validation-retry-active-grace 120))
+             (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                        (lambda (_target _experiment-id) worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
                        (lambda (_worktree-dir) worktree-buf))
                       ((symbol-function 'gptel-auto-experiment-analyze)
@@ -865,8 +865,8 @@ EXIT-CODE defaults to 1."
           (setq captured-timeouts (nreverse captured-timeouts)
                 captured-graces (nreverse captured-graces))
           (should result)
-          (should (equal captured-timeouts '(600 180)))
-          (should (equal captured-graces '(300 60))))
+          (should (equal captured-timeouts '(600 240)))
+          (should (equal captured-graces '(300 120))))
       (when (buffer-live-p worktree-buf)
         (kill-buffer worktree-buf))
       (delete-directory project-root t)))))
@@ -1216,7 +1216,7 @@ EXIT-CODE defaults to 1."
                                     :kept nil
                                     :comparator-reason "retry-grade-failed"
                                     :agent-output
-                                    (format "Error: Task \"Retry: fix validation error in %s\" (executor) timed out after 240s total runtime."
+                                    (format "Error: Task \"Retry: fix validation error in %s\" (executor) timed out after 360s total runtime."
                                             target))
                             (list :target target
                                   :id exp-id

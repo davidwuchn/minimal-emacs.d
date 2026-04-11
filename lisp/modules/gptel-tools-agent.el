@@ -1995,16 +1995,17 @@ forcibly aborted."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-validation-retry-time-budget 180
+(defcustom gptel-auto-experiment-validation-retry-time-budget 240
   "Timeout budget in seconds for validation-retry executor calls.
 
 Validation retries should repair one known error in the current worktree, so
-they use a shorter budget than full experiments."
+they use a shorter budget than full experiments while still allowing enough
+time to apply and verify a focused fix."
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-validation-retry-active-grace 60
+(defcustom gptel-auto-experiment-validation-retry-active-grace 120
   "Extra wall-clock seconds active validation-retry calls may use beyond budget."
   :type 'integer
   :safe #'integerp
