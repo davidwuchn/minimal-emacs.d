@@ -1703,6 +1703,12 @@ EXIT-CODE defaults to 1."
                        (lambda (&rest args)
                          (setq tracked-commit args)
                          "tracked"))
+                      ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
+                       (lambda (&rest _args) "abc123"))
+                      ((symbol-function 'gptel-auto-workflow--promote-provisional-commit)
+                       (lambda (&rest _args) t))
+                      ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
+                       (lambda (&rest _args) t))
                       ((symbol-function 'gptel-auto-workflow--assert-main-untouched)
                        (lambda () nil))
                       ((symbol-function 'gptel-auto-workflow--git-step-success-p)
@@ -1966,6 +1972,7 @@ EXIT-CODE defaults to 1."
         (decision-count 0)
         (tracked-count 0)
         (staging-count 0)
+        (provisional-dir nil)
         (result nil)
         (temp-dir (make-temp-file "exp-worktree" t)))
     (unwind-protect
@@ -1999,6 +2006,12 @@ EXIT-CODE defaults to 1."
                   ((symbol-function 'gptel-auto-workflow--track-commit)
                    (lambda (&rest _args)
                      (cl-incf tracked-count)))
+                  ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
+                   (lambda (&rest _args)
+                     (setq provisional-dir default-directory)
+                     nil))
+                  ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
+                   (lambda (&rest _args) t))
                   ((symbol-function 'gptel-auto-workflow--staging-flow)
                    (lambda (&rest _args)
                      (cl-incf staging-count)))
@@ -2011,12 +2024,13 @@ EXIT-CODE defaults to 1."
            (lambda (exp-result)
              (cl-incf callback-count)
              (setq result exp-result)))
-          (should (= callback-count 1))
-          (should (equal (plist-get result :comparator-reason) "verification-failed"))
-          (should (zerop decision-count))
-          (should (zerop tracked-count))
-          (should (zerop staging-count))))
-      (delete-directory temp-dir t)))
+           (should (= callback-count 1))
+           (should (equal (plist-get result :comparator-reason) "verification-failed"))
+           (should (zerop decision-count))
+           (should (zerop tracked-count))
+           (should (zerop staging-count))
+           (should (equal provisional-dir temp-dir))))
+       (delete-directory temp-dir t)))
 
 (ert-deftest regression/auto-experiment/decision-callback-is-idempotent ()
   "Late duplicate decision callbacks should not repeat side effects."
@@ -2059,6 +2073,12 @@ EXIT-CODE defaults to 1."
                   ((symbol-function 'gptel-auto-workflow--track-commit)
                    (lambda (&rest _args)
                      (cl-incf track-count)))
+                  ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
+                   (lambda (&rest _args) "abc123"))
+                  ((symbol-function 'gptel-auto-workflow--promote-provisional-commit)
+                   (lambda (&rest _args) t))
+                  ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
+                   (lambda (&rest _args) t))
                   ((symbol-function 'gptel-auto-workflow--staging-flow)
                    (lambda (&rest args)
                      (cl-incf staging-count)
@@ -2130,6 +2150,12 @@ EXIT-CODE defaults to 1."
                   ((symbol-function 'gptel-auto-workflow--track-commit)
                    (lambda (&rest _args)
                      (cl-incf track-count)))
+                  ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
+                   (lambda (&rest _args) "abc123"))
+                  ((symbol-function 'gptel-auto-workflow--promote-provisional-commit)
+                   (lambda (&rest _args) t))
+                  ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
+                   (lambda (&rest _args) t))
                   ((symbol-function 'gptel-auto-workflow--staging-flow)
                    (lambda (&rest args)
                      (cl-incf staging-count)
@@ -2203,6 +2229,12 @@ EXIT-CODE defaults to 1."
                   ((symbol-function 'gptel-auto-workflow--track-commit)
                    (lambda (&rest _args)
                      (cl-incf track-count)))
+                  ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
+                   (lambda (&rest _args) "abc123"))
+                  ((symbol-function 'gptel-auto-workflow--promote-provisional-commit)
+                   (lambda (&rest _args) t))
+                  ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
+                   (lambda (&rest _args) t))
                   ((symbol-function 'gptel-auto-workflow--staging-flow)
                    (lambda (&rest args)
                      (cl-incf staging-count)
@@ -3883,6 +3915,42 @@ EXIT-CODE defaults to 1."
        (equal (nreverse deleted)
               '("/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1/var/tmp/experiments/optimize/agent-riven-exp2"
                 "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1"))))))
+
+(ert-deftest regression/auto-workflow/cleanup-old-worktrees-removes-run-tagged-directories ()
+  "Cleanup should recognize run-tagged optimize directories for the current host."
+  (let ((deleted nil)
+        (captured-pattern nil)
+        (run-dir "/tmp/project/var/tmp/experiments/optimize/agent-riven-r134423z4f47-exp1"))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'system-name)
+               (lambda () "riven"))
+              ((symbol-function 'gptel-auto-workflow--optimize-worktrees)
+               (lambda (&optional _proj-root) nil))
+              ((symbol-function 'process-list)
+               (lambda () nil))
+              ((symbol-function 'process-live-p)
+               (lambda (_process) nil))
+              ((symbol-function 'process-name)
+               (lambda (_process) ""))
+              ((symbol-function 'file-exists-p)
+               (lambda (path)
+                 (or (equal path "/tmp/project/var/tmp/experiments/optimize")
+                     (equal path run-dir))))
+              ((symbol-function 'directory-files)
+               (lambda (&rest args)
+                 (setq captured-pattern (nth 2 args))
+                 (list run-dir)))
+              ((symbol-function 'call-process)
+               (lambda (&rest _args) 0))
+              ((symbol-function 'delete-directory)
+               (lambda (path &rest _args)
+                 (push path deleted)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (= (gptel-auto-workflow--cleanup-old-worktrees) 1))
+      (should (equal deleted (list run-dir)))
+      (should (string-match-p captured-pattern "agent-riven-r134423z4f47-exp1")))))
 
 (ert-deftest regression/auto-workflow/discard-worktree-buffers-kills-tracked-gptel-buffer ()
   "Worktree cleanup should kill tracked gptel buffers before path reuse."
@@ -6095,6 +6163,44 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (should (member "git cherry-pick --abort" commands))
       (should (member "git merge --abort" commands)))))
 
+(ert-deftest regression/auto-workflow/promote-provisional-commit-amends-clean-wip ()
+  "Final commit promotion should amend a clean provisional WIP commit."
+  (let ((commands nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-step-success-p)
+               (lambda (command _action &optional _timeout)
+                 (push command commands)
+                 t))
+              ((symbol-function 'gptel-auto-workflow--current-head-hash)
+               (lambda () "abc123"))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should
+       (gptel-auto-workflow--promote-provisional-commit
+        "Final experiment message"
+        "Commit experiment changes for target.el"
+        "abc123"
+        300))
+      (setq commands (nreverse commands))
+      (should (= (length commands) 1))
+      (should (string-match-p "git commit --amend -m" (car commands))))))
+
+(ert-deftest regression/auto-workflow/drop-provisional-commit-resets-head ()
+  "Discarding a provisional commit should reset it away when still at HEAD."
+  (let ((commands nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--current-head-hash)
+               (lambda () "abc123"))
+              ((symbol-function 'gptel-auto-workflow--git-step-success-p)
+               (lambda (command _action &optional _timeout)
+                 (push command commands)
+                 t))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should
+       (gptel-auto-workflow--drop-provisional-commit
+        "abc123"
+        "Drop provisional commit for target.el"))
+      (should (member "git reset --hard HEAD~1" commands)))))
+
 (ert-deftest regression/auto-workflow/verify-staging-hydrates-top-level-submodules ()
   "Staging verification should hydrate submodules via shared repos, not recursive update."
   (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging")
@@ -6812,14 +6918,27 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                       "lisp/modules/gptel-tools-agent.el" 2)
                      "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp2"))
       (should
-        (cl-some
-         (lambda (args)
-           (equal (last args 6)
+       (cl-some
+        (lambda (args)
+          (equal (last args 6)
                   '("worktree" "add" "-b"
-                    "optimize/agent-riven-exp2"
-                    "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp2"
-                    "origin/main")))
-         calls)))))
+                     "optimize/agent-riven-exp2"
+                     "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp2"
+                     "origin/main")))
+        calls)))))
+
+(ert-deftest regression/auto-workflow/branch-name-includes-run-token-when-run-id-bound ()
+  "Optimize branches should include a short run token to avoid remote collisions."
+  (cl-letf (((symbol-function 'system-name)
+             (lambda () "riven")))
+    (let ((gptel-auto-workflow--run-id "2026-04-11T134423Z-4f47"))
+      (should (equal (gptel-auto-workflow--branch-name
+                      "lisp/modules/gptel-tools-agent.el" 2)
+                     "optimize/agent-riven-r134423z4f47-exp2")))
+    (let ((gptel-auto-workflow--run-id nil))
+      (should (equal (gptel-auto-workflow--branch-name
+                      "lisp/modules/gptel-tools-agent.el" 2)
+                     "optimize/agent-riven-exp2")))))
 
 (ert-deftest regression/auto-workflow/create-worktree-removes-stale-branch-worktrees ()
   "Experiment worktree creation should remove stale branch worktrees first."
