@@ -114,6 +114,7 @@
 (ert-deftest regression/auto-workflow-projects/queue-helper-returns-before-job-runs ()
   "Queued cron work should not run inline in the `emacsclient' request."
   (let ((gptel-auto-workflow--cron-job-running nil)
+        (gptel-auto-workflow--cron-job-timer nil)
         (job-ran nil)
         (scheduled nil))
     (cl-letf (((symbol-function 'run-at-time)
@@ -128,11 +129,13 @@
             (lambda () (setq job-ran t)))
            'queued))
       (should gptel-auto-workflow--cron-job-running)
+      (should (eq gptel-auto-workflow--cron-job-timer 'fake-timer))
       (should-not job-ran)
       (should (functionp scheduled))
       (funcall scheduled)
       (should job-ran)
-      (should-not gptel-auto-workflow--cron-job-running))))
+      (should-not gptel-auto-workflow--cron-job-running)
+      (should-not gptel-auto-workflow--cron-job-timer))))
 
 (ert-deftest regression/auto-workflow-projects/queue-helper-rejects-overlap ()
   "A second cron request should return immediately when one is already queued."

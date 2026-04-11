@@ -360,6 +360,75 @@ allowed for compatibility with isolated tests."
                               (directory-files-recursively base-dir "commits\\.txt\\'"))
             #'string<))))
 
+(defun gptel-auto-workflow--tracking-ref (commit-hash)
+  "Return the archival ref used to preserve tracked COMMIT-HASH."
+  (format "refs/auto-workflow/kept/%s" commit-hash))
+
+(defun gptel-auto-workflow--tracked-commit-pinned-p (commit-hash)
+  "Return non-nil when COMMIT-HASH is preserved under an auto-workflow ref."
+  (and (gptel-auto-workflow--non-empty-string-p commit-hash)
+       (eq 0 (cdr (gptel-auto-workflow--git-result
+                   (format "git show-ref --verify --quiet %s"
+                           (shell-quote-argument
+                            (gptel-auto-workflow--tracking-ref commit-hash)))
+                   30)))))
+
+(defun gptel-auto-workflow--pin-tracked-commit (commit-hash)
+  "Preserve COMMIT-HASH under a private auto-workflow ref.
+Returns non-nil when the ref exists after the call."
+  (and (gptel-auto-workflow--non-empty-string-p commit-hash)
+       (gptel-auto-workflow--commit-exists-p commit-hash)
+       (eq 0 (cdr (gptel-auto-workflow--git-result
+                   (format "git update-ref %s %s"
+                           (shell-quote-argument
+                            (gptel-auto-workflow--tracking-ref commit-hash))
+                           (shell-quote-argument commit-hash))
+                   30)))))
+
+(defun gptel-auto-workflow--commit-tracked-in-ledgers-p (commit-hash)
+  "Return non-nil when COMMIT-HASH still appears in any readable tracking ledger."
+  (when (gptel-auto-workflow--non-empty-string-p commit-hash)
+    (catch 'tracked
+      (dolist (tracking-file (gptel-auto-workflow--tracking-files))
+        (when (file-exists-p tracking-file)
+          (with-temp-buffer
+            (insert-file-contents tracking-file)
+            (when (re-search-forward
+                   (format "^%s " (regexp-quote commit-hash))
+                   nil t)
+              (throw 'tracked t)))))
+      nil)))
+
+(defun gptel-auto-workflow--delete-tracked-commit-ref (commit-hash)
+  "Delete COMMIT-HASH's archival ref if it exists."
+  (when (and (gptel-auto-workflow--non-empty-string-p commit-hash)
+             (gptel-auto-workflow--tracked-commit-pinned-p commit-hash))
+    (eq 0 (cdr (gptel-auto-workflow--git-result
+                (format "git update-ref -d %s"
+                        (shell-quote-argument
+                         (gptel-auto-workflow--tracking-ref commit-hash)))
+                30)))))
+
+(defun gptel-auto-workflow--tracked-entries ()
+  "Return unique tracked commit entries from all readable ledgers."
+  (let ((entries nil)
+        (seen (make-hash-table :test 'equal)))
+    (dolist (tracking-file (gptel-auto-workflow--tracking-files))
+      (with-temp-buffer
+        (insert-file-contents tracking-file)
+        (dolist (line (split-string (buffer-string) "\n" t))
+          (let* ((parts (split-string line))
+                 (hash (car parts))
+                 (exp-id (cadr parts))
+                 (target (caddr parts)))
+            (when (and hash
+                       (>= (length parts) 3)
+                       (string-match-p "^[a-f0-9]+$" hash)
+                       (not (gethash hash seen)))
+              (puthash hash t seen)
+              (push (list hash exp-id target) entries))))))
+    (nreverse entries)))
+
 (defun gptel-auto-workflow--untrack-commit (commit-hash &optional run-id-or-file)
   "Remove COMMIT-HASH from tracking ledgers.
 When RUN-ID-OR-FILE is nil, remove the hash from all readable ledgers.
@@ -373,9 +442,9 @@ Returns non-nil when at least one entry was removed."
             ((file-name-absolute-p run-id-or-file)
              (list run-id-or-file))
             (t
-             (list (gptel-auto-workflow--tracking-file run-id-or-file)))))
+              (list (gptel-auto-workflow--tracking-file run-id-or-file)))))
           removed)
-      (dolist (tracking-file tracking-files removed)
+      (dolist (tracking-file tracking-files)
         (when (file-exists-p tracking-file)
           (with-temp-buffer
             (insert-file-contents tracking-file)
@@ -387,11 +456,15 @@ Returns non-nil when at least one entry was removed."
                      lines)))
               (unless (= (length remaining) (length lines))
                 (setq removed t)
-                (if remaining
-                    (with-temp-file tracking-file
-                      (insert (mapconcat #'identity remaining "\n"))
-                      (insert "\n"))
-                  (delete-file tracking-file))))))))))
+                 (if remaining
+                     (with-temp-file tracking-file
+                       (insert (mapconcat #'identity remaining "\n"))
+                       (insert "\n"))
+                   (delete-file tracking-file)))))))
+      (when (and removed
+                 (not (gptel-auto-workflow--commit-tracked-in-ledgers-p commit-hash)))
+        (gptel-auto-workflow--delete-tracked-commit-ref commit-hash))
+      removed)))
 
 (defun gptel-auto-workflow--commit-exists-p (commit-hash)
   "Return non-nil when COMMIT-HASH resolves to an existing commit object."
@@ -474,53 +547,63 @@ Returns nil if git command fails or returns invalid hash."
                            experiment-id
                            (or target "unknown")
                            (format-time-string "%H:%M:%S")))
-           (append-to-file (point-min) (point-max) tracking-file))
-         (message "[auto-workflow] Tracked commit %s for exp-%s"
-                  (gptel-auto-workflow--truncate-hash commit-hash)
-                  experiment-id))
-       commit-hash))))
+            (append-to-file (point-min) (point-max) tracking-file))
+          (message "[auto-workflow] Tracked commit %s for exp-%s"
+                   (gptel-auto-workflow--truncate-hash commit-hash)
+                   experiment-id))
+        (unless (or (gptel-auto-workflow--tracked-commit-pinned-p commit-hash)
+                    (gptel-auto-workflow--pin-tracked-commit commit-hash))
+          (message "[auto-workflow] Failed to preserve tracked commit %s under recovery refs"
+                   (gptel-auto-workflow--truncate-hash commit-hash)))
+        commit-hash))))
 
-(defun gptel-auto-workflow--recover-orphans ()
-  "Check for orphan commits from previous runs.
-An orphan is a commit that exists but is not reachable from staging or main.
-Returns list of (hash exp-id target) for truly orphaned commits."
-  (interactive)
-  (let* ((tracking-files (gptel-auto-workflow--tracking-files))
-         (orphans nil)
-         (seen (make-hash-table :test 'equal))
-         (stale-hashes nil))
-    (dolist (tracking-file tracking-files)
-      (with-temp-buffer
-        (insert-file-contents tracking-file)
-        (dolist (line (split-string (buffer-string) "\n" t))
-          (let* ((parts (split-string line))
-                 (hash (car parts))
-                 (exp-id (cadr parts))
-                 (target (caddr parts)))
-            (when (and hash
-                       (>= (length parts) 3)
-                       (string-match-p "^[a-f0-9]+$" hash)
-                       (not (gethash hash seen)))
-              (puthash hash t seen)
-               (cond
-                ((not (gptel-auto-workflow--commit-exists-p hash))
-                 (push hash stale-hashes))
-                ((gptel-auto-workflow--commit-integrated-p hash)
-                 (push hash stale-hashes))
-                (t
-                 (push (list hash exp-id target) orphans))))))))
+(defun gptel-auto-workflow--recoverable-tracked-commits ()
+  "Return tracked commits that still exist and are not already integrated.
+Stale or already-integrated hashes are compacted out of the ledgers."
+  (let ((recoverable nil)
+        (stale-hashes nil))
+    (dolist (entry (gptel-auto-workflow--tracked-entries))
+      (pcase-let ((`(,hash ,_exp-id ,_target) entry))
+        (cond
+         ((not (gptel-auto-workflow--commit-exists-p hash))
+          (push hash stale-hashes))
+         ((gptel-auto-workflow--commit-integrated-p hash)
+          (push hash stale-hashes))
+         (t
+          (push entry recoverable)))))
     (dolist (hash (delete-dups stale-hashes))
       (when (gptel-auto-workflow--untrack-commit hash)
         (message "[auto-workflow] Removed stale orphan record %s"
                  (gptel-auto-workflow--truncate-hash hash))))
+    (nreverse recoverable)))
+
+(defun gptel-auto-workflow--recover-orphans ()
+  "Check for tracked commits that are not yet preserved by recovery refs.
+An orphan is a tracked commit that exists, is not already integrated, and could
+not be pinned under a private `refs/auto-workflow/kept/*' ref.
+Returns list of (hash exp-id target) for truly unpreserved commits."
+  (interactive)
+  (let ((orphans nil)
+        (pinned-count 0))
+    (dolist (entry (gptel-auto-workflow--recoverable-tracked-commits))
+      (let ((hash (car entry)))
+        (cond
+         ((gptel-auto-workflow--tracked-commit-pinned-p hash))
+         ((gptel-auto-workflow--pin-tracked-commit hash)
+          (cl-incf pinned-count))
+         (t
+          (push entry orphans)))))
+    (when (> pinned-count 0)
+      (message "[auto-workflow] Preserved %d tracked commit(s) under recovery refs"
+               pinned-count))
     (if orphans
         (message "[auto-workflow] Found %d orphan(s): %s"
                  (length orphans)
                  (mapconcat (lambda (o)
                               (gptel-auto-workflow--truncate-hash (car o)))
-                            orphans " "))
+                             orphans " "))
       (message "[auto-workflow] No orphan commits found"))
-    orphans))
+    (nreverse orphans)))
 
 
 (defun gptel-auto-workflow--cherry-pick-orphan (commit-hash)
@@ -605,7 +688,7 @@ Uses the staging worktree only."
   "Recover all orphan commits from tracked ledgers to staging branch.
 If NO-PUSH is non-nil, skip pushing to origin (useful for cron jobs)."
   (interactive)
-  (let ((orphans (gptel-auto-workflow--recover-orphans)))
+  (let ((orphans (gptel-auto-workflow--recoverable-tracked-commits)))
     (if (not orphans)
         (message "[auto-workflow] No orphans to recover")
       (let ((recovered 0)
@@ -4749,6 +4832,14 @@ fall back to an error-shaped AGENT-OUTPUT."
           "allocated quota exceeded\\|usage limit exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
           agent-output))))
 
+(defun gptel-auto-experiment--hard-quota-exhausted-p (agent-output)
+  "Return non-nil when AGENT-OUTPUT shows a hard quota stop for executor work."
+  (and (stringp agent-output)
+       (let ((case-fold-search t))
+         (string-match-p
+          "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
+          agent-output))))
+
 (defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count)
   "Run experiment with automatic retry on transient errors.
 RETRY-COUNT tracks current retry attempt."
@@ -4772,7 +4863,7 @@ RETRY-COUNT tracks current retry attempt."
                    (gptel-auto-experiment--hard-timeout-p raw-error))
                  (quota-exhausted
                   (or gptel-auto-experiment--quota-exhausted
-                      (gptel-auto-experiment--quota-exhausted-p agent-output)))
+                      (gptel-auto-experiment--hard-quota-exhausted-p agent-output)))
                   (api-rate-limit-category
                    (memq error-type '(:api-rate-limit)))
                   (timeout-category
@@ -5038,7 +5129,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                              (cl-incf gptel-auto-experiment--api-error-count)
                              (message "[auto-workflow] API error #%d: %s"
                                       gptel-auto-experiment--api-error-count error-category)
-                              (when (gptel-auto-experiment--quota-exhausted-p error-source)
+                              (when (gptel-auto-experiment--hard-quota-exhausted-p error-source)
                                 (setq gptel-auto-experiment--quota-exhausted t)
                                 (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run"))
                               ;; The outer experiment loop owns max-exp and will
@@ -5635,6 +5726,9 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--cron-job-running nil
   "Non-nil while a queued cron job is executing.")
 
+(defvar gptel-auto-workflow--cron-job-timer nil
+  "Timer object for a queued cron job that has not started yet.")
+
 (defvar gptel-auto-workflow--watchdog-timer nil
   "Watchdog timer to prevent workflow from getting stuck.")
 
@@ -6040,6 +6134,9 @@ Interactive command to recover from hung workflow state."
   (my/gptel--reset-agent-task-state)
   (gptel-mementum--reset-synthesis-state)
   (gptel-auto-experiment--reset-grade-state)
+  (when gptel-auto-workflow--cron-job-timer
+    (cancel-timer gptel-auto-workflow--cron-job-timer)
+    (setq gptel-auto-workflow--cron-job-timer nil))
   (setq gptel-auto-workflow--running nil
         gptel-auto-workflow--cron-job-running nil
         gptel-auto-workflow--run-project-root nil
@@ -6371,6 +6468,9 @@ Only removes worktrees if no gptel processes are running."
       (my/gptel--reset-agent-task-state)
       (gptel-mementum--reset-synthesis-state)
       (gptel-auto-experiment--reset-grade-state)
+      (when gptel-auto-workflow--cron-job-timer
+        (cancel-timer gptel-auto-workflow--cron-job-timer)
+        (setq gptel-auto-workflow--cron-job-timer nil))
       (gptel-auto-workflow--cleanup-old-worktrees)
       (dolist (timer (copy-sequence timer-list))
         (when (timerp timer)
