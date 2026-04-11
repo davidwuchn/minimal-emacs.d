@@ -1,8 +1,27 @@
 # Mementum State
 
-> Last session: 2026-04-11 20:45
+> Last session: 2026-04-11 21:15
 
-## Total Improvements: 236+ Real Code Fixes (27 new today)
+## Total Improvements: 238+ Real Code Fixes (29 new today)
+
+### Session Summary: 2026-04-11 Evening (Remote Sync + Submodule Update)
+
+**Action:** Synced with remote origin, fast-forwarded main, updated submodules
+
+**Result:** ✅ main now at `e220303a`, submodules checked
+
+**Remote Changes (origin/main):**
+- **e220303a** — ⊘ fix: unblock DashScope headless auto-workflow
+  - eca/config.json: +8 lines (headless config)
+  - gptel-ext-backends.el: DashScope backend fix
+  - gptel-tools-agent.el: +136 lines (headless auto-workflow improvements)
+  - test-gptel-tools-agent-regressions.el: +157 lines (new regression tests)
+
+**Sync Status:**
+- **main:** `f678337c` — origin ↔ upstream in sync ✅
+- **staging:** syncing with main...
+
+---
 
 ### Session Summary: 2026-04-11 Evening (Naming Conflict Fix + Merge)
 
@@ -21,10 +40,6 @@
 - Benchmark core refactoring (simplified score extraction)
 - Naming conflict fix
 - All recent workflow improvements
-
-**Sync Status:**
-- **main:** `6f880833` — origin ↔ upstream in sync
-- **staging:** `16f03d1d` — origin ↔ upstream in sync (merged main)
 
 ### Session Summary: 2026-04-11 Early Morning (Workflow Run Complete + Sync)
 
@@ -48,10 +63,6 @@
 - Staging-review failing frequently - reviewer can't access files in worktrees
 - score_after is 0.00 when tests fail (Eight Keys scoring can't calculate)
 - Daemon crashes intermittently during workflow runs (pipe connection lost)
-
-**Sync Status:**
-- **main:** `e700a688` — origin ↔ upstream in sync
-- **staging:** `9607d318` — origin ↔ upstream in sync
 
 **New Optimize Branches on Origin:**
 - `agent-neopi5-exp4`, `loop-neopi5-exp2/5`, `retry-neopi5-exp5`
@@ -852,4 +863,3 @@ Don't reinvent the wheel. Use the daemon.
 - ✅ Updated nucleus-patterns.md (vitality: φ 0.88→0.90, evidence 8→9)
 
 **Commit:** `b33db20a`
-

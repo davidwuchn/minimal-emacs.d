@@ -125,6 +125,14 @@
             }
           }
         },
+        "qwen3.6-plus": {
+          "extraPayload": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 1024
+            }
+          }
+        },
         "MiniMax-M2.5": {
           "extraPayload": {
             "thinking": {
