@@ -4906,6 +4906,37 @@ EXIT-CODE defaults to 1."
                     ((symbol-function 'gptel-auto-workflow--git-cmd)
                      (lambda (&rest _) ""))
                     ((symbol-function 'message) (lambda (&rest _) nil)))
+             (should-not (gptel-auto-workflow--recover-orphans))
+             (should-not (file-exists-p tracking-file))))
+       (delete-directory proj-root t))))
+
+(ert-deftest regression/auto-workflow/recover-orphans-untracks-commits-reachable-from-origin-staging ()
+  "Commits already preserved on origin/staging should not be treated as orphans."
+  (let* ((gptel-auto-workflow--run-id nil)
+         (proj-root (make-temp-file "aw-origin-staging" t))
+         (tracking-file (expand-file-name
+                         (format "var/tmp/experiments/%s/commits.txt"
+                                 (format-time-string "%Y-%m-%d"))
+                         proj-root)))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory tracking-file) t)
+          (with-temp-file tracking-file
+            (insert "abc1234 exp1 target.el 00:00:00\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                     (lambda () proj-root))
+                    ((symbol-function 'gptel-auto-workflow--commit-exists-p)
+                     (lambda (_hash) t))
+                    ((symbol-function 'gptel-auto-workflow--commit-patch-equivalent-p)
+                     (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-workflow--git-cmd)
+                     (lambda (command &optional _timeout)
+                       (if (string-match-p
+                            "git merge-base --is-ancestor abc1234 origin/staging 2>/dev/null && echo yes"
+                            command)
+                           "yes"
+                         "")))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
             (should-not (gptel-auto-workflow--recover-orphans))
             (should-not (file-exists-p tracking-file))))
       (delete-directory proj-root t))))
@@ -5610,10 +5641,36 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (should (gptel-auto-workflow--merge-to-staging "optimize/test-exp1"))
       (setq commands (nreverse commands))
       (should (member "git cherry-pick --no-commit abc123" commands))
-      (should (member "git reset --hard staging" commands))
-      (should-not (seq-some (lambda (command)
-                              (string-match-p "git merge -X theirs optimize/test-exp1 --no-ff" command))
-                            commands)))))
+       (should (member "git reset --hard staging" commands))
+       (should-not (seq-some (lambda (command)
+                               (string-match-p "git merge -X theirs optimize/test-exp1 --no-ff" command))
+                             commands)))))
+
+(ert-deftest regression/auto-workflow/merge-to-staging-uses-extended-commit-timeout ()
+  "Post-cherry-pick verification commits should get the longer timeout budget."
+  (let ((commit-timeout nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--ensure-staging-branch-exists)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--ensure-merge-source-ref)
+               (lambda (_branch) "optimize/test-exp1"))
+              ((symbol-function 'gptel-auto-workflow--with-staging-worktree)
+               (lambda (fn) (funcall fn)))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional timeout)
+                 (cond
+                  ((string-match-p "git rev-parse optimize/test-exp1" command)
+                   (cons "abc123" 0))
+                  ((string-match-p "git cherry-pick --no-commit abc123" command)
+                   (cons "" 0))
+                  ((string-match-p "git commit -m " command)
+                   (setq commit-timeout timeout)
+                   (cons "" 0))
+                  (t
+                   (cons "" 0)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (gptel-auto-workflow--merge-to-staging "optimize/test-exp1"))
+      (should (= commit-timeout 300)))))
 
 (ert-deftest regression/auto-workflow/prepare-staging-merge-base-skips-checkout-when-already-on-staging ()
   "Preparing staging should reset directly when already on the staging branch."
@@ -5709,9 +5766,10 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
   "Staging verification should hydrate submodules via shared repos, not recursive update."
   (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging")
          (hydrated nil)
-        (test-args nil)
-        (test-script "/tmp/staging/scripts/run-tests.sh")
-        (verify-script "/tmp/staging/scripts/verify-nucleus.sh"))
+         (verify-skip-env nil)
+         (test-args nil)
+         (test-script "/tmp/staging/scripts/run-tests.sh")
+         (verify-script "/tmp/staging/scripts/verify-nucleus.sh"))
     (cl-letf (((symbol-function 'file-exists-p)
                (lambda (path)
                  (member path (list "/tmp/staging" test-script verify-script))))
@@ -5726,10 +5784,12 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'call-process)
                (lambda (_program _in buffer _display script &rest args)
                   (when (equal script test-script)
-                    (setq test-args args))
-                  (with-current-buffer buffer
-                    (insert (format "ran %s%s\n"
-                                    script
+                     (setq test-args args))
+                  (when (equal script verify-script)
+                    (setq verify-skip-env (getenv "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC")))
+                   (with-current-buffer buffer
+                     (insert (format "ran %s%s\n"
+                                     script
                                     (if args
                                         (format " %s" (mapconcat #'identity args " "))
                                       ""))))
@@ -5737,12 +5797,13 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (unwind-protect
-          (let ((result (gptel-auto-workflow--verify-staging)))
-            (should (car result))
-            (should (equal hydrated "/tmp/staging"))
-            (should (equal test-args '("unit")))
-            (should (string-match-p "ran /tmp/staging/scripts/run-tests.sh unit" (cdr result)))
-            (should (string-match-p "ran /tmp/staging/scripts/verify-nucleus.sh" (cdr result))))
+           (let ((result (gptel-auto-workflow--verify-staging)))
+             (should (car result))
+             (should (equal hydrated "/tmp/staging"))
+             (should (equal verify-skip-env "1"))
+             (should (equal test-args '("unit")))
+             (should (string-match-p "ran /tmp/staging/scripts/run-tests.sh unit" (cdr result)))
+             (should (string-match-p "ran /tmp/staging/scripts/verify-nucleus.sh" (cdr result))))
         (when-let ((buf (get-buffer "*test-staging-verify*")))
           (kill-buffer buf))))))
 
@@ -5781,7 +5842,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 
 (ert-deftest regression/auto-workflow/main-baseline-test-results-runs-verify-nucleus ()
   "Main-baseline comparison should include verify-nucleus failures in the baseline."
-  (let ((captured nil))
+  (let ((captured nil)
+        (verify-skip-env nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--staging-main-ref)
                (lambda () "main"))
               ((symbol-function 'gptel-auto-workflow--with-temporary-worktree)
@@ -5797,12 +5859,14 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                            "/tmp/main-baseline/scripts/verify-nucleus.sh"))))
               ((symbol-function 'generate-new-buffer)
                (lambda (&rest _) (get-buffer-create "*test-main-baseline-verify*")))
-              ((symbol-function 'call-process)
-               (lambda (_program _in buffer _display script &rest args)
-                 (push (list script args) captured)
-                 (with-current-buffer buffer
-                   (insert (format "ran %s%s\n"
-                                   script
+               ((symbol-function 'call-process)
+                (lambda (_program _in buffer _display script &rest args)
+                  (push (list script args) captured)
+                  (when (equal script "/tmp/main-baseline/scripts/verify-nucleus.sh")
+                    (setq verify-skip-env (getenv "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC")))
+                  (with-current-buffer buffer
+                    (insert (format "ran %s%s\n"
+                                    script
                                    (if args
                                        (format " %s" (mapconcat #'identity args " "))
                                      ""))))
@@ -5814,14 +5878,15 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                    0)))
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
-      (unwind-protect
-          (let ((result (gptel-auto-workflow--main-baseline-test-results)))
-            (should (equal (nreverse captured)
-                           '(("/tmp/main-baseline/scripts/run-tests.sh" ("unit"))
-                             ("/tmp/main-baseline/scripts/verify-nucleus.sh" nil))))
-            (should (= (plist-get result :exit-code) 1))
-            (should (equal (plist-get result :failed-tests)
-                           '("error:packages/gptel is pinned to old, but tracked branch master is at new."))))
+       (unwind-protect
+           (let ((result (gptel-auto-workflow--main-baseline-test-results)))
+             (should (equal (nreverse captured)
+                            '(("/tmp/main-baseline/scripts/run-tests.sh" ("unit"))
+                              ("/tmp/main-baseline/scripts/verify-nucleus.sh" nil))))
+             (should (equal verify-skip-env "1"))
+             (should (= (plist-get result :exit-code) 1))
+             (should (equal (plist-get result :failed-tests)
+                            '("error:packages/gptel is pinned to old, but tracked branch master is at new."))))
         (when-let ((buf (get-buffer "*test-main-baseline-verify*")))
           (kill-buffer buf))))))
 
@@ -5882,13 +5947,14 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                                     captured-env))
                     (status-file (and entry
                                       (substring entry (length prefix)))))
-              (should (equal captured-program
-                             (expand-file-name "scripts/run-tests.sh" worktree)))
-              (should status-file)
-              (should (file-name-absolute-p status-file))
-              (should-not (equal status-file
-                                 (expand-file-name "var/tmp/cron/auto-workflow-status.sexp"
-                                                   proj-root)))
+             (should (equal captured-program
+                            (expand-file-name "scripts/run-tests.sh" worktree)))
+             (should status-file)
+             (should (file-name-absolute-p status-file))
+             (should (member "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1" captured-env))
+             (should-not (equal status-file
+                                (expand-file-name "var/tmp/cron/auto-workflow-status.sexp"
+                                                  proj-root)))
                 (should (equal captured-args '("unit")))
                 (should-not (file-exists-p status-file))))
         (delete-directory proj-root t)

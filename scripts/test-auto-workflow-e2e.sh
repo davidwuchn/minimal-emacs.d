@@ -13,7 +13,8 @@ run_batch_bootstrap() {
         -L "$DIR/lisp/modules" \
         -L "$DIR/packages/gptel" \
         -L "$DIR/packages/gptel-agent" \
-        -l "$DIR/scripts/test-auto-workflow-batch.el" \
+        -L "$DIR/tests" \
+        -l "$DIR/tests/test-auto-workflow-batch.el" \
         -f test-auto-workflow-batch-run
 }
 
@@ -98,5 +99,5 @@ echo "=== All E2E Tests Passed ==="
 echo
 echo "Next steps:"
 echo "1. Test manual run: ./scripts/run-auto-workflow-cron.sh auto-workflow"
-echo "2. Check logs: tail -f var/tmp/cron/auto-workflow.log"
-echo "3. Wait for cron job at next scheduled time"
+echo "2. Inspect status/output: ./scripts/run-auto-workflow-cron.sh status && ./scripts/run-auto-workflow-cron.sh messages"
+echo "3. Check logs: tail -f var/tmp/cron/auto-workflow.log"

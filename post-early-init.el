@@ -34,27 +34,25 @@
 ;; AUTO-WORKFLOW: Mark all project variables as safe
 ;; ═══════════════════════════════════════════════════════════════════════════
 
-;; These variables are used by auto-workflow in .dir-locals.el files
-;; Marking them as safe prevents the prompt when opening project files
-;; NOTE: For complex types (lists), we must explicitly mark the EXACT values
-(add-to-list 'safe-local-variable-values
-             '(gptel-auto-workflow-targets
-               "lisp/modules/gptel-tools-agent.el"
-               "lisp/modules/gptel-auto-workflow-strategic.el"
-               "lisp/modules/gptel-benchmark-core.el"))
-(add-to-list 'safe-local-variable-values
-             '(gptel-auto-experiment-max-per-target . 5))
-(add-to-list 'safe-local-variable-values
-             '(gptel-auto-experiment-time-budget . 1200))
-(add-to-list 'safe-local-variable-values
-             '(gptel-auto-experiment-no-improvement-threshold . 3))
-(add-to-list 'safe-local-variable-values
-             '(gptel-model . minimax-m2.5))
+;; Auto-workflow relies on dir-locals even in daemon mode, so daemon startup
+;; should load safe values and skip prompts for anything unsafe.
+(when (daemonp)
+  (setq enable-local-variables :safe))
 
-;; Mark variable names as safe (for future flexibility)
-(dolist (var '(gptel-auto-workflow-projects
-                gptel-auto-workflow--project-root-override))
-  (add-to-list 'safe-local-variable-values (cons var t)))
+;; These variables are used by auto-workflow in .dir-locals.el files.
+(put 'gptel-auto-workflow-targets 'safe-local-variable
+     (lambda (value)
+       (and (listp value)
+            (catch 'invalid
+              (dolist (entry value t)
+                (unless (stringp entry)
+                  (throw 'invalid nil)))))))
+(put 'gptel-auto-experiment-max-per-target 'safe-local-variable #'integerp)
+(put 'gptel-auto-experiment-time-budget 'safe-local-variable #'integerp)
+(put 'gptel-auto-experiment-no-improvement-threshold 'safe-local-variable #'integerp)
+(put 'gptel-model 'safe-local-variable #'symbolp)
+(put 'gptel-auto-workflow-projects 'safe-local-variable #'listp)
+(put 'gptel-auto-workflow--project-root-override 'safe-local-variable #'stringp)
 
 (provide 'post-early-init)
 
