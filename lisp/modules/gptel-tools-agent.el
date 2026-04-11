@@ -999,11 +999,14 @@ large-result truncation, and result caching."
           (funcall main-cb cached)
           (cl-return-from my/gptel-agent--task-override)))
       ;; Not cached, run the subagent
-      (let* ((preset (nconc (list :include-reasoning nil
-                                  :use-tools t
-                                  :use-context nil
-                                  :stream my/gptel-subagent-stream)
-                            (cdr agent-config)))
+      (let* ((preset
+              (gptel-auto-workflow--maybe-override-subagent-provider
+               agent-type
+               (nconc (list :include-reasoning nil
+                            :use-tools t
+                            :use-context nil
+                            :stream my/gptel-subagent-stream)
+                      (cdr agent-config))))
               (syms (cons 'gptel--preset (gptel--preset-syms preset)))
               (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
         (cl-progv syms vals
@@ -1664,6 +1667,20 @@ its async continuation layer in the worker daemon."
   "Mark FSM as no-retry before request dispatch."
   (my/gptel--disable-auto-retry-for-fsm fsm))
 
+(defun my/gptel--invoke-callback-safely (callback result)
+  "Invoke CALLBACK with RESULT from a stable internal buffer.
+
+This prevents `Selecting deleted buffer' errors when callback side effects
+delete the request or file buffer that happened to be current when the
+subagent callback fired."
+  (let ((return-buffer (current-buffer))
+        (safe-buffer (get-buffer-create " *gptel-callback*")))
+    (set-buffer safe-buffer)
+    (unwind-protect
+        (funcall callback result)
+      (when (buffer-live-p return-buffer)
+        (set-buffer return-buffer)))))
+
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
 CALLBACK is called with the result or a timeout error.
@@ -1713,13 +1730,13 @@ Uses hash table keyed by task-id to support parallel execution."
                     (cancel-timer (plist-get state :timeout-timer)))
                   (when (timerp (plist-get state :progress-timer))
                     (cancel-timer (plist-get state :progress-timer)))
-                  (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
-                           agent-type (float-time (time-since start-time))
-                           (if (stringp result) (length result) 0))
-                  (funcall restore-origin-fsm child-fsm)
-                  (unwind-protect
-                      (funcall callback result)
-                    (remhash task-id my/gptel--agent-task-state))))))))
+                   (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
+                            agent-type (float-time (time-since start-time))
+                            (if (stringp result) (length result) 0))
+                   (funcall restore-origin-fsm child-fsm)
+                   (unwind-protect
+                       (my/gptel--invoke-callback-safely callback result)
+                     (remhash task-id my/gptel--agent-task-state))))))))
     (cl-labels
         ((finish-timeout (state timeout-seconds timeout-suffix)
            (puthash task-id (plist-put state :done t)
@@ -4773,6 +4790,101 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
 
 (defvar gptel-auto-experiment-rate-limit-max-retry-delay 60
   "Maximum seconds between retries for rate-limited API failures.")
+
+(defcustom gptel-auto-workflow-headless-subagent-fallbacks
+  '(("DashScope" . "qwen3.6-plus")
+    ("DeepSeek" . "deepseek-chat")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("Gemini" . "gemini-3.1-pro-preview"))
+  "Ordered backend/model fallbacks for headless auto-workflow subagents.
+
+Each entry is (BACKEND . MODEL), where BACKEND matches the agent preset backend
+string and MODEL is the model string to use with that backend. The workflow
+keeps the agent YAML defaults outside headless runs."
+  :type '(repeat (cons (string :tag "Backend")
+                       (string :tag "Model")))
+  :group 'gptel-tools-agent)
+
+(defconst gptel-auto-workflow--backend-key-hosts
+  '(("MiniMax" . "api.minimaxi.com")
+    ("DeepSeek" . "api.deepseek.com")
+    ("Gemini" . "generativelanguage.googleapis.com")
+    ("CF-Gateway" . "gateway.ai.cloudflare.com")
+    ("DashScope" . "coding.dashscope.aliyuncs.com")
+    ("moonshot" . "api.kimi.com"))
+  "Map gptel backend names to auth-source hosts for workflow failover.")
+
+(defconst gptel-auto-workflow--backend-object-vars
+  '(("MiniMax" . gptel--minimax)
+    ("DeepSeek" . gptel--deepseek)
+    ("Gemini" . gptel--gemini)
+    ("CF-Gateway" . gptel--cf-gateway)
+    ("DashScope" . gptel--dashscope)
+    ("moonshot" . gptel--moonshot))
+  "Map gptel backend names to the corresponding backend object variables.")
+
+(defun gptel-auto-workflow--backend-available-p (backend-name)
+  "Return non-nil when BACKEND-NAME has credentials configured."
+  (let ((host (alist-get backend-name gptel-auto-workflow--backend-key-hosts
+                         nil nil #'string=)))
+    (and host
+         (fboundp 'my/gptel-api-key)
+         (gptel-auto-workflow--non-empty-string-p
+          (my/gptel-api-key host)))))
+
+(defun gptel-auto-workflow--headless-provider-override-active-p ()
+  "Return non-nil when headless auto-workflow provider override should apply."
+  (and (bound-and-true-p gptel-auto-workflow--headless)
+       (bound-and-true-p gptel-auto-workflow-persistent-headless)
+       (bound-and-true-p gptel-auto-workflow--current-project)))
+
+(defun gptel-auto-workflow--backend-object (backend-name)
+  "Return the backend object for BACKEND-NAME, or nil when unavailable."
+  (when-let* ((var (alist-get backend-name gptel-auto-workflow--backend-object-vars
+                              nil nil #'string=))
+              ((boundp var)))
+    (symbol-value var)))
+
+(defun gptel-auto-workflow--backend-model-symbol (backend model-name)
+  "Return MODEL-NAME as a supported symbol for BACKEND.
+
+If MODEL-NAME is not yet listed on BACKEND, append it so hot-reloaded daemons
+can use newer models without a restart."
+  (let ((model (if (symbolp model-name) model-name (intern model-name))))
+    (when (and backend (fboundp 'gptel-backend-models))
+      (let ((models (gptel-backend-models backend)))
+        (unless (memq model models)
+          (setf (gptel-backend-models backend) (append models (list model))))))
+    model))
+
+(defun gptel-auto-workflow--maybe-override-subagent-provider (agent-type preset)
+  "Return PRESET with a fallback provider for headless auto-workflow AGENT-TYPE."
+  (let ((backend (plist-get preset :backend)))
+    (if (and (gptel-auto-workflow--headless-provider-override-active-p)
+             (stringp backend)
+             (string= backend "MiniMax"))
+        (if-let ((candidate
+                  (seq-find
+                   (lambda (entry)
+                     (gptel-auto-workflow--backend-available-p (car entry)))
+                   gptel-auto-workflow-headless-subagent-fallbacks)))
+            (let* ((override (copy-sequence preset))
+                   (fallback-backend (car candidate))
+                   (fallback-model (cdr candidate))
+                   (backend-object
+                    (gptel-auto-workflow--backend-object fallback-backend))
+                   (model-symbol
+                    (gptel-auto-workflow--backend-model-symbol
+                     backend-object fallback-model)))
+              (setq override (plist-put override :backend
+                                        (or backend-object fallback-backend)))
+              (setq override (plist-put override :model
+                                        (or model-symbol fallback-model)))
+              (message "[auto-workflow] Using %s/%s for %s during headless run"
+                       fallback-backend fallback-model agent-type)
+              override)
+          preset)
+      preset)))
 
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
   "Check if ERROR-OUTPUT is a transient/retryable error."

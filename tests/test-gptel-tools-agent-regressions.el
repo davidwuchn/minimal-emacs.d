@@ -486,9 +486,53 @@ EXIT-CODE defaults to 1."
              (setq result exp-result)))
           (should result)
            (should (= gptel-auto-experiment--api-error-count 3))
-            (should (equal (plist-get result :comparator-reason) ":api-rate-limit"))
-             (should-not (plist-get result :kept))))
+             (should (equal (plist-get result :comparator-reason) ":api-rate-limit"))
+              (should-not (plist-get result :kept))))
         (delete-directory temp-dir t)))
+
+(ert-deftest regression/auto-experiment/usage-limit-grader-errors-do-not-trip-hard-quota ()
+  "Usage-limit grader failures should stay retryable instead of tripping hard quota."
+  (let ((gptel-auto-experiment--api-error-count 0)
+        (gptel-auto-experiment--quota-exhausted nil)
+        (result nil)
+        (temp-dir (make-temp-file "exp-worktree" t))
+        (usage-limit-error
+         "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (lambda (_target _experiment-id) temp-dir))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results cb)
+                     (funcall cb '(:patterns nil))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _args) "prompt"))
+                  ((symbol-function 'run-with-timer)
+                   (lambda (&rest _args) :fake-timer))
+                  ((symbol-function 'cancel-timer)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'my/gptel--run-agent-tool)
+                   (lambda (cb &rest _args)
+                     (funcall cb usage-limit-error)))
+                  ((symbol-function 'gptel-auto-experiment-grade)
+                   (lambda (_output cb &rest _args)
+                     (funcall cb `(:score 0 :total 9 :passed nil :details ,usage-limit-error))))
+                  ((symbol-function 'gptel-auto-experiment--categorize-error)
+                   (lambda (_output)
+                     '(:api-rate-limit . "usage limit exceeded (2056)")))
+                  ((symbol-function 'gptel-auto-experiment-log-tsv)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (gptel-auto-experiment-run
+           "lisp/modules/gptel-benchmark-core.el" 1 5 0.4 0.5 nil
+           (lambda (exp-result)
+             (setq result exp-result)))
+          (should result)
+          (should (= gptel-auto-experiment--api-error-count 1))
+          (should-not gptel-auto-experiment--quota-exhausted)
+          (should (equal (plist-get result :comparator-reason) ":api-rate-limit"))
+          (should-not (plist-get result :kept)))
+      (delete-directory temp-dir t))))
 
 (ert-deftest regression/auto-experiment/run-surfaces-retryable-grader-errors ()
   "Failed grades should surface retryable grader details for outer retry logic."
@@ -1300,9 +1344,21 @@ EXIT-CODE defaults to 1."
         (should (functionp scheduled-timeout))
         (should (functionp wrapped-callback))
         (funcall scheduled-timeout)
-        (funcall wrapped-callback "late success")
-        (should (= (length callback-results) 1))
-        (should (string-match-p "timed out after 42s" (car callback-results)))))))
+         (funcall wrapped-callback "late success")
+         (should (= (length callback-results) 1))
+         (should (string-match-p "timed out after 42s" (car callback-results)))))))
+
+(ert-deftest regression/subagent/safe-callback-survives-deleted-current-buffer ()
+  "Callback dispatch should not signal when the callback deletes the current buffer."
+  (let ((payload nil))
+    (with-temp-buffer
+      (let ((victim (current-buffer)))
+        (my/gptel--invoke-callback-safely
+         (lambda (result)
+           (kill-buffer victim)
+           (setq payload result))
+         "ok")))
+    (should (equal payload "ok"))))
 
 (ert-deftest regression/auto-experiment/error-snippet-sanitizes-output ()
   "Error snippet extraction should be sanitized and never signal."
@@ -1340,12 +1396,58 @@ EXIT-CODE defaults to 1."
 
 (ert-deftest regression/auto-experiment/usage-limit-exceeded-is-not-hard-executor-quota ()
   "Transient usage-limit errors should stay retryable for executor runs."
-  (should
-   (gptel-auto-experiment--quota-exhausted-p
-    "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"))
   (should-not
    (gptel-auto-experiment--hard-quota-exhausted-p
     "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")))
+
+(ert-deftest regression/auto-workflow/headless-subagent-provider-override-prefers-available-fallback ()
+  "Headless workflow subagents should move off MiniMax when a fallback is available."
+  (let* ((dashscope-backend
+          (gptel-make-openai "DashScope"
+            :host "coding.dashscope.aliyuncs.com"
+            :key (lambda () "token")
+            :models '(qwen3.5-plus)))
+         (had-dashscope (boundp 'gptel--dashscope))
+         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+         (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
+        (gptel-auto-workflow--headless t)
+        (gptel-auto-workflow-persistent-headless t)
+        (gptel-auto-workflow--current-project "/tmp/project"))
+    (unwind-protect
+        (progn
+          (set 'gptel--dashscope dashscope-backend)
+          (cl-letf (((symbol-function 'my/gptel-api-key)
+                     (lambda (host)
+                       (pcase host
+                         ("coding.dashscope.aliyuncs.com" "token")
+                         (_ nil))))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (let ((override
+                   (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
+              (should (eq (plist-get override :backend) dashscope-backend))
+              (should (eq (plist-get override :model) 'qwen3.6-plus))
+              (should (memq 'qwen3.6-plus (gptel-backend-models dashscope-backend)))
+              (should (equal (plist-get preset :backend) "MiniMax"))
+              (should (equal (plist-get preset :model) "minimax-m2.7-highspeed")))))
+      (if had-dashscope
+          (set 'gptel--dashscope old-dashscope)
+        (makunbound 'gptel--dashscope)))))
+
+(ert-deftest regression/auto-workflow/headless-subagent-provider-override-keeps-minimax-without-fallback ()
+  "Headless workflow should keep MiniMax when no fallback credentials exist."
+  (let ((preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
+        (gptel-auto-workflow--headless t)
+        (gptel-auto-workflow-persistent-headless t)
+        (gptel-auto-workflow--current-project "/tmp/project"))
+    (cl-letf (((symbol-function 'my/gptel-api-key)
+               (lambda (_host) nil))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (let ((override
+             (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
+        (should (equal (plist-get override :backend) "MiniMax"))
+        (should (equal (plist-get override :model) "minimax-m2.7-highspeed"))))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-retries-string-timeout-category ()
   "Retry helper should honor string-shaped timeout categories from experiment results."
@@ -1456,8 +1558,8 @@ EXIT-CODE defaults to 1."
                   (cl-incf runs)
                   (funcall callback
                            (list :agent-output
-                                "Error: Task executor could not finish task \"x\". Error details: (:type \"insufficient_quota\" :message \"week allocated quota exceeded\" :http_code \"429\")"
-                                :comparator-reason ":api-rate-limit"))))
+                                 "Error: Task executor could not finish task \"x\". Error details: (:type \"insufficient_quota\" :message \"week allocated quota exceeded\" :http_code \"429\")"
+                                 :comparator-reason ":api-rate-limit"))))
               ((symbol-function 'run-with-timer)
                (lambda (&rest _args)
                  (setq scheduled-retry t)
@@ -1472,6 +1574,41 @@ EXIT-CODE defaults to 1."
         (should-not scheduled-retry)
         (should gptel-auto-experiment--quota-exhausted)
         (should (string-match-p "week allocated quota exceeded" (plist-get final-result :agent-output))))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-retries-usage-limit-rate-limits ()
+  "Usage-limit 429s should stay on the retry path instead of stopping the run."
+  (let ((runs 0)
+        (scheduled-retries 0)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-experiment--quota-exhausted nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+                 (cl-incf runs)
+                 (funcall callback
+                          (if (= runs 1)
+                              (list :agent-output
+                                    "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"
+                                    :comparator-reason ":api-rate-limit")
+                            (list :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (cl-incf scheduled-retries)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 2))
+       (should (= scheduled-retries 1))
+       (should-not gptel-auto-experiment--quota-exhausted)
+       (should (equal (plist-get final-result :agent-output)
+                      "Executor result for task: retry success")))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-backs-off-rate-limits ()
   "Rate-limit retries should increase delay instead of hammering the provider."
