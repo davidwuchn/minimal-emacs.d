@@ -1,10 +1,29 @@
 # Mementum State
 
-> Last session: 2026-04-11 08:00
+> Last session: 2026-04-11 21:15
 
-## Total Improvements: 234+ Real Code Fixes (25 new today)
+## Total Improvements: 238+ Real Code Fixes (29 new today)
 
-### Session Summary: 2026-04-11 Early Morning (Workflow Run Complete + Sync)
+### Session Summary: 2026-04-11 Evening (Remote Sync + Submodule Update)
+
+**Action:** Synced with remote origin, fast-forwarded main, updated submodules
+
+**Result:** ✅ main now at `e220303a`, submodules checked
+
+**Remote Changes (origin/main):**
+- **e220303a** — ⊘ fix: unblock DashScope headless auto-workflow
+  - eca/config.json: +8 lines (headless config)
+  - gptel-ext-backends.el: DashScope backend fix
+  - gptel-tools-agent.el: +136 lines (headless auto-workflow improvements)
+  - test-gptel-tools-agent-regressions.el: +157 lines (new regression tests)
+
+**Sync Status:**
+- **main:** `e220303a` — origin ↔ upstream in sync ✅
+- **staging:** `d9e5c9b6` — needs sync with main
+
+---
+
+### Session Summary: 2026-04-11 Evening (Naming Conflict Fix + Merge)
 
 **Action:** Monitored workflow run `2026-04-10T214113Z-27a0` to completion, synced all remotes
 
