@@ -319,7 +319,7 @@ RESULTS should contain :eight-keys-scores in each entry."
         (when eight-keys
           (dotimes (i 8)
             (let* ((key (aref key-names i))
-                   (score (plist-get eight-keys key)))
+                   (score (gptel-benchmark--get-field eight-keys key)))
               (when (numberp score)
                 (aset key-totals i (+ (aref key-totals i) score))
                 (aset key-counts i (1+ (aref key-counts i)))))))))
@@ -384,12 +384,7 @@ RESULTS should contain :eight-keys-scores in each entry."
         (threshold 0.7))
     (dolist (r results)
       (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall (and scores
-                           (if (and (listp scores) (keywordp (car scores)))
-                               (plist-get scores :overall-score)
-                             (or (alist-get :overall-score scores)
-                                 (alist-get 'overall-score scores)))))
-             (overall-val (or overall 0)))
+             (overall (if scores (gptel-benchmark--get-field scores :overall-score) 0)))
         (when scores
           (cond
            ((< overall-val threshold) (cl-incf low-scores))
@@ -397,10 +392,7 @@ RESULTS should contain :eight-keys-scores in each entry."
           (dolist (mapping gptel-benchmark--score-type-map)
             (let* ((score-type (car mapping))
                    (issue-type (cdr mapping))
-                   (score (if (and (listp scores) (keywordp (car scores)))
-                              (plist-get scores score-type)
-                            (or (alist-get score-type scores)
-                                (alist-get (gptel-benchmark--keyword-to-alist-key score-type) scores)))))
+                   (score (gptel-benchmark--get-field scores score-type)))
               (when (and score (< score threshold))
                 (puthash issue-type (1+ (gethash issue-type issues 0)) issues)))))))
     (when (> low-scores 0)
