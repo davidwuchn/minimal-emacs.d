@@ -1,8 +1,31 @@
 # Mementum State
 
-> Last session: 2026-04-11 21:15
+> Last session: 2026-04-11 22:35
 
-## Total Improvements: 238+ Real Code Fixes (29 new today)
+## Total Improvements: 240+ Real Code Fixes (31 new today)
+
+### Session Summary: 2026-04-11 Evening (Backend Fallback for Rate Limits)
+
+**Action:** Added automatic backend fallback wrapper for auto-workflow rate-limit errors
+
+**Result:** ✅ 1400 tests passing, staging pushed to origin and upstream
+
+**New Feature: Backend Fallback on 429 Errors**
+- When MiniMax hits the 5-hour rolling window rate limit (429), experiments now
+  automatically fail over to the next available backend instead of being discarded
+- Fallback order: DashScope/qwen3.6-plus → DeepSeek/deepseek-chat → CF-Gateway/glm-4.7-flash → Gemini/gemini-3.1-pro-preview
+- New functions:
+  - `gptel-auto-experiment--forced-backend`: dynamic variable to force backend
+  - `gptel-auto-experiment--run-agent-with-backend-fallback`: wrapper that detects 429 and retries
+  - `gptel-auto-experiment--apply-backend-preset`: applies backend preset for retry
+- Updated `gptel-auto-workflow--maybe-override-subagent-provider` to respect forced backend
+- 4 new regression tests for fallback behavior
+
+**Sync Status:**
+- **main:** `f678337c` — origin ↔ upstream in sync ✅
+- **staging:** `6cc95e8f` — origin ↔ upstream in sync ✅
+
+---
 
 ### Session Summary: 2026-04-11 Evening (Remote Sync + Submodule Update)
 
@@ -22,22 +45,6 @@
 - **staging:** `9af68b35` — origin ↔ upstream in sync ✅
 
 **Submodules:** All up-to-date (6 submodules)
-
-**Action:** Fixed critical naming conflict in gptel-benchmark, merged staging to main
-
-**Result:** ✅ All remotes in sync, 1387 tests passing
-
-**Critical Fix:**
-- **gptel-benchmark-subagent.el:621** — Renamed `gptel-benchmark--extract-scores` to `gptel-benchmark--extract-overall-scores`
-  - Root cause: Two functions with same name in different files (`gptel-benchmark-core.el:193` and `gptel-benchmark-subagent.el:621`)
-  - This caused undefined behavior - whichever file loaded last would overwrite the other
-  - Fix: Renamed subagent version to avoid conflict
-  - Commit: `b731743b` — ⊘ fix: rename duplicate gptel-benchmark--extract-scores to avoid naming conflict
-
-**Merged to main:**
-- Benchmark core refactoring (simplified score extraction)
-- Naming conflict fix
-- All recent workflow improvements
 
 ### Session Summary: 2026-04-11 Early Morning (Workflow Run Complete + Sync)
 
