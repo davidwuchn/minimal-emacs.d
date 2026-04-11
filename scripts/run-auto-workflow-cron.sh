@@ -214,13 +214,13 @@ check_worker_daemon() {
 }
 
 daemon_reports_active_workflow() {
-    local body="(and (fboundp 'gptel-auto-workflow-status)
-                     (gptel-auto-workflow-status))"
+    local body="(and (fboundp 'gptel-auto-workflow--status-plist)
+                     (gptel-auto-workflow--status-plist))"
     local output
     local rc
     if output="$(run_emacsclient_eval "$(wrap_emacs_eval "$body")" 2 2>/dev/null)"; then
         if ! printf '%s' "$output" | grep -q ':phase '; then
-            return 2
+            return 1
         fi
         if printf '%s' "$output" | grep -q ':running t'; then
             return 0
@@ -443,8 +443,8 @@ case "$ACTION" in
                  (gptel-auto-workflow-queue-all-instincts))"
         ;;
     status)
-        ELISP="(and (fboundp 'gptel-auto-workflow-status)
-                    (gptel-auto-workflow-status))"
+        ELISP="(and (fboundp 'gptel-auto-workflow--status-plist)
+                    (gptel-auto-workflow--status-plist))"
         ;;
     messages)
         ELISP="(let ((outfile \"$MESSAGES_LISP\")
