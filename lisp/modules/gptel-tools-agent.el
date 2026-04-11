@@ -3360,10 +3360,12 @@ Uses the staging worktree instead of switching branches in the root repo."
                       (cherry-output (car cherry-result)))
                   (cond
                    ((eq 0 (cdr cherry-result))
-                     (let ((commit-result
-                            (gptel-auto-workflow--git-result
-                             (format "git commit -m %s" (shell-quote-argument merge-message))
-                             commit-timeout)))
+                      (let ((commit-result
+                             (gptel-auto-workflow--git-result
+                              (format "%s git commit -m %s"
+                                      gptel-auto-workflow--skip-submodule-sync-env
+                                      (shell-quote-argument merge-message))
+                              commit-timeout)))
                        (cond
                         ((eq 0 (cdr commit-result))
                          t)
@@ -5014,7 +5016,9 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                           (when commit-dir
                             (let ((default-directory commit-dir))
                               (magit-git-success "add" "-A")
-                              (magit-git-success "commit" "-m" (format "WIP: experiment %s\n\nHYPOTHESIS: %s" target (or hypothesis "Improve code quality"))))))
+                              (gptel-auto-workflow--with-skipped-submodule-sync
+                               (lambda ()
+                                 (magit-git-success "commit" "-m" (format "WIP: experiment %s\n\nHYPOTHESIS: %s" target (or hypothesis "Improve code quality"))))))))
                        (let* ((bench (gptel-auto-experiment-benchmark t))
                               (passed (plist-get bench :passed))
                               (validation-error (plist-get bench :validation-error))
@@ -5059,7 +5063,9 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 			(commit-timeout
 			 (max 300 gptel-auto-workflow-git-timeout))
 			(commit-command
-			 (format "git commit -m %s" (shell-quote-argument msg)))
+			 (format "%s git commit -m %s"
+                                 gptel-auto-workflow--skip-submodule-sync-env
+                                 (shell-quote-argument msg)))
 			(push-command
 			 (format "git push origin %s"
 				 (shell-quote-argument experiment-branch)))
@@ -5181,7 +5187,8 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                                         (commit-timeout
                                                                          (max 300 gptel-auto-workflow-git-timeout))
                                                                         (commit-command
-                                                                         (format "git commit -m %s"
+                                                                         (format "%s git commit -m %s"
+                                                                                 gptel-auto-workflow--skip-submodule-sync-env
                                                                                  (shell-quote-argument msg)))
                                                                         (push-command
                                                                          (format "git push origin %s"
@@ -5785,6 +5792,17 @@ Automatically adds --no-pager to prevent blocking on pager output."
     (gptel-auto-workflow--shell-command-with-timeout
      git-cmd
      (or timeout gptel-auto-workflow-git-timeout))))
+
+(defconst gptel-auto-workflow--skip-submodule-sync-env
+  "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
+  "Environment override used to skip expensive submodule sync checks in workflow commits.")
+
+(defun gptel-auto-workflow--with-skipped-submodule-sync (fn)
+  "Run FN with workflow commit hooks skipping cached submodule sync."
+  (let ((process-environment
+         (cons gptel-auto-workflow--skip-submodule-sync-env
+               process-environment)))
+    (funcall fn)))
 
 (defun gptel-auto-workflow--git-step-success-p (cmd action &optional timeout)
   "Run git CMD and report whether it succeeded.
