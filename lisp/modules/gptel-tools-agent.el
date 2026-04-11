@@ -3320,9 +3320,10 @@ empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD' is absent."
     (and (or (gptel-auto-workflow--non-empty-string-p cherry-pick-head)
              (and allow-missing-head
                   (stringp output)
-                  (string-match-p
-                   "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty\\|nothing to commit\\|working tree clean\\|无文件要提交\\|工作区干净"
-                   output)))
+                  (or (gptel-auto-workflow--empty-commit-output-p output)
+                      (string-match-p
+                       "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
+                       output))))
          (string-empty-p unmerged-files)
          (string-empty-p worktree-status))))
 
@@ -5081,7 +5082,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 			     "git add -A"
 			     (format "Stage experiment changes for %s" target)
 			     60)
-			    (gptel-auto-workflow--git-step-success-p
+			    (gptel-auto-workflow--commit-step-success-p
 			     commit-command
 			     (format "Commit experiment changes for %s" target)
 			     commit-timeout))
@@ -5204,10 +5205,10 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                                              "git add -A"
                                                                              (format "Stage retry changes for %s" target)
                                                                              60)
-                                                                            (gptel-auto-workflow--git-step-success-p
-                                                                             commit-command
-                                                                             (format "Commit retry changes for %s" target)
-                                                                             commit-timeout))
+									    (gptel-auto-workflow--commit-step-success-p
+									     commit-command
+									     (format "Commit retry changes for %s" target)
+									     commit-timeout))
                                                                        (progn
                                                                          (gptel-auto-workflow--track-commit experiment-id
                                                                                                             target
@@ -5823,6 +5824,30 @@ ACTION is a short description used in the failure message."
                action
                (my/gptel--sanitize-for-logging output 200))
       nil)))
+
+(defun gptel-auto-workflow--empty-commit-output-p (output)
+  "Return non-nil when OUTPUT describes a localized clean no-op commit."
+  (and (stringp output)
+       (string-match-p
+        "nothing to commit\\|working tree clean\\|无文件要提交\\|工作区干净"
+        output)))
+
+(defun gptel-auto-workflow--commit-step-success-p (cmd action &optional timeout)
+  "Run commit CMD and report whether it succeeded or was already captured.
+ACTION is a short description used in the failure message."
+  (pcase-let ((`(,output . ,exit-code)
+               (gptel-auto-workflow--git-result cmd timeout)))
+    (cond
+     ((= exit-code 0) t)
+     ((and (gptel-auto-workflow--empty-commit-output-p output)
+           (string-empty-p (gptel-auto-workflow--git-cmd "git status --short" 60)))
+      (message "[auto-workflow] %s already captured (nothing new to commit)" action)
+      t)
+     (t
+      (message "[auto-workflow] %s failed: %s"
+               action
+               (my/gptel--sanitize-for-logging output 200))
+      nil))))
 
 (defun gptel-auto-workflow--with-staging-worktree (fn)
   "Run FN with `default-directory' bound to the staging worktree.
