@@ -776,23 +776,27 @@ describes."
             (or gptel-auto-workflow--current-target
                 gptel-auto-workflow--current-project))))
 
-(defun my/gptel--cacheable-subagent-result-p (result)
+(defun my/gptel--cacheable-subagent-result-p (result &optional agent-type)
   "Return non-nil when RESULT is safe to reuse from the subagent cache.
-Failure-shaped responses must not be cached, otherwise a transient API
-quota error can poison later workflow attempts with immediate cache hits."
+AGENT-TYPE can further restrict cacheability for agent-specific failures.
+Failure-shaped responses must not be cached, otherwise transient transport
+or reviewer-contract failures can poison later workflow attempts with
+immediate cache hits."
   (or (not (stringp result))
-      (not (string-match-p
-            (concat
-             "\\`Error:"
-             "\\|\\`Warning:.*not available"
-             "\\|throttling"
-             "\\|rate.limit"
-             "\\|quota exceeded"
-             "\\|HTTP 429"
-             "\\|hour allocated quota exceeded"
-             "\\|failed to finish"
-             "\\|could not finish")
-            result))))
+      (and (not (string-match-p
+                 (concat
+                  "\\`Error:"
+                  "\\|\\`Warning:.*not available"
+                  "\\|throttling"
+                  "\\|rate.limit"
+                  "\\|quota exceeded"
+                  "\\|HTTP 429"
+                  "\\|hour allocated quota exceeded"
+                  "\\|failed to finish"
+                  "\\|could not finish")
+                 result))
+           (not (and (equal agent-type "reviewer")
+                     (gptel-auto-workflow--review-retryable-error-p result))))))
 
 (defun my/gptel--subagent-cache-get (agent-type prompt &optional files include-history include-diff)
   "Get cached result for (AGENT-TYPE, PROMPT, ...) if still valid.
@@ -804,20 +808,20 @@ Returns nil if cache disabled, not found, or expired."
       (when cached
         (let ((timestamp (car cached))
               (result (cdr cached)))
-          (if (> (- (float-time) timestamp) my/gptel-subagent-cache-ttl)
-              (progn (remhash key my/gptel--subagent-cache) nil)
-            (if (my/gptel--cacheable-subagent-result-p result)
-                result
-              (progn
-                (remhash key my/gptel--subagent-cache)
-                nil))))))))
+            (if (> (- (float-time) timestamp) my/gptel-subagent-cache-ttl)
+                (progn (remhash key my/gptel--subagent-cache) nil)
+              (if (my/gptel--cacheable-subagent-result-p result agent-type)
+                  result
+                (progn
+                  (remhash key my/gptel--subagent-cache)
+                  nil))))))))
 
 (defun my/gptel--subagent-cache-put (agent-type prompt result &optional files include-history include-diff)
   "Cache RESULT for (AGENT-TYPE, PROMPT, ...).
 Evicts oldest entries if cache exceeds `my/gptel-subagent-cache-max-size'."
   (when (and (my/gptel--subagent-cache-enabled-p)
-             (my/gptel--subagent-cache-allowed-p agent-type)
-             (my/gptel--cacheable-subagent-result-p result))
+              (my/gptel--subagent-cache-allowed-p agent-type)
+              (my/gptel--cacheable-subagent-result-p result agent-type))
     (let ((key (my/gptel--subagent-cache-key agent-type prompt files include-history include-diff)))
       (puthash key (cons (float-time) result) my/gptel--subagent-cache)
       ;; Evict oldest entries if over limit
@@ -2775,6 +2779,44 @@ This avoids broken linked-worktree submodule metadata under `.git/worktrees/.../
               0)))))
 
 
+(defun gptel-auto-workflow--review-diff-content (optimize-branch)
+  "Return review diff content for OPTIMIZE-BRANCH.
+
+The review surface must match the exact tip commit that staging merge will
+cherry-pick, not the full branch delta against staging."
+  (let* ((optimize-ref (gptel-auto-workflow--ensure-merge-source-ref optimize-branch)))
+    (cond
+     ((not optimize-ref)
+      (format "Error resolving review branch: %s" optimize-branch))
+     (t
+      (let* ((rev-result
+              (gptel-auto-workflow--git-result
+               (format "git rev-parse %s"
+                       (shell-quote-argument optimize-ref))
+               60))
+             (commit-hash (string-trim (car rev-result))))
+        (cond
+         ((not (eq 0 (cdr rev-result)))
+          (format "Error resolving review commit: %s" (car rev-result)))
+         ((not (string-match-p "^[a-f0-9]\\{7,40\\}$" commit-hash))
+          (format "Error resolving review commit: %s" commit-hash))
+         (t
+          (let* ((diff-result
+                  (gptel-auto-workflow--git-result
+                   (format "git diff --find-renames %s^ %s"
+                           (shell-quote-argument commit-hash)
+                           (shell-quote-argument commit-hash))
+                   60))
+                 (diff-output (car diff-result)))
+            (cond
+             ((string-empty-p diff-output)
+              "No changes detected in review commit.")
+             ((and (not (eq 0 (cdr diff-result)))
+                   (string-match-p "^fatal:" diff-output))
+              (format "Error generating diff: %s" diff-output))
+             (t
+              diff-output))))))))))
+
 (defun gptel-auto-workflow--review-changes (optimize-branch callback)
   "Review changes in OPTIMIZE-BRANCH before merging to staging.
 Calls CALLBACK with (approved-p . review-output).
@@ -2785,22 +2827,7 @@ Reviewer checks for Blocker/Critical issues."
            (default-directory proj-root)
            (review-timeout (max my/gptel-agent-task-timeout
                                 gptel-auto-workflow-review-time-budget))
-           ;; SECURITY: Use shell-quote-argument to prevent shell injection
-           (staging-quoted (shell-quote-argument gptel-auto-workflow-staging-branch))
-           (optimize-quoted (shell-quote-argument optimize-branch))
-           ;; FIX: Simplified diff command to capture actual changes, not just stats
-           ;; Added 2>&1 to capture stderr for error diagnosis
-           (diff-cmd (format "git diff %s...%s 2>&1"
-                             staging-quoted optimize-quoted))
-           (diff-output (shell-command-to-string diff-cmd))
-           ;; ASSUMPTION: Empty diff means no changes or error - handle both cases
-           ;; BEHAVIOR: Check if diff output is empty or contains error message
-           (diff-content (cond
-                          ((string-empty-p diff-output)
-                           "No changes detected between branches.")
-                          ((string-match-p "^fatal:" diff-output)
-                           (format "Error generating diff: %s" diff-output))
-                          (t diff-output)))
+           (diff-content (gptel-auto-workflow--review-diff-content optimize-branch))
            (review-prompt (format "Review the following changes for blockers, critical bugs, and security issues.
 
 CHANGES (diff):
