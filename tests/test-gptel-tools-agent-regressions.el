@@ -4028,6 +4028,98 @@ EXIT-CODE defaults to 1."
       (should-not fix-called)
       (should-not logged-results))))
 
+(ert-deftest regression/auto-workflow/review-disproves-undefined-function-blocker-when-helper-is-defined ()
+  "A reviewer undefined-function blocker should be ignored when the changed file defines that helper."
+  (let* ((temp-dir (make-temp-file "review-worktree" t))
+         (file (expand-file-name "lisp/modules/foo.el" temp-dir)))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory file) t)
+          (with-temp-file file
+            (insert "(defun gptel-auto-workflow--with-subagent (&rest _args) nil)\n"
+                    "(defun foo ()\n"
+                    "  (gptel-auto-workflow--with-subagent))\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--branch-worktree-paths)
+                     (lambda (_branch &optional _proj-root)
+                       (list temp-dir)))
+                    ((symbol-function 'gptel-auto-workflow--worktree-tip-changed-elisp-files)
+                     (lambda (_worktree)
+                       '("lisp/modules/foo.el"))))
+            (should
+             (equal
+              (gptel-auto-workflow--review-disproven-undefined-function-blocker-p
+               "optimize/test-branch"
+               "BLOCKED: calls undefined function `gptel-auto-workflow--with-subagent`")
+              "gptel-auto-workflow--with-subagent"))))
+      (delete-directory temp-dir t))))
+
+(ert-deftest regression/auto-workflow/disproven-undefined-function-review-blocker-proceeds-to-staging ()
+  "Disproven reviewer undefined-function blockers should skip fix-review-issues."
+  (let ((gptel-auto-workflow--review-retry-count 0)
+        (gptel-auto-workflow--review-error-retry-count 0)
+        (gptel-auto-workflow--review-max-retries 2)
+        (fix-called nil)
+        (merge-called nil)
+        completion-result)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--review-disproven-undefined-function-blocker-p)
+               (lambda (_branch _output)
+                 "gptel-auto-workflow--with-subagent"))
+              ((symbol-function 'gptel-auto-workflow--fix-review-issues)
+               (lambda (&rest _args)
+                 (setq fix-called t)
+                 (error "fix-review-issues should not be called for disproven undefined-function blockers")))
+              ((symbol-function 'gptel-auto-experiment--check-scope)
+               (lambda () '(t)))
+              ((symbol-function 'gptel-auto-workflow--current-staging-head)
+               (lambda () "staging-base"))
+              ((symbol-function 'gptel-auto-workflow--merge-to-staging)
+               (lambda (_branch)
+                 (setq merge-called t)
+                 t))
+              ((symbol-function 'gptel-auto-workflow--create-staging-worktree)
+               (lambda () "/tmp/staging-worktree"))
+              ((symbol-function 'gptel-auto-workflow--verify-staging)
+               (lambda () '(t . "ok")))
+              ((symbol-function 'gptel-auto-workflow--push-staging)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--delete-staging-worktree)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--promote-provisional-commit)
+               (lambda (&rest _args) t))
+              ((symbol-function 'gptel-auto-experiment-log-tsv)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-workflow--staging-flow-after-review
+       "optimize/test-branch"
+       '(nil . "BLOCKED: calls undefined function `gptel-auto-workflow--with-subagent`")
+       (lambda (success)
+         (setq completion-result success)))
+      (should completion-result)
+      (should merge-called)
+      (should-not fix-called))))
+
+(ert-deftest regression/auto-workflow/staging-flow-callback-error-fails-cleanly ()
+  "Errors inside the review-to-staging callback chain should not wedge the run."
+  (let ((completion-result :unset))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--assert-main-untouched)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--review-changes)
+               (lambda (_branch callback)
+                 (funcall callback '(t . "APPROVED"))))
+              ((symbol-function 'gptel-auto-workflow--staging-flow-after-review)
+               (lambda (&rest _args)
+                 (error "Selecting deleted buffer")))
+              ((symbol-function 'gptel-auto-workflow--delete-staging-worktree)
+               (lambda () t))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-workflow--staging-flow
+       "optimize/test-branch"
+       (lambda (success)
+         (setq completion-result success)))
+      (should (eq completion-result nil)))))
+
 (ert-deftest regression/auto-workflow/review-changes-keeps-higher-global-timeout ()
   "Review dispatch should not shorten a larger global task timeout."
   (let ((gptel-auto-workflow-require-review t)

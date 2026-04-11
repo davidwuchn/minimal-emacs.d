@@ -3045,15 +3045,17 @@ Maximum response: 1000 characters."
            'reviewer
            "Review changes before merge"
            review-prompt
-           (lambda (result)
-             (let* ((response (if (stringp result) result (format "%S" result)))
-                    (approved (gptel-auto-workflow--review-approved-p response)))
-               (message "[auto-workflow] Review %s: %s"
-                        (if approved "PASSED" "BLOCKED")
-                        (my/gptel--sanitize-for-logging response 100))
-               (funcall callback (cons approved response))))
-           review-timeout)
-        (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
+            (lambda (result)
+              (let* ((response (if (stringp result) result (format "%S" result)))
+                     (approved (gptel-auto-workflow--review-approved-p response)))
+                (message "[auto-workflow] Review %s: %s"
+                         (if approved "PASSED" "BLOCKED")
+                         (my/gptel--sanitize-for-logging response 100))
+                (my/gptel--invoke-callback-safely
+                 callback
+                 (cons approved response))))
+            review-timeout)
+         (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
 
 (defun gptel-auto-workflow--review-approved-p (response)
   "Return non-nil when RESPONSE approves a staging review.
@@ -3157,15 +3159,76 @@ surfacing blocking markers or issue details."
            (not action-items)
            (not unverified))
       t)
-     ((and analysis-summary
-           analysis-line-reference
-           (not bug-section)
-           (not issue-label)
-           (not action-items)
-           (not unverified)
-           (not blocking-summary))
-      t)
-     (t nil)))))
+      ((and analysis-summary
+            analysis-line-reference
+            (not bug-section)
+            (not issue-label)
+            (not action-items)
+            (not unverified)
+            (not blocking-summary))
+       t)
+      (t nil)))))
+
+(defun gptel-auto-workflow--review-undefined-function-symbol (review-output)
+  "Return the undefined function symbol named in REVIEW-OUTPUT, or nil.
+Used to catch reviewer false positives before they enter the fix loop."
+  (when (stringp review-output)
+    (let ((case-fold-search t))
+      (when (string-match
+             "undefined function[[:space:]]+[`'\"“”‘’]?\\([^`'\"“”‘’[:space:])]+\\)[`'\"“”‘’]?"
+             review-output)
+        (match-string 1 review-output)))))
+
+(defun gptel-auto-workflow--worktree-tip-changed-elisp-files (worktree)
+  "Return Elisp files changed by the tip commit in WORKTREE."
+  (when (and (stringp worktree) (file-directory-p worktree))
+    (let* ((default-directory worktree)
+           (result (gptel-auto-workflow--git-result
+                    "git diff --name-only --diff-filter=ACMR HEAD~1 HEAD -- '*.el'"
+                    60)))
+      (when (= 0 (cdr result))
+        (split-string (car result) "\n" t)))))
+
+(defun gptel-auto-workflow--file-defines-function-p (filepath function-name)
+  "Return non-nil when FILEPATH defines FUNCTION-NAME in a defun-like form."
+  (when-let ((content (gptel-auto-workflow--read-file-contents filepath)))
+    (let ((case-fold-search nil))
+      (or (string-match-p
+           (format
+            "^[[:space:]]*(\\(?:cl-\\)?def\\(?:un\\|macro\\|subst\\)\\_>\\s-+%s\\_>"
+            (regexp-quote function-name))
+           content)
+          (string-match-p
+           (format
+            "^[[:space:]]*(defalias\\_>\\s-+'%s\\_>"
+            (regexp-quote function-name))
+           content)))))
+
+(defun gptel-auto-workflow--review-disproven-undefined-function-blocker-p (optimize-branch review-output)
+  "Return blocker symbol when REVIEW-OUTPUT makes a disproven undefined-function claim.
+The blocker is treated as disproven only when the review output cites a single
+undefined-function claim and a changed Elisp file in OPTIMIZE-BRANCH defines
+that function locally."
+  (when-let* ((function-name
+               (gptel-auto-workflow--review-undefined-function-symbol review-output))
+              ((stringp review-output))
+              ((not (string-match-p
+                     (rx (or "Proven Correctness Bugs"
+                             "Action Items"
+                             "Issue:"
+                             "security"
+                             "logic failure"
+                             "state corruption"))
+                     review-output)))
+              (worktree (car (gptel-auto-workflow--branch-worktree-paths optimize-branch)))
+              (changed-files (gptel-auto-workflow--worktree-tip-changed-elisp-files worktree)))
+    (when (cl-some
+           (lambda (relative-file)
+             (gptel-auto-workflow--file-defines-function-p
+              (expand-file-name relative-file worktree)
+              function-name))
+           changed-files)
+      function-name)))
 
 (defun gptel-auto-workflow--fix-review-issues (optimize-branch review-output callback)
   "Try to fix issues found in review for OPTIMIZE-BRANCH.
@@ -3751,29 +3814,46 @@ NOTE: Human must manually merge staging to main after review."
     (gptel-auto-workflow--review-changes
      optimize-branch
      (lambda (review-result)
-       (gptel-auto-workflow--staging-flow-after-review
-        optimize-branch
-        review-result
-        completion-callback)))))
+       (condition-case err
+           (gptel-auto-workflow--staging-flow-after-review
+            optimize-branch
+            review-result
+            completion-callback)
+         (error
+          (message "[auto-workflow] Review callback failed for %s: %s"
+                   optimize-branch
+                   (my/gptel--sanitize-for-logging
+                    (error-message-string err) 200))
+          (ignore-errors (gptel-auto-workflow--delete-staging-worktree))
+          (when completion-callback
+            (my/gptel--invoke-callback-safely completion-callback nil))))))))
 
 
 (defun gptel-auto-workflow--staging-flow-after-review (optimize-branch review-result &optional completion-callback)
   "Continue staging flow after review for OPTIMIZE-BRANCH.
 REVIEW-RESULT is (approved-p . review-output).
 When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
-  (let* ((approved (car review-result))
-         (review-output (cdr review-result))
-         (review-error (and (not approved)
-                            (gptel-auto-workflow--review-retryable-error-p review-output)))
-         (run-id (gptel-auto-workflow--current-run-id))
-         (finish (gptel-auto-workflow--make-idempotent-callback
-                  (lambda (success)
-                    (when completion-callback
-                      (funcall completion-callback success))))))
+  (let* ((raw-approved (car review-result))
+          (review-output (cdr review-result))
+          (disproven-undefined-blocker
+           (and (not raw-approved)
+                (gptel-auto-workflow--review-disproven-undefined-function-blocker-p
+                 optimize-branch review-output)))
+          (approved (or raw-approved disproven-undefined-blocker))
+          (review-error (and (not approved)
+                             (gptel-auto-workflow--review-retryable-error-p review-output)))
+          (run-id (gptel-auto-workflow--current-run-id))
+          (finish (gptel-auto-workflow--make-idempotent-callback
+                   (lambda (success)
+                     (when completion-callback
+                       (funcall completion-callback success))))))
+    (when disproven-undefined-blocker
+      (message "[auto-workflow] Reviewer undefined-function blocker disproven locally for %s; continuing"
+               disproven-undefined-blocker))
     (cond
      (review-error
-      (if (< gptel-auto-workflow--review-error-retry-count
-             gptel-auto-workflow--review-max-retries)
+       (if (< gptel-auto-workflow--review-error-retry-count
+              gptel-auto-workflow--review-max-retries)
           (progn
             (cl-incf gptel-auto-workflow--review-error-retry-count)
             (message "[auto-workflow] Review failed transiently, retrying review (%d/%d)..."
@@ -4391,7 +4471,7 @@ stored timeout timer before invoking CALLBACK."
                  (timerp (plist-get state :timer)))
         (cancel-timer (plist-get state :timer)))
       (unwind-protect
-          (funcall callback result)
+          (my/gptel--invoke-callback-safely callback result)
         (remhash grade-id gptel-auto-experiment--grade-state))
       t)))
 
@@ -4572,29 +4652,31 @@ Then on a new line, briefly explain why (1 sentence)."
                        (winner expected-winner)
                        (override (not (string= reported-winner expected-winner)))
                        (keep (string= winner "B")))
-                  (funcall callback
-                           (list :keep keep
-                                 :reasoning (format "%sWinner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                                    (if override
-                                                        (format "Comparator override: %s -> %s | "
-                                                                reported-winner winner)
-                                                      "")
-                                                    winner score-before score-after
-                                                    quality-before quality-after
-                                                    combined-before combined-after)
-                                 :improvement (list :score (- score-after score-before)
-                                                    :quality (- quality-after quality-before)
-                                                   :combined (- combined-after combined-before)))))))))
+                  (my/gptel--invoke-callback-safely
+                   callback
+                   (list :keep keep
+                         :reasoning (format "%sWinner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
+                                            (if override
+                                                (format "Comparator override: %s -> %s | "
+                                                        reported-winner winner)
+                                              "")
+                                            winner score-before score-after
+                                            quality-before quality-after
+                                            combined-before combined-after)
+                         :improvement (list :score (- score-after score-before)
+                                            :quality (- quality-after quality-before)
+                                            :combined (- combined-after combined-before)))))))))
       (let ((keep (>= (- combined-after combined-before) 0.005)))
-        (funcall callback
-                 (list :keep keep
-                       :reasoning (format "Local: Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                          score-before score-after
-                                          quality-before quality-after
-                                          combined-before combined-after)
-                       :improvement (list :score (- score-after score-before)
-                                          :quality (- quality-after quality-before)
-                                          :combined (- combined-after combined-before))))))))
+        (my/gptel--invoke-callback-safely
+         callback
+         (list :keep keep
+               :reasoning (format "Local: Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
+                                  score-before score-after
+                                  quality-before quality-after
+                                  combined-before combined-after)
+               :improvement (list :score (- score-after score-before)
+                                  :quality (- quality-after quality-before)
+                                  :combined (- combined-after combined-before))))))))
 
 ;;; Prompt Building
 
