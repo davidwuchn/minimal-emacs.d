@@ -30,8 +30,43 @@ run_batch_bootstrap() {
         -L "$DIR/lisp/modules" \
         -L "$DIR/packages/gptel" \
         -L "$DIR/packages/gptel-agent" \
-        -l "$DIR/scripts/test-auto-workflow-batch.el" \
+        -L "$DIR/tests" \
+        -l "$DIR/tests/test-auto-workflow-batch.el" \
         -f test-auto-workflow-batch-run
+}
+
+extract_managed_block() {
+    python3 - "$1" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+match = re.search(
+    r'(?ms)^# >>> minimal-emacs\.d auto-workflow >>>\n.*?^# <<< minimal-emacs\.d auto-workflow <<<\n?',
+    text,
+)
+if match:
+    sys.stdout.write(match.group(0))
+PY
+}
+
+strip_managed_markers() {
+    python3 - "$1" <<'PY'
+from pathlib import Path
+import sys
+
+lines = []
+for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    if line in {
+        "# >>> minimal-emacs.d auto-workflow >>>",
+        "# <<< minimal-emacs.d auto-workflow <<<",
+    }:
+        continue
+    lines.append(line)
+
+sys.stdout.write("\n".join(lines).rstrip() + "\n")
+PY
 }
 
 section "Cron Template"
@@ -67,10 +102,18 @@ fi
 
 if crontab -l >/dev/null 2>&1; then
     pass "User crontab is installed"
-    if diff -u "$RENDERED" <(crontab -l) >/dev/null 2>&1; then
-        pass "Installed crontab matches rendered output"
+    INSTALLED=$(mktemp)
+    INSTALLED_BLOCK=$(mktemp)
+    trap 'rm -f "$RENDERED" "$INSTALLED" "$INSTALLED_BLOCK"' EXIT
+    crontab -l > "$INSTALLED"
+    extract_managed_block "$INSTALLED" > "$INSTALLED_BLOCK"
+    if [ -s "$INSTALLED_BLOCK" ] && \
+       diff -u <(strip_managed_markers "$RENDERED") <(strip_managed_markers "$INSTALLED_BLOCK") >/dev/null 2>&1; then
+        pass "Installed crontab contains the managed auto-workflow block"
+    elif diff -u <(strip_managed_markers "$RENDERED") "$INSTALLED" >/dev/null 2>&1; then
+        pass "Installed crontab matches the legacy whole-crontab auto-workflow install"
     else
-        fail "Installed crontab differs from rendered output"
+        fail "Installed crontab is missing or diverges from the managed auto-workflow block"
         echo "    Run: ./scripts/install-cron.sh"
     fi
 else
@@ -172,7 +215,7 @@ else
     skip "Use --full to run the wrapper status check explicitly"
 fi
 
-rm -f "$RENDERED"
+rm -f "$RENDERED" "${INSTALLED:-}" "${INSTALLED_BLOCK:-}"
 
 echo
 echo "═══════════════════════════════════════════════════════════════"

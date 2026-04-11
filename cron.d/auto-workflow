@@ -11,9 +11,9 @@
 # LOGS: var/tmp/cron/
 #
 # PREREQUISITES:
-#   - Emacs daemon running: systemctl --user start emacs (Linux)
-#   - Or start at login: launchctl (macOS)
-#   - Verify: ./scripts/run-auto-workflow-cron.sh status
+#   - No manual daemon setup required; the wrapper starts its dedicated daemon on demand
+#   - Smoke test a real run: ./scripts/run-auto-workflow-cron.sh auto-workflow
+#   - Confirm progress/results: ./scripts/run-auto-workflow-cron.sh status && ./scripts/run-auto-workflow-cron.sh messages
 #
 # STATUS: ./scripts/run-auto-workflow-cron.sh status
 

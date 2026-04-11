@@ -5,6 +5,8 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CRON_FILE="$DIR/cron.d/auto-workflow"
 MODE="${1:-install}"
+MANAGED_BLOCK_BEGIN="# >>> minimal-emacs.d auto-workflow >>>"
+MANAGED_BLOCK_END="# <<< minimal-emacs.d auto-workflow <<<"
 
 detect_machine() {
     local hostname os
@@ -64,6 +66,51 @@ render_crontab() {
     }
 }
 
+render_managed_crontab() {
+    echo "$MANAGED_BLOCK_BEGIN"
+    render_crontab "$1"
+    echo "$MANAGED_BLOCK_END"
+}
+
+merge_crontab() {
+    local rendered_file="$1"
+    local output_file="$2"
+    local existing_file
+
+    existing_file=$(mktemp)
+    if crontab -l > "$existing_file" 2>/dev/null; then
+        python3 - "$existing_file" "$rendered_file" "$output_file" \
+                 "$MANAGED_BLOCK_BEGIN" "$MANAGED_BLOCK_END" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+existing_path, rendered_path, output_path, begin_marker, end_marker = sys.argv[1:]
+existing = Path(existing_path).read_text(encoding="utf-8")
+rendered = Path(rendered_path).read_text(encoding="utf-8").rstrip() + "\n"
+pattern = re.compile(
+    rf"(?ms)^[ \t]*{re.escape(begin_marker)}\n.*?^[ \t]*{re.escape(end_marker)}\n?"
+)
+
+if pattern.search(existing):
+    merged = pattern.sub(rendered, existing, count=1)
+else:
+    merged = existing.rstrip()
+    if merged:
+        merged += "\n\n"
+    merged += rendered
+
+if not merged.endswith("\n"):
+    merged += "\n"
+
+Path(output_path).write_text(merged, encoding="utf-8")
+PY
+    else
+        cp "$rendered_file" "$output_file"
+    fi
+    rm -f "$existing_file"
+}
+
 MACHINE=$(detect_machine)
 HOSTNAME=$(hostname -s 2>/dev/null || hostname)
 
@@ -90,7 +137,7 @@ esac
 
 case "$MODE" in
     --render)
-        render_crontab "$MACHINE_RENDER"
+        render_managed_crontab "$MACHINE_RENDER"
         exit 0
         ;;
     --dry-run)
@@ -99,7 +146,7 @@ case "$MODE" in
         echo "Detected: $HOSTNAME ($MACHINE)"
         echo
         echo "DRY RUN - Rendered crontab:"
-        render_crontab "$MACHINE_RENDER"
+        render_managed_crontab "$MACHINE_RENDER"
         exit 0
         ;;
     install)
@@ -109,11 +156,13 @@ case "$MODE" in
         echo "Detected: $HOSTNAME ($MACHINE)"
         echo
         tmp_file=$(mktemp)
-        trap 'rm -f "$tmp_file"' EXIT
-        render_crontab "$MACHINE_RENDER" > "$tmp_file"
+        rendered_file=$(mktemp)
+        trap 'rm -f "$tmp_file" "$rendered_file"' EXIT
+        render_managed_crontab "$MACHINE_RENDER" > "$rendered_file"
+        merge_crontab "$rendered_file" "$tmp_file"
         crontab "$tmp_file"
-        rm -f "$tmp_file"
-        echo "Installed crontab with $PLATFORM schedule"
+        rm -f "$tmp_file" "$rendered_file"
+        echo "Installed auto-workflow cron block with $PLATFORM schedule"
         echo
         echo "Active jobs:"
         crontab -l | grep -E '^[0-9*@]' || echo "  (no active jobs)"
@@ -123,8 +172,9 @@ case "$MODE" in
         echo "=== Prerequisites ==="
         echo
         echo "1. No manual cron daemon setup is required; the wrapper starts a dedicated auto-workflow daemon on demand."
-        echo "2. Verify: ./scripts/run-auto-workflow-cron.sh status"
-        echo "3. Check logs: tail -f var/tmp/cron/*.log"
+        echo "2. Smoke test a real run: ./scripts/run-auto-workflow-cron.sh auto-workflow"
+        echo "3. Confirm progress/results: ./scripts/run-auto-workflow-cron.sh status && ./scripts/run-auto-workflow-cron.sh messages"
+        echo "4. Check logs: tail -f var/tmp/cron/*.log"
         echo
         echo "Done."
         exit 0

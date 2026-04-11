@@ -98,7 +98,9 @@ generation and prompt classification."
   :bind ("C-c a" . ai-code-menu)
   :config
   (require 'ai-code-eca)
-  (ai-code-set-backend 'agent-shell)
+  (if (my/agent-shell-available-p)
+      (ai-code-set-backend 'agent-shell)
+    (message "[init-ai] agent-shell not available locally; leaving ai-code backend unchanged"))
   (advice-add 'ai-code-call-gptel-sync :around #'my/ai-code--ensure-gptel-helper-model))
 
 (use-package buttercup
@@ -122,6 +124,10 @@ generation and prompt classification."
     (when (stringp result)
       (replace-regexp-in-string " ➤ " my/agent-shell-header-separator result))))
 
+(defun my/agent-shell-available-p ()
+  "Return non-nil when the local agent-shell package is available."
+  (locate-library "agent-shell"))
+
 (with-eval-after-load 'agent-shell
   (advice-add 'agent-shell--make-header :around #'my/agent-shell--header-text-separator)
   ;; Keybindings for session mode switching
@@ -134,36 +140,38 @@ generation and prompt classification."
   ;; Keybinding to toggle mode-line
   (define-key agent-shell-mode-map (kbd "C-c L") #'ai-code-behaviors-mode-line-enable))
 
-(use-package agent-shell
-  :ensure t
-  :defer t
-  :custom
-  ;; OpenCode as default backend, latest session
-  (agent-shell-preferred-agent-config 'opencode)
-  (agent-shell-session-strategy 'latest)
-  (agent-shell-opencode-authentication
-   (agent-shell-opencode-make-authentication :none t))
-  ;; Default model for new sessions (when no existing session)
-  (agent-shell-opencode-default-model-id "alibaba-coding-plan-cn/glm-5")
-  ;; UI styling
-  (agent-shell-header-style 'text)
-  (agent-shell-show-config-icons t)
-  (agent-shell-show-busy-indicator t)
-  (agent-shell-busy-indicator-frames 'wave)
-  (agent-shell-highlight-blocks t)
-  (agent-shell-thought-process-expand-by-default nil)
-  (agent-shell-tool-use-expand-by-default nil)
-  (agent-shell-user-message-expand-by-default nil)
-  ;; Use background tint style for status labels
-  (agent-shell-status-kind-label-function
-   #'agent-shell--background-tint-status-kind-label)
-  ;; Disable auto-context injection
-  (agent-shell-context-sources nil)
-  ;; Context usage display
-  (agent-shell-show-context-usage-indicator 'detailed)
-  :config
-  ;; Enable ai-code-behaviors integration
-  (ai-code-behaviors-agent-shell-setup))
+(if (my/agent-shell-available-p)
+    (use-package agent-shell
+      :ensure nil
+      :defer t
+      :custom
+      ;; OpenCode as default backend, latest session
+      (agent-shell-preferred-agent-config 'opencode)
+      (agent-shell-session-strategy 'latest)
+      (agent-shell-opencode-authentication
+       (agent-shell-opencode-make-authentication :none t))
+      ;; Default model for new sessions (when no existing session)
+      (agent-shell-opencode-default-model-id "alibaba-coding-plan-cn/glm-5")
+      ;; UI styling
+      (agent-shell-header-style 'text)
+      (agent-shell-show-config-icons t)
+      (agent-shell-show-busy-indicator t)
+      (agent-shell-busy-indicator-frames 'wave)
+      (agent-shell-highlight-blocks t)
+      (agent-shell-thought-process-expand-by-default nil)
+      (agent-shell-tool-use-expand-by-default nil)
+      (agent-shell-user-message-expand-by-default nil)
+      ;; Use background tint style for status labels
+      (agent-shell-status-kind-label-function
+       #'agent-shell--background-tint-status-kind-label)
+      ;; Disable auto-context injection
+      (agent-shell-context-sources nil)
+      ;; Context usage display
+      (agent-shell-show-context-usage-indicator 'detailed)
+      :config
+      ;; Enable ai-code-behaviors integration
+      (ai-code-behaviors-agent-shell-setup))
+  (message "[init-ai] agent-shell package not found locally; skipping agent-shell configuration"))
 
 ;; Load ECA security utilities
 (require 'eca-security)

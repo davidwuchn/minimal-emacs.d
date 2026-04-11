@@ -1016,7 +1016,11 @@ Install scheduled jobs for autonomous operation:
 ```bash
 ./scripts/install-cron.sh --dry-run   # Preview
 ./scripts/install-cron.sh             # Install
+./scripts/run-auto-workflow-cron.sh auto-workflow
+./scripts/run-auto-workflow-cron.sh status && ./scripts/run-auto-workflow-cron.sh messages
 ```
+
+`install-cron.sh` now manages only its marked auto-workflow block, so unrelated user cron entries are preserved.
 
 | Schedule | Function | Purpose |
 |----------|----------|---------|
@@ -1039,6 +1043,6 @@ Logs: `var/tmp/cron/*.log`
 ---
 
 **Document Version:** 2.0  
-**Last Updated:** 2026-04-01  
-**Release:** v2026.04.01  
-**Changes:** Switched cron to the dedicated `copilot-auto-workflow` daemon, documented persisted status snapshots, and updated wrapper/E2E instructions
+**Last Updated:** 2026-04-11  
+**Release:** v2026.04.11  
+**Changes:** Preserved unrelated user cron entries during install, documented the smoke-test verification flow, and kept cron wrapper/E2E instructions aligned with the dedicated daemon

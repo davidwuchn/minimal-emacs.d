@@ -20,7 +20,11 @@ echo "Running Nucleus Tool Validations..."
 
 echo ""
 echo "[1/4] Verifying submodule sync..."
-"$DIR/scripts/check-submodule-sync.sh" --working-tree
+if [[ "${VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC:-0}" == "1" ]]; then
+    echo "Skipping submodule sync check (VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1)"
+else
+    "$DIR/scripts/check-submodule-sync.sh" --working-tree
+fi
 
 cat >"$TMP_ELISP" <<EOF
 (setq package-archives nil)

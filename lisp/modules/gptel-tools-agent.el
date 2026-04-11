@@ -412,7 +412,32 @@ Returns non-nil when at least one entry was removed."
                  (shell-quote-argument branch)
                  (shell-quote-argument commit-hash)
                  (shell-quote-argument (concat commit-hash "^")))
-         60))))
+          60))))
+
+(defun gptel-auto-workflow--commit-integrated-p (commit-hash)
+  "Return non-nil when COMMIT-HASH is already represented in staging or main.
+Checks both local and remote refs because cron resets the local staging branch to
+the workflow base before scanning tracked ledgers."
+  (when (gptel-auto-workflow--non-empty-string-p commit-hash)
+    (let ((refs (delete-dups
+                 (delq nil
+                       (list gptel-auto-workflow-staging-branch
+                             (and (gptel-auto-workflow--non-empty-string-p
+                                   gptel-auto-workflow-staging-branch)
+                                  (format "origin/%s"
+                                          gptel-auto-workflow-staging-branch))
+                             "main"
+                             "origin/main"))))
+          integrated)
+      (dolist (ref refs integrated)
+        (let ((ancestor-check
+               (gptel-auto-workflow--git-cmd
+                (format "git merge-base --is-ancestor %s %s 2>/dev/null && echo yes"
+                        (shell-quote-argument commit-hash)
+                        (shell-quote-argument ref)))))
+          (when (or (not (string-empty-p ancestor-check))
+                    (gptel-auto-workflow--commit-patch-equivalent-p commit-hash ref))
+            (setq integrated t)))))))
 
 (defun gptel-auto-workflow--track-commit (experiment-id &optional target worktree-dir)
   "Save current commit hash to tracking file for EXPERIMENT-ID.
@@ -469,26 +494,21 @@ Returns list of (hash exp-id target) for truly orphaned commits."
         (insert-file-contents tracking-file)
         (dolist (line (split-string (buffer-string) "\n" t))
           (let* ((parts (split-string line))
-                  (hash (car parts))
-                  (exp-id (cadr parts))
-                  (target (caddr parts)))
+                 (hash (car parts))
+                 (exp-id (cadr parts))
+                 (target (caddr parts)))
             (when (and hash
                        (>= (length parts) 3)
                        (string-match-p "^[a-f0-9]+$" hash)
                        (not (gethash hash seen)))
               (puthash hash t seen)
-              (if (not (gptel-auto-workflow--commit-exists-p hash))
-                  (push hash stale-hashes)
-                (let ((in-staging (gptel-auto-workflow--git-cmd
-                                   (format "git merge-base --is-ancestor %s staging 2>/dev/null && echo yes" hash)))
-                      (in-main (gptel-auto-workflow--git-cmd
-                                (format "git merge-base --is-ancestor %s main 2>/dev/null && echo yes" hash))))
-                  (if (or (not (string-empty-p in-staging))
-                          (not (string-empty-p in-main))
-                          (gptel-auto-workflow--commit-patch-equivalent-p hash "staging")
-                          (gptel-auto-workflow--commit-patch-equivalent-p hash "main"))
-                      (push hash stale-hashes)
-                    (push (list hash exp-id target) orphans)))))))))
+               (cond
+                ((not (gptel-auto-workflow--commit-exists-p hash))
+                 (push hash stale-hashes))
+                ((gptel-auto-workflow--commit-integrated-p hash)
+                 (push hash stale-hashes))
+                (t
+                 (push (list hash exp-id target) orphans))))))))
     (dolist (hash (delete-dups stale-hashes))
       (when (gptel-auto-workflow--untrack-commit hash)
         (message "[auto-workflow] Removed stale orphan record %s"
@@ -2717,14 +2737,17 @@ superproject-managed `.git/modules/...` store."
                      failed-tests)
                  (unwind-protect
                      (let ((default-directory worktree))
-                       (setq exit-code
-                             (if (file-exists-p test-script)
-                                 (call-process "bash" nil buffer nil test-script "unit")
-                               0))
-                       (setq verify-exit-code
-                             (if (file-exists-p verify-script)
-                                 (call-process "bash" nil buffer nil verify-script)
-                               0))
+                        (setq exit-code
+                              (if (file-exists-p test-script)
+                                  (call-process "bash" nil buffer nil test-script "unit")
+                                0))
+                        (setq verify-exit-code
+                              (if (file-exists-p verify-script)
+                                  (let ((process-environment
+                                         (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
+                                               process-environment)))
+                                    (call-process "bash" nil buffer nil verify-script))
+                                0))
                        (setq output (with-current-buffer buffer (buffer-string)))
                        (setq failed-tests (gptel-auto-workflow--extract-failed-tests output))
                        (cond
@@ -3310,7 +3333,8 @@ Returns t on success, nil on failure.
 Uses the staging worktree instead of switching branches in the root repo."
   (let* ((staging gptel-auto-workflow-staging-branch)
          (optimize-ref (gptel-auto-workflow--ensure-merge-source-ref optimize-branch))
-         (merge-message (format "Merge %s for verification" optimize-branch)))
+         (merge-message (format "Merge %s for verification" optimize-branch))
+         (commit-timeout (max 300 gptel-auto-workflow-git-timeout)))
     (message "[auto-workflow] Cherry-picking %s to %s" optimize-branch staging)
     (if (not (gptel-auto-workflow--ensure-staging-branch-exists))
         nil
@@ -3336,13 +3360,15 @@ Uses the staging worktree instead of switching branches in the root repo."
                       (cherry-output (car cherry-result)))
                   (cond
                    ((eq 0 (cdr cherry-result))
-                    (let ((commit-result
-                           (gptel-auto-workflow--git-result
-                            (format "git commit -m %s" (shell-quote-argument merge-message))
-                            60)))
-                      (cond
-                       ((eq 0 (cdr commit-result))
-                        t)
+                      (let ((commit-result
+                             (gptel-auto-workflow--git-result
+                              (format "%s git commit -m %s"
+                                      gptel-auto-workflow--skip-submodule-sync-env
+                                      (shell-quote-argument merge-message))
+                              commit-timeout)))
+                       (cond
+                        ((eq 0 (cdr commit-result))
+                         t)
                        ((gptel-auto-workflow--empty-cherry-pick-state-p (car commit-result) t)
                         (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --skip" 60))
                         (message "[auto-workflow] Cherry-pick empty after apply (already in staging)")
@@ -3430,7 +3456,10 @@ Returns (success-p . output)."
               (test-result (when (and submodule-pass test-script (file-exists-p test-script))
                              (call-process "bash" nil output-buffer nil test-script "unit")))
               (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
-                               (call-process "bash" nil output-buffer nil verify-script)))
+                               (let ((process-environment
+                                      (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
+                                            process-environment)))
+                                 (call-process "bash" nil output-buffer nil verify-script))))
               (test-pass (and submodule-pass
                               (or (not (and test-script (file-exists-p test-script)))
                                   (eq test-result 0))))
@@ -3915,8 +3944,9 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                                  (delete-file path)
                                  path))
          (process-environment
-          (cons (format "AUTO_WORKFLOW_STATUS_FILE=%s" isolated-status-file)
-                process-environment))
+          (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
+                (cons (format "AUTO_WORKFLOW_STATUS_FILE=%s" isolated-status-file)
+                      process-environment)))
          (test-script (expand-file-name "scripts/run-tests.sh" worktree))
          (output-buffer (generate-new-buffer "*test-output*"))
          result)
@@ -4986,7 +5016,9 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                           (when commit-dir
                             (let ((default-directory commit-dir))
                               (magit-git-success "add" "-A")
-                              (magit-git-success "commit" "-m" (format "WIP: experiment %s\n\nHYPOTHESIS: %s" target (or hypothesis "Improve code quality"))))))
+                              (gptel-auto-workflow--with-skipped-submodule-sync
+                               (lambda ()
+                                 (magit-git-success "commit" "-m" (format "WIP: experiment %s\n\nHYPOTHESIS: %s" target (or hypothesis "Improve code quality"))))))))
                        (let* ((bench (gptel-auto-experiment-benchmark t))
                               (passed (plist-get bench :passed))
                               (validation-error (plist-get bench :validation-error))
@@ -5028,6 +5060,15 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 				 (/ (- score-after baseline) baseline))
 			    0)))
 			(default-directory experiment-worktree)
+			(commit-timeout
+			 (max 300 gptel-auto-workflow-git-timeout))
+			(commit-command
+			 (format "%s git commit -m %s"
+                                 gptel-auto-workflow--skip-submodule-sync-env
+                                 (shell-quote-argument msg)))
+			(push-command
+			 (format "git push origin %s"
+				 (shell-quote-argument experiment-branch)))
 			(finalize
 			 (gptel-auto-workflow--make-idempotent-callback
 			  (lambda (&rest _)
@@ -5036,23 +5077,47 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 			    (funcall callback exp-result)))))
 		   (gptel-auto-workflow--assert-main-untouched)
 		   (message "[auto-experiment] ✓ Committing improvement for %s" target)
-		   (magit-git-success "add" "-A")
-		   (magit-git-success "commit" "-m" msg)
-		   (gptel-auto-workflow--track-commit experiment-id
-						      target
-						      experiment-worktree)
-		   (setq gptel-auto-experiment--best-score score-after
-			 gptel-auto-experiment--no-improvement-count 0)
-		   (if gptel-auto-experiment-auto-push
+		   (if (and (gptel-auto-workflow--git-step-success-p
+			     "git add -A"
+			     (format "Stage experiment changes for %s" target)
+			     60)
+			    (gptel-auto-workflow--git-step-success-p
+			     commit-command
+			     (format "Commit experiment changes for %s" target)
+			     commit-timeout))
 		       (progn
-			 (message "[auto-experiment] Pushing to %s" experiment-branch)
-			 (magit-git-success "push" "origin" experiment-branch)
-			 (if gptel-auto-workflow-use-staging
-			     (gptel-auto-workflow--staging-flow
-			      experiment-branch
-			      finalize)
+			 (gptel-auto-workflow--track-commit experiment-id
+							    target
+							    experiment-worktree)
+			 (setq gptel-auto-experiment--best-score score-after
+			       gptel-auto-experiment--no-improvement-count 0)
+			 (if gptel-auto-experiment-auto-push
+			     (progn
+			       (message "[auto-experiment] Pushing to %s" experiment-branch)
+			       (if (gptel-auto-workflow--git-step-success-p
+				    push-command
+				    (format "Push optimize branch %s" experiment-branch)
+				    180)
+				   (if gptel-auto-workflow-use-staging
+				       (gptel-auto-workflow--staging-flow
+					experiment-branch
+					finalize)
+				     (funcall finalize))
+				 (let ((failed-result
+					(plist-put (copy-sequence exp-result)
+						   :comparator-reason
+						   "optimize-push-failed")))
+				   (setq failed-result (plist-put failed-result :kept nil))
+				   (gptel-auto-experiment-log-tsv run-id failed-result)
+				   (funcall callback failed-result))))
 			   (funcall finalize)))
-		     (funcall finalize)))
+		     (let ((failed-result
+			    (plist-put (copy-sequence exp-result)
+				       :comparator-reason
+				       "experiment-commit-failed")))
+		       (setq failed-result (plist-put failed-result :kept nil))
+		       (gptel-auto-experiment-log-tsv run-id failed-result)
+		       (funcall callback failed-result))))
 	       (let ((default-directory experiment-worktree))
 		 (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
 		 (magit-git-success "checkout" "--" ".")
@@ -5116,33 +5181,66 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                                         :agent-output retry-output
                                                                         :retries 1)))
                                                             (if keep
-                                                                (let* ((msg (format "◈ Retry: fix validation in %s"
-                                                                                    target))
-                                                                       (default-directory experiment-worktree)
-                                                                       (finalize
-                                                                        (gptel-auto-workflow--make-idempotent-callback
-                                                                         (lambda (&rest _)
-                                                                          (gptel-auto-experiment-log-tsv
-                                                                           run-id exp-result)
-                                                                           (funcall callback exp-result)))))
-                                                                  (gptel-auto-workflow--assert-main-untouched)
-                                                                  (magit-git-success "add" "-A")
-                                                                  (magit-git-success "commit" "-m" msg)
-                                                                  (gptel-auto-workflow--track-commit experiment-id
-                                                                                                     target
-                                                                                                     experiment-worktree)
-                                                                  (setq gptel-auto-experiment--best-score retry-score
-                                                                        gptel-auto-experiment--no-improvement-count 0)
-                                                                  (if gptel-auto-experiment-auto-push
-                                                                      (progn
-                                                                        (message "[auto-experiment] Pushing to %s" experiment-branch)
-                                                                        (magit-git-success "push" "origin" experiment-branch)
-                                                                        (if gptel-auto-workflow-use-staging
-                                                                            (gptel-auto-workflow--staging-flow
-                                                                             experiment-branch
-                                                                             finalize)
-                                                                          (funcall finalize)))
-                                                                    (funcall finalize)))
+                                                                 (let* ((msg (format "◈ Retry: fix validation in %s"
+                                                                                     target))
+                                                                        (default-directory experiment-worktree)
+                                                                        (commit-timeout
+                                                                         (max 300 gptel-auto-workflow-git-timeout))
+                                                                        (commit-command
+                                                                         (format "%s git commit -m %s"
+                                                                                 gptel-auto-workflow--skip-submodule-sync-env
+                                                                                 (shell-quote-argument msg)))
+                                                                        (push-command
+                                                                         (format "git push origin %s"
+                                                                                 (shell-quote-argument experiment-branch)))
+                                                                        (finalize
+                                                                         (gptel-auto-workflow--make-idempotent-callback
+                                                                          (lambda (&rest _)
+                                                                           (gptel-auto-experiment-log-tsv
+                                                                            run-id exp-result)
+                                                                            (funcall callback exp-result)))))
+                                                                   (gptel-auto-workflow--assert-main-untouched)
+                                                                   (if (and (gptel-auto-workflow--git-step-success-p
+                                                                             "git add -A"
+                                                                             (format "Stage retry changes for %s" target)
+                                                                             60)
+                                                                            (gptel-auto-workflow--git-step-success-p
+                                                                             commit-command
+                                                                             (format "Commit retry changes for %s" target)
+                                                                             commit-timeout))
+                                                                       (progn
+                                                                         (gptel-auto-workflow--track-commit experiment-id
+                                                                                                            target
+                                                                                                            experiment-worktree)
+                                                                         (setq gptel-auto-experiment--best-score retry-score
+                                                                               gptel-auto-experiment--no-improvement-count 0)
+                                                                         (if gptel-auto-experiment-auto-push
+                                                                             (progn
+                                                                               (message "[auto-experiment] Pushing to %s" experiment-branch)
+                                                                               (if (gptel-auto-workflow--git-step-success-p
+                                                                                    push-command
+                                                                                    (format "Push optimize branch %s" experiment-branch)
+                                                                                    180)
+                                                                                   (if gptel-auto-workflow-use-staging
+                                                                                       (gptel-auto-workflow--staging-flow
+                                                                                        experiment-branch
+                                                                                        finalize)
+                                                                                     (funcall finalize))
+                                                                                 (let ((failed-result
+                                                                                        (plist-put (copy-sequence exp-result)
+                                                                                                   :comparator-reason
+                                                                                                   "retry-push-failed")))
+                                                                                   (setq failed-result (plist-put failed-result :kept nil))
+                                                                                   (gptel-auto-experiment-log-tsv run-id failed-result)
+                                                                                   (funcall callback failed-result))))
+                                                                           (funcall finalize)))
+                                                                     (let ((failed-result
+                                                                            (plist-put (copy-sequence exp-result)
+                                                                                       :comparator-reason
+                                                                                       "retry-commit-failed")))
+                                                                       (setq failed-result (plist-put failed-result :kept nil))
+                                                                       (gptel-auto-experiment-log-tsv run-id failed-result)
+                                                                       (funcall callback failed-result))))
                                                               (let ((default-directory experiment-worktree))
                                                                 (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
                                                                 (magit-git-success "checkout" "--" ".")
@@ -5702,6 +5800,29 @@ Automatically adds --no-pager to prevent blocking on pager output."
     (gptel-auto-workflow--shell-command-with-timeout
      git-cmd
      (or timeout gptel-auto-workflow-git-timeout))))
+
+(defconst gptel-auto-workflow--skip-submodule-sync-env
+  "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
+  "Environment override used to skip expensive submodule sync checks in workflow commits.")
+
+(defun gptel-auto-workflow--with-skipped-submodule-sync (fn)
+  "Run FN with workflow commit hooks skipping cached submodule sync."
+  (let ((process-environment
+         (cons gptel-auto-workflow--skip-submodule-sync-env
+               process-environment)))
+    (funcall fn)))
+
+(defun gptel-auto-workflow--git-step-success-p (cmd action &optional timeout)
+  "Run git CMD and report whether it succeeded.
+ACTION is a short description used in the failure message."
+  (pcase-let ((`(,output . ,exit-code)
+               (gptel-auto-workflow--git-result cmd timeout)))
+    (if (= exit-code 0)
+        t
+      (message "[auto-workflow] %s failed: %s"
+               action
+               (my/gptel--sanitize-for-logging output 200))
+      nil)))
 
 (defun gptel-auto-workflow--with-staging-worktree (fn)
   "Run FN with `default-directory' bound to the staging worktree.

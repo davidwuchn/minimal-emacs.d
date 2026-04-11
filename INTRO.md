@@ -340,8 +340,9 @@ RunAgent("code", "optimize gptel-ext-context.el following docs/auto-workflow.md"
 # Cron-style manual run
 ./scripts/run-auto-workflow-cron.sh auto-workflow
 
-# Fast snapshot-based status
+# Fast snapshot-based status + recent output
 ./scripts/run-auto-workflow-cron.sh status
+./scripts/run-auto-workflow-cron.sh messages
 ```
 
 ### Config Options

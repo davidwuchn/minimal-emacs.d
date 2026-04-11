@@ -5,7 +5,11 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 
 # Check submodule sync first
-"$repo_root/scripts/check-submodule-sync.sh" --cached
+if [[ "${VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC:-0}" == "1" ]]; then
+    echo "pre-commit: skipping cached submodule sync (VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1)"
+else
+    "$repo_root/scripts/check-submodule-sync.sh" --cached
+fi
 
 # Byte-compile staged .el files to catch syntax errors (e.g. unbalanced parens)
 staged_el_files=$(git diff --cached --name-only --diff-filter=ACM | grep '\.el$' || true)
