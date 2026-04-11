@@ -204,12 +204,13 @@ Returns nil for nil or malformed input."
       (when (listp scores) scores)))
    (t nil)))
 
-(defun gptel-benchmark--get-score (r field)
+(defun gptel-benchmark--get-score (r field &optional scores)
   "Extract FIELD from scores in result entry R.
 Returns nil if R has no scores or FIELD is not present.
 FIELD should be a keyword like :overall-score.
-Handles both plist format (keyword keys) and alist format (symbol or keyword keys)."
-  (let ((scores (gptel-benchmark--extract-scores r)))
+Handles both plist format (keyword keys) and alist format (symbol or keyword keys).
+If SCORES is provided, uses it directly instead of re-extracting from R."
+  (let ((scores (or scores (gptel-benchmark--extract-scores r))))
     (and scores
          (if (and (listp scores) (keywordp (car scores)))
              (plist-get scores field)
@@ -282,7 +283,7 @@ Returns plist with :total-tests, :passed-tests, and average scores."
                           (:constraint-score . 0.0))))
       (dolist (r results)
         (let* ((scores (gptel-benchmark--extract-scores r))
-               (overall-score (gptel-benchmark--get-score r :overall-score)))
+               (overall-score (gptel-benchmark--get-score r :overall-score scores)))
           (cl-incf total)
           (when scores
             (setq score-totals
