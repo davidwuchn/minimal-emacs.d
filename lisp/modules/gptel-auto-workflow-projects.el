@@ -53,6 +53,7 @@ Customize this variable to add more projects.")
 ;; Forward declarations for variables defined in gptel-tools-agent.el
 (defvar gptel-auto-workflow--stats nil)
 (defvar gptel-auto-workflow--running nil)
+(defvar gptel-auto-workflow--cron-job-timer nil)
 
 (defvar mementum-root nil
   "Root directory for mementum. Set per-project.")
@@ -315,7 +316,8 @@ finish."
 (defun gptel-auto-workflow--finish-queued-cron-job (label &optional errored)
   "Clear queued cron state after LABEL completes.
 When ERRORED is non-nil, preserve the existing error phase."
-  (setq gptel-auto-workflow--cron-job-running nil)
+  (setq gptel-auto-workflow--cron-job-running nil
+        gptel-auto-workflow--cron-job-timer nil)
   (let ((phase (plist-get gptel-auto-workflow--stats :phase)))
     (when (and (not errored)
                (not (bound-and-true-p gptel-auto-workflow--running))
@@ -351,29 +353,35 @@ the queued job actually finishes."
     (when (fboundp 'gptel-auto-workflow--persist-status)
       (gptel-auto-workflow--persist-status))
     (message "[%s] Queued background job" label)
-    (run-at-time
-     0 nil
-     (lambda ()
-       (let ((finish-job
-              (gptel-auto-workflow--make-idempotent-callback
-               (lambda (&optional errored)
-                 (gptel-auto-workflow--finish-queued-cron-job label errored)))))
-          (setq gptel-auto-workflow--stats
-                (plist-put gptel-auto-workflow--stats :phase label))
-          (when (fboundp 'gptel-auto-workflow--persist-status)
-            (gptel-auto-workflow--persist-status))
-          (condition-case err
-              (if async
-                  (funcall fn finish-job)
-                (progn
-                  (funcall fn)
-                  (funcall finish-job)))
-            (error
-             (setq gptel-auto-workflow--stats
-                   (plist-put gptel-auto-workflow--stats :phase "error"))
-             (message "[%s] Job failed: %s" label err)
-             (funcall finish-job err))))))
-    'queued))
+    (let (timer)
+      (setq gptel-auto-workflow--cron-job-timer
+            (setq timer
+                  (run-at-time
+                   0 nil
+                   (lambda ()
+                     (when (and gptel-auto-workflow--cron-job-running
+                                (eq gptel-auto-workflow--cron-job-timer timer))
+                       (setq gptel-auto-workflow--cron-job-timer nil)
+                       (let ((finish-job
+                              (gptel-auto-workflow--make-idempotent-callback
+                               (lambda (&optional errored)
+                                 (gptel-auto-workflow--finish-queued-cron-job label errored)))))
+                         (setq gptel-auto-workflow--stats
+                               (plist-put gptel-auto-workflow--stats :phase label))
+                         (when (fboundp 'gptel-auto-workflow--persist-status)
+                           (gptel-auto-workflow--persist-status))
+                         (condition-case err
+                             (if async
+                                 (funcall fn finish-job)
+                               (progn
+                                 (funcall fn)
+                                 (funcall finish-job)))
+                           (error
+                            (setq gptel-auto-workflow--stats
+                                  (plist-put gptel-auto-workflow--stats :phase "error"))
+                            (message "[%s] Job failed: %s" label err)
+                            (funcall finish-job err)))))))))
+    'queued)))
 
 (defun gptel-auto-workflow-queue-all-projects ()
   "Queue `gptel-auto-workflow-run-all-projects' and return immediately."

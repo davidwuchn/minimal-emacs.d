@@ -1338,10 +1338,13 @@ EXIT-CODE defaults to 1."
      "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 56. See Curl manpage for details.\"")
     '(:timeout . "Experiment timed out"))))
 
-(ert-deftest regression/auto-experiment/usage-limit-exceeded-counts-as-quota-exhaustion ()
-  "Live provider usage-limit errors should trip hard quota detection."
+(ert-deftest regression/auto-experiment/usage-limit-exceeded-is-not-hard-executor-quota ()
+  "Transient usage-limit errors should stay retryable for executor runs."
   (should
    (gptel-auto-experiment--quota-exhausted-p
+    "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"))
+  (should-not
+   (gptel-auto-experiment--hard-quota-exhausted-p
     "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")))
 
 (ert-deftest regression/auto-experiment/run-with-retry-retries-string-timeout-category ()
@@ -1449,11 +1452,11 @@ EXIT-CODE defaults to 1."
         (gptel-auto-experiment-retry-delay 0)
         (gptel-auto-experiment--quota-exhausted nil))
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
-                 (cl-incf runs)
-                 (funcall callback
-                          (list :agent-output
-                                "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"
+                (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+                  (cl-incf runs)
+                  (funcall callback
+                           (list :agent-output
+                                "Error: Task executor could not finish task \"x\". Error details: (:type \"insufficient_quota\" :message \"week allocated quota exceeded\" :http_code \"429\")"
                                 :comparator-reason ":api-rate-limit"))))
               ((symbol-function 'run-with-timer)
                (lambda (&rest _args)
@@ -1463,12 +1466,12 @@ EXIT-CODE defaults to 1."
                (lambda (&rest _args) nil)))
       (gptel-auto-experiment--run-with-retry
        "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
-       (lambda (result)
-         (setq final-result result)))
-      (should (= runs 1))
-       (should-not scheduled-retry)
-       (should gptel-auto-experiment--quota-exhausted)
-       (should (string-match-p "usage limit exceeded" (plist-get final-result :agent-output))))))
+        (lambda (result)
+          (setq final-result result)))
+       (should (= runs 1))
+        (should-not scheduled-retry)
+        (should gptel-auto-experiment--quota-exhausted)
+        (should (string-match-p "week allocated quota exceeded" (plist-get final-result :agent-output))))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-backs-off-rate-limits ()
   "Rate-limit retries should increase delay instead of hammering the provider."
@@ -2488,6 +2491,40 @@ EXIT-CODE defaults to 1."
       (should (zerop (hash-table-count gptel-auto-experiment--grade-state)))
       (funcall timeout-callback)
       (should-not results))))
+
+(ert-deftest regression/auto-workflow/force-stop-cancels-queued-cron-job-timer ()
+  "Force-stop should cancel a queued cron callback before it can start later."
+  (let ((gptel-auto-workflow--running nil)
+        (gptel-auto-workflow--cron-job-running nil)
+        (gptel-auto-workflow--cron-job-timer nil)
+        (gptel-auto-workflow--stats '(:phase "auto-workflow-queued" :total 0 :kept 0))
+        (scheduled nil)
+        (cancelled nil)
+        (job-ran nil))
+    (cl-letf (((symbol-function 'run-at-time)
+               (lambda (_secs _repeat fn)
+                 (setq scheduled fn)
+                 'fake-cron-timer))
+              ((symbol-function 'cancel-timer)
+               (lambda (timer)
+                 (setq cancelled timer)))
+              ((symbol-function 'my/gptel--reset-agent-task-state) (lambda () nil))
+              ((symbol-function 'gptel-mementum--reset-synthesis-state) (lambda () nil))
+              ((symbol-function 'gptel-auto-experiment--reset-grade-state) (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--persist-status) (lambda (&rest _) nil))
+              ((symbol-function 'message) (lambda (&rest _) nil)))
+      (should (eq (gptel-auto-workflow--queue-cron-job
+                   "auto-workflow"
+                   (lambda () (setq job-ran t)))
+                  'queued))
+      (should gptel-auto-workflow--cron-job-running)
+      (should (eq gptel-auto-workflow--cron-job-timer 'fake-cron-timer))
+      (gptel-auto-workflow-force-stop)
+      (should (eq cancelled 'fake-cron-timer))
+      (should-not gptel-auto-workflow--cron-job-running)
+      (should-not gptel-auto-workflow--cron-job-timer)
+      (funcall scheduled)
+      (should-not job-ran))))
 
 (ert-deftest regression/auto-workflow/force-stop-aborts-active-subagent-buffers ()
   "Force-stop should abort the live routed subagent buffer before callbacks fire."
@@ -4579,7 +4616,7 @@ EXIT-CODE defaults to 1."
                     "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
                     "if expr == 't':\n"
                     "    print('t')\n"
-                    "elif 'gptel-auto-workflow-status' in expr:\n"
+                    "elif 'gptel-auto-workflow--status-plist' in expr:\n"
                     "    if 'load-file' in expr:\n"
                     "        print('(:running nil :kept 0 :total 0 :phase \"idle\" :run-id \"bad-status\" :results \"var/tmp/experiments/bad-status/results.tsv\")')\n"
                     "    else:\n"
@@ -4690,7 +4727,7 @@ EXIT-CODE defaults to 1."
                     (format "calls_path = pathlib.Path(%S)\n" calls-file)
                     "if expr == 't':\n"
                     "    print('t')\n"
-                    "elif 'gptel-auto-workflow-status' in expr:\n"
+                    "elif 'gptel-auto-workflow--status-plist' in expr:\n"
                     "    count = int(calls_path.read_text() or '0') if calls_path.exists() else 0\n"
                     "    count += 1\n"
                     "    calls_path.write_text(str(count))\n"
@@ -4742,7 +4779,7 @@ EXIT-CODE defaults to 1."
                     (format "calls_path = pathlib.Path(%S)\n" calls-file)
                     "if expr == 't':\n"
                     "    print('t')\n"
-                    "elif 'gptel-auto-workflow-status' in expr:\n"
+                    "elif 'gptel-auto-workflow--status-plist' in expr:\n"
                     "    count = int(calls_path.read_text() or '0') if calls_path.exists() else 0\n"
                     "    count += 1\n"
                     "    calls_path.write_text(str(count))\n"
@@ -4772,9 +4809,8 @@ EXIT-CODE defaults to 1."
       (delete-directory status-dir t)
       (delete-directory fake-bin t))))
 
-(ert-deftest regression/auto-workflow/cron-wrapper-status-keeps-running-on-ambiguous-active-probe ()
-  "Wrapper status should preserve an active snapshot when the active probe is ambiguous."
-  (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
+(ert-deftest regression/auto-workflow/cron-wrapper-status-clears-stale-on-ambiguous-live-probe ()
+  "Wrapper status should clear stale running state when the live probe only returns nil."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -4798,7 +4834,7 @@ EXIT-CODE defaults to 1."
                     (format "calls_path = pathlib.Path(%S)\n" calls-file)
                     "if expr == 't':\n"
                     "    print('t')\n"
-                    "elif 'gptel-auto-workflow-status' in expr:\n"
+                    "elif 'gptel-auto-workflow--status-plist' in expr:\n"
                     "    count = int(calls_path.read_text() or '0') if calls_path.exists() else 0\n"
                     "    count += 1\n"
                     "    calls_path.write_text(str(count))\n"
@@ -4812,12 +4848,12 @@ EXIT-CODE defaults to 1."
           (with-temp-file status-file
             (insert "(:running t :kept 1 :total 5 :phase \"running\" :results \"var/tmp/experiments/2026-04-07/results.tsv\")\n"))
           (let ((output (shell-command-to-string (format "%s status" script))))
-            (should (string-match-p ":running t" output))
-            (should (string-match-p ":phase \"running\"" output)))
+            (should (string-match-p ":running nil" output))
+            (should (string-match-p ":phase \"idle\"" output)))
           (with-temp-buffer
             (insert-file-contents status-file)
-            (should (string-match-p ":running t" (buffer-string)))
-            (should (string-match-p ":phase \"running\"" (buffer-string)))))
+            (should (string-match-p ":running nil" (buffer-string)))
+            (should (string-match-p ":phase \"idle\"" (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t))))
 
@@ -4846,7 +4882,7 @@ EXIT-CODE defaults to 1."
                     "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
                     (format "calls_path = pathlib.Path(%S)\n" calls-file)
                     "count = int(calls_path.read_text() or '0') if calls_path.exists() else 0\n"
-                    "if 'gptel-auto-workflow-status' in expr:\n"
+                    "if 'gptel-auto-workflow--status-plist' in expr:\n"
                     "    count += 1\n"
                     "    calls_path.write_text(str(count))\n"
                     "    raise SystemExit(1)\n"
@@ -4988,7 +5024,7 @@ EXIT-CODE defaults to 1."
                     "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
                     "if expr == 't':\n"
                     "    print('t')\n"
-                    "elif 'gptel-auto-workflow-status' in expr:\n"
+                    "elif 'gptel-auto-workflow--status-plist' in expr:\n"
                     "    print('(:running nil :kept 0 :total 0 :phase \"idle\" :results \"var/tmp/experiments/2026-04-03/results.tsv\")')\n"
                     "else:\n"
                     "    print('nil')\n"
@@ -5028,7 +5064,7 @@ EXIT-CODE defaults to 1."
                     "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
                     "if expr == 't':\n"
                     "    print('t')\n"
-                    "elif 'gptel-auto-workflow-status' in expr:\n"
+                    "elif 'gptel-auto-workflow--status-plist' in expr:\n"
                     "    print('nil')\n"
                     "else:\n"
                     "    print('nil')\n"
@@ -5158,7 +5194,7 @@ EXIT-CODE defaults to 1."
             (insert "def5678 exp2 other.el 00:00:01\n"))
           (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                      (lambda () proj-root))
-                    ((symbol-function 'gptel-auto-workflow--recover-orphans)
+                    ((symbol-function 'gptel-auto-workflow--recoverable-tracked-commits)
                      (lambda () '(("abc1234" "exp1" "target.el"))))
                     ((symbol-function 'gptel-auto-workflow--cherry-pick-orphan)
                      (lambda (_hash) t))
@@ -5186,7 +5222,7 @@ EXIT-CODE defaults to 1."
             (insert "def5678 exp2 other.el 00:00:01\n"))
           (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                      (lambda () proj-root))
-                    ((symbol-function 'gptel-auto-workflow--recover-orphans)
+                    ((symbol-function 'gptel-auto-workflow--recoverable-tracked-commits)
                      (lambda () '(("abc1234" "exp1" "target.el"))))
                     ((symbol-function 'gptel-auto-workflow--cherry-pick-orphan)
                      (lambda (_hash) 'conflict))
@@ -5259,6 +5295,8 @@ EXIT-CODE defaults to 1."
                    (lambda (&rest _) proj-root))
                   ((symbol-function 'gptel-auto-workflow--git-cmd)
                    (lambda (&rest _) "abc1234"))
+                  ((symbol-function 'gptel-auto-workflow--tracked-commit-pinned-p)
+                   (lambda (&rest _) t))
                   ((symbol-function 'message) (lambda (&rest _) nil)))
           (should (equal (gptel-auto-workflow--track-commit "1" "target.el" proj-root)
                          "abc1234"))
@@ -5266,8 +5304,75 @@ EXIT-CODE defaults to 1."
                          "abc1234"))
           (with-temp-buffer
             (insert-file-contents tracking-file)
-            (should (= (cl-count ?\n (buffer-string)) 1))
-            (should (string-match-p "^abc1234 1 target\\.el " (buffer-string)))))
+             (should (= (cl-count ?\n (buffer-string)) 1))
+             (should (string-match-p "^abc1234 1 target\\.el " (buffer-string)))))
+       (delete-directory proj-root t))))
+
+(ert-deftest regression/auto-workflow/track-commit-pins-tracked-commits ()
+  "Tracking a kept commit should preserve it under a private recovery ref."
+  (let* ((gptel-auto-workflow--run-id nil)
+         (proj-root (make-temp-file "aw-track-pin" t))
+         (tracking-file (expand-file-name
+                         (format "var/tmp/experiments/%s/commits.txt"
+                                 (format-time-string "%Y-%m-%d"))
+                         proj-root))
+         (git-result-calls nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                   (lambda () proj-root))
+                  ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+                   (lambda (&rest _) proj-root))
+                  ((symbol-function 'gptel-auto-workflow--git-cmd)
+                   (lambda (&rest _) "abc1234"))
+                  ((symbol-function 'gptel-auto-workflow--tracked-commit-pinned-p)
+                   (lambda (&rest _) nil))
+                  ((symbol-function 'gptel-auto-workflow--commit-exists-p)
+                   (lambda (_hash) t))
+                  ((symbol-function 'gptel-auto-workflow--git-result)
+                   (lambda (command &optional _timeout)
+                     (push command git-result-calls)
+                     (cons "" 0)))
+                  ((symbol-function 'message) (lambda (&rest _) nil)))
+          (should (equal (gptel-auto-workflow--track-commit "1" "target.el" proj-root)
+                         "abc1234"))
+          (should (file-exists-p tracking-file))
+          (should (seq-some
+                   (lambda (command)
+                     (string-match-p
+                      "git update-ref .*refs/auto-workflow/kept/abc1234.*abc1234"
+                      command))
+                   git-result-calls)))
+      (delete-directory proj-root t))))
+
+(ert-deftest regression/auto-workflow/untrack-commit-deletes-recovery-ref-when-ledgers-clear ()
+  "Untracking the last ledger entry should delete the private recovery ref too."
+  (let* ((gptel-auto-workflow--run-id nil)
+         (proj-root (make-temp-file "aw-untrack-pin" t))
+         (tracking-file (expand-file-name
+                         (format "var/tmp/experiments/%s/commits.txt"
+                                 (format-time-string "%Y-%m-%d"))
+                         proj-root))
+         (git-result-calls nil))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory tracking-file) t)
+          (with-temp-file tracking-file
+            (insert "abc1234 exp1 target.el 00:00:00\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                     (lambda () proj-root))
+                    ((symbol-function 'gptel-auto-workflow--git-result)
+                     (lambda (command &optional _timeout)
+                       (push command git-result-calls)
+                       (cons "" 0)))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (should (gptel-auto-workflow--untrack-commit "abc1234"))
+            (should-not (file-exists-p tracking-file))
+            (should (seq-some
+                     (lambda (command)
+                       (string-match-p
+                        "git update-ref -d .*refs/auto-workflow/kept/abc1234"
+                        command))
+                     git-result-calls))))
       (delete-directory proj-root t))))
 
 (ert-deftest regression/auto-workflow/recover-orphans-deduplicates-tracked-hashes ()
@@ -5293,6 +5398,8 @@ EXIT-CODE defaults to 1."
                      (lambda (&rest _) nil))
                     ((symbol-function 'gptel-auto-workflow--git-cmd)
                      (lambda (&rest _) ""))
+                    ((symbol-function 'gptel-auto-workflow--git-result)
+                     (lambda (&rest _) (cons "" 1)))
                     ((symbol-function 'message) (lambda (&rest _) nil)))
             (setq orphans (gptel-auto-workflow--recover-orphans))
             (should (= (length orphans) 1))
@@ -5321,6 +5428,8 @@ EXIT-CODE defaults to 1."
                        (equal branch "main")))
                     ((symbol-function 'gptel-auto-workflow--git-cmd)
                      (lambda (&rest _) ""))
+                    ((symbol-function 'gptel-auto-workflow--git-result)
+                     (lambda (&rest _) (cons "" 1)))
                     ((symbol-function 'message) (lambda (&rest _) nil)))
              (should-not (gptel-auto-workflow--recover-orphans))
              (should-not (file-exists-p tracking-file))))
@@ -5352,9 +5461,45 @@ EXIT-CODE defaults to 1."
                             command)
                            "yes"
                          "")))
+                    ((symbol-function 'gptel-auto-workflow--git-result)
+                     (lambda (&rest _) (cons "" 1)))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+             (should-not (gptel-auto-workflow--recover-orphans))
+             (should-not (file-exists-p tracking-file))))
+      (delete-directory proj-root t))))
+
+(ert-deftest regression/auto-workflow/recover-orphans-pins-tracked-commits ()
+  "Startup orphan scans should preserve recoverable tracked commits under refs."
+  (let* ((gptel-auto-workflow--run-id nil)
+         (proj-root (make-temp-file "aw-orphan-pin" t))
+         (tracking-file (expand-file-name
+                         (format "var/tmp/experiments/%s/commits.txt"
+                                 (format-time-string "%Y-%m-%d"))
+                         proj-root))
+         (pinned nil))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory tracking-file) t)
+          (with-temp-file tracking-file
+            (insert "abc1234 exp1 target.el 00:00:00\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                     (lambda () proj-root))
+                    ((symbol-function 'gptel-auto-workflow--commit-exists-p)
+                     (lambda (_hash) t))
+                    ((symbol-function 'gptel-auto-workflow--commit-patch-equivalent-p)
+                     (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-workflow--git-cmd)
+                     (lambda (&rest _) ""))
+                    ((symbol-function 'gptel-auto-workflow--tracked-commit-pinned-p)
+                     (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-workflow--pin-tracked-commit)
+                     (lambda (hash)
+                       (push hash pinned)
+                       t))
                     ((symbol-function 'message) (lambda (&rest _) nil)))
             (should-not (gptel-auto-workflow--recover-orphans))
-            (should-not (file-exists-p tracking-file))))
+            (should (equal pinned '("abc1234")))
+            (should (file-exists-p tracking-file))))
       (delete-directory proj-root t))))
 
 (ert-deftest regression/auto-workflow/status-plist-uses-active-run-id ()
@@ -5516,6 +5661,8 @@ EXIT-CODE defaults to 1."
                    (lambda (&rest _) proj-root))
                   ((symbol-function 'gptel-auto-workflow--git-cmd)
                    (lambda (&rest _) "abc1234"))
+                  ((symbol-function 'gptel-auto-workflow--tracked-commit-pinned-p)
+                   (lambda (&rest _) t))
                   ((symbol-function 'message) (lambda (&rest _) nil)))
           (should (equal (gptel-auto-workflow--track-commit "1" "target.el" proj-root)
                          "abc1234"))
@@ -6929,7 +7076,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 (ert-deftest regression/auto-workflow/create-worktree-uses-safe-main-ref ()
   "Experiment worktrees should use the selected safe main ref, not hard-coded main."
   (ert-skip "Flaky test - mocking issues with call-process")
-  (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (calls nil))
     (cl-letf (((symbol-function 'system-name) (lambda () "riven"))
               ((symbol-function 'gptel-auto-workflow--default-dir)
@@ -6979,7 +7127,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 (ert-deftest regression/auto-workflow/create-worktree-removes-stale-branch-worktrees ()
   "Experiment worktree creation should remove stale branch worktrees first."
   (ert-skip "Flaky test - mocking issues with call-process")
-  (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (calls nil)
         (stale-worktree
          "/tmp/project/var/tmp/experiments/optimize/projects-riven-exp2/var/tmp/experiments/optimize/cache-riven-exp1"))
@@ -7027,7 +7176,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 (ert-deftest regression/auto-workflow/create-worktree-discards-stale-worktree-buffers ()
   "Experiment worktree creation should discard stale worktree buffers first."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
-  (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (discarded nil)
         (calls nil)
         (stale-worktree "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1"))
@@ -7111,7 +7261,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 (ert-deftest regression/auto-workflow/create-worktree-removes-stale-unattached-directory ()
   "Experiment worktree creation should delete stale plain directories too."
   (ert-skip "Flaky test - mocking issues with call-process")
-  (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (calls nil)
         (deleted nil)
         (worktree-dir "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp2"))
@@ -7157,7 +7308,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 (ert-deftest regression/auto-workflow/create-worktree-prefers-current-project-root ()
   "Experiment worktree paths should stay anchored to the active project root."
   (ert-skip "Flaky test - mocking issues with call-process")
-  (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (gptel-auto-workflow--current-project "/tmp/project")
         (calls nil))
     (cl-letf (((symbol-function 'system-name) (lambda () "riven"))
@@ -7195,7 +7347,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 (ert-deftest regression/auto-workflow/create-worktree-prefers-run-project-root-over-drifted-context ()
   "Experiment worktree paths should stay anchored to the stable run root."
   (ert-skip "Flaky test - mocking issues with call-process")
-  (let ((gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--worktree-state (make-hash-table :test 'equal))
         (gptel-auto-workflow--run-project-root "/tmp/project")
         (gptel-auto-workflow--current-project
          "/tmp/project/var/tmp/experiments/optimize/loop-riven-exp1")
