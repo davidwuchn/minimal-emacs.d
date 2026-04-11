@@ -440,6 +440,7 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
              (string-match-p my/gptel--transient-http-400-patterns error-msg))
         (and (listp error-data)
              (stringp error-msg)
+             (not (memq status '(401 403)))
              (string-match-p my/gptel--transient-error-message-patterns
                              (downcase error-msg))))))
 
