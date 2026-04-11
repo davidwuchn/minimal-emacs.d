@@ -5043,8 +5043,8 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                 (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run"))
                               ;; The outer experiment loop owns max-exp and will
                               ;; adapt or stop early based on the shared error count.
-                              (when (>= gptel-auto-experiment--api-error-count 3)
-                               (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
+                              (when (>= gptel-auto-experiment--api-error-count gptel-auto-experiment--api-error-threshold)
+                                (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
                                         target)))
                            ;; Log the failure
                             (let ((exp-result (list :target target
