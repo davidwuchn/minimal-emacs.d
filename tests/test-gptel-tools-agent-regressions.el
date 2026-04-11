@@ -4631,6 +4631,58 @@ EXIT-CODE defaults to 1."
       (delete-directory status-dir t)
       (delete-directory fake-bin t))))
 
+(ert-deftest regression/auto-workflow/cron-wrapper-status-keeps-running-when-live-socket-refuses ()
+  "Wrapper status should preserve a live snapshot on transient connection refusal."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (tmp-root (make-temp-file "aw-tmp" t))
+         (server-dir (expand-file-name (format "emacs%d" (user-uid)) tmp-root))
+         (server-socket (expand-file-name "copilot-auto-workflow" server-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-lsof
+          (test-auto-workflow--write-shell-script "fake-lsof" "exit 0"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "TMPDIR=%s/" tmp-root))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (make-directory server-dir t)
+          (with-temp-file server-socket
+            (insert "live-socket\n"))
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "import os, sys\n"
+                    "tmpdir = os.environ.get('TMPDIR', '/tmp')\n"
+                    "path = os.path.join(tmpdir, f'emacs{os.getuid()}', 'copilot-auto-workflow')\n"
+                    "sys.stderr.write(f\"{sys.argv[0]}: can't connect to {path}: Connection refused\\n\")\n"
+                    "raise SystemExit(1)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-lsof (expand-file-name "lsof" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 5 :phase \"running\" :run-id \"2026-04-11T105552Z-80d6\" :results \"var/tmp/experiments/2026-04-11T105552Z-80d6/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
+            (should (string-match-p ":phase \"running\"" output))
+            (should (string-match-p "2026-04-11T105552Z-80d6" output)))
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running t" (buffer-string)))
+            (should (string-match-p ":phase \"running\"" (buffer-string)))
+            (should (string-match-p "2026-04-11T105552Z-80d6" (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory tmp-root t)
+      (delete-directory fake-bin t))))
+
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status-after-daemon-restart ()
   "Wrapper auto-workflow should clear stale running status when daemon is alive but idle."
   (let* ((repo-root test-auto-workflow--repo-root)
@@ -4949,6 +5001,27 @@ EXIT-CODE defaults to 1."
         (delete-file override-file))
       (when (file-exists-p bound-file)
         (delete-file bound-file)))))
+
+(ert-deftest regression/auto-workflow/persist-status-preserves-active-snapshot-from-placeholder ()
+  "Idle placeholder writes should not clobber an active persisted snapshot."
+  (let* ((status-file (make-temp-file "aw-status-live" nil ".sexp"))
+         (gptel-auto-workflow-status-file status-file)
+         (gptel-auto-workflow--run-id "2026-04-11T111457Z-a298")
+         (gptel-auto-workflow--running nil)
+         (gptel-auto-workflow--cron-job-running nil)
+         (gptel-auto-workflow--stats '(:phase "idle" :total 0 :kept 0)))
+    (unwind-protect
+        (progn
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 5 :phase \"running\" :run-id \"2026-04-11T105552Z-80d6\" :results \"var/tmp/experiments/2026-04-11T105552Z-80d6/results.tsv\")\n"))
+          (gptel-auto-workflow--persist-status)
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running t" (buffer-string)))
+            (should (string-match-p ":phase \"running\"" (buffer-string)))
+            (should (string-match-p "2026-04-11T105552Z-80d6" (buffer-string)))))
+      (when (file-exists-p status-file)
+        (delete-file status-file)))))
 
 (ert-deftest regression/auto-workflow/run-async-assigns-run-id-before-first-persist ()
   "Workflow launch should assign a run id before the first persisted snapshot."
