@@ -24,14 +24,21 @@ SUBCOMMAND="${1:-all}"
 
 run_unit_tests() {
     local PATTERN="${1:-t}"
+    local status_file
+    local messages_file
     
     section "Unit Tests (ERT)"
     
     echo "Running ERT tests (pattern: $PATTERN)..."
     echo ""
+
+    status_file="$(mktemp "${TMPDIR:-/tmp}/auto-workflow-test-status.XXXXXX.sexp")"
+    messages_file="$(mktemp "${TMPDIR:-/tmp}/auto-workflow-test-messages.XXXXXX.txt")"
     
     local output
-    output=$(emacs --batch -Q \
+    output=$(AUTO_WORKFLOW_STATUS_FILE="$status_file" \
+        AUTO_WORKFLOW_MESSAGES_FILE="$messages_file" \
+        emacs --batch -Q \
         -L "$DIR" \
         -L "$DIR/lisp" \
         -L "$DIR/lisp/modules" \
@@ -45,6 +52,7 @@ run_unit_tests() {
         --eval "(when (and (boundp 'native-comp-enable-subr-trampolines) native-comp-enable-subr-trampolines (fboundp 'comp-subr-trampoline-install) (fboundp 'subr-primitive-p)) (mapc (lambda (fn) (and (fboundp fn) (subr-primitive-p (symbol-function fn)) (comp-subr-trampoline-install fn))) (quote (file-exists-p file-executable-p call-process kill-buffer message directory-files require featurep process-list process-name system-name))))" \
         $(find tests -name "test-*.el" -exec echo "-l {}" \;) \
         --eval "(ert-run-tests-batch-and-exit \"$PATTERN\")" 2>&1) || true
+    rm -f "$status_file" "$messages_file"
     
     grep -E "FAILED|unexpected|0 unexpected" <<< "$output" | head -30
     if [ -z "$(grep -E "FAILED|unexpected" <<< "$output")" ]; then

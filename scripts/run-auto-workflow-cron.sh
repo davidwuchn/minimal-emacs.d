@@ -119,9 +119,37 @@ run_emacsclient_eval() {
     local timeout="${2:-10}"
     python3 - "$EMACSCLIENT" "$SERVER_NAME" "$elisp" "$timeout" <<'PY'
 import subprocess
+import os
+import shutil
 import sys
+import tempfile
+from pathlib import Path
 
 emacsclient, server_name, elisp, timeout = sys.argv[1], sys.argv[2], sys.argv[3], float(sys.argv[4])
+
+def server_socket_path():
+    tmpdir = os.environ.get("TMPDIR") or tempfile.gettempdir()
+    return Path(tmpdir) / f"emacs{os.getuid()}" / server_name
+
+def socket_has_owner():
+    socket_path = server_socket_path()
+    if not socket_path.exists():
+        return False
+    lsof = shutil.which("lsof")
+    if not lsof:
+        return True
+    try:
+        probe = subprocess.run(
+            [lsof, str(socket_path)],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return True
+    return probe.returncode == 0
+
 try:
     proc = subprocess.run(
         [emacsclient, "-a", "false", "-s", server_name, "--eval", elisp],
@@ -143,6 +171,15 @@ busy_markers = (
 )
 stderr_text = proc.stderr or ""
 if proc.returncode != 0 and any(marker in stderr_text for marker in busy_markers):
+    if proc.stdout:
+        sys.stdout.write(proc.stdout)
+    if proc.stderr:
+        sys.stderr.write(proc.stderr)
+    raise SystemExit(124)
+
+if (proc.returncode != 0
+        and "Connection refused" in stderr_text
+        and socket_has_owner()):
     if proc.stdout:
         sys.stdout.write(proc.stdout)
     if proc.stderr:
