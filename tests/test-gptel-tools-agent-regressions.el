@@ -2258,6 +2258,41 @@ EXIT-CODE defaults to 1."
         (when (buffer-live-p request-buf)
           (kill-buffer request-buf))))))
 
+(ert-deftest regression/subagent/request-buffer-registration-prefers-routed-buffer ()
+  "Generic fallback buffers should not overwrite a routed workflow request buffer."
+  (clrhash my/gptel--agent-task-state)
+  (let* ((task-id 17)
+         (activity-dir "/tmp/worktree/")
+         (routed-buf (generate-new-buffer "*gptel-agent:cache-riven-exp2@test*"))
+         (generic-buf (generate-new-buffer "*scratch*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer routed-buf
+            (setq default-directory activity-dir))
+          (with-current-buffer generic-buf
+            (setq default-directory "/Users/davidwu/.emacs.d/"))
+          (puthash task-id
+                   (list :done nil
+                         :origin-buf generic-buf
+                         :request-buf nil
+                         :activity-dir activity-dir)
+                   my/gptel--agent-task-state)
+          (let ((my/gptel--current-agent-task-id task-id))
+            (my/gptel--register-agent-task-buffer generic-buf)
+            (should (eq (plist-get (gethash task-id my/gptel--agent-task-state) :request-buf)
+                        generic-buf))
+            (my/gptel--register-agent-task-buffer routed-buf)
+            (should (eq (plist-get (gethash task-id my/gptel--agent-task-state) :request-buf)
+                        routed-buf))
+            (my/gptel--register-agent-task-buffer generic-buf)
+            (should (eq (plist-get (gethash task-id my/gptel--agent-task-state) :request-buf)
+                        routed-buf))))
+      (remhash task-id my/gptel--agent-task-state)
+      (when (buffer-live-p routed-buf)
+        (kill-buffer routed-buf))
+      (when (buffer-live-p generic-buf)
+        (kill-buffer generic-buf)))))
+
 (ert-deftest regression/subagent/request-buffer-activity-rearms-timeout ()
   "Request-buffer activity should reset the inactivity timeout window."
   (let ((my/gptel-agent-task-timeout 42)

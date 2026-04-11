@@ -1309,6 +1309,29 @@ Dynamic variable, let-bound around gptel-agent--task calls.")
      ((buffer-live-p request-buf) request-buf)
      ((buffer-live-p origin-buf) origin-buf))))
 
+(defun my/gptel--agent-task-buffer-priority (state buffer)
+  "Return a relative priority for tracking BUFFER in STATE.
+Routed worktree agent buffers outrank generic fallback buffers like
+`*scratch*' so later low-fidelity registrations cannot clobber the real
+request buffer for an active workflow task."
+  (if (not (buffer-live-p buffer))
+      0
+    (let* ((buffer-name (buffer-name buffer))
+           (activity-dir (plist-get state :activity-dir))
+           (buffer-dir (with-current-buffer buffer
+                         (and (stringp default-directory)
+                              (expand-file-name default-directory))))
+           (in-activity-dir (and (stringp activity-dir)
+                                 (stringp buffer-dir)
+                                 (my/gptel--path-within-directory-p
+                                  buffer-dir activity-dir)))
+           (agent-buffer-p (string-prefix-p "*gptel-agent:" buffer-name)))
+      (cond
+       ((and agent-buffer-p in-activity-dir) 4)
+       (in-activity-dir 3)
+       (agent-buffer-p 2)
+       (t 1)))))
+
 (defun my/gptel--workflow-owned-worktree-root (dir)
   "Return the known workflow-owned worktree root containing DIR, or nil."
   (when (stringp dir)
@@ -1460,9 +1483,15 @@ TIMESTAMP defaults to `current-time'."
              (buffer-live-p buffer))
     (when-let* ((state (gethash my/gptel--current-agent-task-id
                                 my/gptel--agent-task-state)))
-      (puthash my/gptel--current-agent-task-id
-               (plist-put state :request-buf buffer)
-               my/gptel--agent-task-state)))
+      (let* ((current (plist-get state :request-buf))
+             (current-priority (my/gptel--agent-task-buffer-priority state current))
+             (new-priority (my/gptel--agent-task-buffer-priority state buffer)))
+        (when (or (not (buffer-live-p current))
+                  (eq current buffer)
+                  (> new-priority current-priority))
+          (puthash my/gptel--current-agent-task-id
+                   (plist-put state :request-buf buffer)
+                   my/gptel--agent-task-state)))))
   buffer)
 
 (defun my/gptel--reset-agent-task-state ()
