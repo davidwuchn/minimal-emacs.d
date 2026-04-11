@@ -140,7 +140,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
     (let* ((data (plist-get info :data))
            (messages (and data (plist-get data :messages)))
            (retries (or retry-count (plist-get info :retries) 1))
-           (keep (max 0 (- my/gptel-retry-keep-recent-tool-results retries)))
+           (keep (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries)))
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0)
            (bytes-saved 0))
@@ -357,21 +357,15 @@ Returns the number of image parts removed, or 0 if nothing was done."
                (content (plist-get msg :content)))
           (when (and content (sequencep content) (not (stringp content)) (> (length content) 0))
             (let* ((original-length (length content))
+                   (image-p
+                    (lambda (part)
+                      (and (listp part)
+                           (equal (plist-get part :type) "image_url")
+                           (cl-incf removed))))
                    (filtered
                     (if (vectorp content)
-                        (vconcat
-                         (cl-remove-if
-                          (lambda (part)
-                            (and (listp part)
-                                 (equal (plist-get part :type) "image_url")
-                                 (cl-incf removed)))
-                          content))
-                      (cl-remove-if
-                       (lambda (part)
-                         (and (listp part)
-                              (equal (plist-get part :type) "image_url")
-                              (cl-incf removed)))
-                       content))))
+                        (vconcat (cl-remove-if image-p content))
+                      (cl-remove-if image-p content))))
               (when (< (length filtered) original-length)
                 (plist-put msg :content filtered)))))))
     removed))
@@ -440,6 +434,7 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
              (string-match-p my/gptel--transient-http-400-patterns error-msg))
         (and (listp error-data)
              (stringp error-msg)
+             (not (memq status '(401 403)))
              (string-match-p my/gptel--transient-error-message-patterns
                              (downcase error-msg))))))
 
