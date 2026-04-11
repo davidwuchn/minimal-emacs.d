@@ -1437,7 +1437,21 @@ EXIT-CODE defaults to 1."
   "Transient usage-limit errors should stay retryable for executor runs."
   (should-not
    (gptel-auto-experiment--hard-quota-exhausted-p
-    "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")))
+     "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")))
+
+(ert-deftest regression/auto-experiment/webclient-server-error-is-retryable ()
+  "Provider WebClientRequestException failures should stay on the retry path."
+  (should
+   (gptel-auto-experiment--is-retryable-error-p
+    "Error: Task executor could not finish task \"x\". Error details: (:code \"system_error\" :message \"org.springframework.web.reactive.function.client.WebClientRequestException\" :param :null :type \"server_error\")")))
+
+(ert-deftest regression/auto-experiment/webclient-server-error-categorizes-as-api-error ()
+  "Provider WebClientRequestException failures should not be tagged as tool errors."
+  (should
+   (equal
+    (gptel-auto-experiment--categorize-error
+     "Error: Task executor could not finish task \"x\". Error details: (:code \"system_error\" :message \"org.springframework.web.reactive.function.client.WebClientRequestException\" :param :null :type \"server_error\")")
+    '(:api-error . "Provider server error"))))
 
 (ert-deftest regression/auto-workflow/headless-subagent-provider-override-prefers-available-fallback ()
   "Headless workflow subagents should move off MiniMax when a fallback is available."
@@ -1648,6 +1662,42 @@ EXIT-CODE defaults to 1."
        (should-not gptel-auto-experiment--quota-exhausted)
        (should (equal (plist-get final-result :agent-output)
                       "Executor result for task: retry success")))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-retries-webclient-server-errors ()
+  "Provider WebClientRequestException failures should stay on the retry path."
+  (let ((runs 0)
+        (scheduled-retries 0)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-experiment--quota-exhausted nil)
+        (server-error
+         "Error: Task executor could not finish task \"x\". Error details: (:code \"system_error\" :message \"org.springframework.web.reactive.function.client.WebClientRequestException\" :param :null :type \"server_error\")"))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+                 (cl-incf runs)
+                 (funcall callback
+                          (if (= runs 1)
+                              (list :agent-output server-error
+                                    :comparator-reason ":tool-error")
+                            (list :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (cl-incf scheduled-retries)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-auto-workflow-strategic.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 2))
+      (should (= scheduled-retries 1))
+      (should-not gptel-auto-experiment--quota-exhausted)
+      (should (equal (plist-get final-result :agent-output)
+                     "Executor result for task: retry success")))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-backs-off-rate-limits ()
   "Rate-limit retries should increase delay instead of hammering the provider."
