@@ -3760,6 +3760,12 @@ EXIT-CODE defaults to 1."
    (gptel-auto-workflow--review-approved-p
     "Reviewer result for task: Review changes before merge | I need to verify the actual file contents before reviewing. Let me read the relevant section.I cannot access the file directly. However, I can analyze the diff provided. | ## Analysis of Diff | **APPROVED** | ### Summary | The diff improves type safety.")))
 
+(ert-deftest regression/auto-workflow/review-retryable-error-ignores-approved-review-output ()
+  "Approved reviewer output should not be treated as a retryable failure."
+  (should-not
+   (gptel-auto-workflow--review-retryable-error-p
+    "Reviewer result for task: Review changes before merge\nAPPROVED\n## Summary\nNo correctness errors found and no failed checks were introduced.")))
+
 (ert-deftest regression/auto-workflow/review-diff-content-uses-tip-commit-only ()
   "Review diff should match the exact tip commit that staging merge cherry-picks."
   (let (commands)
@@ -4839,6 +4845,20 @@ EXIT-CODE defaults to 1."
      "UNVERIFIED - explorer evidence did not meet verification contract")
     (should (= (hash-table-count my/gptel--subagent-cache) 0))
     (should-not (my/gptel--subagent-cache-get "reviewer" "prompt"))))
+
+(ert-deftest regression/subagent-cache/stores-approved-reviewer-output-with-error-words ()
+  "Approved reviewer output should remain cacheable even if it mentions errors."
+  (let ((my/gptel-subagent-cache-ttl 300)
+        (my/gptel--subagent-cache (make-hash-table :test 'equal))
+        (review-output
+         "Reviewer result for task: Review changes before merge\nAPPROVED\n## Summary\nNo correctness errors found and no failed checks were introduced."))
+    (my/gptel--subagent-cache-put
+     "reviewer"
+     "prompt"
+     review-output)
+    (should (= (hash-table-count my/gptel--subagent-cache) 1))
+    (should (equal (my/gptel--subagent-cache-get "reviewer" "prompt")
+                   review-output))))
 
 (ert-deftest regression/subagent-cache/purges-legacy-retryable-reviewer-cache-entry ()
   "Cache reads should evict already-cached retryable reviewer failures."

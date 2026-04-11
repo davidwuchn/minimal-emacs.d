@@ -3248,7 +3248,8 @@ If `gptel-auto-workflow-research-before-fix' is nil, executor handles directly."
 
 This covers transient transport/provider failures plus contract failures where
 the reviewer admits it could not verify the diff or locate the relevant file."
-  (when (stringp review-output)
+  (when (and (stringp review-output)
+             (not (gptel-auto-workflow--review-approved-p review-output)))
     (let ((case-fold-search t))
       (or (memq (car (gptel-auto-experiment--categorize-error review-output))
                 '(:api-rate-limit :api-error :timeout))
