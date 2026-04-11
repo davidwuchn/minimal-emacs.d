@@ -5910,8 +5910,7 @@ ACTION is a short description used in the failure message."
                (gptel-auto-workflow--git-result cmd timeout)))
     (cond
      ((= exit-code 0) t)
-     ((and (gptel-auto-workflow--empty-commit-output-p output)
-           (string-empty-p (gptel-auto-workflow--git-cmd "git status --short" 60)))
+     ((gptel-auto-workflow--empty-commit-output-p output)
       (message "[auto-workflow] %s already captured (nothing new to commit)" action)
       t)
      (t
