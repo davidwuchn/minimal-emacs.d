@@ -618,7 +618,7 @@ Calls CALLBACK with comprehensive comparison report."
                                          results-a results-b))))
          (funcall callback report))))))
 
-(defun gptel-benchmark--extract-scores (results)
+(defun gptel-benchmark--extract-overall-scores (results)
   "Extract overall scores from RESULTS list.
 Handles both plist and cons cell formats."
   (mapcar (lambda (r)
@@ -628,8 +628,8 @@ Handles both plist and cons cell formats."
 (defun gptel-benchmark--statistical-significance (results-a results-b)
   "Calculate basic statistical significance between RESULTS-A and RESULTS-B.
 Returns plist with :significant and :confidence."
-  (let* ((scores-a (gptel-benchmark--extract-scores results-a))
-         (scores-b (gptel-benchmark--extract-scores results-b))
+  (let* ((scores-a (gptel-benchmark--extract-overall-scores results-a))
+         (scores-b (gptel-benchmark--extract-overall-scores results-b))
          (mean-a (if scores-a (/ (apply #'+ scores-a) (length scores-a)) 0))
          (mean-b (if scores-b (/ (apply #'+ scores-b) (length scores-b)) 0))
          (diff (abs (- mean-a mean-b))))
