@@ -3312,24 +3312,18 @@ Uses the staging worktree instead of switching branches in the root repo."
     (message "[auto-workflow] Cherry-picking %s to %s" optimize-branch staging)
     (if (not (gptel-auto-workflow--ensure-staging-branch-exists))
         nil
-      (if (not optimize-ref)
-          (progn
-            (message "[auto-workflow] Missing merge source branch: %s" optimize-branch)
-            nil)
-        (gptel-auto-workflow--with-staging-worktree
-         (lambda ()
-           (let* ((remote-staging (format "origin/%s" staging))
-                  (reset-target (if (= 0 (cdr (gptel-auto-workflow--git-result
-                                                (format "git rev-parse --verify %s"
-                                                        (shell-quote-argument remote-staging))
-                                                60)))
-                                    remote-staging
-                                  staging)))
-             (if (not (gptel-auto-workflow--prepare-staging-merge-base reset-target))
-                 nil
-                (let* ((commit-hash (string-trim
-                                     (car (gptel-auto-workflow--git-result
-                                           (format "git rev-parse %s"
+         (if (not optimize-ref)
+             (progn
+               (message "[auto-workflow] Missing merge source branch: %s" optimize-branch)
+               nil)
+         (gptel-auto-workflow--with-staging-worktree
+          (lambda ()
+            (let ((reset-target staging))
+              (if (not (gptel-auto-workflow--prepare-staging-merge-base reset-target))
+                  nil
+                 (let* ((commit-hash (string-trim
+                                      (car (gptel-auto-workflow--git-result
+                                            (format "git rev-parse %s"
                                                    (shell-quote-argument optimize-ref))
                                            60))))
                       (cherry-result
