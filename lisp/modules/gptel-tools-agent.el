@@ -4496,6 +4496,25 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
          (gptel-auto-experiment--finish-grade
           grade-id callback (list :score 100 :passed t) t)))))
 
+(defun gptel-auto-experiment--parse-comparator-winner (response)
+  "Return comparator winner token parsed from RESPONSE, or nil."
+  (when (stringp response)
+    (let ((case-fold-search t))
+      (cond
+       ((string-match "^\\s-*A\\b" response) "A")
+       ((string-match "^\\s-*B\\b" response) "B")
+       ((string-match "^\\s-*tie\\b" response) "tie")))))
+
+(defun gptel-auto-experiment--expected-comparator-winner (combined-before combined-after &optional threshold)
+  "Return the winner implied by COMBINED-BEFORE vs COMBINED-AFTER.
+THRESHOLD defaults to 0.005 and matches the comparator prompt rules."
+  (let* ((decision-threshold (or threshold 0.005))
+         (combined-delta (- combined-after combined-before)))
+    (cond
+     ((>= combined-delta decision-threshold) "B")
+     ((<= combined-delta (- decision-threshold)) "A")
+     (t "tie"))))
+
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
 CALLBACK receives keep/discard decision with reasoning.
@@ -4508,7 +4527,11 @@ The comparator subagent overlay will appear in the current buffer at time of cal
          (quality-before (gptel-auto-workflow--plist-get before :code-quality 0.5))
          (quality-after (gptel-auto-workflow--plist-get after :code-quality 0.5))
          (combined-before (+ (* 0.6 score-before) (* 0.4 quality-before)))
-         (combined-after (+ (* 0.6 score-after) (* 0.4 quality-after))))
+         (combined-after (+ (* 0.6 score-after) (* 0.4 quality-after)))
+         (decision-threshold 0.005)
+         (expected-winner
+          (gptel-auto-experiment--expected-comparator-winner
+           combined-before combined-after decision-threshold)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (let ((compare-prompt (format "Compare these two experiment results and decide which is better.
@@ -4525,36 +4548,42 @@ RESULT B (after):
 
 DECISION CRITERIA:
 - Combined score = 60%% Eight Keys + 40%% Code Quality
-- B should win if combined score improved by ≥0.005
-- A should win if combined score decreased by ≥0.005
-- Tie if difference < 0.005
+- B should win if combined score improved by ≥%.3f
+- A should win if combined score decreased by ≥%.3f
+- Tie if difference < %.3f
 
 Output ONLY a single line: \"A\" or \"B\" or \"tie\"
 
 Then on a new line, briefly explain why (1 sentence)."
-                                      score-before quality-before combined-before
-                                      score-after quality-after combined-after)))
+                                       score-before quality-before combined-before
+                                       score-after quality-after combined-after
+                                       decision-threshold
+                                       decision-threshold
+                                       decision-threshold)))
           (with-current-buffer decide-buffer
             (gptel-benchmark-call-subagent
              'comparator
              "Compare experiment results"
              compare-prompt
              (lambda (result)
-               (let* ((response (if (stringp result) result (format "%S" result)))
-                      (winner (cond
-                               ((string-match "^\\s-*A\\b" response) "A")
-                               ((string-match "^\\s-*B\\b" response) "B")
-                               ((string-match "^\\s-*tie\\b" response) "tie")
-                               (t "B")))
-                      (keep (string= winner "B")))
-                 (funcall callback
-                          (list :keep keep
-                                :reasoning (format "Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                                   winner score-before score-after
-                                                   quality-before quality-after
-                                                   combined-before combined-after)
-                                :improvement (list :score (- score-after score-before)
-                                                   :quality (- quality-after quality-before)
+                (let* ((response (if (stringp result) result (format "%S" result)))
+                       (reported-winner (or (gptel-auto-experiment--parse-comparator-winner response)
+                                            "unparsed"))
+                       (winner expected-winner)
+                       (override (not (string= reported-winner expected-winner)))
+                       (keep (string= winner "B")))
+                  (funcall callback
+                           (list :keep keep
+                                 :reasoning (format "%sWinner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
+                                                    (if override
+                                                        (format "Comparator override: %s -> %s | "
+                                                                reported-winner winner)
+                                                      "")
+                                                    winner score-before score-after
+                                                    quality-before quality-after
+                                                    combined-before combined-after)
+                                 :improvement (list :score (- score-after score-before)
+                                                    :quality (- quality-after quality-before)
                                                    :combined (- combined-after combined-before)))))))))
       (let ((keep (>= (- combined-after combined-before) 0.005)))
         (funcall callback

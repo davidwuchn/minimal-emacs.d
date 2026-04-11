@@ -301,11 +301,50 @@ EXIT-CODE defaults to 1."
       (should (equal (nreverse agent-calls)
                      '((researcher "Research fix approach")
                        (executor "Apply researched fixes"))))
-      (should (equal (nreverse git-calls)
-                     '(("add" "-A")
-                       ("commit" "-m" "fix: address review issues"))))
-      (should-not (car callback-result))
-      (should (equal (cdr callback-result) "Applied researched fix")))))
+       (should (equal (nreverse git-calls)
+                      '(("add" "-A")
+                        ("commit" "-m" "fix: address review issues"))))
+       (should-not (car callback-result))
+       (should (equal (cdr callback-result) "Applied researched fix")))))
+
+(ert-deftest regression/auto-experiment/decide-overrides-llm-regression-winner ()
+  "Comparator should not keep a candidate that numerically regresses."
+  (let ((gptel-auto-experiment-use-subagents t)
+        decision)
+    (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional _timeout)
+                 (funcall callback "B\nAfter is better."))))
+      (with-temp-buffer
+        (gptel-auto-experiment-decide
+         '(:score 0.44 :code-quality 0.93)
+         '(:score 0.40 :code-quality 0.93)
+         (lambda (result)
+           (setq decision result)))))
+    (should decision)
+    (should-not (plist-get decision :keep))
+    (should (< (plist-get (plist-get decision :improvement) :score) 0))
+    (should (= (plist-get (plist-get decision :improvement) :quality) 0))
+    (should (< (plist-get (plist-get decision :improvement) :combined) 0))
+    (should (string-match-p "Comparator override: B -> A" (plist-get decision :reasoning)))
+    (should (string-match-p "Winner: A" (plist-get decision :reasoning)))))
+
+(ert-deftest regression/auto-experiment/decide-uses-numeric-rule-for-unparseable-output ()
+  "Comparator should fall back to numeric decision rules on malformed output."
+  (let ((gptel-auto-experiment-use-subagents t)
+        decision)
+    (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional _timeout)
+                 (funcall callback "I refuse to choose."))))
+      (with-temp-buffer
+        (gptel-auto-experiment-decide
+         '(:score 0.40 :code-quality 0.77)
+         '(:score 0.42 :code-quality 0.93)
+         (lambda (result)
+           (setq decision result)))))
+    (should decision)
+    (should (plist-get decision :keep))
+    (should (string-match-p "Comparator override: unparsed -> B" (plist-get decision :reasoning)))
+    (should (string-match-p "Winner: B" (plist-get decision :reasoning)))))
 
 (ert-deftest regression/auto-experiment/grade-late-timeout-is-ignored ()
   "Successful grading should suppress any later timeout callback."
