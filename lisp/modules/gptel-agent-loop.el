@@ -275,22 +275,28 @@ When CACHE-RESULT is non-nil, cache the delivered string first.
 Guards against delivering to a killed parent buffer by checking
 `gptel-agent-loop--task-parent-buffer' and
 `gptel-agent-loop--task-tracking-marker'."
-  (unless (gptel-agent-loop--task-finished state)
-    (setf (gptel-agent-loop--task-finished state) t)
-    (gptel-agent-loop--cleanup-state state)
-    ;; Clean up marker to allow GC. Check if still live first.
-    (let ((marker (gptel-agent-loop--task-tracking-marker state)))
-      (when (and marker (markerp marker))
-        (if (marker-buffer marker)
-            (set-marker marker nil)  ; Detach from buffer, allow GC
-          (message "[RunAgent] Warning: tracking marker no longer live"))
-        (setf (gptel-agent-loop--task-tracking-marker state) nil)))
-    (when cache-result
-      (gptel-agent-loop--maybe-cache-put state result))
-    (if (fboundp 'my/gptel--deliver-subagent-result)
-        (my/gptel--deliver-subagent-result
-         (gptel-agent-loop--task-main-cb state) result)
-      (funcall (gptel-agent-loop--task-main-cb state) result))))
+  (cl-block gptel-agent-loop--deliver-result
+    (unless (and state result (gptel-agent-loop--task-main-cb state))
+    (message "[RunAgent] Error: Invalid args to deliver-result, dropping: %s"
+             (if (stringp result)
+                 (substring result 0 (min 50 (length result)))
+               result))
+    (cl-return-from gptel-agent-loop--deliver-result))
+  (let ((main-cb (gptel-agent-loop--task-main-cb state)))
+    (unless (gptel-agent-loop--task-finished state)
+      (setf (gptel-agent-loop--task-finished state) t)
+      (gptel-agent-loop--cleanup-state state)
+      (let ((marker (gptel-agent-loop--task-tracking-marker state)))
+        (when (and marker (markerp marker))
+          (if (marker-buffer marker)
+              (set-marker marker nil)
+            (message "[RunAgent] Warning: tracking marker no longer live"))
+          (setf (gptel-agent-loop--task-tracking-marker state) nil)))
+      (when cache-result
+        (gptel-agent-loop--maybe-cache-put state result))
+      (if (fboundp 'my/gptel--deliver-subagent-result)
+          (my/gptel--deliver-subagent-result main-cb result)
+        (funcall main-cb result))))))
 
 (defun gptel-agent-loop--deliver-aborted (state)
   "Deliver timeout/abort result for STATE once."
@@ -336,9 +342,10 @@ a RunAgent task has finished successfully.")
 
 (defun gptel-agent-loop--seems-complete-p (resp)
   "Return non-nil when RESP looks like a completion message."
-  (let ((lower-resp (downcase resp)))
-    (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
-             gptel-agent-loop--completion-patterns)))
+  (and (stringp resp)
+       (let ((lower-resp (downcase resp)))
+         (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
+                  gptel-agent-loop--completion-patterns))))
 
 (defconst gptel-agent-loop--turn-skipped-pattern
   "gptel: turn skipped\\|all tool calls.*malformed"
@@ -348,8 +355,9 @@ gptel skipped a turn due to malformed tool calls.")
 
 (defun gptel-agent-loop--turn-skipped-p (resp)
   "Return non-nil when RESP matches malformed-tool skip output."
-  (let ((lower-resp (downcase resp)))
-    (string-match-p gptel-agent-loop--turn-skipped-pattern lower-resp)))
+  (and (stringp resp)
+       (let ((lower-resp (downcase resp)))
+         (string-match-p gptel-agent-loop--turn-skipped-pattern lower-resp))))
 
 (defconst gptel-agent-loop--planning-patterns
   '("\\blet me\\b"
@@ -369,8 +377,9 @@ when the model is talking about doing work but hasn't called tools.")
   "Return non-nil when RESP looks like planning text without tool calls.
 Detects common patterns where model talks about doing work
 but didn't call tools."
-  (let ((lower-resp (downcase resp)))
-    (and (>= (length resp) 30)
+  (and (stringp resp)
+       (>= (length resp) 30)
+       (let ((lower-resp (downcase resp)))
          (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
                   gptel-agent-loop--planning-patterns))))
 
@@ -388,9 +397,10 @@ when the model is concluding rather than planning more work.")
   "Return non-nil when RESP looks like model is about to finish.
 Detects patterns indicating the model is wrapping up,
 not planning more work."
-  (let ((lower-resp (downcase resp)))
-    (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
-             gptel-agent-loop--finishing-patterns)))
+  (and (stringp resp)
+       (let ((lower-resp (downcase resp)))
+         (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
+                  gptel-agent-loop--finishing-patterns))))
 
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP.
@@ -399,6 +409,7 @@ planning without action.  Also checks continuation count
 limit for early exit."
   (let ((cont-count (or (gptel-agent-loop--task-continuation-count state) 0)))
     (and gptel-agent-loop-force-completion
+         gptel-agent-loop-hard-loop
          (< cont-count gptel-agent-loop-max-continuations)
          (not (gptel-agent-loop--seems-complete-p resp))
          (not (gptel-agent-loop--looks-like-finishing-p resp))
@@ -634,13 +645,14 @@ Cache behavior:
                                     (when (buffer-live-p (plist-get fsm-info :buffer))
                                      (plist-get fsm-info :buffer))
                                    (current-buffer)))
-                   (where (or (let ((tm (gptel-agent-loop--task-tracking-marker state)))
-                                (and (markerp tm) (marker-position tm) tm))
-                              (let ((tm (plist-get fsm-info :tracking-marker)))
-                                (and (markerp tm) (marker-position tm) tm))
-                              (let ((pos (plist-get fsm-info :position)))
-                                (and (markerp pos) (marker-position pos) pos))
-                              (with-current-buffer parent-buf (point-marker))))
+                   (where (or
+                           (let ((tm (gptel-agent-loop--task-tracking-marker state)))
+                             (and (markerp tm) (marker-position tm) tm))
+                           (let ((tm (plist-get fsm-info :tracking-marker)))
+                             (and (markerp tm) (marker-position tm) tm))
+                           (let ((pos (plist-get fsm-info :position)))
+                             (and (markerp pos) (marker-position pos) pos))
+                           (with-current-buffer parent-buf (point-marker))))
                    (tracking-marker
                     (or (gptel-agent-loop--task-tracking-marker state)
                         ;; If where is already in parent-buf, use it directly.

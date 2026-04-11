@@ -97,7 +97,7 @@ for byte-level operations (~3.5 bytes/token)."
   :type 'integer
   :group 'gptel)
 
-(defun my/gptel--trim-tool-results-for-retry (info &optional retry-count)
+(defun my/gptel--trim-tool-results-for-retry (info &optional retry-count force-trim-p)
   "Trim old tool-result content in INFO's :data :messages to reduce payload.
 
 Progressive trimming: on each successive retry, fewer tool results are kept
@@ -117,8 +117,13 @@ while progressively reducing payload size on successive retries.
 If `my/gptel-trim-min-bytes' is non-zero, trimming only proceeds when
 the byte savings would meet or exceed that threshold.
 
+FORCE-TRIM-P, when non-nil, bypasses the `my/gptel-retry-keep-recent-tool-results'
+nil check. Used by compaction passes to ensure trimming occurs even if the user
+has disabled retry trimming (nil). This allows pre-send compaction to work
+independently of retry settings.
+
 Returns the number of messages truncated, or 0 if nothing was done."
-  (if (null my/gptel-retry-keep-recent-tool-results)
+  (if (and (null my/gptel-retry-keep-recent-tool-results) (null force-trim-p))
       0
     (let* ((data (plist-get info :data))
            (messages (and data (plist-get data :messages)))
@@ -312,13 +317,10 @@ Returns the number of messages truncated, or 0 if nothing was done."
   "Collect indices of messages in MESSAGES vector matching PREDICATE.
 PREDICATE is a function that takes a message plist and returns non-nil if it matches.
 Returns a list of indices in ascending order."
-  (let ((indices '()))
-    (when (and messages (> (length messages) 0))
-      (dotimes (i (length messages))
-        (let ((msg (aref messages i)))
-          (when (funcall predicate msg)
-            (push i indices))))
-      (nreverse indices))))
+  (when (and messages (> (length messages) 0))
+    (cl-loop for i below (length messages)
+             when (funcall predicate (aref messages i))
+             collect i)))
 
 (defun my/gptel--strip-images-from-messages (info)
   "Strip image content from all messages in INFO to reduce payload.
@@ -342,23 +344,16 @@ Returns the number of image parts removed, or 0 if nothing was done."
                (content (plist-get msg :content)))
           (when (and content (sequencep content) (not (stringp content)) (> (length content) 0))
             (let* ((original-length (length content))
+                   (image-p (lambda (part)
+                              (and (listp part)
+                                   (equal (plist-get part :type) "image_url"))))
                    (filtered
                     (if (vectorp content)
-                        (vconcat
-                         (cl-remove-if
-                          (lambda (part)
-                            (and (listp part)
-                                 (equal (plist-get part :type) "image_url")
-                                 (cl-incf removed)))
-                          content))
-                      (cl-remove-if
-                       (lambda (part)
-                         (and (listp part)
-                              (equal (plist-get part :type) "image_url")
-                              (cl-incf removed)))
-                       content))))
+                        (vconcat (cl-remove-if image-p content))
+                      (cl-remove-if image-p content))))
               (when (< (length filtered) original-length)
-                (plist-put msg :content filtered)))))))
+                (plist-put msg :content filtered)
+                (cl-incf removed (length (cl-remove-if-not image-p (append content nil))))))))))
     removed))
 
 ;; --- Constants for Transient Error Detection ---
@@ -524,9 +519,9 @@ TEST: Verify with network failure simulation — should retry 3 times with
              (not subagent-p)
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
              (my/gptel--transient-error-p error-data http-status))
-        (let* ((base-delay 4.0)
-               (factor 2.0)
-               (delay (min 30.0 (* base-delay (expt factor retries))))
+        (let* ((delay (min my/gptel--retry-max-delay
+                            (* my/gptel--retry-base-delay
+                               (expt my/gptel--retry-backoff-factor retries))))
                (error-msg (my/gptel--format-error-message error-data http-status)))
           (if my/gptel-max-retries
               (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..."
@@ -722,7 +717,7 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
                    (or my/gptel-retry-keep-recent-tool-results 2)))
               (my/gptel--run-compaction-pass
                info 1 limit 'bytes 'trimmed-total 'pass
-               (lambda (i) (my/gptel--trim-tool-results-for-retry i 1))
+               (lambda (i) (my/gptel--trim-tool-results-for-retry i 1 t))
                "gptel: Pass 1: trimmed %d tool result(s), now %dKB")
               (my/gptel--run-compaction-pass
                info 2 limit 'bytes 'trimmed-total 'pass
@@ -739,7 +734,7 @@ TEST: Create payload >200KB, verify compaction runs and reduces size.
                "gptel: Pass 4: trimmed %d context image(s), now %dKB")
               (my/gptel--run-compaction-pass
                info 5 limit 'bytes 'trimmed-total 'pass
-               (lambda (i) (my/gptel--trim-tool-results-for-retry i 3))
+               (lambda (i) (my/gptel--trim-tool-results-for-retry i 3 t))
                "gptel: Pass 5: truncated %d remaining tool results, now %dKB")
               (my/gptel--run-compaction-pass
                info 6 limit 'bytes 'trimmed-total 'pass

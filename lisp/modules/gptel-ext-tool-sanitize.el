@@ -57,10 +57,11 @@ Tries: exact, case-insensitive, underscore/hyphen normalization."
 (defun my/gptel--repair-tool-call (tc correct-name)
   "Repair tool call TC to use CORRECT-NAME.
 Messages the repair and updates the :name property in place."
-  (let ((current-name (plist-get tc :name)))
-    (unless (string= current-name correct-name)
-      (message "gptel: repairing tool call %S -> %S" current-name correct-name)
-      (plist-put tc :name correct-name))))
+  (when (and (listp tc) (stringp correct-name) (> (length correct-name) 0))
+    (let ((current-name (plist-get tc :name)))
+      (when (and (stringp current-name) (not (string= current-name correct-name)))
+        (message "gptel: repairing tool call %S -> %S" current-name correct-name)
+        (plist-put tc :name correct-name)))))
 
 (defun my/gptel--sanitize-tool-calls (fsm)
   "Remove nil/unknown-named tool calls from FSM before execution.
@@ -110,7 +111,7 @@ RunAgent was registered, leaving it out of the buffer's tool list."
               (message "gptel: skipping malformed tool call \
 (name=%S, available-tools=%S)"
                        name
-                       (mapcar (lambda (ts) (gptel-tool-name ts)) tools))
+                       (mapcar (lambda (ts) (or (ignore-errors (gptel-tool-name ts)) "<unknown>")) tools))
               (plist-put tc :result
                          (format "Error: unknown or nil tool %S called by model" name))
               (push tc pruned))))))
@@ -143,11 +144,12 @@ AND the same arguments count; different tools or different args do not."
   "Return a fingerprint string for tool call TC.
 The fingerprint is \"NAME:MD5(ARGS)\" so two calls are considered identical
 only when both the tool name and the serialized argument plist match."
-  (let* ((raw-name (plist-get tc :name))
-         (name (if (and raw-name (not (equal raw-name ""))) raw-name "nil"))
-         (args (plist-get tc :args))
-         (args-str (if args (format "%S" args) "nil")))
-    (concat name ":" (md5 args-str))))
+  (when (listp tc)
+    (let* ((raw-name (plist-get tc :name))
+           (name (if (and raw-name (not (equal raw-name ""))) raw-name "nil"))
+           (args (plist-get tc :args))
+           (args-str (if args (format "%S" args) "nil")))
+      (concat name ":" (md5 args-str)))))
 
 (cl-defun my/gptel--detect-doom-loop (fsm)
   "Abort FSM when the same tool call repeats `my/gptel-doom-loop-threshold' times.
@@ -163,22 +165,27 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
         (when tool-use
           (let* ((fps (or (plist-get info :doom-loop-fingerprints) '()))
                  (new-fps (mapcar #'my/gptel--tool-call-fingerprint tool-use))
-                 (fps (append fps new-fps)))
-            (plist-put info :doom-loop-fingerprints fps)
+                 (n my/gptel-doom-loop-threshold)
+                 (fps-end (last fps))
+                 (prev-fp (car fps-end)))
+            (plist-put info :doom-loop-fingerprints (append fps new-fps))
             (dolist (fp new-fps)
-              (let* ((n my/gptel-doom-loop-threshold)
-                     (tail (reverse fps))
-                     (run (length (seq-take-while (lambda (f) (equal f fp)) tail))))
-                (when (>= run n)
+              (let ((current-run
+                     (if (and prev-fp (equal prev-fp fp))
+                         (1+ (or (get 'doom-loop :current-run) 0))
+                       1)))
+                (put 'doom-loop :current-run current-run)
+                (when (>= current-run n)
                   (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
-                           (car (split-string fp ":")) run)
+                           (car (split-string fp ":" t)) run)
                   (funcall (plist-get info :callback)
                            (format "gptel: doom-loop aborted — tool \"%s\" called %d consecutive times \
 with identical arguments.  Try a different approach or break the task into smaller steps."
-                                   (car (split-string fp ":")) run)
+                                   (car (split-string fp ":" t)) run)
                            info)
                   (gptel--fsm-transition fsm 'DONE)
-                  (cl-return-from my/gptel--detect-doom-loop))))))))))
+                  (cl-return-from my/gptel--detect-doom-loop))
+                (setq prev-fp fp)))))))))
 
 ;; --- Duplicate Tool Name Guard ---
 ;; gptel--parse-tools maps gptel-tools directly to JSON without deduplication.

@@ -215,6 +215,18 @@ Supported shape:
         (error "Unknown symbol in Programmatic sandbox: %S" symbol)
       value)))
 
+(defun gptel-sandbox--short-circuit-eval (forms env initial-value stop-pred)
+  "Evaluate FORMS sequentially with short-circuit logic.
+INITIAL-VALUE is the starting value. STOP-PRED is called on each result;
+when non-nil, evaluation short-circuits and returns that result.
+Used by `and' and `or' to share short-circuit evaluation logic."
+  (let ((value initial-value))
+    (catch 'gptel-sandbox-short-circuit
+      (dolist (form forms value)
+        (setq value (gptel-sandbox--eval-expr form env))
+        (when (funcall stop-pred value)
+          (throw 'gptel-sandbox-short-circuit value))))))
+
 (defun gptel-sandbox--eval-expr (expr env)
   "Evaluate pure sandbox expression EXPR in ENV.
 This evaluator intentionally excludes general function application and only
@@ -229,9 +241,10 @@ supports a small, explicit whitelist of pure operations."
       ('quote
        (cadr expr))
       ('if
-          (if (gptel-sandbox--eval-expr (nth 1 expr) env)
-              (gptel-sandbox--eval-expr (nth 2 expr) env)
-            (gptel-sandbox--eval-expr (nth 3 expr) env)))
+          (let ((cond-result (gptel-sandbox--eval-expr (nth 1 expr) env)))
+            (if cond-result
+                (gptel-sandbox--eval-expr (nth 2 expr) env)
+              (gptel-sandbox--eval-expr (nth 3 expr) env))))
       ('setq
        (gptel-sandbox--eval-setq-pairs (cdr expr) env))
       ('when
@@ -260,19 +273,9 @@ supports a small, explicit whitelist of pure operations."
       ('filter
        (gptel-sandbox--eval-map-like expr env t))
       ('and
-       (let ((value t))
-         (catch 'gptel-sandbox-short-circuit
-           (dolist (form (cdr expr) value)
-             (setq value (gptel-sandbox--eval-expr form env))
-             (unless value
-               (throw 'gptel-sandbox-short-circuit value))))))
+       (gptel-sandbox--short-circuit-eval (cdr expr) env t #'not))
       ('or
-       (let ((value nil))
-         (catch 'gptel-sandbox-short-circuit
-           (dolist (form (cdr expr) value)
-             (setq value (gptel-sandbox--eval-expr form env))
-             (when value
-               (throw 'gptel-sandbox-short-circuit value))))))
+       (gptel-sandbox--short-circuit-eval (cdr expr) env nil #'identity))
       ((or 'equal 'string= '= '< '> '<= '>=)
        (apply (car expr)
               (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env))
@@ -309,9 +312,9 @@ supports a small, explicit whitelist of pure operations."
     (dolist (arg spec-args (nreverse values))
       (let* ((name (plist-get arg :name))
              (key (intern (concat ":" name)))
-             (value-form (gethash key arg-map :gptel-sandbox-missing)))
+             (value-form (gethash key arg-map gptel-sandbox--missing-marker)))
         (cond
-         ((eq value-form :gptel-sandbox-missing)
+         ((eq value-form gptel-sandbox--missing-marker)
           (if (plist-get arg :optional)
               (push nil values)
             (error "Missing required argument %s for tool %s"
@@ -537,18 +540,34 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
   (pcase statement
     (`(progn . ,body)
      (gptel-sandbox--eval-progn body env state callback))
-    (`(setq ,symbol ,expr)
-     (unless (symbolp symbol)
-       (error "Programmatic setq target must be a symbol, got: %S" symbol))
-     (if (and (consp expr) (eq (car expr) 'tool-call))
-         (gptel-sandbox--execute-tool
-          (lambda (value)
-            (gptel-sandbox--bind-result symbol value env)
-            (funcall callback (list :continue t :done nil)))
-          (nth 1 expr) (cddr expr) env state)
-       (let ((value (gptel-sandbox--eval-expr expr env)))
-         (gptel-sandbox--bind-result symbol value env)
-         (funcall callback (list :continue t :done nil)))))
+    (`(setq . ,pairs)
+     (if (null pairs)
+         (funcall callback (list :continue t :done nil))
+       (unless (cl-evenp (length pairs))
+         (error "Programmatic setq requires symbol/value pairs"))
+       (let ((remaining (seq-partition pairs 2)))
+         (cl-labels
+             ((process-pair
+               ()
+               (if (null remaining)
+                   (funcall callback (list :continue t :done nil))
+                 (let* ((pair (car remaining))
+                        (symbol (car pair))
+                        (expr (cadr pair)))
+                   (unless (symbolp symbol)
+                     (error "Programmatic setq target must be a symbol, got: %S" symbol))
+                   (if (and (consp expr) (eq (car expr) 'tool-call))
+                       (gptel-sandbox--execute-tool
+                        (lambda (value)
+                          (gptel-sandbox--bind-result symbol value env)
+                          (setq remaining (cdr remaining))
+                          (process-pair))
+                        (nth 1 expr) (cddr expr) env state)
+                     (let ((value (gptel-sandbox--eval-expr expr env)))
+                       (gptel-sandbox--bind-result symbol value env)
+                       (setq remaining (cdr remaining))
+                       (process-pair)))))))
+           (process-pair)))))
     (`(tool-call ,tool-name . ,arg-forms)
      (gptel-sandbox--execute-tool
       (lambda (value)

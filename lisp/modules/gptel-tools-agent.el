@@ -54,8 +54,9 @@ Helper for validation in callback-based functions."
 (defun gptel-auto-workflow--plist-get (plist key &optional default)
   "Get value from PLIST for KEY, returning DEFAULT if not found.
 Reduces duplication of `(or (plist-get ...) default-value)` patterns."
-  (let ((value (plist-get plist key)))
-    (if (null value) default value)))
+  (if (plist-member plist key)
+      (plist-get plist key)
+    default))
 
 (defun gptel-auto-workflow--state-active-p (state)
   "Return t if STATE is non-nil and not marked as done.
@@ -2258,7 +2259,8 @@ If branch exists locally, deletes it first to avoid conflicts."
   "Delete worktree for TARGET from hash table.
 Also deletes the associated branch.
 Uses git CLI directly to avoid magit issues."
-  (let* ((state (gethash target gptel-auto-workflow--worktree-state))
+  (let* ((state (or (gethash target gptel-auto-workflow--worktree-state)
+                    (list)))
          (worktree-dir (plist-get state :worktree-dir))
          (branch (plist-get state :current-branch)))
     (when worktree-dir
@@ -4351,7 +4353,7 @@ Then on a new line, briefly explain why (1 sentence)."
                                 :improvement (list :score (- score-after score-before)
                                                    :quality (- quality-after quality-before)
                                                    :combined (- combined-after combined-before)))))))))
-      (let ((keep (> combined-after combined-before)))
+      (let ((keep (>= (- combined-after combined-before) 0.005)))
         (funcall callback
                  (list :keep keep
                        :reasoning (format "Local: Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
@@ -4715,22 +4717,22 @@ Also logs agent-output snippet for debugging when category is :unknown."
      (cons :tool-error "Tool execution failed"))
     ((string-match-p "could not finish" agent-output)
      (cons :api-error "API request failed"))
-   ((string-match-p "Error:.*not available\\|Error:.*not found\\|Error:.*empty" agent-output)
-    (cons :tool-error (format "Tool unavailable: %s" (gptel-auto-experiment--error-snippet agent-output))))
-   ((string-match-p "^Error:" agent-output)
-    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
-      (message "[auto-experiment] Executor error: %s" snippet)
-      (cons :tool-error snippet)))
-   ((string-match-p "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output)
-    (cons :grader-failed "Executor succeeded, grader returned score 0"))
-   ((string-match-p "error\\|failed\\|exception" agent-output)
-    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
-      (message "[auto-experiment] Unknown error snippet: %s" (my/gptel--sanitize-for-logging snippet))
-      (cons :unknown (format "Error pattern: %s" snippet))))
-   (t 
-    (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
-      (message "[auto-experiment] No error pattern found, snippet: %s" (my/gptel--sanitize-for-logging snippet))
-      (cons :unknown "Unknown error")))))
+    ((string-match-p "Error:.*not available\\|Error:.*not found\\|Error:.*empty" agent-output)
+     (cons :tool-error (format "Tool unavailable: %s" (gptel-auto-experiment--error-snippet agent-output))))
+    ((string-match-p "^Error:" agent-output)
+     (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
+       (message "[auto-experiment] Executor error: %s" snippet)
+       (cons :tool-error snippet)))
+    ((string-match-p "^Executor result\\|^✓\\|^\\*\\*HYPOTHESIS" agent-output)
+     (cons :grader-failed "Executor succeeded, grader returned score 0"))
+    ((string-match-p "error\\|failed\\|exception" agent-output)
+     (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
+       (message "[auto-experiment] Unknown error snippet: %s" (my/gptel--sanitize-for-logging snippet))
+       (cons :unknown (format "Error pattern: %s" snippet))))
+    (t
+     (let ((snippet (gptel-auto-experiment--error-snippet agent-output)))
+       (message "[auto-experiment] No error pattern found, snippet: %s" (my/gptel--sanitize-for-logging snippet))
+       (cons :unknown "Unknown error")))))
 
 (defun gptel-auto-experiment--should-reduce-experiments-p ()
   "Check if we should reduce experiment count due to API issues."
