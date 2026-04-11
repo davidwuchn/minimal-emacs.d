@@ -358,7 +358,7 @@ CONTENT-VEC is a vector like [(:type \"text\" :text \"...\")]."
            for part = (aref content-vec i)
            when (and (listp part)
                      (eq (plist-get part :type) 'text)
-                     (plist-get part :text))
+                     (stringp (plist-get part :text)))
            do
            (let* ((text (plist-get part :text))
                   (sanitized (my/gptel--sanitize-string-for-json text)))
