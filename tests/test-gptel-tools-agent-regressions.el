@@ -1453,8 +1453,8 @@ EXIT-CODE defaults to 1."
      "Error: Task executor could not finish task \"x\". Error details: (:code \"system_error\" :message \"org.springframework.web.reactive.function.client.WebClientRequestException\" :param :null :type \"server_error\")")
     '(:api-error . "Provider server error"))))
 
-(ert-deftest regression/auto-workflow/headless-subagent-provider-override-prefers-available-fallback ()
-  "Headless workflow subagents should move off MiniMax when a fallback is available."
+(ert-deftest regression/auto-workflow/headless-analyzer-provider-override-prefers-available-fallback ()
+  "Headless analyzer should move off MiniMax when a fallback is available."
   (let* ((dashscope-backend
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
@@ -1474,15 +1474,47 @@ EXIT-CODE defaults to 1."
                        (pcase host
                          ("coding.dashscope.aliyuncs.com" "token")
                          (_ nil))))
-                    ((symbol-function 'message)
-                     (lambda (&rest _) nil)))
+                     ((symbol-function 'message)
+                      (lambda (&rest _) nil)))
             (let ((override
-                   (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
+                   (gptel-auto-workflow--maybe-override-subagent-provider "analyzer" preset)))
               (should (eq (plist-get override :backend) dashscope-backend))
               (should (eq (plist-get override :model) 'qwen3.6-plus))
               (should (memq 'qwen3.6-plus (gptel-backend-models dashscope-backend)))
               (should (equal (plist-get preset :backend) "MiniMax"))
               (should (equal (plist-get preset :model) "minimax-m2.7-highspeed")))))
+      (if had-dashscope
+          (set 'gptel--dashscope old-dashscope)
+        (makunbound 'gptel--dashscope)))))
+
+(ert-deftest regression/auto-workflow/headless-executor-provider-override-keeps-minimax-when-available ()
+  "Headless executor should keep MiniMax highspeed when that backend is available."
+  (let* ((dashscope-backend
+          (gptel-make-openai "DashScope"
+            :host "coding.dashscope.aliyuncs.com"
+            :key (lambda () "token")
+            :models '(qwen3.5-plus)))
+         (had-dashscope (boundp 'gptel--dashscope))
+         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+         (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
+         (gptel-auto-workflow--headless t)
+         (gptel-auto-workflow-persistent-headless t)
+         (gptel-auto-workflow--current-project "/tmp/project"))
+    (unwind-protect
+        (progn
+          (set 'gptel--dashscope dashscope-backend)
+          (cl-letf (((symbol-function 'my/gptel-api-key)
+                     (lambda (host)
+                       (pcase host
+                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.minimaxi.com" "token")
+                         (_ nil))))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (let ((override
+                   (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
+              (should (equal (plist-get override :backend) "MiniMax"))
+              (should (equal (plist-get override :model) "minimax-m2.7-highspeed")))))
       (if had-dashscope
           (set 'gptel--dashscope old-dashscope)
         (makunbound 'gptel--dashscope)))))
