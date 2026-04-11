@@ -361,6 +361,7 @@ CONTENT-VEC is a vector like [(:type \"text\" :text \"...\"."
                      (stringp (plist-get part :text)))
            do
            (let* ((text (plist-get part :text))
+                  (text (if (stringp text) text (format "%S" text)))
                   (sanitized (my/gptel--sanitize-string-for-json text)))
              (unless (string= sanitized text)
                (aset content-vec i (plist-put part :text sanitized))))))
