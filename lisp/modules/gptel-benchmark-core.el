@@ -283,7 +283,12 @@ Returns plist with :total-tests, :passed-tests, and average scores."
                           (:constraint-score . 0.0))))
       (dolist (r results)
         (let* ((scores (gptel-benchmark--extract-scores r))
-               (overall-score (gptel-benchmark--get-score r :overall-score scores)))
+               (overall-score
+                (and scores
+                     (if (and (listp scores) (keywordp (car scores)))
+                         (plist-get scores :overall-score)
+                       (or (alist-get :overall-score scores)
+                           (alist-get 'overall-score scores))))))
           (cl-incf total)
           (when scores
             (setq score-totals
@@ -378,15 +383,24 @@ RESULTS should contain :eight-keys-scores in each entry."
         (high-scores 0)
         (threshold 0.7))
     (dolist (r results)
-      (let ((overall (gptel-benchmark--get-score r :overall-score)))
-        (when overall
+      (let* ((scores (gptel-benchmark--extract-scores r))
+             (overall (and scores
+                           (if (and (listp scores) (keywordp (car scores)))
+                               (plist-get scores :overall-score)
+                             (or (alist-get :overall-score scores)
+                                 (alist-get 'overall-score scores)))))
+             (overall-val (or overall 0)))
+        (when scores
           (cond
-           ((< overall threshold) (cl-incf low-scores))
-           ((>= overall 0.9) (cl-incf high-scores)))
+           ((< overall-val threshold) (cl-incf low-scores))
+           ((>= overall-val 0.9) (cl-incf high-scores)))
           (dolist (mapping gptel-benchmark--score-type-map)
             (let* ((score-type (car mapping))
                    (issue-type (cdr mapping))
-                   (score (gptel-benchmark--get-score r score-type)))
+                   (score (if (and (listp scores) (keywordp (car scores)))
+                              (plist-get scores score-type)
+                            (or (alist-get score-type scores)
+                                (alist-get (gptel-benchmark--keyword-to-alist-key score-type) scores)))))
               (when (and score (< score threshold))
                 (puthash issue-type (1+ (gethash issue-type issues 0)) issues)))))))
     (when (> low-scores 0)
