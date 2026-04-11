@@ -140,7 +140,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
     (let* ((data (plist-get info :data))
            (messages (and data (plist-get data :messages)))
            (retries (or retry-count (plist-get info :retries) 1))
-           (keep (max 0 (- my/gptel-retry-keep-recent-tool-results retries)))
+           (keep (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries)))
            (replacement my/gptel-retry-truncated-result-text)
            (truncated 0)
            (bytes-saved 0))
