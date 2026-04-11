@@ -137,6 +137,18 @@ except subprocess.TimeoutExpired as err:
         sys.stderr.write(err.stderr if isinstance(err.stderr, str) else err.stderr.decode())
     raise SystemExit(124)
 
+busy_markers = (
+    "Server not responding; use Ctrl+C to break",
+    "server did not reply",
+)
+stderr_text = proc.stderr or ""
+if proc.returncode != 0 and any(marker in stderr_text for marker in busy_markers):
+    if proc.stdout:
+        sys.stdout.write(proc.stdout)
+    if proc.stderr:
+        sys.stderr.write(proc.stderr)
+    raise SystemExit(124)
+
 sys.stdout.write(proc.stdout)
 sys.stderr.write(proc.stderr)
 raise SystemExit(proc.returncode)

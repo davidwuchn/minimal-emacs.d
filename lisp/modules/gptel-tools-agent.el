@@ -1985,12 +1985,13 @@ Monthly subscription: LLM selection finds best targets each run."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-active-grace 300
+(defcustom gptel-auto-experiment-active-grace 420
   "Extra wall-clock seconds active executor experiments may use beyond budget.
 
 Executor requests still use `gptel-auto-experiment-time-budget' as their idle
 timeout, but active runs may exceed it by this grace period before they are
-forcibly aborted."
+forcibly aborted.  The default keeps the wrapper hard cap above 900s backend
+request limits so active calls do not race provider-side timeouts."
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)

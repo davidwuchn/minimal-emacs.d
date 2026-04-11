@@ -950,9 +950,33 @@ EXIT-CODE defaults to 1."
        "desc"
        "prompt")
       (should (= captured-timeout 42))
-      (should (= captured-hard-timeout 63))
-      (should (= my/gptel-agent-task-timeout 300))
-      (should (= my/gptel-agent-task-hard-timeout 7)))))
+       (should (= captured-hard-timeout 63))
+       (should (= my/gptel-agent-task-timeout 300))
+       (should (= my/gptel-agent-task-hard-timeout 7)))))
+
+(ert-deftest regression/subagent/default-full-executor-hard-timeout-keeps-provider-headroom ()
+  "Default full executor hard timeout should stay above 900s backend limits."
+  (let ((gptel-agent--agents '(("executor")))
+        (captured-timeout nil)
+        (captured-hard-timeout nil))
+    (cl-letf (((symbol-function 'my/gptel--agent-task-with-timeout)
+               (lambda (_callback _agent-type _description _prompt
+                        &optional _files _include-history _include-diff)
+                 (setq captured-timeout my/gptel-agent-task-timeout
+                       captured-hard-timeout my/gptel-agent-task-hard-timeout)))
+              ((symbol-function 'gptel-agent--task)
+               (lambda (&rest _) nil)))
+      (my/gptel--run-agent-tool-with-timeout
+       gptel-auto-experiment-time-budget
+       #'ignore
+       "executor"
+       "desc"
+       "prompt")
+      (should (= captured-timeout gptel-auto-experiment-time-budget))
+      (should (= captured-hard-timeout
+                 (+ gptel-auto-experiment-time-budget
+                    gptel-auto-experiment-active-grace)))
+      (should (> captured-hard-timeout 900)))))
 
 (ert-deftest regression/runagent/malformed-call-with-no-args-reports-error ()
   "RunAgent should return a normal tool error when no mapped args were supplied."
@@ -4563,8 +4587,47 @@ EXIT-CODE defaults to 1."
             (should (string-match-p ":phase \"running\"" output)))
           (with-temp-buffer
             (insert-file-contents status-file)
+             (should (string-match-p ":running t" (buffer-string)))
+             (should (string-match-p ":phase \"running\"" (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-status-keeps-running-when-daemon-is-busy ()
+  "Wrapper status should preserve a live snapshot when emacsclient reports a busy server."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "import sys\n"
+                    "sys.stderr.write('Server not responding; use Ctrl+C to break\\n')\n"
+                    "raise SystemExit(1)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 5 :phase \"running\" :run-id \"2026-04-11T095231Z-292f\" :results \"var/tmp/experiments/2026-04-11T095231Z-292f/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
+            (should (string-match-p ":phase \"running\"" output))
+            (should (string-match-p "2026-04-11T095231Z-292f" output)))
+          (with-temp-buffer
+            (insert-file-contents status-file)
             (should (string-match-p ":running t" (buffer-string)))
-            (should (string-match-p ":phase \"running\"" (buffer-string)))))
+            (should (string-match-p ":phase \"running\"" (buffer-string)))
+            (should (string-match-p "2026-04-11T095231Z-292f" (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t))))
 
