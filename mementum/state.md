@@ -1,8 +1,30 @@
 # Mementum State
 
-> Last session: 2026-04-11 08:00
+> Last session: 2026-04-11 20:45
 
-## Total Improvements: 234+ Real Code Fixes (25 new today)
+## Total Improvements: 236+ Real Code Fixes (27 new today)
+
+### Session Summary: 2026-04-11 Evening (Naming Conflict Fix + Merge)
+
+**Action:** Fixed critical naming conflict in gptel-benchmark, merged staging to main
+
+**Result:** ✅ All remotes in sync, 1387 tests passing
+
+**Critical Fix:**
+- **gptel-benchmark-subagent.el:621** — Renamed `gptel-benchmark--extract-scores` to `gptel-benchmark--extract-overall-scores`
+  - Root cause: Two functions with same name in different files (`gptel-benchmark-core.el:193` and `gptel-benchmark-subagent.el:621`)
+  - This caused undefined behavior - whichever file loaded last would overwrite the other
+  - Fix: Renamed subagent version to avoid conflict
+  - Commit: `b731743b` — ⊘ fix: rename duplicate gptel-benchmark--extract-scores to avoid naming conflict
+
+**Merged to main:**
+- Benchmark core refactoring (simplified score extraction)
+- Naming conflict fix
+- All recent workflow improvements
+
+**Sync Status:**
+- **main:** `6f880833` — origin ↔ upstream in sync
+- **staging:** `16f03d1d` — origin ↔ upstream in sync (merged main)
 
 ### Session Summary: 2026-04-11 Early Morning (Workflow Run Complete + Sync)
 
