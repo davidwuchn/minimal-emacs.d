@@ -3487,6 +3487,47 @@ Returns (success-p . output)."
 
 
 
+(defun gptel-auto-workflow--parse-remote-head (branch output)
+  "Return BRANCH head parsed from git ls-remote OUTPUT, ignoring SSH noise."
+  (let ((pattern (format "^\\([0-9a-f]\\{40\\}\\)\trefs/heads/%s$"
+                         (regexp-quote branch)))
+        head)
+    (dolist (line (split-string (or output "") "\n" t) head)
+      (when (and (null head)
+                 (string-match pattern line))
+        (setq head (match-string 1 line))))))
+
+(defun gptel-auto-workflow--push-branch-with-lease (branch action &optional timeout)
+  "Push BRANCH to origin, using `--force-with-lease' when it already exists.
+ACTION is a short description used in failure messages."
+  (let* ((branch-q (shell-quote-argument branch))
+         (remote-result
+          (gptel-auto-workflow--git-result
+           (format "git ls-remote --exit-code --heads origin %s" branch-q)
+           60))
+         (remote-head
+          (and (= 0 (cdr remote-result))
+               (gptel-auto-workflow--parse-remote-head branch (car remote-result))))
+         (push-command
+          (if remote-head
+              (format "git push %s origin %s"
+                      (shell-quote-argument
+                       (format "--force-with-lease=%s:%s"
+                               branch
+                               remote-head))
+                      branch-q)
+            (format "git push origin %s" branch-q)))
+         (push-result
+          (gptel-auto-workflow--git-result
+           push-command
+           (or timeout 180))))
+    (if (= 0 (cdr push-result))
+        t
+      (message "[auto-workflow] %s failed: %s"
+               action
+               (my/gptel--sanitize-for-logging (car push-result) 160))
+      nil)))
+
 (defun gptel-auto-workflow--push-staging ()
   "Push staging branch to origin after successful verification.
 Uses `--force-with-lease' when remote staging already exists because the local
@@ -3495,41 +3536,10 @@ staging branch is regenerated from `main' at the start of each workflow run."
     (message "[auto-workflow] Pushing staging to origin")
     (gptel-auto-workflow--with-staging-worktree
      (lambda ()
-        (cl-labels
-            ((parse-remote-head (output)
-               (let ((pattern (format "^\\([0-9a-f]\\{40\\}\\)\trefs/heads/%s$"
-                                      (regexp-quote staging)))
-                     head)
-                 (dolist (line (split-string (or output "") "\n" t) head)
-                   (when (and (null head)
-                              (string-match pattern line))
-                     (setq head (match-string 1 line)))))))
-          (let* ((staging-q (shell-quote-argument staging))
-               (remote-result
-                (gptel-auto-workflow--git-result
-                 (format "git ls-remote --exit-code --heads origin %s" staging-q)
-                 60))
-               (remote-head
-                (and (= 0 (cdr remote-result))
-                     (parse-remote-head (car remote-result))))
-               (push-command
-                (if remote-head
-                    (format "git push %s origin %s"
-                            (shell-quote-argument
-                            (format "--force-with-lease=%s:%s"
-                                    staging
-                                    remote-head))
-                           staging-q)
-                 (format "git push origin %s" staging-q)))
-              (push-result
-               (gptel-auto-workflow--git-result
-                push-command
-                180)))
-           (if (= 0 (cdr push-result))
-               t
-             (message "[auto-workflow] Failed to push staging: %s"
-                      (my/gptel--sanitize-for-logging (car push-result) 160))
-             nil)))))))
+       (gptel-auto-workflow--push-branch-with-lease
+        staging
+        "Push staging"
+        180)))))
 
 
 (defun gptel-auto-workflow--current-staging-head ()
@@ -5067,9 +5077,6 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 			 (format "%s git commit -m %s"
                                  gptel-auto-workflow--skip-submodule-sync-env
                                  (shell-quote-argument msg)))
-			(push-command
-			 (format "git push origin %s"
-				 (shell-quote-argument experiment-branch)))
 			(finalize
 			 (gptel-auto-workflow--make-idempotent-callback
 			  (lambda (&rest _)
@@ -5095,8 +5102,8 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 			 (if gptel-auto-experiment-auto-push
 			     (progn
 			       (message "[auto-experiment] Pushing to %s" experiment-branch)
-			       (if (gptel-auto-workflow--git-step-success-p
-				    push-command
+			       (if (gptel-auto-workflow--push-branch-with-lease
+				    experiment-branch
 				    (format "Push optimize branch %s" experiment-branch)
 				    180)
 				   (if gptel-auto-workflow-use-staging
@@ -5187,16 +5194,13 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                                         (default-directory experiment-worktree)
                                                                         (commit-timeout
                                                                          (max 300 gptel-auto-workflow-git-timeout))
-                                                                        (commit-command
-                                                                         (format "%s git commit -m %s"
-                                                                                 gptel-auto-workflow--skip-submodule-sync-env
-                                                                                 (shell-quote-argument msg)))
-                                                                        (push-command
-                                                                         (format "git push origin %s"
-                                                                                 (shell-quote-argument experiment-branch)))
-                                                                        (finalize
-                                                                         (gptel-auto-workflow--make-idempotent-callback
-                                                                          (lambda (&rest _)
+                                                                         (commit-command
+                                                                          (format "%s git commit -m %s"
+                                                                                  gptel-auto-workflow--skip-submodule-sync-env
+                                                                                  (shell-quote-argument msg)))
+                                                                         (finalize
+                                                                          (gptel-auto-workflow--make-idempotent-callback
+                                                                           (lambda (&rest _)
                                                                            (gptel-auto-experiment-log-tsv
                                                                             run-id exp-result)
                                                                             (funcall callback exp-result)))))
@@ -5215,16 +5219,16 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                                                                             experiment-worktree)
                                                                          (setq gptel-auto-experiment--best-score retry-score
                                                                                gptel-auto-experiment--no-improvement-count 0)
-                                                                         (if gptel-auto-experiment-auto-push
-                                                                             (progn
-                                                                               (message "[auto-experiment] Pushing to %s" experiment-branch)
-                                                                               (if (gptel-auto-workflow--git-step-success-p
-                                                                                    push-command
-                                                                                    (format "Push optimize branch %s" experiment-branch)
-                                                                                    180)
-                                                                                   (if gptel-auto-workflow-use-staging
-                                                                                       (gptel-auto-workflow--staging-flow
-                                                                                        experiment-branch
+                                                                          (if gptel-auto-experiment-auto-push
+                                                                              (progn
+                                                                                (message "[auto-experiment] Pushing to %s" experiment-branch)
+                                                                                (if (gptel-auto-workflow--push-branch-with-lease
+                                                                                     experiment-branch
+                                                                                     (format "Push optimize branch %s" experiment-branch)
+                                                                                     180)
+                                                                                    (if gptel-auto-workflow-use-staging
+                                                                                        (gptel-auto-workflow--staging-flow
+                                                                                         experiment-branch
                                                                                         finalize)
                                                                                      (funcall finalize))
                                                                                  (let ((failed-result

@@ -1932,12 +1932,13 @@ EXIT-CODE defaults to 1."
                   ((symbol-function 'gptel-auto-workflow--assert-main-untouched)
                     (lambda () t))
                   ((symbol-function 'gptel-auto-workflow--git-step-success-p)
-                   (lambda (cmd &rest _args)
-                     (when (string-match-p "git push origin" cmd)
-                       (cl-incf push-count))
-                     t))
+                   (lambda (&rest _args) t))
                   ((symbol-function 'gptel-auto-workflow--commit-step-success-p)
                    (lambda (&rest _args) t))
+                  ((symbol-function 'gptel-auto-workflow--push-branch-with-lease)
+                   (lambda (&rest _args)
+                     (cl-incf push-count)
+                     t))
                    ((symbol-function 'magit-git-success)
                     (lambda (&rest args)
                       t))
@@ -2001,12 +2002,13 @@ EXIT-CODE defaults to 1."
                   ((symbol-function 'gptel-auto-workflow--assert-main-untouched)
                     (lambda () t))
                   ((symbol-function 'gptel-auto-workflow--git-step-success-p)
-                   (lambda (cmd &rest _args)
-                     (when (string-match-p "git push origin" cmd)
-                       (cl-incf push-count))
-                     t))
+                   (lambda (&rest _args) t))
                   ((symbol-function 'gptel-auto-workflow--commit-step-success-p)
                    (lambda (&rest _args) t))
+                  ((symbol-function 'gptel-auto-workflow--push-branch-with-lease)
+                   (lambda (&rest _args)
+                     (cl-incf push-count)
+                     t))
                   ((symbol-function 'magit-git-success)
                    (lambda (&rest args)
                       t))
@@ -2073,12 +2075,13 @@ EXIT-CODE defaults to 1."
                   ((symbol-function 'gptel-auto-workflow--assert-main-untouched)
                     (lambda () t))
                   ((symbol-function 'gptel-auto-workflow--git-step-success-p)
-                   (lambda (cmd &rest _args)
-                     (when (string-match-p "git push origin" cmd)
-                       (cl-incf push-count))
-                     t))
+                   (lambda (&rest _args) t))
                   ((symbol-function 'gptel-auto-workflow--commit-step-success-p)
                    (lambda (&rest _args) t))
+                  ((symbol-function 'gptel-auto-workflow--push-branch-with-lease)
+                   (lambda (&rest _args)
+                     (cl-incf push-count)
+                     t))
                   ((symbol-function 'magit-git-success)
                    (lambda (&rest args)
                       t))
@@ -7127,6 +7130,39 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (should (gptel-auto-workflow--push-staging))
+      (should (member expected-push commands)))))
+
+(ert-deftest regression/auto-workflow/push-optimize-branch-parses-noisy-remote-head-output ()
+  "Optimize branch push should still force-with-lease when ls-remote prints SSH noise."
+  (let* ((commands nil)
+         (branch "optimize/projects-riven-exp1")
+         (remote-head "5043dae3e83ee7ea00e044870e04a40cf986d196")
+         (expected-push
+          (format "git push %s origin %s"
+                  (shell-quote-argument
+                   (format "--force-with-lease=%s:%s" branch remote-head))
+                  (shell-quote-argument branch))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (push command commands)
+                 (cond
+                  ((string-match-p
+                    "\\`git ls-remote --exit-code --heads origin optimize/projects-riven-exp1\\'"
+                    command)
+                   (cons (format "mux_client_request_session: read from master failed: Broken pipe\n%s\trefs/heads/%s\n"
+                                 remote-head branch)
+                         0))
+                  ((equal command expected-push)
+                   (cons "" 0))
+                  (t
+                   (cons "" 1)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should
+       (gptel-auto-workflow--push-branch-with-lease
+        branch
+        (format "Push optimize branch %s" branch)
+        180))
       (should (member expected-push commands)))))
 
 (ert-deftest regression/auto-workflow/push-staging-uses-plain-push-when-remote-missing ()
