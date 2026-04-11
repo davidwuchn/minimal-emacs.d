@@ -277,26 +277,26 @@ Guards against delivering to a killed parent buffer by checking
 `gptel-agent-loop--task-tracking-marker'."
   (cl-block gptel-agent-loop--deliver-result
     (unless (and state result (gptel-agent-loop--task-main-cb state))
-    (message "[RunAgent] Error: Invalid args to deliver-result, dropping: %s"
-             (if (stringp result)
-                 (substring result 0 (min 50 (length result)))
-               result))
-    (cl-return-from gptel-agent-loop--deliver-result))
-  (let ((main-cb (gptel-agent-loop--task-main-cb state)))
-    (unless (gptel-agent-loop--task-finished state)
-      (setf (gptel-agent-loop--task-finished state) t)
-      (gptel-agent-loop--cleanup-state state)
-      (let ((marker (gptel-agent-loop--task-tracking-marker state)))
-        (when (and marker (markerp marker))
-          (if (marker-buffer marker)
-              (set-marker marker nil)
-            (message "[RunAgent] Warning: tracking marker no longer live"))
-          (setf (gptel-agent-loop--task-tracking-marker state) nil)))
-      (when cache-result
-        (gptel-agent-loop--maybe-cache-put state result))
-      (if (fboundp 'my/gptel--deliver-subagent-result)
-          (my/gptel--deliver-subagent-result main-cb result)
-        (funcall main-cb result))))))
+      (message "[RunAgent] Error: Invalid args to deliver-result, dropping: %s"
+               (if (stringp result)
+                   (substring result 0 (min 50 (length result)))
+                 result))
+      (cl-return-from gptel-agent-loop--deliver-result))
+    (let ((main-cb (gptel-agent-loop--task-main-cb state)))
+      (unless (gptel-agent-loop--task-finished state)
+        (setf (gptel-agent-loop--task-finished state) t)
+        (gptel-agent-loop--cleanup-state state)
+        (let ((marker (gptel-agent-loop--task-tracking-marker state)))
+          (when (and marker (markerp marker))
+            (if (marker-buffer marker)
+                (set-marker marker nil)
+              (message "[RunAgent] Warning: tracking marker no longer live"))
+            (setf (gptel-agent-loop--task-tracking-marker state) nil)))
+        (when cache-result
+          (gptel-agent-loop--maybe-cache-put state result))
+        (if (fboundp 'my/gptel--deliver-subagent-result)
+            (my/gptel--deliver-subagent-result main-cb result)
+          (funcall main-cb result))))))
 
 (defun gptel-agent-loop--deliver-aborted (state)
   "Deliver timeout/abort result for STATE once."
@@ -449,7 +449,8 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
        ((eq resp nil)
         (cond
          ((gptel-agent-loop--check-aborted state ov))
-         ((and (gptel-agent-loop--transient-error-p error-data)
+         ((and (or (null error-data)
+                   (gptel-agent-loop--transient-error-p error-data))
                (< (gptel-agent-loop--task-retries state)
                   gptel-agent-loop-max-retries))
           (setf (gptel-agent-loop--task-retries state)
@@ -630,19 +631,19 @@ Cache behavior:
                                     :use-context nil
                                     :stream my/gptel-subagent-stream)
                               (cdr (assoc agent-type gptel-agent--agents))))
-                (syms (cons 'gptel--preset (gptel--preset-syms preset)))
-                (vals (mapcar (lambda (sym)
-                                (if (boundp sym) (symbol-value sym) nil))
-                              syms)))
+               (syms (cons 'gptel--preset (gptel--preset-syms preset)))
+               (vals (mapcar (lambda (sym)
+                               (if (boundp sym) (symbol-value sym) nil))
+                             syms)))
           (cl-progv syms vals
             (gptel--apply-preset preset)
             (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
                    (parent-fsm (and (fboundp 'my/gptel--coerce-fsm)
                                     (my/gptel--coerce-fsm gptel--fsm-last)))
-                    (fsm-info (ignore-errors
-                                (and parent-fsm (gptel-fsm-info parent-fsm))))
-                    (parent-buf (or (gptel-agent-loop--task-parent-buffer state)
-                                    (when (buffer-live-p (plist-get fsm-info :buffer))
+                   (fsm-info (ignore-errors
+                               (and parent-fsm (gptel-fsm-info parent-fsm))))
+                   (parent-buf (or (gptel-agent-loop--task-parent-buffer state)
+                                   (when (buffer-live-p (plist-get fsm-info :buffer))
                                      (plist-get fsm-info :buffer))
                                    (current-buffer)))
                    (where (or
@@ -745,12 +746,12 @@ Reads `steps' from agent YAML to set max-steps per agent."
   (interactive)
   (advice-remove 'gptel-agent--task #'gptel-agent-loop-task)
   (maphash (lambda (_id state)
-              (let ((marker (gptel-agent-loop--task-tracking-marker state)))
-                (when (and marker (markerp marker) (marker-buffer marker))
-                  (set-marker marker nil)))
-              (setf (gptel-agent-loop--task-tracking-marker state) nil
-                    (gptel-agent-loop--task-finished state) t)
-              (gptel-agent-loop--cleanup-state state))
+             (let ((marker (gptel-agent-loop--task-tracking-marker state)))
+               (when (and marker (markerp marker) (marker-buffer marker))
+                 (set-marker marker nil)))
+             (setf (gptel-agent-loop--task-tracking-marker state) nil
+                   (gptel-agent-loop--task-finished state) t)
+             (gptel-agent-loop--cleanup-state state))
            gptel-agent-loop--active-tasks)
   (clrhash gptel-agent-loop--active-tasks)
   (setq gptel-agent-loop--state nil)

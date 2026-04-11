@@ -39,9 +39,17 @@
     (if (vectorp tc) (append tc nil) tc)))
 
 (defun gptel-workflow--tool-names (run)
-  "Return list of tool names from RUN."
-  (mapcar (lambda (tc) (plist-get tc :tool))
+  "Return list of tool names from RUN as strings."
+  (mapcar (lambda (tc)
+            (let ((tool (plist-get tc :tool)))
+              (if (symbolp tool) (symbol-name tool) tool)))
           (gptel-workflow--tool-calls-list run)))
+
+(defun gptel-workflow--phase-active-p (run phase)
+  "Return non-nil if PHASE is active in RUN's phase trace."
+  (cl-find phase (gptel-workflow-run-phase-trace run)
+           :key (lambda (p) (plist-get p :phase))
+           :test #'eq))
 
 ;;; Customization
 
@@ -410,36 +418,26 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
 
 (defun gptel-workflow--score-constraints (run phases-cfg)
   "Score constraint satisfaction of RUN against PHASES-CFG."
-  (let* ((phase-trace (gptel-workflow-run-phase-trace run))
-         (expected-phases (cdr (assq 'expected phases-cfg)))
+  (let* ((expected-phases (cdr (assq 'expected phases-cfg)))
          (violations '())
          (total-constraints 0)
          (satisfied 0))
     (when expected-phases
       (dolist (expected-phase expected-phases)
         (cl-incf total-constraints)
-        (let ((found (cl-find expected-phase phase-trace
-                              :key (lambda (p) (plist-get p :phase))
-                              :test #'eq)))
-          (when found (cl-incf satisfied))
-          (unless found
-            (push (list :type 'missing-phase
-                        :phase expected-phase
-                        :expected t)
-                  violations)))))
+        (if (gptel-workflow--phase-active-p run expected-phase)
+            (cl-incf satisfied)
+          (push (list :type 'missing-phase
+                      :phase expected-phase
+                      :expected t)
+                violations))))
     (if (> total-constraints 0)
         (max 0.0 (/ (float satisfied) total-constraints))
       1.0)))
 
 (defun gptel-workflow--score-tools (run tools-cfg)
   "Score tool usage of RUN against TOOLS-CFG."
-  (let* ((tool-calls (gptel-workflow--tool-calls-list run))
-         (used-tools (mapcar (lambda (tc)
-                               (let ((tool (plist-get tc :tool)))
-                                 (if (symbolp tool)
-                                     (symbol-name tool)
-                                   tool)))
-                             tool-calls))
+  (let* ((used-tools (gptel-workflow--tool-names run))
          (required (or (cdr (assq 'required tools-cfg)) '()))
          (forbidden-before (cdr (assq 'forbidden_before_phase tools-cfg)))
          (p1-forbidden (cdr (assq 'P1 forbidden-before)))
@@ -451,17 +449,8 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
         (cl-incf total-score score)
         (cl-incf count)))
     (when p1-forbidden
-      (let* ((p1-active-p (cl-find 'P1 (gptel-workflow-run-phase-trace run)
-                                   :key (lambda (p) (plist-get p :phase))
-                                   :test #'eq))
-             (p1-tools (if p1-active-p
-                           (delq nil
-                                 (mapcar (lambda (tc)
-                                           (let ((tool (plist-get tc :tool)))
-                                             (if (symbolp tool)
-                                                 (symbol-name tool)
-                                               tool)))
-                                         tool-calls))
+      (let* ((p1-tools (if (gptel-workflow--phase-active-p run 'P1)
+                           used-tools
                          nil))
              (violations (cl-intersection p1-forbidden p1-tools :test #'string=))
              (score (if violations 0.0 1.0)))
