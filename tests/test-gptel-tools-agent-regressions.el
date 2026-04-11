@@ -1355,10 +1355,10 @@ EXIT-CODE defaults to 1."
      "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 56. See Curl manpage for details.\"")
     '(:timeout . "Experiment timed out"))))
 
-(ert-deftest regression/auto-experiment/usage-limit-exceeded-counts-as-quota-exhaustion ()
-  "Live provider usage-limit errors should trip hard quota detection."
-  (should
-   (gptel-auto-experiment--quota-exhausted-p
+(ert-deftest regression/auto-experiment/usage-limit-exceeded-is-not-hard-executor-quota ()
+  "Transient usage-limit errors should stay retryable for executor runs."
+  (should-not
+   (gptel-auto-experiment--hard-quota-exhausted-p
     "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")))
 
 (ert-deftest regression/auto-experiment/run-with-retry-retries-string-timeout-category ()
@@ -1466,8 +1466,8 @@ EXIT-CODE defaults to 1."
                (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
                  (cl-incf runs)
                  (funcall callback
-                          (list :agent-output
-                                "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"
+                           (list :agent-output
+                                "Error: Task executor could not finish task \"x\". Error details: (:type \"insufficient_quota\" :message \"week allocated quota exceeded\" :http_code \"429\")"
                                 :comparator-reason ":api-rate-limit"))))
               ((symbol-function 'run-with-timer)
                (lambda (&rest _args)
@@ -1477,12 +1477,47 @@ EXIT-CODE defaults to 1."
                (lambda (&rest _args) nil)))
       (gptel-auto-experiment--run-with-retry
        "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+        (lambda (result)
+          (setq final-result result)))
+       (should (= runs 1))
+        (should-not scheduled-retry)
+        (should gptel-auto-experiment--quota-exhausted)
+        (should (string-match-p "week allocated quota exceeded" (plist-get final-result :agent-output))))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-retries-usage-limit-rate-limits ()
+  "Usage-limit 429s should stay on the retry path instead of stopping the run."
+  (let ((runs 0)
+        (scheduled-retries 0)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-experiment--quota-exhausted nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+                 (cl-incf runs)
+                 (funcall callback
+                          (if (= runs 1)
+                              (list :agent-output
+                                    "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"
+                                    :comparator-reason ":api-rate-limit")
+                            (list :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (cl-incf scheduled-retries)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
        (lambda (result)
          (setq final-result result)))
-      (should (= runs 1))
-       (should-not scheduled-retry)
-       (should gptel-auto-experiment--quota-exhausted)
-       (should (string-match-p "usage limit exceeded" (plist-get final-result :agent-output))))))
+      (should (= runs 2))
+      (should (= scheduled-retries 1))
+      (should-not gptel-auto-experiment--quota-exhausted)
+      (should (equal (plist-get final-result :agent-output)
+                     "Executor result for task: retry success")))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-skips-hard-runtime-timeout-retries ()
   "Retry helper should not reschedule hard total-runtime timeout failures."

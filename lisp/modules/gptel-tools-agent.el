@@ -4722,6 +4722,14 @@ fall back to an error-shaped AGENT-OUTPUT."
           "allocated quota exceeded\\|usage limit exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
           agent-output))))
 
+(defun gptel-auto-experiment--hard-quota-exhausted-p (agent-output)
+  "Return non-nil when AGENT-OUTPUT shows a hard quota stop for executor work."
+  (and (stringp agent-output)
+       (let ((case-fold-search t))
+         (string-match-p
+          "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
+          agent-output))))
+
 (defun gptel-auto-experiment--run-with-retry (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional retry-count)
   "Run experiment with automatic retry on transient errors.
 RETRY-COUNT tracks current retry attempt."
@@ -4741,7 +4749,7 @@ RETRY-COUNT tracks current retry attempt."
                   (gptel-auto-experiment--hard-timeout-p raw-error))
                  (quota-exhausted
                   (or gptel-auto-experiment--quota-exhausted
-                      (gptel-auto-experiment--quota-exhausted-p agent-output)))
+                      (gptel-auto-experiment--hard-quota-exhausted-p agent-output)))
                   (api-rate-limit-category
                    (memq error-type '(:api-rate-limit)))
                   (timeout-category
@@ -5006,7 +5014,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                              (cl-incf gptel-auto-experiment--api-error-count)
                              (message "[auto-workflow] API error #%d: %s"
                                       gptel-auto-experiment--api-error-count error-category)
-                              (when (gptel-auto-experiment--quota-exhausted-p error-source)
+                              (when (gptel-auto-experiment--hard-quota-exhausted-p error-source)
                                 (setq gptel-auto-experiment--quota-exhausted t)
                                 (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run"))
                               ;; The outer experiment loop owns max-exp and will
