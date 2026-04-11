@@ -4920,8 +4920,8 @@ can use newer models without a restart."
   (and (stringp error-output)
        (let ((case-fold-search t))
          (string-match-p
-          "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
-          error-output))))
+          "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
+           error-output))))
 
 (defun gptel-auto-experiment--rate-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects provider rate limiting."
@@ -5071,6 +5071,9 @@ Also logs agent-output snippet for debugging when category is :unknown."
        (string-match-p "timeout\\|timed out\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
                        agent-output))
      (cons :timeout "Experiment timed out"))
+    ((let ((case-fold-search t))
+       (string-match-p "server_error\\|WebClientRequestException" agent-output))
+     (cons :api-error "Provider server error"))
     ((string-match-p "error.*executor\\|failed to finish" agent-output)
      (cons :tool-error "Tool execution failed"))
     ((string-match-p "could not finish" agent-output)
