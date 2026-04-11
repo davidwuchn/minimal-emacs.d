@@ -1096,7 +1096,7 @@ EXIT-CODE defaults to 1."
         (scheduled nil)
         result)
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-               (lambda (_target _experiment-id _max-experiments _baseline _baseline-code-quality _previous-results cb)
+               (lambda (_target _experiment-id _max-experiments _baseline _baseline-code-quality _previous-results cb &optional _log-fn)
                  (cl-incf calls)
                  (funcall cb
                           (list :target "target"
@@ -1510,7 +1510,7 @@ EXIT-CODE defaults to 1."
         (gptel-auto-experiment-max-retries 3)
         (gptel-auto-experiment-retry-delay 0))
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
                  (cl-incf runs)
                  (funcall callback
                           (if (= runs 1)
@@ -1541,7 +1541,7 @@ EXIT-CODE defaults to 1."
         (gptel-auto-experiment-max-retries 3)
         (gptel-auto-experiment-retry-delay 0))
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
                  (cl-incf runs)
                  (funcall callback
                           (if (= runs 1)
@@ -1574,7 +1574,7 @@ EXIT-CODE defaults to 1."
         (grader-error
          "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")"))
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
                  (cl-incf runs)
                  (funcall callback
                           (if (= runs 1)
@@ -1607,7 +1607,7 @@ EXIT-CODE defaults to 1."
         (gptel-auto-experiment-retry-delay 0)
         (gptel-auto-experiment--quota-exhausted nil))
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-                (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+                (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
                   (cl-incf runs)
                   (funcall callback
                            (list :agent-output
@@ -1637,7 +1637,7 @@ EXIT-CODE defaults to 1."
         (gptel-auto-experiment-retry-delay 0)
         (gptel-auto-experiment--quota-exhausted nil))
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
                  (cl-incf runs)
                  (funcall callback
                           (if (= runs 1)
@@ -1674,7 +1674,7 @@ EXIT-CODE defaults to 1."
         (server-error
          "Error: Task executor could not finish task \"x\". Error details: (:code \"system_error\" :message \"org.springframework.web.reactive.function.client.WebClientRequestException\" :param :null :type \"server_error\")"))
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
                  (cl-incf runs)
                  (funcall callback
                           (if (= runs 1)
@@ -1699,6 +1699,53 @@ EXIT-CODE defaults to 1."
       (should (equal (plist-get final-result :agent-output)
                      "Executor result for task: retry success")))))
 
+(ert-deftest regression/auto-experiment/run-with-retry-logs-only-final-attempt ()
+  "Retryable failures should not leave duplicate ledger rows for one experiment."
+  (let ((runs 0)
+        (scheduled-retries 0)
+        (logged-results nil)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-experiment--quota-exhausted nil)
+        (server-error
+         "Error: Task executor could not finish task \"x\". Error details: (:code \"system_error\" :message \"org.springframework.web.reactive.function.client.WebClientRequestException\" :param :null :type \"server_error\")"))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional log-fn)
+                 (cl-incf runs)
+                 (let ((result (if (= runs 1)
+                                   (list :id 1
+                                         :target "target"
+                                         :agent-output server-error
+                                         :comparator-reason ":tool-error")
+                                 (list :id 1
+                                       :target "target"
+                                       :agent-output "Executor result for task: retry success"
+                                       :comparator-reason "ok"))))
+                   (when log-fn
+                     (funcall log-fn "run-1234" result))
+                   (funcall callback result))))
+              ((symbol-function 'gptel-auto-experiment-log-tsv)
+               (lambda (_run-id exp-result)
+                 (push exp-result logged-results)))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (cl-incf scheduled-retries)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-auto-workflow-strategic.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 2))
+      (should (= scheduled-retries 1))
+      (should (= (length logged-results) 1))
+      (should (equal (plist-get (car logged-results) :agent-output)
+                     "Executor result for task: retry success"))
+      (should (equal final-result (car logged-results))))))
+
 (ert-deftest regression/auto-experiment/run-with-retry-backs-off-rate-limits ()
   "Rate-limit retries should increase delay instead of hammering the provider."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
@@ -1709,7 +1756,7 @@ EXIT-CODE defaults to 1."
         (gptel-auto-experiment-retry-delay 5)
         (gptel-auto-experiment-rate-limit-max-retry-delay 60))
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
                  (cl-incf runs)
                  (funcall callback
                           (if (< runs 3)
@@ -1743,7 +1790,7 @@ EXIT-CODE defaults to 1."
           (gptel-auto-experiment-max-retries 3)
           (gptel-auto-experiment-retry-delay 0))
       (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-                 (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+                 (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
                    (cl-incf runs)
                    (funcall callback
                             (list :agent-output
@@ -1773,7 +1820,7 @@ EXIT-CODE defaults to 1."
         (gptel-auto-experiment-max-retries 3)
         (gptel-auto-experiment-retry-delay 0))
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
                  (cl-incf runs)
                  (funcall callback
                           (if (= runs 1)
@@ -1844,7 +1891,7 @@ EXIT-CODE defaults to 1."
          (gptel-auto-workflow--run-id "run-1")
         (gptel-auto-workflow--running t))
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
                  (cl-incf runs)
                  (funcall callback
                           (list :agent-output

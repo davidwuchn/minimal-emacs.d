@@ -5070,71 +5070,78 @@ RETRY-COUNT tracks current retry attempt."
   (let ((retries (or retry-count 0))
         (workflow-root (gptel-auto-workflow--resolve-run-root))
         (retry-buffer (current-buffer))
-        (run-id gptel-auto-workflow--run-id))
+        (run-id gptel-auto-workflow--run-id)
+        (attempt-logs nil))
     (gptel-auto-experiment-run
      target experiment-id max-experiments baseline baseline-code-quality previous-results
-         (lambda (result)
-            (let* ((agent-output (plist-get result :agent-output))
-                   (raw-error (or (plist-get result :error)
-                                  (and (gptel-auto-experiment--agent-error-p agent-output)
-                                       agent-output)))
-                   (retry-delay
-                    (gptel-auto-experiment--retry-delay-seconds
-                     (or raw-error agent-output)
-                     retries))
-                  (error-type (plist-get result :comparator-reason))
-                  (hard-timeout
-                   (gptel-auto-experiment--hard-timeout-p raw-error))
-                 (quota-exhausted
-                  (or gptel-auto-experiment--quota-exhausted
-                      (gptel-auto-experiment--hard-quota-exhausted-p agent-output)))
-                  (api-rate-limit-category
-                   (memq error-type '(:api-rate-limit)))
-                  (timeout-category
-                   (memq error-type '(:timeout)))
-                  (retryable-category
-                   (or api-rate-limit-category
-                       (and (not hard-timeout)
-                            timeout-category)))
-                  (retryable-failure
-                   (or retryable-category
-                       (and raw-error
-                            (not hard-timeout)
-                            (gptel-auto-experiment--is-retryable-error-p raw-error)))))
-             (when quota-exhausted
-               (setq gptel-auto-experiment--quota-exhausted t))
-             (if (and (not quota-exhausted)
-                      (< retries gptel-auto-experiment-max-retries)
-                      retryable-failure)
-                (progn
-                    (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
-                             experiment-id (1+ retries) gptel-auto-experiment-max-retries
-                             retry-delay)
-                    (run-with-timer retry-delay nil
-                                    (lambda ()
-                                      (if (gptel-auto-workflow--run-callback-live-p run-id)
-                                          (gptel-auto-workflow--call-in-run-context
-                                          workflow-root
-                                          (lambda ()
-                                            (gptel-auto-experiment--run-with-retry
-                                             target experiment-id max-experiments baseline baseline-code-quality
-                                             previous-results callback (1+ retries)))
-                                          retry-buffer
-                                          workflow-root)
-                                       (progn
-                                          (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
-                                                   experiment-id run-id)
-                                          (funcall callback
-                                                   (list :target target
-                                                         :id experiment-id
-                                                         :stale-run t)))))))
-                (when hard-timeout
-                  (message "[auto-exp] Hard executor timeout during experiment %d; skipping retries"
-                           experiment-id))
-               (when quota-exhausted
-                 (message "[auto-exp] Quota exhausted during experiment %d; skipping retries"
-                          experiment-id))
-               (funcall callback result)))))))
+     (lambda (result)
+       (let* ((agent-output (plist-get result :agent-output))
+              (raw-error (or (plist-get result :error)
+                             (and (gptel-auto-experiment--agent-error-p agent-output)
+                                  agent-output)))
+              (retry-delay
+               (gptel-auto-experiment--retry-delay-seconds
+                (or raw-error agent-output)
+                retries))
+              (error-type (plist-get result :comparator-reason))
+              (hard-timeout
+               (gptel-auto-experiment--hard-timeout-p raw-error))
+              (quota-exhausted
+               (or gptel-auto-experiment--quota-exhausted
+                   (gptel-auto-experiment--hard-quota-exhausted-p agent-output)))
+              (api-rate-limit-category
+               (memq error-type '(:api-rate-limit)))
+              (timeout-category
+               (memq error-type '(:timeout)))
+              (retryable-category
+               (or api-rate-limit-category
+                   (and (not hard-timeout)
+                        timeout-category)))
+              (retryable-failure
+               (or retryable-category
+                   (and raw-error
+                        (not hard-timeout)
+                        (gptel-auto-experiment--is-retryable-error-p raw-error)))))
+         (when quota-exhausted
+           (setq gptel-auto-experiment--quota-exhausted t))
+         (if (and (not quota-exhausted)
+                  (< retries gptel-auto-experiment-max-retries)
+                  retryable-failure)
+             (progn
+               (setq attempt-logs nil)
+               (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
+                        experiment-id (1+ retries) gptel-auto-experiment-max-retries
+                        retry-delay)
+               (run-with-timer retry-delay nil
+                               (lambda ()
+                                 (if (gptel-auto-workflow--run-callback-live-p run-id)
+                                     (gptel-auto-workflow--call-in-run-context
+                                      workflow-root
+                                      (lambda ()
+                                        (gptel-auto-experiment--run-with-retry
+                                         target experiment-id max-experiments baseline baseline-code-quality
+                                         previous-results callback (1+ retries)))
+                                      retry-buffer
+                                      workflow-root)
+                                   (progn
+                                     (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
+                                              experiment-id run-id)
+                                     (funcall callback
+                                              (list :target target
+                                                    :id experiment-id
+                                                    :stale-run t)))))))
+           (dolist (logged-result (nreverse attempt-logs))
+             (gptel-auto-experiment-log-tsv run-id logged-result))
+           (setq attempt-logs nil)
+           (when hard-timeout
+             (message "[auto-exp] Hard executor timeout during experiment %d; skipping retries"
+                      experiment-id))
+           (when quota-exhausted
+             (message "[auto-exp] Quota exhausted during experiment %d; skipping retries"
+                      experiment-id))
+           (funcall callback result))))
+     (lambda (_logged-run-id exp-result)
+       (push exp-result attempt-logs)))))
 (defun gptel-auto-experiment--categorize-error (agent-output)
   "Categorize error from AGENT-OUTPUT and return (CATEGORY . DETAILS).
 Categories: :api-rate-limit :api-error :tool-error :timeout :grader-failed :unknown
@@ -5247,9 +5254,10 @@ Auto-workflow principle: try harder, again and again, never stop to ask."
 
 ;;; Single Experiment
 
-(defun gptel-auto-experiment-run (target experiment-id max-experiments baseline baseline-code-quality previous-results callback)
+(defun gptel-auto-experiment-run (target experiment-id max-experiments baseline baseline-code-quality previous-results callback &optional log-fn)
   "Run single experiment. Call CALLBACK with result plist.
-BASELINE-CODE-QUALITY is the initial code quality score."
+BASELINE-CODE-QUALITY is the initial code quality score.
+LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
   (message "[auto-experiment] Starting %d/%d for %s" experiment-id max-experiments target)
   (setq gptel-auto-workflow--current-target target)
   (let* ((worktree (gptel-auto-workflow-create-worktree target experiment-id))
@@ -5264,6 +5272,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
           ;; CRITICAL: Set default-directory to worktree so all subagents
           ;; operate in the correct context. Each worktree = one session.
           (default-directory experiment-worktree)
+          (log-fn (or log-fn #'gptel-auto-experiment-log-tsv))
          ;; Get project buffer for overlay routing (ensure hash table exists)
          (project-buf (when (and (boundp 'gptel-auto-workflow--current-project)
                                  gptel-auto-workflow--current-project
@@ -5380,8 +5389,8 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                              (when grade-error-output
                                (setq exp-result
                                      (plist-put exp-result :error grade-error-output)))
-                             (gptel-auto-experiment-log-tsv
-                              run-id exp-result)
+                             (funcall log-fn
+                                      run-id exp-result)
                               (funcall callback exp-result)))
                         ;; Grader passed - create a provisional commit so the
                         ;; benchmark/scope logic can diff against HEAD~1.
@@ -5436,8 +5445,8 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 			(finalize
 			 (gptel-auto-workflow--make-idempotent-callback
 			  (lambda (&rest _)
-			    (gptel-auto-experiment-log-tsv
-			     run-id exp-result)
+			    (funcall log-fn
+				     run-id exp-result)
 			    (funcall callback exp-result)))))
 		   (gptel-auto-workflow--assert-main-untouched)
 		   (message "[auto-experiment] ✓ Committing improvement for %s" target)
@@ -5474,7 +5483,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 						   :comparator-reason
 						   "optimize-push-failed")))
 				   (setq failed-result (plist-put failed-result :kept nil))
-				   (gptel-auto-experiment-log-tsv run-id failed-result)
+				   (funcall log-fn run-id failed-result)
 				   (funcall callback failed-result))))
 			   (funcall finalize)))
 		     (let ((failed-result
@@ -5486,7 +5495,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 			(format "Drop provisional commit for %s" target))
 		       (setq provisional-commit-hash nil)
 		       (setq failed-result (plist-put failed-result :kept nil))
-		       (gptel-auto-experiment-log-tsv run-id failed-result)
+		       (funcall log-fn run-id failed-result)
 		       (funcall callback failed-result))))
 	       (let ((default-directory experiment-worktree))
 		 (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
@@ -5496,8 +5505,8 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 		  (format "Discard provisional commit for %s" target))
 		 (setq provisional-commit-hash nil)
 		 (cl-incf gptel-auto-experiment--no-improvement-count)
-		 (gptel-auto-experiment-log-tsv
-		  run-id exp-result)
+		 (funcall log-fn
+			  run-id exp-result)
 		 (funcall callback exp-result))))))))
                           (if (and (gptel-auto-experiment--teachable-validation-error-p
                                     target validation-error)
@@ -5563,8 +5572,8 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 									 (finalize
 									  (gptel-auto-workflow--make-idempotent-callback
 									   (lambda (&rest _)
-                                                                           (gptel-auto-experiment-log-tsv
-                                                                            run-id exp-result)
+                                                                           (funcall log-fn
+                                                                                    run-id exp-result)
                                                                             (funcall callback exp-result)))))
 								    (gptel-auto-workflow--assert-main-untouched)
 								    (if (and (gptel-auto-workflow--git-step-success-p
@@ -5600,7 +5609,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                                                                    :comparator-reason
                                                                                                    "retry-push-failed")))
                                                                                    (setq failed-result (plist-put failed-result :kept nil))
-                                                                                   (gptel-auto-experiment-log-tsv run-id failed-result)
+                                                                                   (funcall log-fn run-id failed-result)
                                                                                    (funcall callback failed-result))))
                                                                            (funcall finalize)))
 								      (let ((failed-result
@@ -5612,7 +5621,7 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 									 (format "Drop provisional commit for %s" target))
 									(setq provisional-commit-hash nil)
 									(setq failed-result (plist-put failed-result :kept nil))
-									(gptel-auto-experiment-log-tsv run-id failed-result)
+									(funcall log-fn run-id failed-result)
 									(funcall callback failed-result))))
 							       (let ((default-directory experiment-worktree))
 								 (message "[auto-experiment] Discarding changes for %s (no improvement)" target)
@@ -5622,8 +5631,8 @@ BASELINE-CODE-QUALITY is the initial code quality score."
 								  (format "Discard provisional commit for %s" target))
 								 (setq provisional-commit-hash nil)
 								 (cl-incf gptel-auto-experiment--no-improvement-count)
-								 (gptel-auto-experiment-log-tsv
-								  run-id exp-result)
+								 (funcall log-fn
+									  run-id exp-result)
                                                                 (funcall callback exp-result))))))))
                                                  (setq finished t)
                                                   (message "[auto-experiment] ✗ Retry still failed validation")
@@ -5657,8 +5666,8 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                                 :agent-output retry-output
                                                                 :retries 1
                                                                 :validation-error retry-validation-error)))
-                                                     (gptel-auto-experiment-log-tsv
-                                                      run-id exp-result)
+                                                     (funcall log-fn
+                                                              run-id exp-result)
                                                     (gptel-auto-workflow--drop-provisional-commit
                                                      provisional-commit-hash
                                                      (format "Drop provisional commit for %s" target))
@@ -5682,8 +5691,8 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                                           :analyzer-patterns (format "%s" patterns)
                                                           :agent-output retry-output
                                                           :retries 1)))
-                                               (gptel-auto-experiment-log-tsv
-                                                run-id exp-result)
+                                               (funcall log-fn
+                                                        run-id exp-result)
                                               (gptel-auto-workflow--drop-provisional-commit
                                                provisional-commit-hash
                                                (format "Drop provisional commit for %s" target))
@@ -5720,8 +5729,8 @@ BASELINE-CODE-QUALITY is the initial code quality score."
                                             :analyzer-patterns (format "%s" patterns)
                                             :agent-output agent-output)))
                                 (message "[auto-experiment] ✗ %s for %s" reason target)
-                                (gptel-auto-experiment-log-tsv
-                                 run-id exp-result)
+                                (funcall log-fn
+                                         run-id exp-result)
                                 (funcall callback exp-result))))))
 ))))))))))))
                    "executor"
