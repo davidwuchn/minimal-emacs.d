@@ -1466,6 +1466,40 @@ EXIT-CODE defaults to 1."
        (should gptel-auto-experiment--quota-exhausted)
        (should (string-match-p "usage limit exceeded" (plist-get final-result :agent-output))))))
 
+(ert-deftest regression/auto-experiment/run-with-retry-backs-off-rate-limits ()
+  "Rate-limit retries should increase delay instead of hammering the provider."
+  (let ((runs 0)
+        (delays nil)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 5)
+        (gptel-auto-experiment-rate-limit-max-retry-delay 60))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback)
+                 (cl-incf runs)
+                 (funcall callback
+                          (if (< runs 3)
+                              (list :agent-output
+                                    "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"
+                                    :comparator-reason ":api-rate-limit")
+                            (list :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'run-with-timer)
+               (lambda (secs _repeat fn &rest args)
+                 (push secs delays)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 3))
+      (should (equal (nreverse delays) '(5 10)))
+      (should (equal (plist-get final-result :agent-output)
+                     "Executor result for task: retry success")))))
+
 (ert-deftest regression/auto-experiment/run-with-retry-skips-hard-runtime-timeout-retries ()
   "Retry helper should not reschedule hard total-runtime timeout failures."
   (dolist (timeout-category '(:timeout ":timeout"))
@@ -1529,6 +1563,40 @@ EXIT-CODE defaults to 1."
       (should (= scheduled-retries 1))
       (should (string-match-p "10s total runtime"
                               (plist-get final-result :agent-output))))))
+
+(ert-deftest regression/auto-experiment/api-pressure-threshold-stops-after-first-failed-experiment ()
+  "Sustained API pressure should stop a target before launching the next experiment."
+  (let ((gptel-auto-experiment-delay-between 0)
+        (gptel-auto-experiment-no-improvement-threshold 99)
+        (gptel-auto-experiment--api-error-count 0)
+        (gptel-auto-experiment--api-error-threshold 3)
+        (runs 0)
+        (results nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+               (lambda (&rest _) '(:eight-keys 0.4)))
+              ((symbol-function 'gptel-auto-experiment--code-quality-score)
+               (lambda () 0.5))
+              ((symbol-function 'gptel-auto-experiment--run-with-retry)
+               (lambda (target exp-id max-exp baseline baseline-code-quality previous-results callback &optional _retry-count)
+                 (cl-incf runs)
+                 (when (= exp-id 1)
+                   (setq gptel-auto-experiment--api-error-count 3))
+                 (funcall callback
+                          (list :target target
+                                :id exp-id
+                                :score-after 0
+                                :kept nil
+                                :comparator-reason ":api-rate-limit"
+                                :agent-output "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")"))
+                 (list target max-exp baseline baseline-code-quality previous-results)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-experiment-loop
+       "lisp/modules/gptel-tools-agent.el"
+       (lambda (loop-results)
+         (setq results loop-results)))
+      (should (= runs 1))
+      (should (= (length results) 1)))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-skips-stale-run ()
   "Retry timers should not restart an experiment after its run has ended."

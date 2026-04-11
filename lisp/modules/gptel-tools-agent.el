@@ -4670,7 +4670,7 @@ Example HYPOTHESES:
   "Count of API errors in current run.")
 
 (defvar gptel-auto-experiment--api-error-threshold 3
-  "Threshold of API errors before reducing experiment count.")
+  "Threshold of API errors before reducing or stopping future experiments.")
 
 (defvar gptel-auto-experiment--quota-exhausted nil
   "Non-nil when provider quota exhaustion should stop the current workflow.")
@@ -4688,6 +4688,9 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
 (defvar gptel-auto-experiment-retry-delay 5
   "Seconds to wait between retries.")
 
+(defvar gptel-auto-experiment-rate-limit-max-retry-delay 60
+  "Maximum seconds between retries for rate-limited API failures.")
+
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
   "Check if ERROR-OUTPUT is a transient/retryable error."
   (and (stringp error-output)
@@ -4695,6 +4698,22 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
          (string-match-p
           "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
           error-output))))
+
+(defun gptel-auto-experiment--rate-limit-error-p (error-output)
+  "Return non-nil when ERROR-OUTPUT reflects provider rate limiting."
+  (and (stringp error-output)
+       (let ((case-fold-search t))
+         (string-match-p
+          "rate_limit_error\\|usage limit exceeded\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429"
+          error-output))))
+
+(defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
+  "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."
+  (let ((base-delay (max 1 gptel-auto-experiment-retry-delay)))
+    (if (gptel-auto-experiment--rate-limit-error-p error-output)
+        (min gptel-auto-experiment-rate-limit-max-retry-delay
+             (* base-delay (ash 1 retries)))
+      base-delay)))
 
 (defun gptel-auto-experiment--grade-failure-error-output (grade-details agent-output)
   "Return retryable/error-shaped output for a failed grade.
@@ -4740,13 +4759,17 @@ RETRY-COUNT tracks current retry attempt."
     (gptel-auto-experiment-run
      target experiment-id max-experiments baseline baseline-code-quality previous-results
          (lambda (result)
-           (let* ((agent-output (plist-get result :agent-output))
-                  (raw-error (or (plist-get result :error)
-                                 (and (gptel-auto-experiment--agent-error-p agent-output)
-                                      agent-output)))
-                 (error-type (plist-get result :comparator-reason))
-                 (hard-timeout
-                  (gptel-auto-experiment--hard-timeout-p raw-error))
+            (let* ((agent-output (plist-get result :agent-output))
+                   (raw-error (or (plist-get result :error)
+                                  (and (gptel-auto-experiment--agent-error-p agent-output)
+                                       agent-output)))
+                   (retry-delay
+                    (gptel-auto-experiment--retry-delay-seconds
+                     (or raw-error agent-output)
+                     retries))
+                  (error-type (plist-get result :comparator-reason))
+                  (hard-timeout
+                   (gptel-auto-experiment--hard-timeout-p raw-error))
                  (quota-exhausted
                   (or gptel-auto-experiment--quota-exhausted
                       (gptel-auto-experiment--quota-exhausted-p agent-output)))
@@ -4769,13 +4792,13 @@ RETRY-COUNT tracks current retry attempt."
                       (< retries gptel-auto-experiment-max-retries)
                       retryable-failure)
                 (progn
-                   (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
-                            experiment-id (1+ retries) gptel-auto-experiment-max-retries
-                            gptel-auto-experiment-retry-delay)
-                   (run-with-timer gptel-auto-experiment-retry-delay nil
-                                   (lambda ()
-                                     (if (gptel-auto-workflow--run-callback-live-p run-id)
-                                         (gptel-auto-workflow--call-in-run-context
+                    (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
+                             experiment-id (1+ retries) gptel-auto-experiment-max-retries
+                             retry-delay)
+                    (run-with-timer retry-delay nil
+                                    (lambda ()
+                                      (if (gptel-auto-workflow--run-callback-live-p run-id)
+                                          (gptel-auto-workflow--call-in-run-context
                                           workflow-root
                                           (lambda ()
                                             (gptel-auto-experiment--run-with-retry
@@ -5529,9 +5552,10 @@ Adapts max-experiments based on API error rate."
                     (message "[auto-workflow] Provider quota exhausted; stopping early for %s"
                              target)
                     (setq max-exp (min max-exp (1- exp-id))))
-                  (when (and (> gptel-auto-experiment--api-error-count 5)
+                  (when (and (>= gptel-auto-experiment--api-error-count
+                                  gptel-auto-experiment--api-error-threshold)
                              (< exp-id max-exp))
-                    (message "[auto-workflow] Too many API errors (%d), stopping early for %s"
+                    (message "[auto-workflow] API pressure reached threshold (%d), stopping early for %s"
                              gptel-auto-experiment--api-error-count target)
                     (setq max-exp (1- exp-id)))
                    (if (or (> exp-id max-exp)
