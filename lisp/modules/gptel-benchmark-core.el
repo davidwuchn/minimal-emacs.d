@@ -377,16 +377,15 @@ RESULTS should contain :eight-keys-scores in each entry."
         (high-scores 0)
         (threshold 0.7))
     (dolist (r results)
-      (let* ((scores (gptel-benchmark--extract-scores r))
-             (overall (if scores (plist-get scores :overall-score) 0)))
-        (when scores
+      (let ((overall (gptel-benchmark--get-score r :overall-score)))
+        (when overall
           (cond
            ((< overall threshold) (cl-incf low-scores))
            ((>= overall 0.9) (cl-incf high-scores)))
           (dolist (mapping gptel-benchmark--score-type-map)
             (let* ((score-type (car mapping))
                    (issue-type (cdr mapping))
-                   (score (plist-get scores score-type)))
+                   (score (gptel-benchmark--get-score r score-type)))
               (when (and score (< score threshold))
                 (puthash issue-type (1+ (gethash issue-type issues 0)) issues)))))))
     (when (> low-scores 0)
