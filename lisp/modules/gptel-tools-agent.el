@@ -4917,6 +4917,15 @@ keeps the agent YAML defaults outside headless runs."
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-headless-fallback-agents
+  '("analyzer" "grader" "reviewer")
+  "Headless subagents that should move off their configured MiniMax backend.
+
+Executor keeps its configured backend when available because live workflow runs
+showed repeated idle timeouts after forcing it onto slower fallback providers."
+  :type '(repeat string)
+  :group 'gptel-tools-agent)
+
 (defconst gptel-auto-workflow--backend-key-hosts
   '(("MiniMax" . "api.minimaxi.com")
     ("DeepSeek" . "api.deepseek.com")
@@ -4973,6 +4982,7 @@ can use newer models without a restart."
   "Return PRESET with a fallback provider for headless auto-workflow AGENT-TYPE."
   (let ((backend (plist-get preset :backend)))
     (if (and (gptel-auto-workflow--headless-provider-override-active-p)
+             (member agent-type gptel-auto-workflow-headless-fallback-agents)
              (stringp backend)
              (string= backend "MiniMax"))
         (if-let ((candidate
