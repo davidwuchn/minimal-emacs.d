@@ -1685,6 +1685,44 @@ EXIT-CODE defaults to 1."
           (kill-buffer worktree-buf))
         (delete-directory project-root t)))))
 
+(ert-deftest regression/subagent/payload-compaction-binds-lexical-byte-state ()
+  "Payload compaction should not fail when byte tracking lives in lexical scope."
+  (let ((my/gptel-payload-byte-limit 1024)
+        (estimate-calls 0)
+        (trim-calls 0)
+        (fsm (gptel-make-fsm
+              :info (list :retries 0
+                          :data (list :messages (vector (list :role "tool"
+                                                              :content "large payload")))))))
+    (cl-letf (((symbol-function 'my/gptel--effective-byte-limit)
+               (lambda (_info) 1024))
+              ((symbol-function 'my/gptel--repair-thinking-tool-call-messages)
+               (lambda (_info) 0))
+              ((symbol-function 'my/gptel--estimate-payload-bytes)
+               (lambda (_info)
+                 (prog1 (if (zerop estimate-calls) 2048 512)
+                   (cl-incf estimate-calls))))
+              ((symbol-function 'my/gptel--trim-tool-results-for-retry)
+               (lambda (_info _retries &optional _force)
+                 (cl-incf trim-calls)
+                 1))
+              ((symbol-function 'my/gptel--trim-reasoning-content)
+               (lambda (_info) 0))
+              ((symbol-function 'my/gptel--reduce-tools-for-retry)
+               (lambda (_info) 0))
+              ((symbol-function 'my/gptel--truncate-old-messages)
+               (lambda (_info) 0))
+              ((symbol-function 'my/gptel--strip-images-from-messages)
+               (lambda (_info) 0)))
+      (should-not
+       (condition-case _err
+           (progn
+             (my/gptel--compact-payload fsm)
+             nil)
+         (error t)))
+      (should (= 1 trim-calls))
+      (should (> estimate-calls 1)))))
+
 (ert-deftest regression/auto-experiment-loop/uses-run-with-retry-helper ()
   "Experiment loop should route live runs through the retry helper."
   (let ((retry-calls 0)
