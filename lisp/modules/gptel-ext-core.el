@@ -262,12 +262,8 @@ Checks for control characters, private-use chars, and non-characters."
 Removes control characters, private-use chars, and non-characters that break json-serialize.
 Also removes supplementary private-use area chars (U+F0000-U+FFFFD, U+100000-U+10FFFD)."
   (when (stringp string)
-    (let ((chars (string-to-list string))
-          (result-chars nil))
-      (dolist (c chars)
-        (unless (my/gptel--char-problematic-p c)
-          (push c result-chars)))
-      (apply #'string (nreverse result-chars)))))
+    (apply #'string (seq-filter (lambda (c) (not (my/gptel--char-problematic-p c)))
+                                (string-to-list string)))))
 
 (defun my/gptel--sanitize-tool-type-symbols (tools-vec)
   "Convert :type symbols to strings in TOOLS-VEC for JSON serialization.
