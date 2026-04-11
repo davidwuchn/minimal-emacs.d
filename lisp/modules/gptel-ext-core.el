@@ -353,7 +353,7 @@ Runs as :before advice on `gptel-curl--get-args'."
 
 (defun my/gptel--sanitize-multimodal-content (content-vec)
   "Sanitize text parts in multimodal CONTENT-VEC.
-CONTENT-VEC is a vector like [(:type \"text\" :text \"...\")]."
+CONTENT-VEC is a vector like [(:type \"text\" :text \"...\"."
   (cl-loop for i from 0 below (length content-vec)
            for part = (aref content-vec i)
            when (and (listp part)
