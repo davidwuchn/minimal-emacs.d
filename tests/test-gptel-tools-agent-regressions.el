@@ -5688,8 +5688,8 @@ EXIT-CODE defaults to 1."
             (should (string-match-p ":phase \"running\"" (buffer-string)))
             (should (string-match-p "2026-04-11T105552Z-80d6" (buffer-string)))))
       (delete-directory status-dir t)
-      (delete-directory tmp-root t)
-      (delete-directory fake-bin t))))
+       (delete-directory tmp-root t)
+       (delete-directory fake-bin t))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status-after-daemon-restart ()
   "Wrapper auto-workflow should clear stale running status when daemon is alive but idle."
@@ -6229,8 +6229,56 @@ EXIT-CODE defaults to 1."
         (should (equal (gptel-auto-workflow--status-file) bound-file))
       (when (file-exists-p override-file)
         (delete-file override-file))
-      (when (file-exists-p bound-file)
-        (delete-file bound-file)))))
+       (when (file-exists-p bound-file)
+         (delete-file bound-file)))))
+
+(ert-deftest regression/auto-workflow/messages-file-honors-environment-override ()
+  "Workflow messages file should honor AUTO_WORKFLOW_MESSAGES_FILE."
+  (let* ((override-file (make-temp-file "aw-messages-override" nil ".log"))
+         (process-environment
+          (cons (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" override-file)
+                process-environment))
+         (gptel-auto-workflow-messages-file "var/tmp/cron/auto-workflow-messages-tail.txt"))
+    (unwind-protect
+        (should (equal (gptel-auto-workflow--messages-file) override-file))
+      (when (file-exists-p override-file)
+        (delete-file override-file)))))
+
+(ert-deftest regression/auto-workflow/persist-status-refreshes-messages-tail ()
+  "Persisting status should also refresh the persisted *Messages* tail."
+  (let* ((status-file (make-temp-file "aw-status-live" nil ".sexp"))
+         (messages-file (make-temp-file "aw-messages-live" nil ".log"))
+         (messages-buffer (get-buffer-create "*Messages*"))
+         (original-text nil)
+         (gptel-auto-workflow-status-file status-file)
+         (gptel-auto-workflow-messages-file messages-file)
+         (gptel-auto-workflow-messages-chars 200)
+         (gptel-auto-workflow--run-id "2026-04-12T141500Z-probe")
+         (gptel-auto-workflow--running t)
+         (gptel-auto-workflow--cron-job-running nil)
+         (gptel-auto-workflow--stats '(:phase "running" :total 5 :kept 1)))
+    (unwind-protect
+        (progn
+          (with-current-buffer messages-buffer
+            (setq original-text (buffer-string))
+            (let ((inhibit-read-only t))
+              (erase-buffer)
+              (insert "alpha status line\n")
+              (insert "[auto-workflow] persisted tail probe\n")
+              (insert "omega status line\n")))
+          (gptel-auto-workflow--persist-status)
+          (with-temp-buffer
+            (insert-file-contents messages-file)
+            (should (string-match-p "\\[auto-workflow\\] persisted tail probe" (buffer-string)))
+            (should (string-match-p "omega status line" (buffer-string)))))
+      (with-current-buffer messages-buffer
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert original-text)))
+      (when (file-exists-p status-file)
+        (delete-file status-file))
+      (when (file-exists-p messages-file)
+        (delete-file messages-file)))))
 
 (ert-deftest regression/auto-workflow/persist-status-preserves-active-snapshot-from-placeholder ()
   "Idle placeholder writes should not clobber an active persisted snapshot."
@@ -6643,6 +6691,53 @@ EXIT-CODE defaults to 1."
             (insert "safe dumped messages\n"))
           (let ((output (shell-command-to-string (format "%s messages" script))))
             (should (string-match-p "safe dumped messages" output)))
+          (with-temp-buffer
+            (insert-file-contents emacs-log)
+            (should (string-empty-p (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log))
+      (when (file-exists-p emacs-log)
+        (delete-file emacs-log))
+      (when (file-exists-p messages-file)
+        (delete-file messages-file)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-messages-uses-persisted-tail-while-running ()
+  "Wrapper messages should use the persisted tail while a run is active."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (messages-file (make-temp-file "aw-messages-tail"))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (fake-emacsclient
+          (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 1))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "echo emacs-invoked >> %s\nexit 1" (shell-quote-argument emacs-log))))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" messages-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 5 :phase \"running\" :run-id \"2026-04-12T134827Z-10a6\" :results \"var/tmp/experiments/2026-04-12T134827Z-10a6/results.tsv\")\n"))
+          (with-temp-file messages-file
+            (insert "persisted running messages\n"))
+          (let ((output (shell-command-to-string (format "%s messages" script))))
+            (should (string-match-p "persisted running messages" output)))
+          (with-temp-buffer
+            (insert-file-contents argv-log)
+            (should (string-empty-p (buffer-string))))
           (with-temp-buffer
             (insert-file-contents emacs-log)
             (should (string-empty-p (buffer-string)))))

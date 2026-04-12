@@ -151,44 +151,55 @@ def socket_has_owner():
     return probe.returncode == 0
 
 try:
-    proc = subprocess.run(
+    proc = subprocess.Popen(
         [emacsclient, "-a", "false", "-s", server_name, "--eval", elisp],
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=timeout,
-        check=False,
     )
+except OSError as err:
+    sys.stderr.write(f"{err}\n")
+    raise SystemExit(1)
+
+try:
+    stdout_text, stderr_text = proc.communicate(timeout=timeout)
 except subprocess.TimeoutExpired as err:
+    # Leave the client alive so the server can finish the request cleanly
+    # instead of logging a broken server connection when the wrapper gives up.
     if err.stdout:
         sys.stdout.write(err.stdout if isinstance(err.stdout, str) else err.stdout.decode())
     if err.stderr:
         sys.stderr.write(err.stderr if isinstance(err.stderr, str) else err.stderr.decode())
     raise SystemExit(124)
 
+proc_stdout = stdout_text or ""
+proc_stderr = stderr_text or ""
+proc_returncode = proc.returncode
+
 busy_markers = (
     "Server not responding; use Ctrl+C to break",
     "server did not reply",
 )
-stderr_text = proc.stderr or ""
-if proc.returncode != 0 and any(marker in stderr_text for marker in busy_markers):
-    if proc.stdout:
-        sys.stdout.write(proc.stdout)
-    if proc.stderr:
-        sys.stderr.write(proc.stderr)
+stderr_text = proc_stderr
+if proc_returncode != 0 and any(marker in stderr_text for marker in busy_markers):
+    if proc_stdout:
+        sys.stdout.write(proc_stdout)
+    if proc_stderr:
+        sys.stderr.write(proc_stderr)
     raise SystemExit(124)
 
-if (proc.returncode != 0
+if (proc_returncode != 0
         and "Connection refused" in stderr_text
         and socket_has_owner()):
-    if proc.stdout:
-        sys.stdout.write(proc.stdout)
-    if proc.stderr:
-        sys.stderr.write(proc.stderr)
+    if proc_stdout:
+        sys.stdout.write(proc_stdout)
+    if proc_stderr:
+        sys.stderr.write(proc_stderr)
     raise SystemExit(124)
 
-sys.stdout.write(proc.stdout)
-sys.stderr.write(proc.stderr)
-raise SystemExit(proc.returncode)
+sys.stdout.write(proc_stdout)
+sys.stderr.write(proc_stderr)
+raise SystemExit(proc_returncode)
 PY
 }
 
@@ -482,6 +493,10 @@ if [ "$ACTION" = "status" ]; then
 fi
 
 if [ "$ACTION" = "messages" ]; then
+    if status_looks_active && [ -r "$MESSAGES_FILE" ]; then
+        cat "$MESSAGES_FILE"
+        exit 0
+    fi
     if ! check_worker_daemon; then
         rc=$?
         if [ -r "$MESSAGES_FILE" ]; then
