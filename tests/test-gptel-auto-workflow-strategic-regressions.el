@@ -66,6 +66,50 @@
       (gptel-auto-workflow--ask-analyzer-with-findings nil #'ignore)
       (should (= captured-timeout 300)))))
 
+(ert-deftest regression/auto-workflow-strategic/ask-analyzer-retries-on-provider-failover ()
+  "Analyzer target selection should rerun once on the promoted failover provider."
+  (let ((gptel-auto-experiment-use-subagents t)
+        (gptel-auto-workflow-analyzer-time-budget 120)
+        (my/gptel-agent-task-timeout 60)
+        (call-count 0)
+        (selected nil)
+        (messages nil)
+        (gptel-auto-workflow--analyzer-transient-failure nil)
+        (gptel-auto-workflow--analyzer-quota-exhausted nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--gather-context)
+               (lambda () '(:git-history "" :file-sizes "" :file-list "" :todos "")))
+              ((symbol-function 'gptel-auto-workflow--build-analyzer-prompt)
+               (lambda (&rest _) "Prompt body"))
+              ((symbol-function 'gptel-auto-workflow--analyzer-failover-candidate)
+               (lambda ()
+                 (and (= call-count 1)
+                      '("DashScope" . "qwen3.6-plus"))))
+              ((symbol-function 'gptel-auto-workflow--parse-targets)
+               (lambda (_response)
+                 (if (= call-count 1)
+                     (progn
+                       (setq gptel-auto-workflow--analyzer-quota-exhausted t)
+                       nil)
+                   '("lisp/modules/fallback-target.el"))))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_type _description _prompt callback &optional _timeout)
+                 (cl-incf call-count)
+                 (funcall callback "[]")))
+              ((symbol-function 'message)
+               (lambda (format-string &rest args)
+                 (push (apply #'format format-string args) messages))))
+      (gptel-auto-workflow--ask-analyzer-with-findings
+       nil
+       (lambda (targets)
+         (setq selected targets)))
+      (should (= call-count 2))
+      (should (equal selected '("lisp/modules/fallback-target.el")))
+      (should-not gptel-auto-workflow--analyzer-quota-exhausted)
+      (should
+       (member
+        "[auto-workflow] Retrying analyzer target selection with DashScope/qwen3.6-plus"
+        messages)))))
+
 (ert-deftest regression/auto-workflow-strategic/select-targets-falls-back-on-analyzer-transient-failure ()
   "Transient analyzer failures should use static targets."
   (let ((gptel-auto-workflow-strategic-selection t)
@@ -112,7 +156,50 @@
        (lambda (targets)
          (setq selected targets)))
       (should (equal selected '("lisp/modules/static-target.el")))
-      (should-not gptel-auto-experiment--quota-exhausted)
+       (should-not gptel-auto-experiment--quota-exhausted)
+       (should (member "[auto-workflow] Analyzer quota exhausted; using static targets"
+                       messages)))))
+
+(ert-deftest regression/auto-workflow-strategic/select-targets-falls-back-after-analyzer-failover-retry ()
+  "Analyzer target selection should use static targets if the failover retry also fails."
+  (let ((gptel-auto-workflow-strategic-selection t)
+        (gptel-auto-experiment-use-subagents t)
+        (gptel-auto-workflow-targets '("ignored.el"))
+        (selected nil)
+        (call-count 0)
+        (messages nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--gather-context)
+               (lambda () '(:git-history "" :file-sizes "" :file-list "" :todos "")))
+              ((symbol-function 'gptel-auto-workflow--build-analyzer-prompt)
+               (lambda (&rest _) "Prompt body"))
+              ((symbol-function 'gptel-auto-workflow--filter-valid-targets)
+               (lambda (&rest _args) '("lisp/modules/static-target.el")))
+              ((symbol-function 'gptel-auto-workflow--analyzer-failover-candidate)
+               (lambda ()
+                 (and (= call-count 1)
+                      '("DashScope" . "qwen3.6-plus"))))
+              ((symbol-function 'gptel-auto-workflow--parse-targets)
+               (lambda (_response)
+                 (setq gptel-auto-workflow--analyzer-quota-exhausted t)
+                 nil))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_type _description _prompt callback &optional _timeout)
+                 (cl-incf call-count)
+                 (funcall callback "[]")))
+              ((symbol-function 'message)
+               (lambda (format-string &rest args)
+                 (push (apply #'format format-string args) messages))))
+      (gptel-auto-workflow-select-targets
+       (lambda (targets)
+         (setq selected targets)))
+      (should (= call-count 2))
+      (should (equal selected '("lisp/modules/static-target.el")))
+      (should
+       (member
+        "[auto-workflow] Retrying analyzer target selection with DashScope/qwen3.6-plus"
+        messages))
       (should (member "[auto-workflow] Analyzer quota exhausted; using static targets"
                       messages)))))
 
