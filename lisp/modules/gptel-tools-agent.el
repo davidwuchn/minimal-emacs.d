@@ -80,32 +80,42 @@ Reduces duplication of `(if (>= (length hash) 7) (substring hash 0 7) hash)` pat
         (substring hash 0 len)
       hash)))
 
+(defun gptel-auto-workflow--call-with-error-logging (operation fn error-prefix error-message-format)
+  "Internal helper: call FN with error logging.
+OPERATION is the operation name for logging.
+FN is the function to call.
+ERROR-PREFIX is the prefix for error messages.
+ERROR-MESSAGE-FORMAT is the format string for the error message.
+Returns FN's result on success, nil on error."
+  (condition-case err
+      (funcall fn)
+    (error
+     (message "%s %s: %s"
+              error-prefix
+              (format error-message-format operation)
+              (my/gptel--sanitize-for-logging (error-message-string err) 160))
+     nil)))
+
 (defun gptel-auto-workflow--safe-call (operation fn &optional error-prefix)
   "Execute FN for OPERATION, logging errors but continuing execution.
 ERROR-PREFIX defaults to \"[auto-workflow]\".
 Returns FN's result on success, nil on error.
 Use for non-critical operations that should not halt execution."
-  (condition-case err
-      (funcall fn)
-    (error
-     (message "%s %s failed (non-critical): %s"
-              (or error-prefix "[auto-workflow]")
-              operation
-              (my/gptel--sanitize-for-logging (error-message-string err) 160))
-     nil)))
+  (gptel-auto-workflow--call-with-error-logging
+   operation
+   fn
+   (or error-prefix "[auto-workflow]")
+   "%s failed (non-critical)"))
 
 
 (defun gptel-auto-workflow--with-error-handling (operation fn &optional error-prefix)
   "Execute FN for OPERATION, logging any error and returning nil.
 ERROR-PREFIX defaults to \"[auto-workflow]\"."
-  (condition-case err
-      (funcall fn)
-    (error
-     (message "%s Failed to %s: %s"
-              (or error-prefix "[auto-workflow]")
-              operation
-              (my/gptel--sanitize-for-logging (error-message-string err) 160))
-     nil)))
+  (gptel-auto-workflow--call-with-error-logging
+   operation
+   fn
+   (or error-prefix "[auto-workflow]")
+   "Failed to %s"))
 
 
 (defun gptel-auto-workflow--require-magit-dependencies ()
