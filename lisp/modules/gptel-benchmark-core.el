@@ -219,7 +219,7 @@ Handles both (run . scores) cons cells and plists with :scores key.
 Returns nil for nil or malformed input."
   (cond
    ((null r) nil)
-   ((and (listp r) (keywordp (car r)))
+   ((and (listp r) (keywordp (car r)) (zerop (mod (length r) 2)))
     (let ((scores (plist-get r :scores)))
       (when (listp scores) scores)))
    ((consp r)
