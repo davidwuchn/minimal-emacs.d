@@ -4920,23 +4920,24 @@ keeps the agent YAML defaults outside headless runs."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-headless-fallback-agents
-  '("analyzer" "grader" "reviewer")
+  '("analyzer" "executor" "grader" "reviewer")
   "Headless subagents that should move off their configured MiniMax backend.
 
-Executor keeps its configured backend when available because live workflow runs
-showed repeated idle timeouts after forcing it onto slower fallback providers."
+Headless workflow runs should stay on the preferred DashScope `qwen3.6-plus'
+path whenever that backend is available, including executor retries."
   :type '(repeat string)
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("DeepSeek" . "deepseek-chat")
+  '(("DashScope" . "qwen3.6-plus")
+    ("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
-    ("DashScope" . "qwen3.6-plus")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Ordered backend/model fallbacks for executor after provider rate limits.
 
-Executor stays on MiniMax by default. When the active executor backend returns a
-rate-limit error during a headless run, later retries in that same run can
+Headless executor prefers DashScope by default. When the active executor backend
+returns a rate-limit error during a headless run, later retries in that same
+run can
 advance through this list instead of repeatedly hammering the same provider."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
