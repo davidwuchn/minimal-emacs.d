@@ -1057,18 +1057,18 @@ large-result truncation, and result caching."
                              (when (overlayp ov) (delete-overlay ov))
                              (let* ((error-info (plist-get info :error))
                                     (error-msg (when (listp error-info)
-                                                 (plist-get error-info :message))))
-                               (if (and error-msg
-                                        (stringp error-msg)
-                                        (string-match-p "1013\\|server is initializing" error-msg))
-                                   (funcall
-                                    main-cb
-                                    (format "Warning: Reviewer agent not available (server initializing). Auto-approving changes.\n\nError details: %S"
-                                            error-info))
-                                 (funcall
-                                  main-cb
-                                  (format "Error: Task %s could not finish task \"%s\". \n\nError details: %S"
-                                          agent-type description error-info)))))
+                                                 (plist-get error-info :message)))
+                                    (result
+                                     (if (and error-msg
+                                              (stringp error-msg)
+                                              (string-match-p "1013\\|server is initializing" error-msg))
+                                         (format "Warning: Reviewer agent not available (server initializing). Auto-approving changes.\n\nError details: %S"
+                                                 error-info)
+                                       (format "Error: Task %s could not finish task \"%s\". \n\nError details: %S"
+                                               agent-type description error-info))))
+                               (gptel-auto-workflow--maybe-activate-rate-limit-failover
+                                agent-type preset result)
+                               (funcall main-cb result)))
                             (`(tool-call . ,calls)
                              (unless (plist-get info :tracking-marker)
                                (plist-put info :tracking-marker tracking-marker))
@@ -1080,8 +1080,10 @@ large-result truncation, and result caching."
                                (when (overlayp ov) (delete-overlay ov))
                                (when-let* ((transformer (plist-get info :transformer)))
                                  (setq partial (funcall transformer partial)))
-                               (my/gptel--subagent-cache-put agent-type prompt partial)
-                               (my/gptel--deliver-subagent-result main-cb partial)))
+                               (gptel-auto-workflow--maybe-activate-rate-limit-failover
+                                agent-type preset partial)
+                                (my/gptel--subagent-cache-put agent-type prompt partial)
+                                (my/gptel--deliver-subagent-result main-cb partial)))
                             ('abort
                              (when (overlayp ov) (delete-overlay ov))
                              (funcall
@@ -4926,6 +4928,26 @@ showed repeated idle timeouts after forcing it onto slower fallback providers."
   :type '(repeat string)
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
+  '(("DeepSeek" . "deepseek-chat")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("DashScope" . "qwen3.6-plus")
+    ("Gemini" . "gemini-3.1-pro-preview"))
+  "Ordered backend/model fallbacks for executor after provider rate limits.
+
+Executor stays on MiniMax by default. When the active executor backend returns a
+rate-limit error during a headless run, later retries in that same run can
+advance through this list instead of repeatedly hammering the same provider."
+  :type '(repeat (cons (string :tag "Backend")
+                       (string :tag "Model")))
+  :group 'gptel-tools-agent)
+
+(defvar gptel-auto-workflow--runtime-subagent-provider-overrides nil
+  "Per-run provider overrides activated by live workflow failures.
+
+Each element is (AGENT-TYPE . (BACKEND . MODEL)). These overrides are cleared
+at run start and whenever workflow state is force-reset.")
+
 (defconst gptel-auto-workflow--backend-key-hosts
   '(("MiniMax" . "api.minimaxi.com")
     ("DeepSeek" . "api.deepseek.com")
@@ -4978,35 +5000,130 @@ can use newer models without a restart."
           (setf (gptel-backend-models backend) (append models (list model))))))
     model))
 
+(defun gptel-auto-workflow--clear-runtime-subagent-provider-overrides ()
+  "Reset per-run provider overrides for subagents."
+  (setq gptel-auto-workflow--runtime-subagent-provider-overrides nil))
+
+(defun gptel-auto-workflow--runtime-subagent-provider-override (agent-type)
+  "Return the active per-run provider override for AGENT-TYPE, if any."
+  (alist-get agent-type
+             gptel-auto-workflow--runtime-subagent-provider-overrides
+             nil nil #'string=))
+
+(defun gptel-auto-workflow--preset-backend-name (backend)
+  "Return a readable backend name for BACKEND."
+  (cond
+   ((stringp backend) backend)
+   ((and backend (fboundp 'gptel-backend-name))
+    (gptel-backend-name backend))
+   (t nil)))
+
+(defun gptel-auto-workflow--model-max-output-tokens (model-id)
+  "Return the documented max output tokens for MODEL-ID, or nil when unknown."
+  (when (require 'gptel-ext-context-cache nil t)
+    (when-let* (((fboundp 'my/gptel-get-model-metadata))
+                (meta (my/gptel-get-model-metadata model-id))
+                (max-output
+                 (if (fboundp 'my/gptel--plist-get)
+                     (my/gptel--plist-get meta :max-output nil)
+                   (plist-get meta :max-output)))
+                ((integerp max-output))
+                ((> max-output 0)))
+      max-output)))
+
+(defun gptel-auto-workflow--first-available-provider-candidate (candidates &optional exclude-backend)
+  "Return the first available entry from CANDIDATES, skipping EXCLUDE-BACKEND."
+  (seq-find
+   (lambda (entry)
+     (and (not (and (stringp exclude-backend)
+                    (string= (car entry) exclude-backend)))
+          (gptel-auto-workflow--backend-available-p (car entry))))
+   candidates))
+
+(defun gptel-auto-workflow--rewrite-subagent-provider (preset candidate)
+  "Return PRESET rewritten to use CANDIDATE backend/model."
+  (let* ((override (copy-sequence preset))
+         (backend-name (car candidate))
+         (model-name (cdr candidate))
+         (backend-object (gptel-auto-workflow--backend-object backend-name))
+         (model-symbol
+          (gptel-auto-workflow--backend-model-symbol
+           backend-object model-name))
+         (max-output
+          (gptel-auto-workflow--model-max-output-tokens
+           (or model-symbol model-name)))
+         (existing-max-tokens
+          (let ((value (plist-get override :max-tokens)))
+            (cond
+             ((integerp value) value)
+             ((and (stringp value)
+                   (string-match-p "^[0-9]+$" value))
+              (string-to-number value))
+             (t nil)))))
+    (setq override (plist-put override :backend
+                              (or backend-object backend-name)))
+    (setq override (plist-put override :model
+                              (or model-symbol model-name)))
+    (when (and (integerp max-output) (> max-output 0))
+      (setq override
+            (plist-put override :max-tokens
+                       (if (and (integerp existing-max-tokens)
+                                (> existing-max-tokens 0))
+                           (min existing-max-tokens max-output)
+                         max-output))))
+    override))
+
+(defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
+  "Activate a per-run fallback for AGENT-TYPE when RESULT shows rate limiting."
+  (when (and (gptel-auto-workflow--headless-provider-override-active-p)
+             (stringp agent-type)
+             (string= agent-type "executor")
+             (gptel-auto-experiment--rate-limit-error-p result))
+    (let* ((current-backend
+            (gptel-auto-workflow--preset-backend-name
+             (plist-get preset :backend)))
+           (current-model (plist-get preset :model))
+           (existing
+            (gptel-auto-workflow--runtime-subagent-provider-override agent-type))
+           (candidate
+            (gptel-auto-workflow--first-available-provider-candidate
+             gptel-auto-workflow-executor-rate-limit-fallbacks
+             current-backend)))
+      (when (and candidate
+                 (not (equal candidate existing)))
+        (setf (alist-get agent-type
+                         gptel-auto-workflow--runtime-subagent-provider-overrides
+                         nil nil #'string=)
+              candidate)
+        (message "[auto-workflow] Rate limit on %s/%s for %s; future retries will use %s/%s"
+                 (or current-backend "unknown")
+                 (or current-model "unknown")
+                 agent-type
+                 (car candidate)
+                 (cdr candidate))))))
+
 (defun gptel-auto-workflow--maybe-override-subagent-provider (agent-type preset)
   "Return PRESET with a fallback provider for headless auto-workflow AGENT-TYPE."
-  (let ((backend (plist-get preset :backend)))
-    (if (and (gptel-auto-workflow--headless-provider-override-active-p)
-             (member agent-type gptel-auto-workflow-headless-fallback-agents)
-             (stringp backend)
-             (string= backend "MiniMax"))
-        (if-let ((candidate
-                  (seq-find
-                   (lambda (entry)
-                     (gptel-auto-workflow--backend-available-p (car entry)))
-                   gptel-auto-workflow-headless-subagent-fallbacks)))
-            (let* ((override (copy-sequence preset))
-                   (fallback-backend (car candidate))
-                   (fallback-model (cdr candidate))
-                   (backend-object
-                    (gptel-auto-workflow--backend-object fallback-backend))
-                   (model-symbol
-                    (gptel-auto-workflow--backend-model-symbol
-                     backend-object fallback-model)))
-              (setq override (plist-put override :backend
-                                        (or backend-object fallback-backend)))
-              (setq override (plist-put override :model
-                                        (or model-symbol fallback-model)))
-              (message "[auto-workflow] Using %s/%s for %s during headless run"
-                       fallback-backend fallback-model agent-type)
-              override)
-          preset)
-      preset)))
+  (let* ((backend (plist-get preset :backend))
+         (runtime-candidate
+          (and (gptel-auto-workflow--headless-provider-override-active-p)
+               (gptel-auto-workflow--runtime-subagent-provider-override agent-type))))
+    (cond
+     (runtime-candidate
+      (gptel-auto-workflow--rewrite-subagent-provider preset runtime-candidate))
+     ((and (gptel-auto-workflow--headless-provider-override-active-p)
+           (member agent-type gptel-auto-workflow-headless-fallback-agents)
+           (stringp backend)
+           (string= backend "MiniMax"))
+      (if-let ((candidate
+                (gptel-auto-workflow--first-available-provider-candidate
+                 gptel-auto-workflow-headless-subagent-fallbacks)))
+          (progn
+            (message "[auto-workflow] Using %s/%s for %s during headless run"
+                     (car candidate) (cdr candidate) agent-type)
+            (gptel-auto-workflow--rewrite-subagent-provider preset candidate))
+        preset))
+     (t preset))))
 
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
   "Check if ERROR-OUTPUT is a transient/retryable error."
@@ -6337,10 +6454,11 @@ Prevents workflow from hanging indefinitely due to callback failures."
                                  60))))
       (cond
        ((null stuck-minutes)
-        (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
-        (setq gptel-auto-workflow--running nil
-              gptel-auto-workflow--cron-job-running nil
-              gptel-auto-workflow--run-project-root nil
+         (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
+         (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+         (setq gptel-auto-workflow--running nil
+               gptel-auto-workflow--cron-job-running nil
+               gptel-auto-workflow--run-project-root nil
               gptel-auto-workflow--current-project nil
               gptel-auto-workflow--current-target nil)
         (setq gptel-auto-workflow--stats
@@ -6351,11 +6469,12 @@ Prevents workflow from hanging indefinitely due to callback failures."
           (setq gptel-auto-workflow--watchdog-timer nil))
         nil)
        ((> stuck-minutes gptel-auto-workflow--max-stuck-minutes)
-        (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
-                 stuck-minutes)
-        (setq gptel-auto-workflow--running nil
-              gptel-auto-workflow--cron-job-running nil
-              gptel-auto-workflow--run-project-root nil
+         (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
+                  stuck-minutes)
+         (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+         (setq gptel-auto-workflow--running nil
+               gptel-auto-workflow--cron-job-running nil
+               gptel-auto-workflow--run-project-root nil
               gptel-auto-workflow--current-project nil
               gptel-auto-workflow--current-target nil)
         (setq gptel-auto-workflow--stats
@@ -6378,6 +6497,7 @@ Prevents workflow from hanging indefinitely due to callback failures."
 Interactive command to recover from hung workflow state."
   (interactive)
   (my/gptel--reset-agent-task-state)
+  (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
   (gptel-mementum--reset-synthesis-state)
   (gptel-auto-experiment--reset-grade-state)
   (when gptel-auto-workflow--cron-job-timer
@@ -6550,6 +6670,7 @@ Usage:
         (message "[auto-workflow] Skipping: %s" (string-join (car active) ", "))
         (cl-return-from gptel-auto-workflow-run-async nil)))
     (gptel-auto-workflow--require-magit-dependencies)
+    (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id
@@ -6712,6 +6833,7 @@ Only removes worktrees if no gptel processes are running."
         (cleaned 0))
     (when proj-root
       (my/gptel--reset-agent-task-state)
+      (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
       (gptel-mementum--reset-synthesis-state)
       (gptel-auto-experiment--reset-grade-state)
       (when gptel-auto-workflow--cron-job-timer
@@ -6774,12 +6896,13 @@ Only removes worktrees if no gptel processes are running."
          (finish
           (gptel-auto-workflow--make-idempotent-callback
            (lambda ()
-              (let ((final-phase (if gptel-auto-experiment--quota-exhausted
-                                     "quota-exhausted"
-                                   "complete")))
-                (setq gptel-auto-workflow--running nil
-                      gptel-auto-workflow--run-project-root nil
-                      gptel-auto-workflow--current-target nil
+               (let ((final-phase (if gptel-auto-experiment--quota-exhausted
+                                      "quota-exhausted"
+                                    "complete")))
+                 (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                 (setq gptel-auto-workflow--running nil
+                       gptel-auto-workflow--run-project-root nil
+                       gptel-auto-workflow--current-target nil
                       gptel-auto-workflow--current-project nil)
                 (setq gptel-auto-workflow--stats
                       (plist-put gptel-auto-workflow--stats :phase final-phase))
