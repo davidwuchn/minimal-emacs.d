@@ -1237,10 +1237,31 @@ EXIT-CODE defaults to 1."
             (insert-file-contents temp-file)
             (goto-char (point-min))
             (should (looking-at-p "Temporary gptel-agent artifact\\."))
-            (forward-line 2)
-            (should (looking-at-p ";;; sample\\.el .*lexical-binding: t;"))))
+             (forward-line 2)
+             (should (looking-at-p ";;; sample\\.el .*lexical-binding: t;"))))
       (when (and temp-file (file-exists-p temp-file))
         (delete-file temp-file)))))
+
+(ert-deftest regression/gptel-agent/truncate-buffer-creates-temp-dir-before-upstream ()
+  "Local truncate advice should create the spill directory before upstream writes."
+  (let* ((temp-root (make-temp-file "gptel-truncate-temp" t))
+         (temporary-file-directory (file-name-as-directory temp-root))
+         (temp-dir (expand-file-name "gptel-agent-temp" temporary-file-directory))
+         seen-dir)
+    (unwind-protect
+        (with-temp-buffer
+          (insert (make-string 21050 ?a))
+          (my/gptel-agent--truncate-buffer-around
+           (lambda (_prefix &optional _max-lines)
+             (setq seen-dir (file-directory-p temp-dir))
+             (erase-buffer)
+             (insert (format "Stored in: %s\n"
+                             (expand-file-name "artifact.txt" temp-dir))))
+           "read")
+          (should seen-dir)
+          (should (file-directory-p temp-dir)))
+      (when (file-directory-p temp-root)
+        (delete-directory temp-root t)))))
 
 (ert-deftest regression/auto-experiment/quota-exhaustion-stops-further-experiments ()
   "Quota exhaustion should stop the current target after the first failed experiment."
