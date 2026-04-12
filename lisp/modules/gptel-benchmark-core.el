@@ -257,13 +257,9 @@ Returns alist of (score-type . value) for the standard scores.
 Handles nil values gracefully by returning 0.0 for missing scores.
 Handles both plist format (keyword keys) and alist format (symbol or keyword keys)."
   (when scores
-    (let ((get-fn (if (and (listp scores) (keywordp (car scores)))
-                      (lambda (k) (plist-get scores k))
-                    (lambda (k) (or (alist-get k scores)
-                                    (alist-get (gptel-benchmark--keyword-to-alist-key k) scores))))))
-      (mapcar (lambda (score-type)
-                (cons score-type (or (funcall get-fn score-type) 0.0)))
-              gptel-benchmark--score-types))))
+    (mapcar (lambda (score-type)
+              (cons score-type (or (gptel-benchmark--get-field scores score-type) 0.0)))
+            gptel-benchmark--score-types)))
 
 (defun gptel-benchmark--calculate-average (score-totals total score-type)
   "Calculate average for SCORE-TYPE from SCORE-TOTALS over TOTAL items.
@@ -376,7 +372,7 @@ RESULTS should contain :eight-keys-scores in each entry."
   "Analyze RESULTS for patterns, issues, and generate recommendations."
   (let ((issues (make-hash-table :test 'equal))
         (recommendations '())
-        (total (length (or results nil)))
+        (total (length results))
         (low-scores 0)
         (high-scores 0)
         (threshold 0.7))
