@@ -140,11 +140,12 @@ For alist lookup, converts :score to \\='score symbol."
       (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
         (cdr (assoc alist-key obj)))))
 
-(defun gptel-benchmark--plist-get (plist field &optional default)
-  "Get FIELD from PLIST with optional DEFAULT value.
+(defun gptel-benchmark--plist-get (obj field &optional default)
+  "Get FIELD from OBJ with optional DEFAULT value.
 Returns DEFAULT if FIELD is not present or value is nil.
-FIELD should be a keyword like :score."
-  (let ((val (plist-get plist field)))
+FIELD should be a keyword like :score.
+Handles both plist and alist formats (for JSON round-trip compatibility)."
+  (let ((val (gptel-benchmark--get-field obj field)))
     (if (null val) default val)))
 
 ;;; Historical Tracking
