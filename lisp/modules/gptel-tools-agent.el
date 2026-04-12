@@ -6341,6 +6341,9 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--watchdog-timer nil
   "Watchdog timer to prevent workflow from getting stuck.")
 
+(defvar gptel-auto-workflow--status-refresh-timer nil
+  "Timer that keeps the persisted workflow status snapshot fresh.")
+
 (defvar gptel-auto-workflow--last-progress-time nil
   "Timestamp of last progress update.")
 
@@ -6361,6 +6364,11 @@ Relative paths are resolved from the project root."
 
 (defcustom gptel-auto-workflow-messages-chars 16000
   "Maximum number of trailing *Messages* characters to persist for cron tools."
+  :type 'integer
+  :group 'gptel)
+
+(defcustom gptel-auto-workflow-status-refresh-interval 10
+  "Seconds between persisted status refreshes during active workflow runs."
   :type 'integer
   :group 'gptel)
 
@@ -6767,6 +6775,7 @@ Prevents workflow from hanging indefinitely due to callback failures."
         (when gptel-auto-workflow--watchdog-timer
           (cancel-timer gptel-auto-workflow--watchdog-timer)
           (setq gptel-auto-workflow--watchdog-timer nil))
+        (gptel-auto-workflow--stop-status-refresh-timer)
         nil)
        ((> stuck-minutes gptel-auto-workflow--max-stuck-minutes)
         (message "[auto-workflow] WATCHDOG: Workflow stuck for %.1f minutes, force-stopping"
@@ -6783,6 +6792,7 @@ Prevents workflow from hanging indefinitely due to callback failures."
         (when gptel-auto-workflow--watchdog-timer
           (cancel-timer gptel-auto-workflow--watchdog-timer)
           (setq gptel-auto-workflow--watchdog-timer nil))
+        (gptel-auto-workflow--stop-status-refresh-timer)
         nil)
        (t
         ;; Still running normally, check again in 5 minutes
@@ -6791,6 +6801,27 @@ Prevents workflow from hanging indefinitely due to callback failures."
 (defun gptel-auto-workflow--update-progress ()
   "Update progress timestamp for watchdog tracking."
   (setq gptel-auto-workflow--last-progress-time (current-time)))
+
+(defun gptel-auto-workflow--stop-status-refresh-timer ()
+  "Cancel the active workflow status refresh timer, if any."
+  (when (timerp gptel-auto-workflow--status-refresh-timer)
+    (cancel-timer gptel-auto-workflow--status-refresh-timer))
+  (setq gptel-auto-workflow--status-refresh-timer nil))
+
+(defun gptel-auto-workflow--refresh-status-if-running ()
+  "Refresh the persisted workflow snapshot while the workflow is active."
+  (if (or gptel-auto-workflow--running
+          gptel-auto-workflow--cron-job-running)
+      (gptel-auto-workflow--persist-status)
+    (gptel-auto-workflow--stop-status-refresh-timer)))
+
+(defun gptel-auto-workflow--start-status-refresh-timer ()
+  "Start the workflow status refresh timer."
+  (gptel-auto-workflow--stop-status-refresh-timer)
+  (setq gptel-auto-workflow--status-refresh-timer
+        (run-with-timer gptel-auto-workflow-status-refresh-interval
+                        gptel-auto-workflow-status-refresh-interval
+                        #'gptel-auto-workflow--refresh-status-if-running)))
 
 (defun gptel-auto-workflow-force-stop ()
   "Force stop a stuck workflow.
@@ -6803,6 +6834,7 @@ Interactive command to recover from hung workflow state."
   (when gptel-auto-workflow--cron-job-timer
     (cancel-timer gptel-auto-workflow--cron-job-timer)
     (setq gptel-auto-workflow--cron-job-timer nil))
+  (gptel-auto-workflow--stop-status-refresh-timer)
   (setq gptel-auto-workflow--running nil
         gptel-auto-workflow--cron-job-running nil
         gptel-auto-workflow--run-project-root nil
@@ -6981,6 +7013,7 @@ Usage:
           gptel-auto-workflow--running t
           gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
           gptel-auto-workflow--last-progress-time (current-time))
+    (gptel-auto-workflow--start-status-refresh-timer)
     (gptel-auto-workflow--persist-status)
     ;; Start watchdog timer
     (when gptel-auto-workflow--watchdog-timer
@@ -7140,6 +7173,7 @@ Only removes worktrees if no gptel processes are running."
       (when gptel-auto-workflow--cron-job-timer
         (cancel-timer gptel-auto-workflow--cron-job-timer)
         (setq gptel-auto-workflow--cron-job-timer nil))
+      (gptel-auto-workflow--stop-status-refresh-timer)
       (gptel-auto-workflow--cleanup-old-worktrees)
       (dolist (timer (copy-sequence timer-list))
         (when (timerp timer)
@@ -7194,24 +7228,25 @@ Only removes worktrees if no gptel processes are running."
          (run-buffer (current-buffer))
          (all-results '())
          (kept-count 0)
-         (finish
-          (gptel-auto-workflow--make-idempotent-callback
-           (lambda ()
-             (let ((final-phase (if gptel-auto-experiment--quota-exhausted
-                                    "quota-exhausted"
-                                  "complete")))
-               (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-               (setq gptel-auto-workflow--running nil
-                     gptel-auto-workflow--run-project-root nil
-                     gptel-auto-workflow--current-target nil
-                     gptel-auto-workflow--current-project nil)
-               (setq gptel-auto-workflow--stats
-                     (plist-put gptel-auto-workflow--stats :phase final-phase))
-               (gptel-auto-workflow--persist-status)
-               (message "[auto-workflow] Complete: %d experiments, %d targets improved"
-                        (length all-results) kept-count)
-               (when completion-callback
-                 (funcall completion-callback all-results)))))))
+        (finish
+         (gptel-auto-workflow--make-idempotent-callback
+          (lambda ()
+            (let ((final-phase (if gptel-auto-experiment--quota-exhausted
+                                   "quota-exhausted"
+                                 "complete")))
+              (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+              (gptel-auto-workflow--stop-status-refresh-timer)
+              (setq gptel-auto-workflow--running nil
+                    gptel-auto-workflow--run-project-root nil
+                    gptel-auto-workflow--current-target nil
+                    gptel-auto-workflow--current-project nil)
+              (setq gptel-auto-workflow--stats
+                    (plist-put gptel-auto-workflow--stats :phase final-phase))
+              (gptel-auto-workflow--persist-status)
+              (message "[auto-workflow] Complete: %d experiments, %d targets improved"
+                       (length all-results) kept-count)
+              (when completion-callback
+                (funcall completion-callback all-results)))))))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root
           gptel-auto-workflow--run-project-root proj-root)
