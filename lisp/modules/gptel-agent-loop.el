@@ -282,6 +282,13 @@ Guards against delivering to a killed parent buffer by checking
                    (substring result 0 (min 50 (length result)))
                  result))
       (cl-return-from gptel-agent-loop--deliver-result))
+    (let ((parent-buf (gptel-agent-loop--task-parent-buffer state)))
+      (when (and parent-buf (not (buffer-live-p parent-buf)))
+        (message "[RunAgent] Warning: parent buffer killed for task '%s', dropping result"
+                 (gptel-agent-loop--task-description state))
+        (setf (gptel-agent-loop--task-finished state) t)
+        (gptel-agent-loop--cleanup-state state)
+        (cl-return-from gptel-agent-loop--deliver-result)))
     (let ((main-cb (gptel-agent-loop--task-main-cb state)))
       (unless (gptel-agent-loop--task-finished state)
         (setf (gptel-agent-loop--task-finished state) t)

@@ -94,10 +94,10 @@ to apply its preset (the system message is already pinned buffer-locally
 by `my/gptel--mode-hook-setup' before this runs)."
   (when (and (bound-and-true-p gptel-mode)
              (not (bound-and-true-p gptel--preset))
-             my/gptel-plain-model)
+             my/gptel-plain-model
+             (boundp 'gptel--minimax))
     (setq-local gptel-model my/gptel-plain-model)
-    (setq-local gptel-backend gptel--minimax)
-    ))
+    (setq-local gptel-backend gptel--minimax)))
 
 (defun my/gptel--mode-hook-setup ()
   "Setup hook for gptel-mode buffers."
@@ -283,19 +283,21 @@ requires string values. Recursively processes nested :properties and :items."
                          (my/gptel--sanitize-tool-props props)))))))))
   tools-vec)
 
+(defun my/gptel--sanitize-type-symbol (plist)
+  "If PLIST has a :type that is a symbol, convert it to a string in place."
+  (let ((type-val (plist-get plist :type)))
+    (when (and type-val (symbolp type-val))
+      (setf (plist-get plist :type) (symbol-name type-val)))))
+
 (defun my/gptel--sanitize-tool-props (props)
   "Recursively sanitize :type symbols in tool properties PROPS."
   (cl-loop for (key val) on props by #'cddr
            when (listp val)
            do
-           (let ((type-val (plist-get val :type)))
-             (when (and type-val (symbolp type-val))
-               (setf (plist-get val :type) (symbol-name type-val))))
+           (my/gptel--sanitize-type-symbol val)
            (let ((items (plist-get val :items)))
              (when (listp items)
-               (let ((item-type (plist-get items :type)))
-                 (when (and item-type (symbolp item-type))
-                   (setf (plist-get items :type) (symbol-name item-type))))
+               (my/gptel--sanitize-type-symbol items)
                (let ((item-props (plist-get items :properties)))
                  (when (listp item-props)
                    (my/gptel--sanitize-tool-props item-props)))))
@@ -349,11 +351,12 @@ Runs as :before advice on `gptel-curl--get-args'."
 
 (defun my/gptel--sanitize-multimodal-content (content-vec)
   "Sanitize text parts in multimodal CONTENT-VEC.
-CONTENT-VEC is a vector like [(:type \"text\" :text \"...\")]."
+CONTENT-VEC is a vector like [(:type \"text\" :text \"...\")].
+Handles both symbol :type 'text and string :type \"text\"."
   (cl-loop for i from 0 below (length content-vec)
            for part = (aref content-vec i)
            when (and (listp part)
-                     (eq (plist-get part :type) 'text)
+                     (memq (plist-get part :type) '(text "text"))
                      (stringp (plist-get part :text)))
            do
            (let* ((text (plist-get part :text))

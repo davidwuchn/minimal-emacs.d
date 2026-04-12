@@ -140,14 +140,22 @@ For alist lookup, converts :score to \\='score symbol."
       (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
         (cdr (assoc alist-key obj)))))
 
-(defun gptel-benchmark--plist-get (plist field &optional default)
-  "Get FIELD from PLIST with optional DEFAULT value.
+(defun gptel-benchmark--plist-get (obj field &optional default)
+  "Get FIELD from OBJ with optional DEFAULT value.
 Returns DEFAULT if FIELD is not present or value is nil.
-FIELD should be a keyword like :score."
-  (let ((val (plist-get plist field)))
+FIELD should be a keyword like :score.
+Handles both plist and alist formats (for JSON round-trip compatibility)."
+  (let ((val (gptel-benchmark--get-field obj field)))
     (if (null val) default val)))
 
 ;;; Historical Tracking
+
+(defun gptel-benchmark--ensure-dir (dir)
+  "Ensure DIR exists, creating it recursively if necessary.
+Returns DIR for chaining convenience."
+  (unless (file-directory-p dir)
+    (make-directory dir t))
+  dir)
 
 (defun gptel-benchmark-save-historical (name results &optional results-dir)
   "Save RESULTS to historical file for NAME in RESULTS-DIR.
@@ -163,8 +171,7 @@ Creates a history entry with timestamp and summary."
          (entry (list :run-id run-id
                       :timestamp (format-time-string "%Y-%m-%dT%H:%M:%S")
                       :summary summary)))
-    (unless (file-exists-p dir)
-      (make-directory dir t))
+    (gptel-benchmark--ensure-dir dir)
     (let ((history (gptel-benchmark--ensure-list existing)))
       (gptel-benchmark-write-json (cons entry history) history-file)
       entry)))
@@ -272,12 +279,10 @@ Returns 0.0 if TOTAL is zero to avoid division by zero."
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores.
 Returns plist with :total-tests, :passed-tests, and average scores."
-  (cl-block summarize
-    (let ((empty-result (append (list :total-tests 0 :passed-tests 0)
-                                (mapcan (lambda (m) (list (cdr m) 0.0))
-                                        gptel-benchmark--score-type-averages))))
-      (when (or gptel-benchmark--cancelled (null results))
-        (cl-return-from summarize empty-result)))
+  (if (or gptel-benchmark--cancelled (null results))
+      (append (list :total-tests 0 :passed-tests 0)
+              (mapcan (lambda (m) (list (cdr m) 0.0))
+                      gptel-benchmark--score-type-averages))
     (let ((total 0)
           (passed 0)
           (score-totals (mapcar (lambda (st) (cons st 0.0)) gptel-benchmark--score-types)))
@@ -292,12 +297,11 @@ Returns plist with :total-tests, :passed-tests, and average scores."
                    (gptel-benchmark--extract-score-types scores))))
           (when (>= (or overall-score 0) 0.7)
             (cl-incf passed))))
-      (cl-return-from summarize
-        (append (list :total-tests total :passed-tests passed)
-                (mapcan (lambda (m)
-                          (list (cdr m)
-                                (gptel-benchmark--calculate-average score-totals total (car m))))
-                        gptel-benchmark--score-type-averages))))))
+      (append (list :total-tests total :passed-tests passed)
+              (mapcan (lambda (m)
+                        (list (cdr m)
+                              (gptel-benchmark--calculate-average score-totals total (car m))))
+                      gptel-benchmark--score-type-averages)))))
 
 ;;; Eight Keys Integration
 
@@ -349,8 +353,7 @@ RESULTS should contain :eight-keys-scores in each entry."
                                         gptel-benchmark-default-dir))
          (file (or log-file default-log))
          (dir (file-name-directory file)))
-    (unless (file-exists-p dir)
-      (make-directory dir t))
+    (gptel-benchmark--ensure-dir dir)
     (let ((log-entry (format "[%s] %s: %s\n"
                              (format-time-string "%Y-%m-%d %H:%M:%S")
                              stage
@@ -463,9 +466,8 @@ Returns plist with suggested threshold adjustments."
 
 (defun gptel-benchmark--temp-dir ()
   "Return the temp directory in user-emacs-directory."
-  (let ((dir (expand-file-name "tmp/" (or user-emacs-directory default-directory))))
-    (unless (file-directory-p dir) (make-directory dir t))
-    dir))
+  (gptel-benchmark--ensure-dir
+   (expand-file-name "tmp/" (or user-emacs-directory default-directory))))
 
 (defun gptel-benchmark-make-temp-file (prefix &optional dir-flag suffix)
   "Like `make-temp-file' but in project var/tmp/ directory.

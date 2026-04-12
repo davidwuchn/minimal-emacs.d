@@ -1492,7 +1492,7 @@ EXIT-CODE defaults to 1."
     '(:api-error . "Provider server error"))))
 
 (ert-deftest regression/auto-workflow/headless-analyzer-provider-override-prefers-available-fallback ()
-  "Headless analyzer should move off MiniMax when a fallback is available."
+  "Headless analyzer should keep MiniMax as primary workhorse."
   (let* ((dashscope-backend
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
@@ -1511,14 +1511,15 @@ EXIT-CODE defaults to 1."
                      (lambda (host)
                        (pcase host
                          ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.minimaxi.com" "token")
                          (_ nil))))
                     ((symbol-function 'message)
                      (lambda (&rest _) nil)))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider "analyzer" preset)))
-              (should (eq (plist-get override :backend) dashscope-backend))
-              (should (eq (plist-get override :model) 'qwen3.6-plus))
-              (should (memq 'qwen3.6-plus (gptel-backend-models dashscope-backend)))
+              ;; MiniMax stays as primary, no override
+              (should (equal (plist-get override :backend) "MiniMax"))
+              (should (equal (plist-get override :model) "minimax-m2.7-highspeed"))
               (should (equal (plist-get preset :backend) "MiniMax"))
               (should (equal (plist-get preset :model) "minimax-m2.7-highspeed")))))
       (if had-dashscope
@@ -1526,7 +1527,7 @@ EXIT-CODE defaults to 1."
         (makunbound 'gptel--dashscope)))))
 
 (ert-deftest regression/auto-workflow/headless-executor-provider-override-prefers-available-fallback ()
-  "Headless executor should prefer DashScope when that fallback is available."
+  "Headless executor should keep MiniMax as primary workhorse."
   (let* ((dashscope-backend
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
@@ -1549,13 +1550,13 @@ EXIT-CODE defaults to 1."
                          (_ nil))))
                     ((symbol-function 'message)
                      (lambda (&rest _) nil)))
-             (let ((override
-                    (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
-               (should (eq (plist-get override :backend) dashscope-backend))
-               (should (eq (plist-get override :model) 'qwen3.6-plus))
-               (should (memq 'qwen3.6-plus (gptel-backend-models dashscope-backend)))
-               (should (equal (plist-get preset :backend) "MiniMax"))
-               (should (equal (plist-get preset :model) "minimax-m2.7-highspeed")))))
+              (let ((override
+                     (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
+                ;; MiniMax stays as primary, no override
+                (should (equal (plist-get override :backend) "MiniMax"))
+                (should (equal (plist-get override :model) "minimax-m2.7-highspeed"))
+                (should (equal (plist-get preset :backend) "MiniMax"))
+                (should (equal (plist-get preset :model) "minimax-m2.7-highspeed")))))
       (if had-dashscope
           (set 'gptel--dashscope old-dashscope)
         (makunbound 'gptel--dashscope)))))
