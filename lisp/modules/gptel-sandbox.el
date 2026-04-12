@@ -156,20 +156,24 @@ gptel preset.")
         (gptel-sandbox--bind-result symbol value env)))
     value))
 
+(defun gptel-sandbox--eval-let-binding (binding env)
+  "Evaluate a single BINDING in ENV, returning (SYMBOL . VALUE)."
+  (pcase-let ((`(,symbol ,value-form)
+               (gptel-sandbox--normalize-binding binding)))
+    (cons symbol (gptel-sandbox--eval-expr value-form env))))
+
 (defun gptel-sandbox--eval-let (bindings body env sequentialp)
   "Evaluate let-style BINDINGS and BODY in ENV.
 When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
   (let ((child-env (gptel-sandbox--copy-env env)))
     (if sequentialp
         (dolist (binding bindings)
-          (pcase-let ((`(,symbol ,value-form)
-                       (gptel-sandbox--normalize-binding binding)))
-            (puthash symbol (gptel-sandbox--eval-expr value-form child-env) child-env)))
+          (pcase-let ((`(,symbol . ,value)
+                       (gptel-sandbox--eval-let-binding binding child-env)))
+            (puthash symbol value child-env)))
       (let (resolved)
         (dolist (binding bindings)
-          (pcase-let ((`(,symbol ,value-form)
-                       (gptel-sandbox--normalize-binding binding)))
-            (push (cons symbol (gptel-sandbox--eval-expr value-form env)) resolved)))
+          (push (gptel-sandbox--eval-let-binding binding env) resolved))
         (dolist (entry resolved)
           (puthash (car entry) (cdr entry) child-env))))
     (let ((value nil))
@@ -227,6 +231,10 @@ Used by `and' and `or' to share short-circuit evaluation logic."
         (when (funcall stop-pred value)
           (throw 'gptel-sandbox-short-circuit value))))))
 
+(defun gptel-sandbox--apply-builtin (func args env)
+  "Apply built-in function FUNC to evaluated ARGS in ENV."
+  (apply func (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args)))
+
 (defun gptel-sandbox--eval-expr (expr env)
   "Evaluate pure sandbox expression EXPR in ENV.
 This evaluator intentionally excludes general function application and only
@@ -277,15 +285,11 @@ supports a small, explicit whitelist of pure operations."
       ('or
        (gptel-sandbox--short-circuit-eval (cdr expr) env nil #'identity))
       ((or 'equal 'string= '= '< '> '<= '>=)
-       (apply (car expr)
-              (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env))
-                      (cdr expr))))
+       (gptel-sandbox--apply-builtin (car expr) (cdr expr) env))
       ((or 'concat 'format 'list 'vector 'append 'length 'car 'cdr 'nth
            'cons 'assoc 'alist-get 'plist-get 'split-string 'string-join
            'string-trim 'string-empty-p 'string-match-p 'substring)
-       (apply (car expr)
-              (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env))
-                      (cdr expr))))
+       (gptel-sandbox--apply-builtin (car expr) (cdr expr) env))
       ('tool-call
        (error "tool-call is only allowed as a top-level statement or setq RHS"))
       (_
