@@ -4943,6 +4943,28 @@ advance through this list instead of repeatedly hammering the same provider."
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
 
+(defconst gptel-auto-workflow--legacy-headless-fallback-agents
+  '("analyzer" "grader" "reviewer")
+  "Previous default for `gptel-auto-workflow-headless-fallback-agents'.")
+
+(defconst gptel-auto-workflow--legacy-executor-rate-limit-fallbacks
+  '(("DeepSeek" . "deepseek-chat")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("DashScope" . "qwen3.6-plus")
+    ("Gemini" . "gemini-3.1-pro-preview"))
+  "Previous default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
+
+(defconst gptel-auto-workflow--current-headless-fallback-agents
+  '("analyzer" "executor" "grader" "reviewer")
+  "Current runtime default for `gptel-auto-workflow-headless-fallback-agents'.")
+
+(defconst gptel-auto-workflow--current-executor-rate-limit-fallbacks
+  '(("DashScope" . "qwen3.6-plus")
+    ("DeepSeek" . "deepseek-chat")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("Gemini" . "gemini-3.1-pro-preview"))
+  "Current runtime default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
+
 (defvar gptel-auto-workflow--runtime-subagent-provider-overrides nil
   "Per-run provider overrides activated by live workflow failures.
 
@@ -4988,6 +5010,40 @@ at run start and whenever workflow state is force-reset.")
                               nil nil #'string=))
               ((boundp var)))
     (symbol-value var)))
+
+(defun gptel-auto-workflow--custom-var-user-customized-p (symbol)
+  "Return non-nil when SYMBOL has an explicit Customize override."
+  (or (get symbol 'saved-value)
+      (get symbol 'customized-value)
+      (get symbol 'theme-value)))
+
+(defun gptel-auto-workflow--migrate-legacy-provider-defaults ()
+  "Refresh known legacy in-memory provider defaults after hot reloads.
+
+Long-lived daemons can keep pre-fix `defcustom' values even after the source
+defines newer defaults.  Migrate only the exact legacy defaults, and only when
+the user has not explicitly customized the variable."
+  (let (migrated)
+    (unless (gptel-auto-workflow--custom-var-user-customized-p
+             'gptel-auto-workflow-headless-fallback-agents)
+      (when (equal gptel-auto-workflow-headless-fallback-agents
+                   gptel-auto-workflow--legacy-headless-fallback-agents)
+        (setq gptel-auto-workflow-headless-fallback-agents
+              (copy-tree gptel-auto-workflow--current-headless-fallback-agents))
+        (push 'gptel-auto-workflow-headless-fallback-agents migrated)))
+    (unless (gptel-auto-workflow--custom-var-user-customized-p
+             'gptel-auto-workflow-executor-rate-limit-fallbacks)
+      (when (equal gptel-auto-workflow-executor-rate-limit-fallbacks
+                   gptel-auto-workflow--legacy-executor-rate-limit-fallbacks)
+        (setq gptel-auto-workflow-executor-rate-limit-fallbacks
+              (copy-tree
+               gptel-auto-workflow--current-executor-rate-limit-fallbacks))
+        (push 'gptel-auto-workflow-executor-rate-limit-fallbacks migrated)))
+    (when migrated
+      (setq migrated (nreverse migrated))
+      (message "[auto-workflow] Refreshed legacy fallback defaults: %s"
+               (mapconcat #'symbol-name migrated ", ")))
+    migrated))
 
 (defun gptel-auto-workflow--backend-model-symbol (backend model-name)
   "Return MODEL-NAME as a supported symbol for BACKEND.
@@ -6028,17 +6084,23 @@ Adapts max-experiments based on API error rate."
                      (lambda (result)
                        (push result results)
                        (gptel-auto-workflow--update-progress)
-                         (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
-                                (hard-timeout
-                                 (gptel-auto-experiment--result-hard-timeout-p result))
-                                (next-exp-id (if hard-timeout
-                                                 (1+ max-exp)
-                                               (1+ exp-id))))
-                           (when (and score-after (> score-after best-score))
-                             (setq best-score score-after
-                                   no-improvement-count 0))
-                           (when (and score-after (< score-after best-score))
-                             (cl-incf no-improvement-count))
+                          (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
+                                 (kept (gptel-auto-workflow--plist-get result :kept nil))
+                                 (quality-after
+                                  (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
+                                 (hard-timeout
+                                  (gptel-auto-experiment--result-hard-timeout-p result))
+                                 (next-exp-id (if hard-timeout
+                                                  (1+ max-exp)
+                                                (1+ exp-id))))
+                            (when kept
+                              (setq best-score score-after
+                                    baseline-code-quality quality-after
+                                    no-improvement-count 0))
+                            (when (and (not kept)
+                                       score-after
+                                       (< score-after best-score))
+                              (cl-incf no-improvement-count))
                             (when hard-timeout
                               (message "[auto-experiment] Hard timeout for %s in experiment %d; stopping remaining experiments for this target"
                                        target exp-id))
@@ -6671,6 +6733,7 @@ Usage:
         (message "[auto-workflow] Skipping: %s" (string-join (car active) ", "))
         (cl-return-from gptel-auto-workflow-run-async nil)))
     (gptel-auto-workflow--require-magit-dependencies)
+    (gptel-auto-workflow--migrate-legacy-provider-defaults)
     (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
     (setq gptel-auto-workflow--current-project (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)

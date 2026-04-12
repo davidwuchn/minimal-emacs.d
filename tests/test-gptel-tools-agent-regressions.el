@@ -1614,11 +1614,90 @@ EXIT-CODE defaults to 1."
                      (lambda (&rest _) nil)))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
-              (should (eq (plist-get override :backend) dashscope-backend))
-              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+               (should (eq (plist-get override :backend) dashscope-backend))
+               (should (eq (plist-get override :model) 'qwen3.6-plus)))))
       (if had-dashscope
           (set 'gptel--dashscope old-dashscope)
         (makunbound 'gptel--dashscope)))))
+
+(ert-deftest regression/auto-workflow/migrates-legacy-provider-defaults ()
+  "Run startup should refresh known legacy headless provider defaults."
+  (let* ((legacy-headless
+          '("analyzer" "grader" "reviewer"))
+         (legacy-rate-limit
+          '(("DeepSeek" . "deepseek-chat")
+            ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+            ("DashScope" . "qwen3.6-plus")
+            ("Gemini" . "gemini-3.1-pro-preview")))
+         (old-headless gptel-auto-workflow-headless-fallback-agents)
+         (old-rate-limit gptel-auto-workflow-executor-rate-limit-fallbacks)
+         (old-headless-saved (get 'gptel-auto-workflow-headless-fallback-agents
+                                  'saved-value))
+         (old-headless-customized (get 'gptel-auto-workflow-headless-fallback-agents
+                                       'customized-value))
+         (old-headless-theme (get 'gptel-auto-workflow-headless-fallback-agents
+                                  'theme-value))
+         (old-rate-limit-saved (get 'gptel-auto-workflow-executor-rate-limit-fallbacks
+                                    'saved-value))
+         (old-rate-limit-customized (get 'gptel-auto-workflow-executor-rate-limit-fallbacks
+                                         'customized-value))
+         (old-rate-limit-theme (get 'gptel-auto-workflow-executor-rate-limit-fallbacks
+                                    'theme-value)))
+    (unwind-protect
+        (progn
+          (setq gptel-auto-workflow-headless-fallback-agents legacy-headless
+                gptel-auto-workflow-executor-rate-limit-fallbacks legacy-rate-limit)
+          (put 'gptel-auto-workflow-headless-fallback-agents 'saved-value nil)
+          (put 'gptel-auto-workflow-headless-fallback-agents 'customized-value nil)
+          (put 'gptel-auto-workflow-headless-fallback-agents 'theme-value nil)
+          (put 'gptel-auto-workflow-executor-rate-limit-fallbacks 'saved-value nil)
+          (put 'gptel-auto-workflow-executor-rate-limit-fallbacks 'customized-value nil)
+          (put 'gptel-auto-workflow-executor-rate-limit-fallbacks 'theme-value nil)
+          (cl-letf (((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (should (equal
+                     (gptel-auto-workflow--migrate-legacy-provider-defaults)
+                     '(gptel-auto-workflow-headless-fallback-agents
+                       gptel-auto-workflow-executor-rate-limit-fallbacks))))
+          (should (equal gptel-auto-workflow-headless-fallback-agents
+                         gptel-auto-workflow--current-headless-fallback-agents))
+          (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks
+                         gptel-auto-workflow--current-executor-rate-limit-fallbacks)))
+      (setq gptel-auto-workflow-headless-fallback-agents old-headless
+            gptel-auto-workflow-executor-rate-limit-fallbacks old-rate-limit)
+      (put 'gptel-auto-workflow-headless-fallback-agents 'saved-value old-headless-saved)
+      (put 'gptel-auto-workflow-headless-fallback-agents 'customized-value old-headless-customized)
+      (put 'gptel-auto-workflow-headless-fallback-agents 'theme-value old-headless-theme)
+      (put 'gptel-auto-workflow-executor-rate-limit-fallbacks 'saved-value old-rate-limit-saved)
+      (put 'gptel-auto-workflow-executor-rate-limit-fallbacks 'customized-value old-rate-limit-customized)
+      (put 'gptel-auto-workflow-executor-rate-limit-fallbacks 'theme-value old-rate-limit-theme))))
+
+(ert-deftest regression/auto-workflow/migrate-legacy-provider-defaults-respects-customization ()
+  "Legacy migration should not overwrite explicit Customize values."
+  (let* ((old-headless gptel-auto-workflow-headless-fallback-agents)
+         (old-rate-limit gptel-auto-workflow-executor-rate-limit-fallbacks)
+         (old-headless-customized (get 'gptel-auto-workflow-headless-fallback-agents
+                                       'customized-value))
+         (old-rate-limit-customized (get 'gptel-auto-workflow-executor-rate-limit-fallbacks
+                                         'customized-value))
+         (custom-headless '("executor"))
+         (custom-rate-limit '(("DeepSeek" . "deepseek-chat"))))
+    (unwind-protect
+        (progn
+          (setq gptel-auto-workflow-headless-fallback-agents custom-headless
+                gptel-auto-workflow-executor-rate-limit-fallbacks custom-rate-limit)
+          (put 'gptel-auto-workflow-headless-fallback-agents 'customized-value '(("executor")))
+          (put 'gptel-auto-workflow-executor-rate-limit-fallbacks
+               'customized-value
+               '((("DeepSeek" . "deepseek-chat"))))
+          (should-not (gptel-auto-workflow--migrate-legacy-provider-defaults))
+          (should (equal gptel-auto-workflow-headless-fallback-agents custom-headless))
+          (should (equal gptel-auto-workflow-executor-rate-limit-fallbacks custom-rate-limit)))
+      (setq gptel-auto-workflow-headless-fallback-agents old-headless
+            gptel-auto-workflow-executor-rate-limit-fallbacks old-rate-limit)
+      (put 'gptel-auto-workflow-headless-fallback-agents 'customized-value old-headless-customized)
+      (put 'gptel-auto-workflow-executor-rate-limit-fallbacks 'customized-value old-rate-limit-customized))))
+
 (ert-deftest regression/auto-workflow/provider-rewrite-clamps-max-tokens-to-model-cap ()
   "Provider rewrites should respect the fallback model's max output tokens."
   (let* ((deepseek-backend
@@ -2369,8 +2448,46 @@ EXIT-CODE defaults to 1."
        "lisp/modules/gptel-tools-agent.el"
        (lambda (loop-results)
          (setq results loop-results)))
-      (should (= retry-calls 1))
-      (should (= (length results) 1)))))
+       (should (= retry-calls 1))
+       (should (= (length results) 1)))))
+
+(ert-deftest regression/auto-experiment-loop/carries-forward-kept-code-quality ()
+  "Later experiments should compare against the latest kept quality baseline."
+  (let ((calls nil)
+        (results nil)
+        (gptel-auto-experiment-max-per-target 2)
+        (gptel-auto-experiment-delay-between 0)
+        (gptel-auto-experiment-no-improvement-threshold 99)
+        (gptel-auto-experiment--quota-exhausted nil)
+        (gptel-auto-experiment--api-error-count 0))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+               (lambda (&rest _) '(:eight-keys 0.4)))
+              ((symbol-function 'gptel-auto-experiment--code-quality-score)
+               (lambda () 0.75))
+              ((symbol-function 'gptel-auto-experiment--run-with-retry)
+               (lambda (_target exp-id _max-exp baseline baseline-code-quality _previous-results callback &optional _retry-count)
+                 (push (list exp-id baseline baseline-code-quality) calls)
+                 (funcall callback
+                          (if (= exp-id 1)
+                              (list :id 1 :score-after 0.4 :code-quality 0.87 :kept t)
+                            (list :id 2 :score-after 0.4 :code-quality 0.87 :kept nil)))))
+              ((symbol-function 'gptel-auto-workflow--call-in-run-context)
+               (lambda (_workflow-root fn &optional _buffer _fallback-root)
+                 (funcall fn)))
+              ((symbol-function 'gptel-auto-workflow--run-callback-live-p)
+               (lambda (&rest _) t))
+              ((symbol-function 'gptel-auto-workflow--update-progress)
+               (lambda (&rest _) nil))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-experiment-loop
+       "lisp/modules/gptel-ext-context.el"
+       (lambda (loop-results)
+         (setq results loop-results)))
+      (should (equal (nreverse calls)
+                     '((1 0.4 0.75)
+                       (2 0.4 0.87))))
+      (should (= (length results) 2)))))
 
 (ert-deftest regression/auto-experiment/failed-verification-does-not-fall-through ()
   "Verification failures should not invoke comparator or complete twice."
