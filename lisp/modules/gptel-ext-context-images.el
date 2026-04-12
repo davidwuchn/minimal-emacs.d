@@ -122,11 +122,7 @@ Uses simple heuristic unless dimensions are available."
           (* tiles tiles tokens-per-tile))
       my/gptel-image-token-estimate)))
 
-;;; Context Entry Helpers
-
-(defun my/gptel--entry-path (entry)
-  "Extract file path from a context ENTRY."
-  (if (consp entry) (car entry) entry))
+;;; Image Entry Extraction
 
 (defun my/gptel--context-image-entries ()
   "Return list of (path . props) for all image entries in `gptel-context'."
@@ -223,9 +219,9 @@ Returns number of images removed."
     removed))
 
 (defun my/gptel--trim-oldest-images (bytes-to-save)
-  "Trim oldest images to save approximately BYTES-TO-SAVE bytes.
+  "Trim least relevant images to save approximately BYTES-TO-SAVE bytes.
 Returns actual bytes saved."
-  (let* ((images (my/gptel--sort-images-by-relevance))
+  (let* ((images (nreverse (my/gptel--sort-images-by-relevance)))
          (bytes-saved 0)
          (trimmed 0))
     (dolist (img images)
