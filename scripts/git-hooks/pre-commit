@@ -22,12 +22,15 @@ if [[ -n "$staged_el_files" ]]; then
             for pkg_dir in "$repo_root/packages"/*/; do
                 [[ -d "$pkg_dir" ]] && pkg_load_args+=(-L "$pkg_dir")
             done
-            compile_out=$(emacs -Q --batch \
+            if compile_out=$(emacs -Q --batch \
                 -L "$repo_root" -L "$repo_root/lisp" -L "$repo_root/lisp/modules" \
                 "${pkg_load_args[@]}" \
                 --eval "(setq byte-compile-error-on-warn nil)" \
-                -f batch-byte-compile "$repo_root/$file" 2>&1)
-            compile_exit=$?
+                -f batch-byte-compile "$repo_root/$file" 2>&1); then
+                compile_exit=0
+            else
+                compile_exit=$?
+            fi
             # Print output (hide the "Wrote .elc" noise)
             echo "$compile_out" | grep -v "^Wrote " || true
             # Clean up .elc to avoid committing it
