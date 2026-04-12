@@ -3882,18 +3882,25 @@ initial remote-advance rejection. Returns a plist with keys `:success',
                         gptel-auto-workflow--staging-push-max-retries))
          (max-retries (max 1 gptel-auto-workflow--staging-push-max-retries))
          (attempt (1+ (- max-retries remaining))))
-    (message "[auto-workflow] origin/staging advanced; refreshing staging and retrying publish (%d/%d)"
-             attempt max-retries)
-    (setq gptel-auto-workflow--last-staging-push-output nil)
-    (cond
-     ((not (gptel-auto-workflow--sync-staging-from-main))
-      (list :success nil
-            :reason 'staging-sync-failed
-            :output "Failed to sync staging from updated origin/staging"))
-     ((not (gptel-auto-workflow--merge-to-staging optimize-branch))
-      (list :success nil
-            :reason 'staging-merge-failed
-            :output (format "Failed to merge %s onto refreshed staging" optimize-branch)))
+     (message "[auto-workflow] origin/staging advanced; refreshing staging and retrying publish (%d/%d)"
+              attempt max-retries)
+     (setq gptel-auto-workflow--last-staging-push-output nil)
+     (cond
+      ((not (gptel-auto-workflow--sync-staging-from-main))
+       (if (> remaining 1)
+           (progn
+             (message "[auto-workflow] Failed to sync refreshed staging; retrying publish refresh (%d/%d)"
+                      attempt max-retries)
+             (gptel-auto-workflow--retry-staging-publish-after-remote-advance
+              optimize-branch
+              (1- remaining)))
+         (list :success nil
+               :reason 'staging-sync-failed
+               :output "Failed to sync staging from updated origin/staging")))
+      ((not (gptel-auto-workflow--merge-to-staging optimize-branch))
+       (list :success nil
+             :reason 'staging-merge-failed
+             :output (format "Failed to merge %s onto refreshed staging" optimize-branch)))
      (t
       (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
                           (gptel-auto-workflow--create-staging-worktree))))
