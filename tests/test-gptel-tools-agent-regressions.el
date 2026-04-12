@@ -1628,6 +1628,122 @@ EXIT-CODE defaults to 1."
          (should (equal (plist-get override :backend) "MiniMax"))
          (should (equal (plist-get override :model) "minimax-m2.7-highspeed"))))))
 
+(ert-deftest regression/auto-workflow/provider-rate-limit-failover-applies-across-headless-subagents ()
+  "A backend rate limit should fail over all headless subagents using it."
+  (let* ((dashscope-backend
+          (gptel-make-openai "DashScope"
+            :host "coding.dashscope.aliyuncs.com"
+            :key (lambda () "token")
+            :models '(qwen3.5-plus qwen3.6-plus)))
+         (had-dashscope (boundp 'gptel--dashscope))
+         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+         (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
+         (gptel-auto-workflow--headless t)
+         (gptel-auto-workflow-persistent-headless t)
+         (gptel-auto-workflow--current-project "/tmp/project")
+         (gptel-auto-workflow-headless-fallback-agents
+          '("analyzer" "comparator" "executor" "grader" "reviewer"))
+         (gptel-auto-workflow-headless-subagent-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-executor-rate-limit-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow--rate-limited-backends nil)
+         (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
+    (unwind-protect
+        (progn
+          (set 'gptel--dashscope dashscope-backend)
+          (cl-letf (((symbol-function 'my/gptel-api-key)
+                     (lambda (host)
+                       (pcase host
+                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.minimaxi.com" "token")
+                         (_ nil))))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (gptel-auto-workflow--maybe-activate-rate-limit-failover
+             "grader" preset
+             "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")
+            (should (member "MiniMax" gptel-auto-workflow--rate-limited-backends))
+            (dolist (agent-type '("analyzer" "comparator" "executor" "grader" "reviewer"))
+              (let ((override
+                     (gptel-auto-workflow--maybe-override-subagent-provider
+                      agent-type preset)))
+                (should (eq (plist-get override :backend) dashscope-backend))
+                (should (eq (plist-get override :model) 'qwen3.6-plus))))))
+      (setq gptel-auto-workflow--rate-limited-backends nil
+            gptel-auto-workflow--runtime-subagent-provider-overrides nil)
+      (if had-dashscope
+          (set 'gptel--dashscope old-dashscope)
+        (makunbound 'gptel--dashscope)))))
+
+(ert-deftest regression/auto-workflow/provider-rate-limit-failover-skips-already-limited-backends ()
+  "Provider failover should advance past backends already rate-limited this run."
+  (let* ((dashscope-backend
+          (gptel-make-openai "DashScope"
+            :host "coding.dashscope.aliyuncs.com"
+            :key (lambda () "token")
+            :models '(qwen3.5-plus qwen3.6-plus)))
+         (deepseek-backend
+          (gptel-make-openai "DeepSeek"
+            :host "api.deepseek.com"
+            :key (lambda () "token")
+            :models '(deepseek-chat)))
+         (had-dashscope (boundp 'gptel--dashscope))
+         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+         (had-deepseek (boundp 'gptel--deepseek))
+         (old-deepseek (and had-deepseek (symbol-value 'gptel--deepseek)))
+         (minimax-preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
+         (dashscope-preset '(:backend "DashScope" :model "qwen3.6-plus"))
+         (gptel-auto-workflow--headless t)
+         (gptel-auto-workflow-persistent-headless t)
+         (gptel-auto-workflow--current-project "/tmp/project")
+         (gptel-auto-workflow-headless-fallback-agents
+          '("analyzer" "comparator" "executor" "grader" "reviewer"))
+         (gptel-auto-workflow-headless-subagent-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")
+            ("DeepSeek" . "deepseek-chat")))
+         (gptel-auto-workflow-executor-rate-limit-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")
+            ("DeepSeek" . "deepseek-chat")))
+         (gptel-auto-workflow--rate-limited-backends nil)
+         (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
+    (unwind-protect
+        (progn
+          (set 'gptel--dashscope dashscope-backend)
+          (set 'gptel--deepseek deepseek-backend)
+          (cl-letf (((symbol-function 'my/gptel-api-key)
+                     (lambda (host)
+                       (pcase host
+                         ("api.deepseek.com" "token")
+                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.minimaxi.com" "token")
+                         (_ nil))))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (gptel-auto-workflow--maybe-activate-rate-limit-failover
+             "grader" minimax-preset
+             "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")
+            (gptel-auto-workflow--maybe-activate-rate-limit-failover
+             "executor" dashscope-preset
+             "Error: Task executor could not finish task \"x\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")
+            (let ((override
+                   (gptel-auto-workflow--maybe-override-subagent-provider
+                    "reviewer" minimax-preset)))
+              (should (eq (plist-get override :backend) deepseek-backend))
+              (should (eq (plist-get override :model) 'deepseek-chat)))))
+      (setq gptel-auto-workflow--rate-limited-backends nil
+            gptel-auto-workflow--runtime-subagent-provider-overrides nil)
+      (if had-dashscope
+          (set 'gptel--dashscope old-dashscope)
+        (makunbound 'gptel--dashscope))
+      (if had-deepseek
+          (set 'gptel--deepseek old-deepseek)
+        (makunbound 'gptel--deepseek)))))
+
 (ert-deftest regression/auto-workflow/executor-rate-limit-failover-promotes-runtime-fallback ()
   "Executor should fail over after a DashScope rate-limit error in headless mode."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
@@ -1709,9 +1825,34 @@ EXIT-CODE defaults to 1."
                    (gptel-auto-workflow--maybe-override-subagent-provider "executor" preset)))
                (should (eq (plist-get override :backend) dashscope-backend))
                (should (eq (plist-get override :model) 'qwen3.6-plus)))))
-      (if had-dashscope
-          (set 'gptel--dashscope old-dashscope)
-        (makunbound 'gptel--dashscope)))))
+       (if had-dashscope
+           (set 'gptel--dashscope old-dashscope)
+         (makunbound 'gptel--dashscope)))))
+
+(ert-deftest regression/auto-workflow/migrates-previous-headless-fallback-agents ()
+  "Hot reload should migrate the prior fallback-agent default to the new one."
+  (let* ((old-headless gptel-auto-workflow-headless-fallback-agents)
+         (old-headless-saved (get 'gptel-auto-workflow-headless-fallback-agents
+                                  'saved-value))
+         (old-headless-customized (get 'gptel-auto-workflow-headless-fallback-agents
+                                       'customized-value))
+         (old-headless-theme (get 'gptel-auto-workflow-headless-fallback-agents
+                                  'theme-value)))
+    (unwind-protect
+        (progn
+          (setq gptel-auto-workflow-headless-fallback-agents
+                (copy-tree gptel-auto-workflow--previous-headless-fallback-agents))
+          (put 'gptel-auto-workflow-headless-fallback-agents 'saved-value nil)
+          (put 'gptel-auto-workflow-headless-fallback-agents 'customized-value nil)
+          (put 'gptel-auto-workflow-headless-fallback-agents 'theme-value nil)
+          (let ((migrated (gptel-auto-workflow--migrate-legacy-provider-defaults)))
+            (should (member 'gptel-auto-workflow-headless-fallback-agents migrated))
+            (should (equal gptel-auto-workflow-headless-fallback-agents
+                           gptel-auto-workflow--current-headless-fallback-agents))))
+      (setq gptel-auto-workflow-headless-fallback-agents old-headless)
+      (put 'gptel-auto-workflow-headless-fallback-agents 'saved-value old-headless-saved)
+      (put 'gptel-auto-workflow-headless-fallback-agents 'customized-value old-headless-customized)
+      (put 'gptel-auto-workflow-headless-fallback-agents 'theme-value old-headless-theme))))
 
 (ert-deftest regression/auto-workflow/migrates-legacy-provider-defaults ()
   "Run startup should refresh known legacy headless provider defaults."
