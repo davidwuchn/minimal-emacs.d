@@ -5195,7 +5195,7 @@ tries backends in order when the primary is unavailable or rate-limited."
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-headless-fallback-agents
-  '("analyzer" "executor" "grader" "reviewer")
+  '("analyzer" "comparator" "executor" "grader" "reviewer")
   "Headless subagents that should use the fallback provider list.
 
 Headless workflow runs prefer MiniMax as the workhorse, falling back to
@@ -5222,6 +5222,10 @@ run can advance through this list instead of repeatedly hammering the same provi
   '("analyzer" "grader" "reviewer")
   "Previous default for `gptel-auto-workflow-headless-fallback-agents'.")
 
+(defconst gptel-auto-workflow--previous-headless-fallback-agents
+  '("analyzer" "executor" "grader" "reviewer")
+  "Prior runtime default for `gptel-auto-workflow-headless-fallback-agents'.")
+
 (defconst gptel-auto-workflow--legacy-executor-rate-limit-fallbacks
   '(("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
@@ -5230,7 +5234,7 @@ run can advance through this list instead of repeatedly hammering the same provi
   "Previous default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
 
 (defconst gptel-auto-workflow--current-headless-fallback-agents
-  '("analyzer" "executor" "grader" "reviewer")
+  '("analyzer" "comparator" "executor" "grader" "reviewer")
   "Current runtime default for `gptel-auto-workflow-headless-fallback-agents'.")
 
 (defconst gptel-auto-workflow--current-executor-rate-limit-fallbacks
@@ -5246,6 +5250,12 @@ run can advance through this list instead of repeatedly hammering the same provi
 
 Each element is (AGENT-TYPE . (BACKEND . MODEL)). These overrides are cleared
 at run start and whenever workflow state is force-reset.")
+
+(defvar gptel-auto-workflow--rate-limited-backends nil
+  "Per-run backend names that hit rate limits during workflow execution.
+
+All matching headless subagents skip these backends for the rest of the run
+and advance through the configured fallback chain instead.")
 
 (defconst gptel-auto-workflow--backend-key-hosts
   '(("MiniMax" . "api.minimaxi.com")
@@ -5302,8 +5312,10 @@ the user has not explicitly customized the variable."
   (let (migrated)
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-headless-fallback-agents)
-      (when (equal gptel-auto-workflow-headless-fallback-agents
-                   gptel-auto-workflow--legacy-headless-fallback-agents)
+      (when (or (equal gptel-auto-workflow-headless-fallback-agents
+                       gptel-auto-workflow--legacy-headless-fallback-agents)
+                (equal gptel-auto-workflow-headless-fallback-agents
+                       gptel-auto-workflow--previous-headless-fallback-agents))
         (setq gptel-auto-workflow-headless-fallback-agents
               (copy-tree gptel-auto-workflow--current-headless-fallback-agents))
         (push 'gptel-auto-workflow-headless-fallback-agents migrated)))
@@ -5334,14 +5346,31 @@ can use newer models without a restart."
     model))
 
 (defun gptel-auto-workflow--clear-runtime-subagent-provider-overrides ()
-  "Reset per-run provider overrides for subagents."
-  (setq gptel-auto-workflow--runtime-subagent-provider-overrides nil))
+  "Reset per-run provider failover state."
+  (setq gptel-auto-workflow--runtime-subagent-provider-overrides nil
+        gptel-auto-workflow--rate-limited-backends nil))
+
+(defun gptel-auto-workflow--rate-limit-failover-candidates (agent-type)
+  "Return fallback provider candidates for AGENT-TYPE after rate limiting."
+  (cond
+   ((not (stringp agent-type)) nil)
+   ((string= agent-type "executor")
+    gptel-auto-workflow-executor-rate-limit-fallbacks)
+   ((member agent-type gptel-auto-workflow-headless-fallback-agents)
+    gptel-auto-workflow-headless-subagent-fallbacks)))
 
 (defun gptel-auto-workflow--runtime-subagent-provider-override (agent-type)
   "Return the active per-run provider override for AGENT-TYPE, if any."
   (alist-get agent-type
              gptel-auto-workflow--runtime-subagent-provider-overrides
              nil nil #'string=))
+
+(defun gptel-auto-workflow--backend-rate-limited-p (backend-name)
+  "Return non-nil when BACKEND-NAME has already rate-limited this run."
+  (and (stringp backend-name)
+       (seq-contains-p gptel-auto-workflow--rate-limited-backends
+                       backend-name
+                       #'string=)))
 
 (defun gptel-auto-workflow--preset-backend-name (backend)
   "Return a readable backend name for BACKEND."
@@ -5364,14 +5393,36 @@ can use newer models without a restart."
                 ((> max-output 0)))
       max-output)))
 
-(defun gptel-auto-workflow--first-available-provider-candidate (candidates &optional exclude-backend)
-  "Return the first available entry from CANDIDATES, skipping EXCLUDE-BACKEND."
+(defun gptel-auto-workflow--first-available-provider-candidate (candidates &optional excluded-backends)
+  "Return the first available entry from CANDIDATES, skipping EXCLUDED-BACKENDS.
+
+EXCLUDED-BACKENDS may be nil, a backend name string, or a list of backend
+name strings."
+  (let ((excluded
+         (cond
+          ((null excluded-backends) nil)
+          ((listp excluded-backends) excluded-backends)
+          (t (list excluded-backends)))))
   (seq-find
    (lambda (entry)
-     (and (not (and (stringp exclude-backend)
-                    (string= (car entry) exclude-backend)))
-          (gptel-auto-workflow--backend-available-p (car entry))))
-   candidates))
+      (and (not (seq-some (lambda (backend-name)
+                            (and (stringp backend-name)
+                                 (string= (car entry) backend-name)))
+                          excluded))
+           (gptel-auto-workflow--backend-available-p (car entry))))
+   candidates)))
+
+(defun gptel-auto-workflow--runtime-provider-failover-candidate (agent-type preset)
+  "Return the active provider-wide fallback candidate for AGENT-TYPE and PRESET."
+  (let* ((current-backend
+          (gptel-auto-workflow--preset-backend-name
+           (plist-get preset :backend)))
+         (candidates
+          (gptel-auto-workflow--rate-limit-failover-candidates agent-type)))
+    (when (gptel-auto-workflow--backend-rate-limited-p current-backend)
+      (gptel-auto-workflow--first-available-provider-candidate
+       candidates
+       gptel-auto-workflow--rate-limited-backends))))
 
 (defun gptel-auto-workflow--rewrite-subagent-provider (preset candidate)
   "Return PRESET rewritten to use CANDIDATE backend/model."
@@ -5409,25 +5460,20 @@ can use newer models without a restart."
 (defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
   "Activate a per-run fallback for AGENT-TYPE when RESULT shows rate limiting."
   (when (and (gptel-auto-workflow--headless-provider-override-active-p)
-             (stringp agent-type)
-             (string= agent-type "executor")
              (gptel-auto-experiment--rate-limit-error-p result))
     (let* ((current-backend
             (gptel-auto-workflow--preset-backend-name
              (plist-get preset :backend)))
            (current-model (plist-get preset :model))
-           (existing
-            (gptel-auto-workflow--runtime-subagent-provider-override agent-type))
-           (candidate
-            (gptel-auto-workflow--first-available-provider-candidate
-             gptel-auto-workflow-executor-rate-limit-fallbacks
-             current-backend)))
-      (when (and candidate
-                 (not (equal candidate existing)))
-        (setf (alist-get agent-type
-                         gptel-auto-workflow--runtime-subagent-provider-overrides
-                         nil nil #'string=)
-              candidate)
+           (candidate nil))
+      (when (stringp current-backend)
+        (cl-pushnew current-backend
+                    gptel-auto-workflow--rate-limited-backends
+                    :test #'string=)
+        (setq candidate
+              (gptel-auto-workflow--runtime-provider-failover-candidate
+               agent-type preset)))
+      (when candidate
         (message "[auto-workflow] Rate limit on %s/%s for %s; future retries will use %s/%s"
                  (or current-backend "unknown")
                  (or current-model "unknown")
@@ -5437,13 +5483,15 @@ can use newer models without a restart."
 
 (defun gptel-auto-workflow--maybe-override-subagent-provider (agent-type preset)
   "Return PRESET with a fallback provider for headless auto-workflow AGENT-TYPE."
-  (let* ((backend (plist-get preset :backend))
-         (runtime-candidate
+  (let* ((runtime-candidate
           (and (gptel-auto-workflow--headless-provider-override-active-p)
-               (gptel-auto-workflow--runtime-subagent-provider-override agent-type))))
+               (or (gptel-auto-workflow--runtime-provider-failover-candidate
+                    agent-type preset)
+                   (gptel-auto-workflow--runtime-subagent-provider-override
+                    agent-type)))))
     (cond
      (runtime-candidate
-      (gptel-auto-workflow--rewrite-subagent-provider preset runtime-candidate))
+       (gptel-auto-workflow--rewrite-subagent-provider preset runtime-candidate))
      (t preset))))
 
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
