@@ -305,7 +305,7 @@ Returns 0.0-1.0 where 1.0 = simple code (≤2 branches per function avg)."
                            (goto-char (point-min))
                            (let ((count 0))
                              (while (re-search-forward
-                                     "(\\(if\\|cond\\|when\\|unless\\|pcase\\|cl-case\\|cond\\)\\>" nil t)
+                                     "(\\(if\\|cond\\|when\\|unless\\|pcase\\|cl-case\\)\\>" nil t)
                                (cl-incf count))
                              count)))
            (avg-complexity (/ (float conditionals) func-count)))
@@ -620,10 +620,11 @@ Calls CALLBACK with comprehensive comparison report."
 
 (defun gptel-benchmark--extract-overall-scores (results)
   "Extract overall scores from RESULTS list.
-Handles both plist and cons cell formats."
-  (mapcar (lambda (r)
-            (plist-get (or (cdr r) (plist-get r :scores)) :overall-score))
-          results))
+Handles both plist and cons cell formats.
+Filters out nil values to prevent arithmetic errors."
+  (delq nil (mapcar (lambda (r)
+                      (plist-get (or (cdr r) (plist-get r :scores)) :overall-score))
+                    results)))
 
 (defun gptel-benchmark--statistical-significance (results-a results-b)
   "Calculate basic statistical significance between RESULTS-A and RESULTS-B.
