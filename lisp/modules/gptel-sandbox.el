@@ -233,7 +233,11 @@ Used by `and' and `or' to share short-circuit evaluation logic."
 
 (defun gptel-sandbox--apply-builtin (func args env)
   "Apply built-in function FUNC to evaluated ARGS in ENV."
-  (apply func (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args)))
+  (let ((evaluated-args (mapcar (lambda (arg) (gptel-sandbox--eval-expr arg env)) args)))
+    (condition-case err
+        (apply func evaluated-args)
+      (error
+       (error "Programmatic builtin %s failed: %s" func (error-message-string err))))))
 
 (defun gptel-sandbox--eval-expr (expr env)
   "Evaluate pure sandbox expression EXPR in ENV.
@@ -513,7 +517,11 @@ can consume lists, vectors, plists, and alists as readable data."
                  (if (gptel-tool-async tool-spec)
                      (apply (gptel-tool-function tool-spec)
                             (lambda (result)
-                              (funcall callback (gptel-sandbox--format-result result)))
+                              (condition-case cb-err
+                                  (funcall callback (gptel-sandbox--format-result result))
+                                (error (funcall callback
+                                                (gptel-sandbox--format-error
+                                                 (error-message-string cb-err))))))
                             arg-values)
                    (let ((result (condition-case inner-err
                                      (apply (gptel-tool-function tool-spec) arg-values)
@@ -642,7 +650,7 @@ PROFILE is either `agent' or `readonly'."
                                 my/gptel-programmatic-timeout)))))
               (gptel-sandbox--run-forms forms env state #'finish)))
         (error
-         (finish (format "Error: %s" (error-message-string err))))))))
+         (finish (gptel-sandbox--format-error (error-message-string err))))))))
 
 (provide 'gptel-sandbox)
 

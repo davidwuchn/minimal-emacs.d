@@ -347,12 +347,17 @@ Truncates accumulated output to last
 Used by `gptel-agent-loop--seems-complete-p' to detect when
 a RunAgent task has finished successfully.")
 
+(defun gptel-agent-loop--matches-any-pattern (text patterns)
+  "Return non-nil when TEXT matches any pattern in PATTERNS.
+Patterns are matched case-insensitively against downcased TEXT."
+  (and (stringp text)
+       (let ((lower (downcase text)))
+         (cl-some (lambda (pattern) (string-match-p pattern lower))
+                  patterns))))
+
 (defun gptel-agent-loop--seems-complete-p (resp)
   "Return non-nil when RESP looks like a completion message."
-  (and (stringp resp)
-       (let ((lower-resp (downcase resp)))
-         (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
-                  gptel-agent-loop--completion-patterns))))
+  (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--completion-patterns))
 
 (defconst gptel-agent-loop--turn-skipped-pattern
   "gptel: turn skipped\\|all tool calls.*malformed"
@@ -362,9 +367,7 @@ gptel skipped a turn due to malformed tool calls.")
 
 (defun gptel-agent-loop--turn-skipped-p (resp)
   "Return non-nil when RESP matches malformed-tool skip output."
-  (and (stringp resp)
-       (let ((lower-resp (downcase resp)))
-         (string-match-p gptel-agent-loop--turn-skipped-pattern lower-resp))))
+  (gptel-agent-loop--matches-any-pattern resp (list gptel-agent-loop--turn-skipped-pattern)))
 
 (defconst gptel-agent-loop--planning-patterns
   '("\\blet me\\b"
@@ -386,9 +389,7 @@ Detects common patterns where model talks about doing work
 but didn't call tools."
   (and (stringp resp)
        (>= (length resp) 30)
-       (let ((lower-resp (downcase resp)))
-         (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
-                  gptel-agent-loop--planning-patterns))))
+       (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--planning-patterns)))
 
 (defconst gptel-agent-loop--finishing-patterns
   '("summariz\\|conclude\\|conclusion\\|finish\\|wrap up\\|that's all\\|in summary\\|to summarize\\|final\\|overall"
@@ -404,10 +405,7 @@ when the model is concluding rather than planning more work.")
   "Return non-nil when RESP looks like model is about to finish.
 Detects patterns indicating the model is wrapping up,
 not planning more work."
-  (and (stringp resp)
-       (let ((lower-resp (downcase resp)))
-         (cl-some (lambda (pattern) (string-match-p pattern lower-resp))
-                  gptel-agent-loop--finishing-patterns))))
+  (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--finishing-patterns))
 
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP.
@@ -428,6 +426,14 @@ limit for early exit."
 (defun gptel-agent-loop--schedule (delay fn)
   "Run FN after DELAY seconds."
   (run-with-timer delay nil fn))
+
+(defun gptel-agent-loop--schedule-request (state prompt use-tools &optional delay)
+  "Schedule a request for STATE with PROMPT.
+USE-TOOLS determines tool usage.  DELAY defaults to 0.1 seconds.
+Extracted from duplicate scheduling patterns."
+  (gptel-agent-loop--schedule (or delay 0.1)
+   (lambda ()
+     (gptel-agent-loop--request state prompt use-tools nil))))
 
 (defun gptel-agent-loop--check-aborted (state ov)
   "Check if STATE is aborted and deliver abort result.
@@ -472,10 +478,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
             (cancel-timer (gptel-agent-loop--task-timeout-timer state)))
           (setf (gptel-agent-loop--task-timeout-timer state)
                 (gptel-agent-loop--make-timeout-timer state))
-          (gptel-agent-loop--schedule
-           2.0
-           (lambda ()
-             (gptel-agent-loop--request state request-prompt use-tools nil))))
+          (gptel-agent-loop--schedule-request state request-prompt use-tools 2.0))
          (t
           (gptel-agent-loop--cleanup-overlay ov)
           (gptel-agent-loop--deliver-result
@@ -541,14 +544,7 @@ Returns non-nil if result was delivered."
     (gptel-agent-loop--append-output state resp)
     (setf (gptel-agent-loop--task-summary-requested state) t)
     (if gptel-agent-loop-hard-loop
-        (gptel-agent-loop--schedule
-         0.1
-         (lambda ()
-           (gptel-agent-loop--request
-            state
-            (gptel-agent-loop--summary-prompt-for state)
-            nil
-            nil)))
+        (gptel-agent-loop--schedule-request state (gptel-agent-loop--summary-prompt-for state) nil)
       (gptel-agent-loop--deliver-result
        state
        (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
@@ -580,14 +576,7 @@ Returns non-nil if result was delivered."
                      (gptel-agent-loop--task-step-count state)
                      cont-count gptel-agent-loop-max-continuations)
             (gptel-agent-loop--append-output state resp)
-            (gptel-agent-loop--schedule
-             0.1
-             (lambda ()
-               (gptel-agent-loop--request
-                state
-                (gptel-agent-loop--continuation-prompt-for state)
-                t
-                nil))))
+            (gptel-agent-loop--schedule-request state (gptel-agent-loop--continuation-prompt-for state) t))
         (gptel-agent-loop--deliver-result
          state
          (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"

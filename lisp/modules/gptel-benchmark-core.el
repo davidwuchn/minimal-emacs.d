@@ -135,10 +135,12 @@ JSON parsing returns vectors for arrays; this normalizes to lists."
 (defun gptel-benchmark--get-field (obj field)
   "Get FIELD from OBJ, handling both plist and alist formats.
 FIELD should be a keyword like :score.
-For alist lookup, converts :score to \\='score symbol."
+For alist lookup, tries both keyword and symbol keys."
   (or (plist-get obj field)
+      (cdr (assoc field obj))
       (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
-        (cdr (assoc alist-key obj)))))
+        (unless (eq alist-key field)
+          (cdr (assoc alist-key obj))))))
 
 (defun gptel-benchmark--plist-get (obj field &optional default)
   "Get FIELD from OBJ with optional DEFAULT value.
@@ -214,7 +216,7 @@ Handles both (run . scores) cons cells and plists with :scores key.
 Returns nil for nil or malformed input."
   (cond
    ((null r) nil)
-   ((and (listp r) (keywordp (car r)))
+   ((and (listp r) (keywordp (car r)) (zerop (mod (length r) 2)))
     (let ((scores (plist-get r :scores)))
       (when (listp scores) scores)))
    ((consp r)
@@ -226,14 +228,9 @@ Returns nil for nil or malformed input."
   "Extract FIELD from scores in result entry R.
 Returns nil if R has no scores or FIELD is not present.
 FIELD should be a keyword like :overall-score.
-Handles both plist format (keyword keys) and alist format (symbol or keyword keys).
 If SCORES is provided, uses it directly instead of re-extracting from R."
   (let ((scores (or scores (gptel-benchmark--extract-scores r))))
-    (and scores
-         (if (and (listp scores) (keywordp (car scores)))
-             (plist-get scores field)
-           (or (alist-get field scores)
-               (alist-get (gptel-benchmark--keyword-to-alist-key field) scores))))))
+    (and scores (gptel-benchmark--get-field scores field))))
 
 (defun gptel-benchmark--accumulate-score (total score)
   "Accumulate SCORE into TOTAL.
@@ -244,19 +241,16 @@ SCORE must be a number or nil; non-numeric values signal error."
   (+ total (if (numberp score) score 0)))
 
 (defun gptel-benchmark--accumulate-scores (totals scores-alist)
-  "Build new alist with scores from SCORES-ALIST accumulated into TOTALS.
-TOTALS is an alist of (score-type . accumulated-value).
+  "Accumulate scores from SCORES-ALIST into TOTALS in place.
+TOTALS is an alist of (score-type . accumulated-value) that is mutated.
 SCORES-ALIST is an alist of (score-type . current-score).
-Returns a NEW alist with all scores accumulated.
-Handles nil scores by treating them as 0. Does not mutate input."
-  (mapcar (lambda (pair)
-            (let ((type (car pair))
-                  (prev-total (cdr pair)))
-              (cons type
-                    (gptel-benchmark--accumulate-score
-                     prev-total
-                     (alist-get type scores-alist)))))
-          totals))
+Returns TOTALS for chaining.
+Handles nil scores by treating them as 0."
+  (dolist (pair totals totals)
+    (let ((type (car pair)))
+      (setcdr pair (gptel-benchmark--accumulate-score
+                    (cdr pair)
+                    (alist-get type scores-alist))))))
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist or alist.
@@ -291,10 +285,9 @@ Returns plist with :total-tests, :passed-tests, and average scores."
                (overall-score (gptel-benchmark--get-score r :overall-score scores)))
           (cl-incf total)
           (when scores
-            (setq score-totals
-                  (gptel-benchmark--accumulate-scores
-                   score-totals
-                   (gptel-benchmark--extract-score-types scores))))
+            (gptel-benchmark--accumulate-scores
+             score-totals
+             (gptel-benchmark--extract-score-types scores)))
           (when (>= (or overall-score 0) 0.7)
             (cl-incf passed))))
       (append (list :total-tests total :passed-tests passed)
@@ -317,7 +310,7 @@ RESULTS should contain :eight-keys-scores in each entry."
         (when eight-keys
           (dotimes (i 8)
             (let* ((key (aref key-names i))
-                   (score (plist-get eight-keys key)))
+                   (score (gptel-benchmark--get-field eight-keys key)))
               (when (numberp score)
                 (aset key-totals i (+ (aref key-totals i) score))
                 (aset key-counts i (1+ (aref key-counts i)))))))))

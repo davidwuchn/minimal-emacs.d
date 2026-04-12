@@ -102,10 +102,17 @@ Ensures consistent cache lookups across different path representations."
                   (expand-file-name "~/.emacs.d/"))))
     (directory-file-name (file-name-directory root))))
 
+
+(defun gptel-auto-workflow--effective-project-root ()
+  "Return the effective project root for workflow operations.
+Uses `gptel-auto-workflow--project-root' if available, otherwise
+falls back to the user's Emacs configuration directory."
+  (or (gptel-auto-workflow--project-root)
+      (expand-file-name "~/.emacs.d/")))
+
 (defun gptel-auto-workflow--discover-targets ()
   "Discover all Elisp files in lisp/modules/ as potential targets."
-  (let* ((proj-root (or (gptel-auto-workflow--project-root)
-                        (expand-file-name "~/.emacs.d/")))
+  (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (modules-dir (expand-file-name "lisp/modules" proj-root))
          (targets '()))
     (when (file-directory-p modules-dir)
@@ -131,8 +138,7 @@ Ensures consistent cache lookups across different path representations."
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
 Scans only root-repo targets that can be integrated into staging."
-  (let* ((proj-root (or (gptel-auto-workflow--project-root)
-                        (expand-file-name "~/.emacs.d/")))
+  (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (safe-root (shell-quote-argument proj-root)))
     (list :git-history (shell-command-to-string
                         (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
@@ -224,7 +230,7 @@ OUTPUT JSON ONLY:
 CALLBACK receives list of target files."
   (let* ((context (gptel-auto-workflow--gather-context))
          (max-targets gptel-auto-workflow-max-targets-per-run)
-         (analyzer-timeout (max my/gptel-agent-task-timeout
+         (analyzer-timeout (max (or my/gptel-agent-task-timeout 0)
                                 gptel-auto-workflow-analyzer-time-budget))
          (prompt (gptel-auto-workflow--build-analyzer-prompt
                    context research-findings max-targets)))
@@ -316,8 +322,7 @@ Returns list of validated relative paths, up to MAX-TARGETS."
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list.
 Logs when fallback to regex parsing is used."
-  (let ((proj-root (or (gptel-auto-workflow--project-root)
-                       (expand-file-name "~/.emacs.d/")))
+  (let ((proj-root (gptel-auto-workflow--effective-project-root))
         (max-targets gptel-auto-workflow-max-targets-per-run)
         (normalized-response (gptel-auto-workflow--normalize-response response)))
     (cond
@@ -467,8 +472,7 @@ CALLBACK receives list of target files.
 LLM decides if available, otherwise uses static list."
   (when (functionp callback)
     (gptel-auto-workflow--clear-analyzer-error-state)
-    (let* ((proj-root (or (gptel-auto-workflow--project-root)
-                          (expand-file-name "~/.emacs.d/")))
+    (let* ((proj-root (gptel-auto-workflow--effective-project-root))
            (static-targets
             (gptel-auto-workflow--filter-valid-targets
              gptel-auto-workflow-targets
@@ -489,8 +493,7 @@ LLM decides if available, otherwise uses static list."
 (defun gptel-auto-workflow--research-file ()
   "Return path to research findings cache file."
   (expand-file-name "var/tmp/research-findings.md"
-                    (or (gptel-auto-workflow--project-root)
-                        (expand-file-name "~/.emacs.d/"))))
+                    (gptel-auto-workflow--effective-project-root)))
 
 (defun gptel-auto-workflow-run-research ()
   "Run researcher and store findings to cache.
@@ -498,8 +501,7 @@ Call periodically to keep findings fresh.
 Findings available to analyzer during target selection.
 Findings are cached per-project."
   (interactive)
-  (let* ((proj-root (or (gptel-auto-workflow--project-root)
-                        (expand-file-name "~/.emacs.d/")))
+  (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root)))
     (message "[research] Starting periodic research for %s..." proj-root)
     (gptel-auto-workflow--research-patterns
@@ -519,8 +521,7 @@ Findings are cached per-project."
   "Load cached research findings for current project.
 Returns empty string if no cache exists.
 Findings are cached per-project."
-  (let* ((proj-root (or (gptel-auto-workflow--project-root)
-                        (expand-file-name "~/.emacs.d/")))
+  (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root)))
     (let ((cached (gethash cache-key gptel-auto-workflow--research-findings-cache)))
       (if (and (stringp cached) (not (string-empty-p cached)))
@@ -579,8 +580,7 @@ Set `gptel-auto-workflow-research-interval' to control frequency."
 (defun gptel-auto-workflow-research-status ()
   "Show researcher status for current project."
   (interactive)
-  (let* ((proj-root (or (gptel-auto-workflow--project-root)
-                        (expand-file-name "~/.emacs.d/")))
+  (let* ((proj-root (gptel-auto-workflow--effective-project-root))
          (cache-key (gptel-auto-workflow--normalized-cache-key proj-root))
          (findings (or (gethash cache-key
                                 gptel-auto-workflow--research-findings-cache
