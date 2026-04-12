@@ -7118,10 +7118,101 @@ EXIT-CODE defaults to 1."
       (delete-directory fake-bin t)
       (when (file-exists-p argv-log)
         (delete-file argv-log))
+       (when (file-exists-p emacs-log)
+         (delete-file emacs-log))
+       (when (file-exists-p messages-file)
+         (delete-file messages-file)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-caches-daemon-snapshot-paths ()
+  "Wrapper status should cache daemon snapshot paths for later messages reads."
+  (let* ((temp-root (make-temp-file "aw-cron-root" t))
+         (script-dir (expand-file-name "scripts" temp-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
+         (snapshot-cache (expand-file-name "snapshot-paths.txt" temp-root))
+         (daemon-status-file (make-temp-file "aw-daemon-status"))
+         (daemon-messages-file (make-temp-file "aw-daemon-messages"))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (fake-emacsclient
+          (let ((file (make-temp-file "fake-emacsclient" nil ".py")))
+            (with-temp-file file
+              (insert "#!/usr/bin/env python3\n"
+                      "from pathlib import Path\n"
+                      "import json, sys\n"
+                      (format "argv_log = Path(%S)\n" argv-log)
+                      "argv_log.parent.mkdir(parents=True, exist_ok=True)\n"
+                      "with argv_log.open('a', encoding='utf-8') as handle:\n"
+                      "    handle.write(json.dumps(sys.argv) + \"\\n\")\n"
+                      "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                      (format "status_path = %S\n" daemon-status-file)
+                      (format "messages_path = %S\n" daemon-messages-file)
+                      "if expr == 't':\n"
+                      "    print('t')\n"
+                      "elif 'gptel-auto-workflow--status-plist' in expr:\n"
+                      "    print('(:running t :kept 1 :total 5 :phase \"running\" :run-id \"2026-04-12T223807Z-3cd4\" :results \"var/tmp/experiments/2026-04-12T223807Z-3cd4/results.tsv\")')\n"
+                      "elif 'gptel-auto-workflow--status-file' in expr and 'gptel-auto-workflow--messages-file' in expr:\n"
+                      "    print('\"%s\\t%s\"' % (status_path, messages_path))\n"
+                      "else:\n"
+                      "    raise SystemExit(1)\n"))
+            (set-file-modes file #o755)
+            file))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "echo emacs-invoked >> %s\nexit 1" (shell-quote-argument emacs-log))))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (or (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" entry)))
+           process-environment))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=%s" snapshot-cache))
+                  base-environment))
+         (default-directory temp-root))
+    (unwind-protect
+        (progn
+          (make-directory script-dir t)
+          (copy-file (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root)
+                     script t)
+          (set-file-modes script #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file daemon-messages-file
+            (insert "daemon cached messages\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
+            (should (string-match-p "2026-04-12T223807Z-3cd4" output)))
+          (with-temp-buffer
+            (insert-file-contents snapshot-cache)
+            (should (equal (split-string (buffer-string) "\n" t)
+                           (list daemon-status-file daemon-messages-file))))
+          (let ((status-call-count
+                 (with-temp-buffer
+                   (insert-file-contents argv-log)
+                   (length (split-string (buffer-string) "\n" t)))))
+            (let ((output (shell-command-to-string (format "%s messages" script))))
+              (should (string-match-p "daemon cached messages" output)))
+            (with-temp-buffer
+              (insert-file-contents argv-log)
+              (should (= status-call-count
+                         (length (split-string (buffer-string) "\n" t))))))
+          (with-temp-buffer
+            (insert-file-contents emacs-log)
+            (should (string-empty-p (buffer-string)))))
+      (delete-directory temp-root t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log))
       (when (file-exists-p emacs-log)
         (delete-file emacs-log))
-      (when (file-exists-p messages-file)
-        (delete-file messages-file)))))
+      (when (file-exists-p daemon-status-file)
+        (delete-file daemon-status-file))
+      (when (file-exists-p daemon-messages-file)
+        (delete-file daemon-messages-file)))))
 
 (ert-deftest regression/auto-workflow/safe-task-override-seeds-child-fsm ()
   "Safe task override should bind a child FSM in the parent buffer before request."
