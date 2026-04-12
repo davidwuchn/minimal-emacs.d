@@ -1145,7 +1145,12 @@ ORIG is `gptel-agent--truncate-buffer'. PREFIX and MAX-LINES are passed through.
                (save-excursion
                  (goto-char (point-min))
                  (re-search-forward "-\\*-" (line-end-position) t))))
-         temp-file)
+         (temp-dir (and (> (buffer-size) 20000)
+                        (expand-file-name "gptel-agent-temp"
+                                          (temporary-file-directory))))
+          temp-file)
+    (when temp-dir
+      (make-directory temp-dir t))
     (funcall orig prefix max-lines)
     (when starts-with-modeline
       (save-excursion
