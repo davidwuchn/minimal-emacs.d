@@ -3337,10 +3337,58 @@ the reviewer admits it could not verify the diff or locate the relevant file."
           (string-match-p "cannot access the file directly" review-output)
           (string-match-p "cannot locate the file" review-output)))))
 
+(defun gptel-auto-workflow--fix-output-indicates-already-fixed-p (fix-output)
+  "Return non-nil when FIX-OUTPUT says the worktree already contains the fix."
+  (when (stringp fix-output)
+    (let ((case-fold-search t))
+      (or (string-match-p "already been fixed" fix-output)
+          (string-match-p "already fixed" fix-output)
+          (string-match-p "already present in the worktree" fix-output)
+          (string-match-p "fix already present in worktree" fix-output)))))
+
+(defun gptel-auto-workflow--worktree-dirty-p ()
+  "Return non-nil when `default-directory' has uncommitted changes."
+  (let ((status (string-trim (or (ignore-errors
+                                   (gptel-auto-workflow--git-cmd
+                                    "git status --porcelain 2>/dev/null"
+                                    30))
+                                 ""))))
+    (gptel-auto-workflow--non-empty-string-p status)))
+
+(defun gptel-auto-workflow--finalize-review-fix-result (response pre-fix-head)
+  "Return (success-p . RESPONSE) after verifying a review-fix attempt.
+PRE-FIX-HEAD is the current HEAD hash before the fixer runs."
+  (let ((success (not (string-match-p "^Error:" response)))
+        (fix-captured nil))
+    (when success
+      (when (gptel-auto-workflow--worktree-dirty-p)
+        (setq fix-captured
+              (and (gptel-auto-workflow--git-step-success-p
+                    (format "%s git add -A"
+                            gptel-auto-workflow--skip-submodule-sync-env)
+                    "Stage review fix"
+                    60)
+                   (gptel-auto-workflow--commit-step-success-p
+                    (format "%s git commit -m %s"
+                            gptel-auto-workflow--skip-submodule-sync-env
+                            (shell-quote-argument "fix: address review issues"))
+                    "Commit review fix"
+                    gptel-auto-workflow-git-timeout))))
+      (let ((post-fix-head (gptel-auto-workflow--current-head-hash)))
+        (setq fix-captured
+              (or fix-captured
+                  (and pre-fix-head
+                       post-fix-head
+                       (not (equal pre-fix-head post-fix-head))))))
+      (unless fix-captured
+        (message "[auto-workflow] Review fix returned without code changes or commit")))
+    (cons (and success fix-captured) response)))
+
 (defun gptel-auto-workflow--fix-directly (review-output callback)
   "Let executor fix REVIEW-OUTPUT issues directly (faster)."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
+         (pre-fix-head (gptel-auto-workflow--current-head-hash))
          (fix-prompt (format "Fix the following issues in the code.
 
 ISSUES FROM REVIEW:
@@ -3350,10 +3398,12 @@ INSTRUCTIONS:
 1. Read the affected files to understand context
 2. Make minimal fixes to address each issue
 3. Do NOT make unrelated changes
-4. Commit your fix with message 'fix: address review issues'
+4. Do NOT create git commits yourself; leave file changes in the worktree
+5. Do not reply with only a plan or explanation; actually modify the relevant files
+6. If you cannot apply a real code change, reply with 'Error: no fix applied'
 
 Focus only on the issues mentioned. Do not refactor or add features."
-                             (truncate-string-to-width review-output 1500 nil nil "..."))))
+                              (truncate-string-to-width review-output 1500 nil nil "..."))))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (gptel-benchmark-call-subagent
@@ -3361,18 +3411,18 @@ Focus only on the issues mentioned. Do not refactor or add features."
          "Fix review issues"
          fix-prompt
          (lambda (result)
-           (let* ((response (if (stringp result) result (format "%S" result)))
-                  (success (not (string-match-p "^Error:" response)))
-                  (git-success (when success
-                                 (and (magit-git-success "add" "-A")
-                                      (magit-git-success "commit" "-m" "fix: address review issues")))))
-             (funcall callback (cons (and success git-success) response)))))
+            (let ((response (if (stringp result) result (format "%S" result))))
+              (funcall callback
+                       (gptel-auto-workflow--finalize-review-fix-result
+                        response
+                        pre-fix-head)))))
       (funcall callback (cons nil "No executor agent available")))))
 
 (defun gptel-auto-workflow--research-then-fix (review-output callback)
   "Use researcher to find approach, then executor to fix REVIEW-OUTPUT."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
+         (pre-fix-head (gptel-auto-workflow--current-head-hash))
          (research-prompt (format "Research the best approach to fix these issues:
 
 ISSUES FROM REVIEW:
@@ -3394,8 +3444,8 @@ Do NOT make changes. Only research and report findings."
          "Research fix approach"
          research-prompt
          (lambda (research-result)
-           (let* ((research-response (if (stringp research-result) research-result (format "%S" research-result)))
-                  (fix-prompt (format "Apply fixes based on this research:
+            (let* ((research-response (if (stringp research-result) research-result (format "%S" research-result)))
+                   (fix-prompt (format "Apply fixes based on this research:
 
 RESEARCH FINDINGS:
 %s
@@ -3406,20 +3456,21 @@ ORIGINAL ISSUES:
 INSTRUCTIONS:
 1. Apply the minimal fixes identified in research
 2. Do NOT make unrelated changes
-3. Commit with message 'fix: address review issues'"
-                                      (truncate-string-to-width research-response 1000 nil nil "...")
-                                      (truncate-string-to-width review-output 500 nil nil "..."))))
-             (gptel-benchmark-call-subagent
-              'executor
-              "Apply researched fixes"
-              fix-prompt
-              (lambda (result)
-                (let* ((response (if (stringp result) result (format "%S" result)))
-                       (success (not (string-match-p "^Error:" response)))
-                       (git-success (when success
-                                      (and (magit-git-success "add" "-A")
-                                           (magit-git-success "commit" "-m" "fix: address review issues")))))
-                  (funcall callback (cons (and success git-success) response))))))))
+3. Do NOT create git commits yourself; leave file changes in the worktree
+4. Do not reply with only an explanation; actually modify the files
+5. If you cannot apply a real code change, reply with 'Error: no fix applied'"
+                                        (truncate-string-to-width research-response 1000 nil nil "...")
+                                        (truncate-string-to-width review-output 500 nil nil "..."))))
+               (gptel-benchmark-call-subagent
+                'executor
+                "Apply researched fixes"
+                fix-prompt
+                (lambda (result)
+                  (let ((response (if (stringp result) result (format "%S" result))))
+                    (funcall callback
+                             (gptel-auto-workflow--finalize-review-fix-result
+                              response
+                              pre-fix-head))))))))
       (funcall callback (cons nil "No subagent available")))))
 
 (defun gptel-auto-workflow--ensure-on-main-branch ()
@@ -4125,35 +4176,49 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
              optimize-branch
              review-output
              (lambda (fix-result)
-               (let ((fix-success (car fix-result))
-                     (fix-output (cdr fix-result)))
-                 (if fix-success
-                     (progn
-                       (message "[auto-workflow] Fix applied, re-reviewing...")
-                       (gptel-auto-workflow--review-changes
+                (let* ((fix-success (car fix-result))
+                       (fix-output (cdr fix-result))
+                       (already-fixed
+                        (and (not fix-success)
+                             (gptel-auto-workflow--fix-output-indicates-already-fixed-p
+                              fix-output))))
+                  (cond
+                   (fix-success
+                    (message "[auto-workflow] Fix applied, re-reviewing...")
+                    (gptel-auto-workflow--review-changes
+                     optimize-branch
+                     (lambda (re-review-result)
+                       (gptel-auto-workflow--staging-flow-after-review
                         optimize-branch
-                        (lambda (re-review-result)
-                          (gptel-auto-workflow--staging-flow-after-review
-                           optimize-branch
-                           re-review-result
-                           completion-callback))))
-                   (message "[auto-workflow] Fix failed: %s"
-                            (my/gptel--sanitize-for-logging fix-output 200))
-                   (gptel-auto-experiment-log-tsv
-                    (gptel-auto-workflow--current-run-id)
-                    (list :target "staging-review"
-                          :id 0
-                          :hypothesis "Staging review fix"
-                          :score-before 0
-                          :score-after 0
-                          :kept nil
-                          :duration 0
-                          :grader-quality 0
-                          :grader-reason "fix-failed"
-                          :comparator-reason (truncate-string-to-width fix-output 200)
-                          :analyzer-patterns ""
-                          :agent-output review-output))
-                   (funcall finish nil))))))
+                        re-review-result
+                        completion-callback))))
+                   (already-fixed
+                    (message "[auto-workflow] Fixer reports issue already resolved; re-reviewing current branch...")
+                    (gptel-auto-workflow--review-changes
+                     optimize-branch
+                     (lambda (re-review-result)
+                       (gptel-auto-workflow--staging-flow-after-review
+                        optimize-branch
+                        re-review-result
+                        completion-callback))))
+                   (t
+                    (message "[auto-workflow] Fix failed: %s"
+                             (my/gptel--sanitize-for-logging fix-output 200))
+                    (gptel-auto-experiment-log-tsv
+                     (gptel-auto-workflow--current-run-id)
+                     (list :target "staging-review"
+                           :id 0
+                           :hypothesis "Staging review fix"
+                           :score-before 0
+                           :score-after 0
+                           :kept nil
+                           :duration 0
+                           :grader-quality 0
+                           :grader-reason "fix-failed"
+                           :comparator-reason (truncate-string-to-width fix-output 200)
+                           :analyzer-patterns ""
+                           :agent-output review-output))
+                    (funcall finish nil)))))))
         (message "[auto-workflow] ✗ Review BLOCKED (max retries): %s"
                  (my/gptel--sanitize-for-logging review-output 200))
         (gptel-auto-experiment-log-tsv
