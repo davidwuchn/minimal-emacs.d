@@ -361,12 +361,16 @@ Returns non-nil if error state was handled."
          (alist-get 'target item))))
    (t nil)))
 
+(defun gptel-auto-workflow--nonempty-string-p (s)
+  "Return non-nil if S is a non-empty string."
+  (and (stringp s) (not (string-empty-p s))))
+
 (defun gptel-auto-workflow--parse-json-targets (response proj-root max-targets)
   "Parse JSON from RESPONSE to extract targets.
 Returns nil if parsing fails or no targets found.
 Logs parsing failures for debugging."
   (cl-block gptel-auto-workflow--parse-json-targets
-    (unless (and (stringp response) (not (string-empty-p response)))
+    (unless (gptel-auto-workflow--nonempty-string-p response)
       (message "[auto-workflow] Empty response in parse-json-targets")
       (cl-return-from gptel-auto-workflow--parse-json-targets nil))
     (condition-case err
@@ -407,7 +411,7 @@ Logs parsing failures for debugging."
   "Parse RESPONSE using regex fallback to extract targets.
 Returns list of validated file paths."
   (cl-block gptel-auto-workflow--parse-regex-targets
-    (unless (and (stringp response) (not (string-empty-p response)))
+    (unless (gptel-auto-workflow--nonempty-string-p response)
       (message "[auto-workflow] Empty response in parse-regex-targets")
       (cl-return-from gptel-auto-workflow--parse-regex-targets nil))
     (with-temp-buffer
