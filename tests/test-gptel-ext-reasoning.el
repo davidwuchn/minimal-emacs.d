@@ -28,7 +28,7 @@
        ((eq model 'deepseek-reasoner) '(:reasoning t))
        (t nil))))
 
-(defclass gptel-openai () ())
+(defclass test-reasoning-openai-backend () ())
 
 (defvar my/gptel--tool-reasoning-alist nil)
 
@@ -39,7 +39,7 @@
   (when (stringp model)
     (setq model (intern model)))
   (when (fboundp 'gptel--model-request-params)
-    (when (or (null backend) (cl-typep backend 'gptel-openai))
+    (when (or (null backend) (cl-typep backend 'test-reasoning-openai-backend))
       (let ((params (gptel--model-request-params model)))
         (cond
          ((plist-member params :thinking) :reasoning_content)

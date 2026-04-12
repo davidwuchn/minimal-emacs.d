@@ -2758,7 +2758,7 @@ NOTE: Staging branch is never deleted, only the worktree."
 
 (defun gptel-auto-workflow--submodule-checkout-git-dir (path)
   "Return the absolute git-common-dir for the root checkout of submodule PATH."
-  (let* ((proj-root (gptel-auto-workflow--default-dir))
+  (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
          (checkout (expand-file-name path proj-root)))
     (when (file-directory-p checkout)
       (let* ((git-common-result
@@ -2786,7 +2786,7 @@ When COMMIT is nil, only check that GIT-DIR exists."
   "Return a local git dir for submodule PATH that can materialize COMMIT.
 Prefer the current checkout when it is a standalone repo, then fall back to the
 superproject-managed `.git/modules/...` store."
-  (let* ((proj-root (gptel-auto-workflow--default-dir))
+  (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
          (checkout-git-dir (gptel-auto-workflow--submodule-checkout-git-dir path))
          (module-git-dir (expand-file-name (format ".git/modules/%s" path) proj-root))
          (candidates (cl-remove-duplicates
@@ -3016,10 +3016,11 @@ This avoids broken linked-worktree submodule metadata under `.git/worktrees/.../
             (cond
              ((not commit)
               (setq failure (format "Missing gitlink revision for submodule %s" path)))
-             ((not (file-directory-p shared-git-dir))
-              (setq failure
-                    (format "Missing shared submodule repo for %s: %s"
-                            path shared-git-dir)))
+             ((not (and shared-git-dir
+                        (file-directory-p shared-git-dir)))
+               (setq failure
+                     (format "Missing shared submodule repo for %s: %s"
+                             path shared-git-dir)))
              (t
               (gptel-auto-workflow--cleanup-staging-submodule-worktree root path)
               (make-directory (file-name-directory target) t)
@@ -3035,13 +3036,27 @@ This avoids broken linked-worktree submodule metadata under `.git/worktrees/.../
                         hydrated)
                 (setq failure
                       (format "Failed to hydrate %s: %s" path (car add-result)))))))))
-      (if failure
-          (cons failure 1)
-        (cons (if hydrated
-                  (format "Hydrated submodules: %s"
-                          (mapconcat #'identity (nreverse hydrated) ", "))
-                "")
-              0)))))
+       (if failure
+           (cons failure 1)
+         (cons (if hydrated
+                   (format "Hydrated submodules: %s"
+                           (mapconcat #'identity (nreverse hydrated) ", "))
+                 "")
+               0)))))
+
+(defun gptel-auto-workflow--ensure-staging-submodules-ready (&optional worktree)
+  "Hydrate staging submodules in WORKTREE before hook-driven git commits run.
+This is a no-op when WORKTREE is nil or missing, which keeps unit tests that
+stub away linked worktrees lightweight."
+  (if (not (and (stringp worktree)
+                (file-directory-p worktree)))
+      t
+    (let ((hydrate (gptel-auto-workflow--hydrate-staging-submodules worktree)))
+      (if (= 0 (cdr hydrate))
+          t
+        (message "[auto-workflow] Failed to hydrate staging submodules: %s"
+                 (my/gptel--sanitize-for-logging (car hydrate) 200))
+        nil))))
 
 
 (defun gptel-auto-workflow--review-diff-content (optimize-branch)
@@ -3653,13 +3668,15 @@ Uses the staging worktree instead of switching branches in the root repo."
             nil)
         (gptel-auto-workflow--with-staging-worktree
          (lambda ()
-           (let ((reset-target staging))
-             (if (not (gptel-auto-workflow--prepare-staging-merge-base reset-target))
-                 nil
-               (let* ((commit-hash (string-trim
-                                    (car (gptel-auto-workflow--git-result
-                                          (format "git rev-parse %s"
-                                                  (shell-quote-argument optimize-ref))
+           (let ((reset-target staging)
+                 (worktree gptel-auto-workflow--staging-worktree-dir))
+             (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                           (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
+                  nil
+                (let* ((commit-hash (string-trim
+                                     (car (gptel-auto-workflow--git-result
+                                           (format "git rev-parse %s"
+                                                   (shell-quote-argument optimize-ref))
                                           60))))
                       (cherry-result
                        (gptel-auto-workflow--git-result
@@ -3692,16 +3709,17 @@ Uses the staging worktree instead of switching branches in the root repo."
                    (message "[auto-workflow] Cherry-pick empty (already in staging)")
                    (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
                    t)
-                  (t
-                   (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
-                   (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
-                            (my/gptel--sanitize-for-logging cherry-output 160))
-                   (if (not (gptel-auto-workflow--prepare-staging-merge-base reset-target))
-                       nil
-                     (let* ((merge-result
-                             (gptel-auto-workflow--git-result
-                              (format "git merge -X theirs %s --no-ff -m %s"
-                                      (shell-quote-argument optimize-ref)
+                   (t
+                    (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                    (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
+                             (my/gptel--sanitize-for-logging cherry-output 160))
+                    (if (not (and (gptel-auto-workflow--prepare-staging-merge-base reset-target)
+                                  (gptel-auto-workflow--ensure-staging-submodules-ready worktree)))
+                        nil
+                      (let* ((merge-result
+                              (gptel-auto-workflow--git-result
+                               (format "git merge -X theirs %s --no-ff -m %s"
+                                       (shell-quote-argument optimize-ref)
                                       (shell-quote-argument merge-message))
                               180))
                             (merge-output (car merge-result)))
@@ -3882,18 +3900,25 @@ initial remote-advance rejection. Returns a plist with keys `:success',
                         gptel-auto-workflow--staging-push-max-retries))
          (max-retries (max 1 gptel-auto-workflow--staging-push-max-retries))
          (attempt (1+ (- max-retries remaining))))
-    (message "[auto-workflow] origin/staging advanced; refreshing staging and retrying publish (%d/%d)"
-             attempt max-retries)
-    (setq gptel-auto-workflow--last-staging-push-output nil)
-    (cond
-     ((not (gptel-auto-workflow--sync-staging-from-main))
-      (list :success nil
-            :reason 'staging-sync-failed
-            :output "Failed to sync staging from updated origin/staging"))
-     ((not (gptel-auto-workflow--merge-to-staging optimize-branch))
-      (list :success nil
-            :reason 'staging-merge-failed
-            :output (format "Failed to merge %s onto refreshed staging" optimize-branch)))
+     (message "[auto-workflow] origin/staging advanced; refreshing staging and retrying publish (%d/%d)"
+              attempt max-retries)
+     (setq gptel-auto-workflow--last-staging-push-output nil)
+     (cond
+      ((not (gptel-auto-workflow--sync-staging-from-main))
+       (if (> remaining 1)
+           (progn
+             (message "[auto-workflow] Failed to sync refreshed staging; retrying publish refresh (%d/%d)"
+                      attempt max-retries)
+             (gptel-auto-workflow--retry-staging-publish-after-remote-advance
+              optimize-branch
+              (1- remaining)))
+         (list :success nil
+               :reason 'staging-sync-failed
+               :output "Failed to sync staging from updated origin/staging")))
+      ((not (gptel-auto-workflow--merge-to-staging optimize-branch))
+       (list :success nil
+             :reason 'staging-merge-failed
+             :output (format "Failed to merge %s onto refreshed staging" optimize-branch)))
      (t
       (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
                           (gptel-auto-workflow--create-staging-worktree))))
@@ -4096,13 +4121,13 @@ NOTE: Human must manually merge staging to main after review."
             optimize-branch
             review-result
             completion-callback)
-         (error
-          (message "[auto-workflow] Review callback failed for %s: %s"
-                   optimize-branch
-                   (my/gptel--sanitize-for-logging
-                    (error-message-string err) 200))
-          (ignore-errors (gptel-auto-workflow--delete-staging-worktree))
-          (when completion-callback
+          (error
+           (message "[auto-workflow] Staging flow callback failed for %s: %s"
+                    optimize-branch
+                    (my/gptel--sanitize-for-logging
+                     (error-message-string err) 200))
+           (ignore-errors (gptel-auto-workflow--delete-staging-worktree))
+           (when completion-callback
             (my/gptel--invoke-callback-safely completion-callback nil))))))))
 
 
@@ -5149,8 +5174,26 @@ Example HYPOTHESES:
                       (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :comparator-reason "N/A"))
                       (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :analyzer-patterns "N/A"))
                       truncated-output))
-      (write-region (point-min) (point-max) file))
-    (gptel-auto-workflow--sync-live-kept-count run-id file)))
+       (write-region (point-min) (point-max) file))
+     (gptel-auto-workflow--sync-live-kept-count run-id file)))
+
+(defun gptel-auto-experiment--make-kept-result-callback (run-id exp-result log-fn callback)
+  "Return idempotent callback that finalizes EXP-RESULT after optional staging.
+
+When invoked without arguments, or with a non-nil first argument, log
+EXP-RESULT as kept. When invoked with nil, downgrade the result so staging-flow
+failures do not masquerade as published kept results."
+  (gptel-auto-workflow--make-idempotent-callback
+   (lambda (&rest success-args)
+     (let* ((staging-reported-p (not (null success-args)))
+            (staging-succeeded (car success-args))
+            (final-result
+             (if (or (not staging-reported-p) staging-succeeded)
+                 exp-result
+               (let ((failed-result (plist-put (copy-sequence exp-result) :kept nil)))
+                 (plist-put failed-result :comparator-reason "staging-flow-failed")))))
+       (funcall log-fn run-id final-result)
+       (funcall callback final-result)))))
 
 ;;; Error Analysis and Adaptive Workflow
 
@@ -5939,11 +5982,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 			                                                     (commit-timeout
 			                                                      (max 300 gptel-auto-workflow-git-timeout))
 			                                                     (finalize
-			                                                      (gptel-auto-workflow--make-idempotent-callback
-			                                                       (lambda (&rest _)
-			                                                         (funcall log-fn
-				                                                              run-id exp-result)
-			                                                         (funcall callback exp-result)))))
+			                                                      (gptel-auto-experiment--make-kept-result-callback
+			                                                       run-id exp-result log-fn callback)))
 		                                                    (gptel-auto-workflow--assert-main-untouched)
 		                                                    (message "[auto-experiment] ✓ Committing improvement for %s" target)
 		                                                    (if (and (gptel-auto-workflow--git-step-success-p
@@ -6066,11 +6106,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 									                                                     (commit-timeout
 									                                                      (max 300 gptel-auto-workflow-git-timeout))
 									                                                     (finalize
-									                                                      (gptel-auto-workflow--make-idempotent-callback
-									                                                       (lambda (&rest _)
-                                                                                             (funcall log-fn
-                                                                                                      run-id exp-result)
-                                                                                             (funcall callback exp-result)))))
+									                                                      (gptel-auto-experiment--make-kept-result-callback
+									                                                       run-id exp-result log-fn callback)))
 								                                                    (gptel-auto-workflow--assert-main-untouched)
 								                                                    (if (and (gptel-auto-workflow--git-step-success-p
 									                                                          "git add -A"

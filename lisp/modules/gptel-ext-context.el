@@ -301,6 +301,16 @@ Returns nil if directive is missing or invalid, and logs a warning."
 
 ;;; Core
 
+(defun my/gptel--compaction-reduction-pct (chars-before chars-after)
+  "Compute compaction reduction percentage.
+Returns 0.0 if CHARS-BEFORE is zero to avoid division by zero."
+  ;; ASSUMPTION: chars-before and chars-after are non-negative integers
+  ;; BEHAVIOR: Returns percentage reduction, 0.0 if no before chars
+  ;; EDGE CASE: chars-before=0 returns 0.0 instead of arith-error
+  (if (zerop chars-before)
+      0.0
+    (* 100 (- 1 (/ (float chars-after) chars-before)))))
+
 (defun my/gptel--do-compact (&optional force-preview)
   "Perform compaction on current gptel buffer.
 If FORCE-PREVIEW is non-nil, use preview mode regardless of `my/gptel-auto-compact-preview'.
@@ -358,7 +368,7 @@ Returns non-nil if compaction was initiated."
                                   (insert (propertize (format "\nCOMPACTED: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction)\n"
                                                               chars-before chars-after
                                                               (round tokens-before) (round tokens-after)
-                                                              (* 100 (- 1 (/ (float chars-after) chars-before))))
+                                                              (my/gptel--compaction-reduction-pct chars-before chars-after))
                                                       'face '(:foreground "green" :weight bold)))
                                   (insert (propertize "═══════════════════════════════════════════════════════════════\n"
                                                       'face '(:foreground "yellow" :weight bold)))
@@ -373,7 +383,7 @@ Returns non-nil if compaction was initiated."
                               (message "[compact] Done: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction) [backup in kill-ring]"
                                        chars-before chars-after
                                        (round tokens-before) (round tokens-after)
-                                       (* 100 (- 1 (/ (float chars-after) chars-before)))))))))))
+                                       (my/gptel--compaction-reduction-pct chars-before chars-after)))))))))))
                 (error
                  (with-current-buffer buf
                    (setq my/gptel-auto-compact-running nil))
