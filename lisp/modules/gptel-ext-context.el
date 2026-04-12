@@ -192,6 +192,15 @@ DashScope uses lower threshold due to server-side timeout limits."
       my/gptel-auto-compact-threshold-dashscope)
      (t my/gptel-auto-compact-threshold))))
 
+(defun my/gptel--threshold-values ()
+  "Return threshold values for current context.
+Returns (tokens window threshold-fraction percentage-threshold)."
+  (let* ((tokens (my/gptel--current-tokens))
+         (window (my/gptel--context-window))
+         (threshold-fraction (my/gptel--effective-threshold))
+         (percentage-threshold (* window threshold-fraction)))
+    (list tokens window threshold-fraction percentage-threshold)))
+
 (defun my/gptel--current-tokens ()
   "Return estimated token count for current buffer."
   (let* ((chars (buffer-size))
@@ -222,10 +231,11 @@ DashScope uses lower threshold due to server-side timeout limits."
 Only returns t when tokens >= threshold% of context window.
 Uses backend-specific thresholds (lower for DashScope)."
   (let* ((chars (buffer-size))
-         (tokens (my/gptel--current-tokens))
-         (window (my/gptel--context-window))
-         (threshold-fraction (my/gptel--effective-threshold))
-         (threshold (* window threshold-fraction))
+         (threshold-values (my/gptel--threshold-values))
+         (tokens (nth 0 threshold-values))
+         (window (nth 1 threshold-values))
+         (threshold-fraction (nth 2 threshold-values))
+         (threshold (nth 3 threshold-values))
          (needed (and my/gptel-auto-compact-enabled
                       (bound-and-true-p gptel-mode)
                       (>= chars my/gptel-auto-compact-min-chars)
@@ -244,15 +254,16 @@ Uses backend-specific thresholds (lower for DashScope)."
 (defun my/gptel-context-window-show ()
   "Show current model's context window for debugging."
   (interactive)
-  (let* ((window (my/gptel--context-window))
+  (let* ((threshold-values (my/gptel--threshold-values))
+         (tokens (nth 0 threshold-values))
+         (window (nth 1 threshold-values))
+         (threshold-fraction (nth 2 threshold-values))
+         (threshold (nth 3 threshold-values))
          (model gptel-model)
          (model-id (my/gptel--model-id-string model))
          (cached (and model-id (gethash model-id my/gptel--context-window-cache)))
          (backend-type (my/gptel--backend-type))
-         (threshold-fraction (my/gptel--effective-threshold))
-         (threshold (* window threshold-fraction))
          (chars (buffer-size))
-         (tokens (my/gptel--current-tokens))
          (text-tokens (my/gptel--estimate-text-tokens chars))
          (image-tokens (- tokens text-tokens))
          (image-count (or (and (fboundp 'my/gptel--context-image-count)
@@ -339,30 +350,30 @@ Returns non-nil if compaction was initiated."
                               (progn
                                 (goto-char (point-max))
                                 (insert "\n\n")
-(insert (propertize "═══════════════════════════════════════════════════════════════\n"
+                                (insert (propertize "═══════════════════════════════════════════════════════════════\n"
                                                     'face '(:foreground "yellow" :weight bold)))
-                                 (insert (propertize response 'face '(:foreground "cyan")))
-                                 (let ((chars-after (buffer-size))
-                                       (tokens-after (my/gptel--estimate-text-tokens (buffer-size))))
-                                   (insert (propertize (format "\nCOMPACTED: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction)\n"
-                                                               chars-before chars-after
-                                                               (round tokens-before) (round tokens-after)
-                                                               (* 100 (- 1 (/ (float chars-after) chars-before))))
-                                                       'face '(:foreground "green" :weight bold)))
-                                   (insert (propertize "═══════════════════════════════════════════════════════════════\n"
-                                                       'face '(:foreground "yellow" :weight bold)))
-                                   (message "[compact] Preview appended (original kept)"))))
-                            (progn
-                              (kill-new backup)
-                              (erase-buffer)
-                              (insert response)
-                              (goto-char (min point-before (point-max)))
-                              (let ((chars-after (buffer-size))
-                                    (tokens-after (my/gptel--estimate-text-tokens (buffer-size))))
-                                (message "[compact] Done: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction) [backup in kill-ring]"
-                                         chars-before chars-after
-                                         (round tokens-before) (round tokens-after)
-                                         (* 100 (- 1 (/ (float chars-after) chars-before)))))))))))
+                                (insert (propertize response 'face '(:foreground "cyan")))
+                                (let ((chars-after (buffer-size))
+                                      (tokens-after (my/gptel--estimate-text-tokens (buffer-size))))
+                                  (insert (propertize (format "\nCOMPACTED: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction)\n"
+                                                              chars-before chars-after
+                                                              (round tokens-before) (round tokens-after)
+                                                              (* 100 (- 1 (/ (float chars-after) chars-before))))
+                                                      'face '(:foreground "green" :weight bold)))
+                                  (insert (propertize "═══════════════════════════════════════════════════════════════\n"
+                                                      'face '(:foreground "yellow" :weight bold)))
+                                  (message "[compact] Preview appended (original kept)"))))
+                          (progn
+                            (kill-new backup)
+                            (erase-buffer)
+                            (insert response)
+                            (goto-char (min point-before (point-max)))
+                            (let ((chars-after (buffer-size))
+                                  (tokens-after (my/gptel--estimate-text-tokens (buffer-size))))
+                              (message "[compact] Done: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction) [backup in kill-ring]"
+                                       chars-before chars-after
+                                       (round tokens-before) (round tokens-after)
+                                       (* 100 (- 1 (/ (float chars-after) chars-before)))))))))))
                 (error
                  (with-current-buffer buf
                    (setq my/gptel-auto-compact-running nil))
@@ -392,10 +403,11 @@ Hook for `gptel-post-response-functions'."
 (defun my/gptel--delegate-threshold-exceeded-p ()
   "Return non-nil if context exceeds auto-delegation threshold."
   (when my/gptel-auto-delegate-enabled
-    (let* ((tokens (my/gptel--current-tokens))
-           (window (my/gptel--context-window))
-           (threshold-fraction (my/gptel--effective-threshold))
-           (percentage-threshold (* window threshold-fraction))
+    (let* ((threshold-values (my/gptel--threshold-values))
+           (tokens (nth 0 threshold-values))
+           (window (nth 1 threshold-values))
+           (threshold-fraction (nth 2 threshold-values))
+           (percentage-threshold (nth 3 threshold-values))
            (absolute-threshold my/gptel-auto-delegate-threshold-absolute))
       (or (and absolute-threshold (>= tokens absolute-threshold))
           (>= tokens percentage-threshold)))))
