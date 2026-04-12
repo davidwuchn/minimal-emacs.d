@@ -5115,7 +5115,8 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
   "Maximum seconds between retries for rate-limited API failures.")
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
-  '(("DashScope" . "qwen3.6-plus")
+  '(("MiniMax" . "minimax-m2.7-highspeed")
+    ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
@@ -5123,31 +5124,31 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
 
 Each entry is (BACKEND . MODEL), where BACKEND matches the agent preset backend
 string and MODEL is the model string to use with that backend. The workflow
-keeps the agent YAML defaults outside headless runs."
+tries backends in order when the primary is unavailable or rate-limited."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-headless-fallback-agents
   '("analyzer" "executor" "grader" "reviewer")
-  "Headless subagents that should move off their configured MiniMax backend.
+  "Headless subagents that should use the fallback provider list.
 
-Headless workflow runs should stay on the preferred DashScope `qwen3.6-plus'
-path whenever that backend is available, including executor retries."
+Headless workflow runs prefer MiniMax as the workhorse, falling back to
+DashScope and others when rate-limited or unavailable."
   :type '(repeat string)
   :group 'gptel-tools-agent)
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
-  '(("DashScope" . "qwen3.6-plus")
+  '(("MiniMax" . "minimax-m2.7-highspeed")
+    ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Ordered backend/model fallbacks for executor after provider rate limits.
 
-Headless executor prefers DashScope by default. When the active executor backend
+Headless executor prefers MiniMax by default. When the active executor backend
 returns a rate-limit error during a headless run, later retries in that same
-run can
-advance through this list instead of repeatedly hammering the same provider."
+run can advance through this list instead of repeatedly hammering the same provider."
   :type '(repeat (cons (string :tag "Backend")
                        (string :tag "Model")))
   :group 'gptel-tools-agent)
@@ -5168,7 +5169,8 @@ advance through this list instead of repeatedly hammering the same provider."
   "Current runtime default for `gptel-auto-workflow-headless-fallback-agents'.")
 
 (defconst gptel-auto-workflow--current-executor-rate-limit-fallbacks
-  '(("DashScope" . "qwen3.6-plus")
+  '(("MiniMax" . "minimax-m2.7-highspeed")
+    ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
     ("Gemini" . "gemini-3.1-pro-preview"))
@@ -5377,18 +5379,6 @@ can use newer models without a restart."
     (cond
      (runtime-candidate
       (gptel-auto-workflow--rewrite-subagent-provider preset runtime-candidate))
-     ((and (gptel-auto-workflow--headless-provider-override-active-p)
-           (member agent-type gptel-auto-workflow-headless-fallback-agents)
-           (stringp backend)
-           (string= backend "MiniMax"))
-      (if-let ((candidate
-                (gptel-auto-workflow--first-available-provider-candidate
-                 gptel-auto-workflow-headless-subagent-fallbacks)))
-          (progn
-            (message "[auto-workflow] Using %s/%s for %s during headless run"
-                     (car candidate) (cdr candidate) agent-type)
-            (gptel-auto-workflow--rewrite-subagent-provider preset candidate))
-        preset))
      (t preset))))
 
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
