@@ -2248,6 +2248,9 @@ This branch is NEVER deleted and NEVER auto-merged to main."
   "Retry count for transient reviewer transport failures.")
 (defvar gptel-auto-workflow--review-max-retries 2
   "Maximum retries when review is blocked. 0 = no retry.")
+(defvar gptel-auto-workflow--staging-push-max-retries 2
+  "Maximum refresh-and-retry attempts after shared staging advances mid-run.
+Counts retry publishes after the initial failed push. 0 disables replay.")
 
 (defvar gptel-auto-workflow--worktree-state (make-hash-table :test 'equal)
   "Hash table for per-target worktree state. Keyed by target.
@@ -3819,43 +3822,58 @@ so this push must not rewrite remote history."
            "remote contains work that you do not have locally"))
    (or output "")))
 
-(defun gptel-auto-workflow--retry-staging-publish-after-remote-advance (optimize-branch)
-  "Refresh shared staging and retry publishing OPTIMIZE-BRANCH once.
-Returns a plist with keys `:success', `:reason', and `:output'."
-  (message "[auto-workflow] origin/staging advanced; refreshing staging and retrying publish")
-  (setq gptel-auto-workflow--last-staging-push-output nil)
-  (cond
-   ((not (gptel-auto-workflow--sync-staging-from-main))
-    (list :success nil
-          :reason 'staging-sync-failed
-          :output "Failed to sync staging from updated origin/staging"))
-   ((not (gptel-auto-workflow--merge-to-staging optimize-branch))
-    (list :success nil
-          :reason 'staging-merge-failed
-          :output (format "Failed to merge %s onto refreshed staging" optimize-branch)))
-   (t
-    (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
-                        (gptel-auto-workflow--create-staging-worktree))))
-      (cond
-       ((not worktree)
-        (list :success nil
-              :reason 'staging-worktree-failed
-              :output "Failed to create staging worktree"))
-       (t
-        (let* ((verification (gptel-auto-workflow--verify-staging))
-               (tests-passed (car verification))
-               (output (or (cdr verification) "")))
-          (if (not tests-passed)
-              (list :success nil
-                    :reason 'staging-verification-failed
-                    :output output)
-            (if (gptel-auto-workflow--push-staging)
-                (list :success t :output output)
-              (list :success nil
-                    :reason 'staging-push-failed
-                    :output (or gptel-auto-workflow--last-staging-push-output
-                                output
-                                "")))))))))))
+(defun gptel-auto-workflow--retry-staging-publish-after-remote-advance (optimize-branch &optional retries-remaining)
+  "Refresh shared staging and retry publishing OPTIMIZE-BRANCH.
+RETRIES-REMAINING counts remaining refresh-and-retry attempts after an
+initial remote-advance rejection. Returns a plist with keys `:success',
+`:reason', and `:output'."
+  (let* ((remaining (or retries-remaining
+                        gptel-auto-workflow--staging-push-max-retries))
+         (max-retries (max 1 gptel-auto-workflow--staging-push-max-retries))
+         (attempt (1+ (- max-retries remaining))))
+    (message "[auto-workflow] origin/staging advanced; refreshing staging and retrying publish (%d/%d)"
+             attempt max-retries)
+    (setq gptel-auto-workflow--last-staging-push-output nil)
+    (cond
+     ((not (gptel-auto-workflow--sync-staging-from-main))
+      (list :success nil
+            :reason 'staging-sync-failed
+            :output "Failed to sync staging from updated origin/staging"))
+     ((not (gptel-auto-workflow--merge-to-staging optimize-branch))
+      (list :success nil
+            :reason 'staging-merge-failed
+            :output (format "Failed to merge %s onto refreshed staging" optimize-branch)))
+     (t
+      (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
+                          (gptel-auto-workflow--create-staging-worktree))))
+        (cond
+         ((not worktree)
+          (list :success nil
+                :reason 'staging-worktree-failed
+                :output "Failed to create staging worktree"))
+         (t
+          (let* ((verification (gptel-auto-workflow--verify-staging))
+                 (tests-passed (car verification))
+                 (output (or (cdr verification) "")))
+            (if (not tests-passed)
+                (list :success nil
+                      :reason 'staging-verification-failed
+                      :output output)
+              (if (gptel-auto-workflow--push-staging)
+                  (list :success t :output output)
+                (let ((push-output
+                       (or gptel-auto-workflow--last-staging-push-output
+                           output
+                           "")))
+                  (if (and (> remaining 1)
+                           (gptel-auto-workflow--staging-push-remote-advanced-p
+                            push-output))
+                      (gptel-auto-workflow--retry-staging-publish-after-remote-advance
+                       optimize-branch
+                       (1- remaining))
+                    (list :success nil
+                          :reason 'staging-push-failed
+                          :output push-output)))))))))))))
 
 (defun gptel-auto-workflow--log-staging-step-failure (reason optimize-branch output)
   "Log staging step failure REASON for OPTIMIZE-BRANCH with OUTPUT."
@@ -4222,23 +4240,31 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                             (gptel-auto-workflow--delete-staging-worktree)
                             (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")
                             (funcall finish t))
-                        (let ((push-output gptel-auto-workflow--last-staging-push-output))
-                          (if (gptel-auto-workflow--staging-push-remote-advanced-p push-output)
-                              (let* ((retry-result
-                                      (gptel-auto-workflow--retry-staging-publish-after-remote-advance
-                                       optimize-branch))
-                                     (retry-success (plist-get retry-result :success))
-                                     (retry-reason (plist-get retry-result :reason))
-                                     (retry-output (plist-get retry-result :output)))
-                                (if retry-success
-                                    (progn
-                                      (gptel-auto-workflow--delete-staging-worktree)
-                                      (message "[auto-workflow] ✓ Staging pushed after refreshing remote advance.")
-                                      (funcall finish t))
-                                  (gptel-auto-workflow--log-staging-step-failure
-                                   retry-reason optimize-branch retry-output)
-                                  (gptel-auto-workflow--sync-staging-from-main)
-                                  (funcall finish nil)))
+                        (let* ((push-output gptel-auto-workflow--last-staging-push-output)
+                               (remote-advanced-p
+                                (gptel-auto-workflow--staging-push-remote-advanced-p
+                                 push-output)))
+                          (if remote-advanced-p
+                              (if (> gptel-auto-workflow--staging-push-max-retries 0)
+                                  (let* ((retry-result
+                                          (gptel-auto-workflow--retry-staging-publish-after-remote-advance
+                                           optimize-branch))
+                                         (retry-success (plist-get retry-result :success))
+                                         (retry-reason (plist-get retry-result :reason))
+                                         (retry-output (plist-get retry-result :output)))
+                                    (if retry-success
+                                        (progn
+                                          (gptel-auto-workflow--delete-staging-worktree)
+                                          (message "[auto-workflow] ✓ Staging pushed after refreshing remote advance.")
+                                          (funcall finish t))
+                                      (gptel-auto-workflow--log-staging-step-failure
+                                       retry-reason optimize-branch retry-output)
+                                      (gptel-auto-workflow--sync-staging-from-main)
+                                      (funcall finish nil)))
+                                (gptel-auto-workflow--log-staging-step-failure
+                                 'staging-push-failed optimize-branch push-output)
+                                (gptel-auto-workflow--sync-staging-from-main)
+                                (funcall finish nil))
                             (gptel-auto-workflow--log-staging-step-failure
                              'staging-push-failed optimize-branch push-output)
                             (gptel-auto-workflow--reset-staging-after-failure staging-base)
