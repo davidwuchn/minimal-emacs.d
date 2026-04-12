@@ -135,10 +135,12 @@ JSON parsing returns vectors for arrays; this normalizes to lists."
 (defun gptel-benchmark--get-field (obj field)
   "Get FIELD from OBJ, handling both plist and alist formats.
 FIELD should be a keyword like :score.
-For alist lookup, converts :score to \\='score symbol."
+For alist lookup, tries both keyword and symbol keys."
   (or (plist-get obj field)
+      (cdr (assoc field obj))
       (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
-        (cdr (assoc alist-key obj)))))
+        (unless (eq alist-key field)
+          (cdr (assoc alist-key obj))))))
 
 (defun gptel-benchmark--plist-get (obj field &optional default)
   "Get FIELD from OBJ with optional DEFAULT value.
@@ -226,14 +228,9 @@ Returns nil for nil or malformed input."
   "Extract FIELD from scores in result entry R.
 Returns nil if R has no scores or FIELD is not present.
 FIELD should be a keyword like :overall-score.
-Handles both plist format (keyword keys) and alist format (symbol or keyword keys).
 If SCORES is provided, uses it directly instead of re-extracting from R."
   (let ((scores (or scores (gptel-benchmark--extract-scores r))))
-    (and scores
-         (if (and (listp scores) (keywordp (car scores)))
-             (plist-get scores field)
-           (or (alist-get field scores)
-               (alist-get (gptel-benchmark--keyword-to-alist-key field) scores))))))
+    (and scores (gptel-benchmark--get-field scores field))))
 
 (defun gptel-benchmark--accumulate-score (total score)
   "Accumulate SCORE into TOTAL.
