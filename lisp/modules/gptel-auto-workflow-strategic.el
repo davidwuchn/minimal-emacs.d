@@ -97,7 +97,7 @@ Ensures consistent cache lookups across different path representations."
           (unless (or (string-match-p "-test\\.el$" file)
                       (string-match-p "-disabled\\.el$" file)
                       (string-match-p "/test/" file))
-             (push rel-path targets)))))
+            (push rel-path targets)))))
     (reverse targets)))
 
 (defun gptel-auto-workflow--target-in-root-repo-p (abs-path proj-root)
@@ -116,7 +116,7 @@ Ensures consistent cache lookups across different path representations."
 Scans only root-repo targets that can be integrated into staging."
   (let* ((proj-root (or (gptel-auto-workflow--project-root)
                         (expand-file-name "~/.emacs.d/")))
-          (safe-root (shell-quote-argument proj-root)))
+         (safe-root (shell-quote-argument proj-root)))
     (list :git-history (shell-command-to-string
                         (format "cd %s && git log --oneline -30 -- lisp/modules/ 2>/dev/null"
                                 safe-root))
@@ -193,9 +193,9 @@ Do NOT choose files from packages/ or any nested git repo. Those are optimized s
 
 OUTPUT JSON ONLY:
 {\"targets\": [{\"file\": \"lisp/modules/xxx.el\", \"priority\": 1, \"reason\": \"why\"}]}"
-           (or (plist-get context :file-list) "")
-           (or (plist-get context :git-history) "")
-           (or (plist-get context :file-sizes) "")
+          (or (plist-get context :file-list) "")
+          (or (plist-get context :git-history) "")
+          (or (plist-get context :file-sizes) "")
           (or (plist-get context :todos) "")
           (if (or (null research-findings) (string-empty-p research-findings))
               "Not available (research disabled)"
@@ -219,8 +219,8 @@ CALLBACK receives list of target files."
            'analyzer
            "Select targets"
            prompt
-            (lambda (result)
-              (funcall callback (gptel-auto-workflow--parse-targets result)))
+           (lambda (result)
+             (funcall callback (gptel-auto-workflow--parse-targets result)))
            analyzer-timeout))
       (funcall callback nil))))
 
@@ -235,16 +235,16 @@ Returns updated targets list."
                         file
                       (expand-file-name file proj-root)))
           (root-prefix (if (string-suffix-p "/" proj-root)
-                          proj-root
-                        (concat proj-root "/"))))
+                           proj-root
+                         (concat proj-root "/"))))
       (if (and (file-exists-p abs-path)
                (file-regular-p abs-path)
                (string-prefix-p root-prefix abs-path)
                (gptel-auto-workflow--target-in-root-repo-p abs-path proj-root))
-           (let ((rel-path (file-relative-name abs-path proj-root)))
-             (if (member rel-path targets)
-                 targets
-               (cons rel-path targets)))
+          (let ((rel-path (file-relative-name abs-path proj-root)))
+            (if (member rel-path targets)
+                targets
+              (cons rel-path targets)))
         targets)))))
 
 (defun gptel-auto-workflow--normalize-response (response)
@@ -288,24 +288,24 @@ Logs when fallback to regex parsing is used."
         (max-targets gptel-auto-workflow-max-targets-per-run)
         (normalized-response (gptel-auto-workflow--normalize-response response)))
     (cond
-      ((gptel-auto-experiment--quota-exhausted-p normalized-response)
-       (setq gptel-auto-workflow--analyzer-quota-exhausted t)
-       (message "[auto-workflow] Analyzer quota exhausted during target selection")
-       nil)
-      ((gptel-auto-workflow--analyzer-transient-error-p normalized-response)
-       (setq gptel-auto-workflow--analyzer-transient-failure t)
-       (message "[auto-workflow] Analyzer transient failure during target selection: %s"
-                (gptel-auto-workflow--response-snippet normalized-response 120))
-       nil)
-      ((gptel-auto-workflow--analyzer-error-p normalized-response)
-       (message "[auto-workflow] Analyzer error during target selection: %s"
-                (gptel-auto-workflow--response-snippet normalized-response 120))
-       nil)
-      (t
-       (let ((targets (gptel-auto-workflow--parse-json-targets
-                       normalized-response proj-root max-targets)))
-         (if targets
-             targets
+     ((gptel-auto-experiment--quota-exhausted-p normalized-response)
+      (setq gptel-auto-workflow--analyzer-quota-exhausted t)
+      (message "[auto-workflow] Analyzer quota exhausted during target selection")
+      nil)
+     ((gptel-auto-workflow--analyzer-transient-error-p normalized-response)
+      (setq gptel-auto-workflow--analyzer-transient-failure t)
+      (message "[auto-workflow] Analyzer transient failure during target selection: %s"
+               (gptel-auto-workflow--response-snippet normalized-response 120))
+      nil)
+     ((gptel-auto-workflow--analyzer-error-p normalized-response)
+      (message "[auto-workflow] Analyzer error during target selection: %s"
+               (gptel-auto-workflow--response-snippet normalized-response 120))
+      nil)
+     (t
+      (let ((targets (gptel-auto-workflow--parse-json-targets
+                      normalized-response proj-root max-targets)))
+        (if targets
+            targets
           (progn
             (message "[auto-workflow] JSON parse failed, using regex fallback")
             (gptel-auto-workflow--parse-regex-targets
@@ -316,6 +316,27 @@ Logs when fallback to regex parsing is used."
   (and (consp value)
        (consp (car value))
        (symbolp (caar value))))
+
+(defun gptel-auto-workflow--handle-analyzer-error-state (targets static-targets callback)
+  "Handle analyzer error states and invoke CALLBACK with appropriate targets.
+TARGETS is the analyzer result, STATIC-TARGETS is fallback list.
+Returns non-nil if error state was handled."
+  (cond
+   ((and gptel-auto-workflow--analyzer-quota-exhausted
+         (null targets))
+    (message "[auto-workflow] Analyzer quota exhausted; using static targets")
+    (funcall callback static-targets)
+    t)
+   ((and gptel-auto-workflow--analyzer-transient-failure
+         (null targets))
+    (message "[auto-workflow] Analyzer transient failure; using static targets")
+    (funcall callback static-targets)
+    t)
+   ((null targets)
+    (message "[auto-workflow] Analyzer returned no targets; using static targets")
+    (funcall callback static-targets)
+    t)
+   (t nil)))
 
 (defun gptel-auto-workflow--normalize-target-candidate (candidate)
   "Normalize parsed target CANDIDATE to a repo-relative path when possible."
@@ -349,38 +370,38 @@ Logs parsing failures for debugging."
       (message "[auto-workflow] Empty response in parse-json-targets")
       (cl-return-from gptel-auto-workflow--parse-json-targets nil))
     (condition-case err
-      (with-temp-buffer
-        (insert response)
-        (goto-char (point-min))
-        (when (re-search-forward "[{[]" nil t)
-          (goto-char (match-beginning 0))
-          (let* ((json-array-type 'list)
-                 (json-object-type 'alist)
-                 (json-key-type 'symbol)
-                  (data (json-read))
-                  (target-list
-                   (cond
-                    ((gptel-auto-workflow--json-object-p data)
-                     (or (alist-get 'targets data)
-                         (alist-get 'files data)
-                         (alist-get 'paths data)
-                         (and (gptel-auto-workflow--json-target-file data)
-                              (list data))))
-                    ((listp data) data)))
-                  (candidates
-                   (and (listp target-list)
-                        (delq nil
-                              (mapcar #'gptel-auto-workflow--json-target-file
-                                      target-list)))))
-            (when candidates
-              (gptel-auto-workflow--filter-valid-targets
-               candidates proj-root max-targets)))))
-    (json-error
-     (message "[auto-workflow] JSON parse error: %s" (error-message-string err))
-     nil)
-    (error
-     (message "[auto-workflow] Target parse error: %s" (error-message-string err))
-     nil))))
+        (with-temp-buffer
+          (insert response)
+          (goto-char (point-min))
+          (when (re-search-forward "[{[]" nil t)
+            (goto-char (match-beginning 0))
+            (let* ((json-array-type 'list)
+                   (json-object-type 'alist)
+                   (json-key-type 'symbol)
+                   (data (json-read))
+                   (target-list
+                    (cond
+                     ((gptel-auto-workflow--json-object-p data)
+                      (or (alist-get 'targets data)
+                          (alist-get 'files data)
+                          (alist-get 'paths data)
+                          (and (gptel-auto-workflow--json-target-file data)
+                               (list data))))
+                     ((listp data) data)))
+                   (candidates
+                    (and (listp target-list)
+                         (delq nil
+                               (mapcar #'gptel-auto-workflow--json-target-file
+                                       target-list)))))
+              (when candidates
+                (gptel-auto-workflow--filter-valid-targets
+                 candidates proj-root max-targets)))))
+      (json-error
+       (message "[auto-workflow] JSON parse error: %s" (error-message-string err))
+       nil)
+      (error
+       (message "[auto-workflow] Target parse error: %s" (error-message-string err))
+       nil))))
 
 (defun gptel-auto-workflow--parse-regex-targets (response proj-root max-targets)
   "Parse RESPONSE using regex fallback to extract targets.
@@ -391,17 +412,17 @@ Returns list of validated file paths."
       (cl-return-from gptel-auto-workflow--parse-regex-targets nil))
     (with-temp-buffer
       (insert response)
-    (goto-char (point-min))
-    (let ((candidates '()))
-      (while (re-search-forward "lisp/modules/[a-zA-Z0-9_/.-]+\\.el" nil t)
-        (push (match-string 0) candidates))
       (goto-char (point-min))
-      (when (null candidates)
-        (while (re-search-forward "\\b\\([a-zA-Z0-9_-]+\\.el\\)\\b" nil t)
-          (push (gptel-auto-workflow--normalize-target-candidate (match-string 1))
-                candidates)))
-      (gptel-auto-workflow--filter-valid-targets
-       (nreverse candidates) proj-root max-targets)))))
+      (let ((candidates '()))
+        (while (re-search-forward "lisp/modules/[a-zA-Z0-9_/.-]+\\.el" nil t)
+          (push (match-string 0) candidates))
+        (goto-char (point-min))
+        (when (null candidates)
+          (while (re-search-forward "\\b\\([a-zA-Z0-9_-]+\\.el\\)\\b" nil t)
+            (push (gptel-auto-workflow--normalize-target-candidate (match-string 1))
+                  candidates)))
+        (gptel-auto-workflow--filter-valid-targets
+         (nreverse candidates) proj-root max-targets)))))
 
 (defun gptel-auto-workflow-select-targets (callback)
   "Select targets for optimization.
@@ -417,25 +438,15 @@ LLM decides if available, otherwise uses static list."
              gptel-auto-workflow-targets
              proj-root
              gptel-auto-workflow-max-targets-per-run)))
-       (if gptel-auto-workflow-strategic-selection
+      (if gptel-auto-workflow-strategic-selection
           (gptel-auto-workflow--ask-analyzer-for-targets
            (lambda (targets)
-             (cond
-              ((and gptel-auto-workflow--analyzer-quota-exhausted
-                    (null targets))
-               (message "[auto-workflow] Analyzer quota exhausted; using static targets")
-               (funcall callback static-targets))
-              ((and gptel-auto-workflow--analyzer-transient-failure
-                    (null targets))
-               (message "[auto-workflow] Analyzer transient failure; using static targets")
-               (funcall callback static-targets))
-              ((null targets)
-               (message "[auto-workflow] Analyzer returned no targets; using static targets")
-               (funcall callback static-targets))
-              (t
-               (message "[auto-workflow] Analyzer selected %d targets" (length targets))
-               (funcall callback targets)))))
-         (funcall callback static-targets)))))
+             (if (gptel-auto-workflow--handle-analyzer-error-state targets static-targets callback)
+                 nil  ; Error already handled
+               (progn
+                 (message "[auto-workflow] Analyzer selected %d targets" (length targets))
+                 (funcall callback targets)))))
+        (funcall callback static-targets)))))
 
 ;;; Periodic Research
 
