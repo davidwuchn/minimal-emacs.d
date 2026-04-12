@@ -6233,6 +6233,17 @@ Relative paths are resolved from the project root."
   :type 'file
   :group 'gptel)
 
+(defcustom gptel-auto-workflow-messages-file "var/tmp/cron/auto-workflow-messages-tail.txt"
+  "Path to the persisted auto-workflow messages snapshot.
+Relative paths are resolved from the project root."
+  :type 'file
+  :group 'gptel)
+
+(defcustom gptel-auto-workflow-messages-chars 16000
+  "Maximum number of trailing *Messages* characters to persist for cron tools."
+  :type 'integer
+  :group 'gptel)
+
 (defun gptel-auto-workflow--status-file ()
   "Return absolute path to the persisted workflow status snapshot."
   (let* ((configured-file gptel-auto-workflow-status-file)
@@ -6250,8 +6261,50 @@ Relative paths are resolved from the project root."
      ((file-name-absolute-p configured-file)
       configured-file)
      (t
+       (expand-file-name configured-file
+                         (gptel-auto-workflow--default-dir))))))
+
+(defun gptel-auto-workflow--messages-file ()
+  "Return absolute path to the persisted workflow messages snapshot."
+  (let* ((configured-file gptel-auto-workflow-messages-file)
+         (default-file "var/tmp/cron/auto-workflow-messages-tail.txt")
+         (env-file (getenv "AUTO_WORKFLOW_MESSAGES_FILE")))
+    (cond
+     ((not (equal configured-file default-file))
+      (if (file-name-absolute-p configured-file)
+          configured-file
+        (expand-file-name configured-file
+                          (gptel-auto-workflow--default-dir))))
+     ((and (stringp env-file)
+           (not (string-empty-p env-file)))
+      env-file)
+     ((file-name-absolute-p configured-file)
+      configured-file)
+     (t
       (expand-file-name configured-file
                         (gptel-auto-workflow--default-dir))))))
+
+(defun gptel-auto-workflow--messages-chars ()
+  "Return the configured trailing *Messages* snapshot size."
+  (let* ((env-value (getenv "AUTO_WORKFLOW_MESSAGES_CHARS"))
+         (parsed-env (and (stringp env-value)
+                          (not (string-empty-p env-value))
+                          (string-to-number env-value))))
+    (if (and parsed-env (> parsed-env 0))
+        parsed-env
+      gptel-auto-workflow-messages-chars)))
+
+(defun gptel-auto-workflow--persist-messages-tail ()
+  "Persist the trailing *Messages* tail for non-blocking cron inspection."
+  (let* ((file (gptel-auto-workflow--messages-file))
+         (dir (file-name-directory file))
+         (max-chars (gptel-auto-workflow--messages-chars)))
+    (when dir
+      (make-directory dir t))
+    (with-current-buffer (get-buffer-create "*Messages*")
+      (write-region (max (point-min) (- (point-max) max-chars))
+                    (point-max)
+                    file nil 'silent))))
 
 (defun gptel-auto-workflow--status-plist ()
   "Return current workflow status as a plist."
@@ -6299,7 +6352,8 @@ Relative paths are resolved from the project root."
       (let ((print-length nil)
             (print-level nil))
         (prin1 status (current-buffer))
-        (insert "\n")))))
+        (insert "\n")))
+    (gptel-auto-workflow--persist-messages-tail)))
 
 (defun gptel-auto-workflow-read-persisted-status ()
   "Read the persisted workflow status snapshot, or nil if unavailable."
