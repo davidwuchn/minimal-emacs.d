@@ -2560,23 +2560,63 @@ state does not leak into workflow branches."
         "origin/main")
        (have-main
         "main")
-       (t
-        (message "[auto-workflow] Missing main ref for staging sync")
-        nil)))))
+        (t
+         (message "[auto-workflow] Missing main ref for staging sync")
+         nil)))))
 
-
-(defun gptel-auto-workflow--sync-staging-from-main ()
-  "Sync staging branch from main at workflow start.
-Creates a fresh staging worktree and never checks out staging in the root repo."
+(defun gptel-auto-workflow--staging-sync-ref ()
+  "Return the ref staging should sync from at workflow start.
+Prefer `origin/staging' when it exists so concurrent hosts append to the
+shared integration branch instead of rebuilding it from `main'. Fall back to
+`gptel-auto-workflow--staging-main-ref' only when the remote staging branch is
+absent."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
          (staging gptel-auto-workflow-staging-branch)
-         (main-ref nil))
-    (message "[auto-workflow] Syncing staging from main")
+         (staging-q (shell-quote-argument staging))
+         (remote-staging (format "refs/remotes/origin/%s" staging))
+         (remote-staging-refspec
+          (format "+refs/heads/%s:%s" staging remote-staging))
+         (remote-probe
+          (gptel-auto-workflow--git-result
+           (format "git ls-remote --exit-code --heads origin %s" staging-q)
+           60)))
+    (cond
+     ((= 0 (cdr remote-probe))
+      (let ((fetch-result
+             (gptel-auto-workflow--git-result
+              (format "git fetch origin %s"
+                      (shell-quote-argument remote-staging-refspec))
+              180)))
+        (if (= 0 (cdr fetch-result))
+            remote-staging
+          (message "[auto-workflow] Failed to fetch origin/%s for staging sync: %s"
+                   staging
+                   (my/gptel--sanitize-for-logging (car fetch-result) 160))
+          nil)))
+     ((= 2 (cdr remote-probe))
+      (gptel-auto-workflow--staging-main-ref))
+     (t
+      (message "[auto-workflow] Failed to probe origin/%s for staging sync: %s"
+               staging
+               (my/gptel--sanitize-for-logging (car remote-probe) 160))
+      nil))))
+
+
+(defun gptel-auto-workflow--sync-staging-from-main ()
+  "Sync staging from current upstream state at workflow start.
+Prefer `origin/staging' when available so shared staging keeps remote results.
+Otherwise reset staging to the selected main ref. Never checks out staging in
+the root repo."
+  (let* ((proj-root (gptel-auto-workflow--project-root))
+         (default-directory proj-root)
+         (staging gptel-auto-workflow-staging-branch)
+         (sync-ref nil))
+    (message "[auto-workflow] Syncing staging")
     (if (not (gptel-auto-workflow--ensure-staging-branch-exists))
         nil
-      (setq main-ref (gptel-auto-workflow--staging-main-ref))
-      (if (not main-ref)
+      (setq sync-ref (gptel-auto-workflow--staging-sync-ref))
+      (if (not sync-ref)
           nil
         (let ((worktree (gptel-auto-workflow--create-staging-worktree)))
           (if (not worktree)
@@ -2588,15 +2628,15 @@ Creates a fresh staging worktree and never checks out staging in the root repo."
                                 60)
                                (gptel-auto-workflow--git-result
                                 (format "git reset --hard %s"
-                                        (shell-quote-argument main-ref))
-                                180)))
+                                        (shell-quote-argument sync-ref))
+                                 180)))
                      (failed (cl-find-if (lambda (item) (/= 0 (cdr item))) results)))
                 (if failed
                     (progn
                       (message "[auto-workflow] Failed to sync staging: %s"
                                (my/gptel--sanitize-for-logging (car failed) 160))
                       nil)
-                  (message "[auto-workflow] ✓ Staging synced from main")
+                  (message "[auto-workflow] ✓ Staging synced from %s" sync-ref)
                   t)))))))))
 
 
@@ -3721,16 +3761,24 @@ ACTION is a short description used in failure messages."
 
 (defun gptel-auto-workflow--push-staging ()
   "Push staging branch to origin after successful verification.
-Uses `--force-with-lease' when remote staging already exists because the local
-staging branch is regenerated from `main' at the start of each workflow run."
+Unlike per-experiment optimize branches, staging is a shared integration branch,
+so this push must not rewrite remote history."
   (let ((staging gptel-auto-workflow-staging-branch))
     (message "[auto-workflow] Pushing staging to origin")
     (gptel-auto-workflow--with-staging-worktree
      (lambda ()
-       (gptel-auto-workflow--push-branch-with-lease
-        staging
-        "Push staging"
-        180)))))
+       (let* ((push-result
+               (gptel-auto-workflow--with-skipped-submodule-sync
+                (lambda ()
+                  (gptel-auto-workflow--git-result
+                   (format "git push origin %s"
+                           (shell-quote-argument staging))
+                   180)))))
+         (if (= 0 (cdr push-result))
+             t
+           (message "[auto-workflow] Push staging failed: %s"
+                    (my/gptel--sanitize-for-logging (car push-result) 160))
+           nil))))))
 
 
 (defun gptel-auto-workflow--current-staging-head ()
