@@ -77,6 +77,23 @@ timeout, so keep a dedicated budget to avoid unnecessary static fallbacks."
 (defvar gptel-auto-workflow--analyzer-quota-exhausted nil
   "Non-nil when analyzer target selection hit provider quota limits.")
 
+(defun gptel-auto-workflow--clear-analyzer-error-state ()
+  "Reset analyzer target-selection error flags before a fresh attempt."
+  (setq gptel-auto-workflow--analyzer-transient-failure nil
+        gptel-auto-workflow--analyzer-quota-exhausted nil))
+
+(defun gptel-auto-workflow--analyzer-failover-candidate ()
+  "Return the next analyzer failover provider candidate, if any."
+  (when (and (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)
+             (fboundp 'gptel-auto-workflow--first-available-provider-candidate)
+             (boundp 'gptel-auto-workflow--rate-limited-backends))
+    (let ((candidates
+           (gptel-auto-workflow--rate-limit-failover-candidates "analyzer")))
+      (and (listp candidates)
+           (gptel-auto-workflow--first-available-provider-candidate
+            candidates
+            gptel-auto-workflow--rate-limited-backends)))))
+
 (defun gptel-auto-workflow--normalized-cache-key (&optional proj-root)
   "Return normalized cache key for PROJ-ROOT.
 Ensures consistent cache lookups across different path representations."
@@ -210,18 +227,34 @@ CALLBACK receives list of target files."
          (analyzer-timeout (max my/gptel-agent-task-timeout
                                 gptel-auto-workflow-analyzer-time-budget))
          (prompt (gptel-auto-workflow--build-analyzer-prompt
-                  context research-findings max-targets)))
+                   context research-findings max-targets)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
-        (progn
+        (cl-labels
+            ((request-analyzer (attempt)
+               (gptel-benchmark-call-subagent
+                'analyzer
+                "Select targets"
+                prompt
+                (lambda (result)
+                  (let* ((targets (gptel-auto-workflow--parse-targets result))
+                         (candidate
+                          (and (zerop attempt)
+                               (null targets)
+                               (or gptel-auto-workflow--analyzer-quota-exhausted
+                                   gptel-auto-workflow--analyzer-transient-failure)
+                               (gptel-auto-workflow--analyzer-failover-candidate))))
+                    (if candidate
+                        (progn
+                          (message "[auto-workflow] Retrying analyzer target selection with %s/%s"
+                                   (car candidate)
+                                   (cdr candidate))
+                          (gptel-auto-workflow--clear-analyzer-error-state)
+                          (request-analyzer (1+ attempt)))
+                      (funcall callback targets))))
+                analyzer-timeout)))
           (message "[auto-workflow] Asking analyzer to select targets...")
-          (gptel-benchmark-call-subagent
-           'analyzer
-           "Select targets"
-           prompt
-           (lambda (result)
-             (funcall callback (gptel-auto-workflow--parse-targets result)))
-           analyzer-timeout))
+          (request-analyzer 0))
       (funcall callback nil))))
 
 (defun gptel-auto-workflow--validate-and-add-target (file proj-root targets max-targets)
@@ -433,8 +466,7 @@ Returns list of validated file paths."
 CALLBACK receives list of target files.
 LLM decides if available, otherwise uses static list."
   (when (functionp callback)
-    (setq gptel-auto-workflow--analyzer-transient-failure nil)
-    (setq gptel-auto-workflow--analyzer-quota-exhausted nil)
+    (gptel-auto-workflow--clear-analyzer-error-state)
     (let* ((proj-root (or (gptel-auto-workflow--project-root)
                           (expand-file-name "~/.emacs.d/")))
            (static-targets
