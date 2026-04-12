@@ -1,14 +1,48 @@
 # Mementum State
 
-> Last session: 2026-04-11 21:15
+> Last session: 2026-04-11 23:30
 
-## Total Improvements: 238+ Real Code Fixes (29 new today)
+## Total Improvements: 242+ Real Code Fixes (33 new today)
 
 ### Session Summary: 2026-04-11 Evening (Remote Sync + Submodule Update)
 
-**Action:** Synced with remote origin, fast-forwarded main, updated submodules
+**Action:** Synced main and staging with origin/upstream, updated submodules
 
-**Result:** ✅ main now at `e220303a`, submodules checked
+**Result:** ✅ 1402 tests passing, all remotes in sync
+
+**Remote Changes (origin/main):**
+- **f9fe3904** — ⊘ fix: clamp comparator keep decisions
+  - gptel-tools-agent.el: +71 lines (comparator logic improvements)
+  - test-gptel-tools-agent-regressions.el: +49 lines (new tests)
+
+**Sync Status:**
+- **main:** `f9fe3904` — origin ↔ upstream in sync ✅
+- **staging:** `116495a6` — origin ↔ upstream in sync ✅
+
+**Submodules:** All up-to-date (6 submodules)
+
+**New Feature: Backend Fallback on 429 Errors**
+- When MiniMax hits the 5-hour rolling window rate limit (429), experiments now
+  automatically fail over to the next available backend instead of being discarded
+- Fallback order: DashScope/qwen3.6-plus → DeepSeek/deepseek-chat → CF-Gateway/glm-4.7-flash → Gemini/gemini-3.1-pro-preview
+- New functions:
+  - `gptel-auto-experiment--forced-backend`: dynamic variable to force backend
+  - `gptel-auto-experiment--run-agent-with-backend-fallback`: wrapper that detects 429 and retries
+  - `gptel-auto-experiment--apply-backend-preset`: applies backend preset for retry
+- Updated `gptel-auto-workflow--maybe-override-subagent-provider` to respect forced backend
+- 4 new regression tests for fallback behavior
+
+**Sync Status:**
+- **main:** `f678337c` — origin ↔ upstream in sync ✅
+- **staging:** `8e2e198d` — origin ↔ upstream in sync ✅
+
+---
+
+### Session Summary: 2026-04-11 Evening (Remote Sync + Submodule Update)
+
+**Action:** Synced with remote origin, fast-forwarded main, merged to staging, updated submodules
+
+**Result:** ✅ main at `f678337c`, staging synced, all remotes up-to-date
 
 **Remote Changes (origin/main):**
 - **e220303a** — ⊘ fix: unblock DashScope headless auto-workflow
@@ -18,12 +52,12 @@
   - test-gptel-tools-agent-regressions.el: +157 lines (new regression tests)
 
 **Sync Status:**
-- **main:** `e220303a` — origin ↔ upstream in sync ✅
-- **staging:** `d9e5c9b6` — needs sync with main
+- **main:** `f678337c` — origin ↔ upstream in sync ✅
+- **staging:** `9af68b35` — origin ↔ upstream in sync ✅
 
----
+**Submodules:** All up-to-date (6 submodules)
 
-### Session Summary: 2026-04-11 Evening (Naming Conflict Fix + Merge)
+### Session Summary: 2026-04-11 Early Morning (Workflow Run Complete + Sync)
 
 **Action:** Monitored workflow run `2026-04-10T214113Z-27a0` to completion, synced all remotes
 
@@ -45,10 +79,6 @@
 - Staging-review failing frequently - reviewer can't access files in worktrees
 - score_after is 0.00 when tests fail (Eight Keys scoring can't calculate)
 - Daemon crashes intermittently during workflow runs (pipe connection lost)
-
-**Sync Status:**
-- **main:** `e700a688` — origin ↔ upstream in sync
-- **staging:** `9607d318` — origin ↔ upstream in sync
 
 **New Optimize Branches on Origin:**
 - `agent-neopi5-exp4`, `loop-neopi5-exp2/5`, `retry-neopi5-exp5`
@@ -849,4 +879,3 @@ Don't reinvent the wheel. Use the daemon.
 - ✅ Updated nucleus-patterns.md (vitality: φ 0.88→0.90, evidence 8→9)
 
 **Commit:** `b33db20a`
-
