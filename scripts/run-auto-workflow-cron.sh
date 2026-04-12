@@ -14,9 +14,43 @@ STATUS_FILE="${AUTO_WORKFLOW_STATUS_FILE:-$DIR/var/tmp/cron/auto-workflow-status
 DAEMON_LOG="$DIR/var/tmp/cron/${SERVER_NAME}.log"
 MESSAGES_FILE="${AUTO_WORKFLOW_MESSAGES_FILE:-$DIR/var/tmp/cron/auto-workflow-messages-tail.txt}"
 MESSAGES_CHARS="${AUTO_WORKFLOW_MESSAGES_CHARS:-16000}"
+SNAPSHOT_PATHS_FILE="${AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE:-$DIR/var/tmp/cron/${SERVER_NAME}-snapshot-paths.txt}"
 
 lisp_escape() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+refresh_messages_lisp() {
+    MESSAGES_LISP="$(lisp_escape "$MESSAGES_FILE")"
+}
+
+save_cached_snapshot_paths() {
+    local status_path="$1"
+    local messages_path="$2"
+    local cache_dir
+
+    [ -n "$status_path" ] || return 1
+    [ -n "$messages_path" ] || return 1
+
+    cache_dir="$(dirname "$SNAPSHOT_PATHS_FILE")"
+    mkdir -p "$cache_dir"
+    printf '%s\n%s\n' "$status_path" "$messages_path" >"$SNAPSHOT_PATHS_FILE"
+}
+
+load_cached_snapshot_paths() {
+    local cached_status
+    local cached_messages
+
+    [ -r "$SNAPSHOT_PATHS_FILE" ] || return 1
+    {
+        IFS= read -r cached_status || true
+        IFS= read -r cached_messages || true
+    } <"$SNAPSHOT_PATHS_FILE"
+    [ -n "$cached_status" ] || return 1
+    [ -n "$cached_messages" ] || return 1
+    STATUS_FILE="$cached_status"
+    MESSAGES_FILE="$cached_messages"
+    return 0
 }
 
 resolve_emacsclient() {
@@ -66,7 +100,6 @@ EMACS="$(resolve_emacs)" || {
 }
 
 ROOT_LISP=$(lisp_escape "$DIR")
-MESSAGES_LISP=$(lisp_escape "$MESSAGES_FILE")
 mkdir -p "$DIR/var/tmp/cron" "$DIR/var/tmp/experiments"
 
 default_status() {
@@ -327,6 +360,48 @@ wrap_emacs_eval() {
            "$env_elisp" "$body"
 }
 
+refresh_snapshot_paths_from_daemon() {
+    local body
+    local output
+    local payload
+    local daemon_status
+    local daemon_messages
+
+    body='(if (and (fboundp '"'"'gptel-auto-workflow--status-file)
+                   (fboundp '"'"'gptel-auto-workflow--messages-file))
+              (format "%s\t%s"
+                      (gptel-auto-workflow--status-file)
+                      (gptel-auto-workflow--messages-file))
+            "")'
+    output="$(run_emacsclient_eval "$(wrap_emacs_eval "$body")" 2 2>/dev/null)" || return 1
+    payload="$output"
+    if [ "${payload#\"}" != "$payload" ] && [ "${payload%\"}" != "$payload" ]; then
+        payload="${payload#\"}"
+        payload="${payload%\"}"
+    fi
+    IFS=$'\t' read -r daemon_status daemon_messages <<<"$payload"
+    [ -n "$daemon_status" ] || return 1
+    [ -n "$daemon_messages" ] || return 1
+    STATUS_FILE="$daemon_status"
+    MESSAGES_FILE="$daemon_messages"
+    save_cached_snapshot_paths "$STATUS_FILE" "$MESSAGES_FILE"
+    return 0
+}
+
+prime_snapshot_paths_for_action() {
+    if [ -n "${AUTO_WORKFLOW_STATUS_FILE:-}" ] || [ -n "${AUTO_WORKFLOW_MESSAGES_FILE:-}" ]; then
+        save_cached_snapshot_paths "$STATUS_FILE" "$MESSAGES_FILE" >/dev/null 2>&1 || true
+    elif [ "$ACTION" = "status" ] || [ "$ACTION" = "messages" ]; then
+        load_cached_snapshot_paths || true
+        if [ "$ACTION" = "messages" ] && [ ! -r "$MESSAGES_FILE" ]; then
+            refresh_snapshot_paths_from_daemon >/dev/null 2>&1 || true
+        fi
+    fi
+    refresh_messages_lisp
+}
+
+prime_snapshot_paths_for_action
+
 ensure_worker_daemon() {
     local rc
     if check_worker_daemon; then
@@ -513,6 +588,7 @@ if [ "$ACTION" = "status" ]; then
     fi
     if output="$(run_emacsclient_eval "$EVAL_ELISP" 5 2>/dev/null)" &&
        printf '%s' "$output" | grep -q ':phase '; then
+        refresh_snapshot_paths_from_daemon >/dev/null 2>&1 || true
         printf '%s\n' "$output" >"$STATUS_FILE"
         printf '%s\n' "$output"
         exit 0
