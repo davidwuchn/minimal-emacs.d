@@ -135,8 +135,9 @@ JSON parsing returns vectors for arrays; this normalizes to lists."
 (defun gptel-benchmark--get-field (obj field)
   "Get FIELD from OBJ, handling both plist and alist formats.
 FIELD should be a keyword like :score.
-For alist lookup, converts :score to \\='score symbol."
+For alist lookup, tries both keyword and symbol keys."
   (or (plist-get obj field)
+      (cdr (assoc field obj))
       (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
         (cdr (assoc alist-key obj)))))
 
