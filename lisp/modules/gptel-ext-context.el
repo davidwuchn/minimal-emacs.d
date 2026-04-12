@@ -301,6 +301,16 @@ Returns nil if directive is missing or invalid, and logs a warning."
 
 ;;; Core
 
+(defun my/gptel--compaction-stats (chars-before)
+  "Return (chars-after tokens-after reduction-pct) for current buffer.
+Uses consistent token estimation (text + images) for both before and after."
+  (let* ((chars-after (buffer-size))
+         (tokens-after (my/gptel--current-tokens))
+         (reduction (if (> chars-before 0)
+                        (* 100 (- 1 (/ (float chars-after) chars-before)))
+                      0.0)))
+    (list chars-after tokens-after reduction)))
+
 (defun my/gptel--do-compact (&optional force-preview)
   "Perform compaction on current gptel buffer.
 If FORCE-PREVIEW is non-nil, use preview mode regardless of `my/gptel-auto-compact-preview'.
@@ -345,7 +355,11 @@ Returns non-nil if compaction was initiated."
                         (cl-incf my/gptel-auto-compact-attempts)
                         (let* ((inhibit-read-only t)
                                (point-before (point))
-                               (backup (buffer-string)))
+                               (backup (buffer-string))
+                               (stats (my/gptel--compaction-stats chars-before))
+                               (chars-after (nth 0 stats))
+                               (tokens-after (nth 1 stats))
+                               (reduction (nth 2 stats)))
                           (if use-preview
                               (progn
                                 (goto-char (point-max))
@@ -353,32 +367,27 @@ Returns non-nil if compaction was initiated."
                                 (insert (propertize "═══════════════════════════════════════════════════════════════\n"
                                                     'face '(:foreground "yellow" :weight bold)))
                                 (insert (propertize response 'face '(:foreground "cyan")))
-                                (let ((chars-after (buffer-size))
-                                      (tokens-after (my/gptel--estimate-text-tokens (buffer-size))))
-                                  (insert (propertize (format "\nCOMPACTED: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction)\n"
-                                                              chars-before chars-after
-                                                              (round tokens-before) (round tokens-after)
-                                                              (* 100 (- 1 (/ (float chars-after) chars-before))))
-                                                      'face '(:foreground "green" :weight bold)))
-                                  (insert (propertize "═══════════════════════════════════════════════════════════════\n"
-                                                      'face '(:foreground "yellow" :weight bold)))
-                                  (message "[compact] Preview appended (original kept)"))))
-                          (progn
+                                (insert (propertize (format "\nCOMPACTED: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction)\n"
+                                                            chars-before chars-after
+                                                            (round tokens-before) (round tokens-after)
+                                                            reduction)
+                                                    'face '(:foreground "green" :weight bold)))
+                                (insert (propertize "═══════════════════════════════════════════════════════════════\n"
+                                                    'face '(:foreground "yellow" :weight bold)))
+                                (message "[compact] Preview appended (original kept)"))
                             (kill-new backup)
                             (erase-buffer)
                             (insert response)
                             (goto-char (min point-before (point-max)))
-                            (let ((chars-after (buffer-size))
-                                  (tokens-after (my/gptel--estimate-text-tokens (buffer-size))))
-                              (message "[compact] Done: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction) [backup in kill-ring]"
-                                       chars-before chars-after
-                                       (round tokens-before) (round tokens-after)
-                                       (* 100 (- 1 (/ (float chars-after) chars-before)))))))))))
-                (error
-                 (with-current-buffer buf
-                   (setq my/gptel-auto-compact-running nil))
-                 (message "[compact] Error: %s" (error-message-string err))))))
-        t)))))
+                            (message "[compact] Done: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction) [backup in kill-ring]"
+                                     chars-before chars-after
+                                     (round tokens-before) (round tokens-after)
+                                     reduction))))))))
+            (error
+             (with-current-buffer buf
+               (setq my/gptel-auto-compact-running nil))
+             (message "[compact] Error: %s" (error-message-string err))))))
+        t))))
 
 (defun my/gptel-manual-compact (&optional arg)
   "Manually compact current gptel buffer.
