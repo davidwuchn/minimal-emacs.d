@@ -412,11 +412,15 @@ Hook for `gptel-post-response-functions'."
       (or (and absolute-threshold (>= tokens absolute-threshold))
           (>= tokens percentage-threshold)))))
 
-(defun my/gptel--extract-last-task (buffer-string)
-  "Extract the most recent task/request from BUFFER-STRING.
+(defun my/gptel--buffer-lines (buffer-string)
+  "Return lines from BUFFER-STRING as a list.
+Helper function to avoid duplicate split-string calls."
+  (split-string buffer-string "\n"))
+
+(defun my/gptel--extract-last-task-from-lines (lines)
+  "Extract the most recent task/request from LINES.
 Returns a short description of what the user was asking for."
-  (let* ((lines (split-string buffer-string "\n"))
-         (user-lines (cl-remove-if-not
+  (let* ((user-lines (cl-remove-if-not
                       (lambda (line)
                         (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
                       lines))
@@ -425,11 +429,16 @@ Returns a short description of what the user was asking for."
         (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" last-user)
       "Continue the task")))
 
+(defun my/gptel--extract-last-task (buffer-string)
+  "Extract the most recent task/request from BUFFER-STRING.
+Returns a short description of what the user was asking for."
+  (my/gptel--extract-last-task-from-lines (my/gptel--buffer-lines buffer-string)))
+
 (defun my/gptel--smart-delegate-context (buffer-string last-task)
   "Build context for subagent delegation.
 BUFFER-STRING is the full conversation. LAST-TASK is the extracted task.
 Returns plist with :strategy and :context keys."
-  (let* ((lines (split-string buffer-string "\n"))
+  (let* ((lines (my/gptel--buffer-lines buffer-string))
          (total-lines (length lines))
          (recent-lines (last lines (min 50 total-lines)))
          (has-tool-results (cl-some
