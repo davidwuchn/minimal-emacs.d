@@ -37,6 +37,17 @@
   :type 'directory
   :group 'gptel-benchmark-core)
 
+(defconst gptel-benchmark--score-types
+  '(:overall-score :efficiency-score :completion-score :constraint-score)
+  "Standard score types tracked across all benchmark runs.")
+
+(defconst gptel-benchmark--score-type-averages
+  '((:overall-score . :avg-overall)
+    (:efficiency-score . :avg-efficiency)
+    (:completion-score . :avg-completion)
+    (:constraint-score . :avg-constraints))
+  "Mapping from score types to their corresponding average keys in summary output.")
+
 ;;; Cancel Support
 
 (defvar gptel-benchmark--cancelled nil
@@ -242,7 +253,7 @@ Handles nil scores by treating them as 0. Does not mutate input."
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist or alist.
-Returns alist of (score-type . value) for the four standard scores.
+Returns alist of (score-type . value) for the standard scores.
 Handles nil values gracefully by returning 0.0 for missing scores.
 Handles both plist format (keyword keys) and alist format (symbol or keyword keys)."
   (when scores
@@ -250,10 +261,9 @@ Handles both plist format (keyword keys) and alist format (symbol or keyword key
                       (lambda (k) (plist-get scores k))
                     (lambda (k) (or (alist-get k scores)
                                     (alist-get (gptel-benchmark--keyword-to-alist-key k) scores))))))
-      (list (cons :overall-score (or (funcall get-fn :overall-score) 0.0))
-            (cons :efficiency-score (or (funcall get-fn :efficiency-score) 0.0))
-            (cons :completion-score (or (funcall get-fn :completion-score) 0.0))
-            (cons :constraint-score (or (funcall get-fn :constraint-score) 0.0))))))
+      (mapcar (lambda (score-type)
+                (cons score-type (or (funcall get-fn score-type) 0.0)))
+              gptel-benchmark--score-types))))
 
 (defun gptel-benchmark--calculate-average (score-totals total score-type)
   "Calculate average for SCORE-TYPE from SCORE-TOTALS over TOTAL items.
@@ -267,20 +277,14 @@ Returns 0.0 if TOTAL is zero to avoid division by zero."
 RESULTS is a list of (run . scores) cons cells or plists with :scores.
 Returns plist with :total-tests, :passed-tests, and average scores."
   (cl-block summarize
-    (let ((empty-result (list :total-tests 0
-                              :passed-tests 0
-                              :avg-overall 0.0
-                              :avg-efficiency 0.0
-                              :avg-completion 0.0
-                              :avg-constraints 0.0)))
+    (let ((empty-result (append (list :total-tests 0 :passed-tests 0)
+                                (mapcan (lambda (m) (list (cdr m) 0.0))
+                                        gptel-benchmark--score-type-averages))))
       (when (or gptel-benchmark--cancelled (null results))
         (cl-return-from summarize empty-result)))
     (let ((total 0)
           (passed 0)
-          (score-totals '((:overall-score . 0.0)
-                          (:efficiency-score . 0.0)
-                          (:completion-score . 0.0)
-                          (:constraint-score . 0.0))))
+          (score-totals (mapcar (lambda (st) (cons st 0.0)) gptel-benchmark--score-types)))
       (dolist (r results)
         (let* ((scores (gptel-benchmark--extract-scores r))
                (overall-score (gptel-benchmark--get-score r :overall-score scores)))
@@ -293,12 +297,11 @@ Returns plist with :total-tests, :passed-tests, and average scores."
           (when (>= (or overall-score 0) 0.7)
             (cl-incf passed))))
       (cl-return-from summarize
-        (list :total-tests total
-              :passed-tests passed
-              :avg-overall (gptel-benchmark--calculate-average score-totals total :overall-score)
-              :avg-efficiency (gptel-benchmark--calculate-average score-totals total :efficiency-score)
-              :avg-completion (gptel-benchmark--calculate-average score-totals total :completion-score)
-              :avg-constraints (gptel-benchmark--calculate-average score-totals total :constraint-score))))))
+        (append (list :total-tests total :passed-tests passed)
+                (mapcan (lambda (m)
+                          (list (cdr m)
+                                (gptel-benchmark--calculate-average score-totals total (car m))))
+                        gptel-benchmark--score-type-averages))))))
 
 ;;; Eight Keys Integration
 
