@@ -1260,6 +1260,23 @@ EXIT-CODE defaults to 1."
            "read")
           (should seen-dir)
           (should (file-directory-p temp-dir)))
+       (when (file-directory-p temp-root)
+         (delete-directory temp-root t)))))
+
+(ert-deftest regression/gptel-agent/write-file-creates-parent-dir-before-upstream ()
+  "Local write advice should create missing parent directories before save."
+  (let* ((temp-root (make-temp-file "gptel-write-temp" t))
+         (target-dir (expand-file-name "missing/parent" temp-root))
+         (target-file (expand-file-name "artifact.txt" target-dir)))
+    (unwind-protect
+        (progn
+          (should (equal (gptel-agent--write-file target-dir "artifact.txt" "hello\n")
+                         (format "Created file %s in %s" "artifact.txt" target-dir)))
+          (should (file-directory-p target-dir))
+          (should (file-exists-p target-file))
+          (with-temp-buffer
+            (insert-file-contents target-file)
+            (should (equal (buffer-string) "hello\n"))))
       (when (file-directory-p temp-root)
         (delete-directory temp-root t)))))
 
@@ -5690,6 +5707,81 @@ EXIT-CODE defaults to 1."
       (delete-directory status-dir t)
        (delete-directory tmp-root t)
        (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-status-uses-fresh-active-snapshot-without-emacsclient ()
+  "Fresh active snapshots with a run id should not poke emacsclient."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (fake-emacsclient
+          (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 1))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "echo emacs-invoked >> %s\nexit 1" (shell-quote-argument emacs-log))))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=45")
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 5 :phase \"running\" :run-id \"2026-04-12T153204Z-77b7\" :results \"var/tmp/experiments/2026-04-12T153204Z-77b7/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
+            (should (string-match-p ":phase \"running\"" output))
+            (should (string-match-p "2026-04-12T153204Z-77b7" output)))
+          (with-temp-buffer
+            (insert-file-contents argv-log)
+            (should (string-empty-p (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents emacs-log)
+            (should (string-empty-p (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log))
+      (when (file-exists-p emacs-log)
+        (delete-file emacs-log)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-status-clears-aged-active-snapshot-with-run-id ()
+  "Aged active snapshots should still be live-probed and cleared when stale."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient
+          (test-auto-workflow--write-shell-script "fake-emacsclient" "exit 1"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=5")
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 0 :total 3 :phase \"running\" :run-id \"2026-04-12T153204Z-77b7\" :results \"var/tmp/experiments/2026-04-12T153204Z-77b7/results.tsv\")\n"))
+          (set-file-times status-file (time-subtract (current-time) (seconds-to-time 120)))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running nil" output))
+            (should (string-match-p ":phase \"idle\"" output))
+            (should (string-match-p "2026-04-12T153204Z-77b7/results.tsv" output))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status-after-daemon-restart ()
   "Wrapper auto-workflow should clear stale running status when daemon is alive but idle."
