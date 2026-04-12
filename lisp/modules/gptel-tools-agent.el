@@ -5022,23 +5022,6 @@ Respects `gptel-auto-experiment--forced-backend' when set by the fallback wrappe
 Format: (BACKEND-NAME . MODEL-NAME) strings.
 Used by the fallback wrapper to switch backends on rate-limit errors.")
 
-(defun gptel-auto-experiment--apply-backend-preset (backend-name model-name)
-  "Apply a preset for BACKEND-NAME with MODEL-NAME for the current request.
-Returns the preset plist, or nil when backend is unavailable."
-  (let* ((backend-object (gptel-auto-workflow--backend-object backend-name))
-         (model-symbol (and backend-object
-                            (gptel-auto-workflow--backend-model-symbol
-                             backend-object model-name)))
-         (preset (list :backend (or backend-object backend-name)
-                       :model (or model-symbol (intern model-name))
-                       :include-reasoning nil
-                       :use-tools t
-                       :use-context nil
-                       :stream my/gptel-subagent-stream)))
-    (when (and backend-object model-symbol)
-      (gptel--apply-preset preset)
-      preset)))
-
 (defun gptel-auto-experiment--run-agent-with-backend-fallback (timeout callback agent-name description prompt &optional files include-history include-diff)
   "Run agent with automatic backend fallback on rate-limit errors.
 
