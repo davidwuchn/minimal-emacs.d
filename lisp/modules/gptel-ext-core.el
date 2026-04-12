@@ -94,10 +94,10 @@ to apply its preset (the system message is already pinned buffer-locally
 by `my/gptel--mode-hook-setup' before this runs)."
   (when (and (bound-and-true-p gptel-mode)
              (not (bound-and-true-p gptel--preset))
-             my/gptel-plain-model)
+             my/gptel-plain-model
+             (boundp 'gptel--minimax))
     (setq-local gptel-model my/gptel-plain-model)
-    (setq-local gptel-backend gptel--minimax)
-    ))
+    (setq-local gptel-backend gptel--minimax)))
 
 (defun my/gptel--mode-hook-setup ()
   "Setup hook for gptel-mode buffers."
@@ -349,11 +349,12 @@ Runs as :before advice on `gptel-curl--get-args'."
 
 (defun my/gptel--sanitize-multimodal-content (content-vec)
   "Sanitize text parts in multimodal CONTENT-VEC.
-CONTENT-VEC is a vector like [(:type \"text\" :text \"...\")]."
+CONTENT-VEC is a vector like [(:type \"text\" :text \"...\")].
+Handles both symbol :type 'text and string :type \"text\"."
   (cl-loop for i from 0 below (length content-vec)
            for part = (aref content-vec i)
            when (and (listp part)
-                     (eq (plist-get part :type) 'text)
+                     (memq (plist-get part :type) '(text "text"))
                      (stringp (plist-get part :text)))
            do
            (let* ((text (plist-get part :text))
