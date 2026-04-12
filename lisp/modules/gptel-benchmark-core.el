@@ -334,7 +334,7 @@ RESULTS should contain :eight-keys-scores in each entry."
         (when eight-keys
           (dotimes (i 8)
             (let* ((key (aref key-names i))
-                   (score (plist-get eight-keys key)))
+                   (score (gptel-benchmark--get-field eight-keys key)))
               (when (numberp score)
                 (aset key-totals i (+ (aref key-totals i) score))
                 (aset key-counts i (1+ (aref key-counts i)))))))))
