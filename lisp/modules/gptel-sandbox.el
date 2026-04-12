@@ -475,6 +475,12 @@ CALLBACK receives non-nil when approved and nil when rejected."
   "Format MESSAGE as a sandbox error string."
   (format "Error: %s" message))
 
+(defun gptel-sandbox--format-result (result)
+  "Convert RESULT to string, preferring gptel--to-string when available."
+  (if (fboundp 'gptel--to-string)
+      (gptel--to-string result)
+    (format "%s" result)))
+
 (defun gptel-sandbox--render-result (value)
   "Render VALUE into the final string returned by Programmatic.
 Strings are returned directly. Structured values are pretty-printed so the LLM
@@ -507,18 +513,12 @@ can consume lists, vectors, plists, and alists as readable data."
                  (if (gptel-tool-async tool-spec)
                      (apply (gptel-tool-function tool-spec)
                             (lambda (result)
-                              (funcall callback
-                                       (if (fboundp 'gptel--to-string)
-                                           (gptel--to-string result)
-                                         (format "%s" result))))
+                              (funcall callback (gptel-sandbox--format-result result)))
                             arg-values)
                    (let ((result (condition-case inner-err
                                      (apply (gptel-tool-function tool-spec) arg-values)
-                                   (error (format "Error: %s" (error-message-string inner-err))))))
-                     (funcall callback
-                              (if (fboundp 'gptel--to-string)
-                                  (gptel--to-string result)
-                                (format "%s" result))))))))
+                                   (error (gptel-sandbox--format-error (error-message-string inner-err))))))
+                     (funcall callback (gptel-sandbox--format-result result)))))))
           (if (gptel-sandbox--confirm-required-p tool-spec arg-values)
               (gptel-sandbox--maybe-aggregate-confirm
                state
@@ -530,13 +530,14 @@ can consume lists, vectors, plists, and alists as readable data."
                                 (if approved
                                     (funcall invoke-tool)
                                   (funcall callback
-                                           (format "Error: Programmatic tool call rejected by user: %s"
-                                                   (gptel-tool-name tool-spec))))))
+                                           (gptel-sandbox--format-error
+                                            (format "Programmatic tool call rejected by user: %s"
+                                                    (gptel-tool-name tool-spec)))))))
                    (funcall callback
                             "Error: Programmatic aggregate preview rejected by user"))))
             (funcall invoke-tool)))
       (error
-       (funcall callback (format "Error: %s" (error-message-string err)))))))
+       (funcall callback (gptel-sandbox--format-error (error-message-string err)))))))
 
 (defun gptel-sandbox--eval-statement (statement env state callback)
   "Evaluate sandbox STATEMENT with ENV and STATE, then CALLBACK.
@@ -552,25 +553,25 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
        (let ((remaining (seq-partition pairs 2)))
          (cl-labels
              ((process-pair
-               ()
-               (if (null remaining)
-                   (funcall callback (list :continue t :done nil))
-                 (let* ((pair (car remaining))
-                        (symbol (car pair))
-                        (expr (cadr pair)))
-                   (unless (symbolp symbol)
-                     (error "Programmatic setq target must be a symbol, got: %S" symbol))
-                   (if (and (consp expr) (eq (car expr) 'tool-call))
-                       (gptel-sandbox--execute-tool
-                        (lambda (value)
-                          (gptel-sandbox--bind-result symbol value env)
-                          (setq remaining (cdr remaining))
-                          (process-pair))
-                        (nth 1 expr) (cddr expr) env state)
-                     (let ((value (gptel-sandbox--eval-expr expr env)))
-                       (gptel-sandbox--bind-result symbol value env)
-                       (setq remaining (cdr remaining))
-                       (process-pair)))))))
+                ()
+                (if (null remaining)
+                    (funcall callback (list :continue t :done nil))
+                  (let* ((pair (car remaining))
+                         (symbol (car pair))
+                         (expr (cadr pair)))
+                    (unless (symbolp symbol)
+                      (error "Programmatic setq target must be a symbol, got: %S" symbol))
+                    (if (and (consp expr) (eq (car expr) 'tool-call))
+                        (gptel-sandbox--execute-tool
+                         (lambda (value)
+                           (gptel-sandbox--bind-result symbol value env)
+                           (setq remaining (cdr remaining))
+                           (process-pair))
+                         (nth 1 expr) (cddr expr) env state)
+                      (let ((value (gptel-sandbox--eval-expr expr env)))
+                        (gptel-sandbox--bind-result symbol value env)
+                        (setq remaining (cdr remaining))
+                        (process-pair)))))))
            (process-pair)))))
     (`(tool-call ,tool-name . ,arg-forms)
      (gptel-sandbox--execute-tool
