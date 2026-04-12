@@ -109,6 +109,7 @@ Uses `gptel-auto-workflow--project-root' if available, otherwise
 falls back to the user's Emacs configuration directory."
   (or (gptel-auto-workflow--project-root)
       (expand-file-name "~/.emacs.d/")))
+
 (defun gptel-auto-workflow--discover-targets ()
   "Discover all Elisp files in lisp/modules/ as potential targets."
   (let* ((proj-root (gptel-auto-workflow--effective-project-root))
@@ -470,8 +471,7 @@ Returns list of validated file paths."
 CALLBACK receives list of target files.
 LLM decides if available, otherwise uses static list."
   (when (functionp callback)
-    (setq gptel-auto-workflow--analyzer-transient-failure nil)
-    (setq gptel-auto-workflow--analyzer-quota-exhausted nil)
+    (gptel-auto-workflow--clear-analyzer-error-state)
     (let* ((proj-root (gptel-auto-workflow--effective-project-root))
            (static-targets
             (gptel-auto-workflow--filter-valid-targets

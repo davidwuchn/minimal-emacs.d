@@ -252,19 +252,6 @@ Handles nil scores by treating them as 0."
                     (cdr pair)
                     (alist-get type scores-alist))))))
 
-(defun gptel-benchmark--accumulate-scores-inplace (totals scores-alist)
-  "Accumulate scores from SCORES-ALIST into TOTALS by mutation.
-TOTALS is an alist of (score-type . accumulated-value) that is mutated.
-SCORES-ALIST is an alist of (score-type . current-score).
-Returns TOTALS for chaining. More efficient than `gptel-benchmark--accumulate-scores'
-in hot loops as it avoids allocating a new list each iteration."
-  (dolist (pair totals totals)
-    (let ((type (car pair)))
-      (setcdr pair
-              (gptel-benchmark--accumulate-score
-               (cdr pair)
-               (alist-get type scores-alist))))))
-
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist or alist.
 Returns alist of (score-type . value) for the standard scores.
