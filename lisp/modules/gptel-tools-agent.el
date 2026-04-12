@@ -3777,18 +3777,145 @@ so this push must not rewrite remote history."
     (message "[auto-workflow] Pushing staging to origin")
     (gptel-auto-workflow--with-staging-worktree
      (lambda ()
+       (setq gptel-auto-workflow--last-staging-push-output nil)
        (let* ((push-result
-               (gptel-auto-workflow--with-skipped-submodule-sync
-                (lambda ()
-                  (gptel-auto-workflow--git-result
-                   (format "git push origin %s"
-                           (shell-quote-argument staging))
-                   180)))))
+                (gptel-auto-workflow--with-skipped-submodule-sync
+                 (lambda ()
+                   (gptel-auto-workflow--git-result
+                    (format "git push origin %s"
+                            (shell-quote-argument staging))
+                    180)))))
+         (setq gptel-auto-workflow--last-staging-push-output (car push-result))
          (if (= 0 (cdr push-result))
              t
            (message "[auto-workflow] Push staging failed: %s"
                     (my/gptel--sanitize-for-logging (car push-result) 160))
            nil))))))
+
+(defvar gptel-auto-workflow--last-staging-push-output nil
+  "Raw output from the most recent staging push attempt.")
+
+(defun gptel-auto-workflow--staging-push-remote-advanced-p (output)
+  "Return non-nil when OUTPUT shows `origin/staging' advanced mid-run."
+  (string-match-p
+   (rx (or "fetch first"
+           "non-fast-forward"
+           "failed to push some refs"
+           "remote contains work that you do not have locally"))
+   (or output "")))
+
+(defun gptel-auto-workflow--retry-staging-publish-after-remote-advance (optimize-branch)
+  "Refresh shared staging and retry publishing OPTIMIZE-BRANCH once.
+Returns a plist with keys `:success', `:reason', and `:output'."
+  (message "[auto-workflow] origin/staging advanced; refreshing staging and retrying publish")
+  (setq gptel-auto-workflow--last-staging-push-output nil)
+  (cond
+   ((not (gptel-auto-workflow--sync-staging-from-main))
+    (list :success nil
+          :reason 'staging-sync-failed
+          :output "Failed to sync staging from updated origin/staging"))
+   ((not (gptel-auto-workflow--merge-to-staging optimize-branch))
+    (list :success nil
+          :reason 'staging-merge-failed
+          :output (format "Failed to merge %s onto refreshed staging" optimize-branch)))
+   (t
+    (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
+                        (gptel-auto-workflow--create-staging-worktree))))
+      (cond
+       ((not worktree)
+        (list :success nil
+              :reason 'staging-worktree-failed
+              :output "Failed to create staging worktree"))
+       (t
+        (let* ((verification (gptel-auto-workflow--verify-staging))
+               (tests-passed (car verification))
+               (output (or (cdr verification) "")))
+          (if (not tests-passed)
+              (list :success nil
+                    :reason 'staging-verification-failed
+                    :output output)
+            (if (gptel-auto-workflow--push-staging)
+                (list :success t :output output)
+              (list :success nil
+                    :reason 'staging-push-failed
+                    :output (or gptel-auto-workflow--last-staging-push-output
+                                output
+                                "")))))))))))
+
+(defun gptel-auto-workflow--log-staging-step-failure (reason optimize-branch output)
+  "Log staging step failure REASON for OPTIMIZE-BRANCH with OUTPUT."
+  (pcase reason
+    ('staging-worktree-failed
+     (message "[auto-workflow] ✗ Failed to create staging worktree")
+     (gptel-auto-experiment-log-tsv
+      (gptel-auto-workflow--current-run-id)
+      (list :target "staging-worktree"
+            :id 0
+            :hypothesis "Staging worktree"
+            :score-before 0
+            :score-after 0
+            :kept nil
+            :duration 0
+            :grader-quality 0
+            :grader-reason "staging-worktree-failed"
+            :comparator-reason "Failed to create staging worktree"
+            :analyzer-patterns ""
+            :agent-output "")))
+    ('staging-verification-failed
+     (message "[auto-workflow] ✗ Staging verification FAILED")
+     (gptel-auto-experiment-log-tsv
+      (gptel-auto-workflow--current-run-id)
+      (list :target "staging-verification"
+            :id 0
+            :hypothesis "Staging verification"
+            :score-before 0
+            :score-after 0
+            :kept nil
+            :duration 0
+            :grader-quality 0
+            :grader-reason "staging-verification-failed"
+            :comparator-reason (truncate-string-to-width (or output "") 200)
+            :analyzer-patterns ""
+            :agent-output (or output ""))))
+    ('staging-merge-failed
+     (message "[auto-workflow] ✗ Merge to staging failed, aborting")
+     (gptel-auto-experiment-log-tsv
+      (gptel-auto-workflow--current-run-id)
+      (list :target "staging-merge"
+            :id 0
+            :hypothesis "Staging merge"
+            :score-before 0
+            :score-after 0
+            :kept nil
+            :duration 0
+            :grader-quality 0
+            :grader-reason "staging-merge-failed"
+            :comparator-reason
+            (or output (format "Failed to merge %s to staging" optimize-branch))
+            :analyzer-patterns ""
+            :agent-output "")))
+    ((or 'staging-push-failed 'staging-sync-failed)
+     (message "[auto-workflow] ✗ Staging push FAILED")
+     (gptel-auto-experiment-log-tsv
+      (gptel-auto-workflow--current-run-id)
+      (list :target "staging-push"
+            :id 0
+            :hypothesis "Staging push"
+            :score-before 0
+            :score-after 0
+            :kept nil
+            :duration 0
+            :grader-quality 0
+            :grader-reason
+            (pcase reason
+              ('staging-sync-failed "staging-sync-failed")
+              (_ "staging-push-failed"))
+            :comparator-reason
+            (if (string-empty-p (string-trim (or output "")))
+                "Failed to push staging"
+              (truncate-string-to-width output 200))
+            :analyzer-patterns ""
+            :agent-output (or output ""))))))
 
 
 (defun gptel-auto-workflow--current-staging-head ()
@@ -4061,21 +4188,8 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                                   (gptel-auto-workflow--create-staging-worktree))))
                 (if (not worktree)
                     (progn
-                      (message "[auto-workflow] ✗ Failed to create staging worktree")
-                      (gptel-auto-experiment-log-tsv
-                       (gptel-auto-workflow--current-run-id)
-                       (list :target "staging-worktree"
-                             :id 0
-                             :hypothesis "Staging worktree"
-                             :score-before 0
-                             :score-after 0
-                             :kept nil
-                             :duration 0
-                             :grader-quality 0
-                             :grader-reason "staging-worktree-failed"
-                             :comparator-reason "Failed to create staging worktree"
-                             :analyzer-patterns ""
-                             :agent-output ""))
+                      (gptel-auto-workflow--log-staging-step-failure
+                       'staging-worktree-failed optimize-branch "")
                       (gptel-auto-workflow--reset-staging-after-failure staging-base)
                       (funcall finish nil))
                   (let* ((verification (gptel-auto-workflow--verify-staging))
@@ -4083,21 +4197,8 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                          (output (or (cdr verification) "")))
                     (if (not tests-passed)
                         (progn
-                          (message "[auto-workflow] ✗ Staging verification FAILED")
-                          (gptel-auto-experiment-log-tsv
-                           (gptel-auto-workflow--current-run-id)
-                           (list :target "staging-verification"
-                                 :id 0
-                                 :hypothesis "Staging verification"
-                                 :score-before 0
-                                 :score-after 0
-                                 :kept nil
-                                 :duration 0
-                                 :grader-quality 0
-                                 :grader-reason "staging-verification-failed"
-                                 :comparator-reason (truncate-string-to-width output 200)
-                                 :analyzer-patterns ""
-                                 :agent-output output))
+                          (gptel-auto-workflow--log-staging-step-failure
+                           'staging-verification-failed optimize-branch output)
                           (gptel-auto-workflow--reset-staging-after-failure staging-base)
                           (funcall finish nil))
                       (message "[auto-workflow] ✓ Staging verification PASSED")
@@ -4106,23 +4207,27 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                             (gptel-auto-workflow--delete-staging-worktree)
                             (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")
                             (funcall finish t))
-                        (message "[auto-workflow] ✗ Staging push FAILED")
-                        (gptel-auto-experiment-log-tsv
-                         (gptel-auto-workflow--current-run-id)
-                         (list :target "staging-push"
-                               :id 0
-                               :hypothesis "Staging push"
-                               :score-before 0
-                               :score-after 0
-                               :kept nil
-                               :duration 0
-                               :grader-quality 0
-                               :grader-reason "staging-push-failed"
-                               :comparator-reason "Failed to push staging"
-                               :analyzer-patterns ""
-                               :agent-output output))
-                        (gptel-auto-workflow--reset-staging-after-failure staging-base)
-                        (funcall finish nil))))))))))))))
+                        (let ((push-output gptel-auto-workflow--last-staging-push-output))
+                          (if (gptel-auto-workflow--staging-push-remote-advanced-p push-output)
+                              (let* ((retry-result
+                                      (gptel-auto-workflow--retry-staging-publish-after-remote-advance
+                                       optimize-branch))
+                                     (retry-success (plist-get retry-result :success))
+                                     (retry-reason (plist-get retry-result :reason))
+                                     (retry-output (plist-get retry-result :output)))
+                                (if retry-success
+                                    (progn
+                                      (gptel-auto-workflow--delete-staging-worktree)
+                                      (message "[auto-workflow] ✓ Staging pushed after refreshing remote advance.")
+                                      (funcall finish t))
+                                  (gptel-auto-workflow--log-staging-step-failure
+                                   retry-reason optimize-branch retry-output)
+                                  (gptel-auto-workflow--sync-staging-from-main)
+                                  (funcall finish nil)))
+                            (gptel-auto-workflow--log-staging-step-failure
+                             'staging-push-failed optimize-branch push-output)
+                            (gptel-auto-workflow--reset-staging-after-failure staging-base)
+                            (funcall finish nil))))))))))))))))
 
 
 ;;; Multi-Project Support
