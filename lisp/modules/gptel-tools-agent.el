@@ -1179,12 +1179,23 @@ ORIG is `gptel-agent--truncate-buffer'. PREFIX and MAX-LINES are passed through.
               (insert content)
               (write-region nil nil temp-file nil 'silent))))))))
 
+(defun my/gptel-agent--write-file-around (orig path filename content)
+  "Create missing parent directories before `gptel-agent--write-file' saves.
+ORIG is `gptel-agent--write-file'. PATH, FILENAME, and CONTENT are passed
+through unchanged after the destination directory exists."
+  (when (and (stringp path) (stringp filename))
+    (let ((parent (file-name-directory (expand-file-name filename path))))
+      (when parent
+        (make-directory parent t))))
+  (funcall orig path filename content))
+
 (with-eval-after-load 'gptel-agent-tools
   ;; REMOVED: Old :override advice conflicts with new :around advice
   ;; in gptel-auto-workflow-projects.el that routes to correct buffer
   ;; (advice-add 'gptel-agent--task :override #'my/gptel-agent--task-override)
   (advice-add 'gptel-agent--task-overlay :around #'my/gptel-agent--task-overlay-around)
-  (advice-add 'gptel-agent--truncate-buffer :around #'my/gptel-agent--truncate-buffer-around))
+  (advice-add 'gptel-agent--truncate-buffer :around #'my/gptel-agent--truncate-buffer-around)
+  (advice-add 'gptel-agent--write-file :around #'my/gptel-agent--write-file-around))
 
 (defun my/gptel-agent--task-overlay-around (orig where &optional agent-type description)
   "Advice to fix task overlay appearing in wrong buffer.
@@ -1862,16 +1873,20 @@ Uses hash table keyed by task-id to support parallel execution."
                                   (time-subtract hard-deadline (current-time)))))
                            (hard-expired (and remaining-hard
                                               (<= remaining-hard 0))))
-                      (if (and task-timeout
-                               (or hard-expired
-                                   (and (not uses-idle-timeout)
-                                        (>= elapsed task-timeout))))
-                          (finish-timeout
-                           state
-                           (if hard-expired hard-timeout task-timeout)
-                           (if hard-expired " total runtime" ""))
-                        (message "[nucleus] Subagent %s still running... (%.1fs elapsed)"
-                                 agent-type elapsed)))))))))
+                       (if (and task-timeout
+                                (or hard-expired
+                                    (and (not uses-idle-timeout)
+                                         (>= elapsed task-timeout))))
+                           (finish-timeout
+                            state
+                            (if hard-expired hard-timeout task-timeout)
+                            (if hard-expired " total runtime" ""))
+                         (when (or (bound-and-true-p gptel-auto-workflow--running)
+                                   (bound-and-true-p gptel-auto-workflow--cron-job-running))
+                           (gptel-auto-workflow--update-progress)
+                           (gptel-auto-workflow--persist-status))
+                         (message "[nucleus] Subagent %s still running... (%.1fs elapsed)"
+                                  agent-type elapsed)))))))))
         (puthash task-id (list :done nil
                                :timeout-timer nil
                                :progress-timer progress-timer

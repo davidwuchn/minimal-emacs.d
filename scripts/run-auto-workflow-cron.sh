@@ -93,6 +93,32 @@ status_looks_active() {
     status_indicates_running || status_indicates_active_phase
 }
 
+status_has_live_run_id() {
+    [ -r "$STATUS_FILE" ] && grep -Eq ':run-id "[^"]+' "$STATUS_FILE"
+}
+
+status_snapshot_fresh() {
+    [ -r "$STATUS_FILE" ] || return 1
+    python3 - "$STATUS_FILE" "${AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL:-45}" <<'PY'
+from pathlib import Path
+import sys
+import time
+
+path = Path(sys.argv[1])
+ttl = float(sys.argv[2])
+
+if not path.exists():
+    raise SystemExit(1)
+
+age = time.time() - path.stat().st_mtime
+raise SystemExit(0 if age <= ttl else 1)
+PY
+}
+
+status_can_use_persisted_active_snapshot() {
+    status_indicates_active_phase && status_has_live_run_id && status_snapshot_fresh
+}
+
 rewrite_status_idle() {
     if [ ! -s "$STATUS_FILE" ]; then
         default_status >"$STATUS_FILE"
@@ -481,6 +507,10 @@ EVAL_ELISP="$(wrap_emacs_eval "$ELISP")"
 
 cd "$DIR"
 if [ "$ACTION" = "status" ]; then
+    if status_can_use_persisted_active_snapshot; then
+        print_status
+        exit 0
+    fi
     if output="$(run_emacsclient_eval "$EVAL_ELISP" 5 2>/dev/null)" &&
        printf '%s' "$output" | grep -q ':phase '; then
         printf '%s\n' "$output" >"$STATUS_FILE"
@@ -493,7 +523,7 @@ if [ "$ACTION" = "status" ]; then
 fi
 
 if [ "$ACTION" = "messages" ]; then
-    if status_looks_active && [ -r "$MESSAGES_FILE" ]; then
+    if status_can_use_persisted_active_snapshot && [ -r "$MESSAGES_FILE" ]; then
         cat "$MESSAGES_FILE"
         exit 0
     fi
