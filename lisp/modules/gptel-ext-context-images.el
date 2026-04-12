@@ -122,23 +122,27 @@ Uses simple heuristic unless dimensions are available."
           (* tiles tiles tokens-per-tile))
       my/gptel-image-token-estimate)))
 
+;;; Image Entry Extraction
+
+(defun my/gptel--context-image-entries ()
+  "Return list of (path . props) for all image entries in `gptel-context'."
+  (cl-loop for entry in gptel-context
+           for (path . props) = (if (consp entry) entry (list entry))
+           when (and (stringp path) (plist-get props :mime))
+           collect (cons path props)))
+
 ;;; Token Counting
 
 (defun my/gptel--count-context-image-tokens ()
   "Count total image tokens in current `gptel-context'.
 Iterates media entries, estimates per-image token cost."
-  (cl-loop for entry in gptel-context
-           for (path . props) = (if (consp entry) entry (list entry))
-           when (and (stringp path) (plist-get props :mime))
+  (cl-loop for (_path . props) in (my/gptel--context-image-entries)
            sum (or (plist-get props :tokens)
                    my/gptel-image-token-estimate)))
 
 (defun my/gptel--context-image-count ()
   "Return the number of images in current `gptel-context'."
-  (cl-loop for entry in gptel-context
-           for (path . props) = (if (consp entry) entry (list entry))
-           when (and (stringp path) (plist-get props :mime))
-           count t))
+  (length (my/gptel--context-image-entries)))
 
 ;;; Metadata Tracking
 
@@ -172,7 +176,7 @@ Adds metadata for image context entries."
                                            gptel-context))
                (existing-props (and existing-entry (consp existing-entry) (cdr existing-entry)))
                (enhanced-props (my/gptel--enhance-image-metadata converted-path
-                                          (or existing-props `(:mime ,mime-type)))))
+                                                                 (or existing-props `(:mime ,mime-type)))))
           (cl-pushnew (cons converted-path enhanced-props) gptel-context :test #'equal))
       (funcall orig-fn path))))
 
@@ -183,10 +187,7 @@ Adds metadata for image context entries."
 (defun my/gptel--sort-images-by-relevance ()
   "Sort gptel-context images by relevance (most recent first).
 Returns list of (path . props) for images only."
-  (let ((images (cl-loop for entry in gptel-context
-                         for (path . props) = (if (consp entry) entry (list entry))
-                         when (and (stringp path) (plist-get props :mime))
-                         collect (cons path props))))
+  (let ((images (my/gptel--context-image-entries)))
     (sort images
           (lambda (a b)
             (let* ((time-a (or (plist-get (cdr a) :added-time) 0))
@@ -218,9 +219,9 @@ Returns number of images removed."
     removed))
 
 (defun my/gptel--trim-oldest-images (bytes-to-save)
-  "Trim oldest images to save approximately BYTES-TO-SAVE bytes.
+  "Trim least relevant images to save approximately BYTES-TO-SAVE bytes.
 Returns actual bytes saved."
-  (let* ((images (my/gptel--sort-images-by-relevance))
+  (let* ((images (nreverse (my/gptel--sort-images-by-relevance)))
          (bytes-saved 0)
          (trimmed 0))
     (dolist (img images)
