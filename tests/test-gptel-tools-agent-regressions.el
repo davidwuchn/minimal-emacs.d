@@ -6247,9 +6247,59 @@ EXIT-CODE defaults to 1."
                              elisp)))
                      elisp-payloads))))
       (delete-directory status-dir t)
+       (delete-directory fake-bin t)
+       (when (file-exists-p argv-log)
+         (delete-file argv-log)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-starts-worker-daemon-headless ()
+  "Wrapper should strip GUI display variables when starting the worker daemon."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (fake-emacsclient
+          (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 1))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "printf 'ARGV:%s\\n' \"$*\" >> %s\nenv | grep -E '^(DISPLAY|WAYLAND_DISPLAY|WAYLAND_SOCKET|XAUTHORITY)=' >> %s || true\nexit 1"
+                   "%s"
+                   (shell-quote-argument emacs-log)
+                   (shell-quote-argument emacs-log))))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        "DISPLAY=:99"
+                        "WAYLAND_DISPLAY=wayland-1"
+                        "WAYLAND_SOCKET=wayland-test"
+                        "XAUTHORITY=/tmp/test-xauthority")
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running nil :kept 0 :total 0 :phase \"idle\" :results \"var/tmp/experiments/2026-04-03/results.tsv\")\n"))
+          (call-process shell-file-name nil nil nil shell-command-switch
+                        (format "%s auto-workflow >/dev/null 2>&1 || true" script))
+          (with-temp-buffer
+            (insert-file-contents emacs-log)
+            (let ((output (buffer-string)))
+              (should (string-match-p "ARGV:--bg-daemon=copilot-auto-workflow" output))
+              (should-not (string-match-p "^DISPLAY=" output))
+              (should-not (string-match-p "^WAYLAND_DISPLAY=" output))
+              (should-not (string-match-p "^WAYLAND_SOCKET=" output))
+              (should-not (string-match-p "^XAUTHORITY=" output)))))
+      (delete-directory status-dir t)
       (delete-directory fake-bin t)
       (when (file-exists-p argv-log)
-        (delete-file argv-log)))))
+        (delete-file argv-log))
+      (when (file-exists-p emacs-log)
+        (delete-file emacs-log)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-messages-uses-file-dump ()
   "Wrapper messages action should dump *Messages* to a file, not print buffer text inline."
