@@ -244,19 +244,16 @@ SCORE must be a number or nil; non-numeric values signal error."
   (+ total (if (numberp score) score 0)))
 
 (defun gptel-benchmark--accumulate-scores (totals scores-alist)
-  "Build new alist with scores from SCORES-ALIST accumulated into TOTALS.
-TOTALS is an alist of (score-type . accumulated-value).
+  "Accumulate scores from SCORES-ALIST into TOTALS in place.
+TOTALS is an alist of (score-type . accumulated-value) that is mutated.
 SCORES-ALIST is an alist of (score-type . current-score).
-Returns a NEW alist with all scores accumulated.
-Handles nil scores by treating them as 0. Does not mutate input."
-  (mapcar (lambda (pair)
-            (let ((type (car pair))
-                  (prev-total (cdr pair)))
-              (cons type
-                    (gptel-benchmark--accumulate-score
-                     prev-total
-                     (alist-get type scores-alist)))))
-          totals))
+Returns TOTALS for chaining.
+Handles nil scores by treating them as 0."
+  (dolist (pair totals totals)
+    (let ((type (car pair)))
+      (setcdr pair (gptel-benchmark--accumulate-score
+                    (cdr pair)
+                    (alist-get type scores-alist))))))
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist or alist.
@@ -291,10 +288,9 @@ Returns plist with :total-tests, :passed-tests, and average scores."
                (overall-score (gptel-benchmark--get-score r :overall-score scores)))
           (cl-incf total)
           (when scores
-            (setq score-totals
-                  (gptel-benchmark--accumulate-scores
-                   score-totals
-                   (gptel-benchmark--extract-score-types scores))))
+            (gptel-benchmark--accumulate-scores
+             score-totals
+             (gptel-benchmark--extract-score-types scores)))
           (when (>= (or overall-score 0) 0.7)
             (cl-incf passed))))
       (append (list :total-tests total :passed-tests passed)
