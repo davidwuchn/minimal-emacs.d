@@ -9094,25 +9094,40 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
          (worktree (make-temp-file "aw-tests-worktree" t))
          captured-env
          captured-program
-         captured-args)
+         captured-args
+         watchdog-cancelled
+         saw-paused-watchdog)
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () proj-root))
               ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
                (lambda (&rest _) worktree))
               ((symbol-function 'file-executable-p)
                (lambda (_file) t))
+              ((symbol-function 'timerp)
+               (lambda (timer) (eq timer 'fake-watchdog)))
+              ((symbol-function 'cancel-timer)
+               (lambda (timer) (setq watchdog-cancelled timer)))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest _args)
+                 (should (eq fn #'gptel-auto-workflow--watchdog-check))
+                 'fake-restarted-watchdog))
               ((symbol-function 'call-process)
-               (lambda (program _in buffer _display &rest args)
-                  (setq captured-program program)
-                  (setq captured-env (copy-sequence process-environment))
-                  (setq captured-args args)
-                  (with-current-buffer buffer
-                    (insert "tests ok"))
-                  0))
+                (lambda (program _in buffer _display &rest args)
+                   (setq captured-program program)
+                   (setq captured-env (copy-sequence process-environment))
+                   (setq captured-args args)
+                   (setq saw-paused-watchdog
+                         (null gptel-auto-workflow--watchdog-timer))
+                   (with-current-buffer buffer
+                     (insert "tests ok"))
+                   0))
               ((symbol-function 'message)
-               (lambda (&rest _) nil)))
+                (lambda (&rest _) nil)))
       (unwind-protect
-          (let ((result (gptel-auto-experiment-run-tests)))
+          (let* ((gptel-auto-workflow--running t)
+                 (gptel-auto-workflow--cron-job-running nil)
+                 (gptel-auto-workflow--watchdog-timer 'fake-watchdog)
+                 (result (gptel-auto-experiment-run-tests)))
             (should (car result))
             (should (equal (cdr result) "tests ok"))
             (let* ((prefix "AUTO_WORKFLOW_STATUS_FILE=")
@@ -9123,14 +9138,18 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                                       (substring entry (length prefix)))))
              (should (equal captured-program
                             (expand-file-name "scripts/run-tests.sh" worktree)))
-             (should status-file)
-             (should (file-name-absolute-p status-file))
-             (should (member "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1" captured-env))
-             (should-not (equal status-file
-                                (expand-file-name "var/tmp/cron/auto-workflow-status.sexp"
-                                                  proj-root)))
-                (should (equal captured-args '("unit")))
-                (should-not (file-exists-p status-file))))
+              (should status-file)
+              (should (file-name-absolute-p status-file))
+              (should (member "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1" captured-env))
+              (should-not (equal status-file
+                                 (expand-file-name "var/tmp/cron/auto-workflow-status.sexp"
+                                                   proj-root)))
+              (should (equal captured-args '("unit")))
+              (should-not (file-exists-p status-file))
+              (should saw-paused-watchdog)
+              (should (eq watchdog-cancelled 'fake-watchdog))
+              (should (eq gptel-auto-workflow--watchdog-timer
+                          'fake-restarted-watchdog))))
         (delete-directory proj-root t)
         (delete-directory worktree t)))))
 
