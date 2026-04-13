@@ -372,23 +372,23 @@ Returns non-nil if compaction was initiated."
                                                       'face '(:foreground "green" :weight bold)))
                                   (insert (propertize "═══════════════════════════════════════════════════════════════\n"
                                                       'face '(:foreground "yellow" :weight bold)))
-                                  (message "[compact] Preview appended (original kept)"))))
-                          (progn
-                            (kill-new backup)
-                            (erase-buffer)
-                            (insert response)
-                            (goto-char (min point-before (point-max)))
-                            (let ((chars-after (buffer-size))
-                                  (tokens-after (my/gptel--estimate-text-tokens (buffer-size))))
-                              (message "[compact] Done: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction) [backup in kill-ring]"
-                                       chars-before chars-after
-                                       (round tokens-before) (round tokens-after)
-                                       (my/gptel--compaction-reduction-pct chars-before chars-after)))))))))))
+                                  (message "[compact] Preview appended (original kept)")))
+                            (progn
+                              (kill-new backup)
+                              (erase-buffer)
+                              (insert response)
+                              (goto-char (min point-before (point-max)))
+                              (let ((chars-after (buffer-size))
+                                    (tokens-after (my/gptel--estimate-text-tokens (buffer-size))))
+                                (message "[compact] Done: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction) [backup in kill-ring]"
+                                         chars-before chars-after
+                                         (round tokens-before) (round tokens-after)
+                                         (my/gptel--compaction-reduction-pct chars-before chars-after)))))))))))
                 (error
                  (with-current-buffer buf
                    (setq my/gptel-auto-compact-running nil))
                  (message "[compact] Error: %s" (error-message-string err))))))
-        t)))))
+        t))))
 
 (defun my/gptel-manual-compact (&optional arg)
   "Manually compact current gptel buffer.
