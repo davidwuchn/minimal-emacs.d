@@ -54,7 +54,7 @@ EXIT-CODE defaults to 1."
     file))
 
 (ert-deftest regression/auto-workflow/verify-nucleus-binds-worktree-root-before-early-init ()
-  "verify-nucleus.sh should bind the worktree root before loading early-init."
+  "verify-nucleus.sh should start from the worktree init dir before loading early-init."
   (let* ((repo-root test-auto-workflow--repo-root)
          (script (expand-file-name "scripts/verify-nucleus.sh" repo-root))
          (argv-log (make-temp-file "aw-verify-argv"))
@@ -74,18 +74,28 @@ EXIT-CODE defaults to 1."
           (let* ((argv (with-temp-buffer
                          (insert-file-contents argv-log)
                          (split-string (buffer-string) "\n" t)))
+                 (init-index
+                  (cl-position-if
+                   (lambda (arg)
+                     (string-prefix-p "--init-directory=" arg))
+                   argv))
+                 (init-arg (and init-index (nth init-index argv)))
                  (eval-index (cl-position "--eval" argv :test #'string=))
                  (eval-form (and eval-index (nth (1+ eval-index) argv)))
                  (load-index (cl-position "-l" argv :test #'string=))
                  (load-target (and load-index (nth (1+ load-index) argv))))
-            (should eval-form)
-            (should (string-match-p
-                     "setq minimal-emacs-user-directory root user-emacs-directory root"
-                     eval-form))
-            (should load-target)
-            (should (equal load-target
-                           (expand-file-name "early-init.el" repo-root)))
-            (should (< eval-index load-index))))
+             (should init-arg)
+             (should (equal init-arg
+                            (format "--init-directory=%s" repo-root)))
+             (should eval-form)
+             (should (string-match-p
+                      "setq minimal-emacs-user-directory root user-emacs-directory root"
+                      eval-form))
+             (should load-target)
+             (should (equal load-target
+                            (expand-file-name "early-init.el" repo-root)))
+             (should (< init-index load-index))
+             (should (< eval-index load-index))))
       (delete-file argv-log)
       (delete-file fake-emacs))))
 

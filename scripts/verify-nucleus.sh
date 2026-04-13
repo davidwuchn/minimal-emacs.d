@@ -80,7 +80,7 @@ cat >"$TMP_ELISP" <<EOF
     (message "✓ All tool signatures are valid.")))
 EOF
 
-$EMACS -Q --batch \
+$EMACS -Q --batch --init-directory="$DIR" \
        --eval "(let ((root (file-name-as-directory \"$ROOT_ELISP\"))) (setq minimal-emacs-user-directory root user-emacs-directory root))" \
        -l "$DIR/early-init.el" \
        -l "$TMP_ELISP"
