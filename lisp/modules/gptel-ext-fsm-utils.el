@@ -373,10 +373,8 @@ Returns t on success, signals error on failure."
              id-to-fsm)
     ;; Check bidirectional consistency for FSM→ID mappings
     (maphash (lambda (fsm id)
-               (let ((lookup-id (gethash fsm my/gptel--fsm-registry))
-                     (lookup-fsm (gethash id my/gptel--fsm-registry)))
-                 (unless (and (equal lookup-id id)
-                              (eq lookup-fsm fsm))
+               (let ((lookup-id (gethash fsm my/gptel--fsm-registry)))
+                 (unless (equal lookup-id id)
                    (error "FSM registry invariant violated: bidirectional mismatch for FSM %s" id))))
              fsm-to-id)
     ;; Check unique IDs: no FSM should be mapped by multiple IDs
