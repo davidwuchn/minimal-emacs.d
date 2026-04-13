@@ -220,6 +220,12 @@ Supported shape:
         (error "Unknown symbol in Programmatic sandbox: %S" symbol)
       value)))
 
+(defun gptel-sandbox--eval-sequential (forms env)
+  "Evaluate FORMS sequentially in ENV, returning the last result."
+  (let ((value nil))
+    (dolist (form forms value)
+      (setq value (gptel-sandbox--eval-expr form env)))))
+
 (defun gptel-sandbox--short-circuit-eval (forms env initial-value stop-pred)
   "Evaluate FORMS sequentially with short-circuit logic.
 INITIAL-VALUE is the starting value. STOP-PRED is called on each result;
@@ -262,19 +268,12 @@ supports a small, explicit whitelist of pure operations."
        (gptel-sandbox--eval-setq-pairs (cdr expr) env))
       ('when
           (when (gptel-sandbox--eval-expr (nth 1 expr) env)
-            (let ((value nil))
-              (dolist (form (cddr expr) value)
-                (setq value (gptel-sandbox--eval-expr form env))))))
+            (gptel-sandbox--eval-sequential (cddr expr) env)))
       ('unless
           (unless (gptel-sandbox--eval-expr (nth 1 expr) env)
-            (let ((value nil))
-              (dolist (form (cddr expr) value)
-                (setq value (gptel-sandbox--eval-expr form env))))))
+            (gptel-sandbox--eval-sequential (cddr expr) env)))
       ('progn
-        (let ((value nil))
-          (dolist (form (cdr expr))
-            (setq value (gptel-sandbox--eval-expr form env)))
-          value))
+        (gptel-sandbox--eval-sequential (cdr expr) env))
       ('let
           (gptel-sandbox--eval-let (nth 1 expr) (cddr expr) env nil))
       ('let*
