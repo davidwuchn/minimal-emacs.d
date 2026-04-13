@@ -361,6 +361,13 @@ MSG is the original error message, FILE-PATH is the file being operated on."
     (format "Error: File not found: %s\n\nACTION: Check the file path and try again." file-path))
    (t nil)))
 
+(defun gptel-tools-code--ripgrep-unavailable-msg ()
+  "Return installation advice for ripgrep (rg)."
+  (concat "\n\nACTION: Install ripgrep (rg) for workspace search:\n"
+          "  macOS:  brew install ripgrep\n"
+          "  Ubuntu: apt install ripgrep\n"
+          "  Check:  rg --version"))
+
 ;;; Emacs Lisp Diagnostics
 
 (defun gptel-tools-code--elisp-checkdoc (file-path)
@@ -522,7 +529,8 @@ When FILE_PATH is nil, searches the entire project workspace."
           (let ((result (treesit-agent-find-workspace node_name)))
             (cond
              ((string-match-p "ripgrep.*not found\\|executable.*rg" result)
-              (concat result "\n\nACTION: Install ripgrep (rg) for workspace search:\n  macOS:  brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Check:  rg --version\n\nAlternatively, provide file_path to search a specific file."))
+              (concat result (gptel-tools-code--ripgrep-unavailable-msg)
+                      "\nAlternatively, provide file_path to search a specific file."))
              ((string-match-p "No structural definition found" result)
               (format "Error: Could not find '%s' anywhere in the project\n\nACTION:\n  1. Check spelling: '%s' may be misspelled\n  2. Symbol may not exist - use Code_Map to explore files\n  3. Symbol may be dynamically defined (not in AST)" node_name node_name))
              (t result)))))
@@ -531,7 +539,7 @@ When FILE_PATH is nil, searches the entire project workspace."
              (or friendly
                  (cond
                   ((string-match-p "ripgrep\\|rg" msg)
-                   (concat msg "\n\nACTION: Install ripgrep:\n  macOS:  brew install ripgrep\n  Ubuntu: apt install ripgrep\n  Check:  rg --version"))
+                   (concat msg (gptel-tools-code--ripgrep-unavailable-msg)))
                   ((string-match-p "timeout" msg)
                    (format "Error: Code_Inspect timed out after 10 seconds for '%s'\n\nACTION:\n  1. Provide explicit file_path to skip workspace search\n  2. Large project - search may take time\n  3. Try Code_Map on specific files first" node_name))
                   (t (format "Error executing Code_Inspect: %s\n\nACTION: Check symbol name and file path, then try again." msg))))))))
@@ -714,7 +722,8 @@ Examples:
                      (with-timeout (10 (format "Error: Code_Usages timed out for '%s'" node_name))
                        (let ((result (my/gptel--find-usages node_name)))
                          (if (string-match-p "ripgrep.*not found\\|executable.*rg" result)
-                             (concat result "\n\nTIP: Or provide file_path to Code_Inspect to search a specific file instead.")
+                             (concat result (gptel-tools-code--ripgrep-unavailable-msg)
+                                     "\nTIP: Or provide file_path to Code_Inspect to search a specific file instead.")
                            result)))
                    (error (format "Error executing Code_Usages: %s" (error-message-string err)))))
      :args (list '(:name "node_name" :type string :description "Symbol/function/class name to find usages for"))
