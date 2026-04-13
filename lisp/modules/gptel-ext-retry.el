@@ -360,13 +360,13 @@ Returns the number of image parts removed, or 0 if nothing was done."
                    (image-p
                     (lambda (part)
                       (and (listp part)
-                           (equal (plist-get part :type) "image_url")
-                           (cl-incf removed))))
+                           (equal (plist-get part :type) "image_url"))))
                    (filtered
                     (if (vectorp content)
                         (vconcat (cl-remove-if image-p content))
                       (cl-remove-if image-p content))))
               (when (< (length filtered) original-length)
+                (cl-incf removed (- original-length (length filtered)))
                 (plist-put msg :content filtered)))))))
     removed))
 
