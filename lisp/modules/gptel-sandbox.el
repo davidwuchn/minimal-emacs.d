@@ -9,6 +9,7 @@
 
 (require 'cl-lib)
 (require 'pp)
+(require 'seq)
 (require 'subr-x)
 
 (require 'gptel nil t)
@@ -219,6 +220,12 @@ Supported shape:
         (error "Unknown symbol in Programmatic sandbox: %S" symbol)
       value)))
 
+(defun gptel-sandbox--eval-sequential (forms env)
+  "Evaluate FORMS sequentially in ENV, returning the last result."
+  (let ((value nil))
+    (dolist (form forms value)
+      (setq value (gptel-sandbox--eval-expr form env)))))
+
 (defun gptel-sandbox--short-circuit-eval (forms env initial-value stop-pred)
   "Evaluate FORMS sequentially with short-circuit logic.
 INITIAL-VALUE is the starting value. STOP-PRED is called on each result;
@@ -261,19 +268,12 @@ supports a small, explicit whitelist of pure operations."
        (gptel-sandbox--eval-setq-pairs (cdr expr) env))
       ('when
           (when (gptel-sandbox--eval-expr (nth 1 expr) env)
-            (let ((value nil))
-              (dolist (form (cddr expr) value)
-                (setq value (gptel-sandbox--eval-expr form env))))))
+            (gptel-sandbox--eval-sequential (cddr expr) env)))
       ('unless
           (unless (gptel-sandbox--eval-expr (nth 1 expr) env)
-            (let ((value nil))
-              (dolist (form (cddr expr) value)
-                (setq value (gptel-sandbox--eval-expr form env))))))
+            (gptel-sandbox--eval-sequential (cddr expr) env)))
       ('progn
-        (let ((value nil))
-          (dolist (form (cdr expr))
-            (setq value (gptel-sandbox--eval-expr form env)))
-          value))
+        (gptel-sandbox--eval-sequential (cdr expr) env))
       ('let
           (gptel-sandbox--eval-let (nth 1 expr) (cddr expr) env nil))
       ('let*
@@ -460,20 +460,20 @@ CALLBACK receives non-nil when approved and nil when rejected."
 
 (defun gptel-sandbox--truncate-result (text)
   "Return TEXT, truncating and persisting to a temp file if needed."
-  (setq text (gptel-sandbox--render-result text))
-  (if (<= (length text) my/gptel-programmatic-result-limit)
-      text
-    (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
-                          (my/gptel-make-temp-file "programmatic-" nil ".txt")
-                        (make-temp-file "programmatic-" nil ".txt")))
-           (suffix "\n...[Programmatic result truncated. Full result saved to: %s]...")
-           (max-text-len (max 0 (- my/gptel-programmatic-result-limit
-                                   (length (format suffix temp-file))))))
-      (with-temp-file temp-file
-        (insert text))
-      (format (concat "%s" suffix)
-              (substring text 0 (min max-text-len (length text)))
-              temp-file))))
+  (let ((text (gptel-sandbox--render-result text)))
+    (if (<= (length text) my/gptel-programmatic-result-limit)
+        text
+      (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
+                            (my/gptel-make-temp-file "programmatic-" nil ".txt")
+                          (make-temp-file "programmatic-" nil ".txt")))
+             (suffix "\n...[Programmatic result truncated. Full result saved to: %s]...")
+             (max-text-len (max 0 (- my/gptel-programmatic-result-limit
+                                     (length (format suffix temp-file))))))
+        (with-temp-file temp-file
+          (insert text))
+        (format (concat "%s" suffix)
+                (substring text 0 (min max-text-len (length text)))
+                temp-file)))))
 
 (defun gptel-sandbox--format-error (message)
   "Format MESSAGE as a sandbox error string."
@@ -572,9 +572,11 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
                     (if (and (consp expr) (eq (car expr) 'tool-call))
                         (gptel-sandbox--execute-tool
                          (lambda (value)
-                           (gptel-sandbox--bind-result symbol value env)
-                           (setq remaining (cdr remaining))
-                           (process-pair))
+                           (if (string-prefix-p "Error: " value)
+                               (funcall callback (list :done t :result value))
+                             (gptel-sandbox--bind-result symbol value env)
+                             (setq remaining (cdr remaining))
+                             (process-pair)))
                          (nth 1 expr) (cddr expr) env state)
                       (let ((value (gptel-sandbox--eval-expr expr env)))
                         (gptel-sandbox--bind-result symbol value env)
@@ -584,8 +586,10 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
     (`(tool-call ,tool-name . ,arg-forms)
      (gptel-sandbox--execute-tool
       (lambda (value)
-        (gptel-sandbox--bind-last-value value env)
-        (funcall callback (list :continue t :done nil)))
+        (if (string-prefix-p "Error: " value)
+            (funcall callback (list :done t :result value))
+          (gptel-sandbox--bind-last-value value env)
+          (funcall callback (list :continue t :done nil))))
       tool-name arg-forms env state))
     (`(result ,expr)
      (funcall callback (list :done t :result (gptel-sandbox--eval-expr expr env))))

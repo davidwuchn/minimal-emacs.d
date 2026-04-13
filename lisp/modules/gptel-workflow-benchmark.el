@@ -376,16 +376,13 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
 (defun gptel-workflow--score-completion (run _completion-cfg)
   "Score completion of RUN against COMPLETION-CFG."
   (cond
+   ((gptel-workflow-run-aborted-p run) 0.0)
+   ((gptel-workflow-run-timeout-p run) 0.0)
+   ((gptel-workflow-run-error-message run) 0.0)
    ((and (gptel-workflow-run-completed-p run)
          (not (gptel-workflow-run-timeout-p run))
          (not (gptel-workflow-run-aborted-p run)))
     1.0)
-   ((and (gptel-workflow-run-completed-p run)
-         (gptel-workflow-run-timeout-p run))
-    0.3)
-   ((gptel-workflow-run-aborted-p run) 0.0)
-   ((gptel-workflow-run-timeout-p run) 0.0)
-   ((gptel-workflow-run-error-message run) 0.0)
    (t 0.5)))
 
 (defun gptel-workflow--score-efficiency (run efficiency-cfg)
