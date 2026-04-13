@@ -2645,38 +2645,55 @@ absent."
 
 (defun gptel-auto-workflow--refresh-staging-base-with-main (main-ref)
   "Bring the current staging worktree up to MAIN-REF without dropping staging commits."
-  (let* ((main-q (shell-quote-argument main-ref))
-         (ff-result
-          (gptel-auto-workflow--git-result
-           (format "git merge --ff-only %s" main-q)
-           180))
-         (ff-output (car ff-result)))
-    (cond
-     ((= 0 (cdr ff-result))
-      t)
-     ((string-match-p "Already up[ -]to[- ]date" ff-output)
-      t)
-     (t
-      (let* ((merge-result
+  (let ((worktree default-directory))
+    (if (not (gptel-auto-workflow--ensure-staging-submodules-ready worktree))
+        nil
+      (let* ((main-q (shell-quote-argument main-ref))
+             (ff-result
               (gptel-auto-workflow--git-result
-               (format "git merge -X theirs %s --no-ff -m %s"
-                       main-q
-                       (shell-quote-argument
-                        (format "Sync staging with %s" main-ref)))
+               (format "git merge --ff-only %s" main-q)
                180))
-             (merge-output (car merge-result)))
+             (ff-output (car ff-result)))
         (cond
-         ((= 0 (cdr merge-result))
+         ((= 0 (cdr ff-result))
           t)
-         ((string-match-p "Already up[ -]to[- ]date" merge-output)
+         ((string-match-p "Already up[ -]to[- ]date" ff-output)
           t)
          (t
-          (ignore-errors
-            (gptel-auto-workflow--git-cmd "git merge --abort" 60))
-          (message "[auto-workflow] Failed to refresh staging with %s: %s"
-                   main-ref
-                   (my/gptel--sanitize-for-logging merge-output 160))
-          nil)))))))
+          (let* ((merge-result
+                  (gptel-auto-workflow--git-result
+                   (format "git merge -X theirs %s --no-ff -m %s"
+                           main-q
+                           (shell-quote-argument
+                            (format "Sync staging with %s" main-ref)))
+                   180))
+                 (merge-output (car merge-result)))
+            (cond
+             ((= 0 (cdr merge-result))
+              t)
+             ((string-match-p "Already up[ -]to[- ]date" merge-output)
+              t)
+             ((gptel-auto-workflow--resolve-ancestor-submodule-merge-conflicts worktree)
+              (let ((commit-result
+                     (gptel-auto-workflow--git-result
+                      (format "%s git commit --no-edit"
+                              gptel-auto-workflow--skip-submodule-sync-env)
+                      180)))
+                (if (= 0 (cdr commit-result))
+                    t
+                  (ignore-errors
+                    (gptel-auto-workflow--git-cmd "git merge --abort" 60))
+                  (message "[auto-workflow] Failed to finalize staging refresh with %s: %s"
+                           main-ref
+                           (my/gptel--sanitize-for-logging (car commit-result) 160))
+                  nil)))
+             (t
+              (ignore-errors
+                (gptel-auto-workflow--git-cmd "git merge --abort" 60))
+              (message "[auto-workflow] Failed to refresh staging with %s: %s"
+                       main-ref
+                       (my/gptel--sanitize-for-logging merge-output 160))
+              nil)))))))))
 
 
 (defun gptel-auto-workflow--sync-staging-from-main ()
@@ -3158,6 +3175,92 @@ stub away linked worktrees lightweight."
                  (my/gptel--sanitize-for-logging (car hydrate) 200))
         nil))))
 
+(defun gptel-auto-workflow--staging-submodule-conflict-commits (path)
+  "Return conflicted gitlink revisions for submodule PATH in the current worktree."
+  (let* ((conflict-result
+          (gptel-auto-workflow--git-result
+           (format "git ls-files -u -- %s" (shell-quote-argument path))
+           60))
+         (output (car conflict-result))
+         commits)
+    (when (= 0 (cdr conflict-result))
+      (dolist (line (split-string (or output "") "\n" t))
+        (when (string-match
+               (format "^160000 \\([0-9a-f]\\{40\\}\\) \\([123]\\)\t%s$"
+                       (regexp-quote path))
+               line)
+          (setq commits
+                (plist-put commits
+                           (pcase (match-string 2 line)
+                             ("1" :base)
+                             ("2" :ours)
+                             ("3" :theirs))
+                           (match-string 1 line))))))
+    commits))
+
+(defun gptel-auto-workflow--submodule-commit-ancestor-p (git-dir ancestor descendant)
+  "Return non-nil when ANCESTOR is contained in DESCENDANT within GIT-DIR."
+  (and (stringp git-dir)
+       (file-directory-p git-dir)
+       (gptel-auto-workflow--non-empty-string-p ancestor)
+       (gptel-auto-workflow--non-empty-string-p descendant)
+       (= 0
+          (cdr (gptel-auto-workflow--git-result
+                (format "git --git-dir=%s merge-base --is-ancestor %s %s"
+                        (shell-quote-argument git-dir)
+                        (shell-quote-argument ancestor)
+                        (shell-quote-argument descendant))
+                60)))))
+
+(defun gptel-auto-workflow--resolve-ancestor-submodule-merge-conflicts (&optional worktree)
+  "Resolve unmerged top-level submodule conflicts in WORKTREE when ancestry is clear.
+If every unmerged path is a declared top-level submodule and one side's gitlink is
+an ancestor of the other, record the descendant gitlink in the index and return
+non-nil. Otherwise leave the merge unresolved and return nil."
+  (let* ((root (or worktree default-directory))
+         (default-directory root)
+         (submodule-paths (gptel-auto-workflow--staging-submodule-paths root))
+         (unmerged-result
+          (gptel-auto-workflow--git-result
+           "git diff --name-only --diff-filter=U"
+           30))
+         (unmerged-paths
+          (when (= 0 (cdr unmerged-result))
+            (split-string (string-trim (car unmerged-result)) "\n" t)))
+         (resolved nil)
+         (all-resolved t))
+    (when (and unmerged-paths
+               (cl-every (lambda (path) (member path submodule-paths)) unmerged-paths))
+      (dolist (path unmerged-paths)
+        (let* ((conflict (gptel-auto-workflow--staging-submodule-conflict-commits path))
+               (ours (plist-get conflict :ours))
+               (theirs (plist-get conflict :theirs))
+               (git-dir (or (gptel-auto-workflow--shared-submodule-git-dir path ours)
+                            (gptel-auto-workflow--shared-submodule-git-dir path theirs)))
+               (chosen
+                (cond
+                 ((gptel-auto-workflow--submodule-commit-ancestor-p git-dir ours theirs)
+                  theirs)
+                 ((gptel-auto-workflow--submodule-commit-ancestor-p git-dir theirs ours)
+                  ours)
+                 (t nil))))
+          (if (not chosen)
+              (setq all-resolved nil)
+            (let ((update-result
+                   (gptel-auto-workflow--git-result
+                    (format "git update-index --cacheinfo 160000 %s %s"
+                            (shell-quote-argument chosen)
+                            (shell-quote-argument path))
+                    60)))
+              (if (= 0 (cdr update-result))
+                  (push (format "%s=%s" path (gptel-auto-workflow--truncate-hash chosen))
+                        resolved)
+                (setq all-resolved nil))))))
+      (when (and all-resolved resolved)
+        (message "[auto-workflow] Resolved submodule merge conflicts: %s"
+                 (mapconcat #'identity (nreverse resolved) ", "))
+        t))))
+
 
 (defun gptel-auto-workflow--review-diff-content (optimize-branch)
   "Return review diff content for OPTIMIZE-BRANCH.
@@ -3509,10 +3612,25 @@ PRE-FIX-HEAD is the current HEAD hash before the fixer runs."
   "Let executor fix REVIEW-OUTPUT issues directly (faster).
 When WORKTREE is non-nil, run the fixer and git capture there."
   (let* ((proj-root (gptel-auto-workflow--project-root))
-         (fix-root (or worktree proj-root))
+         (fix-root
+          (or (and (fboundp 'gptel-auto-workflow--normalize-worktree-dir)
+                   (gptel-auto-workflow--normalize-worktree-dir
+                    (or worktree proj-root)
+                    proj-root))
+              (file-name-as-directory
+               (expand-file-name (or worktree proj-root)))))
+         (fix-buffer
+          (or (and (fboundp 'gptel-auto-workflow--get-worktree-buffer)
+                   (ignore-errors
+                     (gptel-auto-workflow--get-worktree-buffer fix-root)))
+              (get-buffer-create
+               (format " *aw-review-fix:%s*"
+                       (file-name-nondirectory
+                        (directory-file-name fix-root))))))
          (default-directory fix-root)
          (pre-fix-head (gptel-auto-workflow--current-head-hash))
-         (fix-prompt (format "Fix the following issues in the code.
+         (fix-prompt
+          (format "Fix the following issues in the code.
 
 ISSUES FROM REVIEW:
 %s
@@ -3526,30 +3644,51 @@ INSTRUCTIONS:
 6. If you cannot apply a real code change, reply with 'Error: no fix applied'
 
 Focus only on the issues mentioned. Do not refactor or add features."
-                              (truncate-string-to-width review-output 1500 nil nil "..."))))
+                  (truncate-string-to-width review-output 1500 nil nil "..."))))
+    (when (buffer-live-p fix-buffer)
+      (with-current-buffer fix-buffer
+        (setq default-directory fix-root)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
-        (gptel-benchmark-call-subagent
-         'executor
-         "Fix review issues"
-         fix-prompt
-         (lambda (result)
-             (let ((default-directory fix-root)
-                   (response (if (stringp result) result (format "%S" result))))
-               (funcall callback
-                        (gptel-auto-workflow--finalize-review-fix-result
+        (gptel-auto-experiment--call-in-context
+         fix-buffer fix-root
+         (lambda ()
+           (gptel-benchmark-call-subagent
+            'executor
+            "Fix review issues"
+            fix-prompt
+            (lambda (result)
+              (let ((default-directory fix-root)
+                    (response (if (stringp result) result (format "%S" result))))
+                (funcall callback
+                         (gptel-auto-workflow--finalize-review-fix-result
                           response
-                          pre-fix-head)))))
-       (funcall callback (cons nil "No executor agent available")))))
+                          pre-fix-head)))))))
+      (funcall callback (cons nil "No executor agent available")))))
 
 (defun gptel-auto-workflow--research-then-fix (review-output callback &optional worktree)
   "Use researcher to find approach, then executor to fix REVIEW-OUTPUT.
 When WORKTREE is non-nil, run both phases and git capture there."
   (let* ((proj-root (gptel-auto-workflow--project-root))
-         (fix-root (or worktree proj-root))
+         (fix-root
+          (or (and (fboundp 'gptel-auto-workflow--normalize-worktree-dir)
+                   (gptel-auto-workflow--normalize-worktree-dir
+                    (or worktree proj-root)
+                    proj-root))
+              (file-name-as-directory
+               (expand-file-name (or worktree proj-root)))))
+         (fix-buffer
+          (or (and (fboundp 'gptel-auto-workflow--get-worktree-buffer)
+                   (ignore-errors
+                     (gptel-auto-workflow--get-worktree-buffer fix-root)))
+              (get-buffer-create
+               (format " *aw-review-fix:%s*"
+                       (file-name-nondirectory
+                        (directory-file-name fix-root))))))
          (default-directory fix-root)
          (pre-fix-head (gptel-auto-workflow--current-head-hash))
-         (research-prompt (format "Research the best approach to fix these issues:
+         (research-prompt
+          (format "Research the best approach to fix these issues:
 
 ISSUES FROM REVIEW:
 %s
@@ -3561,18 +3700,28 @@ TASK:
 4. Return a concise fix plan (file:line, change description)
 
 Do NOT make changes. Only research and report findings."
-                                  (truncate-string-to-width review-output 1000 nil nil "..."))))
+                  (truncate-string-to-width review-output 1000 nil nil "..."))))
+    (when (buffer-live-p fix-buffer)
+      (with-current-buffer fix-buffer
+        (setq default-directory fix-root)))
     (message "[auto-workflow] Researching fix approach...")
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
-        (gptel-benchmark-call-subagent
-         'researcher
-         "Research fix approach"
-         research-prompt
-         (lambda (research-result)
-             (let* ((default-directory fix-root)
-                    (research-response (if (stringp research-result) research-result (format "%S" research-result)))
-                    (fix-prompt (format "Apply fixes based on this research:
+        (gptel-auto-experiment--call-in-context
+         fix-buffer fix-root
+         (lambda ()
+           (gptel-benchmark-call-subagent
+            'researcher
+            "Research fix approach"
+            research-prompt
+            (lambda (research-result)
+              (let* ((default-directory fix-root)
+                     (research-response
+                      (if (stringp research-result)
+                          research-result
+                        (format "%S" research-result)))
+                     (fix-prompt
+                      (format "Apply fixes based on this research:
 
 RESEARCH FINDINGS:
 %s
@@ -3586,19 +3735,24 @@ INSTRUCTIONS:
 3. Do NOT create git commits yourself; leave file changes in the worktree
 4. Do not reply with only an explanation; actually modify the files
 5. If you cannot apply a real code change, reply with 'Error: no fix applied'"
-                                        (truncate-string-to-width research-response 1000 nil nil "...")
-                                        (truncate-string-to-width review-output 500 nil nil "..."))))
-                (gptel-benchmark-call-subagent
-                 'executor
-                 "Apply researched fixes"
-                 fix-prompt
-                 (lambda (result)
-                   (let ((default-directory fix-root)
-                         (response (if (stringp result) result (format "%S" result))))
-                     (funcall callback
-                              (gptel-auto-workflow--finalize-review-fix-result
-                               response
-                               pre-fix-head))))))))
+                              (truncate-string-to-width research-response 1000 nil nil "...")
+                              (truncate-string-to-width review-output 500 nil nil "..."))))
+                (gptel-auto-experiment--call-in-context
+                 fix-buffer fix-root
+                 (lambda ()
+                   (gptel-benchmark-call-subagent
+                    'executor
+                    "Apply researched fixes"
+                    fix-prompt
+                    (lambda (result)
+                      (let ((default-directory fix-root)
+                            (response (if (stringp result)
+                                          result
+                                        (format "%S" result))))
+                        (funcall callback
+                                 (gptel-auto-workflow--finalize-review-fix-result
+                                  response
+                                  pre-fix-head))))))))))))
       (funcall callback (cons nil "No subagent available")))))
 
 (defun gptel-auto-workflow--ensure-on-main-branch ()
