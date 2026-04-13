@@ -6329,15 +6329,15 @@ EXIT-CODE defaults to 1."
           (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
           (with-temp-file status-file
             (insert "(:running nil :kept 0 :total 0 :phase \"idle\" :results \"var/tmp/experiments/2026-04-07/results.tsv\")\n"))
-          (should (zerop (call-process shell-file-name nil nil nil shell-command-switch
-                                       (format "%s auto-workflow >/dev/null 2>&1" script))))
+           (should (zerop (call-process shell-file-name nil nil nil shell-command-switch
+                                        (format "%s auto-workflow >/dev/null 2>&1" script))))
           (with-temp-buffer
             (insert-file-contents emacs-log)
             (should (string-empty-p (buffer-string))))
           (with-temp-buffer
             (insert-file-contents argv-log)
             (should (string-match-p
-                     (regexp-quote "gptel-auto-workflow-queue-all-projects")
+                     (regexp-quote "gptel-auto-workflow-bootstrap-run root \\\"auto-workflow\\\"")
                      (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t)
@@ -7007,8 +7007,8 @@ EXIT-CODE defaults to 1."
        (when (file-exists-p argv-log)
          (delete-file argv-log)))))
 
-(ert-deftest regression/auto-workflow/cron-wrapper-seeds-module-load-path ()
-  "Wrapper auto-workflow action should seed repo-local load-path entries."
+(ert-deftest regression/auto-workflow/cron-wrapper-loads-bootstrap-helper ()
+  "Wrapper auto-workflow action should call the shared bootstrap helper."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -7040,25 +7040,74 @@ EXIT-CODE defaults to 1."
                   (delq nil
                         (mapcar #'test-auto-workflow--argv-eval-payload
                                 entries))))
-            (should (seq-some
-                     (lambda (elisp)
-                       (and (string-match-p
-                             (regexp-quote "(setq minimal-emacs-user-directory root)")
-                             elisp)
-                            (string-match-p
-                             (regexp-quote "(expand-file-name \"lisp/modules\" root)")
-                             elisp)
-                            (string-match-p
-                             (regexp-quote "(expand-file-name \"packages/ai-code\" root)")
-                             elisp)
-                            (string-match-p
-                             (regexp-quote "(add-to-list 'load-path dir)")
-                             elisp)))
-                     elisp-payloads))))
+             (should (seq-some
+                      (lambda (elisp)
+                        (and (string-match-p
+                              (regexp-quote "(setq minimal-emacs-user-directory root user-emacs-directory root)")
+                              elisp)
+                             (string-match-p
+                              (regexp-quote "lisp/modules/gptel-auto-workflow-bootstrap.el")
+                              elisp)
+                             (string-match-p
+                              (regexp-quote "gptel-auto-workflow-bootstrap-run root \"auto-workflow\"")
+                              elisp)
+                             (not (string-match-p "\n" elisp))))
+                      elisp-payloads))))
       (delete-directory status-dir t)
-       (delete-directory fake-bin t)
-       (when (file-exists-p argv-log)
-         (delete-file argv-log)))))
+        (delete-directory fake-bin t)
+        (when (file-exists-p argv-log)
+          (delete-file argv-log)))))
+
+(ert-deftest regression/auto-workflow/bootstrap-run-seeds-load-path-and-dispatches ()
+  "Bootstrap helper should add repo-local load paths and queue the requested action."
+  (require 'gptel-auto-workflow-bootstrap)
+  (defvar gptel--minimax)
+  (let* ((root "/tmp/bootstrap-root")
+         (expected-dirs
+          (list (expand-file-name "lisp" root)
+                (expand-file-name "lisp/modules" root)
+                (expand-file-name "packages/gptel" root)
+                (expand-file-name "packages/gptel-agent" root)
+                (expand-file-name "packages/ai-code" root)))
+         (orig-load-path load-path)
+         (loaded nil)
+         (required nil)
+         (queued nil)
+         (gptel--minimax 'stub-minimax))
+    (unwind-protect
+        (cl-letf (((symbol-function 'file-directory-p)
+                   (lambda (path)
+                     (member path expected-dirs)))
+                  ((symbol-function 'load-file)
+                   (lambda (path)
+                     (push path loaded)))
+                  ((symbol-function 'require)
+                   (lambda (feature &optional _filename _noerror)
+                     (push feature required)
+                     t))
+                  ((symbol-function 'nucleus--register-gptel-directives)
+                   (lambda () t))
+                  ((symbol-function 'nucleus--override-gptel-agent-presets)
+                   (lambda () t))
+                  ((symbol-function 'gptel-auto-workflow-queue-all-projects)
+                   (lambda ()
+                     (setq queued 'projects))))
+          (setq load-path nil)
+          (gptel-auto-workflow-bootstrap-run root "auto-workflow")
+          (should (eq queued 'projects))
+          (dolist (dir expected-dirs)
+            (should (member dir load-path)))
+          (should (member 'gptel required))
+          (should (member 'gptel-request required))
+          (should (member 'gptel-agent-tools required))
+          (should (member (expand-file-name "lisp/modules/nucleus-tools.el" root) loaded))
+          (should (member (expand-file-name "lisp/modules/nucleus-prompts.el" root) loaded))
+          (should (member (expand-file-name "lisp/modules/nucleus-presets.el" root) loaded))
+          (should (member (expand-file-name "lisp/modules/gptel-ext-backends.el" root) loaded))
+          (should (member (expand-file-name "lisp/modules/gptel-tools-agent.el" root) loaded))
+          (should (member (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root) loaded))
+          (should (member (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root) loaded)))
+      (setq load-path orig-load-path))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-starts-worker-daemon-headless ()
   "Wrapper should strip GUI display variables when starting the worker daemon."
