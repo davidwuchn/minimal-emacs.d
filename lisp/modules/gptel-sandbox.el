@@ -460,20 +460,20 @@ CALLBACK receives non-nil when approved and nil when rejected."
 
 (defun gptel-sandbox--truncate-result (text)
   "Return TEXT, truncating and persisting to a temp file if needed."
-  (setq text (gptel-sandbox--render-result text))
-  (if (<= (length text) my/gptel-programmatic-result-limit)
-      text
-    (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
-                          (my/gptel-make-temp-file "programmatic-" nil ".txt")
-                        (make-temp-file "programmatic-" nil ".txt")))
-           (suffix "\n...[Programmatic result truncated. Full result saved to: %s]...")
-           (max-text-len (max 0 (- my/gptel-programmatic-result-limit
-                                   (length (format suffix temp-file))))))
-      (with-temp-file temp-file
-        (insert text))
-      (format (concat "%s" suffix)
-              (substring text 0 (min max-text-len (length text)))
-              temp-file))))
+  (let ((text (gptel-sandbox--render-result text)))
+    (if (<= (length text) my/gptel-programmatic-result-limit)
+        text
+      (let* ((temp-file (if (fboundp 'my/gptel-make-temp-file)
+                            (my/gptel-make-temp-file "programmatic-" nil ".txt")
+                          (make-temp-file "programmatic-" nil ".txt")))
+             (suffix "\n...[Programmatic result truncated. Full result saved to: %s]...")
+             (max-text-len (max 0 (- my/gptel-programmatic-result-limit
+                                     (length (format suffix temp-file))))))
+        (with-temp-file temp-file
+          (insert text))
+        (format (concat "%s" suffix)
+                (substring text 0 (min max-text-len (length text)))
+                temp-file)))))
 
 (defun gptel-sandbox--format-error (message)
   "Format MESSAGE as a sandbox error string."
