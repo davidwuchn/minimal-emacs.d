@@ -22,6 +22,7 @@
 ;; Forward declarations for functions defined in gptel-tools-agent.el
 (declare-function gptel-auto-workflow--project-root "gptel-tools-agent")
 (declare-function gptel-auto-workflow--get-worktree-dir "gptel-tools-agent")
+(declare-function gptel-auto-workflow--mark-messages-start "gptel-tools-agent")
 (declare-function gptel-auto-workflow--persist-status "gptel-tools-agent")
 (declare-function gptel-auto-workflow-cron-safe "gptel-tools-agent")
 (declare-function gptel-auto-workflow-run-async--guarded "gptel-tools-agent")
@@ -346,13 +347,15 @@ the queued job actually finishes."
     (when (fboundp 'gptel-auto-workflow--make-run-id)
       (setq gptel-auto-workflow--run-id
             (gptel-auto-workflow--make-run-id)))
+    (when (fboundp 'gptel-auto-workflow--mark-messages-start)
+      (gptel-auto-workflow--mark-messages-start))
     (setq gptel-auto-workflow--stats
           (list :phase (format "%s-queued" label)
                 :total 0
                 :kept 0))
+    (message "[%s] Queued background job" label)
     (when (fboundp 'gptel-auto-workflow--persist-status)
       (gptel-auto-workflow--persist-status))
-    (message "[%s] Queued background job" label)
     (let (timer)
       (setq gptel-auto-workflow--cron-job-timer
             (setq timer
