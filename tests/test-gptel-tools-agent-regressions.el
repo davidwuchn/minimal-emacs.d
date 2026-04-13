@@ -53,6 +53,42 @@ EXIT-CODE defaults to 1."
     (set-file-modes file #o755)
     file))
 
+(ert-deftest regression/auto-workflow/verify-nucleus-binds-worktree-root-before-early-init ()
+  "verify-nucleus.sh should bind the worktree root before loading early-init."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (script (expand-file-name "scripts/verify-nucleus.sh" repo-root))
+         (argv-log (make-temp-file "aw-verify-argv"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "printf '%%s\\n' \"$@\" > %s\nexit 0"
+                   (shell-quote-argument argv-log))))
+         (process-environment
+          (append (list (format "EMACS=%s" fake-emacs)
+                        "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1")
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (shell-command-to-string script)
+          (let* ((argv (with-temp-buffer
+                         (insert-file-contents argv-log)
+                         (split-string (buffer-string) "\n" t)))
+                 (eval-index (cl-position "--eval" argv :test #'string=))
+                 (eval-form (and eval-index (nth (1+ eval-index) argv)))
+                 (load-index (cl-position "-l" argv :test #'string=))
+                 (load-target (and load-index (nth (1+ load-index) argv))))
+            (should eval-form)
+            (should (string-match-p
+                     "setq minimal-emacs-user-directory root user-emacs-directory root"
+                     eval-form))
+            (should load-target)
+            (should (equal load-target
+                           (expand-file-name "early-init.el" repo-root)))
+            (should (< eval-index load-index))))
+      (delete-file argv-log)
+      (delete-file fake-emacs))))
+
 (defun test-auto-workflow--argv-eval-payload (argv)
   "Return the `--eval' payload from fake emacsclient ARGV, or nil."
   (when (vectorp argv)
