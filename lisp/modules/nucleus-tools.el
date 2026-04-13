@@ -550,39 +550,41 @@ Supports JSON Schema-like validators:
   - enum: list of allowed values"
   (lambda (&rest call-args)
     (let* ((actual-args (if async-p (cdr call-args) call-args))
-           (i 0))
-      ;; Check for missing required arguments or invalid types
-      (dolist (spec (if (functionp args) (funcall args) args))
-        (let* ((val (nth i actual-args))
-               (type (plist-get spec :type))
-               (arg-name (plist-get spec :name))
-               (optional (plist-get spec :optional)))
-          (cond
-           ;; Check for missing required arguments
-           ((and (null val) (not optional) (not (member type '("boolean" boolean))))
-            (nucleus-tools--validation-error tool-name :required arg-name))
-           
-           ;; Validate non-null values
-           ((not (null val))
-            (pcase type
-              ((or "string" 'string)
-               (nucleus-tools--validate-string val arg-name spec))
-              ((or "integer" 'integer)
-               (nucleus-tools--validate-number val arg-name spec)
-               (unless (integerp val)
-                 (nucleus-tools--validation-error arg-name :type val "an integer")))
-              ((or "number" 'number)
-               (nucleus-tools--validate-number val arg-name spec))
-              ((or "boolean" 'boolean)
-               (unless (memq val '(t nil :json-false))
-                 (nucleus-tools--validation-error arg-name :type val "a boolean")))
-              ((or "array" 'array)
-               (nucleus-tools--validate-array val arg-name spec))
-              ((or "object" 'object)
-               (unless (or (hash-table-p val) (listp val))
-                 (nucleus-tools--validation-error arg-name :type val "an object")))
-              (_ nil))))
-          (cl-incf i)))
+           (i 0)
+           (specs (if (functionp args) (funcall args) args)))
+      ;; Guard: if no args spec, skip validation silently
+      (when specs
+        (dolist (spec specs)
+          (let* ((val (nth i actual-args))
+                 (type (plist-get spec :type))
+                 (arg-name (plist-get spec :name))
+                 (optional (plist-get spec :optional)))
+            (cond
+             ;; Check for missing required arguments
+             ((and (null val) (not optional) (not (member type '("boolean" boolean))))
+              (nucleus-tools--validation-error tool-name :required arg-name))
+             
+             ;; Validate non-null values
+             ((not (null val))
+              (pcase type
+                ((or "string" 'string)
+                 (nucleus-tools--validate-string val arg-name spec))
+                ((or "integer" 'integer)
+                 (nucleus-tools--validate-number val arg-name spec)
+                 (unless (integerp val)
+                   (nucleus-tools--validation-error arg-name :type val "an integer")))
+                ((or "number" 'number)
+                 (nucleus-tools--validate-number val arg-name spec))
+                ((or "boolean" 'boolean)
+                 (unless (memq val '(t nil :json-false))
+                   (nucleus-tools--validation-error arg-name :type val "a boolean")))
+                ((or "array" 'array)
+                 (nucleus-tools--validate-array val arg-name spec))
+                ((or "object" 'object)
+                 (unless (or (hash-table-p val) (listp val))
+                   (nucleus-tools--validation-error arg-name :type val "an object")))
+                (_ nil))))
+            (cl-incf i))))
       (apply func call-args))))
 
 (defun nucleus-tools--advise-make-tool (orig-fn &rest kwargs)
