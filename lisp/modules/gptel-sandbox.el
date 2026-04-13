@@ -401,8 +401,10 @@ supports a small, explicit whitelist of pure operations."
                    (or (gptel-sandbox--statement-tool-call statement)
                        '(nil nil))))
         (when (and tool-name
-                   (stringp tool-name)
-                   (member tool-name my/gptel-programmatic-confirming-tools))
+                   (let ((name (if (symbolp tool-name)
+                                   (symbol-name tool-name)
+                                 tool-name)))
+                     (member name my/gptel-programmatic-confirming-tools)))
           (push (gptel-sandbox--summarize-tool-call-plan tool-name arg-forms)
                 plan))))))
 
