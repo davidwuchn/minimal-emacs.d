@@ -2595,7 +2595,9 @@ state does not leak into workflow branches."
 (defun gptel-auto-workflow--staging-sync-ref ()
   "Return the ref staging should sync from at workflow start.
 Prefer `origin/staging' when it exists so concurrent hosts append to the
-shared integration branch instead of rebuilding it from `main'. Fall back to
+shared integration branch instead of rebuilding it from `main'. Callers may
+still need to refresh that base with `gptel-auto-workflow--staging-main-ref'
+when remote staging lags behind the selected main ref. Fall back to
 `gptel-auto-workflow--staging-main-ref' only when the remote staging branch is
 absent."
   (let* ((proj-root (gptel-auto-workflow--project-root))
@@ -2630,42 +2632,104 @@ absent."
                (my/gptel--sanitize-for-logging (car remote-probe) 160))
       nil))))
 
+(defun gptel-auto-workflow--ref-ancestor-p (ancestor descendant)
+  "Return non-nil when ANCESTOR is already contained in DESCENDANT."
+  (and (gptel-auto-workflow--non-empty-string-p ancestor)
+       (gptel-auto-workflow--non-empty-string-p descendant)
+       (= 0
+          (cdr (gptel-auto-workflow--git-result
+                (format "git merge-base --is-ancestor %s %s"
+                        (shell-quote-argument ancestor)
+                        (shell-quote-argument descendant))
+                60)))))
+
+(defun gptel-auto-workflow--refresh-staging-base-with-main (main-ref)
+  "Bring the current staging worktree up to MAIN-REF without dropping staging commits."
+  (let* ((main-q (shell-quote-argument main-ref))
+         (ff-result
+          (gptel-auto-workflow--git-result
+           (format "git merge --ff-only %s" main-q)
+           180))
+         (ff-output (car ff-result)))
+    (cond
+     ((= 0 (cdr ff-result))
+      t)
+     ((string-match-p "Already up[ -]to[- ]date" ff-output)
+      t)
+     (t
+      (let* ((merge-result
+              (gptel-auto-workflow--git-result
+               (format "git merge -X theirs %s --no-ff -m %s"
+                       main-q
+                       (shell-quote-argument
+                        (format "Sync staging with %s" main-ref)))
+               180))
+             (merge-output (car merge-result)))
+        (cond
+         ((= 0 (cdr merge-result))
+          t)
+         ((string-match-p "Already up[ -]to[- ]date" merge-output)
+          t)
+         (t
+          (ignore-errors
+            (gptel-auto-workflow--git-cmd "git merge --abort" 60))
+          (message "[auto-workflow] Failed to refresh staging with %s: %s"
+                   main-ref
+                   (my/gptel--sanitize-for-logging merge-output 160))
+          nil)))))))
+
 
 (defun gptel-auto-workflow--sync-staging-from-main ()
   "Sync staging from current upstream state at workflow start.
 Prefer `origin/staging' when available so shared staging keeps remote results.
-Otherwise reset staging to the selected main ref. Never checks out staging in
-the root repo."
+Otherwise reset staging to the selected main ref. When remote staging exists
+but lags behind the selected main ref, merge the selected main ref into the
+local staging base before verification. Never checks out staging in the root
+repo."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
          (staging gptel-auto-workflow-staging-branch)
+         (remote-staging (format "refs/remotes/origin/%s" staging))
+         (main-ref nil)
          (sync-ref nil))
     (message "[auto-workflow] Syncing staging")
-    (if (not (gptel-auto-workflow--ensure-staging-branch-exists))
-        nil
-      (setq sync-ref (gptel-auto-workflow--staging-sync-ref))
-      (if (not sync-ref)
-          nil
-        (let ((worktree (gptel-auto-workflow--create-staging-worktree)))
-          (if (not worktree)
-              nil
-            (let ((default-directory worktree))
-              (let* ((results (list
-                               (gptel-auto-workflow--git-result
-                                (format "git checkout %s" (shell-quote-argument staging))
-                                60)
-                               (gptel-auto-workflow--git-result
-                                (format "git reset --hard %s"
-                                        (shell-quote-argument sync-ref))
-                                180)))
-                     (failed (cl-find-if (lambda (item) (/= 0 (cdr item))) results)))
-                (if failed
-                    (progn
-                      (message "[auto-workflow] Failed to sync staging: %s"
-                               (my/gptel--sanitize-for-logging (car failed) 160))
-                      nil)
-                  (message "[auto-workflow] ✓ Staging synced from %s" sync-ref)
-                  t)))))))))
+    (cond
+     ((not (gptel-auto-workflow--ensure-staging-branch-exists))
+      nil)
+     ((progn
+        (setq sync-ref (gptel-auto-workflow--staging-sync-ref))
+        (setq main-ref (gptel-auto-workflow--staging-main-ref))
+        (not sync-ref))
+      nil)
+     (t
+      (let ((worktree (gptel-auto-workflow--create-staging-worktree)))
+        (if (not worktree)
+            nil
+          (let ((default-directory worktree))
+            (let* ((results (list
+                             (gptel-auto-workflow--git-result
+                              (format "git checkout %s" (shell-quote-argument staging))
+                              60)
+                             (gptel-auto-workflow--git-result
+                              (format "git reset --hard %s"
+                                      (shell-quote-argument sync-ref))
+                              180)))
+                   (failed (cl-find-if (lambda (item) (/= 0 (cdr item))) results)))
+              (cond
+               (failed
+                (message "[auto-workflow] Failed to sync staging: %s"
+                         (my/gptel--sanitize-for-logging (car failed) 160))
+                nil)
+               ((and (equal sync-ref remote-staging)
+                     (gptel-auto-workflow--non-empty-string-p main-ref)
+                     (not (gptel-auto-workflow--ref-ancestor-p main-ref sync-ref)))
+                (when (gptel-auto-workflow--refresh-staging-base-with-main main-ref)
+                  (message "[auto-workflow] ✓ Staging synced from %s plus %s"
+                           sync-ref main-ref)
+                  t))
+               (t
+                (message "[auto-workflow] ✓ Staging synced from %s" sync-ref)
+                t))))))))))
 
 
 

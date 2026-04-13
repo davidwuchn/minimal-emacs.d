@@ -9624,8 +9624,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                             commands))
       (should-not (member "git reset --hard origin/main" commands)))))
 
-(ert-deftest regression/auto-workflow/sync-staging-prefers-origin-staging-when-present ()
-  "Staging sync should hydrate from origin/staging before local verification."
+(ert-deftest regression/auto-workflow/sync-staging-prefers-origin-staging-when-up-to-date ()
+  "Staging sync should keep origin/staging as the base when it already contains main."
   (let* ((commands nil)
          (expected-fetch
           (format "git fetch origin %s"
@@ -9636,8 +9636,49 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'gptel-auto-workflow--ensure-staging-branch-exists)
                (lambda () t))
               ((symbol-function 'gptel-auto-workflow--staging-main-ref)
-               (lambda ()
-                 (error "staging should not fall back to main when origin/staging exists")))
+               (lambda () "main"))
+              ((symbol-function 'gptel-auto-workflow--create-staging-worktree)
+               (lambda () "/tmp/staging"))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+                (lambda (command &optional _timeout)
+                  (push command commands)
+                  (cond
+                   ((string-match-p "\\`git ls-remote --exit-code --heads origin staging\\'" command)
+                    (cons "5043dae3e83ee7ea00e044870e04a40cf986d196\trefs/heads/staging\n" 0))
+                   ((equal command expected-fetch)
+                    (cons "" 0))
+                   ((equal command "git merge-base --is-ancestor main refs/remotes/origin/staging")
+                    (cons "" 0))
+                   (t
+                    (cons "" 0)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (gptel-auto-workflow--sync-staging-from-main))
+      (should (member expected-fetch commands))
+      (should (member "git reset --hard refs/remotes/origin/staging" commands))
+      (should (member "git merge-base --is-ancestor main refs/remotes/origin/staging" commands))
+      (should-not (member "git reset --hard main" commands))
+      (should-not (member "git merge --ff-only main" commands))
+      (should-not (seq-some (lambda (command)
+                              (string-match-p "\\`git merge -X theirs main --no-ff -m " command))
+                            commands)))))
+
+(ert-deftest regression/auto-workflow/sync-staging-merges-main-when-origin-staging-lags ()
+  "Staging sync should merge the selected main ref when origin/staging lacks it."
+  (let* ((commands nil)
+         (expected-fetch
+          (format "git fetch origin %s"
+                  (shell-quote-argument
+                   "+refs/heads/staging:refs/remotes/origin/staging")))
+         (expected-merge
+          (format "git merge -X theirs origin/main --no-ff -m %s"
+                  (shell-quote-argument "Sync staging with origin/main"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--ensure-staging-branch-exists)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--staging-main-ref)
+               (lambda () "origin/main"))
               ((symbol-function 'gptel-auto-workflow--create-staging-worktree)
                (lambda () "/tmp/staging"))
               ((symbol-function 'gptel-auto-workflow--git-result)
@@ -9648,6 +9689,12 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                    (cons "5043dae3e83ee7ea00e044870e04a40cf986d196\trefs/heads/staging\n" 0))
                   ((equal command expected-fetch)
                    (cons "" 0))
+                  ((equal command "git merge-base --is-ancestor origin/main refs/remotes/origin/staging")
+                   (cons "" 1))
+                  ((equal command "git merge --ff-only origin/main")
+                   (cons "fatal: Not possible to fast-forward, aborting." 128))
+                  ((equal command expected-merge)
+                   (cons "" 0))
                   (t
                    (cons "" 0)))))
               ((symbol-function 'message)
@@ -9655,7 +9702,10 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (should (gptel-auto-workflow--sync-staging-from-main))
       (should (member expected-fetch commands))
       (should (member "git reset --hard refs/remotes/origin/staging" commands))
-      (should-not (member "git reset --hard main" commands)))))
+      (should (member "git merge-base --is-ancestor origin/main refs/remotes/origin/staging" commands))
+      (should (member "git merge --ff-only origin/main" commands))
+      (should (member expected-merge commands))
+      (should-not (member "git reset --hard origin/main" commands)))))
 
 (ert-deftest regression/auto-workflow/shell-timeout-kills-process-tree ()
   "Timed out shell commands should terminate the whole spawned process tree."
