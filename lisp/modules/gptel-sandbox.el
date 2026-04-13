@@ -143,16 +143,26 @@ gptel preset.")
    (t
     (error "Invalid binding in Programmatic sandbox: %S" binding))))
 
-(defun gptel-sandbox--eval-setq-pairs (pairs env)
-  "Evaluate setq PAIRS in ENV and return the final assigned value."
+(defun gptel-sandbox--validate-setq-pairs (pairs)
+  "Validate PAIRS as symbol/value pairs, returning (SYMBOL . VALUE-FORM) entries.
+Raises an error if PAIRS is malformed."
   (unless (cl-evenp (length pairs))
     (error "Programmatic setq requires symbol/value pairs"))
-  (let ((value nil))
+  (let (entries)
     (while pairs
       (let ((symbol (pop pairs))
             (value-form (pop pairs)))
         (unless (symbolp symbol)
           (error "Programmatic setq target must be a symbol, got: %S" symbol))
+        (push (cons symbol value-form) entries)))
+    (nreverse entries)))
+
+(defun gptel-sandbox--eval-setq-pairs (pairs env)
+  "Evaluate setq PAIRS in ENV and return the final assigned value."
+  (let ((value nil))
+    (dolist (entry (gptel-sandbox--validate-setq-pairs pairs))
+      (let ((symbol (car entry))
+            (value-form (cdr entry)))
         (setq value (gptel-sandbox--eval-expr value-form env))
         (gptel-sandbox--bind-result symbol value env)))
     value))
@@ -556,19 +566,15 @@ CALLBACK receives a plist with one of the keys `:continue' or `:result'."
     (`(setq . ,pairs)
      (if (null pairs)
          (funcall callback (list :continue t :done nil))
-       (unless (cl-evenp (length pairs))
-         (error "Programmatic setq requires symbol/value pairs"))
-       (let ((remaining (seq-partition pairs 2)))
+       (let ((remaining (gptel-sandbox--validate-setq-pairs pairs)))
          (cl-labels
              ((process-pair
                 ()
                 (if (null remaining)
                     (funcall callback (list :continue t :done nil))
-                  (let* ((pair (car remaining))
-                         (symbol (car pair))
-                         (expr (cadr pair)))
-                    (unless (symbolp symbol)
-                      (error "Programmatic setq target must be a symbol, got: %S" symbol))
+                  (let* ((entry (car remaining))
+                         (symbol (car entry))
+                         (expr (cdr entry)))
                     (if (and (consp expr) (eq (car expr) 'tool-call))
                         (gptel-sandbox--execute-tool
                          (lambda (value)
