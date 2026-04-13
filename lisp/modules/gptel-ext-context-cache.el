@@ -764,7 +764,7 @@ Use `my/gptel-show-provider-contract' to query.")
 Fallback order:
 1. Cached context window for model-id
 2. gptel model tables (OpenAI, Gemini, etc.)
-3. Known models table (popular models pre-seeded)
+3. Known model metadata (from cache or known list)
 4. my/gptel-default-context-window (128k default)
 
 Note: We do NOT use gptel-max-tokens as it's for response length, not context window.
@@ -774,7 +774,8 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
      ((not (stringp model-id)) my/gptel-default-context-window)
      ((gethash model-id my/gptel--context-window-cache))
      ((my/gptel--lookup-context-window-in-gptel-tables gptel-model))
-     ((my/gptel--alist-partial-match my/gptel--known-model-context-windows model-id))
+     ((let ((meta (my/gptel-get-model-metadata model-id)))
+        (plist-get meta :context-window)))
      (t my/gptel-default-context-window))))
 
 ;;; Auto-refresh Timer
