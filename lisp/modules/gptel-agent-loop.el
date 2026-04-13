@@ -347,6 +347,27 @@ Truncates accumulated output to last
 Used by `gptel-agent-loop--seems-complete-p' to detect when
 a RunAgent task has finished successfully.")
 
+(defvar gptel-agent-loop--completion-patterns-compiled nil
+  "Pre-compiled completion patterns for performance.")
+
+(defun gptel-agent-loop--compile-patterns (patterns)
+  "Compile PATTERNS list into a single combined regex string.
+Returns nil if patterns list is empty."
+  (when patterns
+    (mapconcat (lambda (p) (concat "\\(" p "\\)")) patterns "\\|")))
+
+(defun gptel-agent-loop--ensure-patterns-compiled ()
+  "Ensure all pattern variables are compiled for performance.
+Call once after definitions to pre-compile regex patterns."
+  (setq gptel-agent-loop--completion-patterns-compiled
+        (gptel-agent-loop--compile-patterns gptel-agent-loop--completion-patterns))
+  (setq gptel-agent-loop--turn-skipped-pattern-compiled
+        gptel-agent-loop--turn-skipped-pattern)
+  (setq gptel-agent-loop--planning-patterns-compiled
+        (gptel-agent-loop--compile-patterns gptel-agent-loop--planning-patterns))
+  (setq gptel-agent-loop--finishing-patterns-compiled
+        (gptel-agent-loop--compile-patterns gptel-agent-loop--finishing-patterns)))
+
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
   "Return non-nil when TEXT matches any pattern in PATTERNS.
 Patterns are matched case-insensitively against downcased TEXT."
@@ -356,8 +377,12 @@ Patterns are matched case-insensitively against downcased TEXT."
                   patterns))))
 
 (defun gptel-agent-loop--seems-complete-p (resp)
-  "Return non-nil when RESP looks like a completion message."
-  (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--completion-patterns))
+  "Return non-nil when RESP looks like a completion message.
+Uses pre-compiled pattern for performance on hot path."
+  (and (stringp resp)
+       (if gptel-agent-loop--completion-patterns-compiled
+           (string-match-p gptel-agent-loop--completion-patterns-compiled (downcase resp))
+         (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--completion-patterns))))
 
 (defconst gptel-agent-loop--turn-skipped-pattern
   "gptel: turn skipped\\|all tool calls.*malformed"
@@ -365,9 +390,16 @@ Patterns are matched case-insensitively against downcased TEXT."
 Used by `gptel-agent-loop--turn-skipped-p' to detect when
 gptel skipped a turn due to malformed tool calls.")
 
+(defvar gptel-agent-loop--turn-skipped-pattern-compiled nil
+  "Pre-compiled turn-skipped pattern for performance.")
+
 (defun gptel-agent-loop--turn-skipped-p (resp)
-  "Return non-nil when RESP matches malformed-tool skip output."
-  (gptel-agent-loop--matches-any-pattern resp (list gptel-agent-loop--turn-skipped-pattern)))
+  "Return non-nil when RESP matches malformed-tool skip output.
+Uses pre-compiled pattern for performance on hot path."
+  (and (stringp resp)
+       (if gptel-agent-loop--turn-skipped-pattern-compiled
+           (string-match-p gptel-agent-loop--turn-skipped-pattern-compiled (downcase resp))
+         (gptel-agent-loop--matches-any-pattern resp (list gptel-agent-loop--turn-skipped-pattern)))))
 
 (defconst gptel-agent-loop--planning-patterns
   '("\\blet me\\b"
@@ -383,13 +415,18 @@ gptel skipped a turn due to malformed tool calls.")
 Used by `gptel-agent-loop--looks-like-planning-p' to detect
 when the model is talking about doing work but hasn't called tools.")
 
+(defvar gptel-agent-loop--planning-patterns-compiled nil
+  "Pre-compiled planning patterns for performance.")
+
 (defun gptel-agent-loop--looks-like-planning-p (resp)
   "Return non-nil when RESP looks like planning text without tool calls.
 Detects common patterns where model talks about doing work
-but didn't call tools."
+but didn't call tools. Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
        (>= (length resp) 30)
-       (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--planning-patterns)))
+       (if gptel-agent-loop--planning-patterns-compiled
+           (string-match-p gptel-agent-loop--planning-patterns-compiled (downcase resp))
+         (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--planning-patterns))))
 
 (defconst gptel-agent-loop--finishing-patterns
   '("summariz\\|conclude\\|conclusion\\|finish\\|wrap up\\|that's all\\|in summary\\|to summarize\\|final\\|overall"
@@ -401,11 +438,17 @@ but didn't call tools."
 Used by `gptel-agent-loop--looks-like-finishing-p' to detect
 when the model is concluding rather than planning more work.")
 
+(defvar gptel-agent-loop--finishing-patterns-compiled nil
+  "Pre-compiled finishing patterns for performance.")
+
 (defun gptel-agent-loop--looks-like-finishing-p (resp)
   "Return non-nil when RESP looks like model is about to finish.
 Detects patterns indicating the model is wrapping up,
-not planning more work."
-  (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--finishing-patterns))
+not planning more work. Uses pre-compiled pattern for performance on hot path."
+  (and (stringp resp)
+       (if gptel-agent-loop--finishing-patterns-compiled
+           (string-match-p gptel-agent-loop--finishing-patterns-compiled (downcase resp))
+         (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--finishing-patterns))))
 
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP.
@@ -769,6 +812,8 @@ Use this in the main agent to decide whether to re-call RunAgent."
   (if (stringp result)
       (replace-regexp-in-string "\\[RUNAGENT_INCOMPLETE:[0-9]+ steps\\(?:, [0-9]+ continuations\\)?\\]\\s-*" "" result)
     result))
+
+(gptel-agent-loop--ensure-patterns-compiled)
 
 (provide 'gptel-agent-loop)
 
