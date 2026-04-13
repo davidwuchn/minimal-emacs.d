@@ -360,6 +360,12 @@ wrap_emacs_eval() {
            "$env_elisp" "$body"
 }
 
+workflow_bootstrap_elisp() {
+    local action="$1"
+    printf '(let ((root "%s")) (setq minimal-emacs-user-directory root user-emacs-directory root) (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-bootstrap.el" root)) (gptel-auto-workflow-bootstrap-run root "%s"))' \
+           "$ROOT_LISP" "$action"
+}
+
 refresh_snapshot_paths_from_daemon() {
     local body
     local output
@@ -444,120 +450,16 @@ ensure_worker_daemon() {
 
 case "$ACTION" in
     auto-workflow)
-        ELISP="(let ((root \"$ROOT_LISP\"))
-                 (setq minimal-emacs-user-directory root)
-                  (setq user-emacs-directory root)
-                 (dolist (dir (list (expand-file-name \"lisp\" root)
-                                    (expand-file-name \"lisp/modules\" root)
-                                    (expand-file-name \"packages/gptel\" root)
-                                    (expand-file-name \"packages/gptel-agent\" root)
-                                    (expand-file-name \"packages/ai-code\" root)))
-                   (when (file-directory-p dir)
-                     (add-to-list 'load-path dir)))
-                 (defvar gptel--tool-preview-alist nil)
-                 (load-file (expand-file-name \"lisp/modules/nucleus-tools.el\" root))
-                 (load-file (expand-file-name \"lisp/modules/nucleus-prompts.el\" root))
-                 (load-file (expand-file-name \"lisp/modules/nucleus-presets.el\" root))
-                 (when (fboundp 'nucleus--register-gptel-directives)
-                   (nucleus--register-gptel-directives))
-                 (when (fboundp 'nucleus--override-gptel-agent-presets)
-                   (nucleus--override-gptel-agent-presets))
-                 (require 'gptel)
-                 (unless (fboundp 'gptel--format-tool-call)
-                   (defun gptel--format-tool-call (name arg-values)
-                     (format \"(%s %s)\n\"
-                             (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
-                             (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
-                 (require 'gptel-request)
-                 (require 'gptel-agent-tools)
-                 (load-file (expand-file-name \"lisp/modules/gptel-ext-backends.el\" root))
-                 (setq gptel-backend gptel--minimax gptel-model 'minimax-m2.7-highspeed)
-                 (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
-                 (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-strategic.el\" root))
-                 (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
-                 (gptel-auto-workflow-queue-all-projects))"
+        ELISP="$(workflow_bootstrap_elisp "auto-workflow")"
         ;;
     research)
-        ELISP="(let ((root \"$ROOT_LISP\"))
-                 (setq minimal-emacs-user-directory root)
-                  (setq user-emacs-directory root)
-                 (dolist (dir (list (expand-file-name \"lisp\" root)
-                                    (expand-file-name \"lisp/modules\" root)
-                                    (expand-file-name \"packages/gptel\" root)
-                                    (expand-file-name \"packages/gptel-agent\" root)
-                                    (expand-file-name \"packages/ai-code\" root)))
-                   (when (file-directory-p dir)
-                     (add-to-list 'load-path dir)))
-                 (defvar gptel--tool-preview-alist nil)
-                 (load-file (expand-file-name \"lisp/modules/nucleus-tools.el\" root))
-                 (load-file (expand-file-name \"lisp/modules/nucleus-prompts.el\" root))
-                 (load-file (expand-file-name \"lisp/modules/nucleus-presets.el\" root))
-                 (when (fboundp 'nucleus--register-gptel-directives)
-                   (nucleus--register-gptel-directives))
-                 (when (fboundp 'nucleus--override-gptel-agent-presets)
-                   (nucleus--override-gptel-agent-presets))
-                 (require 'gptel)
-                 (unless (fboundp 'gptel--format-tool-call)
-                   (defun gptel--format-tool-call (name arg-values)
-                     (format \"(%s %s)\n\"
-                             (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
-                             (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
-                 (require 'gptel-request)
-                 (require 'gptel-agent-tools)
-                 (load-file (expand-file-name \"lisp/modules/gptel-ext-backends.el\" root))
-                 (setq gptel-backend gptel--minimax gptel-model 'minimax-m2.7-highspeed)
-                 (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
-                 (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-strategic.el\" root))
-                 (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
-                 (gptel-auto-workflow-queue-all-research))"
+        ELISP="$(workflow_bootstrap_elisp "research")"
         ;;
     mementum)
-        ELISP="(let ((root \"$ROOT_LISP\"))
-                 (setq minimal-emacs-user-directory root)
-                 (setq user-emacs-directory root)
-                 (dolist (dir (list (expand-file-name \"lisp\" root)
-                                    (expand-file-name \"lisp/modules\" root)
-                                    (expand-file-name \"packages/gptel\" root)
-                                    (expand-file-name \"packages/gptel-agent\" root)
-                                    (expand-file-name \"packages/ai-code\" root)))
-                   (when (file-directory-p dir)
-                     (add-to-list 'load-path dir)))
-                 (defvar gptel--tool-preview-alist nil)
-                 (require 'gptel)
-                 (unless (fboundp 'gptel--format-tool-call)
-                   (defun gptel--format-tool-call (name arg-values)
-                     (format \"(%s %s)\n\"
-                             (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
-                             (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
-                 (load-file (expand-file-name \"lisp/modules/gptel-ext-backends.el\" root))
-                 (setq gptel-backend gptel--minimax gptel-model 'minimax-m2.7-highspeed)
-                 (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
-                 (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
-                 (gptel-auto-workflow-queue-all-mementum))"
+        ELISP="$(workflow_bootstrap_elisp "mementum")"
         ;;
     instincts)
-        ELISP="(let ((root \"$ROOT_LISP\"))
-                 (setq minimal-emacs-user-directory root)
-                 (setq user-emacs-directory root)
-                 (dolist (dir (list (expand-file-name \"lisp\" root)
-                                    (expand-file-name \"lisp/modules\" root)
-                                    (expand-file-name \"packages/gptel\" root)
-                                    (expand-file-name \"packages/gptel-agent\" root)
-                                    (expand-file-name \"packages/ai-code\" root)))
-                   (when (file-directory-p dir)
-                     (add-to-list 'load-path dir)))
-                 (defvar gptel--tool-preview-alist nil)
-                 (require 'gptel)
-                 (unless (fboundp 'gptel--format-tool-call)
-                   (defun gptel--format-tool-call (name arg-values)
-                     (format \"(%s %s)\n\"
-                             (propertize (or name \"unknown\") 'font-lock-face 'font-lock-keyword-face)
-                             (propertize (format \"%s\" arg-values) 'font-lock-face 'font-lock-string-face))))
-                 (load-file (expand-file-name \"lisp/modules/gptel-ext-backends.el\" root))
-                 (setq gptel-backend gptel--minimax gptel-model 'minimax-m2.7-highspeed)
-                 (load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))
-                 (load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-projects.el\" root))
-                 (gptel-auto-workflow-queue-all-instincts))"
+        ELISP="$(workflow_bootstrap_elisp "instincts")"
         ;;
     status)
         ELISP="(and (fboundp 'gptel-auto-workflow--status-plist)
