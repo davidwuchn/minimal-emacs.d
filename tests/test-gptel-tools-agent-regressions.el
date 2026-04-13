@@ -6248,6 +6248,8 @@ EXIT-CODE defaults to 1."
                     "    print('t')\n"
                     "elif 'gptel-auto-workflow--status-plist' in expr:\n"
                     "    print('(:running nil :kept 0 :total 0 :phase \"idle\" :results \"var/tmp/experiments/2026-04-03/results.tsv\")')\n"
+                    "elif 'gptel-auto-workflow-bootstrap-run' in expr:\n"
+                    "    print('queued')\n"
                     "else:\n"
                     "    print('nil')\n"
                     "raise SystemExit(0)\n"))
@@ -6391,8 +6393,8 @@ EXIT-CODE defaults to 1."
           (with-temp-buffer
             (insert-file-contents argv-log)
             (should (string-match-p
-                     (regexp-quote "gptel-auto-workflow-queue-all-projects")
-                     (buffer-string)))))
+                     (regexp-quote "gptel-auto-workflow-bootstrap-run root \\\"auto-workflow\\\"")
+                      (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t)
       (when (file-exists-p argv-log)
@@ -7062,7 +7064,7 @@ EXIT-CODE defaults to 1."
          (delete-file argv-log)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-seeds-module-load-path ()
-  "Wrapper auto-workflow action should seed repo-local load-path entries."
+  "Wrapper auto-workflow action should use the repo-local bootstrap file."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -7097,22 +7099,155 @@ EXIT-CODE defaults to 1."
             (should (seq-some
                      (lambda (elisp)
                        (and (string-match-p
-                             (regexp-quote "(setq minimal-emacs-user-directory root)")
+                             (regexp-quote "(setq minimal-emacs-user-directory root user-emacs-directory root)")
                              elisp)
                             (string-match-p
-                             (regexp-quote "(expand-file-name \"lisp/modules\" root)")
+                             (regexp-quote "(load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-bootstrap.el\" root))")
                              elisp)
                             (string-match-p
-                             (regexp-quote "(expand-file-name \"packages/ai-code\" root)")
+                             (regexp-quote "(gptel-auto-workflow-bootstrap-run root \"auto-workflow\")")
                              elisp)
-                            (string-match-p
-                             (regexp-quote "(add-to-list 'load-path dir)")
-                             elisp)))
-                     elisp-payloads))))
+                            (not (string-match-p
+                                  (regexp-quote "(require 'gptel)")
+                                  elisp))))
+                       elisp-payloads))))
       (delete-directory status-dir t)
        (delete-directory fake-bin t)
        (when (file-exists-p argv-log)
          (delete-file argv-log)))))
+
+(ert-deftest regression/auto-workflow/bootstrap-loads-gptel-before-backends ()
+  "Headless bootstrap should load the Gptel stack before backend setup."
+  (defvar bootstrap-test-calls nil)
+  (let* ((had-minimax (boundp 'gptel--minimax))
+         (saved-minimax (and had-minimax gptel--minimax))
+         (had-backend (boundp 'gptel-backend))
+         (saved-backend (and had-backend gptel-backend))
+         (had-model (boundp 'gptel-model))
+         (saved-model (and had-model gptel-model))
+         (root (make-temp-file "aw-bootstrap-root" t))
+         (calls nil)
+         (bootstrap-file
+          (expand-file-name "lisp/modules/gptel-auto-workflow-bootstrap.el"
+                            test-auto-workflow--repo-root)))
+    (unwind-protect
+        (progn
+          (dolist (dir '("lisp" "lisp/modules" "packages/gptel" "packages/gptel-agent" "packages/ai-code"))
+            (make-directory (expand-file-name dir root) t))
+          (with-temp-file (expand-file-name "lisp/modules/nucleus-tools.el" root)
+            (insert "(push \"nucleus-tools.el\" bootstrap-test-calls)\n"))
+          (with-temp-file (expand-file-name "lisp/modules/nucleus-prompts.el" root)
+            (insert "(push \"nucleus-prompts.el\" bootstrap-test-calls)\n"))
+          (with-temp-file (expand-file-name "lisp/modules/nucleus-presets.el" root)
+            (insert "(push \"nucleus-presets.el\" bootstrap-test-calls)\n"))
+          (with-temp-file (expand-file-name "lisp/modules/gptel-ext-backends.el" root)
+            (insert "(push \"gptel-ext-backends.el\" bootstrap-test-calls)\n"
+                    "(setq gptel--minimax 'fake-backend)\n"))
+          (with-temp-file (expand-file-name "lisp/modules/gptel-tools.el" root)
+            (insert "(push \"gptel-tools.el\" bootstrap-test-calls)\n"))
+          (with-temp-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)
+            (insert "(push \"gptel-tools-agent.el\" bootstrap-test-calls)\n"))
+          (with-temp-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root)
+            (insert "(push \"gptel-auto-workflow-strategic.el\" bootstrap-test-calls)\n"))
+          (with-temp-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root)
+            (insert "(push \"gptel-auto-workflow-projects.el\" bootstrap-test-calls)\n"))
+          (with-temp-buffer
+            (insert-file-contents bootstrap-file)
+            (eval-buffer))
+          (let (gptel--minimax gptel-backend gptel-model bootstrap-test-calls)
+            (cl-letf (((symbol-function 'require)
+                       (lambda (feature &rest _)
+                         (push (list feature load-prefer-newer) bootstrap-test-calls)
+                         t))
+                      ((symbol-function 'nucleus-presets-setup-agents)
+                       (lambda ()
+                         (push 'setup-agents bootstrap-test-calls)))
+                      ((symbol-function 'nucleus--after-agent-update)
+                       (lambda ()
+                         (push 'after-agent-update bootstrap-test-calls)))
+                      ((symbol-function 'gptel-tools-setup)
+                       (lambda ()
+                         (push 'tools-setup bootstrap-test-calls)))
+                      ((symbol-function 'gptel-auto-workflow-queue-all-projects)
+                       (lambda ()
+                         (push 'queue-projects bootstrap-test-calls)
+                         'queued)))
+               (should (eq 'queued (gptel-auto-workflow-bootstrap-run root "auto-workflow")))
+              (setq calls (nreverse bootstrap-test-calls))
+              (should (member '(xdg nil) calls))
+              (should (member '(gptel nil) calls))
+               (should (member "gptel-ext-backends.el" calls))
+               (should (member "gptel-tools.el" calls))
+               (should (member 'tools-setup calls))
+               (should (< (cl-position '(xdg nil) calls :test #'equal)
+                          (cl-position '(gptel nil) calls :test #'equal)))
+               (should (< (cl-position '(gptel nil) calls :test #'equal)
+                          (cl-position "gptel-ext-backends.el" calls :test #'equal)))
+               (should (< (cl-position "gptel-ext-backends.el" calls :test #'equal)
+                          (cl-position "gptel-tools.el" calls :test #'equal)))
+               (should (< (cl-position "gptel-tools.el" calls :test #'equal)
+                          (cl-position 'tools-setup calls :test #'equal)))
+               (should (member 'setup-agents calls))
+               (should (member 'after-agent-update calls))
+               (should (< (cl-position 'tools-setup calls :test #'equal)
+                          (cl-position "gptel-tools-agent.el" calls :test #'equal)))
+               (should (< (cl-position "gptel-tools-agent.el" calls :test #'equal)
+                          (cl-position 'setup-agents calls :test #'equal)))
+               (should (< (cl-position 'setup-agents calls :test #'equal)
+                          (cl-position 'after-agent-update calls :test #'equal)))
+               (should (< (cl-position 'after-agent-update calls :test #'equal)
+                          (cl-position 'queue-projects calls :test #'equal)))
+               (should (member 'queue-projects calls)))))
+      (if had-minimax
+          (setq gptel--minimax saved-minimax)
+        (makunbound 'gptel--minimax))
+      (if had-backend
+          (setq gptel-backend saved-backend)
+        (makunbound 'gptel-backend))
+      (if had-model
+          (setq gptel-model saved-model)
+        (makunbound 'gptel-model))
+      (delete-directory root t))))
+
+(ert-deftest regression/auto-workflow/bootstrap-falls-back-to-gptel-elc-after-read-error ()
+  "Bootstrap should continue after the fresh-daemon Gptel read error."
+  (let ((root "/tmp/bootstrap-fallback")
+        (calls nil)
+        (bootstrap-file
+         (expand-file-name "lisp/modules/gptel-auto-workflow-bootstrap.el"
+                           test-auto-workflow--repo-root))
+        (gptel-live nil))
+    (with-temp-buffer
+      (insert-file-contents bootstrap-file)
+      (eval-buffer))
+    (cl-letf (((symbol-function 'require)
+               (lambda (feature &optional _filename _noerror)
+                 (push (list 'require feature) calls)
+                 (pcase feature
+                   ('xdg t)
+                   ('gptel (signal 'invalid-read-syntax '(")" 391 13)))
+                   (_ t))))
+              ((symbol-function 'load-file)
+               (lambda (file)
+                 (push (list 'load-file file) calls)
+                 (when (string-suffix-p "/packages/gptel/gptel.elc" file)
+                   (setq gptel-live t))
+                 nil))
+              ((symbol-function 'featurep)
+               (lambda (feature)
+                 (and gptel-live (eq feature 'gptel))))
+              ((symbol-function 'fboundp)
+               (lambda (fn)
+                 (and gptel-live (memq fn '(gptel-send gptel-request))))))
+      (gptel-auto-workflow-bootstrap--load-gptel-core root)
+      (setq calls (nreverse calls))
+      (should (< (cl-position '(require xdg) calls :test #'equal)
+                 (cl-position '(require gptel) calls :test #'equal)))
+      (should (member (list 'load-file (expand-file-name "packages/gptel/gptel.elc" root)) calls))
+      (should (< (cl-position (list 'load-file (expand-file-name "packages/gptel/gptel.elc" root)) calls :test #'equal)
+                 (cl-position '(require gptel-request) calls :test #'equal)))
+      (should (member '(require gptel-agent) calls))
+      (should (member '(require gptel-agent-tools) calls)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-starts-worker-daemon-headless ()
   "Wrapper should strip GUI display variables when starting the worker daemon."
@@ -7166,8 +7301,71 @@ EXIT-CODE defaults to 1."
       (delete-directory fake-bin t)
       (when (file-exists-p argv-log)
         (delete-file argv-log))
-      (when (file-exists-p emacs-log)
-        (delete-file emacs-log)))))
+       (when (file-exists-p emacs-log)
+         (delete-file emacs-log)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-seeds-shared-var-for-worktree-daemon ()
+  "Wrapper should seed a linked worktree daemon with the shared package cache."
+  (let* ((temp-root (make-temp-file "aw-cron-root" t))
+         (script-dir (expand-file-name "scripts" temp-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
+         (base-root (make-temp-file "aw-base-root" t))
+         (base-git-dir (expand-file-name ".git" base-root))
+         (shared-elpa-entry (expand-file-name "var/elpa/treesit-auto-1" base-root))
+         (shared-quickstart (expand-file-name "var/package-quickstart.el" base-root))
+         (shared-treesit (expand-file-name "var/tree-sitter" base-root))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (daemon-ready (make-temp-name (expand-file-name "aw-daemon-ready" temporary-file-directory)))
+         (fake-git
+          (test-auto-workflow--write-shell-script
+           "fake-git"
+           (format "case \"$*\" in\n  *'rev-parse --git-common-dir'*) printf '%%s\\n' %s ;;\n  *) exit 1 ;;\nesac"
+                   (shell-quote-argument base-git-dir))))
+         (fake-emacsclient
+          (test-auto-workflow--write-shell-script
+           "fake-emacsclient"
+           (format "if [ -f %s ]; then exit 0; fi\nexit 1"
+                   (shell-quote-argument daemon-ready))))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "touch %s\nexit 0" (shell-quote-argument daemon-ready))))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH")))
+                  process-environment))
+         (default-directory temp-root))
+    (unwind-protect
+        (progn
+          (make-directory script-dir t)
+          (make-directory base-git-dir t)
+          (make-directory shared-elpa-entry t)
+          (make-directory shared-treesit t)
+          (with-temp-file (expand-file-name "treesit-auto.el" shared-elpa-entry)
+            (insert ";;; treesit-auto.el\n"))
+          (with-temp-file shared-quickstart
+            (insert ";;; package-quickstart.el\n"))
+          (copy-file (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root)
+                     script t)
+          (set-file-modes script #o755)
+          (rename-file fake-git (expand-file-name "git" fake-bin) t)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (shell-command-to-string (format "%s auto-workflow >/dev/null 2>&1 || true" script))
+          (let ((linked-elpa (expand-file-name "var/elpa/treesit-auto-1" temp-root))
+                (linked-quickstart (expand-file-name "var/package-quickstart.el" temp-root))
+                (linked-treesit (expand-file-name "var/tree-sitter" temp-root)))
+            (should (file-symlink-p linked-elpa))
+            (should (equal (file-truename linked-elpa) (file-truename shared-elpa-entry)))
+            (should (file-symlink-p linked-quickstart))
+            (should (equal (file-truename linked-quickstart) (file-truename shared-quickstart)))
+            (should (file-symlink-p linked-treesit))
+            (should (equal (file-truename linked-treesit) (file-truename shared-treesit)))))
+      (delete-directory temp-root t)
+      (delete-directory base-root t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p daemon-ready)
+        (delete-file daemon-ready)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-messages-uses-file-dump ()
   "Wrapper messages action should dump *Messages* to a file, not print buffer text inline."
@@ -8268,6 +8466,35 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (should-not (plist-get result :tests-skipped))
         (should (string-match-p "No new staging verification failures vs main baseline"
                                 (plist-get result :tests-output)))))))
+
+(ert-deftest regression/auto-experiment/loop-normalizes-missing-baseline-score ()
+  "Experiment loops should treat a missing baseline score as 0.0."
+  (let ((gptel-auto-experiment-max-per-target 1)
+        (gptel-auto-experiment-delay-between 0)
+        (captured-baseline :unset)
+        final-results)
+    (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+               (lambda (&optional _skip)
+                 '(:passed nil :eight-keys nil :tests-passed nil :nucleus-passed t)))
+              ((symbol-function 'gptel-auto-experiment--code-quality-score)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-experiment--adaptive-max-experiments)
+               (lambda (orig) orig))
+              ((symbol-function 'gptel-auto-experiment--run-with-retry)
+               (lambda (_target _exp-id _max baseline _baseline-code-quality _previous-results callback &optional _retry-count)
+                 (setq captured-baseline baseline)
+                 (funcall callback
+                          (list :target "lisp/modules/gptel-tools-agent.el"
+                                :id 1
+                                :score-after 0
+                                :kept nil))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-experiment-loop
+       "lisp/modules/gptel-tools-agent.el"
+       (lambda (results) (setq final-results results)))
+      (should (equal captured-baseline 0.0))
+      (should (= (length final-results) 1)))))
 
 (ert-deftest regression/auto-workflow/verify-staging-allows-baseline-failures ()
   "Staging verification should pass when test failures match the main baseline."
