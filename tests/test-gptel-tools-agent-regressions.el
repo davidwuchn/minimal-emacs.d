@@ -10719,6 +10719,46 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                           (equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir"))
                         calls)))))
 
+(ert-deftest regression/auto-workflow/shared-submodule-git-dir-uses-current-worktree-checkout-when-root-is-stale ()
+  "Use the current workflow worktree checkout when the canonical root lacks the gitlink commit."
+  (let ((project-root "/tmp/project")
+        (worktree-root "/tmp/worktree")
+        (worktree-git-dir "/tmp/project/.git/worktrees/worktree/modules/packages/gptel-agent")
+        (calls nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () worktree-root))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-repo-root)
+               (lambda () project-root))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-git-common-dir)
+               (lambda () "/tmp/project/.git"))
+              ((symbol-function 'file-directory-p)
+               (lambda (path)
+                 (member path
+                         (list "/tmp/worktree/packages/gptel-agent"
+                               worktree-git-dir
+                               "/tmp/project/packages/gptel-agent"
+                               "/tmp/project/packages/gptel-agent/.git"))))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (push command calls)
+                 (cond
+                  ((equal command "git -C /tmp/worktree/packages/gptel-agent rev-parse --git-common-dir")
+                   (cons "/tmp/project/.git/worktrees/worktree/modules/packages/gptel-agent\n" 0))
+                  ((equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir")
+                   (cons ".git\n" 0))
+                  ((equal command "git --git-dir=/tmp/project/.git/worktrees/worktree/modules/packages/gptel-agent cat-file -e abc123^{commit}")
+                   (cons "" 0))
+                  ((equal command "git --git-dir=/tmp/project/packages/gptel-agent/.git cat-file -e abc123^{commit}")
+                   (cons "" 128))
+                  (t
+                   (cons "" 1))))))
+      (should (equal (gptel-auto-workflow--shared-submodule-git-dir "packages/gptel-agent" "abc123")
+                     worktree-git-dir))
+      (should (seq-some
+               (lambda (command)
+                 (equal command "git -C /tmp/worktree/packages/gptel-agent rev-parse --git-common-dir"))
+               calls)))))
+
 (ert-deftest regression/auto-workflow/hydrate-staging-submodules-missing-shared-repo-fails-cleanly ()
   "Missing shared submodule repos should return a normal failure tuple."
   (let ((root (make-temp-file "staging-root" t)))

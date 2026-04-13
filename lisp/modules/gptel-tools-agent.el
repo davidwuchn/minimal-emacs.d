@@ -2856,10 +2856,9 @@ NOTE: Staging branch is never deleted, only the worktree."
              (file-name-directory (directory-file-name git-common-dir)))
         (gptel-auto-workflow--worktree-base-root))))
 
-(defun gptel-auto-workflow--submodule-checkout-git-dir (path)
-  "Return the absolute git-common-dir for the root checkout of submodule PATH."
-  (let* ((proj-root (gptel-auto-workflow--worktree-base-repo-root))
-         (checkout (expand-file-name path proj-root)))
+(defun gptel-auto-workflow--submodule-checkout-git-dir-at-root (root path)
+  "Return the absolute git-common-dir for submodule PATH checked out under ROOT."
+  (let ((checkout (and root (expand-file-name path root))))
     (when (file-directory-p checkout)
       (let* ((git-common-result
               (gptel-auto-workflow--git-result
@@ -2870,6 +2869,22 @@ NOTE: Staging branch is never deleted, only the worktree."
          (when (and (= 0 (cdr git-common-result))
                     (not (string-empty-p git-common)))
            (expand-file-name git-common checkout))))))
+
+(defun gptel-auto-workflow--submodule-checkout-git-dirs (path)
+  "Return candidate checked-out git dirs for submodule PATH.
+
+Search both the stable workflow worktree root and the canonical main checkout
+root, since one may have a fresher submodule checkout than the other."
+  (let* ((roots (cl-remove-duplicates
+                 (delq nil
+                       (list (gptel-auto-workflow--worktree-base-root)
+                             (gptel-auto-workflow--worktree-base-repo-root)))
+                 :test #'string=))
+         (git-dirs
+          (mapcar (lambda (root)
+                    (gptel-auto-workflow--submodule-checkout-git-dir-at-root root path))
+                  roots)))
+    (cl-remove-duplicates (delq nil git-dirs) :test #'string=)))
 
 (defun gptel-auto-workflow--worktree-base-git-common-dir ()
   "Return the git-common-dir for the stable workflow root."
@@ -2902,12 +2917,12 @@ When COMMIT is nil, only check that GIT-DIR exists."
   "Return a local git dir for submodule PATH that can materialize COMMIT.
 Prefer the current checkout when it is a standalone repo, then fall back to the
 superproject-managed `.git/modules/...` store."
-  (let* ((checkout-git-dir (gptel-auto-workflow--submodule-checkout-git-dir path))
+  (let* ((checkout-git-dirs (gptel-auto-workflow--submodule-checkout-git-dirs path))
          (repo-git-dir (gptel-auto-workflow--worktree-base-git-common-dir))
          (module-git-dir (and repo-git-dir
                               (expand-file-name (format "modules/%s" path) repo-git-dir)))
          (candidates (cl-remove-duplicates
-                      (delq nil (list checkout-git-dir module-git-dir))
+                      (append checkout-git-dirs (delq nil (list module-git-dir)))
                       :test #'string=)))
     (cl-find-if (lambda (git-dir)
                   (gptel-auto-workflow--git-dir-has-commit-p git-dir commit))
