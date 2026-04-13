@@ -102,6 +102,50 @@ EMACS="$(resolve_emacs)" || {
 ROOT_LISP=$(lisp_escape "$DIR")
 mkdir -p "$DIR/var/tmp/cron" "$DIR/var/tmp/experiments"
 
+path_exists_or_link() {
+    [ -e "$1" ] || [ -L "$1" ]
+}
+
+resolve_worktree_common_root() {
+    local common_dir
+
+    common_dir="$(git -C "$DIR" rev-parse --git-common-dir 2>/dev/null | awk 'NF { print; exit }')" || return 1
+    [ -n "$common_dir" ] || return 1
+    case "$common_dir" in
+        /*) ;;
+        *) common_dir="$(cd "$DIR/$common_dir" 2>/dev/null && pwd)" || return 1 ;;
+    esac
+    dirname "$common_dir"
+}
+
+seed_worker_daemon_shared_var() {
+    local common_root shared_var target_var entry target source rel
+
+    common_root="$(resolve_worktree_common_root)" || return 0
+    [ "$common_root" = "$DIR" ] && return 0
+
+    shared_var="$common_root/var"
+    target_var="$DIR/var"
+    [ -d "$shared_var/elpa" ] || return 0
+
+    mkdir -p "$target_var/elpa"
+    for source in "$shared_var"/elpa/*; do
+        [ -e "$source" ] || continue
+        target="$target_var/elpa/$(basename "$source")"
+        if ! path_exists_or_link "$target"; then
+            ln -s "$source" "$target"
+        fi
+    done
+
+    for rel in package-quickstart.el tree-sitter; do
+        source="$shared_var/$rel"
+        target="$target_var/$rel"
+        if [ -e "$source" ] && ! path_exists_or_link "$target"; then
+            ln -s "$source" "$target"
+        fi
+    done
+}
+
 default_status() {
     printf '(:running nil :kept 0 :total 0 :phase "idle" :results "var/tmp/experiments/%s/results.tsv")\n' "$(date +%F)"
 }
@@ -425,9 +469,10 @@ ensure_worker_daemon() {
     # Keep the dedicated workflow daemon truly headless. A GUI-attached Emacs
     # daemon can die when its X/Wayland connection disappears, which is fatal
     # for long-running cron/worker runs.
+    seed_worker_daemon_shared_var
     env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
         MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-        "$EMACS" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
+        "$EMACS" --init-directory="$DIR" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
     for _ in $(seq 1 50); do
         if check_worker_daemon; then
             rc=0

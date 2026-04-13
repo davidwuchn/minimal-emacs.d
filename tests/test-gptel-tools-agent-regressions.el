@@ -323,8 +323,77 @@ EXIT-CODE defaults to 1."
          (setq callback-result result)))
       (should (equal (mapcar #'car (nreverse git-calls))
                      '(:stage :commit)))
-      (should-not (car callback-result))
-      (should (equal (cdr callback-result) "Applied fix")))))
+       (should-not (car callback-result))
+       (should (equal (cdr callback-result) "Applied fix")))))
+
+(ert-deftest regression/auto-workflow/fix-review-issues-binds-optimize-worktree ()
+  "Review-fix retries should run in the optimize branch worktree, not the run root."
+  (let* ((gptel-auto-workflow-research-before-fix nil)
+         (worktree (make-temp-file "aw-review-worktree" t))
+         callback-result
+         captured-default-directory
+         captured-worktree)
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                   (lambda () "/tmp/project"))
+                  ((symbol-function 'gptel-auto-workflow--branch-worktree-paths)
+                   (lambda (_branch &optional _proj-root)
+                     (list worktree nil)))
+                  ((symbol-function 'gptel-auto-workflow--fix-directly)
+                   (lambda (_review-output callback &optional worktree-arg)
+                     (setq captured-default-directory default-directory
+                           captured-worktree worktree-arg)
+                     (funcall callback '(t . "Applied fix"))))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (gptel-auto-workflow--fix-review-issues
+           "optimize/test-branch"
+           "BLOCKED: review issue"
+           (lambda (result)
+             (setq callback-result result)))
+          (should (equal callback-result '(t . "Applied fix")))
+          (should (equal captured-default-directory worktree))
+          (should (equal captured-worktree worktree)))
+      (delete-directory worktree t))))
+
+(ert-deftest regression/auto-workflow/fix-directly-uses-provided-worktree-for-git-capture ()
+  "Direct review fixes should stage and commit in the provided worktree."
+  (let ((gptel-auto-experiment-use-subagents t)
+        callback-result
+        observed-dirs)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback)
+                 (push (list :agent default-directory) observed-dirs)
+                 (funcall callback "Applied fix")))
+              ((symbol-function 'gptel-auto-workflow--current-head-hash)
+               (lambda ()
+                 (push (list :head default-directory) observed-dirs)
+                 "before"))
+              ((symbol-function 'gptel-auto-workflow--worktree-dirty-p)
+               (lambda ()
+                 (push (list :dirty default-directory) observed-dirs)
+                 t))
+              ((symbol-function 'gptel-auto-workflow--git-step-success-p)
+               (lambda (&rest _args)
+                 (push (list :stage default-directory) observed-dirs)
+                 t))
+              ((symbol-function 'gptel-auto-workflow--commit-step-success-p)
+               (lambda (&rest _args)
+                 (push (list :commit default-directory) observed-dirs)
+                 t))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-workflow--fix-directly
+       "review blockers"
+       (lambda (result)
+         (setq callback-result result))
+       "/tmp/project/var/tmp/experiments/optimize/test-branch")
+      (should (car callback-result))
+      (dolist (entry observed-dirs)
+        (should (equal (cadr entry)
+                       "/tmp/project/var/tmp/experiments/optimize/test-branch"))))))
 
 (ert-deftest regression/auto-workflow/research-then-fix-requires-git-success ()
   "Researched review fixes should fail if git add/commit fails."
@@ -7168,7 +7237,7 @@ EXIT-CODE defaults to 1."
       (setq load-path orig-load-path))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-starts-worker-daemon-headless ()
-  "Wrapper should strip GUI display variables when starting the worker daemon."
+  "Wrapper should strip GUI display variables and bind the daemon init dir."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -7205,7 +7274,11 @@ EXIT-CODE defaults to 1."
           (with-temp-buffer
             (insert-file-contents emacs-log)
             (let ((output (buffer-string)))
-              (should (string-match-p "ARGV:--bg-daemon=copilot-auto-workflow" output))
+              (should (string-match-p
+                       (regexp-quote (format "ARGV:--init-directory=%s --bg-daemon=copilot-auto-workflow"
+                                             repo-root))
+                       output))
+              (should (string-match-p "--bg-daemon=copilot-auto-workflow" output))
               (should (string-match-p "^MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1$" output))
               (should-not (string-match-p "^DISPLAY=" output))
               (should-not (string-match-p "^WAYLAND_DISPLAY=" output))
@@ -7217,6 +7290,69 @@ EXIT-CODE defaults to 1."
         (delete-file argv-log))
       (when (file-exists-p emacs-log)
         (delete-file emacs-log)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-seeds-shared-var-for-worktree-daemon ()
+  "Wrapper should seed a linked worktree daemon with the shared package cache."
+  (let* ((temp-root (make-temp-file "aw-cron-root" t))
+         (script-dir (expand-file-name "scripts" temp-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
+         (base-root (make-temp-file "aw-base-root" t))
+         (base-git-dir (expand-file-name ".git" base-root))
+         (shared-elpa-entry (expand-file-name "var/elpa/treesit-auto-1" base-root))
+         (shared-quickstart (expand-file-name "var/package-quickstart.el" base-root))
+         (shared-treesit (expand-file-name "var/tree-sitter" base-root))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (daemon-ready (make-temp-name (expand-file-name "aw-daemon-ready" temporary-file-directory)))
+         (fake-git
+          (test-auto-workflow--write-shell-script
+           "fake-git"
+           (format "case \"$*\" in\n  *'rev-parse --git-common-dir'*) printf '%%s\\n' %s ;;\n  *) exit 1 ;;\nesac"
+                   (shell-quote-argument base-git-dir))))
+         (fake-emacsclient
+          (test-auto-workflow--write-shell-script
+           "fake-emacsclient"
+           (format "if [ -f %s ]; then exit 0; fi\nexit 1"
+                   (shell-quote-argument daemon-ready))))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "touch %s\nexit 0" (shell-quote-argument daemon-ready))))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH")))
+                  process-environment))
+         (default-directory temp-root))
+    (unwind-protect
+        (progn
+          (make-directory script-dir t)
+          (make-directory base-git-dir t)
+          (make-directory shared-elpa-entry t)
+          (make-directory shared-treesit t)
+          (with-temp-file (expand-file-name "treesit-auto.el" shared-elpa-entry)
+            (insert ";;; treesit-auto.el\n"))
+          (with-temp-file shared-quickstart
+            (insert ";;; package-quickstart.el\n"))
+          (copy-file (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root)
+                     script t)
+          (set-file-modes script #o755)
+          (rename-file fake-git (expand-file-name "git" fake-bin) t)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (shell-command-to-string (format "%s auto-workflow >/dev/null 2>&1 || true" script))
+          (let ((linked-elpa (expand-file-name "var/elpa/treesit-auto-1" temp-root))
+                (linked-quickstart (expand-file-name "var/package-quickstart.el" temp-root))
+                (linked-treesit (expand-file-name "var/tree-sitter" temp-root)))
+            (should (file-symlink-p linked-elpa))
+            (should (equal (file-truename linked-elpa) (file-truename shared-elpa-entry)))
+            (should (file-symlink-p linked-quickstart))
+            (should (equal (file-truename linked-quickstart) (file-truename shared-quickstart)))
+            (should (file-symlink-p linked-treesit))
+            (should (equal (file-truename linked-treesit) (file-truename shared-treesit)))))
+      (delete-directory temp-root t)
+      (delete-directory base-root t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p daemon-ready)
+        (delete-file daemon-ready)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-messages-uses-file-dump ()
   "Wrapper messages action should dump *Messages* to a file, not print buffer text inline."

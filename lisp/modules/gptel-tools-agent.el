@@ -3426,12 +3426,18 @@ REVIEW-OUTPUT contains the blocker/critical issues.
 Calls CALLBACK with (success-p . fix-output).
 If `gptel-auto-workflow-research-before-fix' is nil, executor handles directly."
   (let* ((proj-root (gptel-auto-workflow--project-root))
-         (default-directory proj-root))
+         (worktree (car (gptel-auto-workflow--branch-worktree-paths optimize-branch proj-root)))
+         (default-directory (or worktree proj-root)))
     (message "[auto-workflow] Fixing review issues (retry %d/%d)..."
              gptel-auto-workflow--review-retry-count gptel-auto-workflow--review-max-retries)
-    (if (not gptel-auto-workflow-research-before-fix)
-        (gptel-auto-workflow--fix-directly review-output callback)
-      (gptel-auto-workflow--research-then-fix review-output callback))))
+    (if (not (and (stringp worktree) (file-directory-p worktree)))
+        (funcall callback
+                 (cons nil
+                       (format "Error: Missing review fix worktree for %s"
+                               optimize-branch)))
+      (if (not gptel-auto-workflow-research-before-fix)
+          (gptel-auto-workflow--fix-directly review-output callback worktree)
+        (gptel-auto-workflow--research-then-fix review-output callback worktree)))))
 
 (defun gptel-auto-workflow--review-retryable-error-p (review-output)
   "Return non-nil when REVIEW-OUTPUT reflects a reviewer failure worth retrying.
@@ -3499,10 +3505,12 @@ PRE-FIX-HEAD is the current HEAD hash before the fixer runs."
         (message "[auto-workflow] Review fix returned without code changes or commit")))
     (cons (and success fix-captured) response)))
 
-(defun gptel-auto-workflow--fix-directly (review-output callback)
-  "Let executor fix REVIEW-OUTPUT issues directly (faster)."
+(defun gptel-auto-workflow--fix-directly (review-output callback &optional worktree)
+  "Let executor fix REVIEW-OUTPUT issues directly (faster).
+When WORKTREE is non-nil, run the fixer and git capture there."
   (let* ((proj-root (gptel-auto-workflow--project-root))
-         (default-directory proj-root)
+         (fix-root (or worktree proj-root))
+         (default-directory fix-root)
          (pre-fix-head (gptel-auto-workflow--current-head-hash))
          (fix-prompt (format "Fix the following issues in the code.
 
@@ -3529,14 +3537,16 @@ Focus only on the issues mentioned. Do not refactor or add features."
             (let ((response (if (stringp result) result (format "%S" result))))
               (funcall callback
                        (gptel-auto-workflow--finalize-review-fix-result
-                        response
-                        pre-fix-head)))))
-      (funcall callback (cons nil "No executor agent available")))))
+                         response
+                         pre-fix-head)))))
+       (funcall callback (cons nil "No executor agent available")))))
 
-(defun gptel-auto-workflow--research-then-fix (review-output callback)
-  "Use researcher to find approach, then executor to fix REVIEW-OUTPUT."
+(defun gptel-auto-workflow--research-then-fix (review-output callback &optional worktree)
+  "Use researcher to find approach, then executor to fix REVIEW-OUTPUT.
+When WORKTREE is non-nil, run both phases and git capture there."
   (let* ((proj-root (gptel-auto-workflow--project-root))
-         (default-directory proj-root)
+         (fix-root (or worktree proj-root))
+         (default-directory fix-root)
          (pre-fix-head (gptel-auto-workflow--current-head-hash))
          (research-prompt (format "Research the best approach to fix these issues:
 
