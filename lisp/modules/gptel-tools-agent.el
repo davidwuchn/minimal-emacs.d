@@ -2743,7 +2743,19 @@ NOTE: Staging branch is never deleted, only the worktree."
         (goto-char (point-min))
         (while (re-search-forward "^[[:space:]]*path = \\(.+\\)$" nil t)
           (push (string-trim (match-string 1)) paths))))
-    (nreverse paths)))
+     (nreverse paths)))
+
+(defun gptel-auto-workflow--worktree-needs-submodule-hydration-p (&optional worktree)
+  "Return non-nil when WORKTREE declares missing or empty top-level submodules."
+  (let ((root (or worktree gptel-auto-workflow--staging-worktree-dir)))
+    (and (stringp root)
+         (file-directory-p root)
+         (cl-some
+          (lambda (path)
+            (let ((target (expand-file-name path root)))
+              (or (not (file-directory-p target))
+                  (null (directory-files target nil directory-files-no-dot-files-regexp t)))))
+          (gptel-auto-workflow--staging-submodule-paths root)))))
 
 (defun gptel-auto-workflow--staging-submodule-gitlink-revision (worktree path)
   "Return the gitlink revision for PATH in WORKTREE, or nil."
@@ -2756,9 +2768,16 @@ NOTE: Staging branch is never deleted, only the worktree."
                (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" output))
       (match-string 1 output))))
 
+(defun gptel-auto-workflow--worktree-base-repo-root ()
+  "Return the canonical superproject root for the stable workflow root."
+  (let ((git-common-dir (gptel-auto-workflow--worktree-base-git-common-dir)))
+    (or (and git-common-dir
+             (file-name-directory (directory-file-name git-common-dir)))
+        (gptel-auto-workflow--worktree-base-root))))
+
 (defun gptel-auto-workflow--submodule-checkout-git-dir (path)
   "Return the absolute git-common-dir for the root checkout of submodule PATH."
-  (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
+  (let* ((proj-root (gptel-auto-workflow--worktree-base-repo-root))
          (checkout (expand-file-name path proj-root)))
     (when (file-directory-p checkout)
       (let* ((git-common-result
@@ -2767,9 +2786,25 @@ NOTE: Staging branch is never deleted, only the worktree."
                        (shell-quote-argument checkout))
                60))
              (git-common (string-trim (car git-common-result))))
-        (when (and (= 0 (cdr git-common-result))
-                   (not (string-empty-p git-common)))
-          (expand-file-name git-common checkout))))))
+         (when (and (= 0 (cdr git-common-result))
+                    (not (string-empty-p git-common)))
+           (expand-file-name git-common checkout))))))
+
+(defun gptel-auto-workflow--worktree-base-git-common-dir ()
+  "Return the git-common-dir for the stable workflow root."
+  (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
+         (git-common-result
+          (and proj-root
+               (gptel-auto-workflow--git-result
+                (format "git -C %s rev-parse --git-common-dir"
+                        (shell-quote-argument proj-root))
+                60)))
+         (git-common (and git-common-result
+                          (string-trim (car git-common-result)))))
+    (when (and git-common-result
+               (= 0 (cdr git-common-result))
+               (not (string-empty-p git-common)))
+      (expand-file-name git-common proj-root))))
 
 (defun gptel-auto-workflow--git-dir-has-commit-p (git-dir commit)
   "Return non-nil when GIT-DIR contains COMMIT.
@@ -2786,9 +2821,10 @@ When COMMIT is nil, only check that GIT-DIR exists."
   "Return a local git dir for submodule PATH that can materialize COMMIT.
 Prefer the current checkout when it is a standalone repo, then fall back to the
 superproject-managed `.git/modules/...` store."
-  (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
-         (checkout-git-dir (gptel-auto-workflow--submodule-checkout-git-dir path))
-         (module-git-dir (expand-file-name (format ".git/modules/%s" path) proj-root))
+  (let* ((checkout-git-dir (gptel-auto-workflow--submodule-checkout-git-dir path))
+         (repo-git-dir (gptel-auto-workflow--worktree-base-git-common-dir))
+         (module-git-dir (and repo-git-dir
+                              (expand-file-name (format "modules/%s" path) repo-git-dir)))
          (candidates (cl-remove-duplicates
                       (delq nil (list checkout-git-dir module-git-dir))
                       :test #'string=)))
@@ -4449,9 +4485,12 @@ Tests run in worktree if set, otherwise project root.
 Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (worktree (or (gptel-auto-workflow--get-worktree-dir gptel-auto-workflow--current-target)
-                       proj-root))
-         (hydrate-submodules-p (and proj-root worktree
-                                    (not (file-equal-p proj-root worktree))))
+                        proj-root))
+         (hydrate-submodules-p
+          (and worktree
+               (or (and proj-root
+                        (not (file-equal-p proj-root worktree)))
+                   (gptel-auto-workflow--worktree-needs-submodule-hydration-p worktree))))
          (default-directory worktree)
          (isolated-status-file (let ((path (make-temp-file "auto-workflow-status-" nil ".sexp")))
                                  (delete-file path)
@@ -4469,8 +4508,8 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
               (message "[auto-experiment] Test script not found or not executable: %s" test-script)
               (cons t "No test script - skipping"))
           (let* (;; Linked worktrees need the same shared-repo hydration that
-                 ;; staging uses; otherwise package submodules stay empty and
-                 ;; `require' fails before any ERT cases even run.
+                 ;; staging uses, and fresh project-root worktrees can also
+                 ;; arrive with gitlink directories that exist but are empty.
                  (hydrate-result (when hydrate-submodules-p
                                    (gptel-auto-workflow--hydrate-staging-submodules worktree)))
                  (hydrate-pass (or (not hydrate-submodules-p)

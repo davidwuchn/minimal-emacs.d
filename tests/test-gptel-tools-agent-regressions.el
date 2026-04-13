@@ -8075,9 +8075,47 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
             (should (equal hydrate-dir worktree))
             (should (equal captured-program
                            (expand-file-name "scripts/run-tests.sh" worktree)))
-            (should (equal captured-args '("unit"))))
+             (should (equal captured-args '("unit"))))
         (delete-directory proj-root t)
         (delete-directory worktree t)))))
+
+(ert-deftest regression/auto-experiment/run-tests-hydrates-project-root-submodules-when-empty ()
+  "Experiment tests should hydrate empty project-root submodule dirs before running."
+  (let* ((proj-root (make-temp-file "aw-tests-root" t))
+         hydrate-dir
+         captured-program
+         captured-args)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () proj-root))
+              ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-auto-workflow--worktree-needs-submodule-hydration-p)
+               (lambda (dir)
+                 (equal dir proj-root)))
+              ((symbol-function 'file-executable-p)
+               (lambda (_file) t))
+              ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
+               (lambda (dir)
+                 (setq hydrate-dir dir)
+                 (cons "Hydrated submodules" 0)))
+              ((symbol-function 'call-process)
+               (lambda (program _in buffer _display &rest args)
+                 (setq captured-program program)
+                 (setq captured-args args)
+                 (with-current-buffer buffer
+                   (insert "tests ok"))
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (unwind-protect
+          (let ((result (gptel-auto-experiment-run-tests)))
+            (should (car result))
+            (should (equal (cdr result) "tests ok"))
+            (should (equal hydrate-dir proj-root))
+            (should (equal captured-program
+                           (expand-file-name "scripts/run-tests.sh" proj-root)))
+            (should (equal captured-args '("unit"))))
+        (delete-directory proj-root t)))))
 
 (ert-deftest regression/auto-experiment/run-tests-fails-on-submodule-hydration-error ()
   "Experiment tests should fail fast when linked worktree submodules cannot be hydrated."
@@ -9360,6 +9398,66 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                    (cons "" 1))))))
       (should (equal (gptel-auto-workflow--shared-submodule-git-dir "packages/gptel-agent" "abc123")
                      "/tmp/project/packages/gptel-agent/.git"))
+      (should (seq-some (lambda (command)
+                          (equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir"))
+                        calls)))))
+
+(ert-deftest regression/auto-workflow/shared-submodule-git-dir-uses-worktree-common-git-dir ()
+  "Worktree roots should resolve shared submodule repos via git-common-dir."
+  (let ((project-root "/tmp/project-wt")
+        (calls nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () project-root))
+              ((symbol-function 'file-directory-p)
+               (lambda (path)
+                 (member path
+                         '("/tmp/project/.git"
+                           "/tmp/project/.git/modules/packages/gptel"))))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (push command calls)
+                 (cond
+                  ((equal command "git -C /tmp/project-wt rev-parse --git-common-dir")
+                   (cons "/tmp/project/.git\n" 0))
+                  ((equal command "git --git-dir=/tmp/project/.git/modules/packages/gptel cat-file -e abc123^{commit}")
+                   (cons "" 0))
+                  (t
+                   (cons "" 1))))))
+      (should (equal (gptel-auto-workflow--shared-submodule-git-dir "packages/gptel" "abc123")
+                     "/tmp/project/.git/modules/packages/gptel"))
+      (should (seq-some (lambda (command)
+                          (equal command "git -C /tmp/project-wt rev-parse --git-common-dir"))
+                        calls)))))
+
+(ert-deftest regression/auto-workflow/shared-submodule-git-dir-finds-standalone-checkout-via-worktree-common-dir ()
+  "Worktree roots should reuse standalone checkout repos from the main checkout."
+  (let ((project-root "/tmp/project-wt")
+        (calls nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () project-root))
+              ((symbol-function 'file-directory-p)
+               (lambda (path)
+                 (member path
+                         '("/tmp/project/.git"
+                           "/tmp/project/packages/gptel-agent"
+                           "/tmp/project/packages/gptel-agent/.git"))))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (push command calls)
+                 (cond
+                  ((equal command "git -C /tmp/project-wt rev-parse --git-common-dir")
+                   (cons "/tmp/project/.git\n" 0))
+                  ((equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir")
+                   (cons ".git\n" 0))
+                  ((equal command "git --git-dir=/tmp/project/packages/gptel-agent/.git cat-file -e abc123^{commit}")
+                   (cons "" 0))
+                  (t
+                   (cons "" 1))))))
+      (should (equal (gptel-auto-workflow--shared-submodule-git-dir "packages/gptel-agent" "abc123")
+                     "/tmp/project/packages/gptel-agent/.git"))
+      (should (seq-some (lambda (command)
+                          (equal command "git -C /tmp/project-wt rev-parse --git-common-dir"))
+                        calls))
       (should (seq-some (lambda (command)
                           (equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir"))
                         calls)))))
