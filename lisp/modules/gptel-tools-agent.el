@@ -6950,6 +6950,9 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--last-progress-time nil
   "Timestamp of last progress update.")
 
+(defvar gptel-auto-workflow--messages-start-pos nil
+  "Buffer position where the current workflow run's messages begin.")
+
 (defvar gptel-auto-workflow--max-stuck-minutes 30
   "Maximum minutes workflow can be stuck before auto-stopping.")
 
@@ -7025,6 +7028,11 @@ Relative paths are resolved from the project root."
         parsed-env
       gptel-auto-workflow-messages-chars)))
 
+(defun gptel-auto-workflow--mark-messages-start ()
+  "Mark the current end of *Messages* as the start of a new workflow run."
+  (with-current-buffer (get-buffer-create "*Messages*")
+    (setq gptel-auto-workflow--messages-start-pos (point-max))))
+
 (defun gptel-auto-workflow--persist-messages-tail ()
   "Persist the trailing *Messages* tail for non-blocking cron inspection."
   (let* ((file (gptel-auto-workflow--messages-file))
@@ -7033,9 +7041,16 @@ Relative paths are resolved from the project root."
     (when dir
       (make-directory dir t))
     (with-current-buffer (get-buffer-create "*Messages*")
-      (write-region (max (point-min) (- (point-max) max-chars))
-                    (point-max)
-                    file nil 'silent))))
+      (let* ((start-pos (cond
+                         ((integer-or-marker-p gptel-auto-workflow--messages-start-pos)
+                          (max (point-min)
+                               (min (point-max)
+                                    gptel-auto-workflow--messages-start-pos)))
+                         (t (point-min))))
+             (tail-start (max (point-min) (- (point-max) max-chars))))
+        (write-region (max start-pos tail-start)
+                     (point-max)
+                     file nil 'silent)))))
 
 (defun gptel-auto-workflow--status-plist ()
   "Return current workflow status as a plist."
@@ -7372,9 +7387,9 @@ Prevents workflow from hanging indefinitely due to callback failures."
               gptel-auto-workflow--run-project-root nil
               gptel-auto-workflow--current-project nil
               gptel-auto-workflow--current-target nil)
-        (setq gptel-auto-workflow--stats
-              (plist-put gptel-auto-workflow--stats :phase "idle"))
-        (gptel-auto-workflow--persist-status)
+    (setq gptel-auto-workflow--stats
+          (plist-put gptel-auto-workflow--stats :phase "idle"))
+    (gptel-auto-workflow--persist-status)
         (when gptel-auto-workflow--watchdog-timer
           (cancel-timer gptel-auto-workflow--watchdog-timer)
           (setq gptel-auto-workflow--watchdog-timer nil))
@@ -7643,6 +7658,8 @@ Usage:
           gptel-auto-workflow--running t
           gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
           gptel-auto-workflow--last-progress-time (current-time))
+    (unless gptel-auto-workflow--cron-job-running
+      (gptel-auto-workflow--mark-messages-start))
     (gptel-auto-workflow--start-status-refresh-timer)
     (gptel-auto-workflow--persist-status)
     ;; Start watchdog timer
