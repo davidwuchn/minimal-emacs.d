@@ -9,6 +9,7 @@
 
 (require 'cl-lib)
 (require 'pp)
+(require 'seq)
 (require 'subr-x)
 
 (require 'gptel nil t)
