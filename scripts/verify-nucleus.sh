@@ -9,7 +9,10 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EMACS=${EMACS:-emacs}
 ROOT_ELISP=$(printf '%s' "$DIR" | sed 's/\\/\\\\/g; s/"/\\"/g')
-TMP_ELISP=$(mktemp "${TMPDIR:-/tmp}/verify-nucleus.XXXXXX.el")
+TMP_ELISP=$(mktemp "${TMPDIR:-/tmp}/verify-nucleus.XXXXXX") || {
+    echo "Failed to create temporary verifier script" >&2
+    exit 1
+}
 
 cleanup() {
     rm -f "$TMP_ELISP"

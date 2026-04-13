@@ -49,9 +49,114 @@ EXIT-CODE defaults to 1."
               "import json, sys\n"
               (format "with Path(%S).open('a', encoding='utf-8') as handle:\n" log-file)
               "    handle.write(json.dumps(sys.argv) + \"\\n\")\n"
-               (format "raise SystemExit(%d)\n" (or exit-code 1))))
+                (format "raise SystemExit(%d)\n" (or exit-code 1))))
     (set-file-modes file #o755)
     file))
+
+(defun test-auto-workflow--write-fake-mktemp (name log-file counter-file)
+  "Create fake mktemp NAME that logs templates to LOG-FILE and returns temp files.
+COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique."
+  (test-auto-workflow--write-shell-script
+   name
+   (format
+    "log=%s\ncounter=%s\ncount=0\nif [ -f \"$counter\" ]; then count=$(cat \"$counter\"); fi\ncount=$((count + 1))\nprintf '%%s\\n' \"$count\" > \"$counter\"\nif [ \"$#\" -gt 0 ]; then printf '%%s\\n' \"$1\" >> \"$log\"; fi\npath=${TMPDIR:-/tmp}/fake-mktemp-$count\n: > \"$path\"\nprintf '%%s\\n' \"$path\"\n"
+    (shell-quote-argument log-file)
+    (shell-quote-argument counter-file))))
+
+(ert-deftest regression/auto-workflow/run-tests-uses-bsd-safe-mktemp-templates ()
+  "run-tests.sh should use BSD-safe mktemp templates without suffixes after Xs."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (script (expand-file-name "scripts/run-tests.sh" repo-root))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (mktemp-log (make-temp-file "aw-mktemp-log"))
+         (mktemp-counter (make-temp-file "aw-mktemp-counter"))
+         (fake-mktemp
+          (test-auto-workflow--write-fake-mktemp
+           "fake-mktemp" mktemp-log mktemp-counter))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           "printf 'Ran 1 tests, 1 results as expected, 0 unexpected, 0 skipped\\n'\n"))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (string-prefix-p "PATH=" entry))
+           process-environment))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH")))
+                  base-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-mktemp (expand-file-name "mktemp" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (shell-command-to-string (format "%s unit" script))
+          (let ((calls (with-temp-buffer
+                         (insert-file-contents mktemp-log)
+                         (split-string (buffer-string) "\n" t))))
+            (should (= (length calls) 2))
+            (should (member (format "%s/auto-workflow-test-status.XXXXXX"
+                                    (or (getenv "TMPDIR") "/tmp"))
+                            calls))
+            (should (member (format "%s/auto-workflow-test-messages.XXXXXX"
+                                    (or (getenv "TMPDIR") "/tmp"))
+                            calls))
+            (should-not (seq-some
+                         (lambda (call)
+                           (string-match-p "\\.XXXXXX\\.sexp\\'" call))
+                         calls))
+            (should-not (seq-some
+                         (lambda (call)
+                           (string-match-p "\\.XXXXXX\\.txt\\'" call))
+                         calls))))
+      (delete-directory fake-bin t)
+      (when (file-exists-p mktemp-log)
+        (delete-file mktemp-log))
+      (when (file-exists-p mktemp-counter)
+        (delete-file mktemp-counter)))))
+
+(ert-deftest regression/auto-workflow/verify-nucleus-uses-bsd-safe-mktemp-template ()
+  "verify-nucleus.sh should use a BSD-safe mktemp template without a suffix."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (script (expand-file-name "scripts/verify-nucleus.sh" repo-root))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (mktemp-log (make-temp-file "aw-mktemp-log"))
+         (mktemp-counter (make-temp-file "aw-mktemp-counter"))
+         (fake-mktemp
+          (test-auto-workflow--write-fake-mktemp
+           "fake-mktemp" mktemp-log mktemp-counter))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 0"))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (or (string-prefix-p "PATH=" entry)
+                 (string-prefix-p "EMACS=" entry)
+                 (string-prefix-p "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=" entry)))
+           process-environment))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "EMACS=%s" fake-emacs)
+                        "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1")
+                  base-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-mktemp (expand-file-name "mktemp" fake-bin) t)
+          (shell-command-to-string script)
+          (let ((calls (with-temp-buffer
+                         (insert-file-contents mktemp-log)
+                         (split-string (buffer-string) "\n" t))))
+            (should (= (length calls) 1))
+            (should (string-match-p "verify-nucleus\\.XXXXXX\\'" (car calls)))
+            (should-not (string-match-p "verify-nucleus\\.XXXXXX\\.el\\'" (car calls)))))
+      (delete-directory fake-bin t)
+      (when (file-exists-p mktemp-log)
+        (delete-file mktemp-log))
+      (when (file-exists-p mktemp-counter)
+        (delete-file mktemp-counter))
+      (when (file-exists-p fake-emacs)
+        (delete-file fake-emacs)))))
 
 (ert-deftest regression/auto-workflow/verify-nucleus-binds-worktree-root-before-early-init ()
   "verify-nucleus.sh should start from the worktree init dir before loading early-init."
