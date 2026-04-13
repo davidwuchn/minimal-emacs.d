@@ -320,7 +320,7 @@ Truncates accumulated output to last
   (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
          (limit gptel-agent-loop-continuation-context-limit)
          (len (length output))
-         (truncated (if (and (integerp limit) (> limit 0) (> len limit))
+         (truncated (if (and (integerp limit) (cl-plusp limit) (> len limit))
                         (concat "...[earlier output truncated]\n"
                                 (substring output (- len limit)))
                       output)))
