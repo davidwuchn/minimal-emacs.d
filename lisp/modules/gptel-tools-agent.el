@@ -5503,7 +5503,7 @@ name strings."
 (defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
   "Activate a per-run fallback for AGENT-TYPE when RESULT shows rate limiting."
   (when (and (gptel-auto-workflow--headless-provider-override-active-p)
-             (gptel-auto-experiment--rate-limit-error-p result))
+             (gptel-auto-experiment--provider-pressure-error-p result))
     (let* ((current-backend
             (gptel-auto-workflow--preset-backend-name
              (plist-get preset :backend)))
@@ -5552,6 +5552,15 @@ name strings."
          (string-match-p
           "rate_limit_error\\|usage limit exceeded\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429"
           error-output))))
+
+(defun gptel-auto-experiment--provider-pressure-error-p (error-output)
+  "Return non-nil when ERROR-OUTPUT suggests trying a fallback backend."
+  (or (gptel-auto-experiment--rate-limit-error-p error-output)
+      (and (stringp error-output)
+           (let ((case-fold-search t))
+             (string-match-p
+              "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
+              error-output)))))
 
 (defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
   "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."

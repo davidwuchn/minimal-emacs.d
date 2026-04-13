@@ -1744,6 +1744,106 @@ EXIT-CODE defaults to 1."
           (set 'gptel--deepseek old-deepseek)
         (makunbound 'gptel--deepseek)))))
 
+(ert-deftest regression/auto-workflow/provider-failover-activates-on-curl-exit-56 ()
+  "Headless provider failover should also activate on curl 56 transport errors."
+  (let* ((dashscope-backend
+          (gptel-make-openai "DashScope"
+            :host "coding.dashscope.aliyuncs.com"
+            :key (lambda () "token")
+            :models '(qwen3.5-plus qwen3.6-plus)))
+         (had-dashscope (boundp 'gptel--dashscope))
+         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+         (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
+         (curl-error
+          "Error: Task executor could not finish task \"x\". Error details: \"Curl failed with exit code 56. See Curl manpage for details.\"")
+         (gptel-auto-workflow--headless t)
+         (gptel-auto-workflow-persistent-headless t)
+         (gptel-auto-workflow--current-project "/tmp/project")
+         (gptel-auto-workflow-headless-fallback-agents
+          '("analyzer" "comparator" "executor" "grader" "reviewer"))
+         (gptel-auto-workflow-headless-subagent-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-executor-rate-limit-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow--rate-limited-backends nil)
+         (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
+    (unwind-protect
+        (progn
+          (set 'gptel--dashscope dashscope-backend)
+          (cl-letf (((symbol-function 'my/gptel-api-key)
+                     (lambda (host)
+                       (pcase host
+                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.minimaxi.com" "token")
+                         (_ nil))))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (gptel-auto-workflow--maybe-activate-rate-limit-failover
+             "executor" preset curl-error)
+            (should (member "MiniMax" gptel-auto-workflow--rate-limited-backends))
+            (let ((override
+                   (gptel-auto-workflow--maybe-override-subagent-provider
+                    "executor" preset)))
+              (should (eq (plist-get override :backend) dashscope-backend))
+              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+      (setq gptel-auto-workflow--rate-limited-backends nil
+            gptel-auto-workflow--runtime-subagent-provider-overrides nil)
+      (if had-dashscope
+          (set 'gptel--dashscope old-dashscope)
+        (makunbound 'gptel--dashscope)))))
+
+(ert-deftest regression/auto-workflow/provider-failover-activates-on-webclient-server-errors ()
+  "Headless provider failover should activate on retryable server transport errors."
+  (let* ((dashscope-backend
+          (gptel-make-openai "DashScope"
+            :host "coding.dashscope.aliyuncs.com"
+            :key (lambda () "token")
+            :models '(qwen3.5-plus qwen3.6-plus)))
+         (had-dashscope (boundp 'gptel--dashscope))
+         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+         (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
+         (server-error
+          "Error: Task executor could not finish task \"x\". Error details: (:code \"system_error\" :message \"org.springframework.web.reactive.function.client.WebClientRequestException\" :param :null :type \"server_error\")")
+         (gptel-auto-workflow--headless t)
+         (gptel-auto-workflow-persistent-headless t)
+         (gptel-auto-workflow--current-project "/tmp/project")
+         (gptel-auto-workflow-headless-fallback-agents
+          '("analyzer" "comparator" "executor" "grader" "reviewer"))
+         (gptel-auto-workflow-headless-subagent-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-executor-rate-limit-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow--rate-limited-backends nil)
+         (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
+    (unwind-protect
+        (progn
+          (set 'gptel--dashscope dashscope-backend)
+          (cl-letf (((symbol-function 'my/gptel-api-key)
+                     (lambda (host)
+                       (pcase host
+                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.minimaxi.com" "token")
+                         (_ nil))))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (gptel-auto-workflow--maybe-activate-rate-limit-failover
+             "executor" preset server-error)
+            (should (member "MiniMax" gptel-auto-workflow--rate-limited-backends))
+            (let ((override
+                   (gptel-auto-workflow--maybe-override-subagent-provider
+                    "executor" preset)))
+              (should (eq (plist-get override :backend) dashscope-backend))
+              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+      (setq gptel-auto-workflow--rate-limited-backends nil
+            gptel-auto-workflow--runtime-subagent-provider-overrides nil)
+      (if had-dashscope
+          (set 'gptel--dashscope old-dashscope)
+        (makunbound 'gptel--dashscope)))))
+
 (ert-deftest regression/auto-workflow/executor-rate-limit-failover-promotes-runtime-fallback ()
   "Executor should fail over after a DashScope rate-limit error in headless mode."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
