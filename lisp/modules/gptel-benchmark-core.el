@@ -238,9 +238,7 @@ If SCORES is provided, uses it directly instead of re-extracting from R."
 (defun gptel-benchmark--accumulate-score (total score)
   "Accumulate SCORE into TOTAL.
 Returns the new accumulated total.
-SCORE must be a number or nil; non-numeric values signal error."
-  (unless (or (numberp score) (null score))
-    (signal 'wrong-type-argument (list '(or numberp null) score)))
+SCORE must be a number or nil; non-numeric values are treated as 0."
   (+ total (if (numberp score) score 0)))
 
 (defun gptel-benchmark--accumulate-scores (totals scores-alist)
