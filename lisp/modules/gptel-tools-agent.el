@@ -2192,6 +2192,15 @@ Monthly subscription: 2 for fail-fast, try more different files."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-experiment-min-quality-gain-on-score-tie 0.10
+  "Minimum code-quality gain required to keep a tied benchmark score.
+
+Tied Eight Keys scores should only be kept when code quality improves by at
+least this amount and the combined score still improves."
+  :type 'number
+  :safe #'numberp
+  :group 'gptel-tools-agent)
+
 (defcustom gptel-auto-experiment-use-subagents t
   "Use analyzer/grader/comparator subagents."
   :type 'boolean
@@ -5182,6 +5191,30 @@ THRESHOLD defaults to 0.005 and matches the comparator prompt rules."
      ((<= combined-delta (- decision-threshold)) "A")
      (t "tie"))))
 
+(defun gptel-auto-experiment--decision-gate
+    (winner score-before score-after quality-before quality-after combined-before combined-after
+            &optional threshold)
+  "Return gated comparator decision metadata for WINNER.
+
+The gate rejects any score regression, and also rejects score ties unless code
+quality improves by at least
+`gptel-auto-experiment-min-quality-gain-on-score-tie' while the combined score
+still improves."
+  (let* ((decision-threshold (or threshold 0.005))
+         (score-delta (- score-after score-before))
+         (quality-delta (- quality-after quality-before))
+         (combined-delta (- combined-after combined-before)))
+    (if (<= score-delta (- decision-threshold))
+        (list :winner "A"
+              :note "Rejected: score regressed")
+      (if (and (< (abs score-delta) decision-threshold)
+               (> combined-delta 0)
+               (< quality-delta gptel-auto-experiment-min-quality-gain-on-score-tie))
+          (list :winner "A"
+                :note (format "Rejected: score tie without >= %.2f quality gain"
+                              gptel-auto-experiment-min-quality-gain-on-score-tie))
+        (list :winner winner)))))
+
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
 CALLBACK receives keep/discard decision with reasoning.
@@ -5196,9 +5229,18 @@ The comparator subagent overlay will appear in the current buffer at time of cal
          (combined-before (+ (* 0.6 score-before) (* 0.4 quality-before)))
          (combined-after (+ (* 0.6 score-after) (* 0.4 quality-after)))
          (decision-threshold 0.005)
-         (expected-winner
+         (numeric-winner
           (gptel-auto-experiment--expected-comparator-winner
-           combined-before combined-after decision-threshold)))
+           combined-before combined-after decision-threshold))
+         (gated-decision
+          (gptel-auto-experiment--decision-gate
+           numeric-winner
+           score-before score-after
+           quality-before quality-after
+           combined-before combined-after
+           decision-threshold))
+         (expected-winner (plist-get gated-decision :winner))
+         (gate-note (plist-get gated-decision :note)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (let ((compare-prompt (format "Compare these two experiment results and decide which is better.
@@ -5233,37 +5275,45 @@ Then on a new line, briefly explain why (1 sentence)."
              "Compare experiment results"
              compare-prompt
              (lambda (result)
-               (let* ((response (if (stringp result) result (format "%S" result)))
-                      (reported-winner (or (gptel-auto-experiment--parse-comparator-winner response)
-                                           "unparsed"))
-                      (winner expected-winner)
-                      (override (not (string= reported-winner expected-winner)))
-                      (keep (string= winner "B")))
-                 (my/gptel--invoke-callback-safely
-                  callback
-                  (list :keep keep
-                        :reasoning (format "%sWinner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                           (if override
-                                               (format "Comparator override: %s -> %s | "
-                                                       reported-winner winner)
-                                             "")
+                (let* ((response (if (stringp result) result (format "%S" result)))
+                       (reported-winner (or (gptel-auto-experiment--parse-comparator-winner response)
+                                            "unparsed"))
+                       (winner expected-winner)
+                       (override (not (string= reported-winner expected-winner)))
+                       (keep (string= winner "B")))
+                  (my/gptel--invoke-callback-safely
+                   callback
+                   (list :keep keep
+                         :reasoning (format "%sWinner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
+                                            (if override
+                                                (format "Comparator override: %s -> %s | "
+                                                        reported-winner winner)
+                                              "")
                                            winner score-before score-after
                                            quality-before quality-after
-                                           combined-before combined-after)
+                                           combined-before combined-after
+                                           (if gate-note
+                                               (format " | %s" gate-note)
+                                             ""))
                         :improvement (list :score (- score-after score-before)
                                            :quality (- quality-after quality-before)
-                                           :combined (- combined-after combined-before)))))))))
-      (let ((keep (>= (- combined-after combined-before) 0.005)))
+                                            :combined (- combined-after combined-before)))))))))
+      (let ((winner expected-winner)
+            (keep (string= expected-winner "B")))
         (my/gptel--invoke-callback-safely
          callback
-         (list :keep keep
-                :reasoning (format "Local: Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                   score-before score-after
-                                   quality-before quality-after
-                                   combined-before combined-after)
-                :improvement (list :score (- score-after score-before)
-                                   :quality (- quality-after quality-before)
-                                   :combined (- combined-after combined-before))))))))
+          (list :keep keep
+                 :reasoning (format "Local: Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
+                                    winner
+                                    score-before score-after
+                                    quality-before quality-after
+                                    combined-before combined-after
+                                    (if gate-note
+                                        (format " | %s" gate-note)
+                                      ""))
+                 :improvement (list :score (- score-after score-before)
+                                    :quality (- quality-after quality-before)
+                                    :combined (- combined-after combined-before))))))))
 
 (defun gptel-auto-experiment--strong-grade-pass-p (grade-score grade-total)
   "Return non-nil when GRADE-SCORE reflects a strong pass.
