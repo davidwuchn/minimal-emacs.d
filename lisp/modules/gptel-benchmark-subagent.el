@@ -438,9 +438,13 @@ FALLBACK defaults to nil if not provided."
 (defun gptel-benchmark--parse-analysis-response (response)
   "Parse analyzer RESPONSE into plist."
   (let ((parsed (gptel-benchmark--parse-json-response response)))
-    (list :patterns (cdr (assq 'patterns parsed))
-          :issues (cdr (assq 'issues parsed))
-          :recommendations (cdr (assq 'recommendations parsed)))))
+    (if (listp parsed)
+        (list :patterns (cdr (assq 'patterns parsed))
+              :issues (cdr (assq 'issues parsed))
+              :recommendations (cdr (assq 'recommendations parsed)))
+      (list :patterns nil
+            :issues nil
+            :recommendations nil))))
 
 ;;; Executor Subagent
 
@@ -586,15 +590,16 @@ Analyze and output JSON:
 
 (defun gptel-benchmark--parse-comparison-response (response)
   "Parse comparator RESPONSE into plist."
-  (let* ((parsed (gptel-benchmark--parse-json-response response))
-         (winner (cdr (assq 'winner parsed)))
-         (improvement (cdr (assq 'improvement parsed)))
-         (analysis (cdr (assq 'analysis parsed)))
-         (recommendation (cdr (assq 'recommendation parsed))))
-    (list :winner winner
-          :improvement improvement
-          :analysis analysis
-          :recommendation recommendation)))
+  (let* ((parsed (gptel-benchmark--parse-json-response response)))
+    (if (listp parsed)
+        (list :winner (cdr (assq 'winner parsed))
+              :improvement (cdr (assq 'improvement parsed))
+              :analysis (cdr (assq 'analysis parsed))
+              :recommendation (cdr (assq 'recommendation parsed)))
+      (list :winner nil
+            :improvement nil
+            :analysis nil
+            :recommendation nil))))
 
 (defun gptel-benchmark-ab-test (name-a results-a name-b results-b callback)
   "Run A/B test comparing RESULTS-A (name NAME-A) vs RESULTS-B (name NAME-B).
