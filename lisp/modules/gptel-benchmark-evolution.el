@@ -182,8 +182,11 @@ Choose which principle mutation to apply."
   (let ((opportunity (plist-get orientation :evolution-opportunity)))
     (if opportunity
         (let ((principle (assq opportunity gptel-benchmark-evolution-principles)))
-          (list :principle opportunity
-                :mutation (plist-get (cdr principle) :mutation)))
+          (if principle
+              (list :principle opportunity
+                    :mutation (plist-get (cdr principle) :mutation))
+            (list :principle 'self-improve
+                  :mutation (plist-get (cdr (assq 'self-improve gptel-benchmark-evolution-principles)) :mutation))))
       (list :principle 'self-improve
             :mutation (plist-get (cdr (assq 'self-improve gptel-benchmark-evolution-principles)) :mutation)))))
 
