@@ -7414,6 +7414,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (messages-file (make-temp-file "aw-messages-tail"))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (argv-log (make-temp-file "aw-emacsclient-argv"))
          (fake-emacsclient
@@ -7422,9 +7423,10 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
          (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
          (process-environment
-          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
-                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
-                  process-environment))
+           (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" messages-file))
+                   process-environment))
          (default-directory repo-root))
     (unwind-protect
         (progn
@@ -7453,12 +7455,22 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                              (string-match-p
                               (regexp-quote "gptel-auto-workflow-bootstrap-run root \"auto-workflow\"")
                               elisp)
+                             (string-match-p
+                              (regexp-quote (format "(setenv \"AUTO_WORKFLOW_STATUS_FILE\" \"%s\")"
+                                                    status-file))
+                              elisp)
+                             (string-match-p
+                              (regexp-quote (format "(setenv \"AUTO_WORKFLOW_MESSAGES_FILE\" \"%s\")"
+                                                    messages-file))
+                              elisp)
                              (not (string-match-p "\n" elisp))))
-                      elisp-payloads))))
-      (delete-directory status-dir t)
-        (delete-directory fake-bin t)
-        (when (file-exists-p argv-log)
-          (delete-file argv-log)))))
+                       elisp-payloads))))
+       (delete-directory status-dir t)
+         (delete-directory fake-bin t)
+         (when (file-exists-p messages-file)
+           (delete-file messages-file))
+         (when (file-exists-p argv-log)
+           (delete-file argv-log)))))
 
 (ert-deftest regression/auto-workflow/bootstrap-run-seeds-load-path-and-dispatches ()
   "Bootstrap helper should add repo-local load paths and queue the requested action."
@@ -7775,6 +7787,115 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (delete-file emacs-log))
        (when (file-exists-p messages-file)
          (delete-file messages-file)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-isolates-default-snapshots-by-server ()
+  "Default persisted status/messages files should not collide across daemon servers."
+  (let* ((temp-root (make-temp-file "aw-cron-root" t))
+         (script-dir (expand-file-name "scripts" temp-root))
+         (cron-dir (expand-file-name "var/tmp/cron" temp-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
+         (auto-status-file (expand-file-name "auto-workflow-status.sexp" cron-dir))
+         (auto-messages-file (expand-file-name "auto-workflow-messages-tail.txt" cron-dir))
+         (research-status-file (expand-file-name "copilot-researcher-status.sexp" cron-dir))
+         (research-messages-file (expand-file-name "copilot-researcher-messages-tail.txt" cron-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (fake-emacsclient
+          (let ((file (make-temp-file "fake-emacsclient" nil ".py")))
+            (with-temp-file file
+              (insert "#!/usr/bin/env python3\n"
+                      "from pathlib import Path\n"
+                      "import json, sys\n"
+                      (format "argv_log = Path(%S)\n" argv-log)
+                      "argv_log.parent.mkdir(parents=True, exist_ok=True)\n"
+                      "with argv_log.open('a', encoding='utf-8') as handle:\n"
+                      "    handle.write(json.dumps(sys.argv) + \"\\n\")\n"
+                      "server = sys.argv[sys.argv.index('-s') + 1] if '-s' in sys.argv else ''\n"
+                      "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                      "if expr == 't':\n"
+                      "    print('t')\n"
+                      "elif 'gptel-auto-workflow--status-plist' in expr:\n"
+                      "    if server == 'copilot-researcher':\n"
+                      "        print('(:running t :kept 0 :total 1 :phase \"running\" :run-id \"2026-04-13T190001Z-research\" :results \"var/tmp/experiments/research/results.tsv\")')\n"
+                      "    else:\n"
+                      "        print('(:running t :kept 1 :total 5 :phase \"running\" :run-id \"2026-04-13T190001Z-auto\" :results \"var/tmp/experiments/auto/results.tsv\")')\n"
+                      "else:\n"
+                      "    raise SystemExit(1)\n"))
+            (set-file-modes file #o755)
+            file))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (or (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" entry)))
+           process-environment))
+         (path-entry (format "PATH=%s:%s" fake-bin (getenv "PATH")))
+         auto-status-count
+         research-status-count
+         (default-directory temp-root))
+    (unwind-protect
+        (progn
+          (make-directory script-dir t)
+          (make-directory cron-dir t)
+          (copy-file (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root)
+                     script t)
+          (set-file-modes script #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file auto-messages-file
+            (insert "auto workflow messages\n"))
+          (with-temp-file research-messages-file
+            (insert "research workflow messages\n"))
+          (let ((process-environment (append (list path-entry) base-environment)))
+            (let ((output (shell-command-to-string (format "%s status" script))))
+              (should (string-match-p "2026-04-13T190001Z-auto" output)))
+            (setq auto-status-count
+                  (with-temp-buffer
+                    (insert-file-contents argv-log)
+                    (length (split-string (buffer-string) "\n" t))))
+            (let ((output (shell-command-to-string (format "%s messages" script))))
+              (should (string-match-p "auto workflow messages" output)))
+            (should
+             (= auto-status-count
+                (with-temp-buffer
+                  (insert-file-contents argv-log)
+                  (length (split-string (buffer-string) "\n" t))))))
+          (let ((process-environment
+                 (append (list path-entry
+                               "AUTO_WORKFLOW_EMACS_SERVER=copilot-researcher")
+                         base-environment)))
+            (let ((output (shell-command-to-string (format "%s status" script))))
+              (should (string-match-p "2026-04-13T190001Z-research" output)))
+            (setq research-status-count
+                  (with-temp-buffer
+                    (insert-file-contents argv-log)
+                    (length (split-string (buffer-string) "\n" t))))
+            (let ((output (shell-command-to-string (format "%s messages" script))))
+              (should (string-match-p "research workflow messages" output)))
+            (should
+             (= research-status-count
+                (with-temp-buffer
+                  (insert-file-contents argv-log)
+                  (length (split-string (buffer-string) "\n" t))))))
+          (with-temp-buffer
+            (insert-file-contents auto-status-file)
+            (should (string-match-p "2026-04-13T190001Z-auto" (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents research-status-file)
+            (should (string-match-p "2026-04-13T190001Z-research" (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents argv-log)
+            (should (string-match-p "copilot-auto-workflow" (buffer-string)))
+            (should (string-match-p "copilot-researcher" (buffer-string)))))
+      (delete-directory temp-root t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-caches-daemon-snapshot-paths ()
   "Wrapper status should cache daemon snapshot paths for later messages reads."

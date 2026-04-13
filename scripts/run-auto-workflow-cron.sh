@@ -10,9 +10,13 @@ case "$ACTION" in
     research) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-copilot-researcher}" ;;
     *) SERVER_NAME="${AUTO_WORKFLOW_EMACS_SERVER:-copilot-auto-workflow}" ;;
 esac
-STATUS_FILE="${AUTO_WORKFLOW_STATUS_FILE:-$DIR/var/tmp/cron/auto-workflow-status.sexp}"
+case "$SERVER_NAME" in
+    copilot-auto-workflow) SNAPSHOT_NAME="auto-workflow" ;;
+    *) SNAPSHOT_NAME="$SERVER_NAME" ;;
+esac
+STATUS_FILE="${AUTO_WORKFLOW_STATUS_FILE:-$DIR/var/tmp/cron/${SNAPSHOT_NAME}-status.sexp}"
 DAEMON_LOG="$DIR/var/tmp/cron/${SERVER_NAME}.log"
-MESSAGES_FILE="${AUTO_WORKFLOW_MESSAGES_FILE:-$DIR/var/tmp/cron/auto-workflow-messages-tail.txt}"
+MESSAGES_FILE="${AUTO_WORKFLOW_MESSAGES_FILE:-$DIR/var/tmp/cron/${SNAPSHOT_NAME}-messages-tail.txt}"
 MESSAGES_CHARS="${AUTO_WORKFLOW_MESSAGES_CHARS:-16000}"
 SNAPSHOT_PATHS_FILE="${AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE:-$DIR/var/tmp/cron/${SERVER_NAME}-snapshot-paths.txt}"
 
@@ -387,6 +391,21 @@ wrap_emacs_eval() {
     local env_elisp=""
     local ssh_auth_sock="${SSH_AUTH_SOCK:-}"
     local git_ssh_command="${GIT_SSH_COMMAND:-}"
+    local status_file="$STATUS_FILE"
+    local messages_file="$MESSAGES_FILE"
+
+    case "$ACTION" in
+        status|messages) ;;
+        *)
+            if [ -n "$status_file" ]; then
+                env_elisp="$env_elisp (setenv \"AUTO_WORKFLOW_STATUS_FILE\" \"$(lisp_escape "$status_file")\")"
+            fi
+
+            if [ -n "$messages_file" ]; then
+                env_elisp="$env_elisp (setenv \"AUTO_WORKFLOW_MESSAGES_FILE\" \"$(lisp_escape "$messages_file")\")"
+            fi
+            ;;
+    esac
 
     if [ -n "$ssh_auth_sock" ]; then
         env_elisp="$env_elisp (setenv \"SSH_AUTH_SOCK\" \"$(lisp_escape "$ssh_auth_sock")\")"
@@ -432,6 +451,8 @@ refresh_snapshot_paths_from_daemon() {
     IFS=$'\t' read -r daemon_status daemon_messages <<<"$payload"
     [ -n "$daemon_status" ] || return 1
     [ -n "$daemon_messages" ] || return 1
+    [ -d "$(dirname "$daemon_status")" ] || return 1
+    [ -d "$(dirname "$daemon_messages")" ] || return 1
     STATUS_FILE="$daemon_status"
     MESSAGES_FILE="$daemon_messages"
     save_cached_snapshot_paths "$STATUS_FILE" "$MESSAGES_FILE"
