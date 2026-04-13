@@ -57,38 +57,6 @@ load_cached_snapshot_paths() {
     return 0
 }
 
-cached_snapshot_path_is_isolated_test_artifact() {
-    local path="$1"
-    local base
-
-    base="$(basename "$path")"
-    case "$base" in
-        auto-workflow-test-status.*|auto-workflow-test-messages.*)
-            return 0
-            ;;
-    esac
-    return 1
-}
-
-restore_default_snapshot_paths_when_cached_missing() {
-    local default_status="$1"
-    local default_messages="$2"
-
-    if [ "$STATUS_FILE" != "$default_status" ] &&
-       [ -r "$default_status" ] &&
-       { [ ! -r "$STATUS_FILE" ] ||
-         cached_snapshot_path_is_isolated_test_artifact "$STATUS_FILE"; }; then
-        STATUS_FILE="$default_status"
-    fi
-
-    if [ "$MESSAGES_FILE" != "$default_messages" ] &&
-       [ -r "$default_messages" ] &&
-       { [ ! -r "$MESSAGES_FILE" ] ||
-         cached_snapshot_path_is_isolated_test_artifact "$MESSAGES_FILE"; }; then
-        MESSAGES_FILE="$default_messages"
-    fi
-}
-
 resolve_emacsclient() {
     if command -v emacsclient >/dev/null 2>&1; then
         command -v emacsclient
@@ -498,10 +466,9 @@ prime_snapshot_paths_for_action() {
     local shared_messages="$DIR/var/tmp/cron/auto-workflow-messages-tail.txt"
 
     if [ -n "${AUTO_WORKFLOW_STATUS_FILE:-}" ] || [ -n "${AUTO_WORKFLOW_MESSAGES_FILE:-}" ]; then
-        :
+        save_cached_snapshot_paths "$STATUS_FILE" "$MESSAGES_FILE" >/dev/null 2>&1 || true
     elif [ "$ACTION" = "status" ] || [ "$ACTION" = "messages" ]; then
         load_cached_snapshot_paths || true
-        restore_default_snapshot_paths_when_cached_missing "$default_status" "$default_messages"
         if [ "$default_status" != "$shared_status" ] &&
            [ "$STATUS_FILE" = "$shared_status" ] &&
            [ -r "$default_status" ]; then
