@@ -669,7 +669,13 @@ Takes the minimum of `my/gptel-payload-byte-limit' and the model-specific
 context limit from `my/gptel-model-context-bytes'."
   (let* ((model (plist-get info :model))
          (global-limit (or my/gptel-payload-byte-limit 999999999))
-         (model-limit (or (alist-get model my/gptel-model-context-bytes) 999999999)))
+         (model-limit
+          (if (stringp model)
+              (or (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
+                           when (string-match-p (symbol-name pattern) model)
+                           return limit)
+                  999999999)
+            999999999)))
     (min global-limit model-limit)))
 
 (defun my/gptel--compact-payload (fsm)
