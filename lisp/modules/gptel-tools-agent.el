@@ -3534,11 +3534,12 @@ Focus only on the issues mentioned. Do not refactor or add features."
          "Fix review issues"
          fix-prompt
          (lambda (result)
-            (let ((response (if (stringp result) result (format "%S" result))))
-              (funcall callback
-                       (gptel-auto-workflow--finalize-review-fix-result
-                         response
-                         pre-fix-head)))))
+             (let ((default-directory fix-root)
+                   (response (if (stringp result) result (format "%S" result))))
+               (funcall callback
+                        (gptel-auto-workflow--finalize-review-fix-result
+                          response
+                          pre-fix-head)))))
        (funcall callback (cons nil "No executor agent available")))))
 
 (defun gptel-auto-workflow--research-then-fix (review-output callback &optional worktree)
@@ -3569,8 +3570,9 @@ Do NOT make changes. Only research and report findings."
          "Research fix approach"
          research-prompt
          (lambda (research-result)
-            (let* ((research-response (if (stringp research-result) research-result (format "%S" research-result)))
-                   (fix-prompt (format "Apply fixes based on this research:
+             (let* ((default-directory fix-root)
+                    (research-response (if (stringp research-result) research-result (format "%S" research-result)))
+                    (fix-prompt (format "Apply fixes based on this research:
 
 RESEARCH FINDINGS:
 %s
@@ -3586,16 +3588,17 @@ INSTRUCTIONS:
 5. If you cannot apply a real code change, reply with 'Error: no fix applied'"
                                         (truncate-string-to-width research-response 1000 nil nil "...")
                                         (truncate-string-to-width review-output 500 nil nil "..."))))
-               (gptel-benchmark-call-subagent
-                'executor
-                "Apply researched fixes"
-                fix-prompt
-                (lambda (result)
-                  (let ((response (if (stringp result) result (format "%S" result))))
-                    (funcall callback
-                             (gptel-auto-workflow--finalize-review-fix-result
-                              response
-                              pre-fix-head))))))))
+                (gptel-benchmark-call-subagent
+                 'executor
+                 "Apply researched fixes"
+                 fix-prompt
+                 (lambda (result)
+                   (let ((default-directory fix-root)
+                         (response (if (stringp result) result (format "%S" result))))
+                     (funcall callback
+                              (gptel-auto-workflow--finalize-review-fix-result
+                               response
+                               pre-fix-head))))))))
       (funcall callback (cons nil "No subagent available")))))
 
 (defun gptel-auto-workflow--ensure-on-main-branch ()

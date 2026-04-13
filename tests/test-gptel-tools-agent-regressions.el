@@ -359,14 +359,63 @@ EXIT-CODE defaults to 1."
 (ert-deftest regression/auto-workflow/fix-directly-uses-provided-worktree-for-git-capture ()
   "Direct review fixes should stage and commit in the provided worktree."
   (let ((gptel-auto-experiment-use-subagents t)
-        callback-result
-        observed-dirs)
+         callback-result
+        observed-dirs
+        pending-callback
+        (worktree "/tmp/project/var/tmp/experiments/optimize/test-branch"))
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () "/tmp/project"))
               ((symbol-function 'gptel-benchmark-call-subagent)
-               (lambda (_agent _description _prompt callback)
-                 (push (list :agent default-directory) observed-dirs)
-                 (funcall callback "Applied fix")))
+                (lambda (_agent _description _prompt callback)
+                  (push (list :agent default-directory) observed-dirs)
+                  (setq pending-callback callback)))
+              ((symbol-function 'gptel-auto-workflow--current-head-hash)
+               (lambda ()
+                  (push (list :head default-directory) observed-dirs)
+                 "before"))
+              ((symbol-function 'gptel-auto-workflow--worktree-dirty-p)
+               (lambda ()
+                 (push (list :dirty default-directory) observed-dirs)
+                 t))
+              ((symbol-function 'gptel-auto-workflow--git-step-success-p)
+               (lambda (&rest _args)
+                 (push (list :stage default-directory) observed-dirs)
+                 t))
+              ((symbol-function 'gptel-auto-workflow--commit-step-success-p)
+               (lambda (&rest _args)
+                 (push (list :commit default-directory) observed-dirs)
+                 t))
+               ((symbol-function 'message)
+                (lambda (&rest _args) nil)))
+      (gptel-auto-workflow--fix-directly
+       "review blockers"
+       (lambda (result)
+          (setq callback-result result))
+       worktree)
+      (should (functionp pending-callback))
+      (let ((default-directory "/tmp/outside"))
+        (funcall pending-callback "Applied fix"))
+      (should (car callback-result))
+      (dolist (entry observed-dirs)
+        (should (equal (cadr entry)
+                       worktree))))))
+
+(ert-deftest regression/auto-workflow/research-then-fix-uses-provided-worktree-for-async-callbacks ()
+  "Researched review fixes should keep git capture in the provided worktree."
+  (let ((gptel-auto-experiment-use-subagents t)
+        callback-result
+        observed-dirs
+        researcher-callback
+        executor-callback
+        (worktree "/tmp/project/var/tmp/experiments/optimize/test-branch"))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (agent _description _prompt callback)
+                 (push (list agent default-directory) observed-dirs)
+                 (pcase agent
+                   ('researcher (setq researcher-callback callback))
+                   ('executor (setq executor-callback callback)))))
               ((symbol-function 'gptel-auto-workflow--current-head-hash)
                (lambda ()
                  (push (list :head default-directory) observed-dirs)
@@ -385,15 +434,21 @@ EXIT-CODE defaults to 1."
                  t))
               ((symbol-function 'message)
                (lambda (&rest _args) nil)))
-      (gptel-auto-workflow--fix-directly
+      (gptel-auto-workflow--research-then-fix
        "review blockers"
        (lambda (result)
          (setq callback-result result))
-       "/tmp/project/var/tmp/experiments/optimize/test-branch")
+       worktree)
+      (should (functionp researcher-callback))
+      (let ((default-directory "/tmp/outside"))
+        (funcall researcher-callback "Research findings"))
+      (should (functionp executor-callback))
+      (let ((default-directory "/tmp/outside"))
+        (funcall executor-callback "Applied researched fix"))
       (should (car callback-result))
       (dolist (entry observed-dirs)
         (should (equal (cadr entry)
-                       "/tmp/project/var/tmp/experiments/optimize/test-branch"))))))
+                       worktree))))))
 
 (ert-deftest regression/auto-workflow/research-then-fix-requires-git-success ()
   "Researched review fixes should fail if git add/commit fails."
