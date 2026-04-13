@@ -123,7 +123,7 @@ resolve_worktree_common_root() {
 }
 
 seed_worker_daemon_shared_var() {
-    local common_root shared_var target_var entry target source rel
+    local common_root shared_var target_var source rel target
 
     common_root="$(resolve_worktree_common_root)" || return 0
     [ "$common_root" = "$DIR" ] && return 0
