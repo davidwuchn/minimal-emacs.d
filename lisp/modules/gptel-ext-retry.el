@@ -632,17 +632,17 @@ EDGE CASE: TRIM-FN may return nil or 0 — handled gracefully."
     (> (symbol-value bytes-var) bytes-limit)))
 
 (defconst my/gptel-model-context-bytes
-  '((kimi-k2\.5        . 400000)   ; 131K tokens ≈ 460KB, leave room for output
-    (kimi-for-coding    . 400000)
-    (qwen3\.5-plus      . 400000)   ; 131K tokens
-    (qwen3-coder-next   . 400000)
-    (qwen3-coder-plus   . 3000000)   ; 1M tokens ≈ 3.5MB, leave room for output
-    (qwen3-max-2026-01-23 . 400000)
-    (glm-5              . 350000)   ; 128K tokens
-    (glm-4\.7            . 350000)
-    (MiniMax-M2\.5       . 300000)
-    (deepseek-chat      . 200000)   ; 64K tokens
-    (deepseek-reasoner  . 200000))
+  '(("kimi-k2.5"          . 400000)   ; 131K tokens ≈ 460KB, leave room for output
+    ("kimi-for-coding"    . 400000)
+    ("qwen3.5-plus"       . 400000)   ; 131K tokens
+    ("qwen3-coder-next"   . 400000)
+    ("qwen3-coder-plus"   . 3000000)  ; 1M tokens ≈ 3.5MB, leave room for output
+    ("qwen3-max-2026-01-23" . 400000)
+    ("glm-5"              . 350000)   ; 128K tokens
+    ("glm-4.7"            . 350000)
+    ("MiniMax-M2.5"       . 300000)
+    ("deepseek-chat"      . 200000)   ; 64K tokens
+    ("deepseek-reasoner"  . 200000))
   "Approximate max JSON byte size per model.
 
 Computed as context window × ~3.5 bytes/token, minus output reservation.
