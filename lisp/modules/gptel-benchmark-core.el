@@ -238,27 +238,20 @@ If SCORES is provided, uses it directly instead of re-extracting from R."
 (defun gptel-benchmark--accumulate-score (total score)
   "Accumulate SCORE into TOTAL.
 Returns the new accumulated total.
-SCORE must be a number or nil; non-numeric values are treated as 0
-with a warning logged for debugging."
-  (if (numberp score)
-      (+ total score)
-    (when score
-      (message "[benchmark] Non-numeric score %S treated as 0" score))
-    total))
+SCORE must be a number or nil; non-numeric values are treated as 0."
+  (+ total (if (numberp score) score 0)))
 
 (defun gptel-benchmark--accumulate-scores (totals scores-alist)
   "Accumulate scores from SCORES-ALIST into TOTALS in place.
 TOTALS is an alist of (score-type . accumulated-value) that is mutated.
 SCORES-ALIST is an alist of (score-type . current-score).
 Returns TOTALS for chaining.
-Handles nil or invalid SCORES-ALIST gracefully."
-  (when (listp scores-alist)
-    (dolist (pair totals totals)
-      (let ((type (car pair)))
-        (setcdr pair (gptel-benchmark--accumulate-score
-                      (cdr pair)
-                      (alist-get type scores-alist))))))
-  totals)
+Handles nil scores by treating them as 0."
+  (dolist (pair totals totals)
+    (let ((type (car pair)))
+      (setcdr pair (gptel-benchmark--accumulate-score
+                    (cdr pair)
+                    (alist-get type scores-alist))))))
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist or alist.
@@ -272,8 +265,8 @@ Handles both plist format (keyword keys) and alist format (symbol or keyword key
 
 (defun gptel-benchmark--calculate-average (score-totals total score-type)
   "Calculate average for SCORE-TYPE from SCORE-TOTALS over TOTAL items.
-Returns 0.0 if TOTAL is zero or if SCORE-TYPE is not found in SCORE-TOTALS."
-  (if (and (> total 0) (assoc score-type score-totals))
+Returns 0.0 if TOTAL is zero to avoid division by zero."
+  (if (> total 0)
       (/ (alist-get score-type score-totals) (float total))
     0.0))
 
@@ -281,7 +274,7 @@ Returns 0.0 if TOTAL is zero or if SCORE-TYPE is not found in SCORE-TOTALS."
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores.
 Returns plist with :total-tests, :passed-tests, and average scores."
-  (if (or gptel-benchmark--cancelled (null results) (not (listp results)))
+  (if (or gptel-benchmark--cancelled (null results))
       (append (list :total-tests 0 :passed-tests 0)
               (mapcan (lambda (m) (list (cdr m) 0.0))
                       gptel-benchmark--score-type-averages))
