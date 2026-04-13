@@ -7024,13 +7024,13 @@ EXIT-CODE defaults to 1."
          (emacs-log (make-temp-file "aw-emacs-log"))
          (fake-emacsclient
           (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 1))
-         (fake-emacs
-          (test-auto-workflow--write-shell-script
-           "fake-emacs"
-           (format "printf 'ARGV:%s\\n' \"$*\" >> %s\nenv | grep -E '^(DISPLAY|WAYLAND_DISPLAY|WAYLAND_SOCKET|XAUTHORITY)=' >> %s || true\nexit 1"
-                   "%s"
-                   (shell-quote-argument emacs-log)
-                   (shell-quote-argument emacs-log))))
+          (fake-emacs
+           (test-auto-workflow--write-shell-script
+            "fake-emacs"
+            (format "printf 'ARGV:%s\\n' \"$*\" >> %s\nenv | grep -E '^(DISPLAY|WAYLAND_DISPLAY|WAYLAND_SOCKET|XAUTHORITY|MINIMAL_EMACS_ALLOW_SECOND_DAEMON)=' >> %s || true\nexit 1"
+                    "%s"
+                    (shell-quote-argument emacs-log)
+                    (shell-quote-argument emacs-log))))
          (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
          (process-environment
           (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
@@ -7053,6 +7053,7 @@ EXIT-CODE defaults to 1."
             (insert-file-contents emacs-log)
             (let ((output (buffer-string)))
               (should (string-match-p "ARGV:--bg-daemon=copilot-auto-workflow" output))
+              (should (string-match-p "^MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1$" output))
               (should-not (string-match-p "^DISPLAY=" output))
               (should-not (string-match-p "^WAYLAND_DISPLAY=" output))
               (should-not (string-match-p "^WAYLAND_SOCKET=" output))
