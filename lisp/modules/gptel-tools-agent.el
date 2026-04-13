@@ -3073,14 +3073,16 @@ superproject-managed `.git/modules/...` store."
                     (let ((default-directory worktree))
                       (setq exit-code
                             (if (file-exists-p test-script)
-                                (call-process "bash" nil buffer nil test-script "unit")
+                                (gptel-auto-workflow--call-process-with-watchdog
+                                 "bash" nil buffer nil test-script "unit")
                               0))
                       (setq verify-exit-code
                             (if (file-exists-p verify-script)
                                 (let ((process-environment
                                        (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
                                              process-environment)))
-                                  (call-process "bash" nil buffer nil verify-script))
+                                  (gptel-auto-workflow--call-process-with-watchdog
+                                   "bash" nil buffer nil verify-script))
                               0))
                       (setq output (with-current-buffer buffer (buffer-string)))
                       (setq failed-tests (gptel-auto-workflow--extract-failed-tests output))
@@ -4072,12 +4074,14 @@ Returns (success-p . output)."
                   (with-current-buffer output-buffer
                     (insert (car submodules) "\n"))))
              (test-result (when (and submodule-pass test-script (file-exists-p test-script))
-                            (call-process "bash" nil output-buffer nil test-script "unit")))
+                             (gptel-auto-workflow--call-process-with-watchdog
+                              "bash" nil output-buffer nil test-script "unit")))
              (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
                               (let ((process-environment
                                      (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
                                            process-environment)))
-                                (call-process "bash" nil output-buffer nil verify-script))))
+                                (gptel-auto-workflow--call-process-with-watchdog
+                                 "bash" nil output-buffer nil verify-script))))
              (test-pass (and submodule-pass
                              (or (not (and test-script (file-exists-p test-script)))
                                  (eq test-result 0))))
@@ -4773,11 +4777,13 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                 (progn
                   (with-current-buffer output-buffer
                     (insert (car hydrate-result) "\n"))
-                  (message "[auto-experiment] ✗ Submodule hydration failed: %s"
-                           (my/gptel--sanitize-for-logging (car hydrate-result) 200))
+              (message "[auto-experiment] ✗ Submodule hydration failed: %s"
+                       (my/gptel--sanitize-for-logging (car hydrate-result) 200))
                   (cons nil (with-current-buffer output-buffer (buffer-string))))
               (message "[auto-experiment] Running tests...")
-              (let ((exit-code (call-process test-script nil output-buffer nil "unit")))
+              (let ((exit-code
+                     (gptel-auto-workflow--call-process-with-watchdog
+                      test-script nil output-buffer nil "unit")))
                 (with-current-buffer output-buffer
                   (setq result (cons (zerop exit-code) (buffer-string))))
                 (when (car result)
@@ -7399,6 +7405,33 @@ Prevents workflow from hanging indefinitely due to callback failures."
   "Update progress timestamp for watchdog tracking."
   (setq gptel-auto-workflow--last-progress-time (current-time)))
 
+(defun gptel-auto-workflow--restart-watchdog-timer ()
+  "Restart the workflow watchdog timer if a workflow run is active."
+  (when (timerp gptel-auto-workflow--watchdog-timer)
+    (cancel-timer gptel-auto-workflow--watchdog-timer))
+  (setq gptel-auto-workflow--watchdog-timer nil)
+  (when (or gptel-auto-workflow--running
+            gptel-auto-workflow--cron-job-running)
+    (setq gptel-auto-workflow--watchdog-timer
+          (run-with-timer 300 300 #'gptel-auto-workflow--watchdog-check))))
+
+(defun gptel-auto-workflow--call-process-with-watchdog (program &optional infile destination display &rest args)
+  "Run blocking PROGRAM while pausing the workflow watchdog.
+
+This avoids false watchdog force-stops when long local verification phases block
+Emacs long enough for a queued watchdog check to fire immediately afterward."
+  (let ((workflow-active (or gptel-auto-workflow--running
+                             gptel-auto-workflow--cron-job-running)))
+    (when workflow-active
+      (when (timerp gptel-auto-workflow--watchdog-timer)
+        (cancel-timer gptel-auto-workflow--watchdog-timer))
+      (setq gptel-auto-workflow--watchdog-timer nil))
+    (unwind-protect
+        (apply #'call-process program infile destination display args)
+      (when workflow-active
+        (gptel-auto-workflow--update-progress)
+        (gptel-auto-workflow--restart-watchdog-timer)))))
+
 (defun gptel-auto-workflow--stop-status-refresh-timer ()
   "Cancel the active workflow status refresh timer, if any."
   (when (timerp gptel-auto-workflow--status-refresh-timer)
@@ -7613,10 +7646,7 @@ Usage:
     (gptel-auto-workflow--start-status-refresh-timer)
     (gptel-auto-workflow--persist-status)
     ;; Start watchdog timer
-    (when gptel-auto-workflow--watchdog-timer
-      (cancel-timer gptel-auto-workflow--watchdog-timer))
-    (setq gptel-auto-workflow--watchdog-timer
-          (run-with-timer 300 300 #'gptel-auto-workflow--watchdog-check))
+    (gptel-auto-workflow--restart-watchdog-timer)
     (if targets
         (gptel-auto-workflow--run-with-targets targets completion-callback)
       (require 'gptel-auto-workflow-strategic)
