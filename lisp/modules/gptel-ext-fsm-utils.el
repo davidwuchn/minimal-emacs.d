@@ -287,8 +287,8 @@ improving testability and reducing cognitive load."
                    ((consp obj)
                     (prog1 t
                       (puthash obj t seen)
-                      (append (collect (car obj))
-                              (collect (cdr obj)))))
+                      (or (collect (car obj))
+                          (collect (cdr obj)))))
                    (t nil))))
       (delq nil (collect object)))))
 
@@ -377,7 +377,7 @@ Returns t on success, signals error on failure."
                      (lookup-fsm (gethash id my/gptel--fsm-registry)))
                  (unless (and (equal lookup-id id)
                               (eq lookup-fsm fsm))
-                   (error "FSM registry invariant violated: bidirectional mismatch for FSM %s" fsm))))
+                   (error "FSM registry invariant violated: bidirectional mismatch for FSM %s" id))))
              fsm-to-id)
     ;; Check unique IDs: no FSM should be mapped by multiple IDs
     (maphash (lambda (_id fsm)
