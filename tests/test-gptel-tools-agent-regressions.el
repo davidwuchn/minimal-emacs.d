@@ -464,7 +464,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
 (ert-deftest regression/auto-workflow/fix-directly-uses-provided-worktree-for-git-capture ()
   "Direct review fixes should stage and commit in the provided worktree."
   (let ((gptel-auto-experiment-use-subagents t)
-         callback-result
+        callback-result
         observed-dirs
         pending-callback
         (worktree "/tmp/project/var/tmp/experiments/optimize/test-branch"))
@@ -498,12 +498,50 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (setq callback-result result))
        worktree)
       (should (functionp pending-callback))
-      (let ((default-directory "/tmp/outside"))
-        (funcall pending-callback "Applied fix"))
-      (should (car callback-result))
-      (dolist (entry observed-dirs)
-        (should (equal (cadr entry)
-                       worktree))))))
+       (let ((default-directory "/tmp/outside"))
+         (funcall pending-callback "Applied fix"))
+       (should (car callback-result))
+       (dolist (entry observed-dirs)
+         (should (equal (cadr entry)
+                        (file-name-as-directory worktree)))))))
+
+(ert-deftest regression/auto-workflow/fix-directly-routes-subagent-through-worktree-buffer ()
+  "Direct review fixes should dispatch the executor from the optimize worktree buffer."
+  (let* ((gptel-auto-experiment-use-subagents t)
+         (worktree "/tmp/project/var/tmp/experiments/optimize/test-branch")
+         (worktree-buffer (generate-new-buffer " *aw-review-fix-worktree*"))
+         callback-result
+         observed-buffer
+         observed-dir)
+    (unwind-protect
+        (progn
+          (with-current-buffer worktree-buffer
+            (setq default-directory worktree))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                     (lambda () "/tmp/project"))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                     (lambda (_dir) worktree-buffer))
+                    ((symbol-function 'gptel-benchmark-call-subagent)
+                     (lambda (_agent _description _prompt callback)
+                       (setq observed-buffer (current-buffer)
+                             observed-dir default-directory)
+                       (funcall callback "Applied fix")))
+                    ((symbol-function 'gptel-auto-workflow--finalize-review-fix-result)
+                     (lambda (_response _pre-fix-head)
+                       '(t . "Applied fix")))
+                    ((symbol-function 'message)
+                     (lambda (&rest _args) nil)))
+            (gptel-auto-workflow--fix-directly
+             "review blockers"
+             (lambda (result)
+               (setq callback-result result))
+             worktree)
+            (should (equal callback-result '(t . "Applied fix")))
+            (should (eq observed-buffer worktree-buffer))
+            (should (equal observed-dir
+                           (file-name-as-directory worktree)))))
+      (when (buffer-live-p worktree-buffer)
+        (kill-buffer worktree-buffer)))))
 
 (ert-deftest regression/auto-workflow/research-then-fix-uses-provided-worktree-for-async-callbacks ()
   "Researched review fixes should keep git capture in the provided worktree."
@@ -548,12 +586,51 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (let ((default-directory "/tmp/outside"))
         (funcall researcher-callback "Research findings"))
       (should (functionp executor-callback))
-      (let ((default-directory "/tmp/outside"))
-        (funcall executor-callback "Applied researched fix"))
-      (should (car callback-result))
-      (dolist (entry observed-dirs)
-        (should (equal (cadr entry)
-                       worktree))))))
+       (let ((default-directory "/tmp/outside"))
+         (funcall executor-callback "Applied researched fix"))
+       (should (car callback-result))
+       (dolist (entry observed-dirs)
+         (should (equal (cadr entry)
+                        (file-name-as-directory worktree)))))))
+
+(ert-deftest regression/auto-workflow/research-then-fix-routes-subagents-through-worktree-buffer ()
+  "Researched review fixes should dispatch both subagents from the optimize worktree buffer."
+  (let* ((gptel-auto-experiment-use-subagents t)
+         (worktree "/tmp/project/var/tmp/experiments/optimize/test-branch")
+         (worktree-buffer (generate-new-buffer " *aw-review-fix-research*"))
+         callback-result
+         observed-calls)
+    (unwind-protect
+        (progn
+          (with-current-buffer worktree-buffer
+            (setq default-directory worktree))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                     (lambda () "/tmp/project"))
+                    ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                     (lambda (_dir) worktree-buffer))
+                    ((symbol-function 'gptel-benchmark-call-subagent)
+                     (lambda (agent _description _prompt callback)
+                       (push (list agent (current-buffer) default-directory) observed-calls)
+                       (pcase agent
+                         ('researcher (funcall callback "Research findings"))
+                         ('executor (funcall callback "Applied fix")))))
+                    ((symbol-function 'gptel-auto-workflow--finalize-review-fix-result)
+                     (lambda (_response _pre-fix-head)
+                       '(t . "Applied fix")))
+                    ((symbol-function 'message)
+                     (lambda (&rest _args) nil)))
+            (gptel-auto-workflow--research-then-fix
+             "review blockers"
+             (lambda (result)
+               (setq callback-result result))
+             worktree)
+            (should (equal callback-result '(t . "Applied fix")))
+            (dolist (entry observed-calls)
+              (should (eq (nth 1 entry) worktree-buffer))
+              (should (equal (nth 2 entry)
+                             (file-name-as-directory worktree))))))
+      (when (buffer-live-p worktree-buffer)
+        (kill-buffer worktree-buffer)))))
 
 (ert-deftest regression/auto-workflow/research-then-fix-requires-git-success ()
   "Researched review fixes should fail if git add/commit fails."
@@ -8518,6 +8595,103 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda (&rest _) nil)))
       (should-not (gptel-auto-workflow--merge-to-staging "optimize/test-exp1"))
       (should-not git-called))))
+
+(ert-deftest regression/auto-workflow/refresh-staging-base-with-main-hydrates-submodules-before-merge ()
+  "Staging refresh should hydrate submodules before merging main into staging."
+  (let ((events nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--ensure-staging-submodules-ready)
+               (lambda (worktree)
+                 (push (list 'hydrate worktree) events)
+                 t))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (cond
+                  ((string-match-p "git merge --ff-only" command)
+                   (push 'ff-only events)
+                   (cons "fatal: Not possible to fast-forward, aborting." 1))
+                  ((string-match-p "git merge -X theirs" command)
+                   (push 'merge events)
+                   (cons "" 0))
+                  (t
+                   (cons "" 0)))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (let ((default-directory "/tmp/staging/"))
+        (should (gptel-auto-workflow--refresh-staging-base-with-main "origin/main")))
+      (should (equal (nreverse events)
+                     '((hydrate "/tmp/staging/")
+                       ff-only
+                       merge))))))
+
+(ert-deftest regression/auto-workflow/refresh-staging-base-with-main-aborts-when-submodules-cannot-hydrate ()
+  "Staging refresh should fail before merge when submodule hydration fails."
+  (let ((git-called nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--ensure-staging-submodules-ready)
+               (lambda (_worktree) nil))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (&rest _args)
+                 (setq git-called t)
+                 (cons "" 0)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (let ((default-directory "/tmp/staging/"))
+        (should-not (gptel-auto-workflow--refresh-staging-base-with-main "origin/main")))
+      (should-not git-called))))
+
+(ert-deftest regression/auto-workflow/refresh-staging-base-with-main-resolves-ancestor-submodule-conflict ()
+  "Staging refresh should keep the descendant gitlink when a submodule conflict is ancestry-safe."
+  (let ((commands nil)
+        (aborted nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--ensure-staging-submodules-ready)
+               (lambda (_worktree) t))
+              ((symbol-function 'gptel-auto-workflow--staging-submodule-paths)
+               (lambda (&optional _worktree) '("packages/gptel-agent")))
+              ((symbol-function 'gptel-auto-workflow--shared-submodule-git-dir)
+               (lambda (_path &optional _commit) "/tmp/gptel-agent.git"))
+              ((symbol-function 'file-directory-p)
+               (lambda (path)
+                 (member path '("/tmp/staging/" "/tmp/gptel-agent.git"))))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (push command commands)
+                 (cond
+                  ((string-match-p "git merge --ff-only" command)
+                   (cons "fatal: Not possible to fast-forward, aborting." 1))
+                  ((string-match-p "git merge -X theirs .*origin/main.*--no-ff" command)
+                   (cons "Failed to merge submodule packages/gptel-agent (commits don't follow merge-base)" 1))
+                  ((string-match-p "git diff --name-only --diff-filter=U" command)
+                   (cons "packages/gptel-agent\n" 0))
+                  ((string-match-p "git ls-files -u -- packages/gptel-agent" command)
+                   (cons (mapconcat #'identity
+                                    '("160000 56262f99d52dc86ca0b800e8066856f61660d188 1\tpackages/gptel-agent"
+                                      "160000 001ef93f22cd389b32ed1a3efc16086fd16f9764 2\tpackages/gptel-agent"
+                                      "160000 15b2454cbdd2fb397f49675c5707d89a40f1cd90 3\tpackages/gptel-agent")
+                                    "\n")
+                         0))
+                  ((string-match-p "git --git-dir=/tmp/gptel-agent.git merge-base --is-ancestor 001ef93f22cd389b32ed1a3efc16086fd16f9764 15b2454cbdd2fb397f49675c5707d89a40f1cd90" command)
+                   (cons "" 1))
+                  ((string-match-p "git --git-dir=/tmp/gptel-agent.git merge-base --is-ancestor 15b2454cbdd2fb397f49675c5707d89a40f1cd90 001ef93f22cd389b32ed1a3efc16086fd16f9764" command)
+                   (cons "" 0))
+                  ((string-match-p "git update-index --cacheinfo 160000 001ef93f22cd389b32ed1a3efc16086fd16f9764 packages/gptel-agent" command)
+                   (cons "" 0))
+                  ((string-match-p "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1 git commit --no-edit" command)
+                   (cons "" 0))
+                  (t
+                   (cons "" 0)))))
+              ((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (command &optional _timeout)
+                 (when (string-match-p "git merge --abort" command)
+                   (setq aborted t))
+                 ""))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (let ((default-directory "/tmp/staging/"))
+        (should (gptel-auto-workflow--refresh-staging-base-with-main "origin/main")))
+      (should-not aborted)
+      (setq commands (nreverse commands))
+      (should (member "git diff --name-only --diff-filter=U" commands))
+      (should (member "git update-index --cacheinfo 160000 001ef93f22cd389b32ed1a3efc16086fd16f9764 packages/gptel-agent" commands))
+      (should (member "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1 git commit --no-edit" commands)))))
 
 (ert-deftest regression/auto-workflow/prepare-staging-merge-base-skips-checkout-when-already-on-staging ()
   "Preparing staging should reset directly when already on the staging branch."
