@@ -81,6 +81,7 @@ cat >"$TMP_ELISP" <<EOF
 EOF
 
 $EMACS -Q --batch \
+       --eval "(let ((root (file-name-as-directory \"$ROOT_ELISP\"))) (setq minimal-emacs-user-directory root user-emacs-directory root))" \
        -l "$DIR/early-init.el" \
        -l "$TMP_ELISP"
 
