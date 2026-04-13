@@ -460,13 +460,31 @@ refresh_snapshot_paths_from_daemon() {
 }
 
 prime_snapshot_paths_for_action() {
+    local default_status="$STATUS_FILE"
+    local default_messages="$MESSAGES_FILE"
+    local shared_status="$DIR/var/tmp/cron/auto-workflow-status.sexp"
+    local shared_messages="$DIR/var/tmp/cron/auto-workflow-messages-tail.txt"
+
     if [ -n "${AUTO_WORKFLOW_STATUS_FILE:-}" ] || [ -n "${AUTO_WORKFLOW_MESSAGES_FILE:-}" ]; then
         save_cached_snapshot_paths "$STATUS_FILE" "$MESSAGES_FILE" >/dev/null 2>&1 || true
     elif [ "$ACTION" = "status" ] || [ "$ACTION" = "messages" ]; then
         load_cached_snapshot_paths || true
+        if [ "$default_status" != "$shared_status" ] &&
+           [ "$STATUS_FILE" = "$shared_status" ] &&
+           [ -r "$default_status" ]; then
+            STATUS_FILE="$default_status"
+        fi
+        if [ "$default_messages" != "$shared_messages" ] &&
+           [ "$MESSAGES_FILE" = "$shared_messages" ] &&
+           [ -r "$default_messages" ]; then
+            MESSAGES_FILE="$default_messages"
+        fi
+        save_cached_snapshot_paths "$STATUS_FILE" "$MESSAGES_FILE" >/dev/null 2>&1 || true
         if [ "$ACTION" = "messages" ] && [ ! -r "$MESSAGES_FILE" ]; then
             refresh_snapshot_paths_from_daemon >/dev/null 2>&1 || true
         fi
+    else
+        save_cached_snapshot_paths "$STATUS_FILE" "$MESSAGES_FILE" >/dev/null 2>&1 || true
     fi
     refresh_messages_lisp
 }
