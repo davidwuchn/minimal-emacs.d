@@ -568,6 +568,45 @@ EXIT-CODE defaults to 1."
     (should (string-match-p "Comparator override: unparsed -> B" (plist-get decision :reasoning)))
     (should (string-match-p "Winner: B" (plist-get decision :reasoning)))))
 
+(ert-deftest regression/auto-experiment/promotes-non-regressing-correctness-fix-ties ()
+  "Non-regressing ties should be kept when grading shows a real bug fix."
+  (let ((decision
+         (gptel-auto-experiment--promote-correctness-fix-decision
+          '(:keep nil
+            :reasoning "Winner: tie"
+            :improvement (:score 0.0 :quality 0.01 :combined 0.0))
+          t 8 9
+          "Fixes a bug where the sync path double-wraps runtime errors.")))
+    (should (plist-get decision :keep))
+    (should (string-match-p
+             "Override: keep non-regressing high-confidence tie with passing tests"
+             (plist-get decision :reasoning)))))
+
+(ert-deftest regression/auto-experiment/does-not-promote-non-correctness-ties ()
+  "Non-correctness ties should still be discarded."
+  (let ((decision
+         (gptel-auto-experiment--promote-correctness-fix-decision
+          '(:keep nil
+            :reasoning "Winner: tie"
+            :improvement (:score 0.0 :quality 0.01 :combined 0.0))
+          t 8 9
+          "Improves clarity and testability without changing behavior.")))
+    (should-not (plist-get decision :keep))))
+
+(ert-deftest regression/auto-experiment/promotes-perfect-grade-ties ()
+  "Perfect non-regressing ties should be kept even without bug-keyword phrasing."
+  (let ((decision
+         (gptel-auto-experiment--promote-correctness-fix-decision
+          '(:keep nil
+            :reasoning "Winner: tie"
+            :improvement (:score 0.0 :quality 0.0 :combined 0.0))
+          t 9 9
+          "Improves clarity and testability without changing behavior.")))
+    (should (plist-get decision :keep))
+    (should (string-match-p
+             "Override: keep non-regressing high-confidence tie with passing tests"
+             (plist-get decision :reasoning)))))
+
 (ert-deftest regression/auto-experiment/grade-late-timeout-is-ignored ()
   "Successful grading should suppress any later timeout callback."
   (let* ((outcome (test-auto-workflow--exercise-grade-callback-order
@@ -2885,8 +2924,84 @@ EXIT-CODE defaults to 1."
           (should result)
           (should (plist-get result :kept))
           (should (equal (plist-get result :comparator-reason) "Winner: B"))
-          (should (cl-some (lambda (cmd) (string-match-p "git commit -m" cmd))
-                           commit-commands)))
+           (should (cl-some (lambda (cmd) (string-match-p "git commit -m" cmd))
+                            commit-commands)))
+       (delete-directory temp-dir t))))
+
+(ert-deftest regression/auto-experiment/run-promotes-correctness-fix-on-tie ()
+  "Experiment run should keep a non-regressing tie when grading proves a bug fix."
+  (let ((callback-count 0)
+        (track-count 0)
+        (result nil)
+        (temp-dir (make-temp-file "exp-worktree" t))
+        (gptel-auto-experiment-auto-push nil)
+        (gptel-auto-workflow-use-staging nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (lambda (_target _experiment-id) temp-dir))
+                  ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results cb)
+                     (funcall cb '(:patterns nil))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _args) "prompt"))
+                  ((symbol-function 'run-with-timer)
+                   (lambda (&rest _args) :fake-timer))
+                  ((symbol-function 'cancel-timer)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                   (lambda (_timeout cb &rest _args)
+                     (funcall cb "HYPOTHESIS: fix real bug")))
+                  ((symbol-function 'gptel-auto-experiment-grade)
+                   (lambda (_output cb &rest _args)
+                     (funcall cb
+                              '(:score 9
+                                :total 9
+                                :passed t
+                                :details "Fixes two genuine bugs in current code."))))
+                  ((symbol-function 'gptel-auto-experiment-benchmark)
+                   (lambda (&rest _args)
+                     '(:passed t :nucleus-passed t :tests-passed t :eight-keys 0.4)))
+                  ((symbol-function 'gptel-auto-experiment-decide)
+                   (lambda (_before _after cb)
+                     (funcall cb
+                              '(:keep nil
+                                :reasoning "Winner: tie | Score: 0.40 -> 0.40, Quality: 0.75 -> 0.76, Combined: 0.54 -> 0.54"
+                                :improvement (:score 0.0 :quality 0.01 :combined 0.0)))))
+                  ((symbol-function 'gptel-auto-experiment--code-quality-score)
+                   (lambda () 0.76))
+                  ((symbol-function 'gptel-auto-experiment-log-tsv)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-workflow--track-commit)
+                   (lambda (&rest _args)
+                     (cl-incf track-count)))
+                  ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
+                   (lambda (&rest _args) "abc123"))
+                  ((symbol-function 'gptel-auto-workflow--promote-provisional-commit)
+                   (lambda (&rest _args) t))
+                  ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
+                   (lambda (&rest _args) t))
+                  ((symbol-function 'gptel-auto-workflow--assert-main-untouched)
+                   (lambda () t))
+                  ((symbol-function 'gptel-auto-workflow--git-step-success-p)
+                   (lambda (&rest _args) t))
+                  ((symbol-function 'magit-git-success)
+                   (lambda (&rest _args) t))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (gptel-auto-experiment-run
+           "lisp/modules/gptel-benchmark-evolution.el" 1 5 0.4 0.75 nil
+           (lambda (exp-result)
+             (cl-incf callback-count)
+             (setq result exp-result)))
+          (should (= callback-count 1))
+          (should (= track-count 1))
+          (should result)
+          (should (plist-get result :kept))
+          (should (string-match-p
+                   "Override: keep non-regressing high-confidence tie with passing tests"
+                   (plist-get result :comparator-reason))))
       (delete-directory temp-dir t))))
 
 (ert-deftest regression/auto-experiment-loop/uses-run-with-retry-helper ()
