@@ -97,17 +97,6 @@ for byte-level operations (~3.5 bytes/token)."
   :type 'integer
   :group 'gptel)
 
-(defcustom my/gptel-retry-preserve-tools
-  '("TodoWrite" "RunAgent" "Skill" "create_skill")
-  "Tool names to preserve during tool-list compaction.
-
-Some orchestration and tracking tools are used opportunistically later in an
-agent turn after earlier reads or shell commands.  Removing them during the
-\"unused tools\" compaction pass can provoke recoverable late tool-call
-warnings even though the active preset intentionally allows them."
-  :type '(repeat string)
-  :group 'gptel)
-
 (defconst my/gptel--retry-base-delay 4.0
   "Initial delay in seconds for exponential backoff on transient errors.
 Used by `my/gptel-auto-retry' to compute retry delays.")
@@ -170,8 +159,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
                        (content (plist-get msg :content)))
                   (when (and (stringp content)
                              (> (string-bytes content) (string-bytes replacement)))
-                    (cl-incf bytes-saved (- (string-bytes content)
-                                            (string-bytes replacement))))))
+                    (cl-incf bytes-saved (- (string-bytes content) (string-bytes replacement))))))
               (when (or (= my/gptel-trim-min-bytes 0)
                         (>= bytes-saved my/gptel-trim-min-bytes))
                 (dolist (idx to-truncate)
@@ -248,13 +236,12 @@ Returns the number of messages repaired."
     repaired))
 
 (defun my/gptel--reduce-tools-for-retry (info)
-  "Reduce the tools array in INFO to tools referenced in conversation.
+  "Reduce the tools array in INFO to only tools referenced in conversation.
 
 Scans :data :messages for all assistant messages containing :tool_calls,
 collects the set of tool names actually invoked, then filters both
 :data :tools (the serialized vector sent to the API) and :tools (the
-gptel-tool struct list used for dispatch) to those names plus
-`my/gptel-retry-preserve-tools'.
+gptel-tool struct list used for dispatch) to only those names.
 
 This typically removes 60-80% of the tools payload (~5-8KB) on
 conversations that only use 3-5 of 18+ registered tools.
@@ -265,7 +252,6 @@ Returns the number of tool definitions removed, or 0 if nothing changed."
          (data-tools (and data (plist-get data :tools)))  ; vector of plists
          (struct-tools (plist-get info :tools))            ; list of gptel-tool structs
          (used-names (make-hash-table :test #'equal))
-         (preserved-names (delq nil (copy-sequence my/gptel-retry-preserve-tools)))
          (removed 0))
     (when (and messages data-tools (> (length data-tools) 0))
       ;; Pass 1: collect all tool names referenced in tool_calls
@@ -282,28 +268,25 @@ Returns the number of tool definitions removed, or 0 if nothing changed."
       ;; Only filter if we found any used tools (safety: don't send empty tools)
       (when (> (hash-table-count used-names) 0)
         (let* ((original-count (length data-tools))
-                ;; Filter serialized tools vector
-                (filtered (vconcat
-                           (cl-remove-if-not
-                            (lambda (tool-plist)
-                              (let* ((func (plist-get tool-plist :function))
-                                     (name (and func (plist-get func :name))))
-                                (or (gethash name used-names)
-                                    (member name preserved-names))))
-                            (append data-tools nil)))) ; vector -> list for cl-remove-if-not
-                (new-count (length filtered)))
-           (when (< new-count original-count)
-             (plist-put data :tools filtered)
-             ;; Also filter struct list to match
-             (when struct-tools
-               (plist-put info :tools
+               ;; Filter serialized tools vector
+               (filtered (vconcat
                           (cl-remove-if-not
-                           (lambda (ts)
-                             (let ((name (gptel-tool-name ts)))
-                               (or (gethash name used-names)
-                                   (member name preserved-names))))
-                           struct-tools)))
-             (setq removed (- original-count new-count))))))
+                           (lambda (tool-plist)
+                             (let* ((func (plist-get tool-plist :function))
+                                    (name (and func (plist-get func :name))))
+                               (gethash name used-names)))
+                           (append data-tools nil)))) ; vector -> list for cl-remove-if-not
+               (new-count (length filtered)))
+          (when (< new-count original-count)
+            (plist-put data :tools filtered)
+            ;; Also filter struct list to match
+            (when struct-tools
+              (plist-put info :tools
+                         (cl-remove-if-not
+                          (lambda (ts)
+                            (gethash (gptel-tool-name ts) used-names))
+                          struct-tools)))
+            (setq removed (- original-count new-count))))))
     removed))
 
 (defcustom my/gptel-truncate-old-messages-keep 6
@@ -666,20 +649,6 @@ Computed as context window × ~3.5 bytes/token, minus output reservation.
 Used as fallback when `my/gptel-payload-byte-limit' would be too generous
 for a smaller-context model.")
 
-(defun my/gptel--model-context-limit (model)
-  "Return the configured context byte limit for MODEL, or nil if unmatched.
-
-`my/gptel-model-context-bytes' accepts either exact string keys or symbol keys
-whose names are regular expressions.  This keeps existing regex-style entries
-working while also tolerating exact string overrides."
-  (when (stringp model)
-    (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
-             when (cond
-                   ((stringp pattern) (string= pattern model))
-                   ((symbolp pattern) (string-match-p (symbol-name pattern) model))
-                   (t nil))
-             return limit)))
-
 (defun my/gptel--estimate-payload-bytes (info)
   "Estimate the JSON byte size of INFO's :data payload.
 
@@ -700,7 +669,7 @@ Takes the minimum of `my/gptel-payload-byte-limit' and the model-specific
 context limit from `my/gptel-model-context-bytes'."
   (let* ((model (plist-get info :model))
          (global-limit (or my/gptel-payload-byte-limit 999999999))
-         (model-limit (or (my/gptel--model-context-limit model) 999999999)))
+         (model-limit (or (alist-get model my/gptel-model-context-bytes) 999999999)))
     (min global-limit model-limit)))
 
 (defun my/gptel--compact-payload (fsm)
