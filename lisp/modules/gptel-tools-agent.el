@@ -5604,7 +5604,7 @@ name strings."
     override))
 
 (defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
-  "Activate a per-run fallback for AGENT-TYPE when RESULT shows rate limiting."
+  "Activate a per-run fallback for AGENT-TYPE when RESULT shows provider pressure."
   (when (and (gptel-auto-workflow--headless-provider-override-active-p)
              (gptel-auto-experiment--rate-limit-error-p result))
     (let* ((current-backend
@@ -5620,7 +5620,7 @@ name strings."
               (gptel-auto-workflow--runtime-provider-failover-candidate
                agent-type preset)))
       (when candidate
-        (message "[auto-workflow] Rate limit on %s/%s for %s; future retries will use %s/%s"
+        (message "[auto-workflow] Provider pressure on %s/%s for %s; future retries will use %s/%s"
                  (or current-backend "unknown")
                  (or current-model "unknown")
                  agent-type
@@ -5649,12 +5649,12 @@ name strings."
           error-output))))
 
 (defun gptel-auto-experiment--rate-limit-error-p (error-output)
-  "Return non-nil when ERROR-OUTPUT reflects provider rate limiting."
+  "Return non-nil when ERROR-OUTPUT reflects retryable provider pressure."
   (and (stringp error-output)
        (let ((case-fold-search t))
          (string-match-p
-          "rate_limit_error\\|usage limit exceeded\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429"
-          error-output))))
+          "rate_limit_error\\|usage limit exceeded\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
+           error-output))))
 
 (defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
   "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."
@@ -5797,8 +5797,12 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (cons :api-rate-limit "Weekly quota exhausted"))
    ((string-match-p "throttling\\|rate.limit\\|quota exceeded\\|429" agent-output)
     (cons :api-rate-limit "API rate limit exceeded"))
+   ((let ((case-fold-search t))
+      (string-match-p "overloaded_error\\|cluster overloaded\\|529\\|负载较高"
+                      agent-output))
+    (cons :api-rate-limit "Provider overloaded"))
    ((string-match-p "invalid_parameter_error\\|InvalidParameter\\|JSON format" agent-output)
-    (cons :api-error "API parameter error (invalid JSON format)"))
+     (cons :api-error "API parameter error (invalid JSON format)"))
    ((let ((case-fold-search t))
       (string-match-p "timeout\\|timed out\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
                       agent-output))
