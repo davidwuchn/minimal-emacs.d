@@ -2,8 +2,9 @@
 
 ;;; Commentary:
 
-;; Keeps the cron wrapper's `emacsclient --eval` payload short and stable by
-;; moving the larger workflow bootstrap into a normal Elisp file.
+;; Keep the cron wrapper's `emacsclient --eval` payload short and stable.  The
+;; wrapper only needs to seed repo-local module paths, reload the workflow
+;; modules from the requested worktree, and queue the chosen action.
 
 ;;; Code:
 
@@ -17,6 +18,35 @@
     (when (file-directory-p dir)
       (add-to-list 'load-path dir))))
 
+(defun gptel-auto-workflow-bootstrap--known-gptel-load-error-p (err)
+  "Return non-nil when ERR matches the fresh-daemon Gptel read error."
+  (eq (car-safe err) 'invalid-read-syntax))
+
+(defun gptel-auto-workflow-bootstrap--gptel-ready-p ()
+  "Return non-nil when the core Gptel entrypoints are available."
+  (and (featurep 'gptel)
+       (fboundp 'gptel-send)
+       (fboundp 'gptel-request)))
+
+(defun gptel-auto-workflow-bootstrap--load-gptel-core (root)
+  "Load the core Gptel stack from ROOT in a fresh worker daemon."
+  (let ((load-prefer-newer nil))
+    (require 'xdg)
+    (condition-case err
+        (require 'gptel)
+      (error
+       (condition-case load-err
+           (load-file (expand-file-name "packages/gptel/gptel.elc" root))
+         (error
+          (unless (and (gptel-auto-workflow-bootstrap--known-gptel-load-error-p load-err)
+                       (gptel-auto-workflow-bootstrap--gptel-ready-p))
+            (signal (car load-err) (cdr load-err)))))
+       (unless (gptel-auto-workflow-bootstrap--gptel-ready-p)
+         (signal (car err) (cdr err)))))
+    (require 'gptel-request)
+    (require 'gptel-agent)
+    (require 'gptel-agent-tools)))
+
 (defun gptel-auto-workflow-bootstrap-run (root action)
   "Bootstrap headless workflow execution from ROOT for ACTION."
   (gptel-auto-workflow-bootstrap--seed-load-path root)
@@ -24,22 +54,35 @@
   (load-file (expand-file-name "lisp/modules/nucleus-tools.el" root))
   (load-file (expand-file-name "lisp/modules/nucleus-prompts.el" root))
   (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
-  (when (fboundp 'nucleus--register-gptel-directives)
-    (nucleus--register-gptel-directives))
-  (when (fboundp 'nucleus--override-gptel-agent-presets)
-    (nucleus--override-gptel-agent-presets))
-  (require 'gptel)
+  (gptel-auto-workflow-bootstrap--load-gptel-core root)
   (unless (fboundp 'gptel--format-tool-call)
     (defun gptel--format-tool-call (name arg-values)
       (format "(%s %s)\n"
               (propertize (or name "unknown") 'font-lock-face 'font-lock-keyword-face)
               (propertize (format "%s" arg-values) 'font-lock-face 'font-lock-string-face))))
-  (require 'gptel-request)
-  (require 'gptel-agent-tools)
   (load-file (expand-file-name "lisp/modules/gptel-ext-backends.el" root))
   (setq gptel-backend gptel--minimax
         gptel-model 'minimax-m2.7-highspeed)
+  (load-file (expand-file-name "lisp/modules/gptel-tools.el" root))
+  (when (fboundp 'gptel-tools-setup)
+    (gptel-tools-setup))
   (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root))
+  (if (fboundp 'nucleus-presets-setup-agents)
+      (progn
+        ;; Reuse the normal preset refresh path so fresh worker daemons have
+        ;; live agent dirs, presets, and tool contracts before worktree
+        ;; buffers try to apply the agent preset.
+        (nucleus-presets-setup-agents)
+        (if (fboundp 'nucleus--after-agent-update)
+            (nucleus--after-agent-update)
+          (when (fboundp 'nucleus--register-gptel-directives)
+            (nucleus--register-gptel-directives))
+          (when (fboundp 'nucleus--override-gptel-agent-presets)
+            (nucleus--override-gptel-agent-presets))))
+    (when (fboundp 'nucleus--register-gptel-directives)
+      (nucleus--register-gptel-directives))
+    (when (fboundp 'nucleus--override-gptel-agent-presets)
+      (nucleus--override-gptel-agent-presets)))
   (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root))
   (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root))
   (cond

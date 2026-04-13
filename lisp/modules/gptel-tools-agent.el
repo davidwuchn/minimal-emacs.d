@@ -5687,7 +5687,7 @@ name strings."
 (defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
   "Activate a per-run fallback for AGENT-TYPE when RESULT shows provider pressure."
   (when (and (gptel-auto-workflow--headless-provider-override-active-p)
-             (gptel-auto-experiment--rate-limit-error-p result))
+             (gptel-auto-experiment--provider-pressure-error-p result))
     (let* ((current-backend
             (gptel-auto-workflow--preset-backend-name
              (plist-get preset :backend)))
@@ -5736,6 +5736,15 @@ name strings."
          (string-match-p
           "rate_limit_error\\|usage limit exceeded\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
            error-output))))
+
+(defun gptel-auto-experiment--provider-pressure-error-p (error-output)
+  "Return non-nil when ERROR-OUTPUT suggests trying a fallback backend."
+  (or (gptel-auto-experiment--rate-limit-error-p error-output)
+      (and (stringp error-output)
+           (let ((case-fold-search t))
+             (string-match-p
+              "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
+              error-output)))))
 
 (defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
   "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."
@@ -6597,16 +6606,17 @@ ORIGINAL TASK:
 Uses local state captured in closure for parallel execution safety.
 Adapts max-experiments based on API error rate."
   (let* ((baseline (gptel-auto-experiment-benchmark t))
-         (baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5))
-         (original-max gptel-auto-experiment-max-per-target)
-         (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
-         (threshold gptel-auto-experiment-no-improvement-threshold)
-         (run-id gptel-auto-workflow--run-id)
-         (workflow-root (gptel-auto-workflow--resolve-run-root))
-         (loop-buffer (current-buffer))
-         (results nil)
-         (best-score (gptel-auto-workflow--plist-get baseline :eight-keys 0.0))
-         (no-improvement-count 0))
+          (baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5))
+          (original-max gptel-auto-experiment-max-per-target)
+          (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
+          (threshold gptel-auto-experiment-no-improvement-threshold)
+          (run-id gptel-auto-workflow--run-id)
+          (workflow-root (gptel-auto-workflow--resolve-run-root))
+          (loop-buffer (current-buffer))
+          (results nil)
+          (best-score (let ((score (gptel-auto-workflow--plist-get baseline :eight-keys nil)))
+                        (if (numberp score) score 0.0)))
+          (no-improvement-count 0))
     (message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
              target best-score max-exp)
     (cl-labels ((run-next (exp-id)
