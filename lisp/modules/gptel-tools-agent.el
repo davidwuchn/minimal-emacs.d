@@ -5088,13 +5088,81 @@ Then on a new line, briefly explain why (1 sentence)."
         (my/gptel--invoke-callback-safely
          callback
          (list :keep keep
-               :reasoning (format "Local: Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
-                                  score-before score-after
-                                  quality-before quality-after
-                                  combined-before combined-after)
-               :improvement (list :score (- score-after score-before)
-                                  :quality (- quality-after quality-before)
-                                  :combined (- combined-after combined-before))))))))
+                :reasoning (format "Local: Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f"
+                                   score-before score-after
+                                   quality-before quality-after
+                                   combined-before combined-after)
+                :improvement (list :score (- score-after score-before)
+                                   :quality (- quality-after quality-before)
+                                   :combined (- combined-after combined-before))))))))
+
+(defun gptel-auto-experiment--strong-grade-pass-p (grade-score grade-total)
+  "Return non-nil when GRADE-SCORE reflects a strong pass.
+GRADE-TOTAL can be nil when the grader omits an explicit denominator."
+  (let ((score (if (numberp grade-score) grade-score 0)))
+    (if (and (numberp grade-total) (> grade-total 0))
+        (>= (/ (float score) grade-total) 0.85)
+      (>= score 8))))
+
+(defun gptel-auto-experiment--perfect-grade-pass-p (grade-score grade-total)
+  "Return non-nil when GRADE-SCORE is a perfect or near-perfect pass."
+  (let ((score (if (numberp grade-score) grade-score 0)))
+    (if (and (numberp grade-total) (> grade-total 0))
+        (>= score grade-total)
+      (>= score 9))))
+
+(defun gptel-auto-experiment--grader-indicates-correctness-fix-p (grade-details)
+  "Return non-nil when GRADE-DETAILS describes a real correctness fix."
+  (when (stringp grade-details)
+    (let ((case-fold-search t))
+      (string-match-p
+       (rx (or "genuine bug"
+               "genuine bugs"
+               "actual functional bug"
+               "actual functional bugs"
+               "correctness bug"
+               "correctness bugs"
+               "runtime error"
+               "runtime errors"
+               "security hole"
+               "security issue"
+               "state corruption"
+               "logic failure"
+               "demonstrably buggy"))
+       grade-details))))
+
+(defun gptel-auto-experiment--promote-correctness-fix-decision
+    (decision tests-passed grade-score grade-total grade-details)
+  "Return DECISION or a promoted keep decision for high-confidence ties.
+Promotion is allowed only for non-regressing ties with passing tests and either
+a perfect grader result or strong grader evidence of a real correctness fix."
+  (let* ((improvement (and (listp decision) (plist-get decision :improvement)))
+         (combined-delta (if (listp improvement)
+                             (or (plist-get improvement :combined) 0)
+                           0))
+         (reasoning (and (listp decision) (plist-get decision :reasoning)))
+         (override-note
+          "Override: keep non-regressing high-confidence tie with passing tests"))
+    (if (or (not (listp decision))
+            (plist-get decision :keep)
+            (not tests-passed)
+            (< combined-delta 0)
+            (not (or (gptel-auto-experiment--perfect-grade-pass-p
+                      grade-score grade-total)
+                     (and (gptel-auto-experiment--strong-grade-pass-p
+                           grade-score grade-total)
+                          (gptel-auto-experiment--grader-indicates-correctness-fix-p
+                           grade-details)))))
+        decision
+      (let ((promoted (copy-sequence decision)))
+        (setq promoted (plist-put promoted :keep t))
+        (plist-put
+         promoted
+         :reasoning
+         (if (and (stringp reasoning)
+                  (not (string-match-p (regexp-quote override-note) reasoning)))
+             (format "%s | %s" override-note reasoning)
+           override-note))))))
 
 ;;; Prompt Building
 
@@ -6075,7 +6143,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 	                                              (unless finished
 	                                                (setq finished t)
 	                                                (let*
-	                                                    ((keep (plist-get decision :keep))
+	                                                    ((decision
+	                                                      (gptel-auto-experiment--promote-correctness-fix-decision
+	                                                       decision
+	                                                       tests-passed
+	                                                       grade-score
+	                                                       grade-total
+	                                                       grade-details))
+	                                                     (keep (plist-get decision :keep))
 		                                                 (reasoning (plist-get decision :reasoning))
 		                                                 (exp-result
 		                                                  (list :target target :id experiment-id :hypothesis
@@ -6201,7 +6276,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                         (lambda (decision)
                                                                           (unless finished
                                                                             (setq finished t)
-                                                                            (let* ((keep (plist-get decision :keep))
+                                                                            (let* ((decision
+                                                                                    (gptel-auto-experiment--promote-correctness-fix-decision
+                                                                                     decision
+                                                                                     (plist-get retry-bench :tests-passed)
+                                                                                     (plist-get retry-grade :score)
+                                                                                     (plist-get retry-grade :total)
+                                                                                     (plist-get retry-grade :details)))
+                                                                                   (keep (plist-get decision :keep))
                                                                                    (reasoning (plist-get decision :reasoning))
                                                                                    (exp-result
                                                                                     (list :target target
