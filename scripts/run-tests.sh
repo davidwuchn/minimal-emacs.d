@@ -32,8 +32,15 @@ run_unit_tests() {
     echo "Running ERT tests (pattern: $PATTERN)..."
     echo ""
 
-    status_file="$(mktemp "${TMPDIR:-/tmp}/auto-workflow-test-status.XXXXXX.sexp")"
-    messages_file="$(mktemp "${TMPDIR:-/tmp}/auto-workflow-test-messages.XXXXXX.txt")"
+    status_file="$(mktemp "${TMPDIR:-/tmp}/auto-workflow-test-status.XXXXXX")" || {
+        fail "Failed to create isolated workflow status file"
+        return 1
+    }
+    messages_file="$(mktemp "${TMPDIR:-/tmp}/auto-workflow-test-messages.XXXXXX")" || {
+        rm -f "$status_file"
+        fail "Failed to create isolated workflow messages file"
+        return 1
+    }
     
     local output
     output=$(AUTO_WORKFLOW_STATUS_FILE="$status_file" \
