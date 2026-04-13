@@ -667,9 +667,17 @@ EXIT-CODE defaults to 1."
           (should result)
           (should (= gptel-auto-experiment--api-error-count 1))
           (should-not gptel-auto-experiment--quota-exhausted)
-          (should (equal (plist-get result :comparator-reason) ":api-rate-limit"))
-          (should-not (plist-get result :kept)))
-      (delete-directory temp-dir t))))
+           (should (equal (plist-get result :comparator-reason) ":api-rate-limit"))
+           (should-not (plist-get result :kept)))
+       (delete-directory temp-dir t))))
+
+(ert-deftest regression/auto-experiment/overloaded-grader-errors-count-as-provider-pressure ()
+  "Overloaded grader failures should use the provider-pressure retry path."
+  (let ((grader-error
+         "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")"))
+    (should (gptel-auto-experiment--rate-limit-error-p grader-error))
+    (should (equal (gptel-auto-experiment--categorize-error grader-error)
+                   '(:api-rate-limit . "Provider overloaded")))))
 
 (ert-deftest regression/auto-experiment/run-surfaces-retryable-grader-errors ()
   "Failed grades should surface retryable grader details for outer retry logic."
@@ -1786,9 +1794,59 @@ EXIT-CODE defaults to 1."
       (if had-dashscope
           (set 'gptel--dashscope old-dashscope)
         (makunbound 'gptel--dashscope))
-      (if had-deepseek
-          (set 'gptel--deepseek old-deepseek)
-        (makunbound 'gptel--deepseek)))))
+       (if had-deepseek
+           (set 'gptel--deepseek old-deepseek)
+         (makunbound 'gptel--deepseek)))))
+
+(ert-deftest regression/auto-workflow/provider-failover-activates-on-overloaded-errors ()
+  "Headless provider failover should also activate on retryable overload errors."
+  (let* ((dashscope-backend
+          (gptel-make-openai "DashScope"
+            :host "coding.dashscope.aliyuncs.com"
+            :key (lambda () "token")
+            :models '(qwen3.5-plus qwen3.6-plus)))
+         (had-dashscope (boundp 'gptel--dashscope))
+         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+         (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
+         (overloaded-error
+          "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")")
+         (gptel-auto-workflow--headless t)
+         (gptel-auto-workflow-persistent-headless t)
+         (gptel-auto-workflow--current-project "/tmp/project")
+         (gptel-auto-workflow-headless-fallback-agents
+          '("analyzer" "comparator" "executor" "grader" "reviewer"))
+         (gptel-auto-workflow-headless-subagent-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-executor-rate-limit-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow--rate-limited-backends nil)
+         (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
+    (unwind-protect
+        (progn
+          (set 'gptel--dashscope dashscope-backend)
+          (cl-letf (((symbol-function 'my/gptel-api-key)
+                     (lambda (host)
+                       (pcase host
+                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.minimaxi.com" "token")
+                         (_ nil))))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (gptel-auto-workflow--maybe-activate-rate-limit-failover
+             "grader" preset overloaded-error)
+            (should (member "MiniMax" gptel-auto-workflow--rate-limited-backends))
+            (let ((override
+                   (gptel-auto-workflow--maybe-override-subagent-provider
+                    "grader" preset)))
+              (should (eq (plist-get override :backend) dashscope-backend))
+              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+      (setq gptel-auto-workflow--rate-limited-backends nil
+            gptel-auto-workflow--runtime-subagent-provider-overrides nil)
+      (if had-dashscope
+          (set 'gptel--dashscope old-dashscope)
+        (makunbound 'gptel--dashscope)))))
 
 (ert-deftest regression/auto-workflow/executor-rate-limit-failover-promotes-runtime-fallback ()
   "Executor should fail over after a DashScope rate-limit error in headless mode."
