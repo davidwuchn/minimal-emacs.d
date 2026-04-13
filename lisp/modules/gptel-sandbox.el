@@ -241,6 +241,8 @@ Supported shape:
 INITIAL-VALUE is the starting value. STOP-PRED is called on each result;
 when non-nil, evaluation short-circuits and returns that result.
 Used by `and' and `or' to share short-circuit evaluation logic."
+  (unless (functionp stop-pred)
+    (error "Programmatic short-circuit requires a function predicate, got: %S" stop-pred))
   (let ((value initial-value))
     (catch 'gptel-sandbox-short-circuit
       (dolist (form forms value)
