@@ -411,6 +411,9 @@ BEHAVIOR: Checks both string error messages and numeric HTTP status codes.
 EDGE CASE: error-data can be string, plist, or nil. Handles all three.
 EDGE CASE: http-status can be string, number, or t (curl success). Converts
   strings to numbers, ignores t.
+EDGE CASE: When status is nil (unknown), message patterns are still checked.
+  When status is a known success code (2xx/3xx), message patterns are skipped
+  to prevent false-positive retries on successful responses.
 
 TEST: (my/gptel--transient-error-p \"Malformed JSON\" 500) => t
 TEST: (my/gptel--transient-error-p \"Invalid API key\" 401) => nil
@@ -432,7 +435,8 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
              (string-match-p my/gptel--transient-http-400-patterns error-msg))
         (and (listp error-data)
              (stringp error-msg)
-             (not (memq status '(401 403)))
+             (or (null status)
+                 (not (memq status '(401 403 200 201 202 204 301 302 304))))
              (string-match-p my/gptel--transient-error-message-patterns
                              (downcase error-msg))))))
 
