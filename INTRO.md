@@ -8,19 +8,24 @@ extended with a full AI agent system built on
 
 | Metric | Value |
 |--------|-------|
-| **Code fixes** | 31 real fixes merged |
-| **New features** | Pre-merge review, periodic researcher, retry loop |
-| **Agents** | 10 (8 MiniMax, 2 moonshot) |
-| **Cron jobs** | 4 scheduled jobs |
+| **Code fixes** | 242+ real fixes merged |
+| **New features** | Auto-workflow, benchmark, retry loop, researcher, sandbox, strategic planner |
+| **Agents** | 10+ (MiniMax workhorse, DashScope/DeepSeek/CF-Gateway/Gemini fallbacks) |
+| **Cron jobs** | 6 scheduled jobs (auto-workflow, research, mementum, instincts) |
 
-### Latest Features (2026-03-26)
+### Latest Features (2026-04-14)
 
 | Feature | Purpose |
 |---------|---------|
-| **Pre-Merge Review** | Reviewer checks for blockers before staging merge |
+| **Auto-Workflow** | Headless experiments with grading, review, and staging merge |
+| **Backend Fallback** | MiniMax → DashScope → DeepSeek → CF-Gateway → Gemini on 429 |
+| **Benchmark System** | Score tracking, quality metrics, evolution patterns |
+| **Shell Timeout Sentinel** | Wait for process exit before capturing results |
+| **FSM Registry Validation** | Bidirectional consistency checks |
+| **Review Retry Loop** | Executor fixes issues, reviewer validates, max 2 retries |
 | **Periodic Researcher** | Every 4h, finds anti-patterns for target selection |
-| **Review Retry Loop** | Executor fixes issues, max 2 retries |
-| **Backend case fix** | `Moonshot` → `moonshot` for subagent compatibility |
+| **Sandbox Execution** | Safe code evaluation with nil guards and error handling |
+| **Strategic Planner** | Long-term improvement planning with hypothesis tracking |
 
 ## Quick Start
 
@@ -85,13 +90,21 @@ Model is configured in YAML frontmatter (single source of truth):
 
 | Use Case | Model | YAML File |
 |----------|-------|-----------|
-| **Plan preset** | `minimax-m2.5` | `assistant/agents/plan_agent.md` |
-| **Agent preset** | `minimax-m2.5` | `assistant/agents/code_agent.md` |
+| **Plan preset** | `minimax-m2.7-highspeed` | `assistant/agents/plan_agent.md` |
+| **Agent preset** | `minimax-m2.7-highspeed` | `assistant/agents/code_agent.md` |
 | **Subagents** | per-agent YAML | `assistant/agents/*.md` |
 
-Plan/agent defaults now use the MiniMax backend. Requires `api.minimaxi.com`
-API key in auth-source. DashScope, Moonshot, DeepSeek, Gemini, OpenRouter,
-GitHub Copilot, and Cloudflare Workers AI remain available as alternate backends.
+### Backend Fallback Chain
+
+Auto-workflow uses MiniMax as the primary workhorse with automatic fallback on rate limits:
+
+1. **MiniMax** — `minimax-m2.7-highspeed` (primary)
+2. **DashScope** — `qwen3.6-plus`
+3. **DeepSeek** — `deepseek-chat`
+4. **CF-Gateway** — `@cf/zai-org/glm-4.7-flash`
+5. **Gemini** — `gemini-3.1-pro-preview`
+
+Requires `api.minimaxi.com` API key in auth-source. All alternate backends require their respective API keys configured in auth-source.
 
 ## Directory Structure
 
