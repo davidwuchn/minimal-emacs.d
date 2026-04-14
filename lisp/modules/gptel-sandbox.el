@@ -148,14 +148,13 @@ gptel preset.")
 Raises an error if PAIRS is malformed."
   (unless (cl-evenp (length pairs))
     (error "Programmatic setq requires symbol/value pairs"))
-  (let (entries)
-    (while pairs
-      (let ((symbol (pop pairs))
-            (value-form (pop pairs)))
-        (unless (symbolp symbol)
-          (error "Programmatic setq target must be a symbol, got: %S" symbol))
-        (push (cons symbol value-form) entries)))
-    (nreverse entries)))
+  (cl-loop
+   while pairs
+   for symbol = (pop pairs)
+   for value-form = (pop pairs)
+   do (unless (symbolp symbol)
+        (error "Programmatic setq target must be a symbol, got: %S" symbol))
+   collect (cons symbol value-form)))
 
 (defun gptel-sandbox--eval-setq-pairs (pairs env)
   "Evaluate setq PAIRS in ENV and return the final assigned value."
