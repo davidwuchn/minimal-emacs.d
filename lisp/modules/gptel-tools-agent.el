@@ -5151,17 +5151,20 @@ Returns nil if valid, or error message string if invalid."
         (format "Missing target file: %s" file)
       (let ((content (gptel-auto-workflow--read-file-contents file))
             forms)
-        (or (condition-case err
-                (with-temp-buffer
-                  (insert content)
-                  (set-syntax-table emacs-lisp-mode-syntax-table)
-                  (goto-char (point-min))
-                  (while (progn
-                           (forward-comment (point-max))
-                           (< (point) (point-max)))
-                    (push (read (current-buffer)) forms))
-                  nil)
-              (error (format "Syntax error in %s: %s" file err)))
+        (or (cond
+             ((null content)
+              (format "Empty or unreadable file: %s" file))
+             ((condition-case err
+                  (with-temp-buffer
+                    (insert content)
+                    (set-syntax-table emacs-lisp-mode-syntax-table)
+                    (goto-char (point-min))
+                    (while (progn
+                             (forward-comment (point-max))
+                             (< (point) (point-max)))
+                      (push (read (current-buffer)) forms))
+                    nil)
+                (error (format "Syntax error in %s: %s" file err)))))
             (when (gptel-auto-experiment--invalid-cl-return-target-in-forms
                    (nreverse forms))
               (format "Dangerous pattern in %s: cl-return-from without cl-block" file)))))))
