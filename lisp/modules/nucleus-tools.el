@@ -522,8 +522,6 @@ CONSTRAINTS may include :minimum, :maximum, :exclusiveMinimum, :exclusiveMaximum
 (defun nucleus-tools--validate-array (val arg-name constraints)
   "Validate array VAL against CONSTRAINTS.
 CONSTRAINTS may include :minItems, :maxItems, :items."
-  (when (null val)
-    (nucleus-tools--validation-error arg-name :type val "an array"))
   (unless (or (vectorp val) (listp val))
     (nucleus-tools--validation-error arg-name :type val "an array"))
   
