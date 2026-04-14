@@ -4454,9 +4454,10 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                 optimize-branch review-output)))
          (approved (or raw-approved disproven-undefined-blocker))
          (review-error-category
-          (and (stringp review-output)
-               (car-safe
-                (gptel-auto-experiment--categorize-error review-output))))
+           (and (not approved)
+                (stringp review-output)
+                (car-safe
+                 (gptel-auto-experiment--categorize-error review-output))))
          (review-error (and (not approved)
                             (gptel-auto-workflow--review-retryable-error-p review-output)))
          (run-id (gptel-auto-workflow--current-run-id))
