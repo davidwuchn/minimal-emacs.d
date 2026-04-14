@@ -672,7 +672,7 @@ context limit from `my/gptel-model-context-bytes'."
          (model-limit
           (if (stringp model)
               (or (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
-                           when (string= (symbol-name pattern) model)
+                           when (string= pattern model)
                            return limit)
                   999999999)
             999999999)))

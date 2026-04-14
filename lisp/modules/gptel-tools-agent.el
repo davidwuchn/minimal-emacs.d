@@ -4783,13 +4783,13 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                                    (gptel-auto-workflow--hydrate-staging-submodules worktree)))
                  (hydrate-pass (or (not hydrate-submodules-p)
                                    (= 0 (cdr hydrate-result)))))
-            (if (not hydrate-pass)
-                (progn
-                  (with-current-buffer output-buffer
-                    (insert (car hydrate-result) "\n"))
-              (message "[auto-experiment] ✗ Submodule hydration failed: %s"
-                       (my/gptel--sanitize-for-logging (car hydrate-result) 200))
-                  (cons nil (with-current-buffer output-buffer (buffer-string))))
+             (if (not hydrate-pass)
+                 (progn
+                   (with-current-buffer output-buffer
+                     (insert (car hydrate-result) "\n"))
+                   (message "[auto-experiment] ✗ Submodule hydration failed: %s"
+                            (my/gptel--sanitize-for-logging (car hydrate-result) 200))
+                   (cons nil (with-current-buffer output-buffer (buffer-string))))
               (message "[auto-experiment] Running tests...")
               (let ((exit-code
                      (gptel-auto-workflow--call-process-with-watchdog
