@@ -251,12 +251,14 @@ with a warning logged for debugging."
 TOTALS is an alist of (score-type . accumulated-value) that is mutated.
 SCORES-ALIST is an alist of (score-type . current-score).
 Returns TOTALS for chaining.
-Handles nil scores by treating them as 0."
-  (dolist (pair totals totals)
-    (let ((type (car pair)))
-      (setcdr pair (gptel-benchmark--accumulate-score
-                    (cdr pair)
-                    (alist-get type scores-alist))))))
+Handles nil or invalid SCORES-ALIST gracefully."
+  (when (listp scores-alist)
+    (dolist (pair totals totals)
+      (let ((type (car pair)))
+        (setcdr pair (gptel-benchmark--accumulate-score
+                      (cdr pair)
+                      (alist-get type scores-alist))))))
+  totals)
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist or alist.
@@ -270,8 +272,8 @@ Handles both plist format (keyword keys) and alist format (symbol or keyword key
 
 (defun gptel-benchmark--calculate-average (score-totals total score-type)
   "Calculate average for SCORE-TYPE from SCORE-TOTALS over TOTAL items.
-Returns 0.0 if TOTAL is zero to avoid division by zero."
-  (if (> total 0)
+Returns 0.0 if TOTAL is zero or if SCORE-TYPE is not found in SCORE-TOTALS."
+  (if (and (> total 0) (assoc score-type score-totals))
       (/ (alist-get score-type score-totals) (float total))
     0.0))
 
@@ -279,7 +281,7 @@ Returns 0.0 if TOTAL is zero to avoid division by zero."
   "Create summary of RESULTS.
 RESULTS is a list of (run . scores) cons cells or plists with :scores.
 Returns plist with :total-tests, :passed-tests, and average scores."
-  (if (or gptel-benchmark--cancelled (null results))
+  (if (or gptel-benchmark--cancelled (null results) (not (listp results)))
       (append (list :total-tests 0 :passed-tests 0)
               (mapcan (lambda (m) (list (cdr m) 0.0))
                       gptel-benchmark--score-type-averages))
