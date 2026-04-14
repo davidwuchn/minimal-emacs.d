@@ -1836,38 +1836,38 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (should gptel-auto-experiment--quota-exhausted))))
 
 (ert-deftest regression/auto-experiment/hard-timeout-stops-further-experiments ()
-  "Hard total-runtime timeouts should stop the current target after one experiment."
-  (let ((gptel-auto-experiment-delay-between 0)
-        (gptel-auto-experiment-no-improvement-threshold 99)
-        (runs 0)
-        (results nil))
-    (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
-               (lambda (&rest _) '(:eight-keys 0.4)))
-              ((symbol-function 'gptel-auto-experiment--code-quality-score)
-               (lambda () 0.5))
-              ((symbol-function 'gptel-auto-experiment--run-with-retry)
-               (lambda (target exp-id max-exp baseline baseline-code-quality previous-results callback &optional _retry-count)
-                 (cl-incf runs)
-                 (funcall callback
-                          (list :target target
-                                :id exp-id
-                                :score-after 0
-                                :kept nil
-                                :comparator-reason ":timeout"
-                                :agent-output
-                                (format "Error: Task \"Experiment %d: optimize %s\" (executor) timed out after 900s total runtime."
-                                        exp-id target)))
-                 (list target max-exp baseline baseline-code-quality previous-results)))
-              ((symbol-function 'message)
-               (lambda (&rest _) nil)))
-      (gptel-auto-experiment-loop
-       "lisp/modules/gptel-tools-agent.el"
-       (lambda (loop-results)
-         (setq results loop-results)))
-      (should (= runs 1))
-      (should (= (length results) 1))
-      (should (string-match-p "900s total runtime"
-                              (plist-get (car results) :agent-output))))))
+  "Hard executor timeouts should stop the current target after one experiment."
+  (dolist (timeout-message
+           '("Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s total runtime."
+             "Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s."))
+    (let ((gptel-auto-experiment-delay-between 0)
+          (gptel-auto-experiment-no-improvement-threshold 99)
+          (runs 0)
+          (results nil))
+      (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+                 (lambda (&rest _) '(:eight-keys 0.4)))
+                ((symbol-function 'gptel-auto-experiment--code-quality-score)
+                 (lambda () 0.5))
+                ((symbol-function 'gptel-auto-experiment--run-with-retry)
+                 (lambda (target exp-id max-exp baseline baseline-code-quality previous-results callback &optional _retry-count)
+                   (cl-incf runs)
+                   (funcall callback
+                            (list :target target
+                                  :id exp-id
+                                  :score-after 0
+                                  :kept nil
+                                  :comparator-reason ":timeout"
+                                  :agent-output timeout-message))
+                   (list target max-exp baseline baseline-code-quality previous-results)))
+                ((symbol-function 'message)
+                 (lambda (&rest _) nil)))
+        (gptel-auto-experiment-loop
+         "lisp/modules/gptel-tools-agent.el"
+         (lambda (loop-results)
+           (setq results loop-results)))
+        (should (= runs 1))
+        (should (= (length results) 1))
+        (should (equal (plist-get (car results) :agent-output) timeout-message))))))
 
 (ert-deftest regression/auto-experiment/validation-retry-timeout-does-not-stop-further-experiments ()
   "Timed-out validation repairs should discard one experiment, not the whole target."
@@ -2899,34 +2899,44 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should (eq (plist-get result :model) 'qwen3.6-plus)))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-skips-hard-runtime-timeout-retries ()
-  "Retry helper should not reschedule hard total-runtime timeout failures."
+  "Retry helper should not reschedule hard executor timeout failures."
   (dolist (timeout-category '(:timeout ":timeout"))
-    (let ((runs 0)
-          (scheduled-retry nil)
-          (final-result nil)
-          (gptel-auto-experiment-max-retries 3)
-          (gptel-auto-experiment-retry-delay 0))
-      (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-                 (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
-                   (cl-incf runs)
-                   (funcall callback
-                            (list :agent-output
-                                  "Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s total runtime."
-                                  :comparator-reason timeout-category))))
-                ((symbol-function 'run-with-timer)
-                 (lambda (&rest _args)
-                   (setq scheduled-retry t)
-                   :fake-timer))
-                ((symbol-function 'message)
-                 (lambda (&rest _args) nil)))
-        (gptel-auto-experiment--run-with-retry
-         "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
-         (lambda (result)
-           (setq final-result result)))
-        (should (= runs 1))
-        (should-not scheduled-retry)
-        (should (string-match-p "900s total runtime"
-                                (plist-get final-result :agent-output)))))))
+    (dolist (timeout-message
+             '("Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s total runtime."
+               "Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s."))
+      (let ((runs 0)
+            (scheduled-retry nil)
+            (final-result nil)
+            (gptel-auto-experiment-max-retries 3)
+            (gptel-auto-experiment-retry-delay 0))
+        (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+                   (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
+                     (cl-incf runs)
+                     (funcall callback
+                              (list :agent-output timeout-message
+                                    :comparator-reason timeout-category))))
+                  ((symbol-function 'run-with-timer)
+                   (lambda (&rest _args)
+                     (setq scheduled-retry t)
+                     :fake-timer))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (gptel-auto-experiment--run-with-retry
+           "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+           (lambda (result)
+             (setq final-result result)))
+          (should (= runs 1))
+          (should-not scheduled-retry)
+          (should (equal (plist-get final-result :agent-output) timeout-message)))))))
+
+(ert-deftest regression/auto-experiment/hard-timeout-p-detects-plain-executor-timeouts ()
+  "Hard-timeout detection should recognize both executor timeout message formats."
+  (should (gptel-auto-experiment--hard-timeout-p
+           "Error: Task \"Experiment 2\" (executor) timed out after 600s."))
+  (should (gptel-auto-experiment--hard-timeout-p
+           "Error: Task \"Experiment 2\" (executor) timed out after 600s total runtime."))
+  (should-not (gptel-auto-experiment--hard-timeout-p
+               "curl failed with exit code 28: operation timed out")))
 
 (ert-deftest regression/auto-experiment/run-with-retry-stops-after-hard-timeout-following-idle-timeout ()
   "Retry helper should stop once a retried timeout becomes a hard total-runtime timeout."
