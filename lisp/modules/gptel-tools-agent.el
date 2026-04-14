@@ -1009,16 +1009,17 @@ large-result truncation, and result caching."
           (funcall main-cb cached)
           (cl-return-from my/gptel-agent--task-override)))
       ;; Not cached, run the subagent
-      (let* ((preset
-              (gptel-auto-workflow--maybe-override-subagent-provider
-               agent-type
-               (nconc (list :include-reasoning nil
-                            :use-tools t
-                            :use-context nil
-                            :stream my/gptel-subagent-stream)
-                      (cdr agent-config))))
-             (syms (cons 'gptel--preset (gptel--preset-syms preset)))
-             (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
+       (let* ((preset
+               (gptel-auto-workflow--maybe-override-subagent-provider
+                agent-type
+                (or (gptel-auto-workflow--agent-base-preset agent-type)
+                    (nconc (list :include-reasoning nil
+                                 :use-tools t
+                                 :use-context nil
+                                 :stream my/gptel-subagent-stream)
+                           (cdr agent-config)))))
+              (syms (cons 'gptel--preset (gptel--preset-syms preset)))
+              (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
         (cl-progv syms vals
           (gptel--apply-preset preset)
           (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
@@ -4437,6 +4438,10 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                (gptel-auto-workflow--review-disproven-undefined-function-blocker-p
                 optimize-branch review-output)))
          (approved (or raw-approved disproven-undefined-blocker))
+         (review-error-category
+          (and (stringp review-output)
+               (car-safe
+                (gptel-auto-experiment--categorize-error review-output))))
          (review-error (and (not approved)
                             (gptel-auto-workflow--review-retryable-error-p review-output)))
          (run-id (gptel-auto-workflow--current-run-id))
@@ -4449,13 +4454,18 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                disproven-undefined-blocker))
     (cond
      (review-error
-      (if (< gptel-auto-workflow--review-error-retry-count
-             gptel-auto-workflow--review-max-retries)
-          (progn
-            (cl-incf gptel-auto-workflow--review-error-retry-count)
-            (message "[auto-workflow] Review failed transiently, retrying review (%d/%d)..."
-                     gptel-auto-workflow--review-error-retry-count
-                     gptel-auto-workflow--review-max-retries)
+       (if (< gptel-auto-workflow--review-error-retry-count
+              gptel-auto-workflow--review-max-retries)
+           (progn
+             (when (memq review-error-category '(:api-rate-limit :api-error :timeout))
+               (when-let ((reviewer-preset
+                           (gptel-auto-workflow--agent-base-preset "reviewer")))
+                 (gptel-auto-workflow--activate-provider-failover
+                  "reviewer" reviewer-preset review-output)))
+             (cl-incf gptel-auto-workflow--review-error-retry-count)
+             (message "[auto-workflow] Review failed transiently, retrying review (%d/%d)..."
+                      gptel-auto-workflow--review-error-retry-count
+                      gptel-auto-workflow--review-max-retries)
             (run-with-timer
              gptel-auto-experiment-retry-delay nil
              (lambda ()
@@ -5811,6 +5821,17 @@ can use newer models without a restart."
    ((member agent-type gptel-auto-workflow-headless-fallback-agents)
     gptel-auto-workflow-headless-subagent-fallbacks)))
 
+(defun gptel-auto-workflow--agent-base-preset (agent-type)
+  "Return the current base preset plist for AGENT-TYPE, or nil when unavailable."
+  (when-let* ((agent-type (and (stringp agent-type) agent-type))
+              (agent-config (and (boundp 'gptel-agent--agents)
+                                 (assoc agent-type gptel-agent--agents))))
+    (append (list :include-reasoning nil
+                  :use-tools t
+                  :use-context nil
+                  :stream my/gptel-subagent-stream)
+            (copy-sequence (cdr agent-config)))))
+
 (defun gptel-auto-workflow--runtime-subagent-provider-override (agent-type)
   "Return the active per-run provider override for AGENT-TYPE, if any."
   (alist-get agent-type
@@ -5909,10 +5930,13 @@ name strings."
                          max-output))))
     override))
 
-(defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
-  "Activate a per-run fallback for AGENT-TYPE when RESULT shows provider pressure."
+(defun gptel-auto-workflow--activate-provider-failover (agent-type preset &optional reason)
+  "Mark PRESET's backend unavailable for this run and fail AGENT-TYPE over.
+
+REASON is only used for logging."
   (when (and (gptel-auto-workflow--headless-provider-override-active-p)
-             (gptel-auto-experiment--provider-pressure-error-p result))
+             (stringp agent-type)
+             (listp preset))
     (let* ((current-backend
             (gptel-auto-workflow--preset-backend-name
              (plist-get preset :backend)))
@@ -5926,12 +5950,24 @@ name strings."
               (gptel-auto-workflow--runtime-provider-failover-candidate
                agent-type preset)))
       (when candidate
-        (message "[auto-workflow] Provider pressure on %s/%s for %s; future retries will use %s/%s"
+        (message "[auto-workflow] Provider failure on %s/%s for %s%s; future retries will use %s/%s"
                  (or current-backend "unknown")
                  (or current-model "unknown")
                  agent-type
+                 (if (and (stringp reason) (not (string-empty-p reason)))
+                     (format " (%s)"
+                             (my/gptel--sanitize-for-logging reason 120))
+                   "")
                  (car candidate)
-                 (cdr candidate))))))
+                 (cdr candidate)))
+      candidate)))
+
+(defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
+  "Activate a per-run fallback for AGENT-TYPE when RESULT shows provider pressure."
+  (when (and (gptel-auto-workflow--headless-provider-override-active-p)
+             (gptel-auto-experiment--provider-pressure-error-p result))
+    (gptel-auto-workflow--activate-provider-failover
+     agent-type preset "provider pressure")))
 
 (defun gptel-auto-workflow--maybe-override-subagent-provider (agent-type preset)
   "Return PRESET with a fallback provider for headless auto-workflow AGENT-TYPE."
