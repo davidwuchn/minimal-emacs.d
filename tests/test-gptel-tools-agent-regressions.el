@@ -220,10 +220,16 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (check-script (expand-file-name "check-submodule-sync.sh" script-dir))
          (call-log (make-temp-file "aw-verify-submodule-calls"))
          (fake-emacs
-          (test-auto-workflow--write-shell-script "fake-emacs" "exit 0"))
+           (test-auto-workflow--write-shell-script "fake-emacs" "exit 0"))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (or (string-prefix-p "EMACS=" entry)
+                 (string-prefix-p "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=" entry)))
+           process-environment))
          (process-environment
           (append (list (format "EMACS=%s" fake-emacs))
-                  process-environment))
+                  base-environment))
          (default-directory temp-root))
     (unwind-protect
         (progn
