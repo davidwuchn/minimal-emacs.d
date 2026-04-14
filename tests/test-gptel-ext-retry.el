@@ -219,6 +219,12 @@
   (should (test--transient-error-p '(:message "Request timeout") nil))
   (should (test--transient-error-p '(:message "Free usage limit reached") nil)))
 
+(ert-deftest retry/transient-error/plist-format-with-misleading-success-status ()
+  "Transient plist messages should still retry when ERRS carries a success code."
+  (should (test--transient-error-p '(:message "Rate limit exceeded") 200))
+  (should (test--transient-error-p '(:message "Request timeout") "204"))
+  (should-not (test--transient-error-p '(:message "Model not found") 200)))
+
 (ert-deftest retry/transient-error/non-transient ()
   "Should not detect non-transient errors."
   (should-not (test--transient-error-p nil 400))

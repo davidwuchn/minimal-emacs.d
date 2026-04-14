@@ -411,9 +411,9 @@ BEHAVIOR: Checks both string error messages and numeric HTTP status codes.
 EDGE CASE: error-data can be string, plist, or nil. Handles all three.
 EDGE CASE: http-status can be string, number, or t (curl success). Converts
   strings to numbers, ignores t.
-EDGE CASE: When status is nil (unknown), message patterns are still checked.
-  When status is a known success code (2xx/3xx), message patterns are skipped
-  to prevent false-positive retries on successful responses.
+EDGE CASE: Misleading success codes can still accompany application-level
+  transient errors after the FSM has already entered `ERRS', so plist message
+  patterns are checked for any status except known auth failures (401/403).
 
 TEST: (my/gptel--transient-error-p \"Malformed JSON\" 500) => t
 TEST: (my/gptel--transient-error-p \"Invalid API key\" 401) => nil
@@ -433,12 +433,11 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
              (listp error-data)
              (stringp error-msg)
              (string-match-p my/gptel--transient-http-400-patterns error-msg))
-        (and (listp error-data)
-             (stringp error-msg)
-             (or (null status)
-                 (not (memq status '(401 403 200 201 202 204 301 302 304))))
-             (string-match-p my/gptel--transient-error-message-patterns
-                             (downcase error-msg))))))
+         (and (listp error-data)
+              (stringp error-msg)
+              (not (memq status '(401 403)))
+              (string-match-p my/gptel--transient-error-message-patterns
+                              (downcase error-msg))))))
 
 (defun my/gptel--cleanup-partial-insertion (info)
   "Remove partial buffer text inserted before a failed request.
