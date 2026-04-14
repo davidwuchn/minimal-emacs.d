@@ -6862,6 +6862,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
          (calls-file (expand-file-name "probe-calls.txt" status-dir))
+         (tmp-root (make-temp-file "aw-tmp" t))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
          (fake-emacs
@@ -6895,23 +6896,25 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (with-temp-file status-file
             (insert "(:running t :kept 1 :total 1 :phase \"running\" :run-id \"2026-04-14T160001Z-2523\" :results \"var/tmp/experiments/2026-04-14T160001Z-2523/results.tsv\")\n"))
           (set-file-times status-file (time-subtract (current-time) (seconds-to-time 120)))
-          (let* ((process-environment
-                  (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
-                                (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
-                                "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=1")
-                          process-environment))
-                 (output (shell-command-to-string (format "%s status" script))))
-            (should (string-match-p ":running t" output))
-            (should (string-match-p ":phase \"running\"" output)))
+           (let* ((process-environment
+                   (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                                 (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                                 (format "TMPDIR=%s/" tmp-root)
+                                 "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=1")
+                           process-environment))
+                  (output (shell-command-to-string (format "%s status" script))))
+             (should (string-match-p ":running t" output))
+             (should (string-match-p ":phase \"running\"" output)))
           (with-temp-buffer
             (insert-file-contents status-file)
             (should (string-match-p ":running t" (buffer-string)))
             (should (string-match-p ":phase \"running\"" (buffer-string))))
           (with-temp-buffer
-            (insert-file-contents calls-file)
-            (should (string= "2" (string-trim (buffer-string))))))
-      (delete-directory status-dir t)
-      (delete-directory fake-bin t))))
+             (insert-file-contents calls-file)
+             (should (string= "2" (string-trim (buffer-string))))))
+       (delete-directory status-dir t)
+       (delete-directory tmp-root t)
+       (delete-directory fake-bin t))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-status-retries-transient-daemon-ping ()
   "Wrapper status should not clear a live snapshot after one transient daemon ping failure."
