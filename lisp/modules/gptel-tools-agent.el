@@ -4773,13 +4773,13 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                                    (gptel-auto-workflow--hydrate-staging-submodules worktree)))
                  (hydrate-pass (or (not hydrate-submodules-p)
                                    (= 0 (cdr hydrate-result)))))
-             (if (not hydrate-pass)
-                 (progn
-                   (with-current-buffer output-buffer
-                     (insert (car hydrate-result) "\n"))
-                   (message "[auto-experiment] ✗ Submodule hydration failed: %s"
-                            (my/gptel--sanitize-for-logging (car hydrate-result) 200))
-                   (cons nil (with-current-buffer output-buffer (buffer-string))))
+            (if (not hydrate-pass)
+                (progn
+                  (with-current-buffer output-buffer
+                    (insert (car hydrate-result) "\n"))
+              (message "[auto-experiment] ✗ Submodule hydration failed: %s"
+                       (my/gptel--sanitize-for-logging (car hydrate-result) 200))
+                  (cons nil (with-current-buffer output-buffer (buffer-string))))
               (message "[auto-experiment] Running tests...")
               (let ((exit-code
                      (gptel-auto-workflow--call-process-with-watchdog
@@ -5219,10 +5219,7 @@ still improves."
           (list :winner "A"
                 :note (format "Rejected: score tie without >= %.2f quality gain"
                               gptel-auto-experiment-min-quality-gain-on-score-tie))
-        (list :winner (if (string= winner "tie") "B" winner)
-              :note (and (string= winner "tie")
-                         (format "Kept: score tie with >= %.2f quality gain"
-                                 gptel-auto-experiment-min-quality-gain-on-score-tie)))))))
+        (list :winner winner)))))
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
@@ -7390,9 +7387,9 @@ Prevents workflow from hanging indefinitely due to callback failures."
               gptel-auto-workflow--run-project-root nil
               gptel-auto-workflow--current-project nil
               gptel-auto-workflow--current-target nil)
-        (setq gptel-auto-workflow--stats
-              (plist-put gptel-auto-workflow--stats :phase "idle"))
-        (gptel-auto-workflow--persist-status)
+    (setq gptel-auto-workflow--stats
+          (plist-put gptel-auto-workflow--stats :phase "idle"))
+    (gptel-auto-workflow--persist-status)
         (when gptel-auto-workflow--watchdog-timer
           (cancel-timer gptel-auto-workflow--watchdog-timer)
           (setq gptel-auto-workflow--watchdog-timer nil))

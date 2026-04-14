@@ -20,6 +20,7 @@
 (defvar test-truncate-old-messages-keep 6)
 (defvar test-trim-min-bytes 0)
 (defvar test-reasoning-keep-turns 1)
+(defvar test-retry-preserve-tools '("TodoWrite" "RunAgent" "Skill" "create_skill"))
 
 (defvar test-model-context-bytes
   '((kimi-k2\.5        . 400000)
@@ -36,7 +37,7 @@
   "Create an info plist with :data."
   (list :data (list :messages (vconcat (plist-get plist :messages))
                     :tools (plist-get plist :tools))
-        :model (or (plist-get plist :model) 'kimi-k2.5)
+        :model (or (plist-get plist :model) "kimi-k2.5")
         :retries (or (plist-get plist :retries) 0)))
 
 (defun test-make-tool-result (id content)
@@ -59,12 +60,15 @@
 
 (defun test--transient-error-p (error-data http-status)
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error."
-  (or (and (stringp error-data)
-           (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|exit code 28\\|exit code 6\\|exit code 7\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
-      (and (numberp http-status) (memq http-status '(408 429 500 502 503 504)))
-      (and (listp error-data)
-           (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
-                           (downcase (or (plist-get error-data :message) ""))))))
+  (let ((error-msg (when (listp error-data)
+                    (or (plist-get error-data :message)
+                        (cdr (assq 'message error-data))))))
+    (or (and (stringp error-data)
+             (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|exit code 28\\|exit code 6\\|exit code 7\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
+        (and (numberp http-status) (memq http-status '(408 429 500 502 503 504)))
+        (and (stringp error-msg)
+             (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
+                             (downcase error-msg))))))
 
 (defun test--trim-tool-results-for-retry (info)
   "Trim old tool-result content in INFO's :data :messages to reduce payload."
@@ -89,10 +93,34 @@
                 (let* ((msg (aref messages idx))
                        (content (plist-get msg :content)))
                   (when (and (stringp content)
-                             (> (length content) (length replacement)))
-                    (plist-put msg :content replacement)
-                    (cl-incf truncated))))))))
+                              (> (string-bytes content) (string-bytes replacement)))
+                     (plist-put msg :content replacement)
+                     (cl-incf truncated))))))))
       truncated)))
+
+(defun test--strip-images-from-messages (info)
+  "Strip image parts from multimodal message content in INFO."
+  (let* ((data (plist-get info :data))
+         (messages (and data (plist-get data :messages)))
+         (removed 0))
+    (when (and messages (> (length messages) 0))
+      (dotimes (i (length messages))
+        (let* ((msg (aref messages i))
+               (content (plist-get msg :content)))
+          (when (and content (sequencep content) (not (stringp content)) (> (length content) 0))
+            (let* ((original-length (length content))
+                   (image-p
+                    (lambda (part)
+                      (and (listp part)
+                           (equal (plist-get part :type) "image_url"))))
+                   (filtered
+                    (if (vectorp content)
+                        (vconcat (cl-remove-if image-p content))
+                      (cl-remove-if image-p content))))
+              (when (< (length filtered) original-length)
+                (cl-incf removed (- original-length (length filtered)))
+                (plist-put msg :content filtered)))))))
+    removed))
 
 (defun test--trim-reasoning-content (info)
   "Strip reasoning_content from assistant messages in INFO."
@@ -115,6 +143,7 @@
          (messages (and data (plist-get data :messages)))
          (data-tools (and data (plist-get data :tools)))
          (used-names (make-hash-table :test #'equal))
+         (preserved-names (delq nil (copy-sequence test-retry-preserve-tools)))
          (removed 0))
     (when (and messages data-tools (> (length data-tools) 0))
       (dotimes (i (length messages))
@@ -129,16 +158,17 @@
                   (puthash name t used-names)))))))
       (when (> (hash-table-count used-names) 0)
         (let* ((original-count (length data-tools))
-               (filtered (vconcat
-                          (cl-remove-if-not
-                           (lambda (tool-plist)
-                             (let* ((func (plist-get tool-plist :function))
-                                    (name (and func (plist-get func :name))))
-                               (gethash name used-names)))
-                           (append data-tools nil))))
-               (new-count (length filtered)))
-          (when (< new-count original-count)
-            (plist-put data :tools filtered)
+                (filtered (vconcat
+                           (cl-remove-if-not
+                            (lambda (tool-plist)
+                              (let* ((func (plist-get tool-plist :function))
+                                     (name (and func (plist-get func :name))))
+                                (or (gethash name used-names)
+                                    (member name preserved-names))))
+                            (append data-tools nil))))
+                (new-count (length filtered)))
+           (when (< new-count original-count)
+             (plist-put data :tools filtered)
             (setq removed (- original-count new-count))))))
     removed))
 
@@ -164,17 +194,21 @@
                 (cl-incf truncated))))))
       truncated)))
 
+(defun test--model-context-limit (model)
+  "Return the configured context byte limit for MODEL."
+  (when (stringp model)
+    (cl-loop for (pattern . limit) in test-model-context-bytes
+             when (cond
+                   ((stringp pattern) (string= pattern model))
+                   ((symbolp pattern) (string-match-p (symbol-name pattern) model))
+                   (t nil))
+             return limit)))
+
 (defun test--effective-byte-limit (info)
   "Return the byte limit to use for INFO's request."
   (let* ((model (plist-get info :model))
          (global-limit (or test-payload-byte-limit 999999999))
-         (model-limit
-          (if (stringp model)
-              (or (cl-loop for (pattern . limit) in test-model-context-bytes
-                           when (string-match-p (symbol-name pattern) model)
-                           return limit)
-                  999999999)
-            (or (alist-get model test-model-context-bytes) 999999999))))
+         (model-limit (or (test--model-context-limit model) 999999999)))
     (min global-limit model-limit)))
 
 (defun test--estimate-payload-bytes (info)
@@ -218,6 +252,11 @@
   (should (test--transient-error-p '(:message "Rate limit exceeded") nil))
   (should (test--transient-error-p '(:message "Request timeout") nil))
   (should (test--transient-error-p '(:message "Free usage limit reached") nil)))
+
+(ert-deftest retry/transient-error/alist-format ()
+  "Should detect transient errors from alist format."
+  (should (test--transient-error-p '((message . "The model is overloaded")) nil))
+  (should (test--transient-error-p '((message . "Too many requests")) nil)))
 
 (ert-deftest retry/transient-error/non-transient ()
   "Should not detect non-transient errors."
@@ -338,6 +377,48 @@
                               (test-make-tool-def "write_file")))))
     (should (= 0 (test--reduce-tools-for-retry info)))))
 
+(ert-deftest retry/reduce-tools/preserves-configured-late-tools ()
+  "Should keep preserved tools even when earlier turns used different tools."
+  (let ((test-retry-preserve-tools '("TodoWrite"))
+        (info (test-make-info
+               :messages (list (test-make-assistant-with-tool-call "1" "read_file"))
+               :tools (vector (test-make-tool-def "read_file")
+                              (test-make-tool-def "TodoWrite")
+                              (test-make-tool-def "search")))))
+    (should (= 1 (test--reduce-tools-for-retry info)))
+    (let ((tools (plist-get (plist-get info :data) :tools)))
+      (should (= 2 (length tools)))
+      (should (equal (mapcar (lambda (tool)
+                               (plist-get (plist-get tool :function) :name))
+                             (append tools nil))
+                     '("read_file" "TodoWrite"))))))
+
+(ert-deftest retry/reduce-tools/no-tool-calls-does-not-prune-to-preserved-set ()
+  "Preserved tools should not force reduction without prior tool calls."
+  (let ((test-retry-preserve-tools '("TodoWrite"))
+        (info (test-make-info
+               :messages (list '(:role "user" :content "hi"))
+               :tools (vector (test-make-tool-def "read_file")
+                              (test-make-tool-def "TodoWrite")
+                              (test-make-tool-def "search")))))
+    (should (= 0 (test--reduce-tools-for-retry info)))
+    (let ((tools (plist-get (plist-get info :data) :tools)))
+      (should (= 3 (length tools))))))
+
+(ert-deftest retry/strip-images/counts-only-removed-images ()
+  "Should count only removed image parts, not every typed content part."
+  (let* ((info (test-make-info
+                :messages (list
+                           (list :role "user"
+                                 :content (vector
+                                           '(:type "text" :text "hello")
+                                           '(:type "image_url" :image_url (:url "x"))
+                                           '(:type "tool_result" :text "ok")))))))
+    (should (= 1 (test--strip-images-from-messages info)))
+    (let* ((messages (plist-get (plist-get info :data) :messages))
+           (content (plist-get (aref messages 0) :content)))
+      (should (= 2 (length content))))))
+
 ;;; Tests for truncate-old-messages
 
 (ert-deftest retry/truncate-old-messages/truncates-beyond-keep ()
@@ -374,19 +455,34 @@
 
 (ert-deftest retry/effective-limit/uses-model-limit ()
   "Should use model-specific limit."
-  (let ((info (test-make-info :model 'deepseek-chat)))
+  (let ((info (test-make-info :model "deepseek-chat")))
     (should (= 200000 (test--effective-byte-limit info)))))
 
 (ert-deftest retry/effective-limit/uses-global-limit ()
   "Should use global limit when model unknown."
-  (let ((info (test-make-info :model 'unknown-model)))
+  (let ((info (test-make-info :model "unknown-model")))
     (should (= test-payload-byte-limit (test--effective-byte-limit info)))))
 
 (ert-deftest retry/effective-limit/unknown-model ()
   "Should handle unknown models."
   (let ((test-payload-byte-limit nil)
-        (info (test-make-info :model 'completely-unknown)))
+        (info (test-make-info :model "completely-unknown")))
     (should (< 0 (test--effective-byte-limit info)))))
+
+(ert-deftest retry/effective-limit/regex-symbol-support ()
+  "Regex-style symbol keys should match string model names."
+  (let ((test-model-context-bytes '((qwen3\.5-plus . 123456)))
+        (info (test-make-info :model "qwen3.5-plus-2026")))
+    (should (= 123456 (test--effective-byte-limit info)))))
+
+(ert-deftest retry/effective-limit/string-key-support ()
+  "Exact string keys should also match string model names."
+  (let ((test-model-context-bytes '(("MiniMax-M2.5" . 654321)))
+        (info (test-make-info :model "MiniMax-M2.5")))
+    (let ((test-payload-byte-limit 200000))
+      (should (= 200000 (test--effective-byte-limit info))))
+    (let ((test-payload-byte-limit 999999999))
+      (should (= 654321 (test--effective-byte-limit info))))))
 
 ;;; Tests for estimate-payload-bytes
 
