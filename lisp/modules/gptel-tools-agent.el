@@ -5234,19 +5234,26 @@ still improves."
          (score-delta (- score-after score-before))
          (quality-delta (- quality-after quality-before))
          (combined-delta (- combined-after combined-before)))
-    (if (<= score-delta (- decision-threshold))
-        (list :winner "A"
-              :note "Rejected: score regressed")
-      (if (and (< (abs score-delta) decision-threshold)
-               (> combined-delta 0)
-               (< quality-delta gptel-auto-experiment-min-quality-gain-on-score-tie))
-          (list :winner "A"
-                :note (format "Rejected: score tie without >= %.2f quality gain"
+    (cond
+     ((<= score-delta (- decision-threshold))
+      (list :winner "A"
+            :note "Rejected: score regressed"))
+     ((< (abs score-delta) decision-threshold)
+      (if (and (> combined-delta 0)
+               (>= quality-delta gptel-auto-experiment-min-quality-gain-on-score-tie))
+          (list :winner "B"
+                :note (format "Kept: score tie with >= %.2f quality gain"
                               gptel-auto-experiment-min-quality-gain-on-score-tie))
-        (list :winner (if (string= winner "tie") "B" winner)
-              :note (and (string= winner "tie")
-                         (format "Kept: score tie with >= %.2f quality gain"
-                                 gptel-auto-experiment-min-quality-gain-on-score-tie)))))))
+        (list :winner "A"
+              :note (if (<= combined-delta 0)
+                        "Rejected: score tie without positive combined improvement"
+                      (format "Rejected: score tie without >= %.2f quality gain"
+                              gptel-auto-experiment-min-quality-gain-on-score-tie)))))
+     (t
+      (list :winner (if (string= winner "tie") "B" winner)
+            :note (and (string= winner "tie")
+                       (format "Kept: score tie with >= %.2f quality gain"
+                               gptel-auto-experiment-min-quality-gain-on-score-tie)))))))
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
