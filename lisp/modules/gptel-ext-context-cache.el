@@ -489,10 +489,10 @@ Handles API key lookup, process creation, JSON parsing, and error handling."
         (max-time (or max-time 120)))
     (unless my/gptel--openrouter-context-window-fetch-inflight
       (let* ((key (condition-case err
-                       (gptel-api-key-from-auth-source "api.openrouter.com" "api")
-                     (error
-                      (message "OpenRouter: failed to get API key: %s" (error-message-string err))
-                      nil)))
+                      (gptel-api-key-from-auth-source "api.openrouter.com" "api")
+                    (error
+                     (message "OpenRouter: failed to get API key: %s" (error-message-string err))
+                     nil)))
              (buf (generate-new-buffer (format " *%s*" process-name))))
         (if (not (and (stringp key) (not (string-empty-p key))))
             (progn
@@ -762,7 +762,7 @@ Use `my/gptel-show-provider-contract' to query.")
   "Return model context window if available, else fall back to defaults.
 
 Fallback order:
-1. Cached context window for model-id
+1. Cached context window for model-id (with known-model alist fallback)
 2. gptel model tables (OpenAI, Gemini, etc.)
 3. Known model metadata (from cache or known list)
 4. my/gptel-default-context-window (128k default)
@@ -772,7 +772,9 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
   (let ((model-id (my/gptel--model-id-string gptel-model)))
     (cond
      ((not (stringp model-id)) my/gptel-default-context-window)
-     ((gethash model-id my/gptel--context-window-cache))
+     ((my/gptel--cache-or-alist-lookup my/gptel--context-window-cache
+                                       my/gptel--known-model-context-windows
+                                       model-id))
      ((my/gptel--lookup-context-window-in-gptel-tables gptel-model))
      ((let ((meta (my/gptel-get-model-metadata model-id)))
         (plist-get meta :context-window)))
