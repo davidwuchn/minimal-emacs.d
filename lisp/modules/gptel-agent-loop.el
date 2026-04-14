@@ -462,7 +462,6 @@ limit for early exit."
          (not (gptel-agent-loop--seems-complete-p resp))
          (not (gptel-agent-loop--looks-like-finishing-p resp))
          (not (gptel-agent-loop--task-max-steps-reached state))
-         (> (gptel-agent-loop--task-step-count state) 0)
          (or (gptel-agent-loop--turn-skipped-p resp)
              (gptel-agent-loop--looks-like-planning-p resp)))))
 
