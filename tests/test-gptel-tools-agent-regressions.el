@@ -817,11 +817,11 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   "Non-regressing ties should be kept when grading shows a real bug fix."
   (let ((decision
          (gptel-auto-experiment--promote-correctness-fix-decision
-          '(:keep nil
-            :reasoning "Winner: tie"
-            :improvement (:score 0.0 :quality 0.01 :combined 0.0))
-          t 8 9
-          "Fixes a bug where the sync path double-wraps runtime errors.")))
+           '(:keep nil
+             :reasoning "Winner: tie"
+             :improvement (:score 0.0 :quality 0.01 :combined 0.004))
+           t 8 9
+           "Fixes a bug where the sync path double-wraps runtime errors.")))
     (should (plist-get decision :keep))
     (should (string-match-p
              "Override: keep non-regressing high-confidence tie with passing tests"
@@ -831,26 +831,34 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   "Non-correctness ties should still be discarded."
   (let ((decision
          (gptel-auto-experiment--promote-correctness-fix-decision
-          '(:keep nil
-            :reasoning "Winner: tie"
-            :improvement (:score 0.0 :quality 0.01 :combined 0.0))
-          t 8 9
-          "Improves clarity and testability without changing behavior.")))
+           '(:keep nil
+             :reasoning "Winner: tie"
+             :improvement (:score 0.0 :quality 0.01 :combined 0.004))
+           t 8 9
+           "Improves clarity and testability without changing behavior.")))
     (should-not (plist-get decision :keep))))
 
-(ert-deftest regression/auto-experiment/promotes-perfect-grade-ties ()
-  "Perfect non-regressing ties should be kept even without bug-keyword phrasing."
+(ert-deftest regression/auto-experiment/does-not-promote-flat-perfect-grade-ties ()
+  "Exact ties should stay discarded even with a perfect grade."
+  (let ((decision
+         (gptel-auto-experiment--promote-correctness-fix-decision
+           '(:keep nil
+             :reasoning "Winner: tie"
+             :improvement (:score 0.0 :quality 0.0 :combined 0.0))
+           t 9 9
+           "Improves clarity and testability without changing behavior.")))
+    (should-not (plist-get decision :keep))))
+
+(ert-deftest regression/auto-experiment/does-not-promote-score-regressing-correctness-fixes ()
+  "Promotion must not override a real score regression."
   (let ((decision
          (gptel-auto-experiment--promote-correctness-fix-decision
           '(:keep nil
-            :reasoning "Winner: tie"
-            :improvement (:score 0.0 :quality 0.0 :combined 0.0))
+            :reasoning "Winner: A | Rejected: score regressed"
+            :improvement (:score -0.01 :quality 0.05 :combined 0.014))
           t 9 9
-          "Improves clarity and testability without changing behavior.")))
-    (should (plist-get decision :keep))
-    (should (string-match-p
-             "Override: keep non-regressing high-confidence tie with passing tests"
-             (plist-get decision :reasoning)))))
+          "Fixes a real correctness bug in the retry-state transition.")))
+    (should-not (plist-get decision :keep))))
 
 (ert-deftest regression/auto-experiment/grade-late-timeout-is-ignored ()
   "Successful grading should suppress any later timeout callback."
@@ -3312,8 +3320,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                    (lambda (_before _after cb)
                      (funcall cb
                               '(:keep nil
-                                :reasoning "Winner: tie | Score: 0.40 -> 0.40, Quality: 0.75 -> 0.76, Combined: 0.54 -> 0.54"
-                                :improvement (:score 0.0 :quality 0.01 :combined 0.0)))))
+                                :reasoning "Winner: tie | Score: 0.40 -> 0.40, Quality: 0.75 -> 0.76, Combined: 0.54 -> 0.544"
+                                :improvement (:score 0.0 :quality 0.01 :combined 0.004)))))
                   ((symbol-function 'gptel-auto-experiment--code-quality-score)
                    (lambda () 0.76))
                   ((symbol-function 'gptel-auto-experiment-log-tsv)
