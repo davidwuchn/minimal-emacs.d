@@ -220,10 +220,16 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (check-script (expand-file-name "check-submodule-sync.sh" script-dir))
          (call-log (make-temp-file "aw-verify-submodule-calls"))
          (fake-emacs
-          (test-auto-workflow--write-shell-script "fake-emacs" "exit 0"))
+           (test-auto-workflow--write-shell-script "fake-emacs" "exit 0"))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (or (string-prefix-p "EMACS=" entry)
+                 (string-prefix-p "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=" entry)))
+           process-environment))
          (process-environment
           (append (list (format "EMACS=%s" fake-emacs))
-                  process-environment))
+                  base-environment))
          (default-directory temp-root))
     (unwind-protect
         (progn
@@ -1726,10 +1732,58 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
               (funcall scheduled-next))
             (let ((second (car invocation-contexts)))
               (should (equal (plist-get second :exp-id) 2))
-              (should (equal (plist-get second :default-directory) project-root))
-               (should (equal (plist-get second :current-project) project-root))
-               (should (equal (plist-get second :run-project-root) project-root)))))
+               (should (equal (plist-get second :default-directory) project-root))
+                (should (equal (plist-get second :current-project) project-root))
+                (should (equal (plist-get second :run-project-root) project-root)))))
        (delete-directory project-root t))))
+
+(ert-deftest regression/auto-experiment/loop-baseline-rebinds-run-root ()
+  "Initial baseline probes should run from the stable workflow root."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-project" t)))
+         (drift-dir (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1"
+                                      project-root))
+         (gptel-auto-experiment-delay-between 0)
+         (gptel-auto-experiment-max-per-target 1)
+         (gptel-auto-experiment-no-improvement-threshold 99)
+         (gptel-auto-workflow--run-project-root project-root)
+         (gptel-auto-workflow--current-project (file-name-as-directory drift-dir))
+         contexts)
+    (unwind-protect
+        (progn
+          (make-directory drift-dir t)
+          (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+                     (lambda (&rest _)
+                       (push (list :fn 'benchmark
+                                   :default-directory default-directory
+                                   :current-project gptel-auto-workflow--current-project
+                                   :run-project-root gptel-auto-workflow--run-project-root)
+                             contexts)
+                       '(:eight-keys 0.4)))
+                    ((symbol-function 'gptel-auto-experiment--code-quality-score)
+                     (lambda ()
+                       (push (list :fn 'quality
+                                   :default-directory default-directory
+                                   :current-project gptel-auto-workflow--current-project
+                                   :run-project-root gptel-auto-workflow--run-project-root)
+                             contexts)
+                       0.5))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil))
+                    ((symbol-function 'gptel-auto-experiment--run-with-retry)
+                     (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results cb &optional _retry-count)
+                       (funcall cb (list :target "target"
+                                         :id 1
+                                         :score-after 0.4
+                                         :kept nil
+                                         :agent-output "no-op")))))
+            (with-temp-buffer
+              (setq default-directory (file-name-as-directory drift-dir))
+              (gptel-auto-experiment-loop "target" (lambda (&rest _) nil))))
+          (dolist (context contexts)
+            (should (equal (plist-get context :default-directory) project-root))
+            (should (equal (plist-get context :current-project) project-root))
+            (should (equal (plist-get context :run-project-root) project-root))))
+      (delete-directory project-root t))))
 
 (ert-deftest regression/auto-experiment/loop-delay-skips-stale-run ()
   "Delayed next-experiment callbacks should return accumulated results when stale."

@@ -6905,87 +6905,94 @@ ORIGINAL TASK:
   "Run experiments for TARGET until stop condition. Call CALLBACK with results.
 Uses local state captured in closure for parallel execution safety.
 Adapts max-experiments based on API error rate."
-  (let* ((baseline (gptel-auto-experiment-benchmark t))
-         (baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5))
-         (original-max gptel-auto-experiment-max-per-target)
+  (let* ((workflow-root (gptel-auto-workflow--resolve-run-root))
+         (loop-buffer (current-buffer))
+         baseline
+         baseline-code-quality)
+    (gptel-auto-workflow--call-in-run-context
+     workflow-root
+     (lambda ()
+       (setq baseline (gptel-auto-experiment-benchmark t)
+             baseline-code-quality (or (gptel-auto-experiment--code-quality-score) 0.5)))
+     loop-buffer
+     workflow-root)
+    (let* ((original-max gptel-auto-experiment-max-per-target)
          (max-exp (gptel-auto-experiment--adaptive-max-experiments original-max))
          (threshold gptel-auto-experiment-no-improvement-threshold)
          (run-id gptel-auto-workflow--run-id)
-         (workflow-root (gptel-auto-workflow--resolve-run-root))
-         (loop-buffer (current-buffer))
          (results nil)
          (best-score (let ((score (gptel-auto-workflow--plist-get baseline :eight-keys nil)))
                        (if (numberp score) score 0.0)))
          (no-improvement-count 0))
-    (message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
-             target best-score max-exp)
-    (cl-labels ((run-next (exp-id)
-                  (when gptel-auto-experiment--quota-exhausted
-                    (message "[auto-workflow] Provider quota exhausted; stopping early for %s"
-                             target)
-                    (setq max-exp (min max-exp (1- exp-id))))
-                  (when (and (>= gptel-auto-experiment--api-error-count
-                                 gptel-auto-experiment--api-error-threshold)
-                             (< exp-id max-exp))
-                    (message "[auto-workflow] API pressure reached threshold (%d), stopping early for %s"
-                             gptel-auto-experiment--api-error-count target)
-                    (setq max-exp (1- exp-id)))
-                  (if (or (> exp-id max-exp)
-                          (>= no-improvement-count threshold))
-                      (progn
-                        (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
-                                 target (length results)
-                                 best-score)
-                        (funcall callback (nreverse results)))
-                    (gptel-auto-experiment--run-with-retry
-                     target exp-id max-exp
-                     best-score
-                     baseline-code-quality
-                     results
-                     (lambda (result)
-                       (push result results)
-                       (gptel-auto-workflow--update-progress)
-                       (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
-                              (kept (gptel-auto-workflow--plist-get result :kept nil))
-                              (quality-after
-                               (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
-                              (hard-timeout
-                               (gptel-auto-experiment--result-hard-timeout-p result))
-                              (next-exp-id (if hard-timeout
-                                               (1+ max-exp)
-                                             (1+ exp-id))))
-                         (when kept
-                           (setq best-score score-after
-                                 baseline-code-quality quality-after
-                                 no-improvement-count 0))
-                         (when (and (not kept)
-                                    score-after
-                                    (< score-after best-score))
-                           (cl-incf no-improvement-count))
-                         (when hard-timeout
-                           (message "[auto-experiment] Hard timeout for %s in experiment %d; stopping remaining experiments for this target"
-                                    target exp-id))
-                         (let ((continue
-                                (lambda ()
-                                  (if (gptel-auto-workflow--run-callback-live-p run-id)
-                                      (gptel-auto-workflow--call-in-run-context
-                                       workflow-root
-                                       (lambda () (run-next next-exp-id))
-                                       loop-buffer
-                                       workflow-root)
-                                    (progn
-                                      (message "[auto-experiment] Run %s no longer active; returning accumulated results for %s"
-                                               run-id target)
-                                      (funcall callback (nreverse results)))))))
-                           (if (> gptel-auto-experiment-delay-between 0)
-                               (run-with-timer gptel-auto-experiment-delay-between nil
-                                               continue)
-                             (funcall continue)))))))))
-      (gptel-auto-workflow--call-in-run-context
-       workflow-root
-       (lambda () (run-next 1))
-       loop-buffer
-       workflow-root))))
+      (message "[auto-experiment] Baseline for %s: %.2f (max-exp: %d)"
+               target best-score max-exp)
+      (cl-labels ((run-next (exp-id)
+                    (when gptel-auto-experiment--quota-exhausted
+                      (message "[auto-workflow] Provider quota exhausted; stopping early for %s"
+                               target)
+                      (setq max-exp (min max-exp (1- exp-id))))
+                    (when (and (>= gptel-auto-experiment--api-error-count
+                                   gptel-auto-experiment--api-error-threshold)
+                               (< exp-id max-exp))
+                      (message "[auto-workflow] API pressure reached threshold (%d), stopping early for %s"
+                               gptel-auto-experiment--api-error-count target)
+                      (setq max-exp (1- exp-id)))
+                    (if (or (> exp-id max-exp)
+                            (>= no-improvement-count threshold))
+                        (progn
+                          (message "[auto-experiment] Done with %s: %d experiments, best score %.2f"
+                                   target (length results)
+                                   best-score)
+                          (funcall callback (nreverse results)))
+                      (gptel-auto-experiment--run-with-retry
+                       target exp-id max-exp
+                       best-score
+                       baseline-code-quality
+                       results
+                       (lambda (result)
+                         (push result results)
+                         (gptel-auto-workflow--update-progress)
+                         (let* ((score-after (gptel-auto-workflow--plist-get result :score-after 0))
+                                (kept (gptel-auto-workflow--plist-get result :kept nil))
+                                (quality-after
+                                 (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
+                                (hard-timeout
+                                 (gptel-auto-experiment--result-hard-timeout-p result))
+                                (next-exp-id (if hard-timeout
+                                                 (1+ max-exp)
+                                               (1+ exp-id))))
+                           (when kept
+                             (setq best-score score-after
+                                   baseline-code-quality quality-after
+                                   no-improvement-count 0))
+                           (when (and (not kept)
+                                      score-after
+                                      (< score-after best-score))
+                             (cl-incf no-improvement-count))
+                           (when hard-timeout
+                             (message "[auto-experiment] Hard timeout for %s in experiment %d; stopping remaining experiments for this target"
+                                      target exp-id))
+                           (let ((continue
+                                  (lambda ()
+                                    (if (gptel-auto-workflow--run-callback-live-p run-id)
+                                        (gptel-auto-workflow--call-in-run-context
+                                         workflow-root
+                                         (lambda () (run-next next-exp-id))
+                                         loop-buffer
+                                         workflow-root)
+                                      (progn
+                                        (message "[auto-experiment] Run %s no longer active; returning accumulated results for %s"
+                                                 run-id target)
+                                        (funcall callback (nreverse results)))))))
+                             (if (> gptel-auto-experiment-delay-between 0)
+                                 (run-with-timer gptel-auto-experiment-delay-between nil
+                                                 continue)
+                               (funcall continue)))))))))
+        (gptel-auto-workflow--call-in-run-context
+         workflow-root
+         (lambda () (run-next 1))
+         loop-buffer
+         workflow-root)))))
 
 ;;; Main Entry Point
 
