@@ -5394,19 +5394,29 @@ GRADE-TOTAL can be nil when the grader omits an explicit denominator."
 (defun gptel-auto-experiment--promote-correctness-fix-decision
     (decision tests-passed grade-score grade-total grade-details)
   "Return DECISION or a promoted keep decision for high-confidence ties.
-Promotion is allowed only for non-regressing ties with passing tests and either
-a perfect grader result or strong grader evidence of a real correctness fix."
+Promotion is allowed only for non-regressing ties with passing tests, some
+positive quality/combined improvement, and either a perfect grader result or
+strong grader evidence of a real correctness fix."
   (let* ((improvement (and (listp decision) (plist-get decision :improvement)))
+         (decision-threshold 0.005)
+         (score-delta (if (listp improvement)
+                          (or (plist-get improvement :score) 0)
+                        0))
+         (quality-delta (if (listp improvement)
+                            (or (plist-get improvement :quality) 0)
+                          0))
          (combined-delta (if (listp improvement)
-                             (or (plist-get improvement :combined) 0)
-                           0))
+                              (or (plist-get improvement :combined) 0)
+                            0))
          (reasoning (and (listp decision) (plist-get decision :reasoning)))
          (override-note
           "Override: keep non-regressing high-confidence tie with passing tests"))
     (if (or (not (listp decision))
             (plist-get decision :keep)
             (not tests-passed)
-            (< combined-delta 0)
+            (<= score-delta (- decision-threshold))
+            (<= quality-delta 0)
+            (<= combined-delta 0)
             (not (or (gptel-auto-experiment--perfect-grade-pass-p
                       grade-score grade-total)
                      (and (gptel-auto-experiment--strong-grade-pass-p
