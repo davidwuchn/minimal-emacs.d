@@ -311,16 +311,18 @@ PY
 }
 
 check_worker_daemon() {
-    local rc
+    local first_rc rc
     if run_emacsclient_eval "t" 1 >/dev/null 2>&1; then
         return 0
+    else
+        first_rc=$?
     fi
     if run_emacsclient_eval "t" 3 >/dev/null 2>&1; then
         return 0
     else
         rc=$?
     fi
-    if [ "$rc" -eq 124 ]; then
+    if [ "$first_rc" -eq 124 ] || [ "$rc" -eq 124 ]; then
         return 2
     fi
     return 1
