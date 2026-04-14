@@ -362,7 +362,7 @@ Call once after definitions to pre-compile regex patterns."
   (setq gptel-agent-loop--completion-patterns-compiled
         (gptel-agent-loop--compile-patterns gptel-agent-loop--completion-patterns))
   (setq gptel-agent-loop--turn-skipped-pattern-compiled
-        gptel-agent-loop--turn-skipped-pattern)
+        (gptel-agent-loop--compile-patterns (list gptel-agent-loop--turn-skipped-pattern)))
   (setq gptel-agent-loop--planning-patterns-compiled
         (gptel-agent-loop--compile-patterns gptel-agent-loop--planning-patterns))
   (setq gptel-agent-loop--finishing-patterns-compiled
