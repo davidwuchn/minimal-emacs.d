@@ -270,7 +270,7 @@ START-LINE and END-LINE specify the line range to return."
                  (total-lines (length lines))
                  (start (or start-line 1))
                  (end (min (or end-line total-lines) total-lines))
-                 (page-count (max 1 (how-many "\f" text))))
+                  (page-count (max 1 (1+ (cl-count ?\f text)))))
             (when (< start 1) (setq start 1))
             (when (> start total-lines) (setq start total-lines))
             (format "PDF: %s (%d pages, %d lines)\n\n%s"
