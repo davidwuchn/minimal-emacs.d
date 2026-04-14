@@ -447,6 +447,7 @@ CALLBACK receives non-nil when approved and nil when rejected."
   (let ((plan (plist-get state :mutating-plan)))
     (if (or (not (eq (gptel-sandbox--current-profile) 'agent))
             (plist-get state :aggregate-preview-shown)
+            (null plan)
             (<= (length plan) 1))
         (funcall callback t)
       (funcall gptel-sandbox-aggregate-confirm-function
