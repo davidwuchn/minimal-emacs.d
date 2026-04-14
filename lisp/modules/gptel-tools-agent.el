@@ -2558,8 +2558,9 @@ Call this before any git operation that might modify branches."
 (defun gptel-auto-workflow--staging-branch-exists-p ()
   "Check if staging branch exists locally or remotely."
   (let ((branch gptel-auto-workflow-staging-branch))
-    (or (member branch (magit-list-local-branch-names))
-        (member (concat "origin/" branch) (magit-list-remote-branch-names)))))
+    (when (gptel-auto-workflow--non-empty-string-p branch)
+      (or (member branch (magit-list-local-branch-names))
+          (member (concat "origin/" branch) (magit-list-remote-branch-names))))))
 
 (defun gptel-auto-workflow--staging-main-ref ()
   "Return the safe main ref staging and experiments should mirror.
@@ -3289,6 +3290,10 @@ non-nil. Otherwise leave the merge unresolved and return nil."
                   theirs)
                  ((gptel-auto-workflow--submodule-commit-ancestor-p git-dir theirs ours)
                   ours)
+                 ((gptel-auto-workflow--non-empty-string-p ours)
+                  ours)
+                 ((gptel-auto-workflow--non-empty-string-p theirs)
+                  theirs)
                  (t nil))))
           (if (not chosen)
               (setq all-resolved nil)
