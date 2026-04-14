@@ -591,21 +591,21 @@ Runs asynchronously; returns nil immediately."
 Run asynchronously. Use for bulk cache warming."
   (interactive)
   (let ((url "https://openrouter.ai/api/v1/models"))
-    (my/gptel--openrouter-fetch-with-callback
-     url
-     (lambda (data)
-       (let ((count 0))
-         (dolist (entry data)
-           (let* ((id (alist-get 'id entry))
-                  (cw (alist-get 'context_length entry)))
-             (when (and (stringp id) (integerp cw) (> cw 0))
-               (puthash id cw my/gptel--context-window-cache)
-               (cl-incf count))))
-         (message "OpenRouter: cached %d models" count)))
-     "gptel-openrouter-all-models"
-     10
-     120)
-    (message "OpenRouter: fetching all models...")))
+    (when (my/gptel--openrouter-fetch-with-callback
+           url
+           (lambda (data)
+             (let ((count 0))
+               (dolist (entry data)
+                 (let* ((id (alist-get 'id entry))
+                        (cw (alist-get 'context_length entry)))
+                   (when (and (stringp id) (integerp cw) (> cw 0))
+                     (puthash id cw my/gptel--context-window-cache)
+                     (cl-incf count))))
+               (message "OpenRouter: cached %d models" count)))
+           "gptel-openrouter-all-models"
+           10
+           120)
+      (message "OpenRouter: fetching all models..."))))
 
 (defun my/gptel-get-model-metadata (model-id)
   "Get metadata for MODEL-ID from cache.
