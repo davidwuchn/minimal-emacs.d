@@ -483,16 +483,23 @@ CALLBACK is a function called with (data) where data is the parsed 'data field.
 PROCESS-NAME defaults to \"gptel-openrouter-fetch\".
 CONNECT-TIMEOUT and MAX-TIME default to 10 and 120 seconds.
 
-Handles API key lookup, process creation, JSON parsing, and error handling."
+Handles API key lookup, process creation, JSON parsing, and error handling.
+Returns nil if curl is unavailable or a fetch is already in flight."
   (let ((process-name (or process-name "gptel-openrouter-fetch"))
         (connect-timeout (or connect-timeout 10))
         (max-time (or max-time 120)))
-    (unless my/gptel--openrouter-context-window-fetch-inflight
+    (cond
+     ((not (executable-find "curl"))
+      (message "OpenRouter: curl not found")
+      nil)
+     (my/gptel--openrouter-context-window-fetch-inflight
+      nil)
+     (t
       (let* ((key (condition-case err
-                       (gptel-api-key-from-auth-source "api.openrouter.com" "api")
-                     (error
-                      (message "OpenRouter: failed to get API key: %s" (error-message-string err))
-                      nil)))
+                      (gptel-api-key-from-auth-source "api.openrouter.com" "api")
+                    (error
+                     (message "OpenRouter: failed to get API key: %s" (error-message-string err))
+                     nil)))
              (buf (generate-new-buffer (format " *%s*" process-name))))
         (if (not (and (stringp key) (not (string-empty-p key))))
             (progn
@@ -525,7 +532,7 @@ Handles API key lookup, process creation, JSON parsing, and error handling."
                                 (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
                        (when (buffer-live-p buf) (kill-buffer buf)))))))
             (process-put proc 'my/gptel-managed t)
-            proc))))))
+            proc)))))))
 
 (cl-defun my/gptel--openrouter-fetch-context-window (&optional model)
   "Fetch context window for MODEL from OpenRouter and cache it.
@@ -536,12 +543,6 @@ Runs asynchronously; returns nil immediately."
     (cond
      ((or (not (stringp model-id)) (string= model-id "nil"))
       (message "OpenRouter context-window: model not set (gptel-model is nil)")
-      nil)
-     ((not (executable-find "curl"))
-      (message "OpenRouter context-window: curl not found")
-      nil)
-     (my/gptel--openrouter-context-window-fetch-inflight
-      (message "OpenRouter context-window: fetch already in progress")
       nil)
      (t
       (my/gptel--openrouter-fetch-with-callback
@@ -590,22 +591,20 @@ Runs asynchronously; returns nil immediately."
 Run asynchronously. Use for bulk cache warming."
   (interactive)
   (let ((url "https://openrouter.ai/api/v1/models"))
-    (when (and (not my/gptel--openrouter-context-window-fetch-inflight)
-               (executable-find "curl"))
-      (my/gptel--openrouter-fetch-with-callback
-       url
-       (lambda (data)
-         (let ((count 0))
-           (dolist (entry data)
-             (let* ((id (alist-get 'id entry))
-                    (cw (alist-get 'context_length entry)))
-               (when (and (stringp id) (integerp cw) (> cw 0))
-                 (puthash id cw my/gptel--context-window-cache)
-                 (cl-incf count))))
-           (message "OpenRouter: cached %d models" count)))
-       "gptel-openrouter-all-models"
-       10
-       120)
+    (when (my/gptel--openrouter-fetch-with-callback
+           url
+           (lambda (data)
+             (let ((count 0))
+               (dolist (entry data)
+                 (let* ((id (alist-get 'id entry))
+                        (cw (alist-get 'context_length entry)))
+                   (when (and (stringp id) (integerp cw) (> cw 0))
+                     (puthash id cw my/gptel--context-window-cache)
+                     (cl-incf count))))
+               (message "OpenRouter: cached %d models" count)))
+           "gptel-openrouter-all-models"
+           10
+           120)
       (message "OpenRouter: fetching all models..."))))
 
 (defun my/gptel-get-model-metadata (model-id)
@@ -762,7 +761,7 @@ Use `my/gptel-show-provider-contract' to query.")
   "Return model context window if available, else fall back to defaults.
 
 Fallback order:
-1. Cached context window for model-id
+1. Cached context window for model-id (with known-model alist fallback)
 2. gptel model tables (OpenAI, Gemini, etc.)
 3. Known model metadata (from cache or known list)
 4. my/gptel-default-context-window (128k default)
@@ -772,7 +771,9 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
   (let ((model-id (my/gptel--model-id-string gptel-model)))
     (cond
      ((not (stringp model-id)) my/gptel-default-context-window)
-     ((gethash model-id my/gptel--context-window-cache))
+     ((my/gptel--cache-or-alist-lookup my/gptel--context-window-cache
+                                       my/gptel--known-model-context-windows
+                                       model-id))
      ((my/gptel--lookup-context-window-in-gptel-tables gptel-model))
      ((let ((meta (my/gptel-get-model-metadata model-id)))
         (plist-get meta :context-window)))
