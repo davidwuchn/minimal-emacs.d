@@ -415,17 +415,13 @@ Returns (project-root . project-buffer) or nil if can't determine."
           (gptel-auto-workflow--get-project-buffer gptel-auto-workflow--project-root-override)))
    ;; Case 3: Check if current directory is a configured project
    ((and (boundp 'gptel-auto-workflow-projects)
-         (cl-some (lambda (proj)
-                    (when (string-prefix-p (expand-file-name proj)
-                                          (expand-file-name default-directory))
-                      proj))
-                  gptel-auto-workflow-projects))
-    (let ((proj (cl-some (lambda (p)
-                          (when (string-prefix-p (expand-file-name p)
-                                                (expand-file-name default-directory))
-                            p))
-                        gptel-auto-workflow-projects)))
-      (cons proj (gptel-auto-workflow--get-project-buffer proj))))
+         gptel-auto-workflow-projects)
+    (let ((proj (cl-loop for p in gptel-auto-workflow-projects
+                         when (string-prefix-p (expand-file-name p)
+                                               (expand-file-name default-directory))
+                         return p)))
+      (when proj
+        (cons proj (gptel-auto-workflow--get-project-buffer proj)))))
    ;; Case 4: Try to detect project from default-directory
    (t
     (let* ((proj (or (condition-case nil
