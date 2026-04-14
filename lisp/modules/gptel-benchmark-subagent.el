@@ -61,6 +61,12 @@ When nil, falls back to local evaluation."
   :type 'boolean
   :group 'gptel-benchmark-subagent)
 
+(defvar gptel-benchmark--subagent-files nil
+  "Dynamic file context for the next benchmark subagent dispatch.
+
+Callers may bind this to a list of files that should be included in the
+subagent context for a single dispatch.")
+
 ;;; Subagent Registry
 
 (defconst gptel-benchmark-subagent-types
@@ -94,15 +100,17 @@ Calls CALLBACK with result when complete.
 TIMEOUT overrides the default benchmark subagent timeout."
   (if (and gptel-benchmark-use-subagents
            (fboundp 'gptel-agent--task))
-      (let ((agent-type (symbol-name type)))
+      (let ((agent-type (symbol-name type))
+            (files gptel-benchmark--subagent-files))
         (if (fboundp 'my/gptel--agent-task-with-timeout)
             (let ((my/gptel-agent-task-timeout
-                   (or timeout gptel-benchmark-subagent-timeout)))
+                    (or timeout gptel-benchmark-subagent-timeout)))
               (my/gptel--agent-task-with-timeout
                callback
                agent-type
                description
-               prompt))
+               prompt
+               files))
           (gptel-agent--task
            callback
            agent-type
