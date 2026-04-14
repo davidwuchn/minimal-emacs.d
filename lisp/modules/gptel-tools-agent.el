@@ -2653,36 +2653,41 @@ absent."
                 60)))))
 
 (defun gptel-auto-workflow--refresh-staging-base-with-main (main-ref)
-  "Bring the current staging worktree up to MAIN-REF without dropping staging commits."
+  "Bring the current staging worktree up to MAIN-REF without dropping staging commits.
+Do not require the pre-merge staging checkout to hydrate cleanly: MAIN-REF may
+be the source of truth that repairs stale submodule gitlinks from origin/staging."
   (let ((worktree default-directory))
-    (if (not (gptel-auto-workflow--ensure-staging-submodules-ready worktree))
-        nil
-      (let* ((main-q (shell-quote-argument main-ref))
-             (ff-result
-              (gptel-auto-workflow--git-result
-               (format "git merge --ff-only %s" main-q)
-               180))
-             (ff-output (car ff-result)))
-        (cond
-         ((= 0 (cdr ff-result))
-          t)
-         ((string-match-p "Already up[ -]to[- ]date" ff-output)
-          t)
-         (t
-          (let* ((merge-result
-                  (gptel-auto-workflow--git-result
-                   (format "git merge -X theirs %s --no-ff -m %s"
-                           main-q
-                           (shell-quote-argument
-                            (format "Sync staging with %s" main-ref)))
-                   180))
-                 (merge-output (car merge-result)))
-            (cond
-             ((= 0 (cdr merge-result))
-              t)
-             ((string-match-p "Already up[ -]to[- ]date" merge-output)
-              t)
-             ((gptel-auto-workflow--resolve-ancestor-submodule-merge-conflicts worktree)
+    (let* ((main-q (shell-quote-argument main-ref))
+           (ff-result
+            (gptel-auto-workflow--git-result
+             (format "git merge --ff-only %s" main-q)
+             180))
+           (ff-output (car ff-result)))
+      (cond
+       ((= 0 (cdr ff-result))
+        t)
+       ((string-match-p "Already up[ -]to[- ]date" ff-output)
+        t)
+       (t
+        (let* ((merge-result
+                (gptel-auto-workflow--git-result
+                 (format "git merge -X theirs %s --no-ff -m %s"
+                         main-q
+                         (shell-quote-argument
+                          (format "Sync staging with %s" main-ref)))
+                 180))
+               (merge-output (car merge-result)))
+          (cond
+           ((= 0 (cdr merge-result))
+            t)
+           ((string-match-p "Already up[ -]to[- ]date" merge-output)
+            t)
+           ((gptel-auto-workflow--resolve-ancestor-submodule-merge-conflicts worktree)
+            (if (not (gptel-auto-workflow--ensure-staging-submodules-ready worktree))
+                (progn
+                  (ignore-errors
+                    (gptel-auto-workflow--git-cmd "git merge --abort" 60))
+                  nil)
               (let ((commit-result
                      (gptel-auto-workflow--git-result
                       (format "%s git commit --no-edit"
@@ -2695,14 +2700,14 @@ absent."
                   (message "[auto-workflow] Failed to finalize staging refresh with %s: %s"
                            main-ref
                            (my/gptel--sanitize-for-logging (car commit-result) 160))
-                  nil)))
-             (t
-              (ignore-errors
-                (gptel-auto-workflow--git-cmd "git merge --abort" 60))
-              (message "[auto-workflow] Failed to refresh staging with %s: %s"
-                       main-ref
-                       (my/gptel--sanitize-for-logging merge-output 160))
-              nil)))))))))
+                  nil))))
+           (t
+            (ignore-errors
+              (gptel-auto-workflow--git-cmd "git merge --abort" 60))
+            (message "[auto-workflow] Failed to refresh staging with %s: %s"
+                     main-ref
+                     (my/gptel--sanitize-for-logging merge-output 160))
+            nil))))))))
 
 
 (defun gptel-auto-workflow--sync-staging-from-main ()
