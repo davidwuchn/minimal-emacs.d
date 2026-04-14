@@ -263,11 +263,12 @@ Uses robust timeout mechanism to prevent blocking indefinitely."
                                           (setq done 'timeout)))))
           (set-process-sentinel process
                                 (lambda (proc _event)
-                                  (unless done
-                                    (setq done 'finished)
-                                    (setq exit-code (process-exit-status proc))
-                                    (with-current-buffer buffer
-                                      (setq result (buffer-string))))))
+                                  (when (and (not done)
+                                             (not (process-live-p proc)))
+                                     (setq done 'finished)
+                                     (setq exit-code (process-exit-status proc))
+                                     (with-current-buffer buffer
+                                       (setq result (buffer-string))))))
           ;; Poll with short timeout to avoid blocking indefinitely
           (while (and (not done)
                       (< (float-time (time-subtract (current-time) start-time)) timeout-seconds))

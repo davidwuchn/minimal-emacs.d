@@ -11177,6 +11177,24 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (when-let ((buf (get-buffer "*test-shell-timeout*")))
         (kill-buffer buf)))))
 
+(ert-deftest regression/auto-workflow/shell-timeout-ignores-run-sentinel-events ()
+  "Shell timeout helper should wait for process exit, not the initial run event."
+  (let ((result
+         (gptel-auto-workflow--shell-command-with-timeout
+          (concat "python -c "
+                  (shell-quote-argument
+                   (mapconcat #'identity
+                              '("import sys, time"
+                                "sys.stdout.write('pre-commit: byte-compiling staged .el files...\\n')"
+                                "sys.stdout.flush()"
+                                "time.sleep(0.2)"
+                                "sys.stdout.write('[branch] commit done\\n')"
+                                "sys.stdout.flush()")
+                              "; ")))
+          2)))
+    (should (equal result
+                   '("pre-commit: byte-compiling staged .el files...\n[branch] commit done\n" . 0)))))
+
 (ert-deftest regression/auto-workflow/ensure-staging-branch-fetches-remote-head-when-missing-locally ()
   "Ensure staging branch should use ls-remote and targeted fetch when only remote staging exists."
   (let ((commands nil))

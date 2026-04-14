@@ -149,7 +149,7 @@
   "Should preserve order for first occurrence of each name."
   (let ((tools (list '(:name "A") '(:name "B") '(:name "A"))))
     (let ((deduped (test-dedup-tools tools)))
-      (should (equal (mapcar (lambda (t) (plist-get t :name)) deduped) '("B" "A"))))))
+      (should (equal (mapcar (lambda (tool) (plist-get tool :name)) deduped) '("B" "A"))))))
 
 (ert-deftest sanitize/dedup/triple-duplicate ()
   "Should handle triple duplicates."
@@ -201,6 +201,35 @@
   (let* ((fp (test-tool-call-fingerprint '(:name "Read" :args (:path "test.el"))))
          (fingerprints (list fp fp fp fp fp)))
     (should (test-detect-doom-loop-p fingerprints 5))))
+
+(ert-deftest sanitize/doom-loop/actual-handler-uses-current-run ()
+  "Actual doom-loop handler should format messages with CURRENT-RUN."
+  (require 'gptel-ext-tool-sanitize)
+  (let* ((tc '(:name "Read" :args (:path "test.el")))
+         (fp (my/gptel--tool-call-fingerprint tc))
+         (info (list :tool-use (list tc)
+                     :doom-loop-fingerprints (list fp)))
+         (fsm (gptel-make-fsm :info info))
+         logged-message
+         callback-message
+         transition)
+    (unwind-protect
+        (progn
+          (put 'doom-loop :current-run 2)
+          (plist-put info :callback
+                     (lambda (msg _info)
+                       (setq callback-message msg)))
+          (cl-letf (((symbol-function 'gptel--fsm-transition)
+                     (lambda (_fsm state)
+                       (setq transition state)))
+                    ((symbol-function 'message)
+                     (lambda (fmt &rest args)
+                       (setq logged-message (apply #'format fmt args)))))
+            (my/gptel--detect-doom-loop fsm))
+          (should (string-match-p "\"Read\" called 3 times" logged-message))
+          (should (string-match-p "\"Read\" called 3 consecutive times" callback-message))
+          (should (eq transition 'DONE)))
+      (put 'doom-loop :current-run nil))))
 
 ;;; ========================================
 ;;; Tests for sanitize-tool-calls scenarios
