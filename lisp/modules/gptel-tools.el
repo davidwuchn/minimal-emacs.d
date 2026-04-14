@@ -196,39 +196,39 @@ Call this after gptel-agent-tools loads."
      :async t
      :include t)
 
-;; TodoWrite tool
+    ;; TodoWrite tool
     (gptel-make-tool
-      :name "TodoWrite"
-      :function #'gptel-agent--write-todo
-      :description "Update a session todo list. IMPORTANT: This is a tracking tool only. After calling TodoWrite, immediately continue executing the tasks. Do not stop or wait for user input after creating a todo list."
-:args '((:name "todos"
-               :type array
-               :items (:type object
-                             :properties (:content (:type string :minLength 1)
-                                                   :status (:type string :enum ["pending" "in_progress" "completed"])
-                                                   :activeForm (:type string :minLength 1 :optional t)))))
-:category "gptel-agent"
-      :include nil)
+     :name "TodoWrite"
+     :function #'gptel-agent--write-todo
+     :description "Update a session todo list. IMPORTANT: This is a tracking tool only. After calling TodoWrite, immediately continue executing the tasks. Do not stop or wait for user input after creating a todo list."
+     :args '((:name "todos"
+                    :type array
+                    :items (:type object
+                                  :properties (:content (:type string :minLength 1)
+                                                        :status (:type string :enum ["pending" "in_progress" "completed"])
+                                                        :activeForm (:type string :minLength 1 :optional t)))))
+     :category "gptel-agent"
+     :include nil)
 
-     ;; Skill creation tool (gptel-agent provides Skill tool for loading)
-     (gptel-make-tool
-      :name "create_skill"
-      :function (lambda (skill-name user-prompt &optional dir)
-                  (let* ((dir (or dir (expand-file-name "assistant/skills/" user-emacs-directory)))
-                         (skill-dir (expand-file-name skill-name dir)))
-                    (unless (file-directory-p dir)
-                      (make-directory dir t))
-                    (unless (file-directory-p skill-dir)
-                      (make-directory skill-dir t))
-                    (with-temp-file (expand-file-name "SKILL.md" skill-dir)
-                      (insert (format "# Skill: %s\n\n%s\n" skill-name user-prompt)))
-                    (format "Created skill: %s" skill-dir)))
-      :description "Create a new skill with the given name and prompt."
-      :args '((:name "skillName" :type string)
-              (:name "userPrompt" :type string)
-              (:name "dir" :type string :optional t))
-      :category "gptel-agent"
-      :confirm t))
+    ;; Skill creation tool (gptel-agent provides Skill tool for loading)
+    (gptel-make-tool
+     :name "create_skill"
+     :function (lambda (skill-name user-prompt &optional dir)
+                 (let* ((dir (or dir (expand-file-name "assistant/skills/" user-emacs-directory)))
+                        (skill-dir (expand-file-name skill-name dir)))
+                   (unless (file-directory-p dir)
+                     (make-directory dir t))
+                   (unless (file-directory-p skill-dir)
+                     (make-directory skill-dir t))
+                   (with-temp-file (expand-file-name "SKILL.md" skill-dir)
+                     (insert (format "# Skill: %s\n\n%s\n" skill-name user-prompt)))
+                   (format "Created skill: %s" skill-dir)))
+     :description "Create a new skill with the given name and prompt."
+     :args '((:name "skillName" :type string)
+             (:name "userPrompt" :type string)
+             (:name "dir" :type string :optional t))
+     :category "gptel-agent"
+     :confirm t))
 
   ;; Default toolset is set by nucleus-sync-tool-profile in gptel-mode-hook.
   ;; Use (nucleus-get-tools :readonly) or (nucleus-get-tools :nucleus) directly.
@@ -266,17 +266,16 @@ START-LINE and END-LINE specify the line range to return."
                     (buffer-string))))
         (if (string-empty-p (string-trim text))
             (format "Error: Could not extract text from PDF: %s" (file-name-nondirectory path))
-          (let* ((lines (split-string text "\n"))
-                 (total-lines (length lines))
-                 (start (or start-line 1))
-                 (end (min (or end-line total-lines) total-lines)))
+           (let* ((lines (split-string text "\n"))
+                  (total-lines (length lines))
+                  (start (or start-line 1))
+                  (end (min (or end-line total-lines) total-lines))
+                  (page-count (max 1 (1+ (cl-count ?\f text)))))
             (when (< start 1) (setq start 1))
             (when (> start total-lines) (setq start total-lines))
             (format "PDF: %s (%d pages, %d lines)\n\n%s"
                     (file-name-nondirectory path)
-                    (with-temp-buffer
-                      (call-process pdftotext nil t nil "-layout" path "-")
-                      (how-many "^\\f" (point-min) (point-max)))
+                    page-count
                     total-lines
                     (string-join (seq-subseq lines (1- start) end) "\n"))))))))
 
