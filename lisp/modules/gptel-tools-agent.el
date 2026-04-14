@@ -64,6 +64,12 @@ Reduces duplication of `(or (plist-get ...) default-value)` patterns."
 Reduces duplication of `(when (and state (not (plist-get state :done)))` patterns."
   (and state (not (plist-get state :done))))
 
+(defun gptel-auto-workflow--hash-get-bound (var-sym key)
+  "Get KEY from hash table bound to VAR-SYM, or nil if unbound/not a hash."
+  (when (and (boundp var-sym)
+             (hash-table-p (symbol-value var-sym)))
+    (gethash key (symbol-value var-sym))))
+
 (defun gptel-auto-workflow--make-idempotent-callback (callback)
   "Return a wrapper that invokes CALLBACK at most once."
   (let ((called nil))
@@ -1498,13 +1504,8 @@ request buffer for an active workflow task."
   "Return non-nil when BUFFER is a routed workflow buffer rooted at ROOT."
   (let ((tracked
          (delete-dups
-          (delq nil
-                (list (and (boundp 'gptel-auto-workflow--worktree-buffers)
-                           (hash-table-p gptel-auto-workflow--worktree-buffers)
-                           (gethash root gptel-auto-workflow--worktree-buffers))
-                      (and (boundp 'gptel-auto-workflow--project-buffers)
-                           (hash-table-p gptel-auto-workflow--project-buffers)
-                           (gethash root gptel-auto-workflow--project-buffers)))))))
+          (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
+                (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root)))))
     (or (memq buffer tracked)
         (string-prefix-p "*gptel-agent:" (buffer-name buffer)))))
 
@@ -2388,13 +2389,8 @@ Each item is a plist with keys :branch and :path."
     (let* ((root (file-name-as-directory (expand-file-name worktree-dir)))
            (tracked
             (delete-dups
-             (delq nil
-                   (list (and (boundp 'gptel-auto-workflow--worktree-buffers)
-                              (hash-table-p gptel-auto-workflow--worktree-buffers)
-                              (gethash root gptel-auto-workflow--worktree-buffers))
-                         (and (boundp 'gptel-auto-workflow--project-buffers)
-                              (hash-table-p gptel-auto-workflow--project-buffers)
-                              (gethash root gptel-auto-workflow--project-buffers))))))
+             (list (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--worktree-buffers root)
+                   (gptel-auto-workflow--hash-get-bound 'gptel-auto-workflow--project-buffers root))))
            (killed 0))
       (dolist (buf (delete-dups (append tracked (buffer-list))))
         (when (buffer-live-p buf)
@@ -6311,11 +6307,10 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
          (log-fn (or log-fn #'gptel-auto-experiment-log-tsv))
          ;; Get project buffer for overlay routing (ensure hash table exists)
          (project-buf (when (and (boundp 'gptel-auto-workflow--current-project)
-                                 gptel-auto-workflow--current-project
-                                 (boundp 'gptel-auto-workflow--project-buffers)
-                                 (hash-table-p gptel-auto-workflow--project-buffers))
-                        (gethash (expand-file-name gptel-auto-workflow--current-project)
-                                 gptel-auto-workflow--project-buffers)))
+                                 gptel-auto-workflow--current-project)
+                        (gptel-auto-workflow--hash-get-bound
+                         'gptel-auto-workflow--project-buffers
+                         (expand-file-name gptel-auto-workflow--current-project))))
          ;; Disable preview for headless auto-workflow
          (gptel-tools-preview-enabled nil)
          ;; Disable tool confirmations for headless auto-workflow
