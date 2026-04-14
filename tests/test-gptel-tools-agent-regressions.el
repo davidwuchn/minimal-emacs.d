@@ -88,32 +88,39 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (default-directory repo-root))
     (unwind-protect
         (progn
-          (rename-file fake-mktemp (expand-file-name "mktemp" fake-bin) t)
-          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
-          (shell-command-to-string (format "%s unit" script))
-          (let ((calls (with-temp-buffer
-                         (insert-file-contents mktemp-log)
-                         (split-string (buffer-string) "\n" t))))
-            (should (= (length calls) 2))
-            (should (member (format "%s/auto-workflow-test-status.XXXXXX"
-                                    (or (getenv "TMPDIR") "/tmp"))
-                            calls))
-            (should (member (format "%s/auto-workflow-test-messages.XXXXXX"
-                                    (or (getenv "TMPDIR") "/tmp"))
-                            calls))
-            (should-not (seq-some
-                         (lambda (call)
-                           (string-match-p "\\.XXXXXX\\.sexp\\'" call))
-                         calls))
-            (should-not (seq-some
-                         (lambda (call)
-                           (string-match-p "\\.XXXXXX\\.txt\\'" call))
-                         calls))))
-      (delete-directory fake-bin t)
-      (when (file-exists-p mktemp-log)
-        (delete-file mktemp-log))
-      (when (file-exists-p mktemp-counter)
-        (delete-file mktemp-counter)))))
+           (rename-file fake-mktemp (expand-file-name "mktemp" fake-bin) t)
+           (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+           (shell-command-to-string (format "%s unit" script))
+           (let ((calls (with-temp-buffer
+                          (insert-file-contents mktemp-log)
+                          (split-string (buffer-string) "\n" t))))
+             (should (= (length calls) 3))
+             (should (member (format "%s/auto-workflow-test-status.XXXXXX"
+                                     (or (getenv "TMPDIR") "/tmp"))
+                             calls))
+             (should (member (format "%s/auto-workflow-test-messages.XXXXXX"
+                                     (or (getenv "TMPDIR") "/tmp"))
+                             calls))
+             (should (member (format "%s/auto-workflow-test-snapshot-paths.XXXXXX"
+                                     (or (getenv "TMPDIR") "/tmp"))
+                             calls))
+             (should-not (seq-some
+                          (lambda (call)
+                            (string-match-p "\\.XXXXXX\\.sexp\\'" call))
+                          calls))
+             (should-not (seq-some
+                          (lambda (call)
+                            (string-match-p "\\.XXXXXX\\.txt\\'" call))
+                          calls))
+             (should-not (seq-some
+                          (lambda (call)
+                            (string-match-p "\\.XXXXXX\\.[[:alnum:]]+\\'" call))
+                          calls))))
+       (delete-directory fake-bin t)
+       (when (file-exists-p mktemp-log)
+         (delete-file mktemp-log))
+       (when (file-exists-p mktemp-counter)
+         (delete-file mktemp-counter)))))
 
 (ert-deftest regression/auto-workflow/verify-nucleus-uses-bsd-safe-mktemp-template ()
   "verify-nucleus.sh should use a BSD-safe mktemp template without a suffix."
@@ -8561,10 +8568,170 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (delete-file argv-log))
       (when (file-exists-p emacs-log)
         (delete-file emacs-log))
-      (when (file-exists-p daemon-status-file)
-        (delete-file daemon-status-file))
-      (when (file-exists-p daemon-messages-file)
-        (delete-file daemon-messages-file)))))
+       (when (file-exists-p daemon-status-file)
+         (delete-file daemon-status-file))
+       (when (file-exists-p daemon-messages-file)
+         (delete-file daemon-messages-file)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-override-paths-do-not-poison-shared-cache ()
+  "Wrapper env overrides should stay local instead of overwriting the shared snapshot cache."
+  (let* ((temp-root (make-temp-file "aw-cron-root" t))
+         (script-dir (expand-file-name "scripts" temp-root))
+         (cron-dir (expand-file-name "var/tmp/cron" temp-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
+         (default-status-file (expand-file-name "mn1714-status.sexp" cron-dir))
+         (default-messages-file (expand-file-name "mn1714-messages-tail.txt" cron-dir))
+         (snapshot-cache (expand-file-name "snapshot-paths.txt" temp-root))
+         (override-status-file (make-temp-file "auto-workflow-test-status."))
+         (override-messages-file (make-temp-file "auto-workflow-test-messages."))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (fake-emacsclient
+          (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 124))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "echo emacs-invoked >> %s\nexit 1" (shell-quote-argument emacs-log))))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (or (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" entry)))
+           process-environment))
+         (default-directory temp-root))
+    (unwind-protect
+        (progn
+          (make-directory script-dir t)
+          (make-directory cron-dir t)
+          (copy-file (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root)
+                     script t)
+          (set-file-modes script #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file default-status-file
+            (insert "(:running t :kept 0 :total 5 :phase \"running\" :run-id \"2026-04-14T083531Z-ca78\" :results \"var/tmp/experiments/2026-04-14T083531Z-ca78/results.tsv\")\n"))
+          (with-temp-file default-messages-file
+            (insert "live workflow messages\n"))
+          (with-temp-file override-status-file
+            (insert "(:running t :kept 0 :total 0 :phase \"running\" :run-id \"2026-04-14T000000Z-test\" :results \"var/tmp/experiments/test/results.tsv\")\n"))
+          (with-temp-file override-messages-file
+            (insert "isolated test messages\n"))
+          (with-temp-file snapshot-cache
+            (insert default-status-file "\n" default-messages-file "\n"))
+          (let ((process-environment
+                 (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                               "AUTO_WORKFLOW_EMACS_SERVER=mn1714"
+                               (format "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=%s" snapshot-cache)
+                               (format "AUTO_WORKFLOW_STATUS_FILE=%s" override-status-file)
+                               (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" override-messages-file))
+                         base-environment)))
+            (let ((output (shell-command-to-string (format "%s status" script))))
+              (should (string-match-p "2026-04-14T000000Z-test" output))))
+          (with-temp-buffer
+            (insert-file-contents snapshot-cache)
+            (should (equal (split-string (buffer-string) "\n" t)
+                           (list default-status-file default-messages-file))))
+          (let ((process-environment
+                 (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                               "AUTO_WORKFLOW_EMACS_SERVER=mn1714"
+                               (format "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=%s" snapshot-cache))
+                         base-environment)))
+            (let ((output (shell-command-to-string (format "%s messages" script))))
+              (should (string-match-p "live workflow messages" output))
+              (should-not (string-match-p "isolated test messages" output))))
+          (with-temp-buffer
+            (insert-file-contents argv-log)
+            (should (string-empty-p (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents emacs-log)
+            (should (string-empty-p (buffer-string)))))
+      (delete-directory temp-root t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log))
+      (when (file-exists-p emacs-log)
+        (delete-file emacs-log))
+      (when (file-exists-p override-status-file)
+        (delete-file override-status-file))
+      (when (file-exists-p override-messages-file)
+        (delete-file override-messages-file)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-heals-readable-test-artifact-cache ()
+  "Wrapper should restore live default snapshot files when cache points at test artifacts."
+  (let* ((temp-root (make-temp-file "aw-cron-root" t))
+         (script-dir (expand-file-name "scripts" temp-root))
+         (cron-dir (expand-file-name "var/tmp/cron" temp-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
+         (default-status-file (expand-file-name "mn1714-status.sexp" cron-dir))
+         (default-messages-file (expand-file-name "mn1714-messages-tail.txt" cron-dir))
+         (snapshot-cache (expand-file-name "snapshot-paths.txt" temp-root))
+         (test-messages-file (make-temp-file "auto-workflow-test-messages."))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (fake-emacsclient
+          (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 124))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "echo emacs-invoked >> %s\nexit 1" (shell-quote-argument emacs-log))))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (or (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" entry)))
+           process-environment))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        "AUTO_WORKFLOW_EMACS_SERVER=mn1714"
+                        (format "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=%s" snapshot-cache))
+                  base-environment))
+         (default-directory temp-root))
+    (unwind-protect
+        (progn
+          (make-directory script-dir t)
+          (make-directory cron-dir t)
+          (copy-file (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root)
+                     script t)
+          (set-file-modes script #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file default-status-file
+            (insert "(:running t :kept 0 :total 5 :phase \"running\" :run-id \"2026-04-14T083531Z-ca78\" :results \"var/tmp/experiments/2026-04-14T083531Z-ca78/results.tsv\")\n"))
+          (with-temp-file default-messages-file
+            (insert "live workflow messages\n"))
+          (with-temp-file test-messages-file
+            (insert "isolated test messages\n"))
+          (with-temp-file snapshot-cache
+            (insert default-status-file "\n" test-messages-file "\n"))
+          (let ((output (shell-command-to-string (format "%s messages" script))))
+            (should (string-match-p "live workflow messages" output))
+            (should-not (string-match-p "isolated test messages" output)))
+          (with-temp-buffer
+            (insert-file-contents snapshot-cache)
+            (should (equal (split-string (buffer-string) "\n" t)
+                           (list default-status-file default-messages-file))))
+          (with-temp-buffer
+            (insert-file-contents argv-log)
+            (should (string-empty-p (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents emacs-log)
+            (should (string-empty-p (buffer-string)))))
+      (delete-directory temp-root t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log))
+      (when (file-exists-p emacs-log)
+        (delete-file emacs-log))
+      (when (file-exists-p test-messages-file)
+        (delete-file test-messages-file)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-recovers-from-missing-cached-snapshot-paths ()
   "Wrapper should fall back to server-local snapshots when cached paths disappear."
