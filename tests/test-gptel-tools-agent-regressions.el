@@ -7096,6 +7096,106 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (should (string-empty-p (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t)
+       (when (file-exists-p argv-log)
+         (delete-file argv-log))
+       (when (file-exists-p emacs-log)
+         (delete-file emacs-log)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-status-uses-selecting-snapshot-without-emacsclient ()
+  "Selecting snapshots should be trusted without poking emacsclient."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (fake-emacsclient
+          (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 1))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "echo emacs-invoked >> %s\nexit 1" (shell-quote-argument emacs-log))))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=45")
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 0 :total 0 :phase \"selecting\" :run-id \"2026-04-14T192005Z-29f3\" :results \"var/tmp/experiments/2026-04-14T192005Z-29f3/results.tsv\")\n"))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
+            (should (string-match-p ":phase \"selecting\"" output))
+            (should (string-match-p "2026-04-14T192005Z-29f3" output)))
+          (with-temp-buffer
+            (insert-file-contents argv-log)
+            (should (string-empty-p (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents emacs-log)
+            (should (string-empty-p (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log))
+      (when (file-exists-p emacs-log)
+        (delete-file emacs-log)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-status-uses-aged-active-snapshot-while-daemon-socket-owned ()
+  "Aged active snapshots should stay persisted while the daemon socket is still owned."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (tmp-root (make-temp-file "aw-tmp" t))
+         (server-dir (expand-file-name (format "emacs%d" (user-uid)) tmp-root))
+         (server-socket (expand-file-name "copilot-auto-workflow" server-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (fake-emacsclient
+          (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 1))
+         (fake-lsof
+          (test-auto-workflow--write-shell-script "fake-lsof" "exit 0"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "echo emacs-invoked >> %s\nexit 1" (shell-quote-argument emacs-log))))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "TMPDIR=%s/" tmp-root)
+                        "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=5")
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (make-directory server-dir t)
+          (with-temp-file server-socket
+            (insert "live-socket\n"))
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-lsof (expand-file-name "lsof" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 5 :phase \"running\" :run-id \"2026-04-14T192005Z-29f3\" :results \"var/tmp/experiments/2026-04-14T192005Z-29f3/results.tsv\")\n"))
+          (set-file-times status-file (time-subtract (current-time) (seconds-to-time 120)))
+          (let ((output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
+            (should (string-match-p ":phase \"running\"" output))
+            (should (string-match-p "2026-04-14T192005Z-29f3" output)))
+          (with-temp-buffer
+            (insert-file-contents argv-log)
+            (should (string-empty-p (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents emacs-log)
+            (should (string-empty-p (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory tmp-root t)
+      (delete-directory fake-bin t)
       (when (file-exists-p argv-log)
         (delete-file argv-log))
       (when (file-exists-p emacs-log)
@@ -7106,6 +7206,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (tmp-root (make-temp-file "aw-tmp" t))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient
           (test-auto-workflow--write-shell-script "fake-emacsclient" "exit 1"))
@@ -7115,6 +7216,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (process-environment
           (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
                         (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "TMPDIR=%s/" tmp-root)
                         "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=5")
                   process-environment))
          (default-directory repo-root))
@@ -7125,12 +7227,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (with-temp-file status-file
             (insert "(:running t :kept 0 :total 3 :phase \"running\" :run-id \"2026-04-12T153204Z-77b7\" :results \"var/tmp/experiments/2026-04-12T153204Z-77b7/results.tsv\")\n"))
           (set-file-times status-file (time-subtract (current-time) (seconds-to-time 120)))
-          (let ((output (shell-command-to-string (format "%s status" script))))
-            (should (string-match-p ":running nil" output))
-            (should (string-match-p ":phase \"idle\"" output))
-            (should (string-match-p "2026-04-12T153204Z-77b7/results.tsv" output))))
-      (delete-directory status-dir t)
-      (delete-directory fake-bin t))))
+           (let ((output (shell-command-to-string (format "%s status" script))))
+             (should (string-match-p ":running nil" output))
+             (should (string-match-p ":phase \"idle\"" output))
+             (should (string-match-p "2026-04-12T153204Z-77b7/results.tsv" output))))
+       (delete-directory status-dir t)
+       (delete-directory tmp-root t)
+       (delete-directory fake-bin t))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-running-status-after-daemon-restart ()
   "Wrapper auto-workflow should clear stale running status when daemon is alive but idle."
@@ -7237,12 +7340,14 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (tmp-root (make-temp-file "aw-tmp" t))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
          (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
          (process-environment
           (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
-                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "TMPDIR=%s/" tmp-root))
                   process-environment))
          (default-directory repo-root))
     (unwind-protect
@@ -7265,24 +7370,27 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (let ((output (shell-command-to-string (format "%s status" script))))
             (should (string-match-p ":running nil" output))
             (should (string-match-p ":phase \"idle\"" output)))
-          (with-temp-buffer
-            (insert-file-contents status-file)
-            (should (string-match-p ":running nil" (buffer-string)))
-            (should (string-match-p ":phase \"idle\"" (buffer-string)))))
-      (delete-directory status-dir t)
-      (delete-directory fake-bin t))))
+           (with-temp-buffer
+             (insert-file-contents status-file)
+             (should (string-match-p ":running nil" (buffer-string)))
+             (should (string-match-p ":phase \"idle\"" (buffer-string)))))
+       (delete-directory status-dir t)
+       (delete-directory tmp-root t)
+       (delete-directory fake-bin t))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-status-prefers-live-daemon-snapshot-over-persisted-fallback ()
   "Wrapper status should ignore persisted-active fallback when the live daemon is idle."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (tmp-root (make-temp-file "aw-tmp" t))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
          (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
          (process-environment
           (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
-                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "TMPDIR=%s/" tmp-root))
                   process-environment))
          (default-directory repo-root))
     (unwind-protect
@@ -7307,12 +7415,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (let ((output (shell-command-to-string (format "%s status" script))))
             (should (string-match-p ":running nil" output))
             (should (string-match-p ":phase \"idle\"" output)))
-          (with-temp-buffer
-            (insert-file-contents status-file)
-            (should (string-match-p ":running nil" (buffer-string)))
-            (should (string-match-p ":phase \"idle\"" (buffer-string)))))
-      (delete-directory status-dir t)
-      (delete-directory fake-bin t))))
+           (with-temp-buffer
+             (insert-file-contents status-file)
+             (should (string-match-p ":running nil" (buffer-string)))
+             (should (string-match-p ":phase \"idle\"" (buffer-string)))))
+       (delete-directory status-dir t)
+       (delete-directory tmp-root t)
+       (delete-directory fake-bin t))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-timeout-keeps-existing-daemon ()
   "Wrapper auto-workflow should not start a second daemon after a probe timeout."
@@ -8634,6 +8743,66 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (delete-file emacs-log))
        (when (file-exists-p messages-file)
          (delete-file messages-file)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-messages-uses-aged-active-tail-while-daemon-socket-owned ()
+  "Wrapper messages should keep using the persisted tail for aged active snapshots when the daemon socket is still owned."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (messages-file (make-temp-file "aw-messages-tail"))
+         (tmp-root (make-temp-file "aw-tmp" t))
+         (server-dir (expand-file-name (format "emacs%d" (user-uid)) tmp-root))
+         (server-socket (expand-file-name "copilot-auto-workflow" server-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (fake-emacsclient
+          (test-auto-workflow--write-python-emacsclient "fake-emacsclient" argv-log 1))
+         (fake-lsof
+          (test-auto-workflow--write-shell-script "fake-lsof" "exit 0"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "echo emacs-invoked >> %s\nexit 1" (shell-quote-argument emacs-log))))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" messages-file)
+                        (format "TMPDIR=%s/" tmp-root)
+                        "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=5")
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (make-directory server-dir t)
+          (with-temp-file server-socket
+            (insert "live-socket\n"))
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-lsof (expand-file-name "lsof" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 5 :phase \"running\" :run-id \"2026-04-14T192005Z-29f3\" :results \"var/tmp/experiments/2026-04-14T192005Z-29f3/results.tsv\")\n"))
+          (set-file-times status-file (time-subtract (current-time) (seconds-to-time 120)))
+          (with-temp-file messages-file
+            (insert "persisted aged messages\n"))
+          (let ((output (shell-command-to-string (format "%s messages" script))))
+            (should (string-match-p "persisted aged messages" output)))
+          (with-temp-buffer
+            (insert-file-contents argv-log)
+            (should (string-empty-p (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents emacs-log)
+            (should (string-empty-p (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory tmp-root t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log))
+      (when (file-exists-p emacs-log)
+        (delete-file emacs-log))
+      (when (file-exists-p messages-file)
+        (delete-file messages-file)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-isolates-default-snapshots-by-server ()
   "Default persisted status/messages files should not collide across daemon servers."
