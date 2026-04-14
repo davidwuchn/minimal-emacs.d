@@ -17,16 +17,63 @@ Never touch main. All changes wait in staging.
 |-------|-----------|--------|
 | **Brain** | LLM target selection | ✓ |
 | **Brain** | LLM quality grading | ✓ |
-| **Brain** | LLM keep/discard | ✓ |
+| **Brain** | LLM keep/discard (decision gate) | ✓ |
 | **Brain** | Pre-merge code review | ✓ |
 | **Brain** | Periodic researcher | ✓ |
+| **Brain** | Strategic planner | ✓ |
 | **Eyes** | Context gathering | ✓ |
 | **Eyes** | Research findings cache | ✓ |
+| **Eyes** | Image context handling | ✓ |
 | **Hands** | Tests before push | ✓ |
 | **Hands** | optimize/* branches | ✓ |
 | **Hands** | Staging verification | ✓ |
+| **Hands** | Sandbox execution | ✓ |
 | **Autonomy** | Retry on failure | ✓ |
 | **Autonomy** | Review retry loop | ✓ |
+| **Autonomy** | Backend fallback (429) | ✓ |
+| **Autonomy** | Worker daemon isolation | ✓ |
+
+## Backend Fallback Chain
+
+When MiniMax hits rate limits (429), auto-workflow automatically fails over:
+
+| Order | Backend | Model | Purpose |
+|-------|---------|-------|---------|
+| 1 | **MiniMax** | `minimax-m2.7-highspeed` | Primary workhorse |
+| 2 | **DashScope** | `qwen3.6-plus` | First fallback |
+| 3 | **DeepSeek** | `deepseek-chat` | Second fallback |
+| 4 | **CF-Gateway** | `@cf/zai-org/glm-4.7-flash` | Third fallback |
+| 5 | **Gemini** | `gemini-3.1-pro-preview` | Last resort |
+
+**Two fallback mechanisms:**
+1. **Headless subagent fallback** — At startup, prefers MiniMax for all subagents
+2. **Executor rate-limit fallback** — During experiments, advances through list on 429 errors
+
+## New Features (2026-04-14)
+
+### Backend Fallback on Rate Limits
+
+When MiniMax hits the 5-hour rolling window rate limit (429), experiments now
+automatically fail over to the next available backend instead of being discarded.
+
+```elisp
+gptel-auto-workflow-headless-subagent-fallbacks    ; fallback order
+gptel-auto-workflow-executor-rate-limit-fallbacks  ; retry fallback order
+```
+
+### Decision Gate for Score Ties
+
+Experiments with tied scores are now kept if code quality improves by at least
+`gptel-auto-experiment-min-quality-gain-on-score-tie` AND the combined score improves.
+
+### Shell Timeout Sentinel Fix
+
+Process sentinel now waits for actual process exit before capturing results,
+preventing race conditions with incomplete output.
+
+### FSM Registry Validation
+
+Bidirectional consistency checks now verify both FSM→ID and ID→FSM mappings.
 
 ## New Features (2026-03-26)
 
@@ -71,7 +118,7 @@ gptel-auto-workflow-research-before-fix   ; default nil
 
 | Job | Schedule | Machine |
 |-----|----------|---------|
-| Auto-workflow | 10AM, 2PM, 6PM | macOS |
+| Auto-workflow | 23:00, 03:00, 07:00, 11:00, 15:00, 19:00 | macOS (6 runs/day) |
 | Researcher | Every 4 hours | macOS |
 | Weekly mementum | Sunday 4AM | macOS |
 | Weekly instincts | Sunday 5AM | macOS |
@@ -79,7 +126,7 @@ gptel-auto-workflow-research-before-fix   ; default nil
 ## Entry Points
 
 ```bash
-# Install cron jobs (macOS: 10AM, 2PM, 6PM; Pi5: 11PM, 3AM, 7AM, 11AM, 3PM, 7PM)
+# Install cron jobs (macOS: 6 runs/day; Pi5: 6 runs/day)
 ./scripts/install-cron.sh
 
 # Manual cron-style run (uses the dedicated worker daemon)

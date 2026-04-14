@@ -213,6 +213,7 @@ M-x nucleus-agent-toggle
 | OpenAI | 3-500 req/min | 5000+ req/min |
 | Anthropic | Varies | Check console |
 | Gemini | 15 RPM | 2000 RPM |
+| MiniMax | 5-hour rolling window | 10x daily quota |
 
 **Solutions:**
 
@@ -222,12 +223,24 @@ M-x nucleus-agent-toggle
    my/gptel-max-retries  ; default: 3
    ```
 
-2. **Add delays between requests**:
+2. **Backend fallback for auto-workflow** (default):
+   When MiniMax hits rate limits, auto-workflow automatically fails over:
+   ```
+   MiniMax → DashScope → DeepSeek → CF-Gateway → Gemini
+   ```
+   Configure via:
+   ```elisp
+   gptel-auto-workflow-headless-subagent-fallbacks
+   gptel-auto-workflow-executor-rate-limit-fallbacks
+   ```
+
+3. **Add delays between requests**:
    ```elisp
    (setq gptel-agent-loop-retry-delay 5.0)  ; 5 second base delay
    ```
 
-3. **Check provider dashboard**:
+4. **Check provider dashboard**:
+   - MiniMax: https://platform.minimaxi.com/docs/token-plan/faq
    - DashScope: https://dashscope.console.aliyun.com/
    - OpenAI: https://platform.openai.com/usage
    - Anthropic: https://console.anthropic.com/
