@@ -776,6 +776,25 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (string-match-p "Rejected: score tie without >= 0.10 quality gain"
                             (plist-get decision :reasoning)))))
 
+(ert-deftest regression/auto-experiment/decide-rejects-score-tie-without-combined-improvement ()
+  "Comparator should reject tied scores when the combined score does not improve."
+  (let ((gptel-auto-experiment-use-subagents t)
+        decision)
+    (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional _timeout)
+                 (funcall callback "B\nAfter is better."))))
+      (with-temp-buffer
+        (gptel-auto-experiment-decide
+         '(:score 0.40 :code-quality 0.76)
+         '(:score 0.40 :code-quality 0.76)
+         (lambda (result)
+           (setq decision result)))))
+    (should decision)
+    (should-not (plist-get decision :keep))
+    (should (string-match-p "Comparator override: B -> A" (plist-get decision :reasoning)))
+    (should (string-match-p "Rejected: score tie without positive combined improvement"
+                            (plist-get decision :reasoning)))))
+
 (ert-deftest regression/auto-experiment/decide-keeps-score-tie-with-large-quality-gain ()
   "Comparator may keep tied scores when quality improves materially."
   (let ((gptel-auto-experiment-use-subagents t)
