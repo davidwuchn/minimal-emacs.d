@@ -313,11 +313,14 @@ Otherwise, convert using princ representation."
 (defun gptel-auto-workflow--filter-valid-targets (candidates proj-root max-targets)
   "Filter CANDIDATES to valid target files.
 Returns list of validated relative paths, up to MAX-TARGETS."
-  (let ((targets '())
-        (candidates-list (if (listp candidates) candidates (list candidates))))
-    (dolist (file candidates-list targets)
-      (setq targets (gptel-auto-workflow--validate-and-add-target
-                     file proj-root targets max-targets)))))
+  (let ((candidates-list (if (listp candidates) candidates (list candidates)))
+        (results '()))
+    (dolist (file candidates-list (reverse results))
+      (unless (>= (length results) max-targets)
+        (let ((new-results (gptel-auto-workflow--validate-and-add-target
+                            file proj-root results max-targets)))
+          (when (consp new-results)
+            (setq results new-results)))))))
 
 (defun gptel-auto-workflow--parse-targets (response)
   "Parse LLM RESPONSE to extract target file list.
