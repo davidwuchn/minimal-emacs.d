@@ -268,14 +268,13 @@ Returns the number of tool definitions removed, or 0 if nothing changed."
       ;; Only filter if we found any used tools (safety: don't send empty tools)
       (when (> (hash-table-count used-names) 0)
         (let* ((original-count (length data-tools))
-               ;; Filter serialized tools vector
-               (filtered (vconcat
-                          (cl-remove-if-not
-                           (lambda (tool-plist)
-                             (let* ((func (plist-get tool-plist :function))
-                                    (name (and func (plist-get func :name))))
-                               (gethash name used-names)))
-                           (append data-tools nil)))) ; vector -> list for cl-remove-if-not
+               ;; Filter serialized tools vector directly (cl-remove-if-not preserves sequence type)
+               (filtered (cl-remove-if-not
+                          (lambda (tool-plist)
+                            (let* ((func (plist-get tool-plist :function))
+                                   (name (and func (plist-get func :name))))
+                              (gethash name used-names)))
+                          data-tools))
                (new-count (length filtered)))
           (when (< new-count original-count)
             (plist-put data :tools filtered)
@@ -350,21 +349,18 @@ EDGE CASE: Content that becomes empty after filtering is preserved as empty vect
 Returns the number of image parts removed, or 0 if nothing was done."
   (let* ((data (plist-get info :data))
          (messages (and data (plist-get data :messages)))
-         (removed 0))
+         (removed 0)
+         (image-p
+          (lambda (part)
+            (and (listp part)
+                 (equal (plist-get part :type) "image_url")))))
     (when (and messages (> (length messages) 0))
       (dotimes (i (length messages))
         (let* ((msg (aref messages i))
                (content (plist-get msg :content)))
           (when (and content (sequencep content) (not (stringp content)) (> (length content) 0))
-            (let* ((original-length (length content))
-                   (image-p
-                    (lambda (part)
-                      (and (listp part)
-                           (equal (plist-get part :type) "image_url"))))
-                   (filtered
-                    (if (vectorp content)
-                        (vconcat (cl-remove-if image-p content))
-                      (cl-remove-if image-p content))))
+            (let ((original-length (length content))
+                  (filtered (cl-remove-if image-p content)))
               (when (< (length filtered) original-length)
                 (cl-incf removed (- original-length (length filtered)))
                 (plist-put msg :content filtered)))))))
@@ -415,6 +411,9 @@ BEHAVIOR: Checks both string error messages and numeric HTTP status codes.
 EDGE CASE: error-data can be string, plist, or nil. Handles all three.
 EDGE CASE: http-status can be string, number, or t (curl success). Converts
   strings to numbers, ignores t.
+EDGE CASE: When status is nil (unknown), message patterns are still checked.
+  When status is a known success code (2xx/3xx), message patterns are skipped
+  to prevent false-positive retries on successful responses.
 
 TEST: (my/gptel--transient-error-p \"Malformed JSON\" 500) => t
 TEST: (my/gptel--transient-error-p \"Invalid API key\" 401) => nil
@@ -436,7 +435,8 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
              (string-match-p my/gptel--transient-http-400-patterns error-msg))
         (and (listp error-data)
              (stringp error-msg)
-             (not (memq status '(401 403)))
+             (or (null status)
+                 (not (memq status '(401 403 200 201 202 204 301 302 304))))
              (string-match-p my/gptel--transient-error-message-patterns
                              (downcase error-msg))))))
 
@@ -537,8 +537,8 @@ TEST: Verify with network failure simulation — should retry 3 times with
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
              (my/gptel--transient-error-p error-data http-status))
         (let* ((delay (min my/gptel--retry-max-delay
-                            (* my/gptel--retry-base-delay
-                               (expt my/gptel--retry-backoff-factor retries))))
+                           (* my/gptel--retry-base-delay
+                              (expt my/gptel--retry-backoff-factor retries))))
                (error-msg (my/gptel--format-error-message error-data http-status)))
           (if my/gptel-max-retries
               (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..."
@@ -666,13 +666,17 @@ Uses `json-serialize' for accuracy.  Returns 0 if :data is nil or serialization 
 (defun my/gptel--effective-byte-limit (info)
   "Return the byte limit to use for INFO's request.
 Takes the minimum of `my/gptel-payload-byte-limit' and the model-specific
-context limit from `my/gptel-model-context-bytes'."
+context limit from `my/gptel-model-context-bytes'.
+
+ASSUMPTION: Model names may include version/date suffixes (e.g., \"kimi-k2.5-20250711\").
+  Uses prefix matching to map variant names to their family limits.
+EDGE CASE: Unknown models fall back to global limit (999999999)."
   (let* ((model (plist-get info :model))
          (global-limit (or my/gptel-payload-byte-limit 999999999))
          (model-limit
           (if (stringp model)
               (or (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
-                           when (string= pattern model)
+                           when (string-prefix-p pattern model)
                            return limit)
                   999999999)
             999999999)))

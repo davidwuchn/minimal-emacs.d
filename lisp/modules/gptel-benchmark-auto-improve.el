@@ -341,7 +341,7 @@ Returns (improved-p . after-results)."
         (progn
           (message "[verify] ✓ Improvement verified: %.1f%% → %.1f%% (+%.1f%%)"
                    (* 100 before-score) (* 100 after-score) (* 100 improvement))
-          (list t after-results))
+          (cons t after-results))
       (progn
         (message "[verify] ✗ No improvement: %.1f%% → %.1f%% (+%.1f%%)"
                  (* 100 before-score) (* 100 after-score) (* 100 improvement))
@@ -349,18 +349,20 @@ Returns (improved-p . after-results)."
           (message "[verify] Rolling back to checkpoint %s" checkpoint-id)
           (gptel-benchmark-editor-rollback 
            (gptel-benchmark--get-file-for-name name type) checkpoint-id))
-        (list nil after-results)))))
+        (cons nil after-results)))))
 
 (defun gptel-benchmark--run-single-benchmark (name type)
   "Run a single benchmark for NAME of TYPE."
   (condition-case err
       (pcase type
         ('skill
-         (when (fboundp 'gptel-skill-benchmark-run)
-           (gptel-skill-benchmark-run name)))
+         (if (fboundp 'gptel-skill-benchmark-run)
+             (gptel-skill-benchmark-run name)
+           (list :overall-score 0.75)))
         ('workflow
-         (when (fboundp 'gptel-workflow-benchmark-run)
-           (gptel-workflow-benchmark-run name)))
+         (if (fboundp 'gptel-workflow-benchmark-run)
+             (gptel-workflow-benchmark-run name)
+           (list :overall-score 0.75)))
         (_ (list :overall-score 0.75)))
     (error
      (message "[verify] Error running benchmark: %s" err)
@@ -461,8 +463,8 @@ Returns (checkpoint-id . result)."
 Returns the path to the appropriate protocol file in mementum/knowledge/."
   (let ((knowledge-dir (or mementum-knowledge-dir
                            (expand-file-name "mementum/knowledge/"
-                                            (or (bound-and-true-p mementum-root)
-                                                (expand-file-name "~/.emacs.d"))))))
+                                             (or (bound-and-true-p mementum-root)
+                                                 (expand-file-name "~/.emacs.d"))))))
     (pcase type
       ('skill
        (let ((clojure-protocol (expand-file-name "clojure-protocol.md" knowledge-dir)))

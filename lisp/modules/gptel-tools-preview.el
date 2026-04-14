@@ -273,6 +273,9 @@ Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
     (cond
      (path-error
       (funcall callback (format "Error: %s" path-error)))
+     ((not (stringp original))
+      (funcall callback (format "Error: Original content must be a string, got %s"
+                                (type-of original))))
      ((and (> gptel-tools-preview-max-replacement-size 0)
            replacement
            (> (length replacement) gptel-tools-preview-max-replacement-size))
@@ -280,7 +283,7 @@ Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
                                 (length replacement) gptel-tools-preview-max-replacement-size)))
      ((my/gptel--preview-bypass-p)
       (funcall callback "Preview disabled, auto-confirmed."))
-(t
+     (t
       (let (temp1 temp2)
         (condition-case err
             (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
@@ -362,6 +365,28 @@ Returns (SANITIZED-PATCH . WARNING) or (nil . ERROR) if invalid."
        (t
         (cons sanitized nil)))))))
 
+(defun my/gptel--display-patch-preview (patch-content buffer callback header on-confirm on-abort)
+  "Display patch preview and prompt for user action.
+
+PATCH-CONTENT is the sanitized patch string.
+BUFFER is the originating buffer for FSM restoration.
+CALLBACK is called with the result.
+HEADER is the title shown in the preview buffer.
+ON-CONFIRM and ON-ABORT are called with the wrapped callback
+when the user confirms or aborts respectively."
+  (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
+         (diff-buf (my/gptel--create-diff-buffer
+                    (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
+                    header
+                    patch-content
+                    #'diff-mode)))
+    (my/gptel--insert-preview-instructions diff-buf)
+    (my/gptel--display-preview-buffer diff-buf)
+    (my/gptel--prompt-for-preview-action
+     diff-buf
+     (lambda () (funcall on-confirm wrapped-cb))
+     (lambda () (funcall on-abort wrapped-cb)))))
+
 (defun my/gptel--preview-patch (patch buffer callback header)
   "Show patch preview.
 
@@ -379,21 +404,12 @@ Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
            (warning (cdr sanitized)))
       (if (not patch-content)
           (funcall callback (format "Error: %s" warning))
-        (progn
-          (when warning
-            (message "[gptel-preview] %s" warning))
-          (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-                 (diff-buf (my/gptel--create-diff-buffer
-                            (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
-                            header
-                            patch-content
-                            #'diff-mode)))
-            (my/gptel--insert-preview-instructions diff-buf)
-            (my/gptel--display-preview-buffer diff-buf)
-            (my/gptel--prompt-for-preview-action
-             diff-buf
-             (lambda () (funcall wrapped-cb "Patch confirmed."))
-             (lambda () (funcall wrapped-cb "Patch aborted.")))))))))
+        (when warning
+          (message "[gptel-preview] %s" warning))
+        (my/gptel--display-patch-preview
+         patch-content buffer callback header
+         (lambda (wrapped-cb) (funcall wrapped-cb "Patch confirmed."))
+         (lambda (wrapped-cb) (funcall wrapped-cb "Patch aborted.")))))))
 
 (defun my/gptel--preview-patch-async (patch buffer callback on-confirm on-abort header &optional tool-name)
   "Show patch preview asynchronously for ApplyPatch/Edit tool integration.
@@ -417,21 +433,10 @@ When user types \"!\", TOOL-NAME is added to `my/gptel-permitted-tools'."
              (warning (cdr sanitized)))
         (if (not patch-content)
             (funcall callback (format "Error: %s" warning))
-          (progn
-            (when warning
-              (message "[gptel-preview] %s" warning))
-            (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
-                   (diff-buf (my/gptel--create-diff-buffer
-                              (my/gptel--unique-preview-buffer-name "*gptel-patch-preview*")
-                              header
-                              patch-content
-                              #'diff-mode)))
-              (my/gptel--insert-preview-instructions diff-buf)
-              (my/gptel--display-preview-buffer diff-buf)
-              (my/gptel--prompt-for-preview-action
-               diff-buf
-               (lambda () (funcall on-confirm wrapped-cb))
-               (lambda () (funcall on-abort wrapped-cb))))))))))
+          (when warning
+            (message "[gptel-preview] %s" warning))
+          (my/gptel--display-patch-preview
+           patch-content buffer callback header on-confirm on-abort))))))
 
 ;;; Tool Registration
 
