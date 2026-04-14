@@ -167,7 +167,7 @@ status_indicates_running() {
 }
 
 status_indicates_active_phase() {
-    [ -r "$STATUS_FILE" ] && grep -Eq ':phase "(running|queued)"' "$STATUS_FILE"
+    [ -r "$STATUS_FILE" ] && grep -Eq ':phase "(running|queued|selecting)"' "$STATUS_FILE"
 }
 
 status_looks_active() {
@@ -196,8 +196,45 @@ raise SystemExit(0 if age <= ttl else 1)
 PY
 }
 
+daemon_socket_has_owner() {
+    python3 - "$SERVER_NAME" <<'PY'
+from pathlib import Path
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+server_name = sys.argv[1]
+tmpdir = os.environ.get("TMPDIR") or tempfile.gettempdir()
+socket_path = Path(tmpdir) / f"emacs{os.getuid()}" / server_name
+
+if not socket_path.exists():
+    raise SystemExit(1)
+
+lsof = shutil.which("lsof")
+if not lsof:
+    raise SystemExit(0)
+
+try:
+    probe = subprocess.run(
+        [lsof, str(socket_path)],
+        capture_output=True,
+        text=True,
+        timeout=2,
+        check=False,
+    )
+except subprocess.TimeoutExpired:
+    raise SystemExit(0)
+
+raise SystemExit(0 if probe.returncode == 0 else 1)
+PY
+}
+
 status_can_use_persisted_active_snapshot() {
-    status_indicates_active_phase && status_has_live_run_id && status_snapshot_fresh
+    status_indicates_active_phase &&
+        status_has_live_run_id &&
+        { status_snapshot_fresh || daemon_socket_has_owner; }
 }
 
 rewrite_status_idle() {

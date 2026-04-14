@@ -7515,6 +7515,7 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
         (apply #'call-process program infile destination display args)
       (when workflow-active
         (gptel-auto-workflow--update-progress)
+        (gptel-auto-workflow--persist-status)
         (gptel-auto-workflow--restart-watchdog-timer)))))
 
 (defun gptel-auto-workflow--stop-status-refresh-timer ()
