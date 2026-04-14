@@ -287,8 +287,8 @@ improving testability and reducing cognitive load."
                    ((consp obj)
                     (prog1 t
                       (puthash obj t seen)
-                      (collect (car obj))
-                      (collect (cdr obj))))
+                      (append (collect (car obj))
+                              (collect (cdr obj)))))
                    (t nil))))
       (delq nil (collect object)))))
 
