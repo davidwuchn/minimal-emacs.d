@@ -72,7 +72,7 @@ cat >"$TMP_ELISP" <<EOF
       (progn
         (message "✗ Tool registration validation failed. Missing/Duplicate tools: %s"
                  (mapconcat #'identity missing ", "))
-         (kill-emacs 1))
+        (kill-emacs 1))
     (message "✓ All tools correctly registered.")))
 
 (message "\\n[5/5] Verifying Tool Signatures...")
