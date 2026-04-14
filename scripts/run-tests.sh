@@ -26,6 +26,7 @@ run_unit_tests() {
     local PATTERN="${1:-t}"
     local status_file
     local messages_file
+    local snapshot_paths_file
     
     section "Unit Tests (ERT)"
     
@@ -41,10 +42,16 @@ run_unit_tests() {
         fail "Failed to create isolated workflow messages file"
         return 1
     }
+    snapshot_paths_file="$(mktemp "${TMPDIR:-/tmp}/auto-workflow-test-snapshot-paths.XXXXXX")" || {
+        rm -f "$status_file" "$messages_file"
+        fail "Failed to create isolated workflow snapshot cache file"
+        return 1
+    }
     
     local output
     output=$(AUTO_WORKFLOW_STATUS_FILE="$status_file" \
         AUTO_WORKFLOW_MESSAGES_FILE="$messages_file" \
+        AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE="$snapshot_paths_file" \
         emacs --batch -Q \
         -L "$DIR" \
         -L "$DIR/lisp" \
@@ -59,7 +66,7 @@ run_unit_tests() {
         --eval "(when (and (boundp 'native-comp-enable-subr-trampolines) native-comp-enable-subr-trampolines (fboundp 'comp-subr-trampoline-install) (fboundp 'subr-primitive-p)) (mapc (lambda (fn) (and (fboundp fn) (subr-primitive-p (symbol-function fn)) (comp-subr-trampoline-install fn))) (quote (file-exists-p file-executable-p call-process kill-buffer message directory-files require featurep process-list process-name system-name))))" \
         $(find tests -name "test-*.el" -exec echo "-l {}" \;) \
         --eval "(ert-run-tests-batch-and-exit \"$PATTERN\")" 2>&1) || true
-    rm -f "$status_file" "$messages_file"
+    rm -f "$status_file" "$messages_file" "$snapshot_paths_file"
     
     grep -E "FAILED|unexpected|0 unexpected" <<< "$output" | head -30
     if [ -z "$(grep -E "FAILED|unexpected" <<< "$output")" ]; then
