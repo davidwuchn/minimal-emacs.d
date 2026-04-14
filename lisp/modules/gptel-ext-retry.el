@@ -547,27 +547,20 @@ TEST: Verify with network failure simulation — should retry 3 times with
           
           ;; Clean up partial buffer insertions if any.
           (my/gptel--cleanup-partial-insertion info)
-          
-          ;; Reset FSM state to WAIT to trigger a fresh request
-          (plist-put info :error nil)
-          (plist-put info :status nil)
-          (plist-put info :http-status nil)
-          (plist-put info :retries (1+ retries))
-          
-          ;; Progressive payload trimming before retry.
+
+          ;; Progressive payload trimming before retry (before incrementing retries).
           ;; Tool results: keep count decreases with each retry
-          ;;   retry 1 → keep max(0, default-1), retry 2+ → keep 0
+          ;;   retry 0 → keep max(0, default-0), retry 1 → keep max(0, default-1), retry 2+ → keep 0
           ;; Reasoning content: stripped on retry 2+ to reclaim space
           ;; from accumulated chain-of-thought text.
           ;; Tools array: reduced on retry 2+ to only tools actually
           ;; used in the conversation, removing ~60-80% of definitions.
-          (let ((trimmed (my/gptel--trim-tool-results-for-retry info))
-                (new-retries (plist-get info :retries)))
+          (let ((trimmed (my/gptel--trim-tool-results-for-retry info retries)))
             (when (> trimmed 0)
               (message "gptel: Trimmed %d old tool result(s) to reduce payload (retry %d, keeping %d recent)"
-                       trimmed new-retries
-                       (max 0 (- my/gptel-retry-keep-recent-tool-results new-retries))))
-            (when (>= new-retries 2)
+                       trimmed retries
+                       (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries))))
+            (when (>= retries 2)
               (let ((reasoning-stripped (my/gptel--trim-reasoning-content info)))
                 (when (> reasoning-stripped 0)
                   (message "gptel: Stripped reasoning_content from %d assistant message(s)" reasoning-stripped)))
@@ -577,7 +570,13 @@ TEST: Verify with network failure simulation — should retry 3 times with
               (let ((repaired (my/gptel--repair-thinking-tool-call-messages info)))
                 (when (> repaired 0)
                   (message "gptel: Restored empty reasoning field on %d tool-call message(s)" repaired)))))
-          
+
+          ;; Reset FSM state to WAIT and increment retry counter
+          (plist-put info :error nil)
+          (plist-put info :status nil)
+          (plist-put info :http-status nil)
+          (plist-put info :retries (1+ retries))
+
           ;; Schedule the FSM transition asynchronously (non-blocking exponential backoff)
           (run-at-time delay nil
                        (lambda (m f-orig)
