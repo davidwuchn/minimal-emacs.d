@@ -8047,7 +8047,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should (member '(require gptel-agent-tools) calls)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-starts-worker-daemon-headless ()
-  "Wrapper should strip GUI display variables and bind the daemon init dir."
+  "Wrapper should strip GUI display variables and ignore inherited server overrides."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -8063,16 +8063,29 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                    "%s"
                    (shell-quote-argument emacs-log)
                    (shell-quote-argument emacs-log))))
-         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
-         (process-environment
-          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
-                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
-                        "DISPLAY=:99"
-                        "WAYLAND_DISPLAY=wayland-1"
-                        "WAYLAND_SOCKET=wayland-test"
-                        "XAUTHORITY=/tmp/test-xauthority")
-                  process-environment))
-         (default-directory repo-root))
+          (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+          (base-environment
+           (cl-remove-if
+            (lambda (entry)
+              (or (string-prefix-p "PATH=" entry)
+                  (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" entry)
+                  (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" entry)
+                  (string-prefix-p "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=" entry)
+                  (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" entry)
+                  (string-prefix-p "DISPLAY=" entry)
+                  (string-prefix-p "WAYLAND_DISPLAY=" entry)
+                  (string-prefix-p "WAYLAND_SOCKET=" entry)
+                  (string-prefix-p "XAUTHORITY=" entry)))
+            (cons "AUTO_WORKFLOW_EMACS_SERVER=mn1714" process-environment)))
+          (process-environment
+           (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                         (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                         "DISPLAY=:99"
+                         "WAYLAND_DISPLAY=wayland-1"
+                         "WAYLAND_SOCKET=wayland-test"
+                         "XAUTHORITY=/tmp/test-xauthority")
+                   base-environment))
+          (default-directory repo-root))
     (unwind-protect
         (progn
           (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
