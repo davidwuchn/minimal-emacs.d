@@ -2183,6 +2183,21 @@ time to apply and verify a focused fix."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-review-file-context-max-bytes 50000
+  "Maximum size in bytes for one changed file attached to reviewer context.
+
+Oversized files are omitted from `gptel-benchmark--subagent-files` and the
+reviewer must inspect them via tools when needed."
+  :type 'integer
+  :safe #'integerp
+  :group 'gptel-tools-agent)
+
+(defcustom gptel-auto-workflow-review-file-context-max-total-bytes 120000
+  "Maximum cumulative size in bytes for reviewer-attached changed files."
+  :type 'integer
+  :safe #'integerp
+  :group 'gptel-tools-agent)
+
 (defcustom gptel-auto-experiment-max-per-target 5
   "Maximum experiments per target.
 Monthly subscription: 5 is optimal (diminishing returns after 3-4)."
@@ -3331,8 +3346,34 @@ cherry-pick, not the full branch delta against staging."
               "No changes detected in review commit.")
              ((not (eq 0 (cdr diff-result)))
               (format "Error generating diff: %s" diff-output))
-             (t
-              diff-output))))))))))
+              (t
+               diff-output))))))))))
+
+(defun gptel-auto-workflow--review-attachment-files (worktree changed-files)
+  "Return reviewer file attachments for CHANGED-FILES in WORKTREE.
+
+The returned plist contains:
+- `:files' absolute file paths safe to attach
+- `:skipped' relative file paths omitted due to reviewer context limits
+- `:bytes' cumulative bytes attached"
+  (let ((files nil)
+        (skipped nil)
+        (total-bytes 0))
+    (dolist (relative-file changed-files
+                           (list :files (nreverse files)
+                                 :skipped (nreverse skipped)
+                                 :bytes total-bytes))
+      (let* ((absolute-file (expand-file-name relative-file worktree))
+             (attrs (and (file-readable-p absolute-file)
+                         (file-attributes absolute-file)))
+             (size (and attrs (file-attribute-size attrs))))
+        (if (or (not (integerp size))
+                (> size gptel-auto-workflow-review-file-context-max-bytes)
+                (> (+ total-bytes size)
+                   gptel-auto-workflow-review-file-context-max-total-bytes))
+            (push relative-file skipped)
+          (push absolute-file files)
+          (cl-incf total-bytes size))))))
 
 (defun gptel-auto-workflow--review-changes (optimize-branch callback)
   "Review changes in OPTIMIZE-BRANCH before merging to staging.
@@ -3346,15 +3387,22 @@ Reviewer checks for Blocker/Critical issues."
            (changed-files (and worktree
                                (gptel-auto-workflow--worktree-tip-changed-elisp-files
                                 worktree)))
-           (review-files (and worktree
-                              changed-files
-                              (mapcar (lambda (relative-file)
-                                        (expand-file-name relative-file worktree))
-                                      changed-files)))
+           (review-file-info (and worktree
+                                  changed-files
+                                  (gptel-auto-workflow--review-attachment-files
+                                   worktree changed-files)))
+           (review-files (plist-get review-file-info :files))
+           (skipped-review-files (plist-get review-file-info :skipped))
            (default-directory proj-root)
            (review-timeout (max my/gptel-agent-task-timeout
                                 gptel-auto-workflow-review-time-budget))
            (diff-content (gptel-auto-workflow--review-diff-content optimize-branch))
+           (attachment-note
+            (if skipped-review-files
+                (format "ATTACHED FILE CONTEXT:\n- Attached changed files: %d\n- Omitted oversized files: %s\n- Use repo tools to inspect omitted files when needed.\n\n"
+                        (length review-files)
+                        (mapconcat #'identity skipped-review-files ", "))
+              ""))
            (review-prompt (format "Review the following changes for blockers, critical bugs, and security issues.
 
 CHANGES (diff):
@@ -3373,12 +3421,18 @@ REVIEW METHOD:
 - When attached changed file contents are present, use them before claiming a file
   cannot be located.
 
+%s
+
 OUTPUT: First line must be exactly 'APPROVED' or 'BLOCKED: [reason]'.
 You may include structured markdown after that verdict line.
 
 Maximum response: 1000 characters."
-                                  (truncate-string-to-width diff-content 3000 nil nil "..."))))
+                                  (truncate-string-to-width diff-content 3000 nil nil "...")
+                                  attachment-note)))
       (message "[auto-workflow] Reviewing changes in %s..." optimize-branch)
+      (when skipped-review-files
+        (message "[auto-workflow] Reviewer attachments omitted oversized files: %s"
+                 (mapconcat #'identity skipped-review-files ", ")))
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-call-subagent))
           (let ((gptel-benchmark--subagent-files review-files))
