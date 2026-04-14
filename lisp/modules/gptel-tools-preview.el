@@ -273,6 +273,9 @@ Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
     (cond
      (path-error
       (funcall callback (format "Error: %s" path-error)))
+     ((not (stringp original))
+      (funcall callback (format "Error: Original content must be a string, got %s"
+                                (type-of original))))
      ((and (> gptel-tools-preview-max-replacement-size 0)
            replacement
            (> (length replacement) gptel-tools-preview-max-replacement-size))
@@ -280,7 +283,7 @@ Skips preview when `my/gptel--preview-bypass-p' returns non-nil."
                                 (length replacement) gptel-tools-preview-max-replacement-size)))
      ((my/gptel--preview-bypass-p)
       (funcall callback "Preview disabled, auto-confirmed."))
-(t
+     (t
       (let (temp1 temp2)
         (condition-case err
             (let* ((wrapped-cb (my/gptel--make-preview-callback buffer callback))
