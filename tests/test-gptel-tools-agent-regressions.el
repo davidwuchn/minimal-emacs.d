@@ -7260,12 +7260,22 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
            "fake-emacs"
            (format "echo emacs-invoked >> %s\nexit 1" (shell-quote-argument emacs-log))))
          (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (or (string-prefix-p "PATH=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" entry)
+                 (string-prefix-p "TMPDIR=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=" entry)))
+           process-environment))
          (process-environment
           (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
                         (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
                         (format "TMPDIR=%s/" tmp-root)
                         "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=5")
-                  process-environment))
+                  base-environment))
          (default-directory repo-root))
     (unwind-protect
         (progn
@@ -8860,13 +8870,23 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
            "fake-emacs"
            (format "echo emacs-invoked >> %s\nexit 1" (shell-quote-argument emacs-log))))
          (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (or (string-prefix-p "PATH=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" entry)
+                 (string-prefix-p "TMPDIR=" entry)
+                 (string-prefix-p "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=" entry)))
+           process-environment))
          (process-environment
           (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
                         (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
                         (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" messages-file)
                         (format "TMPDIR=%s/" tmp-root)
                         "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=5")
-                  process-environment))
+                  base-environment))
          (default-directory repo-root))
     (unwind-protect
         (progn
