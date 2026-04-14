@@ -666,13 +666,17 @@ Uses `json-serialize' for accuracy.  Returns 0 if :data is nil or serialization 
 (defun my/gptel--effective-byte-limit (info)
   "Return the byte limit to use for INFO's request.
 Takes the minimum of `my/gptel-payload-byte-limit' and the model-specific
-context limit from `my/gptel-model-context-bytes'."
+context limit from `my/gptel-model-context-bytes'.
+
+ASSUMPTION: Model names may include version/date suffixes (e.g., \"kimi-k2.5-20250711\").
+  Uses prefix matching to map variant names to their family limits.
+EDGE CASE: Unknown models fall back to global limit (999999999)."
   (let* ((model (plist-get info :model))
          (global-limit (or my/gptel-payload-byte-limit 999999999))
          (model-limit
           (if (stringp model)
               (or (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
-                           when (string= pattern model)
+                           when (string-prefix-p pattern model)
                            return limit)
                   999999999)
             999999999)))
