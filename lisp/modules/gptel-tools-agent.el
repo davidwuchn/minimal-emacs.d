@@ -6891,19 +6891,22 @@ Tries multiple patterns in order:
   "Maximum retries when validation fails due to teachable patterns.
 Executor will be instructed to load relevant skill and regenerate.")
 
+(defun gptel-auto-experiment--elisp-syntax-error-p (target error)
+  "Return non-nil when ERROR indicates an Elisp syntax issue in TARGET."
+  (and (stringp error)
+       (or (string-match-p
+            "cl-return-from.*without.*cl-block\\|Dangerous pattern"
+            error)
+           (and (stringp target)
+                (string-suffix-p ".el" target)
+                (string-match-p "\\`Syntax error in " error)))))
+
 (defun gptel-auto-experiment--teachable-validation-error-p (target validation-error)
   "Return non-nil when VALIDATION-ERROR should trigger an immediate retry.
 TARGET is the file currently being optimized."
   (and (stringp validation-error)
        (> (length validation-error) 0)
-       (not
-        (null
-         (or (string-match-p
-              "cl-return-from.*without.*cl-block\\|Dangerous pattern"
-              validation-error)
-             (and (stringp target)
-                  (string-suffix-p ".el" target)
-                  (string-match-p "\\`Syntax error in " validation-error)))))))
+       (not (null (gptel-auto-experiment--elisp-syntax-error-p target validation-error)))))
 
 (defun gptel-auto-experiment--make-retry-prompt (target validation-error original-prompt)
   "Create retry prompt after validation failure.
@@ -6913,12 +6916,7 @@ Instructs executor to load relevant skill instead of hardcoding patterns."
   (let ((skill-guidance
          (cond
           ;; Elisp syntax and dangerous patterns - tell executor to load skill
-          ((and (stringp target)
-                (string-suffix-p ".el" target)
-                (or (string-match-p
-                     "cl-return-from.*without.*cl-block\\|Dangerous pattern"
-                     validation-error)
-                    (string-match-p "\\`Syntax error in " validation-error)))
+          ((gptel-auto-experiment--elisp-syntax-error-p target validation-error)
            "CALL THIS FIRST: Skill(\"elisp-expert\")
 This skill teaches syntax-safe Elisp edits and dangerous patterns including cl-return-from requirements.")
           ;; Add more skill mappings here as needed
