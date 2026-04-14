@@ -268,14 +268,13 @@ Returns the number of tool definitions removed, or 0 if nothing changed."
       ;; Only filter if we found any used tools (safety: don't send empty tools)
       (when (> (hash-table-count used-names) 0)
         (let* ((original-count (length data-tools))
-               ;; Filter serialized tools vector
-               (filtered (vconcat
-                          (cl-remove-if-not
-                           (lambda (tool-plist)
-                             (let* ((func (plist-get tool-plist :function))
-                                    (name (and func (plist-get func :name))))
-                               (gethash name used-names)))
-                           (append data-tools nil)))) ; vector -> list for cl-remove-if-not
+               ;; Filter serialized tools vector directly (cl-remove-if-not preserves sequence type)
+               (filtered (cl-remove-if-not
+                          (lambda (tool-plist)
+                            (let* ((func (plist-get tool-plist :function))
+                                   (name (and func (plist-get func :name))))
+                              (gethash name used-names)))
+                          data-tools))
                (new-count (length filtered)))
           (when (< new-count original-count)
             (plist-put data :tools filtered)
@@ -350,21 +349,18 @@ EDGE CASE: Content that becomes empty after filtering is preserved as empty vect
 Returns the number of image parts removed, or 0 if nothing was done."
   (let* ((data (plist-get info :data))
          (messages (and data (plist-get data :messages)))
-         (removed 0))
+         (removed 0)
+         (image-p
+          (lambda (part)
+            (and (listp part)
+                 (equal (plist-get part :type) "image_url")))))
     (when (and messages (> (length messages) 0))
       (dotimes (i (length messages))
         (let* ((msg (aref messages i))
                (content (plist-get msg :content)))
           (when (and content (sequencep content) (not (stringp content)) (> (length content) 0))
-            (let* ((original-length (length content))
-                   (image-p
-                    (lambda (part)
-                      (and (listp part)
-                           (equal (plist-get part :type) "image_url"))))
-                   (filtered
-                    (if (vectorp content)
-                        (vconcat (cl-remove-if image-p content))
-                      (cl-remove-if image-p content))))
+            (let ((original-length (length content))
+                  (filtered (cl-remove-if image-p content)))
               (when (< (length filtered) original-length)
                 (cl-incf removed (- original-length (length filtered)))
                 (plist-put msg :content filtered)))))))
@@ -537,8 +533,8 @@ TEST: Verify with network failure simulation — should retry 3 times with
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
              (my/gptel--transient-error-p error-data http-status))
         (let* ((delay (min my/gptel--retry-max-delay
-                            (* my/gptel--retry-base-delay
-                               (expt my/gptel--retry-backoff-factor retries))))
+                           (* my/gptel--retry-base-delay
+                              (expt my/gptel--retry-backoff-factor retries))))
                (error-msg (my/gptel--format-error-message error-data http-status)))
           (if my/gptel-max-retries
               (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..."
