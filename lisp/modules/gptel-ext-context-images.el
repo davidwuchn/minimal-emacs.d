@@ -220,23 +220,25 @@ Returns number of images removed."
 (defun my/gptel--trim-oldest-images (bytes-to-save)
   "Trim oldest images to save approximately BYTES-TO-SAVE bytes.
 Returns actual bytes saved."
-  (let* ((images (my/gptel--sort-images-by-relevance))
-         (bytes-saved 0)
-         (trimmed 0))
-    (dolist (img images)
-      (when (and (< bytes-saved bytes-to-save)
-                 (file-exists-p (car img)))
-        (let* ((path (car img))
-               (size (file-attribute-size (file-attributes path))))
-          (setq gptel-context
-                (cl-remove-if (lambda (e)
-                                (equal (if (consp e) (car e) e) path))
-                              gptel-context))
-          (cl-incf bytes-saved (or size 0))
-          (cl-incf trimmed))))
-    (when (> trimmed 0)
-      (message "[gptel-images] Trimmed %d image(s) (~%dKB)" trimmed (/ bytes-saved 1024)))
-    bytes-saved))
+  (if (not (and (numberp bytes-to-save) (> bytes-to-save 0)))
+      0
+    (let* ((images (my/gptel--sort-images-by-relevance))
+           (bytes-saved 0)
+           (trimmed 0))
+      (dolist (img images)
+        (when (and (< bytes-saved bytes-to-save)
+                   (file-exists-p (car img)))
+          (let* ((path (car img))
+                 (size (file-attribute-size (file-attributes path))))
+            (setq gptel-context
+                  (cl-remove-if (lambda (e)
+                                   (equal (if (consp e) (car e) e) path))
+                                 gptel-context))
+            (cl-incf bytes-saved (or size 0))
+            (cl-incf trimmed))))
+      (when (> trimmed 0)
+        (message "[gptel-images] Trimmed %d image(s) (~%dKB)" trimmed (/ bytes-saved 1024)))
+      bytes-saved)))
 
 ;;; Context Image Info
 
