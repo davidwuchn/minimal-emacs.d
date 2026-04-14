@@ -268,14 +268,13 @@ Returns the number of tool definitions removed, or 0 if nothing changed."
       ;; Only filter if we found any used tools (safety: don't send empty tools)
       (when (> (hash-table-count used-names) 0)
         (let* ((original-count (length data-tools))
-               ;; Filter serialized tools vector
-               (filtered (vconcat
-                          (cl-remove-if-not
-                           (lambda (tool-plist)
-                             (let* ((func (plist-get tool-plist :function))
-                                    (name (and func (plist-get func :name))))
-                               (gethash name used-names)))
-                           (append data-tools nil)))) ; vector -> list for cl-remove-if-not
+               ;; Filter serialized tools vector directly (cl-remove-if-not preserves sequence type)
+               (filtered (cl-remove-if-not
+                          (lambda (tool-plist)
+                            (let* ((func (plist-get tool-plist :function))
+                                   (name (and func (plist-get func :name))))
+                              (gethash name used-names)))
+                          data-tools))
                (new-count (length filtered)))
           (when (< new-count original-count)
             (plist-put data :tools filtered)
@@ -360,11 +359,8 @@ Returns the number of image parts removed, or 0 if nothing was done."
         (let* ((msg (aref messages i))
                (content (plist-get msg :content)))
           (when (and content (sequencep content) (not (stringp content)) (> (length content) 0))
-            (let* ((original-length (length content))
-                   (filtered
-                    (if (vectorp content)
-                        (vconcat (cl-remove-if image-p content))
-                      (cl-remove-if image-p content))))
+            (let ((original-length (length content))
+                  (filtered (cl-remove-if image-p content)))
               (when (< (length filtered) original-length)
                 (cl-incf removed (- original-length (length filtered)))
                 (plist-put msg :content filtered)))))))
