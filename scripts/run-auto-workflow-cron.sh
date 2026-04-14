@@ -314,11 +314,6 @@ check_worker_daemon() {
     local rc
     if run_emacsclient_eval "t" 1 >/dev/null 2>&1; then
         return 0
-    else
-        rc=$?
-    fi
-    if [ "$rc" -eq 124 ]; then
-        return 2
     fi
     if run_emacsclient_eval "t" 3 >/dev/null 2>&1; then
         return 0
