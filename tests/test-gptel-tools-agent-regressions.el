@@ -5164,12 +5164,50 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
        "optimize/test-branch"
        (lambda (result) (setq review-result result)))
       (should (car review-result))
-      (should (string-match-p
-               "inspect that helper's[[:space:]\n]+current definition"
-               captured-prompt))
-      (should (string-match-p
-               "Do not block solely because a referenced helper is outside the diff"
-               captured-prompt)))))
+       (should (string-match-p
+                "inspect that helper's[[:space:]\n]+current definition"
+                captured-prompt))
+       (should (string-match-p
+                "Do not block solely because a referenced helper is outside the diff"
+                captured-prompt))
+       (should (string-match-p
+                "use them before claiming a file[[:space:]\n]+cannot be located"
+                captured-prompt)))))
+
+(ert-deftest regression/auto-workflow/review-changes-passes-changed-files-to-reviewer ()
+  "Review dispatch should attach changed worktree files for reviewer verification."
+  (let ((gptel-auto-workflow-require-review t)
+        (gptel-auto-experiment-use-subagents t)
+        (temp-dir (make-temp-file "review-files-worktree" t))
+        captured-files
+        review-result)
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "lisp/modules" temp-dir) t)
+          (with-temp-file (expand-file-name "lisp/modules/foo.el" temp-dir)
+            (insert "(defun foo () t)\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
+                     (lambda () test-auto-workflow--repo-root))
+                    ((symbol-function 'gptel-auto-workflow--branch-worktree-paths)
+                     (lambda (_branch &optional _proj-root)
+                       (list temp-dir)))
+                    ((symbol-function 'gptel-auto-workflow--worktree-tip-changed-elisp-files)
+                     (lambda (_worktree)
+                       '("lisp/modules/foo.el")))
+                    ((symbol-function 'gptel-auto-workflow--review-diff-content)
+                     (lambda (&rest _) "diff --git a/lisp/modules/foo.el b/lisp/modules/foo.el"))
+                    ((symbol-function 'gptel-benchmark-call-subagent)
+                     (lambda (_agent _description _prompt callback &optional _timeout)
+                       (setq captured-files gptel-benchmark--subagent-files)
+                       (funcall callback "APPROVED")))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (gptel-auto-workflow--review-changes
+             "optimize/test-branch"
+             (lambda (result) (setq review-result result))))
+          (should (car review-result))
+          (should (equal captured-files
+                         (list (expand-file-name "lisp/modules/foo.el" temp-dir)))))
+      (delete-directory temp-dir t))))
 
 (ert-deftest regression/auto-workflow/retry-review-on-transient-reviewer-error ()
   "Transient reviewer transport failures should retry review, not trigger fix-review-issues."

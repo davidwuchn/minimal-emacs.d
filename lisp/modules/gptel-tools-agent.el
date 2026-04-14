@@ -26,6 +26,7 @@
 (defvar gptel-auto-workflow--current-project nil)
 (defvar gptel-auto-workflow--run-project-root nil)
 (defvar gptel-agent-loop--bypass nil)
+(defvar gptel-benchmark--subagent-files nil)
 
 ;;; Shell Command with Timeout
 
@@ -3333,6 +3334,16 @@ Reviewer checks for Blocker/Critical issues."
   (if (not gptel-auto-workflow-require-review)
       (funcall callback (cons t "Review disabled by config"))
     (let* ((proj-root (gptel-auto-workflow--project-root))
+           (worktree (car (gptel-auto-workflow--branch-worktree-paths
+                           optimize-branch proj-root)))
+           (changed-files (and worktree
+                               (gptel-auto-workflow--worktree-tip-changed-elisp-files
+                                worktree)))
+           (review-files (and worktree
+                              changed-files
+                              (mapcar (lambda (relative-file)
+                                        (expand-file-name relative-file worktree))
+                                      changed-files)))
            (default-directory proj-root)
            (review-timeout (max my/gptel-agent-task-timeout
                                 gptel-auto-workflow-review-time-budget))
@@ -3352,29 +3363,32 @@ REVIEW METHOD:
   current definition before blocking on unknown behavior.
 - Do not block solely because a referenced helper is outside the diff when you can
   verify it from the current file/repo.
+- When attached changed file contents are present, use them before claiming a file
+  cannot be located.
 
 OUTPUT: First line must be exactly 'APPROVED' or 'BLOCKED: [reason]'.
 You may include structured markdown after that verdict line.
 
 Maximum response: 1000 characters."
-                                  (truncate-string-to-width diff-content 3000 nil nil "..."))))
+                                   (truncate-string-to-width diff-content 3000 nil nil "..."))))
       (message "[auto-workflow] Reviewing changes in %s..." optimize-branch)
       (if (and gptel-auto-experiment-use-subagents
                (fboundp 'gptel-benchmark-call-subagent))
-          (gptel-benchmark-call-subagent
-           'reviewer
-           "Review changes before merge"
-           review-prompt
-           (lambda (result)
-             (let* ((response (if (stringp result) result (format "%S" result)))
-                    (approved (gptel-auto-workflow--review-approved-p response)))
-               (message "[auto-workflow] Review %s: %s"
-                        (if approved "PASSED" "BLOCKED")
-                        (my/gptel--sanitize-for-logging response 100))
-               (my/gptel--invoke-callback-safely
-                callback
-                (cons approved response))))
-           review-timeout)
+          (let ((gptel-benchmark--subagent-files review-files))
+            (gptel-benchmark-call-subagent
+             'reviewer
+             "Review changes before merge"
+             review-prompt
+             (lambda (result)
+               (let* ((response (if (stringp result) result (format "%S" result)))
+                      (approved (gptel-auto-workflow--review-approved-p response)))
+                 (message "[auto-workflow] Review %s: %s"
+                          (if approved "PASSED" "BLOCKED")
+                          (my/gptel--sanitize-for-logging response 100))
+                 (my/gptel--invoke-callback-safely
+                  callback
+                  (cons approved response))))
+             review-timeout))
         (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
 
 (defun gptel-auto-workflow--review-approved-p (response)
