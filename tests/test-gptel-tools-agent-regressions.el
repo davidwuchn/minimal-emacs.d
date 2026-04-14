@@ -1783,7 +1783,122 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (should seen-dir)
           (should (file-directory-p temp-dir)))
        (when (file-directory-p temp-root)
-         (delete-directory temp-root t)))))
+          (delete-directory temp-root t)))))
+
+(defun test-auto-workflow--stored-temp-file (text)
+  "Return the temp artifact path embedded in TEXT, if present."
+  (when (and (stringp text)
+             (string-match "Stored in: \\(.*\\)" text))
+    (match-string 1 text)))
+
+(ert-deftest regression/gptel-agent/read-file-lines-truncates-large-output ()
+  "Read tool output should spill oversized buffers to a temp artifact."
+  (let* ((temp-root (make-temp-file "gptel-read-temp" t))
+         (temporary-file-directory (file-name-as-directory temp-root))
+         (input-file (expand-file-name "large.txt" temp-root))
+         temp-file)
+    (unwind-protect
+        (progn
+          (with-temp-file input-file
+            (dotimes (_ 250)
+              (insert (make-string 100 ?a) "\n")))
+          (let ((result (gptel-agent--read-file-lines input-file 1 250)))
+            (setq temp-file (test-auto-workflow--stored-temp-file result))
+            (should temp-file)
+            (should (file-exists-p temp-file))))
+      (when (and temp-file (file-exists-p temp-file))
+        (delete-file temp-file))
+      (when (file-directory-p temp-root)
+        (delete-directory temp-root t)))))
+
+(ert-deftest regression/gptel-agent/grep-truncates-large-output ()
+  "Grep tool output should spill oversized buffers to a temp artifact."
+  (let* ((temp-root (make-temp-file "gptel-grep-temp" t))
+         (temporary-file-directory (file-name-as-directory temp-root))
+         temp-file)
+    (unwind-protect
+        (cl-letf (((symbol-function 'executable-find)
+                   (lambda (_cmd) "/usr/bin/rg"))
+                  ((symbol-function 'call-process)
+                   (lambda (&rest _args)
+                     (insert (make-string 21050 ?g))
+                     0)))
+          (let ((result (gptel-agent--grep "needle" temp-root)))
+            (setq temp-file (test-auto-workflow--stored-temp-file result))
+            (should temp-file)
+            (should (file-exists-p temp-file))))
+      (when (and temp-file (file-exists-p temp-file))
+        (delete-file temp-file))
+      (when (file-directory-p temp-root)
+        (delete-directory temp-root t)))))
+
+(ert-deftest regression/gptel-agent/read-url-truncates-large-output ()
+  "Web fetch output should spill oversized buffers to a temp artifact."
+  (let* ((temp-root (make-temp-file "gptel-webfetch-temp" t))
+         (temporary-file-directory (file-name-as-directory temp-root))
+         result temp-file)
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'gptel-agent--fetch-with-timeout)
+                     (lambda (_url url-cb tool-cb _label)
+                       (with-temp-buffer
+                         (insert "HTTP/1.1 200 OK\n\n<html><body><pre>"
+                                 (make-string 21050 ?w)
+                                 "</pre></body></html>")
+                         (goto-char (point-min))
+                         (funcall url-cb tool-cb)))))
+            (gptel-agent--read-url (lambda (value) (setq result value))
+                                   "https://example.com"))
+          (setq temp-file (test-auto-workflow--stored-temp-file result))
+          (should temp-file)
+          (should (file-exists-p temp-file)))
+      (when (and temp-file (file-exists-p temp-file))
+        (delete-file temp-file))
+      (when (file-directory-p temp-root)
+        (delete-directory temp-root t)))))
+
+(ert-deftest regression/gptel-agent/yt-read-url-truncates-large-output ()
+  "YouTube fetch output should spill oversized buffers to a temp artifact."
+  (let* ((temp-root (make-temp-file "gptel-yt-temp" t))
+         (temporary-file-directory (file-name-as-directory temp-root))
+         result temp-file)
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'gptel-agent--yt-fetch-watch-page)
+                     (lambda (callback _video-id)
+                       (funcall callback
+                                (concat "# Transcript\n\n"
+                                        (make-string 21050 ?y))))))
+            (gptel-agent--yt-read-url (lambda (value) (setq result value))
+                                      "https://youtube.com/watch?v=demo"))
+          (setq temp-file (test-auto-workflow--stored-temp-file result))
+          (should temp-file)
+          (should (file-exists-p temp-file)))
+      (when (and temp-file (file-exists-p temp-file))
+        (delete-file temp-file))
+      (when (file-directory-p temp-root)
+        (delete-directory temp-root t)))))
+
+(ert-deftest regression/gptel-agent/execute-bash-truncates-large-output ()
+  "Bash tool output should spill oversized buffers to a temp artifact."
+  (let* ((temp-root (make-temp-file "gptel-bash-temp" t))
+         (temporary-file-directory (file-name-as-directory temp-root))
+         result temp-file)
+    (unwind-protect
+        (progn
+          (gptel-agent--execute-bash
+           (lambda (value) (setq result value))
+           "python -c \"print('b' * 21050)\"")
+          (with-timeout (10 (ert-fail "Timed out waiting for bash output"))
+            (while (null result)
+              (accept-process-output nil 0.1)))
+          (setq temp-file (test-auto-workflow--stored-temp-file result))
+          (should temp-file)
+          (should (file-exists-p temp-file)))
+      (when (and temp-file (file-exists-p temp-file))
+        (delete-file temp-file))
+      (when (file-directory-p temp-root)
+        (delete-directory temp-root t)))))
 
 (ert-deftest regression/gptel-agent/write-file-creates-parent-dir-before-upstream ()
   "Local write advice should create missing parent directories before save."
@@ -6738,6 +6853,63 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (insert-file-contents status-file)
             (should (string-match-p ":running nil" (buffer-string)))
             (should (string-match-p ":phase \"idle\"" (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-status-keeps-running-on-initial-probe-timeout ()
+  "Wrapper status should preserve running state when the initial daemon probe times out."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (calls-file (expand-file-name "probe-calls.txt" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 1"))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "from pathlib import Path\n"
+                    "import sys, time\n"
+                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    (format "calls_path = Path(%S)\n" calls-file)
+                    "if expr == 't':\n"
+                    "    count = int(calls_path.read_text() or '0') if calls_path.exists() else 0\n"
+                    "    count += 1\n"
+                    "    calls_path.write_text(str(count))\n"
+                    "    if count == 1:\n"
+                    "        time.sleep(2)\n"
+                    "        print('t')\n"
+                    "        raise SystemExit(0)\n"
+                    "    raise SystemExit(1)\n"
+                    "elif 'gptel-auto-workflow--status-plist' in expr:\n"
+                    "    raise SystemExit(1)\n"
+                    "print('nil')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 1 :phase \"running\" :run-id \"2026-04-14T160001Z-2523\" :results \"var/tmp/experiments/2026-04-14T160001Z-2523/results.tsv\")\n"))
+          (set-file-times status-file (time-subtract (current-time) (seconds-to-time 120)))
+          (let* ((process-environment
+                  (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                                (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                                "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=1")
+                          process-environment))
+                 (output (shell-command-to-string (format "%s status" script))))
+            (should (string-match-p ":running t" output))
+            (should (string-match-p ":phase \"running\"" output)))
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running t" (buffer-string)))
+            (should (string-match-p ":phase \"running\"" (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents calls-file)
+            (should (string= "2" (string-trim (buffer-string))))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t))))
 
