@@ -6799,7 +6799,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                     "executor"
                                                     (format "Retry: fix validation error in %s" target)
                                                     (gptel-auto-experiment--make-retry-prompt
-                                                     target validation-error executor-prompt))))
+                                                     target validation-error executor-prompt)
+                                                    nil "false" nil)))
                                              (let ((default-directory experiment-worktree))
                                                (setq finished t)
                                                (magit-git-success "checkout" "--" ".")

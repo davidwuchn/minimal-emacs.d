@@ -1341,8 +1341,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (kill-buffer worktree-buf))
       (delete-directory project-root t))))
 
-(ert-deftest regression/auto-experiment/retry-forwards-executor-runagent-args ()
-  "Validation retry should keep passing executor args to RunAgent."
+(ert-deftest regression/auto-experiment/retry-forwards-focused-executor-runagent-args ()
+  "Validation retry should keep the executor retry context focused."
   (let* ((project-root (make-temp-file "aw-project" t))
          (worktree-dir (expand-file-name "var/tmp/experiments/optimize/retry-riven-exp1" project-root))
          (worktree-buf (get-buffer-create "*aw-forward-retry*"))
@@ -1404,11 +1404,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                            nil
                            "false"
                            nil)))
-          (should (equal (nth 1 runagent-calls)
-                         '("executor"
-                           "Retry: fix validation error in lisp/modules/gptel-tools-agent.el"
-                           "retry:Dangerous pattern:prompt"
-                           nil nil nil))))
+           (should (equal (nth 1 runagent-calls)
+                          '("executor"
+                            "Retry: fix validation error in lisp/modules/gptel-tools-agent.el"
+                            "retry:Dangerous pattern:prompt"
+                            nil
+                            "false"
+                            nil))))
        (when (buffer-live-p worktree-buf)
          (kill-buffer worktree-buf))
        (delete-directory project-root t))))
