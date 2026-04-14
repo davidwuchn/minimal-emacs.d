@@ -6067,7 +6067,9 @@ fall back to an error-shaped AGENT-OUTPUT."
 (defun gptel-auto-experiment--hard-timeout-p (error-output)
   "Return non-nil when ERROR-OUTPUT reports a hard wall-clock timeout."
   (and (stringp error-output)
-       (string-match-p "timed out after [0-9]+s total runtime" error-output)))
+       (string-match-p
+        "timed out after [0-9]+s\\(?: total runtime\\)?\\.?"
+        error-output)))
 
 (defun gptel-auto-experiment--result-hard-timeout-p (result)
   "Return non-nil when RESULT failed due to a hard executor timeout."
