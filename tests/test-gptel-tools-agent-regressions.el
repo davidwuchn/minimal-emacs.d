@@ -207,9 +207,47 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
              (should (equal load-target
                             (expand-file-name "early-init.el" repo-root)))
              (should (< init-index load-index))
-             (should (< eval-index load-index))))
+              (should (< eval-index load-index))))
       (delete-file argv-log)
       (delete-file fake-emacs))))
+
+(ert-deftest regression/auto-workflow/verify-nucleus-checks-cached-gitlinks ()
+  "verify-nucleus.sh should validate both working-tree and cached submodule refs."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (temp-root (make-temp-file "aw-verify-root" t))
+         (script-dir (expand-file-name "scripts" temp-root))
+         (script (expand-file-name "verify-nucleus.sh" script-dir))
+         (check-script (expand-file-name "check-submodule-sync.sh" script-dir))
+         (call-log (make-temp-file "aw-verify-submodule-calls"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script "fake-emacs" "exit 0"))
+         (process-environment
+          (append (list (format "EMACS=%s" fake-emacs))
+                  process-environment))
+         (default-directory temp-root))
+    (unwind-protect
+        (progn
+          (make-directory script-dir t)
+          (copy-file (expand-file-name "scripts/verify-nucleus.sh" repo-root) script t)
+          (set-file-modes script #o755)
+          (with-temp-file check-script
+            (insert "#!/bin/sh\n"
+                    (format "printf '%%s\\n' \"$*\" >> %s\n"
+                            (shell-quote-argument call-log))
+                    "exit 0\n"))
+          (set-file-modes check-script #o755)
+          (with-temp-file (expand-file-name "early-init.el" temp-root)
+            (insert ""))
+          (shell-command-to-string script)
+          (let ((calls (with-temp-buffer
+                         (insert-file-contents call-log)
+                         (split-string (buffer-string) "\n" t))))
+            (should (equal calls '("--working-tree" "--cached")))))
+      (delete-directory temp-root t)
+      (when (file-exists-p call-log)
+        (delete-file call-log))
+      (when (file-exists-p fake-emacs)
+        (delete-file fake-emacs)))))
 
 (defun test-auto-workflow--argv-eval-payload (argv)
   "Return the `--eval' payload from fake emacsclient ARGV, or nil."

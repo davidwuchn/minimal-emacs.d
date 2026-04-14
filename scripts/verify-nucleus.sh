@@ -22,11 +22,14 @@ trap cleanup EXIT
 echo "Running Nucleus Tool Validations..."
 
 echo ""
-echo "[1/4] Verifying submodule sync..."
+echo "[1/5] Verifying submodule sync..."
 if [[ "${VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC:-0}" == "1" ]]; then
-    echo "Skipping submodule sync check (VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1)"
+    echo "Skipping submodule sync checks (VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1)"
 else
     "$DIR/scripts/check-submodule-sync.sh" --working-tree
+    echo ""
+    echo "[2/5] Verifying tracked submodule gitlinks..."
+    "$DIR/scripts/check-submodule-sync.sh" --cached
 fi
 
 cat >"$TMP_ELISP" <<EOF
@@ -50,7 +53,7 @@ cat >"$TMP_ELISP" <<EOF
 (require 'cl-lib)
 (require 'gptel-config)
 (require 'gptel-agent-tools)
-(message "\\n[2/4] Verifying Agent Tool Contracts...")
+(message "\\n[3/5] Verifying Agent Tool Contracts...")
 (require 'nucleus-presets)
 (condition-case err
     (progn
@@ -60,7 +63,7 @@ cat >"$TMP_ELISP" <<EOF
    (message "✗ Agent tool contracts validation failed: %s" (error-message-string err))
    (kill-emacs 1)))
 
-(message "\\n[3/4] Verifying Tool Registrations...")
+(message "\\n[4/5] Verifying Tool Registrations...")
 (require 'nucleus-tools-verify)
 (let ((missing (cl-loop for item in (nucleus--verify-tools)
                         when (not (eq (cdr item) 'registered))
@@ -69,10 +72,10 @@ cat >"$TMP_ELISP" <<EOF
       (progn
         (message "✗ Tool registration validation failed. Missing/Duplicate tools: %s"
                  (mapconcat #'identity missing ", "))
-        (kill-emacs 1))
+         (kill-emacs 1))
     (message "✓ All tools correctly registered.")))
 
-(message "\\n[4/4] Verifying Tool Signatures...")
+(message "\\n[5/5] Verifying Tool Signatures...")
 (require 'nucleus-tools-validate)
 (let* ((results (nucleus--validate-all-tools))
        (errors (cl-loop for (_ . (status . _)) in results count (eq status 'error))))
