@@ -2555,12 +2555,26 @@ Call this before any git operation that might modify branches."
     (when (string= current "main")
       (error "[SAFETY] Auto-workflow attempted to operate on main branch!"))))
 
+(defun gptel-auto-workflow--configured-staging-branch ()
+  "Return the configured staging branch when it is a non-empty string."
+  (let ((branch gptel-auto-workflow-staging-branch))
+    (and (gptel-auto-workflow--non-empty-string-p branch)
+         branch)))
+
+(defun gptel-auto-workflow--require-staging-branch ()
+  "Return the configured staging branch, logging when it is invalid."
+  (or (gptel-auto-workflow--configured-staging-branch)
+      (progn
+        (message "[auto-workflow] Missing staging branch configuration")
+        nil)))
+
 (defun gptel-auto-workflow--staging-branch-exists-p ()
   "Check if staging branch exists locally or remotely."
-  (let ((branch gptel-auto-workflow-staging-branch))
-    (when (gptel-auto-workflow--non-empty-string-p branch)
-      (or (member branch (magit-list-local-branch-names))
-          (member (concat "origin/" branch) (magit-list-remote-branch-names))))))
+  (let ((branch (gptel-auto-workflow--configured-staging-branch)))
+    (and branch
+         (or (member branch (magit-list-local-branch-names))
+              (member (concat "origin/" branch)
+                      (magit-list-remote-branch-names))))))
 
 (defun gptel-auto-workflow--staging-main-ref ()
   "Return the safe main ref staging and experiments should mirror.
@@ -2627,35 +2641,36 @@ when remote staging lags behind the selected main ref. Fall back to
 absent."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
-         (staging gptel-auto-workflow-staging-branch)
-         (staging-q (shell-quote-argument staging))
-         (remote-staging (format "refs/remotes/origin/%s" staging))
-         (remote-staging-refspec
-          (format "+refs/heads/%s:%s" staging remote-staging))
-         (remote-probe
-          (gptel-auto-workflow--git-result
-           (format "git ls-remote --exit-code --heads origin %s" staging-q)
-           60)))
-    (cond
-     ((= 0 (cdr remote-probe))
-      (let ((fetch-result
-             (gptel-auto-workflow--git-result
-              (format "git fetch origin %s"
-                      (shell-quote-argument remote-staging-refspec))
-              180)))
-        (if (= 0 (cdr fetch-result))
-            remote-staging
-          (message "[auto-workflow] Failed to fetch origin/%s for staging sync: %s"
+         (staging (gptel-auto-workflow--require-staging-branch)))
+    (when staging
+      (let* ((staging-q (shell-quote-argument staging))
+             (remote-staging (format "refs/remotes/origin/%s" staging))
+             (remote-staging-refspec
+              (format "+refs/heads/%s:%s" staging remote-staging))
+             (remote-probe
+              (gptel-auto-workflow--git-result
+               (format "git ls-remote --exit-code --heads origin %s" staging-q)
+               60)))
+        (cond
+         ((= 0 (cdr remote-probe))
+          (let ((fetch-result
+                 (gptel-auto-workflow--git-result
+                  (format "git fetch origin %s"
+                          (shell-quote-argument remote-staging-refspec))
+                  180)))
+            (if (= 0 (cdr fetch-result))
+                remote-staging
+              (message "[auto-workflow] Failed to fetch origin/%s for staging sync: %s"
+                       staging
+                       (my/gptel--sanitize-for-logging (car fetch-result) 160))
+              nil)))
+         ((= 2 (cdr remote-probe))
+          (gptel-auto-workflow--staging-main-ref))
+         (t
+          (message "[auto-workflow] Failed to probe origin/%s for staging sync: %s"
                    staging
-                   (my/gptel--sanitize-for-logging (car fetch-result) 160))
-          nil)))
-     ((= 2 (cdr remote-probe))
-      (gptel-auto-workflow--staging-main-ref))
-     (t
-      (message "[auto-workflow] Failed to probe origin/%s for staging sync: %s"
-               staging
-               (my/gptel--sanitize-for-logging (car remote-probe) 160))
-      nil))))
+                   (my/gptel--sanitize-for-logging (car remote-probe) 160))
+          nil))))))
 
 (defun gptel-auto-workflow--ref-ancestor-p (ancestor descendant)
   "Return non-nil when ANCESTOR is already contained in DESCENDANT."
@@ -2735,8 +2750,6 @@ local staging base before verification. Never checks out staging in the root
 repo."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
-         (staging gptel-auto-workflow-staging-branch)
-         (remote-staging (format "refs/remotes/origin/%s" staging))
          (main-ref nil)
          (sync-ref nil))
     (message "[auto-workflow] Syncing staging")
@@ -2752,7 +2765,9 @@ repo."
       (let ((worktree (gptel-auto-workflow--create-staging-worktree)))
         (if (not worktree)
             nil
-          (let ((default-directory worktree))
+          (let* ((staging (gptel-auto-workflow--configured-staging-branch))
+                 (remote-staging (format "refs/remotes/origin/%s" staging))
+                 (default-directory worktree))
             (let* ((results (list
                              (gptel-auto-workflow--git-result
                               (format "git checkout %s" (shell-quote-argument staging))
@@ -2786,39 +2801,38 @@ Never touches project root - all verification happens in the worktree.
 Returns worktree path or nil on failure."
   (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
          (default-directory proj-root)
-         (branch gptel-auto-workflow-staging-branch)
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
-                                "var/tmp/experiments"))
+                                 "var/tmp/experiments"))
          (worktree-dir (expand-file-name
                         (format "%s/staging-verify" worktree-base-dir)
                         proj-root))
-         (worktree-q (shell-quote-argument worktree-dir))
-         (branch-q (shell-quote-argument branch)))
+         (worktree-q (shell-quote-argument worktree-dir)))
     (gptel-auto-workflow--with-error-handling
      "create staging worktree"
      (lambda ()
-       (unless (gptel-auto-workflow--ensure-staging-branch-exists)
-         (error "staging branch %s is unavailable" branch))
-       (gptel-auto-workflow--discard-worktree-buffers worktree-dir)
-       (when (or (file-exists-p worktree-dir)
-                 (string-match-p (regexp-quote worktree-dir)
-                                 (gptel-auto-workflow--git-cmd "git worktree list" 60)))
-         (gptel-auto-workflow--cleanup-staging-submodule-worktrees worktree-dir)
-         (ignore-errors
-           (gptel-auto-workflow--git-cmd
-            (format "git worktree remove --force %s" worktree-q)
-            180))
-         (ignore-errors (delete-directory worktree-dir t)))
-       (make-directory (file-name-directory worktree-dir) t)
-       (let ((add-result
-              (gptel-auto-workflow--git-result
-               (format "git worktree add --force %s %s" worktree-q branch-q)
-               180)))
-         (unless (= 0 (cdr add-result))
-           (error "git worktree add failed: %s" (car add-result))))
-       (setq gptel-auto-workflow--staging-worktree-dir worktree-dir)
-       (message "[auto-workflow] Created staging worktree: %s" worktree-dir)
-       worktree-dir))))
+       (when (gptel-auto-workflow--ensure-staging-branch-exists)
+         (let* ((branch (gptel-auto-workflow--configured-staging-branch))
+                (branch-q (shell-quote-argument branch)))
+           (gptel-auto-workflow--discard-worktree-buffers worktree-dir)
+           (when (or (file-exists-p worktree-dir)
+                     (string-match-p (regexp-quote worktree-dir)
+                                     (gptel-auto-workflow--git-cmd "git worktree list" 60)))
+             (gptel-auto-workflow--cleanup-staging-submodule-worktrees worktree-dir)
+             (ignore-errors
+               (gptel-auto-workflow--git-cmd
+                (format "git worktree remove --force %s" worktree-q)
+                180))
+             (ignore-errors (delete-directory worktree-dir t)))
+           (make-directory (file-name-directory worktree-dir) t)
+           (let ((add-result
+                  (gptel-auto-workflow--git-result
+                   (format "git worktree add --force %s %s" worktree-q branch-q)
+                   180)))
+             (unless (= 0 (cdr add-result))
+               (error "git worktree add failed: %s" (car add-result))))
+           (setq gptel-auto-workflow--staging-worktree-dir worktree-dir)
+           (message "[auto-workflow] Created staging worktree: %s" worktree-dir)
+           worktree-dir))))))
 
 
 
@@ -3886,47 +3900,48 @@ If it is missing locally, recover it from `origin/staging' or create it from
 the preferred main ref. Remote pushes are deferred until verification passes."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
-         (staging gptel-auto-workflow-staging-branch)
-         (staging-q (shell-quote-argument staging))
-         (remote-staging (format "refs/remotes/origin/%s" staging))
-         (remote-staging-q (shell-quote-argument remote-staging))
-         (remote-staging-refspec
-          (format "+refs/heads/%s:refs/remotes/origin/%s" staging staging))
-         (remote-staging-refspec-q (shell-quote-argument remote-staging-refspec)))
+         (staging (gptel-auto-workflow--require-staging-branch)))
     (gptel-auto-workflow--with-error-handling
      "ensure staging branch exists"
      (lambda ()
-       (let ((local-exists
-              (= 0 (cdr (gptel-auto-workflow--git-result
-                         (format "git rev-parse --verify %s" staging-q)
-                         60)))))
-         (cond
-          (local-exists
-           (message "[auto-workflow] %s branch exists locally" staging)
-           t)
-          ((= 0 (cdr (gptel-auto-workflow--git-result
-                      (format "git ls-remote --exit-code --heads origin %s"
-                              staging-q)
-                      60)))
-           (message "[auto-workflow] Creating local %s from origin/%s" staging staging)
-           (and (= 0 (cdr (gptel-auto-workflow--git-result
-                           (format "git fetch origin %s" remote-staging-refspec-q)
-                           180)))
-                (= 0 (cdr (gptel-auto-workflow--git-result
-                           (format "git branch %s %s" staging-q remote-staging-q)
-                           180)))))
-          (t
-           (let ((main-ref (gptel-auto-workflow--staging-main-ref)))
-             (if (not main-ref)
-                 nil
-               (message "[auto-workflow] Creating %s branch from %s" staging main-ref)
-               (let ((create-result
-                      (gptel-auto-workflow--git-result
-                       (format "git branch %s %s"
-                               staging-q
-                               (shell-quote-argument main-ref))
-                       180)))
-                 (= 0 (cdr create-result))))))))))))
+       (when staging
+         (let* ((staging-q (shell-quote-argument staging))
+                (remote-staging (format "refs/remotes/origin/%s" staging))
+                (remote-staging-q (shell-quote-argument remote-staging))
+                (remote-staging-refspec
+                 (format "+refs/heads/%s:refs/remotes/origin/%s" staging staging))
+                (remote-staging-refspec-q (shell-quote-argument remote-staging-refspec))
+                (local-exists
+                 (= 0 (cdr (gptel-auto-workflow--git-result
+                            (format "git rev-parse --verify %s" staging-q)
+                            60)))))
+           (cond
+            (local-exists
+             (message "[auto-workflow] %s branch exists locally" staging)
+             t)
+            ((= 0 (cdr (gptel-auto-workflow--git-result
+                        (format "git ls-remote --exit-code --heads origin %s"
+                                staging-q)
+                        60)))
+             (message "[auto-workflow] Creating local %s from origin/%s" staging staging)
+             (and (= 0 (cdr (gptel-auto-workflow--git-result
+                             (format "git fetch origin %s" remote-staging-refspec-q)
+                             180)))
+                  (= 0 (cdr (gptel-auto-workflow--git-result
+                             (format "git branch %s %s" staging-q remote-staging-q)
+                             180)))))
+            (t
+             (let ((main-ref (gptel-auto-workflow--staging-main-ref)))
+               (if (not main-ref)
+                   nil
+                 (message "[auto-workflow] Creating %s branch from %s" staging main-ref)
+                 (let ((create-result
+                        (gptel-auto-workflow--git-result
+                         (format "git branch %s %s"
+                                 staging-q
+                                 (shell-quote-argument main-ref))
+                         180)))
+                   (= 0 (cdr create-result)))))))))))))
 
 (defun gptel-auto-workflow--ensure-merge-source-ref (branch)
   "Return a mergeable ref for BRANCH, fetching it narrowly if needed.
@@ -3964,30 +3979,32 @@ do not fetch every remote head into `refs/remotes/origin/*'."
 (defun gptel-auto-workflow--prepare-staging-merge-base (reset-target)
   "Reset the staging worktree to RESET-TARGET.
 Returns non-nil on success, nil on failure."
-  (let* ((staging-q (shell-quote-argument gptel-auto-workflow-staging-branch))
-         (reset-q (shell-quote-argument reset-target))
-         (current-branch-result
-          (gptel-auto-workflow--git-result "git branch --show-current" 30))
-         (current-branch
-          (and (= 0 (cdr current-branch-result))
-               (string-trim (car current-branch-result))))
-         (setup-results
-          (append
-           (unless (equal current-branch gptel-auto-workflow-staging-branch)
-             (list (gptel-auto-workflow--git-result
-                    (format "git checkout %s" staging-q)
-                    60)))
-           (list (gptel-auto-workflow--git-result
-                  (format "git reset --hard %s" reset-q)
-                  180))))
-         (failed-setup (cl-find-if (lambda (item) (/= 0 (cdr item)))
-                                   setup-results)))
-    (if failed-setup
-        (progn
-          (message "[auto-workflow] Failed to prepare staging merge: %s"
-                   (my/gptel--sanitize-for-logging (car failed-setup) 160))
-          nil)
-      t)))
+  (let* ((staging (gptel-auto-workflow--require-staging-branch))
+         (reset-q (shell-quote-argument reset-target)))
+    (when staging
+      (let* ((staging-q (shell-quote-argument staging))
+             (current-branch-result
+              (gptel-auto-workflow--git-result "git branch --show-current" 30))
+             (current-branch
+              (and (= 0 (cdr current-branch-result))
+                   (string-trim (car current-branch-result))))
+             (setup-results
+              (append
+               (unless (equal current-branch staging)
+                 (list (gptel-auto-workflow--git-result
+                        (format "git checkout %s" staging-q)
+                        60)))
+               (list (gptel-auto-workflow--git-result
+                      (format "git reset --hard %s" reset-q)
+                      180))))
+             (failed-setup (cl-find-if (lambda (item) (/= 0 (cdr item)))
+                                       setup-results)))
+        (if failed-setup
+            (progn
+              (message "[auto-workflow] Failed to prepare staging merge: %s"
+                       (my/gptel--sanitize-for-logging (car failed-setup) 160))
+              nil)
+          t)))))
 
 (defun gptel-auto-workflow--empty-cherry-pick-state-p (&optional output allow-missing-head)
   "Return non-nil when the current worktree reflects an already-applied cherry-pick.
@@ -4025,17 +4042,17 @@ empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD' is absent."
 Cherry-pick the tip commit of OPTIMIZE-BRANCH onto staging.
 Returns t on success, nil on failure.
 Uses the staging worktree instead of switching branches in the root repo."
-  (let* ((staging gptel-auto-workflow-staging-branch)
+  (let* ((staging (gptel-auto-workflow--configured-staging-branch))
          (optimize-ref (gptel-auto-workflow--ensure-merge-source-ref optimize-branch))
          (merge-message (format "Merge %s for verification" optimize-branch))
          (commit-timeout (max 300 gptel-auto-workflow-git-timeout)))
-    (message "[auto-workflow] Cherry-picking %s to %s" optimize-branch staging)
     (if (not (gptel-auto-workflow--ensure-staging-branch-exists))
         nil
       (if (not optimize-ref)
           (progn
             (message "[auto-workflow] Missing merge source branch: %s" optimize-branch)
             nil)
+        (message "[auto-workflow] Cherry-picking %s to %s" optimize-branch staging)
         (gptel-auto-workflow--with-staging-worktree
          (lambda ()
            (let ((reset-target staging)
@@ -4232,24 +4249,25 @@ ACTION is a short description used in failure messages."
   "Push staging branch to origin after successful verification.
 Unlike per-experiment optimize branches, staging is a shared integration branch,
 so this push must not rewrite remote history."
-  (let ((staging gptel-auto-workflow-staging-branch))
+  (let ((staging (gptel-auto-workflow--require-staging-branch)))
     (message "[auto-workflow] Pushing staging to origin")
-    (gptel-auto-workflow--with-staging-worktree
-     (lambda ()
-       (setq gptel-auto-workflow--last-staging-push-output nil)
-       (let* ((push-result
-               (gptel-auto-workflow--with-skipped-submodule-sync
-                (lambda ()
-                  (gptel-auto-workflow--git-result
-                   (format "git push origin %s"
-                           (shell-quote-argument staging))
-                   180)))))
-         (setq gptel-auto-workflow--last-staging-push-output (car push-result))
-         (if (= 0 (cdr push-result))
-             t
-           (message "[auto-workflow] Push staging failed: %s"
-                    (my/gptel--sanitize-for-logging (car push-result) 160))
-           nil))))))
+    (when staging
+      (gptel-auto-workflow--with-staging-worktree
+       (lambda ()
+         (setq gptel-auto-workflow--last-staging-push-output nil)
+         (let* ((push-result
+                 (gptel-auto-workflow--with-skipped-submodule-sync
+                  (lambda ()
+                    (gptel-auto-workflow--git-result
+                     (format "git push origin %s"
+                             (shell-quote-argument staging))
+                     180)))))
+           (setq gptel-auto-workflow--last-staging-push-output (car push-result))
+           (if (= 0 (cdr push-result))
+               t
+             (message "[auto-workflow] Push staging failed: %s"
+                      (my/gptel--sanitize-for-logging (car push-result) 160))
+             nil)))))))
 
 (defvar gptel-auto-workflow--last-staging-push-output nil
   "Raw output from the most recent staging push attempt.")
@@ -4402,13 +4420,14 @@ initial remote-advance rejection. Returns a plist with keys `:success',
 (defun gptel-auto-workflow--current-staging-head ()
   "Return the current commit at the staging branch head, or nil if unavailable."
   (let* ((proj-root (gptel-auto-workflow--project-root))
-         (default-directory proj-root)
-         (staging-q (shell-quote-argument gptel-auto-workflow-staging-branch)))
+         (default-directory proj-root))
     (when (gptel-auto-workflow--ensure-staging-branch-exists)
-      (let ((head-result
-             (gptel-auto-workflow--git-result
-              (format "git rev-parse --verify %s" staging-q)
-              60)))
+      (let* ((staging-q (shell-quote-argument
+                         (gptel-auto-workflow--configured-staging-branch)))
+             (head-result
+              (gptel-auto-workflow--git-result
+               (format "git rev-parse --verify %s" staging-q)
+               60)))
         (when (= 0 (cdr head-result))
           (string-trim (car head-result)))))))
 
@@ -4417,28 +4436,28 @@ initial remote-advance rejection. Returns a plist with keys `:success',
 Returns non-nil on success."
   (let* ((proj-root (gptel-auto-workflow--project-root))
          (default-directory proj-root)
-         (staging gptel-auto-workflow-staging-branch)
-         (staging-q (shell-quote-argument staging))
          (base-q (shell-quote-argument base-ref)))
     (when (and base-ref (gptel-auto-workflow--ensure-staging-branch-exists))
-      (gptel-auto-workflow--delete-staging-worktree)
-      (let ((worktree (gptel-auto-workflow--create-staging-worktree)))
-        (when worktree
-          (let ((default-directory worktree))
-            (let* ((results (list
-                             (gptel-auto-workflow--git-result
-                              (format "git checkout %s" staging-q)
-                              60)
-                             (gptel-auto-workflow--git-result
-                              (format "git reset --hard %s" base-q)
-                              180)))
-                   (failed (cl-find-if (lambda (item) (/= 0 (cdr item))) results)))
-              (if failed
-                  (progn
-                    (message "[auto-workflow] Failed to restore staging baseline: %s"
-                             (my/gptel--sanitize-for-logging (car failed) 160))
-                    nil)
-                t))))))))
+      (let ((staging (gptel-auto-workflow--configured-staging-branch)))
+        (gptel-auto-workflow--delete-staging-worktree)
+        (let ((worktree (gptel-auto-workflow--create-staging-worktree)))
+          (when worktree
+            (let ((default-directory worktree))
+              (let* ((staging-q (shell-quote-argument staging))
+                     (results (list
+                               (gptel-auto-workflow--git-result
+                                (format "git checkout %s" staging-q)
+                                60)
+                               (gptel-auto-workflow--git-result
+                                (format "git reset --hard %s" base-q)
+                                180)))
+                     (failed (cl-find-if (lambda (item) (/= 0 (cdr item))) results)))
+                (if failed
+                    (progn
+                      (message "[auto-workflow] Failed to restore staging baseline: %s"
+                               (my/gptel--sanitize-for-logging (car failed) 160))
+                      nil)
+                  t)))))))))
 
 (defun gptel-auto-workflow--reset-staging-after-failure (&optional base-ref)
   "Restore staging after a failed staging step.
