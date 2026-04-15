@@ -13,7 +13,6 @@
 (require 'subr-x)
 (require 'seq)
 (require 'json)
-(require 'gptel)
 
 ;;; Customization
 
@@ -305,17 +304,22 @@ Matches if the alist key is a prefix of SEARCH-STR.
 When multiple entries match, returns the one with the longest key for most specific match."
   (when (and (listp alist) (stringp search-str))
     (let ((search-lower (downcase search-str))
+          (sentinel (make-symbol "alist-partial-match-sentinel"))
           best-match
           (best-key-len 0))
+      (setq best-match sentinel)
       (dolist (entry alist)
         (when (and (consp entry)
                    (stringp (car entry))
                    (string-prefix-p (downcase (car entry)) search-lower))
-          (let ((key-len (length (car entry))))
+          (let ((key-len (length (car entry)))
+                (entry-match (cdr entry)))
             (when (>= key-len best-key-len)
               (setq best-key-len key-len)
-              (setq best-match (cdr entry))))))
-      best-match)))
+              (when entry-match
+                (setq best-match entry-match))))))
+      (unless (eq best-match sentinel)
+        best-match))))
 
 (defun my/gptel--plist-get (plist key &optional default)
   "Get value from PLIST for KEY, returning DEFAULT if not found.
@@ -485,6 +489,7 @@ CONNECT-TIMEOUT and MAX-TIME default to 10 and 120 seconds.
 
 Handles API key lookup, process creation, JSON parsing, and error handling.
 Returns nil if curl is unavailable or a fetch is already in flight."
+  (require 'gptel)
   (let ((process-name (or process-name "gptel-openrouter-fetch"))
         (connect-timeout (or connect-timeout 10))
         (max-time (or max-time 120)))
@@ -581,6 +586,7 @@ Runs asynchronously; returns nil immediately."
 (defun my/gptel-refresh-context-window-cache ()
   "Refresh (fetch) the current model's context window into the cache."
   (interactive)
+  (require 'gptel)
   (when (boundp 'gptel--openrouter)
     (my/gptel--openrouter-fetch-context-window gptel-model)))
 
@@ -608,6 +614,7 @@ Run asynchronously. Use for bulk cache warming."
 (defun my/gptel-get-model-metadata (model-id)
   "Get metadata for MODEL-ID from cache.
 Returns plist with :context-window, :pricing-input, :pricing-output, etc."
+  (require 'gptel)
   (let* ((model-id (if (stringp model-id) model-id (my/gptel--model-id-string model-id))))
     (my/gptel--cache-or-alist-lookup my/gptel--model-metadata-cache
                                      my/gptel--known-model-metadata
@@ -766,6 +773,7 @@ Fallback order:
 
 Note: We do NOT use gptel-max-tokens as it's for response length, not context window.
 Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-window-cache'."
+  (require 'gptel)
   (let ((model-id (my/gptel--model-id-string gptel-model)))
     (cond
      ((not (stringp model-id)) my/gptel-default-context-window)
