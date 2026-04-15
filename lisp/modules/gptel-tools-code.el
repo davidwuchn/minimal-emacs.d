@@ -476,10 +476,16 @@ NEW-CODE must also be non-empty."
   (cond
    ((not file-path)
     (error "gptel-tools-code--validate-replace-args: file_path is nil"))
+   ((not (stringp file-path))
+    (error "gptel-tools-code--validate-replace-args: file_path must be a string, got %s" (type-of file-path)))
    ((not node-name)
     (error "gptel-tools-code--validate-replace-args: node_name is nil"))
+   ((not (stringp node-name))
+    (error "gptel-tools-code--validate-replace-args: node_name must be a string, got %s" (type-of node-name)))
    ((not new-code)
     (error "gptel-tools-code--validate-replace-args: new_code is nil"))
+   ((not (stringp new-code))
+    (error "gptel-tools-code--validate-replace-args: new_code must be a string, got %s" (type-of new-code)))
    ((string-empty-p new-code)
     (error "gptel-tools-code--validate-replace-args: new_code is empty"))))
 
@@ -560,36 +566,36 @@ Syncs buffer with disk, validates parser, guards against truncation."
     (condition-case err
         (with-timeout (5 (format "Error: Code_Replace timed out on %s" abs-path))
           (with-current-buffer (find-file-noselect abs-path)
-          (when (buffer-modified-p)
-            (error "Buffer has unsaved changes. Save or revert manually before Code_Replace."))
-          (when (gptel-tools-code--file-changed-externally-p)
-            (revert-buffer t t t))
-           (let ((parser-error (gptel-tools-code--ensure-treesit-ready abs-path
-                                                                       "Edit tool (manual paren balancing required)")))
-             (if parser-error
-                 parser-error
-               (let ((old-code (treesit-agent-extract-node node_name)))
-                 (if (and old-code
-                          (> my/gptel-code-replace-truncation-ratio 0)
-                          (> (length old-code) my/gptel-code-replace-min-old-chars)
-                          (< (length new_code) (* my/gptel-code-replace-truncation-ratio (length old-code))))
-                     (format "Error: Replacement rejected — new code (%d chars) is suspiciously shorter than original (%d chars).\nThis usually means the function body was truncated.\n\nACTION: Provide the COMPLETE replacement including the full function body."
-                             (length new_code) (length old-code))
-                   (if (treesit-agent-replace-node node_name new_code)
-                       (progn
-                         (when (gptel-tools-code--file-changed-externally-p)
-                           (error "File changed externally during replace. Re-run Code_Replace."))
-                         (cl-letf (((symbol-function 'ask-user-about-supersession-threat) #'ignore))
-                           (save-buffer))
-                         (format "Successfully replaced '%s' in %s" node_name abs-path))
-                     (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name abs-path node_name))))))))
-     (error (let* ((msg (error-message-string err))
-                   (friendly (my/gptel--treesit-error-message msg abs-path)))
-              (or friendly
-                  (cond
-                  ((string-match-p "syntax error\\|has-error" msg)
-                   (format "Error: New code has syntax errors (unbalanced parentheses/brackets)\n\nACTION:\n  1. Check that all opening brackets have closing brackets\n  2. Verify indentation is correct\n  3. Test code in a REPL before replacing\n\nOriginal error: %s" msg))
-                                     (t (format "Error executing Code_Replace on %s: %s\n\nACTION: Check function name and new code syntax, then try again." abs-path msg)))))))))
+            (when (buffer-modified-p)
+              (error "Buffer has unsaved changes. Save or revert manually before Code_Replace."))
+            (when (gptel-tools-code--file-changed-externally-p)
+              (revert-buffer t t t))
+            (let ((parser-error (gptel-tools-code--ensure-treesit-ready abs-path
+                                                                        "Edit tool (manual paren balancing required)")))
+              (if parser-error
+                  parser-error
+                (let ((old-code (treesit-agent-extract-node node_name)))
+                  (if (and old-code
+                           (> my/gptel-code-replace-truncation-ratio 0)
+                           (> (length old-code) my/gptel-code-replace-min-old-chars)
+                           (< (length new_code) (* my/gptel-code-replace-truncation-ratio (length old-code))))
+                      (format "Error: Replacement rejected — new code (%d chars) is suspiciously shorter than original (%d chars).\nThis usually means the function body was truncated.\n\nACTION: Provide the COMPLETE replacement including the full function body."
+                              (length new_code) (length old-code))
+                    (if (treesit-agent-replace-node node_name new_code)
+                        (progn
+                          (when (gptel-tools-code--file-changed-externally-p)
+                            (error "File changed externally during replace. Re-run Code_Replace."))
+                          (cl-letf (((symbol-function 'ask-user-about-supersession-threat) #'ignore))
+                            (save-buffer))
+                          (format "Successfully replaced '%s' in %s" node_name abs-path))
+                      (format "Error: Could not find function/class '%s' in %s\n\nACTION:\n  1. Run Code_Map first to see available symbols\n  2. Check spelling: '%s' may be misspelled\n  3. Verify the function exists in the file" node_name abs-path node_name))))))))
+      (error (let* ((msg (error-message-string err))
+                    (friendly (my/gptel--treesit-error-message msg abs-path)))
+               (or friendly
+                   (cond
+                    ((string-match-p "syntax error\\|has-error" msg)
+                     (format "Error: New code has syntax errors (unbalanced parentheses/brackets)\n\nACTION:\n  1. Check that all opening brackets have closing brackets\n  2. Verify indentation is correct\n  3. Test code in a REPL before replacing\n\nOriginal error: %s" msg))
+                    (t (format "Error executing Code_Replace on %s: %s\n\nACTION: Check function name and new code syntax, then try again." abs-path msg)))))))))
 
 (defun gptel-tools-code--format-diagnostic (d)
   "Format a single flymake diagnostic D as a string with file, line, type, and context."
