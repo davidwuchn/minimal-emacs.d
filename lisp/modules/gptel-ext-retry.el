@@ -473,6 +473,16 @@ start <= tracking to avoid corrupting the buffer."
          (buffer-live-p buf)
          (string-prefix-p "*gptel-agent:" (buffer-name buf)))))
 
+(defun my/gptel--apply-trim-with-logging (info trim-fn fmt)
+  "Apply TRIM-FN to INFO and log result using FMT if items were trimmed.
+TRIM-FN should take INFO and return the number of items trimmed.
+FMT is a format string that receives the count as its single argument.
+Returns the number of items trimmed."
+  (let ((count (funcall trim-fn info)))
+    (when (> count 0)
+      (message fmt count))
+    count))
+
 (defun my/gptel-auto-retry (orig-fn machine &optional new-state)
   "Intercept FSM transitions to ERRS and retry the request if transient.
 
@@ -561,15 +571,15 @@ TEST: Verify with network failure simulation — should retry 3 times with
                        trimmed retries
                        (max 0 (- (or my/gptel-retry-keep-recent-tool-results 0) retries))))
             (when (>= retries 2)
-              (let ((reasoning-stripped (my/gptel--trim-reasoning-content info)))
-                (when (> reasoning-stripped 0)
-                  (message "gptel: Stripped reasoning_content from %d assistant message(s)" reasoning-stripped)))
-              (let ((tools-removed (my/gptel--reduce-tools-for-retry info)))
-                (when (> tools-removed 0)
-                  (message "gptel: Removed %d unused tool definition(s) from payload" tools-removed)))
-              (let ((repaired (my/gptel--repair-thinking-tool-call-messages info)))
-                (when (> repaired 0)
-                  (message "gptel: Restored empty reasoning field on %d tool-call message(s)" repaired)))))
+              (my/gptel--apply-trim-with-logging
+               info #'my/gptel--trim-reasoning-content
+               "gptel: Stripped reasoning_content from %d assistant message(s)")
+              (my/gptel--apply-trim-with-logging
+               info #'my/gptel--reduce-tools-for-retry
+               "gptel: Removed %d unused tool definition(s) from payload")
+              (my/gptel--apply-trim-with-logging
+               info #'my/gptel--repair-thinking-tool-call-messages
+               "gptel: Restored empty reasoning field on %d tool-call message(s)")))
 
           ;; Reset FSM state to WAIT and increment retry counter
           (plist-put info :error nil)
