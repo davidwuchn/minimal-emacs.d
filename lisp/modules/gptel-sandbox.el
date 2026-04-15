@@ -198,29 +198,27 @@ otherwise collect each mapped result.
 Supported shape:
   (mapcar (lambda (item) BODY...) LIST)
   (filter (lambda (item) BODY...) LIST)"
-  (pcase expr
-    (`(,_ (lambda (,arg) . ,body) ,list-expr)
-     (unless (symbolp arg)
-       (error "Programmatic %s lambda arg must be a symbol"
-              (if keep-original "filter" "mapcar")))
-     (let ((items (gptel-sandbox--eval-expr list-expr env))
-           (results nil))
-       (unless (listp items)
-         (error "Programmatic %s expects a list input"
-                (if keep-original "filter" "mapcar")))
-       (dolist (item items (nreverse results))
-         (let ((child-env (gptel-sandbox--copy-env env))
-               (value nil))
-           (puthash arg item child-env)
-           (dolist (form body)
-             (setq value (gptel-sandbox--eval-expr form child-env)))
-           (if keep-original
-               (when value
-                 (push item results))
-             (push value results))))))
-    (_
-     (error "Programmatic %s requires (lambda (item) ...) and a list"
-            (if keep-original "filter" "mapcar")))))
+  (let ((op-name (if keep-original "filter" "mapcar")))
+    (pcase expr
+      (`(,_ (lambda (,arg) . ,body) ,list-expr)
+       (unless (symbolp arg)
+         (error "Programmatic %s lambda arg must be a symbol" op-name))
+       (let ((items (gptel-sandbox--eval-expr list-expr env))
+             (results nil))
+         (unless (listp items)
+           (error "Programmatic %s expects a list input" op-name))
+         (dolist (item items (nreverse results))
+           (let ((child-env (gptel-sandbox--copy-env env))
+                 (value nil))
+             (puthash arg item child-env)
+             (dolist (form body)
+               (setq value (gptel-sandbox--eval-expr form child-env)))
+             (if keep-original
+                 (when value
+                   (push item results))
+               (push value results))))))
+      (_
+       (error "Programmatic %s requires (lambda (item) ...) and a list" op-name)))))
 
 (defun gptel-sandbox--lookup (symbol env)
   "Look up SYMBOL in ENV or signal an error."
@@ -481,7 +479,7 @@ CALLBACK receives non-nil when approved and nil when rejected."
                             (my/gptel-make-temp-file "programmatic-" nil ".txt")
                           (make-temp-file "programmatic-" nil ".txt")))
              (suffix (format "\n...[Programmatic result truncated. Full result saved to: %s]..."
-                            temp-file))
+                             temp-file))
              (suffix-len (length suffix))
              (limit my/gptel-programmatic-result-limit))
         (with-temp-file temp-file

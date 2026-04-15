@@ -292,7 +292,7 @@ for a partial match (case-insensitive).  Returns nil if not found."
       (let ((sentinel (make-symbol "gptel-cache-sentinel")))
         (let ((hash-value (gethash key hash-table sentinel)))
           (if (eq hash-value sentinel)
-              (and (listp alist) (stringp key)
+              (and (listp alist)
                    (my/gptel--alist-partial-match alist key))
             hash-value)))
     (and (listp alist) (stringp key)
@@ -518,18 +518,16 @@ Returns nil if curl is unavailable or a fetch is already in flight."
                    (lambda (p _event)
                      (setq my/gptel--openrouter-context-window-fetch-inflight nil)
                      (unwind-protect
-                         (when (= (process-exit-status p) 0)
-                           (with-current-buffer buf
-                             (goto-char (point-min))
-                             (condition-case err
-                                 (let* ((json-object-type 'alist)
-                                        (json-array-type 'list)
-                                        (json-key-type 'symbol)
-                                        (obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
-                                        (data (alist-get 'data obj)))
-                                   (funcall callback data))
-                               (error
-                                (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
+                         (let ((status (process-exit-status p)))
+                           (when (and status (= status 0))
+                             (with-current-buffer buf
+                               (goto-char (point-min))
+                               (condition-case err
+                                   (let ((obj (json-parse-buffer :object-type 'alist :array-type 'list :null-object nil :false-object nil))
+                                         (data (alist-get 'data obj)))
+                                     (funcall callback data))
+                                 (error
+                                  (message "OpenRouter: parse failed (%s)" (error-message-string err)))))))
                        (when (buffer-live-p buf) (kill-buffer buf)))))))
             (process-put proc 'my/gptel-managed t)
             proc)))))))
@@ -548,11 +546,11 @@ Runs asynchronously; returns nil immediately."
       (my/gptel--openrouter-fetch-with-callback
        url
        (lambda (data)
-         (let ((entry (seq-find (lambda (e)
-                                  (let ((id (alist-get 'id e)))
-                                    (and (stringp id) (string= id model-id))))
-                                data))
-               (cw (and entry (alist-get 'context_length entry))))
+         (let* ((entry (seq-find (lambda (e)
+                                   (let ((id (alist-get 'id e)))
+                                     (and (stringp id) (string= id model-id))))
+                                 data))
+                (cw (and entry (alist-get 'context_length entry))))
            (if (and (integerp cw) (> cw 0))
                (progn
                  (my/gptel--cache-put-context-window model-id cw)
