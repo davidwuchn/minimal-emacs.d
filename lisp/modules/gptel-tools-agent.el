@@ -5718,6 +5718,16 @@ correctness fix."
 
 ;;; Prompt Building
 
+(defconst gptel-auto-experiment-large-target-byte-threshold 60000
+  "Byte size above which experiment prompts enable the focus contract.")
+
+(defun gptel-auto-experiment--target-byte-size (target-full-path)
+  "Return the byte size for TARGET-FULL-PATH, or nil when unavailable."
+  (let ((attrs (and (stringp target-full-path)
+                    (ignore-errors (file-attributes target-full-path)))))
+    (when attrs
+      (file-attribute-size attrs))))
+
 (defun gptel-auto-experiment--inspection-thrash-result-p (result)
   "Return non-nil when RESULT records an inspection-thrash failure."
   (cl-some
@@ -5751,14 +5761,27 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
          (weakest-keys (when scores (gptel-auto-workflow--format-weakest-keys scores)))
          (mutation-templates (when skills (gptel-auto-workflow--extract-mutation-templates skills)))
          (suggested-hypothesis (when skills (gptel-auto-workflow-skill-suggest-hypothesis skills)))
-         (inspection-thrash-recovery
-          (when (gptel-auto-experiment--needs-inspection-thrash-recovery-p previous-results)
-            (concat "## Inspection-Thrash Recovery\n"
-                    "A previous attempt on this target was aborted for repeated same-file read-only inspection.\n"
-                    "- Pick one concrete function or variable before you keep reading.\n"
-                    "- After at most 3 focused reads, use a write-capable tool on that same concrete location.\n"
-                    "- Do not map the whole file or survey multiple subsystems in this turn.\n\n")))
-         (target-full-path (expand-file-name target worktree-path)))
+         (target-full-path (expand-file-name target worktree-path))
+         (target-bytes (gptel-auto-experiment--target-byte-size target-full-path))
+         (recovery-p
+          (gptel-auto-experiment--needs-inspection-thrash-recovery-p previous-results))
+         (large-target-p
+          (and (numberp target-bytes)
+               (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
+         (inspection-thrash-contract
+          (when (or recovery-p large-target-p)
+            (concat "## Mandatory Focus Contract\n"
+                    (when large-target-p
+                      (format "This target is large (%d bytes). Broad file surveys are likely to fail.\n"
+                              target-bytes))
+                    (when recovery-p
+                      "A previous attempt on this target already failed with inspection-thrash.\n")
+                    "Follow this exact opening sequence:\n"
+                    "1. The second line after HYPOTHESIS must be `FOCUS: <one concrete function or variable>`.\n"
+                    "2. Do NOT use Code_Map on the whole file.\n"
+                    "3. Use at most 3 read-only tool calls, all on that same symbol or its direct callers/callees.\n"
+                    "4. Your next tool call after those reads must be a write-capable tool on that same symbol.\n"
+                    "5. Do not inspect a second subsystem before the first edit exists.\n\n"))))
     (format "You are running experiment %d of %d to optimize %s.
 
 ## Working Directory
@@ -5767,12 +5790,12 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
 ## Target File (full path)
 %s
 
+%s
+
 ## Previous Experiment Analysis
 %s
 
 ## Suggestions
-%s
-
 %s
 
 ## Git History (recent commits)
@@ -5808,21 +5831,22 @@ Make minimal, targeted changes to CODE, not documentation.
 
 ## Instructions
 1. FIRST LINE must be: HYPOTHESIS: [What CODE change and why]
-2. Use Code_Map or Grep to find the relevant function/section in the target file first
-3. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
-4. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
-5. Implement the CODE change minimally using Edit tool
-6. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
-7. DO NOT run git add, git commit, git push, or stage changes yourself.
+2. If a Mandatory Focus Contract is present, obey it exactly and include `FOCUS: <symbol>` on line 2
+3. Start with focused Grep or narrow Read on the chosen symbol; only use Code_Map when no Mandatory Focus Contract is present
+4. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
+5. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
+6. Implement the CODE change minimally using Edit tool
+7. Run tests to verify: ./scripts/verify-nucleus.sh && ./scripts/run-tests.sh
+8. DO NOT run git add, git commit, git push, or stage changes yourself.
    Leave edits uncommitted in the worktree; the auto-workflow controller
    handles grading, commit creation, review, and staging.
-8. FINAL RESPONSE must include:
+9. FINAL RESPONSE must include:
    - CHANGED: exact file path(s) and function/variable names touched
    - EVIDENCE: 1-2 concrete code snippets or diff hunks showing the real edit
    - VERIFY: exact command(s) run and whether they passed or failed
    - COMMIT: always \"not committed\" (workflow controller handles commits)
-9. End the final response with: Task completed
-10. NEVER reply with only \"Done\", only a commit message, or a vague success claim
+10. End the final response with: Task completed
+11. NEVER reply with only \"Done\", only a commit message, or a vague success claim
 
 CRITICAL: Your response MUST start with HYPOTHESIS: on the first line.
 DO NOT add comments, docstrings, or documentation.
@@ -5837,9 +5861,9 @@ Example HYPOTHESES:
             experiment-id max-experiments target
             worktree-path
             target-full-path
+            (or inspection-thrash-contract "")
             (or patterns "No previous experiments")
             (or suggestions "None")
-            (or inspection-thrash-recovery "")
             git-history
             (or baseline 0.5)
             (if weakest-keys

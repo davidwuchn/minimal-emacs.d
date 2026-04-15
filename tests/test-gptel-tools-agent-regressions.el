@@ -1530,9 +1530,28 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                         "gptel: inspection-thrash aborted — 25 consecutive read-only inspections")) )
            (prompt (gptel-auto-experiment-build-prompt
                     "lisp/modules/gptel-tools-agent.el" 2 5 nil 0.4 previous-results)))
-      (should (string-match-p "Inspection-Thrash Recovery" prompt))
-      (should (string-match-p "After at most 3 focused reads" prompt))
-      (should (string-match-p "Do not map the whole file" prompt)))))
+      (should (string-match-p "Mandatory Focus Contract" prompt))
+      (should (string-match-p "A previous attempt on this target already failed with inspection-thrash" prompt))
+      (should (string-match-p "FOCUS: <one concrete function or variable>" prompt))
+      (should (string-match-p "Do NOT use Code_Map on the whole file" prompt)))))
+
+(ert-deftest regression/auto-experiment/build-prompt-adds-large-target-focus-contract ()
+  "Large targets should get the focus contract on the first attempt."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+             (lambda (_target) "/tmp/worktree"))
+            ((symbol-function 'shell-command-to-string)
+             (lambda (_cmd) "abc123 recent history"))
+            ((symbol-function 'gptel-auto-experiment--eight-keys-scores)
+             (lambda () nil))
+            ((symbol-function 'gptel-auto-experiment--target-byte-size)
+             (lambda (_path)
+               (+ gptel-auto-experiment-large-target-byte-threshold 1))))
+    (let ((prompt (gptel-auto-experiment-build-prompt
+                   "lisp/modules/gptel-tools-agent.el" 1 5 nil 0.4)))
+      (should (string-match-p "Mandatory Focus Contract" prompt))
+      (should (string-match-p "This target is large" prompt))
+      (should (string-match-p "FOCUS: <one concrete function or variable>" prompt))
+      (should (string-match-p "If a Mandatory Focus Contract is present, obey it exactly" prompt)))))
 
 (ert-deftest regression/auto-experiment/retry-prompt-preserves-focused-contract ()
   "Validation retries should keep the original focused experiment contract."
