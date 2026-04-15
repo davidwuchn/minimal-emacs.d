@@ -337,7 +337,7 @@ Returns the number of messages truncated, or 0 if nothing was done."
   "Collect indices of messages in MESSAGES vector matching PREDICATE.
 PREDICATE is a function that takes a message plist and returns non-nil if it matches.
 Returns a list of indices in ascending order."
-  (when (and messages (> (length messages) 0))
+  (when (and (vectorp messages) (> (length messages) 0))
     (cl-loop for i from 0 below (length messages)
              for msg = (aref messages i)
              when (funcall predicate msg)
