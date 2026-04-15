@@ -10102,10 +10102,10 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 (ert-deftest regression/auto-workflow/refresh-staging-base-with-main-merges-before-submodule-hydration ()
   "Staging refresh should not block on stale pre-merge submodule hydration."
   (let ((events nil))
-    (cl-letf (((symbol-function 'gptel-auto-workflow--ensure-staging-submodules-ready)
-               (lambda (worktree)
-                  (push (list 'hydrate worktree) events)
-                  t))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--finalize-refreshed-staging-submodules)
+               (lambda (worktree main-ref)
+                 (push (list 'finalize worktree main-ref) events)
+                 t))
               ((symbol-function 'gptel-auto-workflow--git-result)
                (lambda (command &optional _timeout)
                  (cond
@@ -10123,28 +10123,66 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (should (gptel-auto-workflow--refresh-staging-base-with-main "origin/main")))
       (should (equal (nreverse events)
                      '(ff-only
-                       merge))))))
+                       merge
+                       (finalize "/tmp/staging/" "origin/main")))))))
 
-(ert-deftest regression/auto-workflow/refresh-staging-base-with-main-does-not-abort-on-stale-premerge-submodules ()
-  "Staging refresh should proceed when main can repair stale staging gitlinks."
-  (let ((git-called nil))
-    (cl-letf (((symbol-function 'gptel-auto-workflow--ensure-staging-submodules-ready)
-                (lambda (_worktree) nil))
-               ((symbol-function 'gptel-auto-workflow--git-result)
+(ert-deftest regression/auto-workflow/finalize-refreshed-staging-submodules-repairs-unmaterializable-gitlinks ()
+  "Refreshed staging should repair top-level gitlinks from main when hydration fails."
+  (let ((commands nil)
+        (hydrate-count 0))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
+               (lambda (_worktree)
+                 (setq hydrate-count (1+ hydrate-count))
+                 (if (= hydrate-count 1)
+                     (cons "Missing shared submodule repo for packages/gptel-agent: nil" 1)
+                   (cons "" 0))))
+              ((symbol-function 'gptel-auto-workflow--staging-submodule-paths)
+               (lambda (&optional _worktree) '("packages/gptel-agent")))
+              ((symbol-function 'gptel-auto-workflow--staging-submodule-gitlink-revision)
+               (lambda (_worktree _path)
+                 "5f58ae47ef1e6be8393c5eb4eee232e5855bf08a"))
+              ((symbol-function 'gptel-auto-workflow--staging-submodule-gitlink-revision-at-ref)
+               (lambda (_worktree ref _path)
+                 (and (equal ref "origin/main")
+                      "8ecd6d12bb5002aacf4c8294372c338feef554bd")))
+              ((symbol-function 'gptel-auto-workflow--shared-submodule-git-dir)
+               (lambda (_path &optional commit)
+                 (pcase commit
+                   ("5f58ae47ef1e6be8393c5eb4eee232e5855bf08a" nil)
+                   ("8ecd6d12bb5002aacf4c8294372c338feef554bd" "/tmp/gptel-agent.git")
+                   (_ "/tmp/gptel-agent.git"))))
+              ((symbol-function 'gptel-auto-workflow--git-result)
                (lambda (command &optional _timeout)
-                 (setq git-called t)
+                 (push command commands)
                  (cond
-                  ((string-match-p "git merge --ff-only" command)
-                   (cons "fatal: Not possible to fast-forward, aborting." 1))
-                  ((string-match-p "git merge -X theirs" command)
+                  ((equal command
+                          "git update-index --cacheinfo 160000 8ecd6d12bb5002aacf4c8294372c338feef554bd packages/gptel-agent")
+                   (cons "" 0))
+                  ((equal command
+                          "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1 git commit -m 'Repair staging submodule gitlinks from origin/main'")
                    (cons "" 0))
                   (t
                    (cons "" 0)))))
-               ((symbol-function 'message)
-                (lambda (&rest _) nil)))
-      (let ((default-directory "/tmp/staging/"))
-        (should (gptel-auto-workflow--refresh-staging-base-with-main "origin/main")))
-      (should git-called))))
+              ((symbol-function 'gptel-auto-workflow--git-cmd)
+               (lambda (command &optional _timeout)
+                 (when (equal command "git rev-parse HEAD")
+                   "780662a28541faf0b1870720e0d70e7fd1f1fdff\n")))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (gptel-auto-workflow--finalize-refreshed-staging-submodules
+               "/tmp/staging/"
+               "origin/main"))
+      (should (= hydrate-count 2))
+      (setq commands (nreverse commands))
+      (should (member
+               "git update-index --cacheinfo 160000 8ecd6d12bb5002aacf4c8294372c338feef554bd packages/gptel-agent"
+               commands))
+      (should (seq-some
+               (lambda (command)
+                 (string-match-p
+                  "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1 git commit -m .*Repair\\\\ staging\\\\ submodule\\\\ gitlinks\\\\ from\\\\ origin/main"
+                  command))
+               commands)))))
 
 (ert-deftest regression/auto-workflow/refresh-staging-base-with-main-resolves-ancestor-submodule-conflict ()
   "Staging refresh should keep the descendant gitlink when a submodule conflict is ancestry-safe."
@@ -12215,6 +12253,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 (ert-deftest regression/auto-workflow/sync-staging-prefers-origin-staging-when-up-to-date ()
   "Staging sync should keep origin/staging as the base when it already contains main."
   (let* ((commands nil)
+         (finalized nil)
          (expected-fetch
           (format "git fetch origin %s"
                   (shell-quote-argument
@@ -12227,10 +12266,14 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda () "main"))
               ((symbol-function 'gptel-auto-workflow--create-staging-worktree)
                (lambda () "/tmp/staging"))
+              ((symbol-function 'gptel-auto-workflow--finalize-refreshed-staging-submodules)
+               (lambda (worktree main-ref)
+                 (setq finalized (list worktree main-ref))
+                 t))
               ((symbol-function 'gptel-auto-workflow--git-result)
-                (lambda (command &optional _timeout)
-                  (push command commands)
-                  (cond
+               (lambda (command &optional _timeout)
+                 (push command commands)
+                 (cond
                    ((string-match-p "\\`git ls-remote --exit-code --heads origin staging\\'" command)
                     (cons "5043dae3e83ee7ea00e044870e04a40cf986d196\trefs/heads/staging\n" 0))
                    ((equal command expected-fetch)
@@ -12245,6 +12288,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (should (member expected-fetch commands))
       (should (member "git reset --hard refs/remotes/origin/staging" commands))
       (should (member "git merge-base --is-ancestor main refs/remotes/origin/staging" commands))
+      (should (equal finalized '("/tmp/staging" "main")))
       (should-not (member "git reset --hard main" commands))
       (should-not (member "git merge --ff-only main" commands))
       (should-not (seq-some (lambda (command)
@@ -12269,6 +12313,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda () "origin/main"))
               ((symbol-function 'gptel-auto-workflow--create-staging-worktree)
                (lambda () "/tmp/staging"))
+              ((symbol-function 'gptel-auto-workflow--finalize-refreshed-staging-submodules)
+               (lambda (_worktree _main-ref) t))
               ((symbol-function 'gptel-auto-workflow--git-result)
                (lambda (command &optional _timeout)
                  (push command commands)

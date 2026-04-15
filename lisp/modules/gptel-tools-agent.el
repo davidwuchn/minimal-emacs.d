@@ -2768,11 +2768,11 @@ be the source of truth that repairs stale submodule gitlinks from origin/staging
              (format "git merge --ff-only %s" main-q)
              180))
            (ff-output (car ff-result)))
-      (cond
+       (cond
        ((= 0 (cdr ff-result))
-        t)
+        (gptel-auto-workflow--finalize-refreshed-staging-submodules worktree main-ref))
        ((string-match-p "Already up[ -]to[- ]date" ff-output)
-        t)
+        (gptel-auto-workflow--finalize-refreshed-staging-submodules worktree main-ref))
        (t
         (let* ((merge-result
                 (gptel-auto-workflow--git-result
@@ -2784,9 +2784,9 @@ be the source of truth that repairs stale submodule gitlinks from origin/staging
                (merge-output (car merge-result)))
           (cond
            ((= 0 (cdr merge-result))
-            t)
+            (gptel-auto-workflow--finalize-refreshed-staging-submodules worktree main-ref))
            ((string-match-p "Already up[ -]to[- ]date" merge-output)
-            t)
+            (gptel-auto-workflow--finalize-refreshed-staging-submodules worktree main-ref))
            ((gptel-auto-workflow--resolve-ancestor-submodule-merge-conflicts worktree)
             (if (not (gptel-auto-workflow--ensure-staging-submodules-ready worktree))
                 (progn
@@ -2862,6 +2862,11 @@ repo."
                 (when (gptel-auto-workflow--refresh-staging-base-with-main main-ref)
                   (message "[auto-workflow] ✓ Staging synced from %s plus %s"
                            sync-ref main-ref)
+                  t))
+               ((and (equal sync-ref remote-staging)
+                     (gptel-auto-workflow--non-empty-string-p main-ref))
+                (when (gptel-auto-workflow--finalize-refreshed-staging-submodules worktree main-ref)
+                  (message "[auto-workflow] ✓ Staging synced from %s" sync-ref)
                   t))
                (t
                 (message "[auto-workflow] ✓ Staging synced from %s" sync-ref)
@@ -2967,6 +2972,19 @@ NOTE: Staging branch is never deleted, only the worktree."
                (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" output))
       (match-string 1 output))))
 
+(defun gptel-auto-workflow--staging-submodule-gitlink-revision-at-ref (worktree ref path)
+  "Return the gitlink revision for PATH at REF in WORKTREE, or nil."
+  (let* ((default-directory worktree)
+         (result (gptel-auto-workflow--git-result
+                  (format "git ls-tree %s -- %s"
+                          (shell-quote-argument ref)
+                          (shell-quote-argument path))
+                  60))
+         (output (car result)))
+    (when (and (= 0 (cdr result))
+               (string-match "160000 commit \\([0-9a-f]\\{40\\}\\)\t" output))
+      (match-string 1 output))))
+
 (defun gptel-auto-workflow--worktree-base-repo-root ()
   "Return the canonical superproject root for the stable workflow root."
   (let ((git-common-dir (gptel-auto-workflow--worktree-base-git-common-dir)))
@@ -3045,6 +3063,105 @@ superproject-managed `.git/modules/...` store."
     (cl-find-if (lambda (git-dir)
                   (gptel-auto-workflow--git-dir-has-commit-p git-dir commit))
                 candidates)))
+
+(defun gptel-auto-workflow--finalize-refreshed-staging-submodules (worktree main-ref)
+  "Ensure refreshed staging WORKTREE uses materializable top-level submodule gitlinks.
+If refreshed staging cannot hydrate a top-level submodule gitlink locally, try to
+repair just that gitlink from MAIN-REF, then rehydrate and commit the repair."
+  (let* ((default-directory worktree)
+         (starting-head (string-trim
+                         (gptel-auto-workflow--git-cmd "git rev-parse HEAD" 60)))
+         (hydrate-result (gptel-auto-workflow--hydrate-staging-submodules worktree)))
+    (if (= 0 (cdr hydrate-result))
+        t
+      (let ((repaired nil)
+            (failure nil))
+        (dolist (path (gptel-auto-workflow--staging-submodule-paths worktree))
+          (unless failure
+            (let* ((current-commit
+                    (gptel-auto-workflow--staging-submodule-gitlink-revision worktree path))
+                   (current-git-dir
+                    (and current-commit
+                         (gptel-auto-workflow--shared-submodule-git-dir path current-commit))))
+              (when (and current-commit (not current-git-dir))
+                (let* ((main-commit
+                        (and (gptel-auto-workflow--non-empty-string-p main-ref)
+                             (gptel-auto-workflow--staging-submodule-gitlink-revision-at-ref
+                              worktree main-ref path)))
+                       (main-git-dir
+                        (and main-commit
+                             (gptel-auto-workflow--shared-submodule-git-dir path main-commit))))
+                  (cond
+                   ((and main-commit
+                         main-git-dir
+                         (not (equal current-commit main-commit)))
+                    (pcase-let ((`(,output . ,exit-code)
+                                 (gptel-auto-workflow--git-result
+                                  (format "git update-index --cacheinfo 160000 %s %s"
+                                          (shell-quote-argument main-commit)
+                                          (shell-quote-argument path))
+                                  60)))
+                      (if (= exit-code 0)
+                          (push (format "%s=%s"
+                                        path
+                                        (gptel-auto-workflow--truncate-hash main-commit))
+                                repaired)
+                        (setq failure
+                              (format "Failed to repair %s from %s: %s"
+                                      path
+                                      main-ref
+                                      output)))))
+                   (t
+                    (setq failure
+                          (format "Missing materializable fallback for %s (current=%s, main=%s)"
+                                  path
+                                  (or current-commit "nil")
+                                  (or main-commit "nil"))))))))))
+        (cond
+         (failure
+          (ignore-errors
+            (let ((default-directory worktree))
+              (gptel-auto-workflow--git-cmd "git reset --hard HEAD" 60)))
+          (message "[auto-workflow] Failed to repair refreshed staging submodules from %s: %s"
+                   main-ref
+                   (my/gptel--sanitize-for-logging failure 200))
+          nil)
+         ((null repaired)
+          (message "[auto-workflow] Failed to hydrate refreshed staging submodules: %s"
+                   (my/gptel--sanitize-for-logging (car hydrate-result) 200))
+          nil)
+         (t
+          (let* ((repair-message
+                  (format "Repair staging submodule gitlinks from %s" main-ref))
+                 (commit-command
+                  (format "%s git commit -m %s"
+                          gptel-auto-workflow--skip-submodule-sync-env
+                          (shell-quote-argument repair-message))))
+            (if (not (gptel-auto-workflow--commit-step-success-p
+                      commit-command
+                      "Repair staging submodule gitlinks"
+                      180))
+                (progn
+                  (ignore-errors
+                    (gptel-auto-workflow--git-cmd "git reset --hard HEAD" 60))
+                  nil)
+              (setq hydrate-result
+                    (gptel-auto-workflow--hydrate-staging-submodules worktree))
+              (if (/= 0 (cdr hydrate-result))
+                  (progn
+                    (ignore-errors
+                      (gptel-auto-workflow--git-cmd
+                       (format "git reset --hard %s"
+                               (shell-quote-argument starting-head))
+                       60))
+                    (message "[auto-workflow] Failed to hydrate repaired staging submodules from %s: %s"
+                             main-ref
+                             (my/gptel--sanitize-for-logging (car hydrate-result) 200))
+                    nil)
+                (message "[auto-workflow] Repaired stale staging submodule gitlinks from %s: %s"
+                         main-ref
+                         (mapconcat #'identity (nreverse repaired) ", "))
+                t)))))))))
 
 (defun gptel-auto-workflow--cleanup-staging-submodule-worktree (worktree path)
   "Remove any staged submodule worktree for PATH under WORKTREE."
