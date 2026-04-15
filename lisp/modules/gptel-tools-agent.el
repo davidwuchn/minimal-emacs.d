@@ -1777,7 +1777,8 @@ delete the request or file buffer that happened to be current when the
 subagent callback fired."
   (let ((safe-buffer (get-buffer-create " *gptel-callback*")))
     (with-current-buffer safe-buffer
-      (funcall callback result))))
+      (when callback
+        (funcall callback result)))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
