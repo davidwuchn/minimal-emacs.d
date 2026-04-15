@@ -6394,9 +6394,156 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                          (and (= (plist-get timer :delay) 10)
                               (= (plist-get timer :repeat) 10)))
                        cancelled-timers))
-              (should (eq gptel--fsm-last 'parent-fsm))))
+               (should (eq gptel--fsm-last 'parent-fsm))))
         (when (buffer-live-p request-buf)
           (kill-buffer request-buf))))))
+
+(ert-deftest regression/auto-workflow/new-subagent-clears-overlapping-task-state ()
+  "Launching a new workflow subagent should clear stale overlapping task state first."
+  (let ((my/gptel--agent-task-counter 0)
+        (my/gptel-agent-task-timeout 42)
+        (my/gptel-subagent-progress-interval 10)
+        (gptel-auto-workflow--running t)
+        (scheduled-timers nil)
+        (cancelled-timers nil)
+        (aborted-buffers nil))
+    (clrhash my/gptel--agent-task-state)
+    (let* ((origin-buf (generate-new-buffer " *gptel-overlap-origin*"))
+           (activity-dir (file-name-as-directory (make-temp-file "gptel-overlap-" t)))
+           (old-timeout (list :delay 60 :repeat nil :id 'old-timeout))
+           (old-progress (list :delay 10 :repeat 10 :id 'old-progress)))
+      (unwind-protect
+          (progn
+            (with-current-buffer origin-buf
+              (setq default-directory activity-dir))
+            (puthash 99
+                     (list :done nil
+                           :timeout-timer old-timeout
+                           :progress-timer old-progress
+                           :origin-buf origin-buf
+                           :request-buf origin-buf
+                           :activity-dir activity-dir)
+                     my/gptel--agent-task-state)
+            (cl-letf (((symbol-function 'my/gptel--build-subagent-context)
+                       (lambda (prompt &rest _) prompt))
+                      ((symbol-function 'run-at-time)
+                       (lambda (delay repeat fn &rest _args)
+                         (let ((timer (list :delay delay :repeat repeat :fn fn)))
+                           (push timer scheduled-timers)
+                           timer)))
+                      ((symbol-function 'timerp)
+                       (lambda (timer)
+                         (and (listp timer)
+                              (plist-member timer :delay))))
+                      ((symbol-function 'cancel-timer)
+                       (lambda (timer)
+                         (push timer cancelled-timers)))
+                      ((symbol-function 'gptel-abort)
+                       (lambda (buffer)
+                         (push buffer aborted-buffers)))
+                      ((symbol-function 'gptel-auto-workflow--state-active-p)
+                       (lambda (state)
+                         (and state (not (plist-get state :done)))))
+                      ((symbol-function 'my/gptel--call-gptel-agent-task)
+                       (lambda (&rest _args)
+                         (my/gptel--register-agent-task-buffer origin-buf)))
+                      ((symbol-function 'message) (lambda (&rest _) nil)))
+              (with-current-buffer origin-buf
+                (my/gptel--agent-task-with-timeout
+                 #'ignore
+                 "executor" "desc" "prompt")))
+            (should-not (gethash 99 my/gptel--agent-task-state))
+            (should (= (hash-table-count my/gptel--agent-task-state) 1))
+            (should (equal aborted-buffers (list origin-buf)))
+            (should (member old-timeout cancelled-timers))
+            (should (member old-progress cancelled-timers))
+            (should (seq-some
+                     (lambda (timer)
+                       (and (= (plist-get timer :delay) 42)
+                            (null (plist-get timer :repeat))))
+                     scheduled-timers))
+            (should (seq-some
+                     (lambda (timer)
+                       (and (= (plist-get timer :delay) 10)
+                            (= (plist-get timer :repeat) 10)))
+                     scheduled-timers)))
+        (when (buffer-live-p origin-buf)
+          (kill-buffer origin-buf))
+        (when (file-directory-p activity-dir)
+          (delete-directory activity-dir t))))))
+
+(ert-deftest regression/auto-workflow/new-subagent-keeps-done-overlap-state ()
+  "Launching a new workflow subagent should ignore overlapping tasks already marked done."
+  (let ((my/gptel--agent-task-counter 0)
+        (my/gptel-agent-task-timeout 42)
+        (my/gptel-subagent-progress-interval 10)
+        (gptel-auto-workflow--running t)
+        (scheduled-timers nil)
+        (cancelled-timers nil)
+        (aborted-buffers nil))
+    (clrhash my/gptel--agent-task-state)
+    (let* ((origin-buf (generate-new-buffer " *gptel-overlap-done-origin*"))
+           (activity-dir (file-name-as-directory (make-temp-file "gptel-overlap-done-" t)))
+           (done-timeout (list :delay 60 :repeat nil :id 'done-timeout))
+           (done-progress (list :delay 10 :repeat 10 :id 'done-progress)))
+      (unwind-protect
+          (progn
+            (with-current-buffer origin-buf
+              (setq default-directory activity-dir))
+            (puthash 99
+                     (list :done t
+                           :timeout-timer done-timeout
+                           :progress-timer done-progress
+                           :origin-buf origin-buf
+                           :request-buf origin-buf
+                           :activity-dir activity-dir)
+                     my/gptel--agent-task-state)
+            (cl-letf (((symbol-function 'my/gptel--build-subagent-context)
+                       (lambda (prompt &rest _) prompt))
+                      ((symbol-function 'run-at-time)
+                       (lambda (delay repeat fn &rest _args)
+                         (let ((timer (list :delay delay :repeat repeat :fn fn)))
+                           (push timer scheduled-timers)
+                           timer)))
+                      ((symbol-function 'timerp)
+                       (lambda (timer)
+                         (and (listp timer)
+                              (plist-member timer :delay))))
+                      ((symbol-function 'cancel-timer)
+                       (lambda (timer)
+                         (push timer cancelled-timers)))
+                      ((symbol-function 'gptel-abort)
+                       (lambda (buffer)
+                         (push buffer aborted-buffers)))
+                      ((symbol-function 'gptel-auto-workflow--state-active-p)
+                       (lambda (state)
+                         (and state (not (plist-get state :done)))))
+                      ((symbol-function 'my/gptel--call-gptel-agent-task)
+                       (lambda (&rest _args)
+                         (my/gptel--register-agent-task-buffer origin-buf)))
+                      ((symbol-function 'message) (lambda (&rest _) nil)))
+              (with-current-buffer origin-buf
+                (my/gptel--agent-task-with-timeout
+                 #'ignore
+                 "grader" "desc" "prompt")))
+            (should (gethash 99 my/gptel--agent-task-state))
+            (should (= (hash-table-count my/gptel--agent-task-state) 2))
+            (should-not aborted-buffers)
+            (should-not cancelled-timers)
+            (should (seq-some
+                     (lambda (timer)
+                       (and (= (plist-get timer :delay) 42)
+                            (null (plist-get timer :repeat))))
+                     scheduled-timers))
+            (should (seq-some
+                     (lambda (timer)
+                       (and (= (plist-get timer :delay) 10)
+                            (= (plist-get timer :repeat) 10)))
+                     scheduled-timers)))
+        (when (buffer-live-p origin-buf)
+          (kill-buffer origin-buf))
+        (when (file-directory-p activity-dir)
+          (delete-directory activity-dir t))))))
 
 (ert-deftest regression/auto-workflow/subagent-wrapper-marks-child-fsm-no-retry ()
   "Wrapped subagent FSMs should disable the global auto-retry advice."

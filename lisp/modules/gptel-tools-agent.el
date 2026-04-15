@@ -1655,13 +1655,69 @@ TIMESTAMP defaults to `current-time'."
     (dolist (request-buf (delete-dups request-buffers))
       (when (and (buffer-live-p request-buf)
                  (fboundp 'gptel-abort))
+         (condition-case err
+             (gptel-abort request-buf)
+           (error
+            (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
+                     (buffer-name request-buf)
+                     (my/gptel--sanitize-for-logging
+                      (error-message-string err) 160))))))))
+
+(defun my/gptel--normalize-agent-activity-dir (dir)
+  "Return DIR as a canonical directory path with trailing slash, or nil."
+  (when (stringp dir)
+    (file-name-as-directory (expand-file-name dir))))
+
+(defun my/gptel--agent-task-overlaps-p (state origin-buf activity-dir)
+  "Return non-nil when STATE overlaps a new dispatch from ORIGIN-BUF.
+
+ACTIVITY-DIR should be the canonical workflow activity directory for the new
+dispatch. Overlap is intentionally conservative during auto-workflow runs:
+subagents for one routed experiment buffer/worktree should not survive into a
+new analyzer/executor/grader launch on that same buffer or worktree."
+  (and (gptel-auto-workflow--state-active-p state)
+       (let* ((request-buf (my/gptel--agent-task-request-buffer state))
+              (state-origin (plist-get state :origin-buf))
+              (state-dir (my/gptel--normalize-agent-activity-dir
+                          (plist-get state :activity-dir))))
+         (or (and (buffer-live-p origin-buf)
+                  (or (eq state-origin origin-buf)
+                      (eq request-buf origin-buf)))
+             (and activity-dir state-dir
+                  (equal activity-dir state-dir))))))
+
+(defun my/gptel--cleanup-overlapping-agent-tasks (origin-buf activity-dir)
+  "Abort and clear tracked subagent tasks that overlap a new workflow dispatch.
+
+This prevents stale timers/callbacks from older analyzer/executor work on the
+same routed experiment buffer from re-entering a later retry."
+  (let ((normalized-dir (my/gptel--normalize-agent-activity-dir activity-dir))
+        overlap-ids
+        request-buffers)
+    (maphash
+     (lambda (task-id state)
+       (when (my/gptel--agent-task-overlaps-p state origin-buf normalized-dir)
+         (when (timerp (plist-get state :timeout-timer))
+           (cancel-timer (plist-get state :timeout-timer)))
+         (when (timerp (plist-get state :progress-timer))
+           (cancel-timer (plist-get state :progress-timer)))
+         (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
+           (push request-buf request-buffers))
+         (push task-id overlap-ids)))
+     my/gptel--agent-task-state)
+    (dolist (task-id overlap-ids)
+      (remhash task-id my/gptel--agent-task-state))
+    (dolist (request-buf (delete-dups request-buffers))
+      (when (and (buffer-live-p request-buf)
+                 (fboundp 'gptel-abort))
         (condition-case err
             (gptel-abort request-buf)
           (error
-           (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
+           (message "[nucleus] Failed to abort overlapping subagent buffer %s: %s"
                     (buffer-name request-buf)
                     (my/gptel--sanitize-for-logging
-                     (error-message-string err) 160))))))))
+                     (error-message-string err) 160))))))
+    (length overlap-ids)))
 
 (defun my/gptel--call-gptel-agent-task (callback agent-type description prompt)
   "Invoke the active gptel subagent task runner.
@@ -1722,6 +1778,8 @@ Uses hash table keyed by task-id to support parallel execution."
          (start-time (current-time))
          (task-timeout my/gptel-agent-task-timeout)
          (origin-buf (current-buffer))
+         (activity-dir (and (stringp default-directory)
+                            (expand-file-name default-directory)))
          (parent-fsm-local-p (local-variable-p 'gptel--fsm-last origin-buf))
          (parent-fsm (and parent-fsm-local-p
                           (buffer-local-value 'gptel--fsm-last origin-buf)))
@@ -1739,6 +1797,10 @@ Uses hash table keyed by task-id to support parallel execution."
          (hard-deadline
           (and hard-timeout
                (time-add start-time (seconds-to-time hard-timeout))))
+         (overlap-count
+          (and (bound-and-true-p gptel-auto-workflow--running)
+               (my/gptel--cleanup-overlapping-agent-tasks
+                origin-buf activity-dir)))
          (restore-origin-fsm
           (lambda (&optional expected-fsm)
             (when (buffer-live-p origin-buf)
@@ -1863,6 +1925,9 @@ Uses hash table keyed by task-id to support parallel execution."
                                (format ", max runtime: %ds" hard-timeout)
                              ""))
                  ""))
+      (when (and overlap-count (> overlap-count 0))
+        (message "[nucleus] Cleared %d overlapping subagent task(s) before launching %s"
+                 overlap-count agent-type))
       (let ((progress-timer
              (run-at-time
               my/gptel-subagent-progress-interval
@@ -1900,9 +1965,8 @@ Uses hash table keyed by task-id to support parallel execution."
                                :last-buffer-tick nil
                                :last-activity-time (current-time)
                                :agent-type agent-type
-                               :activity-dir (and (stringp default-directory)
-                                                  (expand-file-name default-directory)))
-                 my/gptel--agent-task-state)
+                               :activity-dir activity-dir)
+                  my/gptel--agent-task-state)
         (when task-timeout
           (let ((state (gethash task-id my/gptel--agent-task-state)))
             (rearm-timeout state)))
