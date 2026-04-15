@@ -7319,7 +7319,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
          (calls-file (expand-file-name "probe-calls.txt" status-dir))
+         (server-name "copilot-auto-workflow-test-timeout")
          (tmp-root (make-temp-file "aw-tmp" t))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
@@ -7357,6 +7359,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
            (let* ((process-environment
                    (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
                                  (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                                 (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" messages-file)
+                                 (format "AUTO_WORKFLOW_EMACS_SERVER=%s" server-name)
                                  (format "TMPDIR=%s/" tmp-root)
                                  "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=1")
                            process-environment))
@@ -7677,6 +7681,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
+         (server-name "copilot-auto-workflow-test-stale")
          (tmp-root (make-temp-file "aw-tmp" t))
          (fake-bin (make-temp-file "aw-fake-bin" t))
          (fake-emacsclient
@@ -7687,6 +7693,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (process-environment
           (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
                         (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" messages-file)
+                        (format "AUTO_WORKFLOW_EMACS_SERVER=%s" server-name)
                         (format "TMPDIR=%s/" tmp-root)
                         "AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=5")
                   process-environment))
