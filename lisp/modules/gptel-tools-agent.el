@@ -5924,6 +5924,7 @@ run can advance through this list instead of repeatedly hammering the same provi
 
 (defconst gptel-auto-workflow--current-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
