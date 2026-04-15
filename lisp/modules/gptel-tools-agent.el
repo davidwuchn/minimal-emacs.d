@@ -6164,9 +6164,18 @@ REASON is only used for logging."
       (gptel-auto-workflow--rewrite-subagent-provider preset runtime-candidate))
      (t preset))))
 
+(defun gptel-auto-experiment--aborted-agent-output-p (output)
+  "Return non-nil when OUTPUT reflects an explicit subagent abort."
+  (and (stringp output)
+       (let ((case-fold-search t))
+         (string-match-p
+          "\\`Aborted:\\|inspection-thrash aborted\\|doom-loop aborted\\|was aborted by the user\\|was cancelled or timed out"
+          output))))
+
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
   "Check if ERROR-OUTPUT is a transient/retryable error."
   (and (stringp error-output)
+       (not (gptel-auto-experiment--aborted-agent-output-p error-output))
        (let ((case-fold-search t))
          (string-match-p
           "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
@@ -6326,6 +6335,8 @@ Also logs agent-output snippet for debugging when category is :unknown."
   (cond
    ((or (null agent-output) (string= agent-output ""))
     (cons :grader-failed "Grader returned no output"))
+   ((gptel-auto-experiment--aborted-agent-output-p agent-output)
+    (cons :tool-error "Subagent aborted"))
    ((string-match-p "hour allocated quota exceeded" agent-output)
     (cons :api-rate-limit "Hourly quota exhausted"))
    ((string-match-p "week allocated quota exceeded" agent-output)
@@ -6946,7 +6957,7 @@ Tries multiple patterns in order:
    ((not (stringp output))
     "No hypothesis stated")
    ;; Check for error message first
-   ((string-match-p "^Error:" output)
+   ((gptel-auto-experiment--agent-error-p output)
     "Agent error")
    ((string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
     (match-string 1 output))
@@ -6965,7 +6976,9 @@ Tries multiple patterns in order:
 
 (defun gptel-auto-experiment--agent-error-p (output)
   "Check if OUTPUT is an error message from agent tool."
-  (and (stringp output) (string-match-p "^Error:" output)))
+  (and (stringp output)
+       (or (string-match-p "^Error:" output)
+           (gptel-auto-experiment--aborted-agent-output-p output))))
 
 (defun gptel-auto-experiment--summarize (hypothesis)
   "Create short summary of HYPOTHESIS."
