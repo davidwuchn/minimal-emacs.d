@@ -5511,13 +5511,6 @@ GRADE-TOTAL can be nil when the grader omits an explicit denominator."
         (>= (/ (float score) grade-total) 0.85)
       (>= score 8))))
 
-(defun gptel-auto-experiment--perfect-grade-pass-p (grade-score grade-total)
-  "Return non-nil when GRADE-SCORE is a perfect or near-perfect pass."
-  (let ((score (if (numberp grade-score) grade-score 0)))
-    (if (and (numberp grade-total) (> grade-total 0))
-        (>= score grade-total)
-      (>= score 9))))
-
 (defun gptel-auto-experiment--grader-indicates-correctness-fix-p (grade-details)
   "Return non-nil when GRADE-DETAILS describes a real correctness fix."
   (when (stringp grade-details)
