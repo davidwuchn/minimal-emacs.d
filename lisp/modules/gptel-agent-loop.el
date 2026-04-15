@@ -455,7 +455,7 @@ not planning more work. Uses pre-compiled pattern for performance on hot path."
 Only continues if tools were called AND model seems to be
 planning without action.  Also checks continuation count
 limit for early exit."
-  (let ((cont-count (gptel-agent-loop--task-continuation-count state)))
+  (let ((cont-count (or (gptel-agent-loop--task-continuation-count state) 0)))
     (and gptel-agent-loop-force-completion
          gptel-agent-loop-hard-loop
          (< cont-count gptel-agent-loop-max-continuations)
@@ -610,7 +610,7 @@ Returns non-nil if result was delivered."
   "Handle STATE when continuation is needed after RESP.
 Returns non-nil if result was delivered."
   (when (gptel-agent-loop--continuation-needed-p state resp)
-    (let ((cont-count (1+ (gptel-agent-loop--task-continuation-count state))))
+    (let ((cont-count (1+ (or (gptel-agent-loop--task-continuation-count state) 0))))
       (setf (gptel-agent-loop--task-continuation-count state) cont-count)
       (if gptel-agent-loop-hard-loop
           (progn
