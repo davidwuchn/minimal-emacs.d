@@ -370,11 +370,11 @@ Call once after definitions to pre-compile regex patterns."
 
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
   "Return non-nil when TEXT matches any pattern in PATTERNS.
-Patterns are matched case-insensitively against downcased TEXT."
+Patterns are matched case-insensitively against downcased TEXT and PATTERN."
   (and (stringp text)
-       (let ((lower (downcase text)))
-         (cl-some (lambda (pattern) (string-match-p pattern lower))
-                  patterns))))
+       (cl-some (lambda (pattern)
+                  (string-match-p (downcase pattern) (downcase text)))
+                patterns)))
 
 (defun gptel-agent-loop--seems-complete-p (resp)
   "Return non-nil when RESP looks like a completion message.
