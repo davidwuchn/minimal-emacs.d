@@ -28,6 +28,19 @@ Passed as --max-count to rg/grep."
 
 ;;; Grep Tool Implementation
 
+(defun gptel-tools-grep--normalize-context-lines (value)
+  "Normalize Grep VALUE into a capped context line count.
+Accept integer-like strings, clamp negatives to 0, and cap values at 30.
+Return invalid non-numeric values unchanged so contract validation can reject
+them."
+  (cond
+   ((integerp value)
+    (max 0 (min 30 value)))
+   ((and (stringp value)
+         (string-match-p "\\`[[:space:]]*[+-]?[0-9]+[[:space:]]*\\'" value))
+    (max 0 (min 30 (string-to-number (string-trim value)))))
+   (t value)))
+
 (defun my/gptel--agent-grep-async (callback regex path &optional glob context-lines)
   "Async replacement for gptel-agent's `Grep' tool.
 
@@ -47,8 +60,9 @@ receives an error message to prevent callers from hanging."
           (let* ((grepper (or (executable-find "rg") (executable-find "grep")))
                  (_ (unless grepper (error "ripgrep/grep not available")))
                  (cmd (file-name-sans-extension (file-name-nondirectory grepper)))
-                 (context-lines (if (natnump context-lines) context-lines 0))
-                 (context-lines (min 30 context-lines))
+                 (raw-context-lines
+                  (gptel-tools-grep--normalize-context-lines context-lines))
+                 (context-lines (if (natnump raw-context-lines) raw-context-lines 0))
                  (expanded-path (expand-file-name (substitute-in-file-name path)))
                  (args
                   (cond
@@ -137,8 +151,9 @@ receives an error message to prevent callers from hanging."
               (:name "glob"
                 :type string
                 :optional t)
-(:name "context_lines"
+              (:name "context_lines"
                  :optional t
+                 :normalize gptel-tools-grep--normalize-context-lines
                  :type integer
                  :maximum 30))
        :category "gptel-agent"

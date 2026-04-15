@@ -431,6 +431,7 @@ Expected tools: %S"
 ;;   :maximum          NUM - Maximum value (inclusive)
 ;;   :exclusiveMinimum NUM - Minimum value (exclusive)
 ;;   :exclusiveMaximum NUM - Maximum value (exclusive)
+;;   :normalize        FN  - Normalize raw argument before validation/call
 ;;
 ;; Array:
 ;;   :minItems     INT     - Minimum array length
@@ -473,7 +474,9 @@ FMT-ARGS are additional format arguments for the message."
                (:type "Tool Contract Violation: expected '%s' to be %s, got %S")
                (:required "Tool Contract Violation (%s): missing or null required argument '%s'")
                (_ "Tool Contract Violation: '%s' failed validation for %s"))))
-    (apply #'user-error msg arg-name val fmt-args)))
+    (if (eq constraint :type)
+        (user-error msg arg-name (car fmt-args) val)
+      (apply #'user-error msg arg-name val fmt-args))))
 
 (defun nucleus-tools--validate-string (val arg-name constraints)
   "Validate string VAL against CONSTRAINTS.
@@ -536,6 +539,23 @@ CONSTRAINTS may include :minItems, :maxItems, :items."
 
 ;;; Tool Contract Validation
 
+(defun nucleus-tools--normalize-arg-value (val spec)
+  "Return VAL normalized according to SPEC."
+  (let ((normalize (plist-get spec :normalize)))
+    (if (functionp normalize)
+        (funcall normalize val)
+      val)))
+
+(defun nucleus-tools--public-arg-spec (spec)
+  "Return SPEC with local-only contract keys removed."
+  (let (result)
+    (while spec
+      (let ((key (pop spec))
+            (value (pop spec)))
+        (unless (eq key :normalize)
+          (setq result (plist-put result key value)))))
+    result))
+
 (defun nucleus-tools--validate-contract (tool-name func args async-p)
   "Wrap FUNC with runtime contract validation based on ARGS schema.
 Ensure that incoming arguments match the type definitions in ARGS.
@@ -548,18 +568,24 @@ Supports JSON Schema-like validators:
   - enum: list of allowed values"
   (lambda (&rest call-args)
     (let* ((actual-args (if async-p (cdr call-args) call-args))
+           (normalized-args (copy-sequence actual-args))
            (i 0)
            (specs (if (functionp args) (funcall args) args)))
       ;; Guard: if no args spec, skip validation silently
       (when specs
         (dolist (spec specs)
-          (let* ((val (nth i actual-args))
+          (let* ((raw-val (nth i normalized-args))
+                 (val (if (null raw-val)
+                          raw-val
+                        (nucleus-tools--normalize-arg-value raw-val spec)))
                  (type (plist-get spec :type))
                  (arg-name (plist-get spec :name))
                  (optional (plist-get spec :optional)))
+            (unless (equal raw-val val)
+              (setf (nth i normalized-args) val))
             (cond
-             ;; Check for missing required arguments
-             ((and (null val) (not optional) (not (member type '("boolean" boolean))))
+              ;; Check for missing required arguments
+              ((and (null val) (not optional) (not (member type '("boolean" boolean))))
               (nucleus-tools--validation-error tool-name :required arg-name))
              
              ;; Validate non-null values
@@ -581,9 +607,11 @@ Supports JSON Schema-like validators:
                 ((or "object" 'object)
                  (unless (or (hash-table-p val) (listp val))
                    (nucleus-tools--validation-error arg-name :type val "an object")))
-                (_ nil))))
+                 (_ nil))))
             (cl-incf i))))
-      (apply func call-args))))
+      (if async-p
+          (apply func (car call-args) normalized-args)
+        (apply func normalized-args)))))
 
 (defun nucleus-tools--advise-make-tool (orig-fn &rest kwargs)
   "Advice for `gptel-make-tool' to enforce tool contracts at runtime.
@@ -591,10 +619,19 @@ Wraps the provided :function with argument type validation."
   (let* ((name (plist-get kwargs :name))
          (func (plist-get kwargs :function))
          (args (plist-get kwargs :args))
-         (async-p (plist-get kwargs :async)))
+         (async-p (plist-get kwargs :async))
+         (public-args
+          (cond
+           ((functionp args)
+            (lambda ()
+              (mapcar #'nucleus-tools--public-arg-spec (funcall args))))
+           ((listp args)
+            (mapcar #'nucleus-tools--public-arg-spec args))
+           (t args))))
     (when (and name func args)
       (setq kwargs (plist-put kwargs :function
-                              (nucleus-tools--validate-contract name func args async-p))))
+                              (nucleus-tools--validate-contract name func args async-p)))
+      (setq kwargs (plist-put kwargs :args public-args)))
     (apply orig-fn kwargs)))
 
 (defun nucleus-tools-setup ()
