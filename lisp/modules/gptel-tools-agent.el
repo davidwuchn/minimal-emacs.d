@@ -2564,17 +2564,16 @@ Call this before any git operation that might modify branches."
 (defun gptel-auto-workflow--require-staging-branch ()
   "Return the configured staging branch, logging when it is invalid."
   (or (gptel-auto-workflow--configured-staging-branch)
-      (progn
-        (message "[auto-workflow] Missing staging branch configuration")
-        nil)))
+      (message "[auto-workflow] Missing staging branch configuration")
+      nil))
 
 (defun gptel-auto-workflow--staging-branch-exists-p ()
   "Check if staging branch exists locally or remotely."
   (let ((branch (gptel-auto-workflow--configured-staging-branch)))
     (and branch
          (or (member branch (magit-list-local-branch-names))
-              (member (concat "origin/" branch)
-                      (magit-list-remote-branch-names))))))
+             (member (concat "origin/" branch)
+                     (magit-list-remote-branch-names))))))
 
 (defun gptel-auto-workflow--staging-main-ref ()
   "Return the safe main ref staging and experiments should mirror.
