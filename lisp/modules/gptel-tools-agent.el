@@ -5847,6 +5847,7 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
@@ -5871,6 +5872,7 @@ DashScope and others when rate-limited or unavailable."
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
@@ -5892,6 +5894,23 @@ run can advance through this list instead of repeatedly hammering the same provi
   '("analyzer" "executor" "grader" "reviewer")
   "Prior runtime default for `gptel-auto-workflow-headless-fallback-agents'.")
 
+(defconst gptel-auto-workflow--legacy-headless-subagent-fallbacks
+  '(("MiniMax" . "minimax-m2.7-highspeed")
+    ("DashScope" . "qwen3.6-plus")
+    ("DeepSeek" . "deepseek-chat")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("Gemini" . "gemini-3.1-pro-preview"))
+  "Previous default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
+
+(defconst gptel-auto-workflow--current-headless-subagent-fallbacks
+  '(("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6-code-preview")
+    ("DashScope" . "qwen3.6-plus")
+    ("DeepSeek" . "deepseek-chat")
+    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("Gemini" . "gemini-3.1-pro-preview"))
+  "Current runtime default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
+
 (defconst gptel-auto-workflow--legacy-executor-rate-limit-fallbacks
   '(("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
@@ -5905,6 +5924,7 @@ run can advance through this list instead of repeatedly hammering the same provi
 
 (defconst gptel-auto-workflow--current-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
@@ -5985,6 +6005,13 @@ the user has not explicitly customized the variable."
         (setq gptel-auto-workflow-headless-fallback-agents
               (copy-tree gptel-auto-workflow--current-headless-fallback-agents))
         (push 'gptel-auto-workflow-headless-fallback-agents migrated)))
+    (unless (gptel-auto-workflow--custom-var-user-customized-p
+             'gptel-auto-workflow-headless-subagent-fallbacks)
+      (when (equal gptel-auto-workflow-headless-subagent-fallbacks
+                   gptel-auto-workflow--legacy-headless-subagent-fallbacks)
+        (setq gptel-auto-workflow-headless-subagent-fallbacks
+              (copy-tree gptel-auto-workflow--current-headless-subagent-fallbacks))
+        (push 'gptel-auto-workflow-headless-subagent-fallbacks migrated)))
     (unless (gptel-auto-workflow--custom-var-user-customized-p
              'gptel-auto-workflow-executor-rate-limit-fallbacks)
       (when (equal gptel-auto-workflow-executor-rate-limit-fallbacks
