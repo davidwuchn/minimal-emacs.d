@@ -316,8 +316,7 @@ When multiple entries match, returns the one with the longest key for most speci
                 (entry-match (cdr entry)))
             (when (>= key-len best-key-len)
               (setq best-key-len key-len)
-              (when entry-match
-                (setq best-match entry-match))))))
+              (setq best-match entry-match)))))
       (unless (eq best-match sentinel)
         best-match))))
 
