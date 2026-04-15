@@ -1004,6 +1004,34 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should result)
       (should (= captured-timeout 137)))))
 
+(ert-deftest regression/auto-experiment/grade-short-circuits-aborted-output ()
+  "Aborted executor output should fail closed without invoking the grader."
+  (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment-use-subagents t)
+        (aborted-output
+         "Aborted: executor task 'Experiment 1: optimize lisp/modules/gptel-tools-agent.el' was cancelled or timed out.")
+        grader-called
+        result)
+    (cl-letf (((symbol-function 'gptel-benchmark-grade)
+               (lambda (&rest _args)
+                 (setq grader-called t)))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-grade
+         aborted-output
+         (lambda (grade)
+           (setq result grade))))
+      (should result)
+      (should-not grader-called)
+      (should (zerop (hash-table-count gptel-auto-experiment--grade-state)))
+      (should (zerop (plist-get result :score)))
+      (should-not (plist-get result :passed))
+      (should (eq (plist-get result :error-category) :tool-error))
+      (should (string-match-p "Agent error: Aborted:"
+                              (plist-get result :details))))))
+
 (ert-deftest regression/auto-experiment/grade-includes-worktree-diff-evidence ()
   "Grader input should include concrete git evidence from the experiment worktree."
   (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
@@ -2228,7 +2256,21 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
    (equal
     (gptel-auto-experiment--categorize-error
      "Error: Task executor could not finish task \"x\". Error details: (:code \"system_error\" :message \"org.springframework.web.reactive.function.client.WebClientRequestException\" :param :null :type \"server_error\")")
-    '(:api-error . "Provider server error"))))
+     '(:api-error . "Provider server error"))))
+
+(ert-deftest regression/auto-experiment/aborted-output-is-not-retryable ()
+  "Explicit sanitizer/user aborts should not be retried as transport timeouts."
+  (should-not
+   (gptel-auto-experiment--is-retryable-error-p
+    "Aborted: executor task 'Experiment 1: optimize lisp/modules/gptel-tools-agent.el' was cancelled or timed out.")))
+
+(ert-deftest regression/auto-experiment/aborted-output-categorizes-as-tool-error ()
+  "Explicit aborts should fail closed as tool errors."
+  (should
+   (equal
+    (gptel-auto-experiment--categorize-error
+     "Aborted: executor task 'Experiment 1: optimize lisp/modules/gptel-tools-agent.el' was cancelled or timed out.")
+    '(:tool-error . "Subagent aborted"))))
 
 (ert-deftest regression/auto-workflow/headless-analyzer-provider-override-prefers-available-fallback ()
   "Headless analyzer should keep MiniMax as primary workhorse."
@@ -2920,8 +2962,37 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (setq final-result result)))
        (should (= runs 1))
         (should-not scheduled-retry)
-        (should gptel-auto-experiment--quota-exhausted)
-        (should (string-match-p "week allocated quota exceeded" (plist-get final-result :agent-output))))))
+         (should gptel-auto-experiment--quota-exhausted)
+         (should (string-match-p "week allocated quota exceeded" (plist-get final-result :agent-output))))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-does-not-retry-aborted-output ()
+  "Explicit abort results should finalize immediately instead of retrying."
+  (let ((runs 0)
+        (scheduled-retry nil)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
+                 (cl-incf runs)
+                 (funcall callback
+                          (list :agent-output
+                                "Aborted: executor task 'Experiment 1: optimize lisp/modules/gptel-tools-agent.el' was cancelled or timed out."
+                                :comparator-reason ":tool-error"))))
+              ((symbol-function 'run-with-timer)
+               (lambda (&rest _args)
+                 (setq scheduled-retry t)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 1))
+      (should-not scheduled-retry)
+      (should (string-match-p "\\`Aborted:"
+                              (plist-get final-result :agent-output))))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-retries-usage-limit-rate-limits ()
   "Usage-limit 429s should stay on the retry path instead of stopping the run."

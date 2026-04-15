@@ -206,30 +206,116 @@
   "Actual doom-loop handler should format messages with CURRENT-RUN."
   (require 'gptel-ext-tool-sanitize)
   (let* ((tc '(:name "Read" :args (:path "test.el")))
+         (request-buffer (generate-new-buffer " *doom-loop-abort*"))
          (fp (my/gptel--tool-call-fingerprint tc))
          (info (list :tool-use (list tc)
-                     :doom-loop-fingerprints (list fp)))
+                     :buffer request-buffer
+                      :doom-loop-fingerprints (list fp)))
          (fsm (gptel-make-fsm :info info))
          logged-message
          callback-message
+         aborted-buffer
          transition)
     (unwind-protect
         (progn
           (put 'doom-loop :current-run 2)
           (plist-put info :callback
                      (lambda (msg _info)
-                       (setq callback-message msg)))
+                        (setq callback-message msg)))
           (cl-letf (((symbol-function 'gptel--fsm-transition)
                      (lambda (_fsm state)
-                       (setq transition state)))
+                        (setq transition state)))
+                    ((symbol-function 'my/gptel-abort-here)
+                     (lambda ()
+                       (setq aborted-buffer (current-buffer))))
                     ((symbol-function 'message)
                      (lambda (fmt &rest args)
-                       (setq logged-message (apply #'format fmt args)))))
-            (my/gptel--detect-doom-loop fsm))
-          (should (string-match-p "\"Read\" called 3 times" logged-message))
-          (should (string-match-p "\"Read\" called 3 consecutive times" callback-message))
+                        (setq logged-message (apply #'format fmt args)))))
+             (my/gptel--detect-doom-loop fsm))
+           (should (string-match-p "\"Read\" called 3 times" logged-message))
+           (should (string-match-p "\"Read\" called 3 consecutive times" callback-message))
+           (should (eq aborted-buffer request-buffer))
+           (should (eq transition 'DONE)))
+      (put 'doom-loop :current-run nil)
+      (when (buffer-live-p request-buffer)
+        (kill-buffer request-buffer)))))
+
+(ert-deftest sanitize/inspection-thrash/actual-handler-triggers-on-same-file-streak ()
+  "Inspection thrash should abort once same-file read-only exploration crosses threshold."
+  (require 'gptel-ext-tool-sanitize)
+  (let* ((tc '(:name "Code_Inspect"
+               :args (:file_path "/tmp/test.el" :node_name "third-node")))
+         (request-buffer (generate-new-buffer " *inspection-thrash-abort*"))
+         (info (list :tool-use (list tc)
+                     :buffer request-buffer
+                     :inspection-thrash-state (list :file "/tmp/test.el" :count 2)))
+         (fsm (gptel-make-fsm :info info))
+         logged-message
+         callback-message
+         aborted-buffer
+         transition)
+    (unwind-protect
+        (progn
+          (plist-put info :callback
+                     (lambda (msg _info)
+                       (setq callback-message msg)))
+          (let ((my/gptel-inspection-thrash-threshold 3))
+            (cl-letf (((symbol-function 'gptel--fsm-transition)
+                       (lambda (_fsm state)
+                         (setq transition state)))
+                      ((symbol-function 'my/gptel-abort-here)
+                       (lambda ()
+                         (setq aborted-buffer (current-buffer))))
+                      ((symbol-function 'message)
+                       (lambda (fmt &rest args)
+                         (setq logged-message (apply #'format fmt args)))))
+              (my/gptel--detect-inspection-thrash fsm)))
+          (should (string-match-p "inspection-thrash detected" logged-message))
+          (should (string-match-p "/tmp/test\\.el" logged-message))
+          (should (string-match-p "3 consecutive read-only inspections" callback-message))
+          (should (eq aborted-buffer request-buffer))
           (should (eq transition 'DONE)))
-      (put 'doom-loop :current-run nil))))
+      (when (buffer-live-p request-buffer)
+        (kill-buffer request-buffer)))))
+
+(ert-deftest sanitize/inspection-thrash/does-not-trigger-when-file-changes ()
+  "Inspection thrash should reset when the model moves to a different file."
+  (require 'gptel-ext-tool-sanitize)
+  (let* ((tc '(:name "Code_Inspect"
+               :args (:file_path "/tmp/other.el" :node_name "fresh-node")))
+         (info (list :tool-use (list tc)
+                     :inspection-thrash-state (list :file "/tmp/test.el" :count 2)))
+         (fsm (gptel-make-fsm :info info))
+         transition)
+    (let ((my/gptel-inspection-thrash-threshold 3))
+      (cl-letf (((symbol-function 'gptel--fsm-transition)
+                 (lambda (_fsm state)
+                   (setq transition state))))
+        (my/gptel--detect-inspection-thrash fsm)))
+    (should-not transition)
+    (let ((state (plist-get (gptel-fsm-info fsm) :inspection-thrash-state)))
+      (should (equal (plist-get state :file) "/tmp/other.el"))
+      (should (= (plist-get state :count) 1)))))
+
+(ert-deftest sanitize/inspection-thrash/resets-after-write-tool ()
+  "Write-capable tools should reset the same-file inspection streak."
+  (require 'gptel-ext-tool-sanitize)
+  (let* ((tool-use (list '(:name "ApplyPatch" :args (:patch "*** Begin Patch"))
+                         '(:name "Code_Inspect"
+                           :args (:file_path "/tmp/test.el" :node_name "fresh-node"))))
+         (info (list :tool-use tool-use
+                     :inspection-thrash-state (list :file "/tmp/test.el" :count 2)))
+         (fsm (gptel-make-fsm :info info))
+         transition)
+    (let ((my/gptel-inspection-thrash-threshold 3))
+      (cl-letf (((symbol-function 'gptel--fsm-transition)
+                 (lambda (_fsm state)
+                   (setq transition state))))
+        (my/gptel--detect-inspection-thrash fsm)))
+    (should-not transition)
+    (let ((state (plist-get (gptel-fsm-info fsm) :inspection-thrash-state)))
+      (should (equal (plist-get state :file) "/tmp/test.el"))
+      (should (= (plist-get state :count) 1)))))
 
 ;;; ========================================
 ;;; Tests for sanitize-tool-calls scenarios

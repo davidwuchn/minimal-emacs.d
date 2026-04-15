@@ -140,6 +140,21 @@ AND the same arguments count; different tools or different args do not."
   :type 'integer
   :group 'gptel)
 
+(defcustom my/gptel-inspection-thrash-threshold 25
+  "Number of same-file read-only inspections allowed before aborting a turn.
+This catches agents that keep exploring one file with `Code_Inspect', `Read',
+or `Grep' but never switch to a write-capable tool."
+  :type 'integer
+  :group 'gptel)
+
+(defconst my/gptel--inspection-tools
+  '("Code_Inspect" "Code_Map" "Code_Usages" "Read" "Grep")
+  "Read-only tools that contribute to same-file inspection thrash.")
+
+(defconst my/gptel--write-tools
+  '("ApplyPatch" "Edit" "Insert" "Mkdir" "Move" "Write")
+  "Tools that reset inspection-thrash tracking because they can change files.")
+
 (defun my/gptel--tool-call-fingerprint (tc)
   "Return a fingerprint string for tool call TC.
 The fingerprint is \"NAME:MD5(ARGS)\" so two calls are considered identical
@@ -149,7 +164,31 @@ only when both the tool name and the serialized argument plist match."
            (name (if (and raw-name (not (equal raw-name ""))) raw-name "nil"))
            (args (plist-get tc :args))
            (args-str (if args (format "%S" args) "nil")))
-      (concat name ":" (md5 args-str)))))
+       (concat name ":" (md5 args-str)))))
+
+(defun my/gptel--inspection-tool-target (tc)
+  "Return the inspected file path for tool call TC, or nil when unavailable."
+  (when (listp tc)
+    (let ((name (plist-get tc :name))
+          (args (plist-get tc :args)))
+      (when (member name my/gptel--inspection-tools)
+        (or (plist-get args :file_path)
+            (plist-get args :path))))))
+
+(defun my/gptel--abort-sanitized-turn (fsm info error-message)
+  "Abort the live request behind FSM/INFO and stamp ERROR-MESSAGE on the FSM."
+  (let ((updated-info (plist-put (plist-put info :error error-message)
+                                 :stop-reason 'STOP)))
+    (setf (gptel-fsm-info fsm) updated-info)
+    (when-let* ((buffer (plist-get updated-info :buffer)))
+      (when (buffer-live-p buffer)
+        (with-current-buffer buffer
+          (cond
+           ((fboundp 'my/gptel-abort-here)
+            (ignore-errors (my/gptel-abort-here)))
+           ((fboundp 'gptel-abort)
+            (ignore-errors (gptel-abort buffer)))))))
+    updated-info))
 
 (cl-defun my/gptel--detect-doom-loop (fsm)
   "Abort FSM when the same tool call repeats `my/gptel-doom-loop-threshold' times.
@@ -175,17 +214,65 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                          (1+ (or (get 'doom-loop :current-run) 0))
                        1)))
                  (put 'doom-loop :current-run current-run)
-                 (when (>= current-run n)
-                   (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
-                            (car (split-string fp ":" t)) current-run)
-                   (funcall (plist-get info :callback)
-                            (format "gptel: doom-loop aborted — tool \"%s\" called %d consecutive times \
+                  (when (>= current-run n)
+                    (let ((error-message
+                           (format "gptel: doom-loop aborted — tool \"%s\" called %d consecutive times \
  with identical arguments.  Try a different approach or break the task into smaller steps."
-                                    (car (split-string fp ":" t)) current-run)
-                            info)
-                   (gptel--fsm-transition fsm 'DONE)
-                   (cl-return-from my/gptel--detect-doom-loop))
-                 (setq prev-fp fp)))))))))
+                                   (car (split-string fp ":" t)) current-run)))
+                      (message "gptel: doom-loop detected — \"%s\" called %d times with identical args, aborting turn"
+                               (car (split-string fp ":" t)) current-run)
+                      (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
+                      (funcall (plist-get info :callback) error-message info))
+                    (setq info (gptel-fsm-info fsm))
+                    (gptel--fsm-transition fsm 'DONE)
+                    (cl-return-from my/gptel--detect-doom-loop))
+                  (setq prev-fp fp)))))))))
+
+(cl-defun my/gptel--detect-inspection-thrash (fsm)
+  "Abort FSM when it stays in same-file read-only inspection for too long.
+
+Unlike `my/gptel--detect-doom-loop', this catches varied `Code_Inspect',
+`Read', or `Grep' calls that keep walking the same file without ever switching
+to a write-capable tool."
+  (cl-block my/gptel--detect-inspection-thrash
+    (when-let* ((info (and (fboundp 'gptel-fsm-info) (gptel-fsm-info fsm)))
+                (tool-use (plist-get info :tool-use)))
+      (let* ((state (plist-get info :inspection-thrash-state))
+             (current-file (plist-get state :file))
+             (current-run (or (plist-get state :count) 0))
+             (threshold my/gptel-inspection-thrash-threshold))
+        (dolist (tc tool-use)
+          (let* ((name (plist-get tc :name))
+                 (file (my/gptel--inspection-tool-target tc)))
+            (cond
+             ((member name my/gptel--write-tools)
+              (setq current-file nil
+                    current-run 0))
+             (file
+              (setq current-run (if (equal current-file file)
+                                    (1+ current-run)
+                                  1)
+                    current-file file)
+              (when (>= current-run threshold)
+                (let ((abbrev-file (abbreviate-file-name file)))
+                  (let ((error-message
+                         (format "gptel: inspection-thrash aborted — %d consecutive read-only inspections on %s without a write-capable tool. Try editing sooner or narrow the task."
+                                 current-run abbrev-file)))
+                    (message "gptel: inspection-thrash detected — %d read-only inspections on %s without a write, aborting turn"
+                             current-run abbrev-file)
+                    (setq info (my/gptel--abort-sanitized-turn fsm info error-message))
+                    (funcall (plist-get info :callback) error-message info))
+                  (gptel--fsm-transition fsm 'DONE)
+                  (cl-return-from my/gptel--detect-inspection-thrash)))
+              (setf (gptel-fsm-info fsm)
+                    (plist-put info :inspection-thrash-state
+                               (list :file current-file :count current-run))))
+             (t
+             (setq current-file nil
+                   current-run 0)
+              (setf (gptel-fsm-info fsm)
+                    (plist-put info :inspection-thrash-state
+                               (list :file current-file :count current-run)))))))))))
 
 ;; --- Duplicate Tool Name Guard ---
 ;; gptel--parse-tools maps gptel-tools directly to JSON without deduplication.
@@ -213,6 +300,7 @@ Uses last-wins so the most recently registered struct takes precedence."
   ;; Tool-call guards
   (advice-add 'gptel--handle-tool-use :before #'my/gptel--sanitize-tool-calls)
   (advice-add 'gptel--handle-tool-use :before #'my/gptel--detect-doom-loop)
+  (advice-add 'gptel--handle-tool-use :before #'my/gptel--detect-inspection-thrash)
   ;; Dedup tools before serialization
   (advice-add 'gptel--parse-tools     :around #'my/gptel--dedup-tools-before-parse))
 
