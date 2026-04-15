@@ -304,17 +304,22 @@ Matches if the alist key is a prefix of SEARCH-STR.
 When multiple entries match, returns the one with the longest key for most specific match."
   (when (and (listp alist) (stringp search-str))
     (let ((search-lower (downcase search-str))
+          (sentinel (make-symbol "alist-partial-match-sentinel"))
           best-match
           (best-key-len 0))
+      (setq best-match sentinel)
       (dolist (entry alist)
         (when (and (consp entry)
                    (stringp (car entry))
                    (string-prefix-p (downcase (car entry)) search-lower))
-          (let ((key-len (length (car entry))))
+          (let ((key-len (length (car entry)))
+                (entry-match (cdr entry)))
             (when (>= key-len best-key-len)
               (setq best-key-len key-len)
-              (setq best-match (cdr entry))))))
-      best-match)))
+              (when entry-match
+                (setq best-match entry-match))))))
+      (unless (eq best-match sentinel)
+        best-match))))
 
 (defun my/gptel--plist-get (plist key &optional default)
   "Get value from PLIST for KEY, returning DEFAULT if not found.
