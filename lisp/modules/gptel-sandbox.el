@@ -633,7 +633,10 @@ CALLBACK receives final outcome plist."
        (if (plist-get outcome :done)
            (funcall callback (gptel-sandbox--truncate-result
                               (plist-get outcome :result)))
-         (gptel-sandbox--run-forms (cdr forms) env state callback))))))
+         (let ((rest (cdr forms)))
+           (if (null rest)
+               (funcall callback (gptel-sandbox--truncate-result nil))
+             (gptel-sandbox--run-forms rest env state callback))))))))
 
 ;;; Public API
 
