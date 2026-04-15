@@ -57,13 +57,11 @@ receives an error message to prevent callers from hanging."
             (error "regex is empty"))
           (unless (and (stringp path) (file-readable-p path))
             (error "File or directory %s is not readable" path))
-          (let* ((grepper (or (executable-find "rg") (executable-find "grep")))
-                 (_ (unless grepper (error "ripgrep/grep not available")))
-                 (cmd (file-name-sans-extension (file-name-nondirectory grepper)))
-                 (raw-context-lines
-                  (gptel-tools-grep--normalize-context-lines context-lines))
-                 (context-lines (if (natnump raw-context-lines) raw-context-lines 0))
-                 (expanded-path (expand-file-name (substitute-in-file-name path)))
+           (let* ((grepper (or (executable-find "rg") (executable-find "grep")))
+                  (_ (unless grepper (error "ripgrep/grep not available")))
+                  (cmd (file-name-sans-extension (file-name-nondirectory grepper)))
+                  (context-lines (if (natnump context-lines) context-lines 0))
+                  (expanded-path (expand-file-name (substitute-in-file-name path)))
                  (args
                   (cond
                    ((string= "rg" cmd)

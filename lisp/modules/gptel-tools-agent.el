@@ -1707,16 +1707,16 @@ same routed experiment buffer from re-entering a later retry."
      my/gptel--agent-task-state)
     (dolist (task-id overlap-ids)
       (remhash task-id my/gptel--agent-task-state))
-    (dolist (request-buf (delete-dups request-buffers))
-      (when (and (buffer-live-p request-buf)
-                 (fboundp 'gptel-abort))
-        (condition-case err
-            (gptel-abort request-buf)
-          (error
-           (message "[nucleus] Failed to abort overlapping subagent buffer %s: %s"
-                    (buffer-name request-buf)
-                    (my/gptel--sanitize-for-logging
-                     (error-message-string err) 160))))))
+     (dolist (request-buf (delete-dups request-buffers))
+       (when (and (buffer-live-p request-buf)
+                  (fboundp 'gptel-abort))
+          (condition-case err
+              (gptel-abort request-buf)
+            (error
+             (message "[nucleus] Failed to abort overlapping subagent buffer %s: %s"
+                      (buffer-name request-buf)
+                      (my/gptel--sanitize-for-logging
+                       (error-message-string err) 160))))))
     (length overlap-ids)))
 
 (defun my/gptel--call-gptel-agent-task (callback agent-type description prompt)
