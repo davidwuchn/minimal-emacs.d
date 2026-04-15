@@ -259,6 +259,19 @@ Returns error message string on failure, nil on success."
         (tool (test-gptel-tool-create :name "Programmatic" :confirm nil)))
     (should (stringp (test-sandbox--check-tool tool '("code"))))))
 
+(ert-deftest sandbox/run-forms/requires-final-result ()
+  "Programmatic execution should fail when forms finish without a final result."
+  (require 'gptel-sandbox)
+  (let (actual)
+    (gptel-sandbox--run-forms
+     '((setq x 42))
+     (gptel-sandbox--make-env)
+     (list :tool-count 0)
+     (lambda (result)
+       (setq actual result)))
+    (should (equal "Error: Programmatic execution finished without calling result"
+                   actual))))
+
 ;;; Footer
 
 (provide 'test-gptel-sandbox)
