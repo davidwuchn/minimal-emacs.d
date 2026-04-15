@@ -1775,9 +1775,9 @@ delete the request or file buffer that happened to be current when the
 subagent callback fired."
   (let ((return-buffer (current-buffer))
         (safe-buffer (get-buffer-create " *gptel-callback*")))
-    (set-buffer safe-buffer)
     (unwind-protect
-        (funcall callback result)
+        (with-current-buffer safe-buffer
+          (funcall callback result))
       (when (buffer-live-p return-buffer)
         (set-buffer return-buffer)))))
 
