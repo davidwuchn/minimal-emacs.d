@@ -58,10 +58,11 @@ ARGS are passed to `gptel-make-openai'."
                 ("User-Agent"    . "KimiCLI/1.3")))
     :stream t
     :curl-args '("--http1.1" "--max-time" "900" "--connect-timeout" "30")
-    :models '((kimi-k2.5
-               :request-params (:reasoning (:effort "high")
-                                           :thinking  (:type "enabled")))
-              kimi-for-coding)))
+    :models '((kimi-k2.6-code-preview)
+               (kimi-k2.5
+                :request-params (:reasoning (:effort "high")
+                                            :thinking  (:type "enabled")))
+               kimi-for-coding)))
 
 (defvar gptel--deepseek
   (gptel-make-openai "DeepSeek"

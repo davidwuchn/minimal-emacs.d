@@ -5847,6 +5847,7 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
 
 (defcustom gptel-auto-workflow-headless-subagent-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
@@ -5871,6 +5872,7 @@ DashScope and others when rate-limited or unavailable."
 
 (defcustom gptel-auto-workflow-executor-rate-limit-fallbacks
   '(("MiniMax" . "minimax-m2.7-highspeed")
+    ("moonshot" . "kimi-k2.6-code-preview")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-chat")
     ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
