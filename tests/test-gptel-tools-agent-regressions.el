@@ -1517,6 +1517,23 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
        (should-not (string-match-p "COMMIT your changes: git add -A && git commit" prompt))
        (should (string-match-p "NEVER reply with only \"Done\"" prompt)))))
 
+(ert-deftest regression/auto-experiment/build-prompt-adds-inspection-thrash-recovery-guidance ()
+  "Prompt should harden executor behavior after an inspection-thrash failure."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+             (lambda (_target) "/tmp/worktree"))
+            ((symbol-function 'shell-command-to-string)
+             (lambda (_cmd) "abc123 recent history"))
+            ((symbol-function 'gptel-auto-experiment--eight-keys-scores)
+             (lambda () nil)))
+    (let* ((previous-results
+            (list (list :agent-output
+                        "gptel: inspection-thrash aborted — 25 consecutive read-only inspections")) )
+           (prompt (gptel-auto-experiment-build-prompt
+                    "lisp/modules/gptel-tools-agent.el" 2 5 nil 0.4 previous-results)))
+      (should (string-match-p "Inspection-Thrash Recovery" prompt))
+      (should (string-match-p "After at most 3 focused reads" prompt))
+      (should (string-match-p "Do not map the whole file" prompt)))))
+
 (ert-deftest regression/auto-experiment/retry-prompt-preserves-focused-contract ()
   "Validation retries should keep the original focused experiment contract."
   (let* ((original-prompt (concat "ORIGINAL EXPERIMENT\n"

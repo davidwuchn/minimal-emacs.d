@@ -5716,7 +5716,23 @@ correctness fix."
 
 ;;; Prompt Building
 
-(defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline)
+(defun gptel-auto-experiment--inspection-thrash-result-p (result)
+  "Return non-nil when RESULT records an inspection-thrash failure."
+  (cl-some
+   (lambda (text)
+     (and (stringp text)
+          (string-match-p "inspection-thrash aborted" text)))
+   (list (plist-get result :error)
+         (plist-get result :agent-output)
+         (plist-get result :grader-reason)
+         (plist-get result :comparator-reason))))
+
+(defun gptel-auto-experiment--needs-inspection-thrash-recovery-p (previous-results)
+  "Return non-nil when PREVIOUS-RESULTS include inspection-thrash failures."
+  (cl-some #'gptel-auto-experiment--inspection-thrash-result-p previous-results))
+
+(defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline
+                                                  &optional previous-results)
   "Build prompt for experiment EXPERIMENT-ID on TARGET.
 Uses loaded skills and Eight Keys breakdown for focused improvements."
   (let* ((worktree-path (or (gptel-auto-workflow--get-worktree-dir target)
@@ -5733,6 +5749,13 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
          (weakest-keys (when scores (gptel-auto-workflow--format-weakest-keys scores)))
          (mutation-templates (when skills (gptel-auto-workflow--extract-mutation-templates skills)))
          (suggested-hypothesis (when skills (gptel-auto-workflow-skill-suggest-hypothesis skills)))
+         (inspection-thrash-recovery
+          (when (gptel-auto-experiment--needs-inspection-thrash-recovery-p previous-results)
+            (concat "## Inspection-Thrash Recovery\n"
+                    "A previous attempt on this target was aborted for repeated same-file read-only inspection.\n"
+                    "- Pick one concrete function or variable before you keep reading.\n"
+                    "- After at most 3 focused reads, use a write-capable tool on that same concrete location.\n"
+                    "- Do not map the whole file or survey multiple subsystems in this turn.\n\n")))
          (target-full-path (expand-file-name target worktree-path)))
     (format "You are running experiment %d of %d to optimize %s.
 
@@ -5746,6 +5769,8 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
 %s
 
 ## Suggestions
+%s
+
 %s
 
 ## Git History (recent commits)
@@ -5812,6 +5837,7 @@ Example HYPOTHESES:
             target-full-path
             (or patterns "No previous experiments")
             (or suggestions "None")
+            (or inspection-thrash-recovery "")
             git-history
             (or baseline 0.5)
             (if weakest-keys
@@ -6656,7 +6682,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
             (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
               (let* ((patterns (when analysis (plist-get analysis :patterns)))
                      (prompt (gptel-auto-experiment-build-prompt
-                              target experiment-id max-experiments analysis baseline)))
+                              target experiment-id max-experiments analysis baseline previous-results)))
                 (setq executor-prompt prompt)
                 ;; Routing handled by gptel-auto-workflow--advice-task-override
                 (my/gptel--run-agent-tool-with-timeout
