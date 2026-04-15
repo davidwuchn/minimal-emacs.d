@@ -876,19 +876,33 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   (let ((decision
          (gptel-auto-experiment--promote-correctness-fix-decision
            '(:keep nil
-             :reasoning "Winner: tie"
-             :improvement (:score 0.0 :quality 0.01 :combined 0.004))
+              :reasoning "Winner: tie"
+              :improvement (:score 0.0 :quality 0.01 :combined 0.004))
            t 8 9
            "Improves clarity and testability without changing behavior.")))
     (should-not (plist-get decision :keep))))
+
+(ert-deftest regression/auto-experiment/does-not-promote-perfect-grade-non-correctness-ties ()
+  "Perfect grades should not override the score-tie gate without a correctness fix."
+  (let ((decision
+         (gptel-auto-experiment--promote-correctness-fix-decision
+          '(:keep nil
+            :reasoning "Winner: A | Rejected: score tie without >= 0.10 quality gain"
+            :improvement (:score 0.0 :quality 0.09 :combined 0.03))
+          t 8 8
+          "Improves clarity and self-documentation without changing behavior.")))
+    (should-not (plist-get decision :keep))
+    (should (string-match-p
+             "Rejected: score tie without >= 0.10 quality gain"
+             (plist-get decision :reasoning)))))
 
 (ert-deftest regression/auto-experiment/does-not-promote-flat-perfect-grade-ties ()
   "Exact ties should stay discarded even with a perfect grade."
   (let ((decision
          (gptel-auto-experiment--promote-correctness-fix-decision
            '(:keep nil
-             :reasoning "Winner: tie"
-             :improvement (:score 0.0 :quality 0.0 :combined 0.0))
+              :reasoning "Winner: tie"
+              :improvement (:score 0.0 :quality 0.0 :combined 0.0))
            t 9 9
            "Improves clarity and testability without changing behavior.")))
     (should-not (plist-get decision :keep))))

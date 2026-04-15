@@ -5542,8 +5542,8 @@ GRADE-TOTAL can be nil when the grader omits an explicit denominator."
     (decision tests-passed grade-score grade-total grade-details)
   "Return DECISION or a promoted keep decision for high-confidence ties.
 Promotion is allowed only for non-regressing ties with passing tests, some
-positive quality/combined improvement, and either a perfect grader result or
-strong grader evidence of a real correctness fix."
+positive quality/combined improvement, and strong grader evidence of a real
+correctness fix."
   (let* ((improvement (and (listp decision) (plist-get decision :improvement)))
          (decision-threshold 0.005)
          (score-delta (if (listp improvement)
@@ -5556,6 +5556,9 @@ strong grader evidence of a real correctness fix."
                              (or (plist-get improvement :combined) 0)
                            0))
          (reasoning (and (listp decision) (plist-get decision :reasoning)))
+         (correctness-fix-p
+          (gptel-auto-experiment--grader-indicates-correctness-fix-p
+           grade-details))
          (override-note
           "Override: keep non-regressing high-confidence tie with passing tests"))
     (if (or (not (listp decision))
@@ -5564,12 +5567,9 @@ strong grader evidence of a real correctness fix."
             (<= score-delta (- decision-threshold))
             (<= quality-delta 0)
             (<= combined-delta 0)
-            (not (or (gptel-auto-experiment--perfect-grade-pass-p
-                      grade-score grade-total)
-                     (and (gptel-auto-experiment--strong-grade-pass-p
-                           grade-score grade-total)
-                          (gptel-auto-experiment--grader-indicates-correctness-fix-p
-                           grade-details)))))
+            (not correctness-fix-p)
+            (not (gptel-auto-experiment--strong-grade-pass-p
+                  grade-score grade-total)))
         decision
       (let ((promoted (copy-sequence decision)))
         (setq promoted (plist-put promoted :keep t))
