@@ -5721,12 +5721,106 @@ correctness fix."
 (defconst gptel-auto-experiment-large-target-byte-threshold 60000
   "Byte size above which experiment prompts enable the focus contract.")
 
+(defconst gptel-auto-experiment-large-target-focus-token-weights
+  '(("callback" . 6.0)
+    ("timer" . 5.0)
+    ("safe" . 5.0)
+    ("validate" . 4.0)
+    ("check" . 4.0)
+    ("status" . 4.0)
+    ("build" . 3.0)
+    ("prompt" . 3.0)
+    ("state" . 3.0)
+    ("retry" . 3.0)
+    ("sync" . 2.0)
+    ("select" . 2.0)
+    ("focus" . 2.0)
+    ("buffer" . 2.0)
+    ("worktree" . 1.0)
+    ("stage" . 1.0))
+  "Name-token weights for controller-selected large-target focus symbols.")
+
+(defconst gptel-auto-experiment-large-target-focus-max-candidates 8
+  "Maximum ranked large-target focus candidates to rotate across experiments.")
+
 (defun gptel-auto-experiment--target-byte-size (target-full-path)
   "Return the byte size for TARGET-FULL-PATH, or nil when unavailable."
   (let ((attrs (and (stringp target-full-path)
                     (ignore-errors (file-attributes target-full-path)))))
     (when attrs
       (file-attribute-size attrs))))
+
+(defun gptel-auto-experiment--collect-top-level-definitions (target-full-path)
+  "Return top-level definitions from TARGET-FULL-PATH as plists."
+  (when (and (stringp target-full-path)
+             (file-readable-p target-full-path))
+    (with-temp-buffer
+      (insert-file-contents target-full-path)
+      (let ((definition-rx
+             "^(\\(\\(?:cl-defun\\|defun\\|defsubst\\|defmacro\\|cl-defmethod\\|defvar\\|defconst\\|defcustom\\)\\)\\s-+\\([^()\n\t ]+\\)")
+            definitions
+            total-lines)
+        (goto-char (point-min))
+        (while (re-search-forward definition-rx nil t)
+          (push (list :kind (match-string 1)
+                      :name (match-string 2)
+                      :start-line (line-number-at-pos (match-beginning 0)))
+                definitions))
+        (setq definitions (nreverse definitions)
+              total-lines (line-number-at-pos (point-max)))
+        (cl-loop for current in definitions
+                 for next = (cadr (memq current definitions))
+                 collect
+                 (let* ((start-line (plist-get current :start-line))
+                        (end-line (if next
+                                      (1- (plist-get next :start-line))
+                                    total-lines))
+                        (size-lines (1+ (- end-line start-line)))
+                        (candidate (copy-sequence current)))
+                   (setq candidate (plist-put candidate :end-line end-line))
+                   (plist-put candidate :size-lines size-lines)))))))
+
+(defun gptel-auto-experiment--large-target-focus-score (candidate)
+  "Return a deterministic focus score for large-target CANDIDATE."
+  (let* ((name (downcase (or (plist-get candidate :name) "")))
+         (size (or (plist-get candidate :size-lines) 0))
+         (score 0.0))
+    (dolist (entry gptel-auto-experiment-large-target-focus-token-weights)
+      (when (string-match-p (car entry) name)
+        (setq score (+ score (cdr entry)))))
+    (setq score (+ score (max 0.0 (- 8.0 (/ (abs (- size 24)) 4.0)))))
+    (when (string-prefix-p "my/" name)
+      (setq score (+ score 1.5)))
+    (when (string-match-p "--" name)
+      (setq score (+ score 0.5)))
+    score))
+
+(defun gptel-auto-experiment--select-large-target-focus (target-full-path experiment-id)
+  "Return a controller-selected focus candidate for TARGET-FULL-PATH.
+Rotates across the top-ranked candidates using EXPERIMENT-ID."
+  (let* ((candidates
+          (cl-loop for candidate in (gptel-auto-experiment--collect-top-level-definitions
+                                     target-full-path)
+                   when (and (member (plist-get candidate :kind)
+                                     '("defun" "cl-defun" "defsubst"))
+                             (<= 8 (or (plist-get candidate :size-lines) 0) 120))
+                   collect (plist-put (copy-sequence candidate)
+                                      :score
+                                      (gptel-auto-experiment--large-target-focus-score
+                                       candidate))))
+         (ranked (sort candidates
+                       (lambda (a b)
+                         (let ((score-a (or (plist-get a :score) 0.0))
+                               (score-b (or (plist-get b :score) 0.0)))
+                           (if (= score-a score-b)
+                               (< (or (plist-get a :start-line) most-positive-fixnum)
+                                  (or (plist-get b :start-line) most-positive-fixnum))
+                             (> score-a score-b))))))
+         (shortlist (seq-take ranked gptel-auto-experiment-large-target-focus-max-candidates)))
+    (when shortlist
+      (nth (mod (max 0 (1- (or experiment-id 1)))
+                (length shortlist))
+           shortlist))))
 
 (defun gptel-auto-experiment--inspection-thrash-result-p (result)
   "Return non-nil when RESULT records an inspection-thrash failure."
@@ -5768,6 +5862,21 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
          (large-target-p
           (and (numberp target-bytes)
                (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
+         (focus-candidate
+          (when large-target-p
+            (gptel-auto-experiment--select-large-target-focus target-full-path experiment-id)))
+         (focus-line
+          (format "FOCUS: %s"
+                  (or (plist-get focus-candidate :name)
+                      "<one concrete function or variable>")))
+         (controller-focus
+          (when focus-candidate
+            (format "## Controller-Selected Starting Symbol\n- Symbol: `%s`\n- Kind: %s\n- Approx lines: %d-%d (%d lines)\n- Reason: controller-selected small or medium helper in a very large file; start here or at a direct caller/callee.\n\n"
+                    (plist-get focus-candidate :name)
+                    (plist-get focus-candidate :kind)
+                    (plist-get focus-candidate :start-line)
+                    (plist-get focus-candidate :end-line)
+                    (plist-get focus-candidate :size-lines))))
          (inspection-thrash-contract
           (when (or recovery-p large-target-p)
             (concat "## Mandatory Focus Contract\n"
@@ -5777,7 +5886,8 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
                     (when recovery-p
                       "A previous attempt on this target already failed with inspection-thrash.\n")
                     "Follow this exact opening sequence:\n"
-                    "1. The second line after HYPOTHESIS must be `FOCUS: <one concrete function or variable>`.\n"
+                    (format "1. The second line after HYPOTHESIS must be exactly `%s`.\n"
+                            focus-line)
                     "2. Do NOT use Code_Map on the whole file.\n"
                     "3. Use at most 3 read-only tool calls, all on that same symbol or its direct callers/callees.\n"
                     "4. Your next tool call after those reads must be a write-capable tool on that same symbol.\n"
@@ -5788,6 +5898,8 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
 %s
 
 ## Target File (full path)
+%s
+
 %s
 
 %s
@@ -5831,8 +5943,8 @@ Make minimal, targeted changes to CODE, not documentation.
 
 ## Instructions
 1. FIRST LINE must be: HYPOTHESIS: [What CODE change and why]
-2. If a Mandatory Focus Contract is present, obey it exactly and include `FOCUS: <symbol>` on line 2
-3. Start with focused Grep or narrow Read on the chosen symbol; only use Code_Map when no Mandatory Focus Contract is present
+2. If a Controller-Selected Starting Symbol is present, line 2 must be exactly `%s`
+3. If a Mandatory Focus Contract is present, obey it exactly; start with focused Grep or narrow Read on that symbol and only switch to a direct caller/callee after at most 2 reads
 4. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
 5. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
 6. Implement the CODE change minimally using Edit tool
@@ -5861,6 +5973,7 @@ Example HYPOTHESES:
             experiment-id max-experiments target
             worktree-path
             target-full-path
+            (or controller-focus "")
             (or inspection-thrash-contract "")
             (or patterns "No previous experiments")
             (or suggestions "None")
@@ -5877,7 +5990,8 @@ Example HYPOTHESES:
                         (mapconcat (lambda (tmpl) (format "- %s" tmpl)) mutation-templates "\n"))
               "")
             target
-            (/ gptel-auto-experiment-time-budget 60))))
+            (/ gptel-auto-experiment-time-budget 60)
+            focus-line)))
 
 ;;; TSV Logging (Explainable)
 

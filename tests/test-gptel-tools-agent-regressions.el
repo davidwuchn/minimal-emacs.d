@@ -1545,13 +1545,44 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
              (lambda () nil))
             ((symbol-function 'gptel-auto-experiment--target-byte-size)
              (lambda (_path)
-               (+ gptel-auto-experiment-large-target-byte-threshold 1))))
+               (+ gptel-auto-experiment-large-target-byte-threshold 1)))
+            ((symbol-function 'gptel-auto-experiment--select-large-target-focus)
+             (lambda (_path _experiment-id)
+               (list :name "my/gptel--invoke-callback-safely"
+                     :kind "defun"
+                     :start-line 1772
+                     :end-line 1781
+                     :size-lines 10
+                     :score 15.5))))
     (let ((prompt (gptel-auto-experiment-build-prompt
                    "lisp/modules/gptel-tools-agent.el" 1 5 nil 0.4)))
+      (should (string-match-p "Controller-Selected Starting Symbol" prompt))
+      (should (string-match-p "Symbol: `my/gptel--invoke-callback-safely`" prompt))
       (should (string-match-p "Mandatory Focus Contract" prompt))
       (should (string-match-p "This target is large" prompt))
-      (should (string-match-p "FOCUS: <one concrete function or variable>" prompt))
-      (should (string-match-p "If a Mandatory Focus Contract is present, obey it exactly" prompt)))))
+      (should (string-match-p "FOCUS: my/gptel--invoke-callback-safely" prompt))
+      (should (string-match-p "line 2 must be exactly `FOCUS: my/gptel--invoke-callback-safely`" prompt)))))
+
+(ert-deftest regression/auto-experiment/select-large-target-focus-ranks-and-rotates ()
+  "Large-target focus selector should rank helpers and rotate by experiment."
+  (let ((file (make-temp-file "aw-focus" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun my/demo-callback-helper ()\n")
+            (dotimes (_ 8)
+              (insert "  (message \"callback\")\n"))
+            (insert "  :done)\n\n")
+            (insert "(defun my/demo-validate-state ()\n")
+            (dotimes (_ 10)
+              (insert "  (message \"validate\")\n"))
+            (insert "  :done)\n"))
+          (let ((first (gptel-auto-experiment--select-large-target-focus file 1))
+                (second (gptel-auto-experiment--select-large-target-focus file 2)))
+            (should (equal (plist-get first :name) "my/demo-validate-state"))
+            (should (equal (plist-get second :name) "my/demo-callback-helper"))
+            (should (> (plist-get first :score) (plist-get second :score)))))
+      (delete-file file))))
 
 (ert-deftest regression/auto-experiment/retry-prompt-preserves-focused-contract ()
   "Validation retries should keep the original focused experiment contract."
