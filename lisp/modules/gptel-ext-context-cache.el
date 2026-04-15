@@ -13,7 +13,6 @@
 (require 'subr-x)
 (require 'seq)
 (require 'json)
-(require 'gptel)
 
 ;;; Customization
 
@@ -485,6 +484,7 @@ CONNECT-TIMEOUT and MAX-TIME default to 10 and 120 seconds.
 
 Handles API key lookup, process creation, JSON parsing, and error handling.
 Returns nil if curl is unavailable or a fetch is already in flight."
+  (require 'gptel)
   (let ((process-name (or process-name "gptel-openrouter-fetch"))
         (connect-timeout (or connect-timeout 10))
         (max-time (or max-time 120)))
@@ -581,6 +581,7 @@ Runs asynchronously; returns nil immediately."
 (defun my/gptel-refresh-context-window-cache ()
   "Refresh (fetch) the current model's context window into the cache."
   (interactive)
+  (require 'gptel)
   (when (boundp 'gptel--openrouter)
     (my/gptel--openrouter-fetch-context-window gptel-model)))
 
@@ -766,6 +767,7 @@ Fallback order:
 
 Note: We do NOT use gptel-max-tokens as it's for response length, not context window.
 Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-window-cache'."
+  (require 'gptel)
   (let ((model-id (my/gptel--model-id-string gptel-model)))
     (cond
      ((not (stringp model-id)) my/gptel-default-context-window)
