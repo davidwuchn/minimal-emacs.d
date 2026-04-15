@@ -320,9 +320,9 @@ Truncates accumulated output to last
   (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
          (limit gptel-agent-loop-continuation-context-limit)
          (len (length output))
-         (truncated (if (and (integerp limit) (cl-plusp limit) (> len limit))
+         (truncated (if (and (integerp limit) (> limit 0) (> len limit))
                         (concat "...[earlier output truncated]\n"
-                                (substring output (- len limit)))
+                                (substring output (- limit)))
                       output)))
     (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
             gptel-agent-loop-continuation-prompt
@@ -725,7 +725,8 @@ Cache behavior:
          (setf (gptel-agent-loop--task-aborted state) t)
          (message "[RunAgent] Task '%s' timed out after %ds"
                   (gptel-agent-loop--task-description state)
-                  gptel-agent-loop-timeout))))))
+                  gptel-agent-loop-timeout)
+         (gptel-agent-loop--deliver-aborted state))))))
 
 (defun gptel-agent-loop-task (main-cb agent-type description prompt)
   "Call a RunAgent task with timeout, retry, and step limits.
