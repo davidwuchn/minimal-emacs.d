@@ -92,7 +92,7 @@ gptel preset.")
         (pos 0)
         (len (length code)))
     (while (< pos len)
-      (if (string-match-p "[[:space:]]" (char-to-string (aref code pos)))
+      (if (eq (char-syntax (aref code pos)) ?\s)
           (setq pos (1+ pos))
         (let* ((parsed (condition-case err
                            (read-from-string code pos)
