@@ -269,7 +269,7 @@ Returns the number of tool definitions removed, or 0 if nothing changed."
                (tool-calls (plist-get msg :tool_calls)))
           (when tool-calls
             (dotimes (j (length tool-calls))
-              (let* ((tc (aref tool-calls j))
+              (let* ((tc (seq-elt tool-calls j))
                      (func (plist-get tc :function))
                      (name (and func (plist-get func :name))))
                 (when name
