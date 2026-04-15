@@ -178,9 +178,10 @@ status_has_live_run_id() {
     [ -r "$STATUS_FILE" ] && grep -Eq ':run-id "[^"]+' "$STATUS_FILE"
 }
 
-status_snapshot_fresh() {
-    [ -r "$STATUS_FILE" ] || return 1
-    python3 - "$STATUS_FILE" "${AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL:-45}" <<'PY'
+snapshot_file_fresh() {
+    local path="$1"
+    [ -r "$path" ] || return 1
+    python3 - "$path" "${AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL:-45}" <<'PY'
 from pathlib import Path
 import sys
 import time
@@ -196,6 +197,14 @@ raise SystemExit(0 if age <= ttl else 1)
 PY
 }
 
+status_snapshot_fresh() {
+    snapshot_file_fresh "$STATUS_FILE"
+}
+
+messages_snapshot_fresh() {
+    snapshot_file_fresh "$MESSAGES_FILE"
+}
+
 daemon_socket_has_owner() {
     python3 - "$SERVER_NAME" <<'PY'
 from pathlib import Path
@@ -206,10 +215,26 @@ import sys
 import tempfile
 
 server_name = sys.argv[1]
-tmpdir = os.environ.get("TMPDIR") or tempfile.gettempdir()
-socket_path = Path(tmpdir) / f"emacs{os.getuid()}" / server_name
 
-if not socket_path.exists():
+def candidate_socket_paths(name):
+    uid = os.getuid()
+    candidates = []
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir:
+        candidates.append(Path(runtime_dir) / "emacs" / name)
+    for base in filter(None, [os.environ.get("TMPDIR"), tempfile.gettempdir(), "/tmp"]):
+        candidates.append(Path(base) / f"emacs{uid}" / name)
+    deduped = []
+    seen = set()
+    for path in candidates:
+        key = str(path)
+        if key not in seen:
+            deduped.append(path)
+            seen.add(key)
+    return deduped
+
+socket_path = next((path for path in candidate_socket_paths(server_name) if path.exists()), None)
+if socket_path is None:
     raise SystemExit(1)
 
 lsof = shutil.which("lsof")
@@ -234,7 +259,7 @@ PY
 status_can_use_persisted_active_snapshot() {
     status_indicates_active_phase &&
         status_has_live_run_id &&
-        { status_snapshot_fresh || daemon_socket_has_owner; }
+        { status_snapshot_fresh || messages_snapshot_fresh || daemon_socket_has_owner; }
 }
 
 rewrite_status_idle() {
@@ -272,8 +297,25 @@ from pathlib import Path
 emacsclient, server_name, elisp, timeout = sys.argv[1], sys.argv[2], sys.argv[3], float(sys.argv[4])
 
 def server_socket_path():
-    tmpdir = os.environ.get("TMPDIR") or tempfile.gettempdir()
-    return Path(tmpdir) / f"emacs{os.getuid()}" / server_name
+    uid = os.getuid()
+    candidates = []
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir:
+        candidates.append(Path(runtime_dir) / "emacs" / server_name)
+    for base in filter(None, [os.environ.get("TMPDIR"), tempfile.gettempdir(), "/tmp"]):
+        candidates.append(Path(base) / f"emacs{uid}" / server_name)
+    deduped = []
+    seen = set()
+    for path in candidates:
+        key = str(path)
+        if key in seen:
+            continue
+        deduped.append(path)
+        seen.add(key)
+    for path in deduped:
+        if path.exists():
+            return path
+    return deduped[0]
 
 def socket_has_owner():
     socket_path = server_socket_path()
