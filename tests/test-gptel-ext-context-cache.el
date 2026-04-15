@@ -19,6 +19,7 @@
 (declare-function my/gptel--context-window "gptel-ext-context-cache")
 (declare-function my/gptel--cache-put-context-window "gptel-ext-context-cache")
 (declare-function my/gptel--cache-load-context-windows "gptel-ext-context-cache")
+(declare-function my/gptel--alist-partial-match "gptel-ext-context-cache")
 
 (defun test--context-cache-setup ()
   "Load module and reset state for each test."
@@ -196,6 +197,15 @@
   (let ((meta (my/gptel-get-model-metadata "qwen3.5-plus-today")))
     (should meta)
     (should (= (plist-get meta :context-window) 1000000))))
+
+(ert-deftest cache/metadata/partial-match-nil-overrides-shorter-prefix ()
+  "A longer partial match with nil should not fall back to a shorter prefix."
+  (test--context-cache-setup)
+  (should-not
+   (my/gptel--alist-partial-match
+    '(("qwen" . (:context-window 1000000))
+      ("qwen3.5-plus" . nil))
+    "qwen3.5-plus-preview")))
 
 (provide 'test-gptel-ext-context-cache)
 
