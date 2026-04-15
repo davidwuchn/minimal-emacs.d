@@ -316,7 +316,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                   ((symbol-function 'gptel-auto-workflow--branch-name)
                    (lambda (&rest _) "optimize/test"))
                   ((symbol-function 'gptel-auto-experiment--call-in-context)
-                   (lambda (_buffer _directory fn)
+                   (lambda (_buffer _directory fn &optional _run-root)
                      (funcall fn)))
                   ((symbol-function 'gptel-auto-experiment-analyze)
                    (lambda (_previous-results callback)
@@ -1326,6 +1326,46 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (when (buffer-live-p worktree-buf)
         (kill-buffer worktree-buf))
       (delete-directory project-root t))))
+
+(ert-deftest regression/auto-experiment/context-honors-explicit-run-root ()
+  "Explicit run roots should survive async callback drift."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-project" t)))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/loop-riven-exp1"
+                                         project-root))
+         (drift-root (file-name-as-directory (make-temp-file "aw-drift" t)))
+         (worktree-buf (get-buffer-create "*aw-context-worktree*"))
+         (drift-buf (get-buffer-create "*aw-context-drift*"))
+         seen)
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer worktree-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir)))
+          (with-current-buffer drift-buf
+            (setq-local default-directory drift-root)
+            (let ((gptel-auto-workflow--run-project-root nil)
+                  (gptel-auto-workflow--current-project drift-root)
+                  (gptel-auto-workflow--project-root-override nil))
+              (gptel-auto-experiment--call-in-context
+               worktree-buf worktree-dir
+               (lambda ()
+                 (setq seen
+                       (list :default-directory default-directory
+                             :current-project gptel-auto-workflow--current-project
+                             :run-project-root gptel-auto-workflow--run-project-root
+                             :project-root-override gptel-auto-workflow--project-root-override)))
+               project-root)))
+          (should (equal (plist-get seen :default-directory)
+                         (file-name-as-directory worktree-dir)))
+          (should (equal (plist-get seen :current-project) project-root))
+          (should (equal (plist-get seen :run-project-root) project-root))
+          (should (equal (plist-get seen :project-root-override) project-root)))
+      (when (buffer-live-p worktree-buf)
+        (kill-buffer worktree-buf))
+      (when (buffer-live-p drift-buf)
+        (kill-buffer drift-buf))
+      (delete-directory project-root t)
+      (delete-directory drift-root t))))
 
 (ert-deftest regression/auto-experiment/run-forwards-executor-runagent-args ()
   "Primary executor dispatch should pass the expected RunAgent args."
@@ -2978,6 +3018,37 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (should-not scheduled-retry)
          (should gptel-auto-experiment--quota-exhausted)
          (should (string-match-p "week allocated quota exceeded" (plist-get final-result :agent-output))))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-does-not-stop-successful-quota-discussion ()
+  "Successful results should not trip the run-wide quota stop just by mentioning quota tokens."
+  (let ((runs 0)
+        (scheduled-retry nil)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-experiment--quota-exhausted nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
+                 (cl-incf runs)
+                 (funcall callback
+                          (list :agent-output
+                                "Executor result for task: x\n\nHYPOTHESIS: Extract a shared quota regex for allocated quota exceeded, insufficient_quota, insufficient balance, billing_hard_limit_reached, and hard limit reached."
+                                :comparator-reason "ok"))))
+              ((symbol-function 'run-with-timer)
+               (lambda (&rest _args)
+                 (setq scheduled-retry t)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 1))
+      (should-not scheduled-retry)
+      (should-not gptel-auto-experiment--quota-exhausted)
+      (should (string-match-p "billing_hard_limit_reached"
+                              (plist-get final-result :agent-output))))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-does-not-retry-aborted-output ()
   "Explicit abort results should finalize immediately instead of retrying."
@@ -10484,6 +10555,11 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
           (let* ((gptel-auto-workflow--running t)
                  (gptel-auto-workflow--cron-job-running nil)
                  (gptel-auto-workflow--watchdog-timer 'fake-watchdog)
+                 (process-environment
+                  (append '("AUTO_WORKFLOW_EMACS_SERVER=test-server"
+                            "AUTO_WORKFLOW_MESSAGES_FILE=/tmp/live-messages.txt"
+                            "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=/tmp/live-snapshots.txt")
+                          process-environment))
                  (result (gptel-auto-experiment-run-tests)))
             (should (car result))
             (should (equal (cdr result) "tests ok"))
@@ -10498,6 +10574,18 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               (should status-file)
               (should (file-name-absolute-p status-file))
               (should (member "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1" captured-env))
+              (should-not
+               (seq-find (lambda (item)
+                           (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" item))
+                         captured-env))
+              (should-not
+               (seq-find (lambda (item)
+                           (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" item))
+                         captured-env))
+              (should-not
+               (seq-find (lambda (item)
+                           (string-prefix-p "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=" item))
+                         captured-env))
               (should-not (equal status-file
                                  (expand-file-name "var/tmp/cron/auto-workflow-status.sexp"
                                                    proj-root)))

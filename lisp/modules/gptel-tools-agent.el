@@ -4930,17 +4930,24 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                (or (and proj-root
                         (not (file-equal-p proj-root worktree)))
                    (gptel-auto-workflow--worktree-needs-submodule-hydration-p worktree))))
-         (default-directory worktree)
-         (isolated-status-file (let ((path (make-temp-file "auto-workflow-status-" nil ".sexp")))
-                                 (delete-file path)
-                                 path))
-         (process-environment
-          (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
-                (cons (format "AUTO_WORKFLOW_STATUS_FILE=%s" isolated-status-file)
-                      process-environment)))
-         (test-script (expand-file-name "scripts/run-tests.sh" worktree))
-         (output-buffer (generate-new-buffer "*test-output*"))
-         result)
+          (default-directory worktree)
+          (isolated-status-file (let ((path (make-temp-file "auto-workflow-status-" nil ".sexp")))
+                                  (delete-file path)
+                                  path))
+          (process-environment
+           (append
+            (list "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
+                  (format "AUTO_WORKFLOW_STATUS_FILE=%s" isolated-status-file))
+            (cl-remove-if
+             (lambda (entry)
+               (or (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" entry)
+                   (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" entry)
+                   (string-prefix-p "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=" entry)
+                   (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" entry)))
+             process-environment)))
+          (test-script (expand-file-name "scripts/run-tests.sh" worktree))
+          (output-buffer (generate-new-buffer "*test-output*"))
+          result)
     (unwind-protect
         (if (not (file-executable-p test-script))
             (progn
@@ -5105,10 +5112,12 @@ Scores based on commit message + code diff (not just stat)."
 
 ;;; Subagent Integrations
 
-(defun gptel-auto-experiment--call-in-context (buffer directory fn)
-  "Call FN in BUFFER with DIRECTORY bound as `default-directory'."
+(defun gptel-auto-experiment--call-in-context (buffer directory fn &optional run-root)
+  "Call FN in BUFFER with DIRECTORY bound as `default-directory'.
+When RUN-ROOT is non-nil, preserve that workflow root for async callbacks that
+resume from buffers outside the original project context."
   (gptel-auto-workflow--call-in-run-context
-   nil fn buffer directory))
+   run-root fn buffer directory))
 
 (defmacro gptel-auto-experiment--with-context (buffer directory &rest body)
   "Run BODY in BUFFER with DIRECTORY bound as `default-directory'."
@@ -5117,6 +5126,15 @@ Scores based on commit message + code diff (not just stat)."
     ,buffer ,directory
     (lambda ()
       ,@body)))
+
+(defmacro gptel-auto-experiment--with-run-context (buffer directory run-root &rest body)
+  "Run BODY in BUFFER with DIRECTORY and RUN-ROOT rebound for workflow callbacks."
+  (declare (indent 3) (debug t))
+  `(gptel-auto-experiment--call-in-context
+    ,buffer ,directory
+    (lambda ()
+      ,@body)
+    ,run-root))
 
 (defun gptel-auto-experiment-analyze (previous-results callback)
   "Analyze patterns from PREVIOUS-RESULTS. Call CALLBACK with analysis.
@@ -6266,21 +6284,22 @@ RETRY-COUNT tracks current retry attempt."
      target experiment-id max-experiments baseline baseline-code-quality previous-results
      (lambda (result)
        (let* ((agent-output (plist-get result :agent-output))
-              (raw-error (or (plist-get result :error)
-                             (and (gptel-auto-experiment--agent-error-p agent-output)
-                                  agent-output)))
-              (retry-delay
-               (gptel-auto-experiment--retry-delay-seconds
-                (or raw-error agent-output)
-                retries))
-              (error-type (plist-get result :comparator-reason))
-              (hard-timeout
-               (gptel-auto-experiment--hard-timeout-p raw-error))
-              (quota-exhausted
-               (or gptel-auto-experiment--quota-exhausted
-                   (gptel-auto-experiment--hard-quota-exhausted-p agent-output)))
-              (api-rate-limit-category
-               (memq error-type '(:api-rate-limit)))
+               (raw-error (or (plist-get result :error)
+                              (and (gptel-auto-experiment--agent-error-p agent-output)
+                                   agent-output)))
+               (quota-source raw-error)
+               (retry-delay
+                (gptel-auto-experiment--retry-delay-seconds
+                 (or raw-error agent-output)
+                 retries))
+               (error-type (plist-get result :comparator-reason))
+               (hard-timeout
+                (gptel-auto-experiment--hard-timeout-p raw-error))
+               (quota-exhausted
+                (or gptel-auto-experiment--quota-exhausted
+                    (gptel-auto-experiment--hard-quota-exhausted-p quota-source)))
+               (api-rate-limit-category
+                (memq error-type '(:api-rate-limit)))
               (timeout-category
                (memq error-type '(:timeout)))
               (retryable-category
@@ -6482,52 +6501,53 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
          ;; Capture the experiment timeout lexically because later analyzer
          ;; callbacks run after this outer let frame exits.
          (experiment-timeout gptel-auto-experiment-time-budget)
-         (run-id gptel-auto-workflow--run-id)
-         ;; The subagent timeout wrapper owns executor timeout/abort behavior.
-         (my/gptel-agent-task-timeout experiment-timeout)
-         (start-time (float-time))
-         (finished nil)
-         (provisional-commit-hash nil)
-         (executor-prompt nil))
+          (run-id gptel-auto-workflow--run-id)
+          (workflow-root (gptel-auto-workflow--resolve-run-root))
+          ;; The subagent timeout wrapper owns executor timeout/abort behavior.
+          (my/gptel-agent-task-timeout experiment-timeout)
+          (start-time (float-time))
+          (finished nil)
+          (provisional-commit-hash nil)
+          (executor-prompt nil))
     (if (not worktree)
         (funcall callback (list :target target :error "Failed to create worktree"))
-      (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
+      (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
         (gptel-auto-experiment-analyze
          previous-results
          (lambda (analysis)
-           (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
-             (let* ((patterns (when analysis (plist-get analysis :patterns)))
-                    (prompt (gptel-auto-experiment-build-prompt
-                             target experiment-id max-experiments analysis baseline)))
-               (setq executor-prompt prompt)
-               ;; Routing handled by gptel-auto-workflow--advice-task-override
-               (my/gptel--run-agent-tool-with-timeout
-                experiment-timeout
-                (lambda (agent-output)
-                  (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
-                    (if (gptel-auto-experiment--stale-run-p run-id)
-                        (unless finished
-                          (setq finished t)
-                          (message "[auto-experiment] Ignoring stale executor callback for %s experiment %d; run %s is no longer active"
-                                   target experiment-id run-id)
+            (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
+              (let* ((patterns (when analysis (plist-get analysis :patterns)))
+                     (prompt (gptel-auto-experiment-build-prompt
+                              target experiment-id max-experiments analysis baseline)))
+                (setq executor-prompt prompt)
+                ;; Routing handled by gptel-auto-workflow--advice-task-override
+                (my/gptel--run-agent-tool-with-timeout
+                 experiment-timeout
+                 (lambda (agent-output)
+                   (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
+                     (if (gptel-auto-experiment--stale-run-p run-id)
+                         (unless finished
+                           (setq finished t)
+                           (message "[auto-experiment] Ignoring stale executor callback for %s experiment %d; run %s is no longer active"
+                                    target experiment-id run-id)
                           (funcall callback
                                    (gptel-auto-experiment--stale-run-result
                                     target experiment-id)))
                       (progn
                         (message "[auto-exp] Agent output (first 150 chars): %s"
                                  (my/gptel--sanitize-for-logging agent-output 150))
-                        (unless finished
-                          (let ((gptel-auto-experiment--grading-target target)
-                                (gptel-auto-experiment--grading-worktree experiment-worktree))
-                            (gptel-auto-experiment-grade
-                             agent-output
-                             (lambda (grade)
-                               (gptel-auto-experiment--with-context experiment-buffer experiment-worktree
-                                 (if (gptel-auto-experiment--stale-run-p run-id)
-                                     (unless finished
-                                       (setq finished t)
-                                       (message "[auto-experiment] Ignoring stale grader callback for %s experiment %d; run %s is no longer active"
-                                                target experiment-id run-id)
+                         (unless finished
+                           (let ((gptel-auto-experiment--grading-target target)
+                                 (gptel-auto-experiment--grading-worktree experiment-worktree))
+                             (gptel-auto-experiment-grade
+                              agent-output
+                              (lambda (grade)
+                                (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
+                                  (if (gptel-auto-experiment--stale-run-p run-id)
+                                      (unless finished
+                                        (setq finished t)
+                                        (message "[auto-experiment] Ignoring stale grader callback for %s experiment %d; run %s is no longer active"
+                                                 target experiment-id run-id)
                                        (funcall callback
                                                 (gptel-auto-experiment--stale-run-result
                                                  target experiment-id)))
