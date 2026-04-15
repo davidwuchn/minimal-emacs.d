@@ -2396,9 +2396,21 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                 (should (equal (plist-get override :model) "minimax-m2.7-highspeed"))
                 (should (equal (plist-get preset :backend) "MiniMax"))
                 (should (equal (plist-get preset :model) "minimax-m2.7-highspeed")))))
-      (if had-dashscope
-          (set 'gptel--dashscope old-dashscope)
-        (makunbound 'gptel--dashscope)))))
+       (if had-dashscope
+           (set 'gptel--dashscope old-dashscope)
+         (makunbound 'gptel--dashscope)))))
+
+(ert-deftest regression/auto-workflow/moonshot-header-accepts-request-info ()
+  "Moonshot failover backend should accept the request info plist."
+  (let ((backends-file
+         (locate-library "gptel-ext-backends")))
+    (load-file backends-file)
+    (cl-letf (((symbol-function 'gptel--get-api-key)
+               (lambda () "token")))
+      (let ((header (gptel-backend-header gptel--moonshot)))
+        (should (equal (funcall header '(:model kimi-k2.6-code-preview))
+                       '(("Authorization" . "Bearer token")
+                         ("User-Agent" . "KimiCLI/1.3"))))))))
 
 (ert-deftest regression/auto-workflow/headless-subagent-provider-override-keeps-minimax-without-fallback ()
   "Headless workflow should keep MiniMax when no fallback credentials exist."
@@ -10396,6 +10408,83 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (setq commands (nreverse commands))
       (should (= (length commands) 1))
       (should (string-match-p "git commit --amend -m" (car commands))))))
+
+(ert-deftest regression/auto-workflow/checked-out-submodule-head-requires-git-marker ()
+  "Unhydrated submodule directories should not resolve via the superproject HEAD."
+  (let ((git-calls nil))
+    (cl-letf (((symbol-function 'file-directory-p)
+               (lambda (path)
+                 (string= path "/tmp/worktree/packages/gptel")))
+              ((symbol-function 'file-exists-p)
+               (lambda (_path) nil))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (&rest _args)
+                 (setq git-calls t)
+                 (cons "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n" 0))))
+      (should-not
+       (gptel-auto-workflow--checked-out-submodule-head
+        "/tmp/worktree/"
+        "packages/gptel"))
+      (should-not git-calls))))
+
+(ert-deftest regression/auto-workflow/restage-top-level-submodule-gitlinks-preserves-gitlinks ()
+  "Restaging should restore top-level submodules as gitlinks."
+  (let ((commands nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--staging-submodule-paths)
+               (lambda (&optional _root)
+                 '("packages/gptel" "packages/gptel-agent")))
+              ((symbol-function 'gptel-auto-workflow--checked-out-submodule-head)
+               (lambda (_root path)
+                 (when (string= path "packages/gptel")
+                   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")))
+              ((symbol-function 'gptel-auto-workflow--staging-submodule-gitlink-revision)
+               (lambda (_root path)
+                 (when (string= path "packages/gptel-agent")
+                   "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (push command commands)
+                 (cons "" 0)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (let ((default-directory "/tmp/worktree/"))
+        (should (gptel-auto-workflow--restage-top-level-submodule-gitlinks)))
+      (setq commands (nreverse commands))
+      (should (= (length commands) 2))
+      (should (cl-some (lambda (command)
+                         (and (string-match-p "packages/gptel" command)
+                              (string-match-p "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" command)))
+                       commands))
+      (should (cl-some (lambda (command)
+                         (and (string-match-p "packages/gptel-agent" command)
+                              (string-match-p "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" command)))
+                       commands)))))
+
+(ert-deftest regression/auto-workflow/create-provisional-commit-uses-gitlink-preserving-stage-helper ()
+  "Provisional commits should stage through the gitlink-preserving helper."
+  (let ((stage-actions nil)
+        (commands nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--stage-worktree-changes)
+               (lambda (action &optional _timeout)
+                 (push action stage-actions)
+                 t))
+              ((symbol-function 'gptel-auto-workflow--git-step-success-p)
+               (lambda (command _action &optional _timeout)
+                 (push command commands)
+                 t))
+              ((symbol-function 'gptel-auto-workflow--current-head-hash)
+               (lambda () "abc123"))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should
+       (equal (gptel-auto-workflow--create-provisional-experiment-commit
+               "target.el"
+               "Improve code quality"
+               300)
+              "abc123"))
+      (should (equal stage-actions '("Stage provisional experiment for target.el")))
+      (should (= (length commands) 1))
+      (should (string-match-p "git commit -m" (car commands))))))
 
 (ert-deftest regression/auto-workflow/drop-provisional-commit-resets-head ()
   "Discarding a provisional commit should reset it away when still at HEAD."

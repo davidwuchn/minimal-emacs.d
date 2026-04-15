@@ -3891,9 +3891,7 @@ PRE-FIX-HEAD is the current HEAD hash before the fixer runs."
     (when success
       (when (gptel-auto-workflow--worktree-dirty-p)
         (setq fix-captured
-              (and (gptel-auto-workflow--git-step-success-p
-                    (format "%s git add -A"
-                            gptel-auto-workflow--skip-submodule-sync-env)
+              (and (gptel-auto-workflow--stage-worktree-changes
                     "Stage review fix"
                     60)
                    (gptel-auto-workflow--commit-step-success-p
@@ -6809,8 +6807,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 			                                                       run-id exp-result log-fn callback)))
 		                                                    (gptel-auto-workflow--assert-main-untouched)
 		                                                    (message "[auto-experiment] ✓ Committing improvement for %s" target)
-		                                                    (if (and (gptel-auto-workflow--git-step-success-p
-			                                                          "git add -A"
+		                                                    (if (and (gptel-auto-workflow--stage-worktree-changes
 			                                                          (format "Stage experiment changes for %s" target)
 			                                                          60)
 			                                                         (gptel-auto-workflow--promote-provisional-commit
@@ -6939,8 +6936,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 									                                                      (gptel-auto-experiment--make-kept-result-callback
 									                                                       run-id exp-result log-fn callback)))
 								                                                    (gptel-auto-workflow--assert-main-untouched)
-								                                                    (if (and (gptel-auto-workflow--git-step-success-p
-									                                                          "git add -A"
+								                                                    (if (and (gptel-auto-workflow--stage-worktree-changes
 									                                                          (format "Stage retry changes for %s" target)
 									                                                          60)
 									                                                         (gptel-auto-workflow--promote-provisional-commit
@@ -7710,14 +7706,72 @@ ACTION is a short description used in the failure message."
     (when (string-match-p "^[a-f0-9]\\{7,40\\}$" hash)
       hash)))
 
+(defun gptel-auto-workflow--checked-out-submodule-head (&optional worktree path)
+  "Return the checked-out HEAD for top-level submodule PATH in WORKTREE, or nil."
+  (let* ((root (or worktree default-directory))
+         (target (and (stringp path) (expand-file-name path root)))
+         (git-marker (and target (expand-file-name ".git" target)))
+         (result (and target
+                      (file-directory-p target)
+                      (file-exists-p git-marker)
+                      (gptel-auto-workflow--git-result
+                       (format "git -C %s rev-parse HEAD"
+                               (shell-quote-argument target))
+                       60)))
+         (hash (and result (string-trim (car result)))))
+    (when (and result
+               (= 0 (cdr result))
+               (string-match-p "^[a-f0-9]\\{40\\}$" hash))
+      hash)))
+
+(defun gptel-auto-workflow--restage-top-level-submodule-gitlinks (&optional worktree)
+  "Restore top-level submodule gitlinks in WORKTREE after `git add -A'.
+Hydrated experiment worktrees materialize submodules as checked-out directories.
+Reassert gitlink index entries so commits do not record those paths as typechanges."
+  (let* ((root (or worktree default-directory))
+         (paths (gptel-auto-workflow--staging-submodule-paths root))
+         failure)
+    (dolist (path paths)
+      (unless failure
+        (let* ((commit (or (gptel-auto-workflow--checked-out-submodule-head root path)
+                           (gptel-auto-workflow--staging-submodule-gitlink-revision root path)))
+               (result (and commit
+                            (gptel-auto-workflow--git-result
+                             (format "git update-index --cacheinfo 160000 %s %s"
+                                     (shell-quote-argument commit)
+                                     (shell-quote-argument path))
+                             60))))
+          (cond
+           ((not commit)
+            (setq failure
+                  (format "Missing gitlink revision for submodule %s" path)))
+           ((/= 0 (cdr result))
+            (setq failure
+                  (format "Failed to restage %s as gitlink: %s"
+                          path
+                          (car result))))))))
+    (if failure
+        (progn
+          (message "[auto-workflow] Failed to preserve submodule gitlinks: %s"
+                   (my/gptel--sanitize-for-logging failure 200))
+          nil)
+      t)))
+
+(defun gptel-auto-workflow--stage-worktree-changes (action &optional timeout)
+  "Stage current worktree changes for ACTION while preserving submodule gitlinks."
+  (and (gptel-auto-workflow--git-step-success-p
+        "git add -A"
+        action
+        timeout)
+       (gptel-auto-workflow--restage-top-level-submodule-gitlinks)))
+
 (defun gptel-auto-workflow--create-provisional-experiment-commit (target hypothesis &optional timeout)
   "Create a provisional WIP commit for TARGET and return its hash.
 Returns nil when the commit could not be created."
   (let ((msg (format "WIP: experiment %s\n\nHYPOTHESIS: %s"
                      target
                      (or hypothesis "Improve code quality"))))
-    (when (and (gptel-auto-workflow--git-step-success-p
-                "git add -A"
+    (when (and (gptel-auto-workflow--stage-worktree-changes
                 (format "Stage provisional experiment for %s" target)
                 60)
                (gptel-auto-workflow--git-step-success-p

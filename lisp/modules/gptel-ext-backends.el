@@ -48,23 +48,25 @@ ARGS are passed to `gptel-make-openai'."
     :curl-args '("--http1.1" "--max-time" "900" "--connect-timeout" "30")
     :models '(qwen3.5-flash qwen3.5-plus qwen3.6-plus qwen3-max-2026-01-23 qwen3-coder-next qwen3-coder-plus kimi-k2.5 glm-5 glm-4.7 MiniMax-M2.5)))
 
-(defvar gptel--moonshot
-  (gptel-make-openai "moonshot"
-    :host "api.kimi.com"
-    :endpoint "/coding/v1/chat/completions"
-    :key (lambda () (my/gptel-api-key "api.kimi.com"))
-    :header (lambda ()
-              `(("Authorization" . ,(concat "Bearer " (gptel--get-api-key)))
-                ("User-Agent"    . "KimiCLI/1.3")))
-    :stream t
-    :curl-args '("--http1.1" "--max-time" "900" "--connect-timeout" "30")
-    :models '((kimi-k2.6-code-preview
-               :request-params (:reasoning (:effort "high")
-                                           :thinking  (:type "enabled")))
-              (kimi-k2.5
-               :request-params (:reasoning (:effort "high")
-                                           :thinking  (:type "enabled")))
-              kimi-for-coding)))
+;; Refresh the backend object on reload so long-lived workflow daemons pick up
+;; contract changes like header callback arity.
+(setq gptel--moonshot
+      (gptel-make-openai "moonshot"
+        :host "api.kimi.com"
+        :endpoint "/coding/v1/chat/completions"
+        :key (lambda () (my/gptel-api-key "api.kimi.com"))
+        :header (lambda (_info)
+                  `(("Authorization" . ,(concat "Bearer " (gptel--get-api-key)))
+                    ("User-Agent"    . "KimiCLI/1.3")))
+        :stream t
+        :curl-args '("--http1.1" "--max-time" "900" "--connect-timeout" "30")
+        :models '((kimi-k2.6-code-preview
+                   :request-params (:reasoning (:effort "high")
+                                               :thinking  (:type "enabled")))
+                  (kimi-k2.5
+                   :request-params (:reasoning (:effort "high")
+                                               :thinking  (:type "enabled")))
+                  kimi-for-coding)))
 
 (defvar gptel--deepseek
   (gptel-make-openai "DeepSeek"
