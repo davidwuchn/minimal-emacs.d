@@ -2044,12 +2044,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (should (= (length results) 1))
         (should gptel-auto-experiment--quota-exhausted))))
 
-(ert-deftest regression/auto-experiment/hard-timeout-stops-further-experiments ()
-  "Hard executor timeouts should stop the current target after one experiment."
+(ert-deftest regression/auto-experiment/hard-timeout-allows-later-experiments ()
+  "Hard executor timeouts should skip retries, not abandon the whole target."
   (dolist (timeout-message
            '("Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s total runtime."
              "Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s."))
     (let ((gptel-auto-experiment-delay-between 0)
+          (gptel-auto-experiment-max-per-target 2)
           (gptel-auto-experiment-no-improvement-threshold 99)
           (runs 0)
           (results nil))
@@ -2061,22 +2062,29 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                  (lambda (target exp-id max-exp baseline baseline-code-quality previous-results callback &optional _retry-count)
                    (cl-incf runs)
                    (funcall callback
-                            (list :target target
-                                  :id exp-id
-                                  :score-after 0
-                                  :kept nil
-                                  :comparator-reason ":timeout"
-                                  :agent-output timeout-message))
-                   (list target max-exp baseline baseline-code-quality previous-results)))
+                            (if (= exp-id 1)
+                                (list :target target
+                                      :id exp-id
+                                      :score-after 0
+                                      :kept nil
+                                      :comparator-reason ":timeout"
+                                      :agent-output timeout-message)
+                              (list :target target
+                                    :id exp-id
+                                    :score-after 0
+                                    :kept nil
+                                    :comparator-reason ":no-change"
+                                    :agent-output "second experiment")))))
                 ((symbol-function 'message)
                  (lambda (&rest _) nil)))
         (gptel-auto-experiment-loop
          "lisp/modules/gptel-tools-agent.el"
          (lambda (loop-results)
            (setq results loop-results)))
-        (should (= runs 1))
-        (should (= (length results) 1))
-        (should (equal (plist-get (car results) :agent-output) timeout-message))))))
+        (should (= runs 2))
+        (should (= (length results) 2))
+        (should (equal (plist-get (car results) :agent-output) timeout-message))
+        (should (equal (plist-get (cadr results) :agent-output) "second experiment"))))))
 
 (ert-deftest regression/auto-experiment/validation-retry-timeout-does-not-stop-further-experiments ()
   "Timed-out validation repairs should discard one experiment, not the whole target."
@@ -8716,10 +8724,62 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (if had-backend
           (setq gptel-backend saved-backend)
         (makunbound 'gptel-backend))
+       (if had-model
+           (setq gptel-model saved-model)
+         (makunbound 'gptel-model))
+       (delete-directory root t))))
+
+(ert-deftest regression/gptel-config/loads-nucleus-tools-before-tool-registration ()
+  "Fresh daemon startup should install nucleus tool advice before tool setup."
+  (defvar gptel--minimax)
+  (defvar gptel-backend)
+  (defvar gptel-model)
+  (let* ((config-file (expand-file-name "lisp/gptel-config.el"
+                                        test-auto-workflow--repo-root))
+         (calls nil)
+         (orig-load-path load-path)
+         (had-minimax (boundp 'gptel--minimax))
+         (saved-minimax (and had-minimax gptel--minimax))
+         (had-backend (boundp 'gptel-backend))
+         (saved-backend (and had-backend gptel-backend))
+         (had-model (boundp 'gptel-model))
+         (saved-model (and had-model gptel-model)))
+    (unwind-protect
+        (progn
+          (setq gptel--minimax 'stub-minimax
+                gptel-backend nil
+                gptel-model nil)
+          (cl-letf (((symbol-function 'require)
+                     (lambda (feature &optional _filename _noerror)
+                       (push feature calls)
+                       t))
+                    ((symbol-function 'gptel-tools-setup)
+                     (lambda ()
+                       (push 'gptel-tools-setup calls)))
+                    ((symbol-function 'gptel-benchmark-daily-setup)
+                     (lambda ()
+                       (push 'gptel-benchmark-daily-setup calls))))
+            (with-temp-buffer
+              (insert-file-contents config-file)
+              (eval-buffer)))
+          (setq calls (nreverse calls))
+          (should (member 'nucleus-tools calls))
+          (should (member 'gptel-tools calls))
+          (should (member 'gptel-tools-setup calls))
+          (should (< (cl-position 'nucleus-tools calls :test #'eq)
+                     (cl-position 'gptel-tools calls :test #'eq)))
+          (should (< (cl-position 'gptel-tools calls :test #'eq)
+                     (cl-position 'gptel-tools-setup calls :test #'eq))))
+      (setq load-path orig-load-path)
+      (if had-minimax
+          (setq gptel--minimax saved-minimax)
+        (makunbound 'gptel--minimax))
+      (if had-backend
+          (setq gptel-backend saved-backend)
+        (makunbound 'gptel-backend))
       (if had-model
           (setq gptel-model saved-model)
-        (makunbound 'gptel-model))
-      (delete-directory root t))))
+        (makunbound 'gptel-model)))))
 
 (ert-deftest regression/auto-workflow/bootstrap-falls-back-to-gptel-elc-after-read-error ()
   "Bootstrap should continue after the fresh-daemon Gptel read error."
