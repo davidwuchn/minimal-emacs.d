@@ -23,6 +23,10 @@
 (require 'gptel-ext-context-cache)
 (require 'gptel-ext-security)
 
+;; Load tool-contract advice before registering any tools so local-only schema
+;; metadata like :normalize never leaks into provider-facing JSON schemas.
+(require 'nucleus-tools)
+
 ;; Load split tool modules (replaces gptel-ext-tools.el)
 (require 'gptel-tools)
 (gptel-tools-setup)
