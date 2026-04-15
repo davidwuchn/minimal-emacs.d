@@ -143,7 +143,7 @@
 (ert-deftest test-nucleus-toolset-counts ()
   "Test expected tool counts per toolset."
   (let ((counts '((:readonly . 18)
-                   (:researcher . 17)
+                  (:researcher . 17)
                    (:nucleus . 28)
                    (:executor . 27)
                     (:explorer . 5)
@@ -152,6 +152,64 @@
     (dolist (entry counts)
       (let ((tools (alist-get (car entry) nucleus-toolsets)))
         (should (= (length tools) (cdr entry)))))))
+
+(ert-deftest test-nucleus-tools-type-validation-error-orders-message-correctly ()
+  "Type validation errors should report expected type before actual value."
+  (let ((err (should-error
+              (nucleus-tools--validation-error "context_lines" :type "40" "an integer")
+              :type 'user-error)))
+    (should (string-match-p "context_lines" (error-message-string err)))
+    (should (string-match-p "an integer" (error-message-string err)))
+    (should (string-match-p "\"40\"" (error-message-string err)))))
+
+(ert-deftest test-nucleus-tools-contract-normalizes-before-validation-and-call ()
+  "Contract validation should normalize args before validating and calling FUNC."
+  (let* ((captured nil)
+         (normalize (lambda (val)
+                      (if (and (stringp val)
+                               (string-match-p "\\`[0-9]+\\'" val))
+                          (min 30 (string-to-number val))
+                        val)))
+         (wrapped
+          (nucleus-tools--validate-contract
+           "Demo"
+           (lambda (count)
+             (setq captured count)
+             count)
+           `((:name "count"
+              :type integer
+              :maximum 30
+              :normalize ,normalize))
+           nil)))
+    (should (= 30 (funcall wrapped "40")))
+    (should (= 30 captured))))
+
+(ert-deftest test-nucleus-tools-advise-make-tool-strips-local-contract-keys ()
+  "Provider-facing tool args should not include local-only contract metadata."
+  (let* ((normalize (lambda (val) val))
+         (captured nil)
+         (result
+          (nucleus-tools--advise-make-tool
+           (lambda (&rest kwargs)
+             (setq captured kwargs)
+             :ok)
+           :name "Demo"
+           :function (lambda (&rest _) nil)
+           :args `((:name "count"
+                    :type integer
+                    :normalize ,normalize))
+           :async nil)))
+    (should (eq result :ok))
+    (should-not (plist-member (car (plist-get captured :args)) :normalize))
+    (should (functionp (plist-get captured :function)))))
+
+(ert-deftest test-nucleus-tools-grep-normalize-context-lines-caps-numeric-strings ()
+  "Grep context lines should accept integer-like strings and cap to 30."
+  (require 'gptel-tools-grep)
+  (should (= 30 (gptel-tools-grep--normalize-context-lines "40")))
+  (should (= 5 (gptel-tools-grep--normalize-context-lines "5")))
+  (should (= 0 (gptel-tools-grep--normalize-context-lines -3)))
+  (should (equal "many" (gptel-tools-grep--normalize-context-lines "many"))))
 
 ;;; Provide
 
