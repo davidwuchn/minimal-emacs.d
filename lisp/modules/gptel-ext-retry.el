@@ -361,8 +361,14 @@ Returns the number of image parts removed, or 0 if nothing was done."
          (removed 0)
          (image-p
           (lambda (part)
-            (and (listp part)
-                 (equal (plist-get part :type) "image_url")))))
+            (and (sequencep part)
+                 (not (stringp part))
+                 (let ((type (if (listp part)
+                                 (plist-get part :type)
+                               (cl-loop for i from 0 below (1- (length part)) by 2
+                                        when (eq (aref part i) :type)
+                                        return (aref part (1+ i))))))
+                   (equal type "image_url"))))))
     (when (and messages (> (length messages) 0))
       (dotimes (i (length messages))
         (let* ((msg (aref messages i))
