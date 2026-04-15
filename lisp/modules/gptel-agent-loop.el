@@ -455,15 +455,16 @@ not planning more work. Uses pre-compiled pattern for performance on hot path."
 Only continues if tools were called AND model seems to be
 planning without action.  Also checks continuation count
 limit for early exit."
-  (let ((cont-count (or (gptel-agent-loop--task-continuation-count state) 0)))
-    (and gptel-agent-loop-force-completion
-         gptel-agent-loop-hard-loop
-         (< cont-count gptel-agent-loop-max-continuations)
-         (not (gptel-agent-loop--seems-complete-p resp))
-         (not (gptel-agent-loop--looks-like-finishing-p resp))
-         (not (gptel-agent-loop--task-max-steps-reached state))
-         (or (gptel-agent-loop--turn-skipped-p resp)
-             (gptel-agent-loop--looks-like-planning-p resp)))))
+  (when state
+    (let ((cont-count (or (gptel-agent-loop--task-continuation-count state) 0)))
+      (and gptel-agent-loop-force-completion
+           gptel-agent-loop-hard-loop
+           (< cont-count gptel-agent-loop-max-continuations)
+           (not (gptel-agent-loop--seems-complete-p resp))
+           (not (gptel-agent-loop--looks-like-finishing-p resp))
+           (not (gptel-agent-loop--task-max-steps-reached state))
+           (or (gptel-agent-loop--turn-skipped-p resp)
+               (gptel-agent-loop--looks-like-planning-p resp))))))
 
 (defun gptel-agent-loop--schedule (delay fn)
   "Run FN after DELAY seconds."
