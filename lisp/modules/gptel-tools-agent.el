@@ -55,8 +55,10 @@ Helper for validation in callback-based functions."
 (defun gptel-auto-workflow--plist-get (plist key &optional default)
   "Get value from PLIST for KEY, returning DEFAULT if not found.
 Reduces duplication of `(or (plist-get ...) default-value)` patterns."
-  (if (plist-member plist key)
-      (plist-get plist key)
+  (if (listp plist)
+      (if (plist-member plist key)
+          (plist-get plist key)
+        default)
     default))
 
 (defun gptel-auto-workflow--state-active-p (state)
