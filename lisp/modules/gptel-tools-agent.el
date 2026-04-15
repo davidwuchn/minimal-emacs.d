@@ -385,7 +385,7 @@ allowed for compatibility with isolated tests."
 (defun gptel-auto-workflow--tracked-commit-pinned-p (commit-hash)
   "Return non-nil when COMMIT-HASH is preserved under an auto-workflow ref."
   (and (gptel-auto-workflow--non-empty-string-p commit-hash)
-       (eq 0 (cdr (gptel-auto-workflow--git-result
+       (= 0 (cdr (gptel-auto-workflow--git-result
                    (format "git show-ref --verify --quiet %s"
                            (shell-quote-argument
                             (gptel-auto-workflow--tracking-ref commit-hash)))
@@ -396,7 +396,7 @@ allowed for compatibility with isolated tests."
 Returns non-nil when the ref exists after the call."
   (and (gptel-auto-workflow--non-empty-string-p commit-hash)
        (gptel-auto-workflow--commit-exists-p commit-hash)
-       (eq 0 (cdr (gptel-auto-workflow--git-result
+       (= 0 (cdr (gptel-auto-workflow--git-result
                    (format "git update-ref %s %s"
                            (shell-quote-argument
                             (gptel-auto-workflow--tracking-ref commit-hash))
@@ -421,7 +421,7 @@ Returns non-nil when the ref exists after the call."
   "Delete COMMIT-HASH's archival ref if it exists."
   (when (and (gptel-auto-workflow--non-empty-string-p commit-hash)
              (gptel-auto-workflow--tracked-commit-pinned-p commit-hash))
-    (eq 0 (cdr (gptel-auto-workflow--git-result
+    (= 0 (cdr (gptel-auto-workflow--git-result
                 (format "git update-ref -d %s"
                         (shell-quote-argument
                          (gptel-auto-workflow--tracking-ref commit-hash)))
@@ -487,7 +487,7 @@ Returns non-nil when at least one entry was removed."
 (defun gptel-auto-workflow--commit-exists-p (commit-hash)
   "Return non-nil when COMMIT-HASH resolves to an existing commit object."
   (and (gptel-auto-workflow--non-empty-string-p commit-hash)
-       (eq 0 (cdr (gptel-auto-workflow--git-result
+       (= 0 (cdr (gptel-auto-workflow--git-result
                    (format "git cat-file -e %s^{commit}"
                            (shell-quote-argument commit-hash))
                    30)))))
@@ -2424,7 +2424,7 @@ BRANCH should be the short local branch name, e.g. optimize/foo-exp1."
         (paths nil)
         (branch-ref (format "refs/heads/%s" branch)))
     (unwind-protect
-        (when (eq 0 (call-process "git" nil buffer nil "worktree" "list" "--porcelain"))
+        (when (= 0 (call-process "git" nil buffer nil "worktree" "list" "--porcelain"))
           (with-current-buffer buffer
             (dolist (entry (split-string (buffer-string) "\n\n+" t))
               (when (string-match-p (format "^branch %s$" (regexp-quote branch-ref))
@@ -2446,7 +2446,7 @@ Each item is a plist with keys :branch and :path."
           (format "\\`optimize/.+-%s\\(?:-r[[:alnum:]]+\\)?-exp[0-9]+\\'"
                   (regexp-quote suffix))))
     (unwind-protect
-        (when (eq 0 (call-process "git" nil buffer nil "worktree" "list" "--porcelain"))
+        (when (= 0 (call-process "git" nil buffer nil "worktree" "list" "--porcelain"))
           (with-current-buffer buffer
             (dolist (entry (split-string (buffer-string) "\n\n+" t))
               (let (path branch)
@@ -3407,7 +3407,7 @@ cherry-pick, not the full branch delta against staging."
                60))
              (commit-hash (string-trim (car rev-result))))
         (cond
-         ((not (eq 0 (cdr rev-result)))
+         ((not (= 0 (cdr rev-result)))
           (format "Error resolving review commit: %s" (car rev-result)))
          ((not (string-match-p "^[a-f0-9]\\{7,40\\}$" commit-hash))
           (format "Error resolving review commit: %s" commit-hash))
@@ -3422,7 +3422,7 @@ cherry-pick, not the full branch delta against staging."
             (cond
              ((string-empty-p diff-output)
               "No changes detected in review commit.")
-             ((not (eq 0 (cdr diff-result)))
+             ((not (= 0 (cdr diff-result)))
               (format "Error generating diff: %s" diff-output))
               (t
                diff-output))))))))))
@@ -4135,7 +4135,7 @@ Uses the staging worktree instead of switching branches in the root repo."
                         180))
                       (cherry-output (car cherry-result)))
                  (cond
-                  ((eq 0 (cdr cherry-result))
+                  ((= 0 (cdr cherry-result))
                    (let ((commit-result
                           (gptel-auto-workflow--git-result
                            (format "%s git commit -m %s"
@@ -4143,7 +4143,7 @@ Uses the staging worktree instead of switching branches in the root repo."
                                    (shell-quote-argument merge-message))
                            commit-timeout)))
                      (cond
-                      ((eq 0 (cdr commit-result))
+                      ((= 0 (cdr commit-result))
                        t)
                       ((gptel-auto-workflow--empty-cherry-pick-state-p (car commit-result) t)
                        (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --skip" 60))
@@ -4174,7 +4174,7 @@ Uses the staging worktree instead of switching branches in the root repo."
                               180))
                             (merge-output (car merge-result)))
                        (cond
-                        ((eq 0 (cdr merge-result)) t)
+                        ((= 0 (cdr merge-result)) t)
                         ((string-match-p "Already up[ -]to[- ]date" merge-output) t)
                         (t
                          (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))
