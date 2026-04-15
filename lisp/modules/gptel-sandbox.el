@@ -288,7 +288,10 @@ supports a small, explicit whitelist of pure operations."
       ('let*
           (gptel-sandbox--eval-let (nth 1 expr) (cddr expr) env t))
       ('not
-       (not (gptel-sandbox--eval-expr (nth 1 expr) env)))
+       (let ((args (cdr expr)))
+         (unless (= (length args) 1)
+           (error "Programmatic not requires exactly one argument, got: %d" (length args)))
+         (not (gptel-sandbox--eval-expr (car args) env))))
       ('mapcar
        (gptel-sandbox--eval-map-like expr env nil))
       ('filter
