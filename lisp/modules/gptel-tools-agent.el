@@ -8085,10 +8085,12 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
 (defun gptel-auto-workflow--start-status-refresh-timer ()
   "Start the workflow status refresh timer."
   (gptel-auto-workflow--stop-status-refresh-timer)
-  (setq gptel-auto-workflow--status-refresh-timer
-        (run-with-timer gptel-auto-workflow-status-refresh-interval
-                        gptel-auto-workflow-status-refresh-interval
-                        #'gptel-auto-workflow--refresh-status-if-running)))
+  (when (and (numberp gptel-auto-workflow-status-refresh-interval)
+             (> gptel-auto-workflow-status-refresh-interval 0))
+    (setq gptel-auto-workflow--status-refresh-timer
+          (run-with-timer gptel-auto-workflow-status-refresh-interval
+                          gptel-auto-workflow-status-refresh-interval
+                          #'gptel-auto-workflow--refresh-status-if-running))))
 
 (defun gptel-auto-workflow-force-stop ()
   "Force stop a stuck workflow.
