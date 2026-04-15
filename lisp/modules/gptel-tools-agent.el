@@ -1106,10 +1106,20 @@ large-result truncation, and result caching."
                                (my/gptel--deliver-subagent-result main-cb partial)))
                             ('abort
                              (when (overlayp ov) (delete-overlay ov))
-                             (funcall
-                              main-cb
-                              (format "Error: Task \"%s\" was aborted by the user. \n%s could not finish."
-                                      description agent-type)))))))
+                             (let* ((error-info (plist-get info :error))
+                                    (error-msg
+                                     (cond
+                                      ((stringp error-info) error-info)
+                                      ((and (listp error-info)
+                                            (stringp (plist-get error-info :message)))
+                                       (plist-get error-info :message)))))
+                               (funcall
+                                main-cb
+                                (if (and (stringp error-msg)
+                                         (not (string-empty-p error-msg)))
+                                    error-msg
+                                  (format "Error: Task \"%s\" was aborted by the user. \n%s could not finish."
+                                          description agent-type)))))))))
                     (my/gptel--seed-fsm-tools child-fsm request-tools)
                     (my/gptel--disable-auto-retry-for-fsm child-fsm)
                     (setq request-started t))
@@ -1747,9 +1757,10 @@ its async continuation layer in the worker daemon."
 (defun my/gptel--disable-auto-retry-for-fsm (fsm)
   "Mark FSM so global auto-retry advice will not reschedule it."
   (when (and fsm (fboundp 'gptel-fsm-info))
-    (when-let* ((info (ignore-errors (gptel-fsm-info fsm)))
-                ((listp info)))
-      (plist-put info :disable-auto-retry t)
+    (let ((info (ignore-errors (gptel-fsm-info fsm))))
+      (when (listp info)
+        (setf (gptel-fsm-info fsm)
+              (plist-put info :disable-auto-retry t)))
       t)))
 
 (defun my/gptel--disable-auto-retry-transform (fsm)
