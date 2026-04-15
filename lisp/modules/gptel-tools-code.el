@@ -123,6 +123,16 @@ RETRIES-LEFT is remaining retries, MAX-RETRIES is the initial max.
 Returns delay in seconds: 0.5s, 1s, 2s, 4s, 8s for 5 retries."
   (* 0.5 (expt 2 (- max-retries retries-left))))
 
+(defun my/gptel--lsp-retry-wait (retries-left max-retries msg-fmt)
+  "Decrement RETRIES-LEFT, sleep with backoff if retries remain.
+MSG-FMT is a format string receiving RETRIES-LEFT.
+Returns the updated retries-left value."
+  (setq retries-left (1- retries-left))
+  (when (> retries-left 0)
+    (message msg-fmt retries-left)
+    (sleep-for (my/gptel--lsp-backoff-delay retries-left max-retries)))
+  retries-left)
+
 
 (defun gptel-tools-code--filter-usage-line (line)
   "Filter out binary/cache files from usage LINE.
@@ -198,11 +208,7 @@ Reports which backend was used."
       (let* ((lsp-server (eglot-current-server))
              (backend-type (and lsp-server (xref-find-backend))))
         (if (not (and lsp-server backend-type))
-            (progn
-              (setq lsp-retries (1- lsp-retries))
-              (when (> lsp-retries 0)
-                (message "[LSP] Waiting for server... (%d retries left)" lsp-retries)
-                (sleep-for (my/gptel--lsp-backoff-delay lsp-retries my/gptel-lsp-retry-max))))
+            (setq lsp-retries (my/gptel--lsp-retry-wait lsp-retries my/gptel-lsp-retry-max "[LSP] Waiting for server... (%d retries left)"))
           (condition-case nil
               (let ((refs (xref-backend-references backend-type symbol-name)))
                 (if (and refs (listp refs))
@@ -217,15 +223,9 @@ Reports which backend was used."
                                                 (xref-location-line loc)
                                                 (xref-item-summary ref))))
                                     refs)))
-                  (setq lsp-retries (1- lsp-retries))
-                  (when (> lsp-retries 0)
-                    (message "[LSP] Waiting for server... (%d retries left)" lsp-retries)
-                    (sleep-for (my/gptel--lsp-backoff-delay lsp-retries my/gptel-lsp-retry-max)))))
+                  (setq lsp-retries (my/gptel--lsp-retry-wait lsp-retries my/gptel-lsp-retry-max "[LSP] Waiting for server... (%d retries left)"))))
             (error
-             (setq lsp-retries (1- lsp-retries))
-             (when (> lsp-retries 0)
-               (message "[LSP] Connection error, retrying... (%d left)" lsp-retries)
-               (sleep-for (my/gptel--lsp-backoff-delay lsp-retries my/gptel-lsp-retry-max))))))))
+             (setq lsp-retries (my/gptel--lsp-retry-wait lsp-retries my/gptel-lsp-retry-max "[LSP] Connection error, retrying... (%d left)")))))))
     (unless usages
       (let ((git-result (my/gptel--git-grep-usages symbol-name root)))
         (if git-result
