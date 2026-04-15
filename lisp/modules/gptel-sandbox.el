@@ -184,7 +184,7 @@ When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
       (let (resolved)
         (dolist (binding bindings)
           (push (gptel-sandbox--eval-let-binding binding env) resolved))
-        (dolist (entry resolved)
+        (dolist (entry (nreverse resolved))
           (puthash (car entry) (cdr entry) child-env))))
     (let ((value nil))
       (dolist (form body value)
