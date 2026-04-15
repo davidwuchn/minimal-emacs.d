@@ -433,11 +433,11 @@ TEST: (my/gptel--transient-error-p nil 429) => t"
              (listp error-data)
              (stringp error-msg)
              (string-match-p my/gptel--transient-http-400-patterns error-msg))
-         (and (listp error-data)
-              (stringp error-msg)
-              (not (memq status '(401 403)))
-              (string-match-p my/gptel--transient-error-message-patterns
-                              (downcase error-msg))))))
+        (and (listp error-data)
+             (stringp error-msg)
+             (or (null status) (not (memq status '(401 403))))
+             (string-match-p my/gptel--transient-error-message-patterns
+                             (downcase error-msg))))))
 
 (defun my/gptel--cleanup-partial-insertion (info)
   "Remove partial buffer text inserted before a failed request.
