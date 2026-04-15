@@ -109,6 +109,15 @@ Used by `my/gptel-auto-retry' to compute retry delays.")
   "Maximum delay in seconds for exponential backoff retries.
 Prevents excessively long waits when many retries are needed.")
 
+(defconst my/gptel--unbounded-byte-limit 999999999
+  "Unbounded byte limit for model-specific context limits.
+Used as fallback when a model is not in `my/gptel-model-context-bytes'
+or when `my/gptel-payload-byte-limit' is nil.
+Setting a high but finite value prevents nil arithmetic issues
+while effectively disabling the limit for unknown models.
+ASSUMPTION: No model will ever produce a payload exceeding this limit.
+TEST: Can be grepped to find all fallback limit usages.")
+
 (defun my/gptel--trim-tool-results-for-retry (info &optional retry-count force-trim-p)
   "Trim old tool-result content in INFO's :data :messages to reduce payload.
 
@@ -678,16 +687,16 @@ context limit from `my/gptel-model-context-bytes'.
 
 ASSUMPTION: Model names may include version/date suffixes (e.g., \"kimi-k2.5-20250711\").
   Uses prefix matching to map variant names to their family limits.
-EDGE CASE: Unknown models fall back to global limit (999999999)."
+EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'."
   (let* ((model (plist-get info :model))
-         (global-limit (or my/gptel-payload-byte-limit 999999999))
+         (global-limit (or my/gptel-payload-byte-limit my/gptel--unbounded-byte-limit))
          (model-limit
           (if (stringp model)
               (or (cl-loop for (pattern . limit) in my/gptel-model-context-bytes
                            when (string-prefix-p pattern model)
                            return limit)
-                  999999999)
-            999999999)))
+                  my/gptel--unbounded-byte-limit)
+            my/gptel--unbounded-byte-limit)))
     (min global-limit model-limit)))
 
 (defun my/gptel--compact-payload (fsm)
