@@ -1857,14 +1857,9 @@ Uses hash table keyed by task-id to support parallel execution."
                   (format "Error: Task \"%s\" (%s) timed out after %ds%s."
                           description agent-type timeout-seconds timeout-suffix)))
              (funcall restore-origin-fsm child-fsm)
-             (if (buffer-live-p origin-buf)
-                 (with-current-buffer origin-buf
-                   (unwind-protect
-                       (funcall callback timeout-result)
-                     (remhash task-id my/gptel--agent-task-state)))
-               (unwind-protect
-                   (funcall callback timeout-result)
-                 (remhash task-id my/gptel--agent-task-state)))))
+             (unwind-protect
+                 (my/gptel--invoke-callback-safely callback timeout-result)
+               (remhash task-id my/gptel--agent-task-state))))
          (rearm-timeout (state)
            (when task-timeout
              (when (timerp (plist-get state :timeout-timer))
