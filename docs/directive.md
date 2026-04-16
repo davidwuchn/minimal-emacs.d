@@ -58,8 +58,8 @@ lisp/modules/gptel-benchmark-core.el
 
 **Decision Gate**:
 - Keep if combined score improves
-- Tie: Keep ONLY if correctness-fix detected AND strong-grade pass AND quality gain >= threshold
-- Discard if decline or tie without correctness-fix
+- Tie: Keep ONLY if combined score improves AND quality gain >= threshold (default 0.05)
+- Discard if decline or tie without sufficient quality gain
 
 ## Constraints
 
