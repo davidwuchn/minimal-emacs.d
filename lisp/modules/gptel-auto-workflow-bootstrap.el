@@ -87,9 +87,8 @@
                              (expand-file-name "lisp/modules" root)
                              (expand-file-name "packages/gptel" root)
                              (expand-file-name "packages/gptel-agent" root)
-                             (expand-file-name "packages/ai-code" root)
-                             (expand-file-name "packages/magit/lisp" root))
-                       (gptel-auto-workflow-bootstrap--elpa-dirs root)))
+                             (expand-file-name "packages/ai-code" root))
+                        (gptel-auto-workflow-bootstrap--elpa-dirs root)))
     (when (file-directory-p dir)
       (add-to-list 'load-path dir))))
 

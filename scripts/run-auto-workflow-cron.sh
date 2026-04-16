@@ -499,10 +499,20 @@ wrap_emacs_eval() {
            "$env_elisp" "$body"
 }
 
-workflow_bootstrap_elisp() {
+workflow_action_elisp() {
     local action="$1"
-    printf '(let ((root "%s")) (setq minimal-emacs-user-directory root user-emacs-directory root) (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-bootstrap.el" root)) (gptel-auto-workflow-bootstrap-run root "%s"))' \
-           "$ROOT_LISP" "$action"
+    local dispatch
+
+    case "$action" in
+        auto-workflow) dispatch="(gptel-auto-workflow-queue-all-projects)" ;;
+        research) dispatch="(gptel-auto-workflow-queue-all-research)" ;;
+        mementum) dispatch="(gptel-auto-workflow-queue-all-mementum)" ;;
+        instincts) dispatch="(gptel-auto-workflow-queue-all-instincts)" ;;
+        *) return 1 ;;
+    esac
+
+    printf '(let ((root (or (bound-and-true-p minimal-emacs-user-directory) (file-name-as-directory user-emacs-directory)))) (setq default-directory root) (require (quote gptel-auto-workflow-projects)) %s)' \
+           "$dispatch"
 }
 
 refresh_snapshot_paths_from_daemon() {
@@ -588,11 +598,12 @@ ensure_worker_daemon() {
     fi
     # Keep the dedicated workflow daemon truly headless. A GUI-attached Emacs
     # daemon can die when its X/Wayland connection disappears, which is fatal
-    # for long-running cron/worker runs.
+    # for long-running cron/worker runs. Load the worktree's normal init so the
+    # worker uses the same package/module graph as interactive Emacs.
     seed_worker_daemon_shared_var
     env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
         MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-        "$EMACS" -Q --init-directory="$DIR" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
+        "$EMACS" --init-directory="$DIR" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
     for _ in $(seq 1 50); do
         if check_worker_daemon; then
             rc=0
@@ -615,16 +626,16 @@ ensure_worker_daemon() {
 
 case "$ACTION" in
     auto-workflow)
-        ELISP="$(workflow_bootstrap_elisp "auto-workflow")"
+        ELISP="$(workflow_action_elisp "auto-workflow")"
         ;;
     research)
-        ELISP="$(workflow_bootstrap_elisp "research")"
+        ELISP="$(workflow_action_elisp "research")"
         ;;
     mementum)
-        ELISP="$(workflow_bootstrap_elisp "mementum")"
+        ELISP="$(workflow_action_elisp "mementum")"
         ;;
     instincts)
-        ELISP="$(workflow_bootstrap_elisp "instincts")"
+        ELISP="$(workflow_action_elisp "instincts")"
         ;;
     status)
         ELISP="(and (fboundp 'gptel-auto-workflow--status-plist)

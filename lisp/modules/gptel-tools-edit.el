@@ -7,6 +7,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'gptel-ext-abort)
 (require 'seq)
 (require 'gptel-tools-preview)
 

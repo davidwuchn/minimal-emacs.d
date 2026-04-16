@@ -58,7 +58,6 @@ run_unit_tests() {
         -L "$DIR/lisp/modules" \
         -L "$DIR/packages/gptel" \
         -L "$DIR/packages/gptel-agent" \
-        -L "$DIR/packages/magit/lisp" \
         -L "$DIR/tests" \
         -l ert \
         --eval "(setq load-prefer-newer t)" \

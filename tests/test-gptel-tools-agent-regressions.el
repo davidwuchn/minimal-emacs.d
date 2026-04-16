@@ -8052,7 +8052,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                     "    print('t')\n"
                     "elif 'gptel-auto-workflow--status-plist' in expr:\n"
                     "    print('(:running nil :kept 0 :total 0 :phase \"idle\" :results \"var/tmp/experiments/2026-04-03/results.tsv\")')\n"
-                    "elif 'gptel-auto-workflow-bootstrap-run' in expr:\n"
+                    "elif 'gptel-auto-workflow-queue-all-projects' in expr:\n"
                     "    print('queued')\n"
                     "else:\n"
                     "    print('nil')\n"
@@ -8258,9 +8258,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (should (string-empty-p (buffer-string))))
           (with-temp-buffer
             (insert-file-contents argv-log)
-            (should (string-match-p
-                     (regexp-quote "gptel-auto-workflow-bootstrap-run root \\\"auto-workflow\\\"")
-                     (buffer-string)))))
+             (should (string-match-p
+                      (regexp-quote "gptel-auto-workflow-queue-all-projects")
+                      (buffer-string)))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t)
       (when (file-exists-p argv-log)
@@ -8995,8 +8995,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
        (when (file-exists-p argv-log)
          (delete-file argv-log)))))
 
-(ert-deftest regression/auto-workflow/cron-wrapper-loads-bootstrap-helper ()
-  "Wrapper auto-workflow action should call the shared bootstrap helper."
+(ert-deftest regression/auto-workflow/cron-wrapper-queues-workflow-from-normal-init ()
+  "Wrapper auto-workflow action should queue work from the normal init path."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -9030,30 +9030,33 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                   (delq nil
                         (mapcar #'test-auto-workflow--argv-eval-payload
                                 entries))))
-            (should (seq-some
-                     (lambda (elisp)
-                       (and (string-match-p
-                             (regexp-quote "(setq minimal-emacs-user-directory root user-emacs-directory root)")
-                             elisp)
-                            (string-match-p
-                             (regexp-quote "(load-file (expand-file-name \"lisp/modules/gptel-auto-workflow-bootstrap.el\" root))")
-                             elisp)
-                            (string-match-p
-                             (regexp-quote "(gptel-auto-workflow-bootstrap-run root \"auto-workflow\")")
-                             elisp)
-                            (string-match-p
-                             (regexp-quote (format "(setenv \"AUTO_WORKFLOW_STATUS_FILE\" \"%s\")"
-                                                   status-file))
+             (should (seq-some
+                      (lambda (elisp)
+                        (and (string-match-p
+                              (regexp-quote "(setq default-directory root)")
+                              elisp)
+                             (string-match-p
+                              (regexp-quote "(require (quote gptel-auto-workflow-projects))")
+                              elisp)
+                             (string-match-p
+                              (regexp-quote "(gptel-auto-workflow-queue-all-projects)")
+                              elisp)
+                             (string-match-p
+                              (regexp-quote (format "(setenv \"AUTO_WORKFLOW_STATUS_FILE\" \"%s\")"
+                                                    status-file))
                              elisp)
                             (string-match-p
                              (regexp-quote (format "(setenv \"AUTO_WORKFLOW_MESSAGES_FILE\" \"%s\")"
                                                    messages-file))
-                             elisp)
-                            (not (string-match-p
-                                  (regexp-quote "(require 'gptel)")
-                                  elisp))
-                            (not (string-match-p "\n" elisp))))
-                     elisp-payloads))))
+                              elisp)
+                             (not (string-match-p
+                                   (regexp-quote "gptel-auto-workflow-bootstrap.el")
+                                   elisp))
+                             (not (string-match-p
+                                   (regexp-quote "(require 'gptel)")
+                                   elisp))
+                             (not (string-match-p "\n" elisp))))
+                      elisp-payloads))))
       (delete-directory status-dir t)
       (delete-directory fake-bin t)
       (when (file-exists-p messages-file)
@@ -9071,14 +9074,15 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (elpa-dir (expand-file-name "var/elpa" root))
          (gnupg-dir (expand-file-name "var/elpa/gnupg" root))
          (yaml-dir (expand-file-name "var/elpa/yaml-1.2.3" root))
+         (magit-dir (expand-file-name "var/elpa/magit-4.5.0" root))
          (expected-dirs
            (list (expand-file-name "lisp" root)
                  (expand-file-name "lisp/modules" root)
                  (expand-file-name "packages/gptel" root)
                  (expand-file-name "packages/gptel-agent" root)
                  (expand-file-name "packages/ai-code" root)
-                 (expand-file-name "packages/magit/lisp" root)
-                 yaml-dir))
+                 yaml-dir
+                 magit-dir))
          (orig-load-path load-path)
          (loaded nil)
          (required nil)
@@ -9101,14 +9105,14 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                   ((symbol-function 'directory-files)
                    (lambda (dir &optional _full _match _nosort _count)
                      (when (equal dir elpa-dir)
-                       (list yaml-dir))))
+                       (list yaml-dir magit-dir))))
                   ((symbol-function 'locate-library)
                    (lambda (library &rest _args)
                      (cond
                       ((equal library "yaml")
                        (expand-file-name "yaml.el" yaml-dir))
                       ((equal library "magit")
-                       (expand-file-name "packages/magit/lisp/magit.el" root)))))
+                       (expand-file-name "magit.el" magit-dir)))))
                   ((symbol-function 'load-file)
                    (lambda (path)
                      (push path loaded)))
@@ -9179,7 +9183,6 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                     (expand-file-name "packages/gptel" root)
                                     (expand-file-name "packages/gptel-agent" root)
                                     (expand-file-name "packages/ai-code" root)
-                                    (expand-file-name "packages/magit/lisp" root)
                                     elpa-dir))))
               ((symbol-function 'directory-files)
                (lambda (_dir &optional _full _match _nosort _count)
@@ -9258,11 +9261,11 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (unwind-protect
         (progn
            (dolist (dir '("lisp" "lisp/modules" "packages/gptel" "packages/gptel-agent"
-                          "packages/ai-code" "packages/magit/lisp" "var/elpa/yaml-1.2.3"))
+                          "packages/ai-code" "var/elpa/yaml-1.2.3" "var/elpa/magit-4.5.0"))
              (make-directory (expand-file-name dir root) t))
            (with-temp-file (expand-file-name "var/elpa/yaml-1.2.3/yaml.el" root)
              (insert ";;; yaml.el\n"))
-           (with-temp-file (expand-file-name "packages/magit/lisp/magit.el" root)
+           (with-temp-file (expand-file-name "var/elpa/magit-4.5.0/magit.el" root)
              (insert ";;; magit.el\n"))
           (with-temp-file (expand-file-name "lisp/modules/nucleus-tools.el" root)
             (insert "(push \"nucleus-tools.el\" bootstrap-test-calls)\n"))
@@ -9344,6 +9347,17 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
            (setq gptel-model saved-model)
          (makunbound 'gptel-model))
        (delete-directory root t))))
+
+(ert-deftest regression/auto-workflow/async-tool-modules-require-abort-support ()
+  "Async tool modules should require abort support before reading abort state."
+  (dolist (relative-path '("lisp/modules/gptel-tools-bash.el"
+                           "lisp/modules/gptel-tools-edit.el"
+                           "lisp/modules/gptel-tools-glob.el"
+                           "lisp/modules/gptel-tools-grep.el"))
+    (with-temp-buffer
+      (insert-file-contents
+       (expand-file-name relative-path test-auto-workflow--repo-root))
+      (should (re-search-forward "(require 'gptel-ext-abort)" nil t)))))
 
 (ert-deftest regression/gptel-config/loads-nucleus-tools-before-tool-registration ()
   "Fresh daemon startup should install nucleus tool advice before tool setup."
@@ -9438,7 +9452,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should (member '(require gptel-agent-tools) calls)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-starts-worker-daemon-headless ()
-  "Wrapper should strip GUI display variables and ignore inherited server overrides."
+  "Wrapper should strip GUI display variables and start a normal-init daemon."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -9486,17 +9500,17 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
            (call-process shell-file-name nil nil nil shell-command-switch
                          (format "%s auto-workflow >/dev/null 2>&1 || true" script))
            (with-temp-buffer
-             (insert-file-contents emacs-log)
-             (let ((output (buffer-string)))
-               (should (string-match-p "--bg-daemon=copilot-auto-workflow" output))
-               (should (string-match-p
-                       (regexp-quote (format "ARGV:-Q --init-directory=%s --bg-daemon=copilot-auto-workflow"
+              (insert-file-contents emacs-log)
+              (let ((output (buffer-string)))
+                (should (string-match-p "--bg-daemon=copilot-auto-workflow" output))
+                (should (string-match-p
+                        (regexp-quote (format "ARGV:--init-directory=%s --bg-daemon=copilot-auto-workflow"
                                               repo-root))
-                       output))
-               (should (string-match-p "ARGV:.*-Q" output))
-               (should (string-match-p "^MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1$" output))
-               (should-not (string-match-p "^DISPLAY=" output))
-               (should-not (string-match-p "^WAYLAND_DISPLAY=" output))
+                        output))
+                (should-not (string-match-p "ARGV:.*-Q" output))
+                (should (string-match-p "^MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1$" output))
+                (should-not (string-match-p "^DISPLAY=" output))
+                (should-not (string-match-p "^WAYLAND_DISPLAY=" output))
               (should-not (string-match-p "^WAYLAND_SOCKET=" output))
               (should-not (string-match-p "^XAUTHORITY=" output)))))
       (delete-directory status-dir t)

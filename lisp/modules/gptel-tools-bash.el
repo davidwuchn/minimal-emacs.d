@@ -8,6 +8,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'seq)
+(require 'gptel-ext-abort)
 
 ;;; Customization
 

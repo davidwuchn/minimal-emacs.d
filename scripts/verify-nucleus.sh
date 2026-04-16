@@ -44,7 +44,6 @@ cat >"$TMP_ELISP" <<EOF
                (expand-file-name "packages/gptel" root)
                (expand-file-name "packages/gptel-agent" root)
                (expand-file-name "packages/ai-code" root)
-               (expand-file-name "packages/magit/lisp" root)
                (expand-file-name "lisp" root)
                (expand-file-name "lisp/modules" root))))
   (dolist (path paths)
