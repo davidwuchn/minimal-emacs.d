@@ -92,17 +92,21 @@ gptel preset.")
         (pos 0)
         (len (length code)))
     (while (< pos len)
-      (if (eq (char-syntax (aref code pos)) ?\s)
-          (setq pos (1+ pos))
-        (let* ((parsed (condition-case err
-                           (read-from-string code pos)
-                         (error
-                          (error "Invalid program syntax near offset %d: %s"
-                                 pos (error-message-string err)))))
-               (form (car parsed))
-               (next-pos (cdr parsed)))
-          (push form forms)
-          (setq pos next-pos))))
+      (condition-case err
+          (let* ((parsed (read-from-string code pos))
+                 (form (car parsed))
+                 (next-pos (cdr parsed)))
+            (push form forms)
+            (setq pos next-pos))
+        (end-of-file
+         (if (string-match-p "\\`[ \t\n\r]*\\(?:;[^\n]*\n?[ \t\n\r]*\\)*\\'"
+                             (substring code pos))
+             (setq pos len)
+           (error "Invalid program syntax near offset %d: %s"
+                  pos (error-message-string err))))
+        (error
+         (error "Invalid program syntax near offset %d: %s"
+                pos (error-message-string err)))))
     (nreverse forms)))
 
 (defun gptel-sandbox--make-env ()
