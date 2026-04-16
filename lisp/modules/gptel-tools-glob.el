@@ -6,6 +6,7 @@
 ;; Async Glob tool implementation with timeout and result truncation.
 
 (require 'cl-lib)
+(require 'gptel-ext-abort)
 (require 'subr-x)
 (require 'seq)
 

@@ -6529,7 +6529,7 @@ REASON is only used for logging."
        (not (gptel-auto-experiment--aborted-agent-output-p error-output))
        (let ((case-fold-search t))
          (string-match-p
-          "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
+          "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
           error-output))))
 
 (defun gptel-auto-experiment--rate-limit-error-p (error-output)
@@ -6540,9 +6540,18 @@ REASON is only used for logging."
           "rate_limit_error\\|usage limit exceeded\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
           error-output))))
 
+(defun gptel-auto-experiment--provider-auth-error-p (error-output)
+  "Return non-nil when ERROR-OUTPUT reflects provider auth failure."
+  (and (stringp error-output)
+       (let ((case-fold-search t))
+         (string-match-p
+          "authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
+          error-output))))
+
 (defun gptel-auto-experiment--provider-pressure-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT suggests trying a fallback backend."
   (or (gptel-auto-experiment--rate-limit-error-p error-output)
+      (gptel-auto-experiment--provider-auth-error-p error-output)
       (and (stringp error-output)
            (let ((case-fold-search t))
              (string-match-p
@@ -6784,9 +6793,11 @@ Also logs agent-output snippet for debugging when category is :unknown."
    ((string-match-p "throttling\\|rate.limit\\|quota exceeded\\|429" agent-output)
     (cons :api-rate-limit "API rate limit exceeded"))
    ((let ((case-fold-search t))
-      (string-match-p "overloaded_error\\|cluster overloaded\\|529\\|负载较高"
-                      agent-output))
+       (string-match-p "overloaded_error\\|cluster overloaded\\|529\\|负载较高"
+                       agent-output))
     (cons :api-rate-limit "Provider overloaded"))
+   ((gptel-auto-experiment--provider-auth-error-p agent-output)
+    (cons :api-error "Provider authorization failed"))
    ((string-match-p "invalid_parameter_error\\|InvalidParameter\\|JSON format" agent-output)
     (cons :api-error "API parameter error (invalid JSON format)"))
    ((let ((case-fold-search t))

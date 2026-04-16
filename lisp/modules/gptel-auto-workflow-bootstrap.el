@@ -8,13 +8,87 @@
 
 ;;; Code:
 
+(defconst gptel-auto-workflow-bootstrap--package-archives
+  '(("melpa"        . "https://melpa.org/packages/")
+    ("gnu"          . "https://elpa.gnu.org/packages/")
+    ("nongnu"       . "https://elpa.nongnu.org/nongnu/")
+    ("melpa-stable" . "https://stable.melpa.org/packages/"))
+  "Package archives used by the headless workflow bootstrap.")
+
+(defconst gptel-auto-workflow-bootstrap--package-archive-priorities
+  '(("gnu" . 99)
+    ("nongnu" . 80)
+    ("melpa" . 70)
+    ("melpa-stable" . 50))
+  "Package archive priorities used by the headless workflow bootstrap.")
+
+(defconst gptel-auto-workflow-bootstrap--required-packages
+  '(yaml magit)
+  "Runtime packages that a fresh workflow daemon must be able to load.")
+
+(defun gptel-auto-workflow-bootstrap--elpa-dirs (root)
+  "Return package directories under ROOT/var/elpa suitable for `load-path'."
+  (let* ((elpa-dir (expand-file-name "var/elpa" root))
+         (entries (and (file-directory-p elpa-dir)
+                       (directory-files elpa-dir t directory-files-no-dot-files-regexp)))
+         dirs)
+    (dolist (entry entries (nreverse dirs))
+      (when (and (file-directory-p entry)
+                 (not (member (file-name-nondirectory entry) '("archives" "gnupg"))))
+        (push entry dirs)))))
+
+(defun gptel-auto-workflow-bootstrap--configure-package-system (root)
+  "Point `package.el' at ROOT's repo-local package cache and activate it."
+  (require 'package)
+  (let ((gnupg-dir (expand-file-name "var/elpa/gnupg" root)))
+    (setq package-user-dir (expand-file-name "var/elpa" root)
+          package-quickstart-file (expand-file-name "var/package-quickstart.el" root)
+          package-gnupghome-dir (and (file-directory-p gnupg-dir) gnupg-dir)
+          package-archives gptel-auto-workflow-bootstrap--package-archives
+          package-archive-priorities
+          gptel-auto-workflow-bootstrap--package-archive-priorities))
+  (package-initialize))
+
+(defun gptel-auto-workflow-bootstrap--load-package-archive-cache (root)
+  "Load cached package archive contents from ROOT without refreshing the network."
+  (let ((archives-dir (expand-file-name "var/elpa/archives" root))
+        (loaded nil))
+    (when (file-directory-p archives-dir)
+      (dolist (archive-dir (directory-files archives-dir t directory-files-no-dot-files-regexp))
+        (let ((cache-file (expand-file-name "archive-contents" archive-dir)))
+          (when (file-exists-p cache-file)
+            (with-temp-buffer
+              (condition-case nil
+                  (progn
+                    (insert-file-contents cache-file)
+                    (let ((contents (read (current-buffer))))
+                      (when (and (listp contents) (eq (car contents) 1))
+                        (dolist (pkg (cdr contents))
+                          (when (and (listp pkg) (symbolp (car pkg)))
+                            (let ((pkg-name (car pkg)))
+                              (unless (assq pkg-name package-archive-contents)
+                                (push pkg package-archive-contents)))))
+                        (setq loaded t))))
+                (error nil)))))))
+    loaded))
+
+(defun gptel-auto-workflow-bootstrap--ensure-package-installed (root package)
+  "Ensure PACKAGE can be loaded for the workflow daemon under ROOT."
+  (unless (locate-library (symbol-name package))
+    (gptel-auto-workflow-bootstrap--load-package-archive-cache root)
+    (unless (assq package package-archive-contents)
+      (package-refresh-contents))
+    (package-install package)
+    (package-initialize)))
+
 (defun gptel-auto-workflow-bootstrap--seed-load-path (root)
   "Add repo-local workflow paths under ROOT to `load-path'."
-  (dolist (dir (list (expand-file-name "lisp" root)
-                     (expand-file-name "lisp/modules" root)
-                     (expand-file-name "packages/gptel" root)
-                     (expand-file-name "packages/gptel-agent" root)
-                     (expand-file-name "packages/ai-code" root)))
+  (dolist (dir (append (list (expand-file-name "lisp" root)
+                             (expand-file-name "lisp/modules" root)
+                             (expand-file-name "packages/gptel" root)
+                             (expand-file-name "packages/gptel-agent" root)
+                             (expand-file-name "packages/ai-code" root))
+                        (gptel-auto-workflow-bootstrap--elpa-dirs root)))
     (when (file-directory-p dir)
       (add-to-list 'load-path dir))))
 
@@ -49,7 +123,10 @@
 
 (defun gptel-auto-workflow-bootstrap-run (root action)
   "Bootstrap headless workflow execution from ROOT for ACTION."
+  (gptel-auto-workflow-bootstrap--configure-package-system root)
   (gptel-auto-workflow-bootstrap--seed-load-path root)
+  (dolist (package gptel-auto-workflow-bootstrap--required-packages)
+    (gptel-auto-workflow-bootstrap--ensure-package-installed root package))
   (defvar gptel--tool-preview-alist nil)
   (load-file (expand-file-name "lisp/modules/nucleus-tools.el" root))
   (load-file (expand-file-name "lisp/modules/nucleus-prompts.el" root))
