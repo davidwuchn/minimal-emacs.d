@@ -4315,25 +4315,30 @@ Uses the staging worktree instead of switching branches in the root repo."
   "Check syntax of all .el files in DIRECTORY.
 Writes errors to OUTPUT-BUFFER.
 Returns t if all files pass syntax check, nil otherwise."
-  (let ((errors nil)
-        (files (directory-files-recursively directory "\\.el\\'")))
-    (dolist (file files)
-      (when (file-readable-p file)
-        (with-temp-buffer
-          (insert-file-contents file)
-          (emacs-lisp-mode)  ; Enable proper syntax parsing for comments
-          (goto-char (point-min))
-          (condition-case err
-              (progn
-                (while (not (eobp)) (forward-sexp)))
-            (error
-             (let ((msg (format "SYNTAX ERROR: %s: %s"
-                                (file-relative-name file directory)
-                                (error-message-string err))))
-               (push msg errors)
-               (with-current-buffer output-buffer
-                 (insert msg "\n"))))))))
-    (null errors)))
+  (if (or (null directory) (null output-buffer))
+      (progn
+        (message "[auto-workflow] check-el-syntax: nil argument")
+        nil)
+    (let ((errors nil)
+          (files (ignore-errors (directory-files-recursively directory "\\.el\\'"))))
+      (dolist (file (or files nil))
+        (when (file-readable-p file)
+          (with-temp-buffer
+            (insert-file-contents file)
+            (emacs-lisp-mode)
+            (goto-char (point-min))
+            (condition-case err
+                (progn
+                  (while (not (eobp)) (forward-sexp)))
+              (error
+               (let ((msg (format "SYNTAX ERROR: %s: %s"
+                                  (file-relative-name file directory)
+                                  (error-message-string err))))
+                 (push msg errors)
+                 (when (buffer-live-p output-buffer)
+                   (with-current-buffer output-buffer
+                     (insert msg "\n"))))))))
+      (null errors)))))
 
 (defun gptel-auto-workflow--verify-staging ()
   "Run verification in the staging worktree.
