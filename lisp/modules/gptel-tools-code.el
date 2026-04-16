@@ -205,7 +205,8 @@ Reports which backend was used."
          (backend "unknown"))
     ;; LSP retry loop - check server availability on each iteration
     (while (and (> lsp-retries 0) (not lsp-ready))
-      (let* ((lsp-server (eglot-current-server))
+      (let* ((lsp-server (and (fboundp 'eglot-current-server)
+                              (eglot-current-server)))
              (backend-type (and lsp-server (xref-find-backend))))
         (if (not (and lsp-server backend-type))
             (setq lsp-retries (my/gptel--lsp-retry-wait lsp-retries my/gptel-lsp-retry-max "[LSP] Waiting for server... (%d retries left)"))
