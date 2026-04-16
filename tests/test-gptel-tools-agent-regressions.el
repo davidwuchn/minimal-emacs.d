@@ -1227,10 +1227,100 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (equal (gptel-auto-experiment--categorize-error grader-error)
                    '(:api-rate-limit . "Provider overloaded")))))
 
-(ert-deftest regression/auto-experiment/run-surfaces-retryable-grader-errors ()
-  "Failed grades should surface retryable grader details for outer retry logic."
+(ert-deftest regression/auto-experiment/run-retries-grader-locally-without-rerunning-executor ()
+  "Transient grader failures should retry grading locally without rerunning executor work."
+  (let* ((project-root (make-temp-file "aw-project" t))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1" project-root))
+         (worktree-buf (get-buffer-create "*aw-grade-retry*"))
+         (runagent-call-count 0)
+         (grade-call-count 0)
+         (benchmark-call-count 0)
+         (logged-result nil)
+         (result nil)
+         (grader-error
+          "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")"))
+    (unwind-protect
+        (progn
+          (make-directory worktree-dir t)
+          (with-current-buffer worktree-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir)))
+          (let ((gptel-auto-experiment-auto-push nil)
+                (gptel-auto-workflow-use-staging nil)
+                (gptel-auto-experiment-max-grader-retries 1)
+                (gptel-auto-experiment-retry-delay 0)
+                (gptel-auto-experiment--api-error-count 0))
+            (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                       (lambda (_target _experiment-id) worktree-dir))
+                      ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                       (lambda (_worktree-dir) worktree-buf))
+                      ((symbol-function 'gptel-auto-experiment-analyze)
+                       (lambda (_previous-results cb)
+                         (funcall cb '(:patterns nil))))
+                      ((symbol-function 'gptel-auto-experiment-build-prompt)
+                       (lambda (&rest _args) "prompt"))
+                      ((symbol-function 'run-with-timer)
+                       (lambda (_secs _repeat fn &rest args)
+                         (apply fn args)
+                         :fake-timer))
+                      ((symbol-function 'cancel-timer)
+                       (lambda (&rest _args) nil))
+                      ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                       (lambda (_timeout cb &rest _args)
+                         (cl-incf runagent-call-count)
+                         (funcall cb "HYPOTHESIS: local grader retry")))
+                      ((symbol-function 'gptel-auto-experiment-grade)
+                       (lambda (_output cb &rest _args)
+                         (cl-incf grade-call-count)
+                         (funcall cb
+                                  (if (= grade-call-count 1)
+                                      `(:score 0 :total 9 :passed nil :details ,grader-error)
+                                    '(:score 9 :total 9 :passed t :details "graded after retry")))))
+                      ((symbol-function 'gptel-auto-experiment-benchmark)
+                       (lambda (&rest _args)
+                         (cl-incf benchmark-call-count)
+                         '(:passed t :nucleus-passed t :tests-passed t :eight-keys 0.4)))
+                      ((symbol-function 'gptel-auto-experiment-decide)
+                       (lambda (_before _after cb)
+                         (funcall cb '(:keep nil :reasoning "Winner: A"))))
+                      ((symbol-function 'gptel-auto-experiment--code-quality-score)
+                       (lambda () 0.7))
+                      ((symbol-function 'gptel-auto-experiment-log-tsv)
+                       (lambda (_run-id exp-result)
+                         (setq logged-result exp-result)))
+                      ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
+                       (lambda (&rest _args) "abc123"))
+                      ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
+                       (lambda (&rest _args) t))
+                      ((symbol-function 'gptel-auto-workflow--assert-main-untouched)
+                       (lambda () t))
+                      ((symbol-function 'magit-git-success)
+                       (lambda (&rest _args) t))
+                      ((symbol-function 'message)
+                       (lambda (&rest _args) nil)))
+              (with-current-buffer worktree-buf
+                (gptel-auto-experiment-run
+                 "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+                 (lambda (exp-result)
+                   (setq result exp-result)))))
+            (should result)
+            (should (equal logged-result result))
+            (should (= runagent-call-count 1))
+            (should (= grade-call-count 2))
+            (should (= benchmark-call-count 1))
+            (should-not (plist-get result :grader-only-failure))
+            (should-not (plist-get result :error))
+            (should (= gptel-auto-experiment--api-error-count 1))
+            (should (equal (plist-get result :grader-reason) "graded after retry"))
+            (should (equal (plist-get result :comparator-reason) "Winner: A"))))
+      (when (buffer-live-p worktree-buf)
+        (kill-buffer worktree-buf))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/auto-experiment/run-marks-final-grader-only-failures ()
+  "Final grader-only failures should be marked so outer retry logic skips executor reruns."
   (let ((result nil)
         (temp-dir (make-temp-file "exp-worktree" t))
+        (gptel-auto-experiment-max-grader-retries 0)
         (grader-error
          "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"overloaded_error\" :message \"cluster overloaded (2064)\" :http_code \"529\")"))
     (unwind-protect
@@ -1259,10 +1349,11 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
            "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
            (lambda (exp-result)
              (setq result exp-result))))
-      (delete-directory temp-dir t))
+        (delete-directory temp-dir t))
     (should result)
     (should (equal (plist-get result :error) grader-error))
     (should (equal (plist-get result :grader-reason) grader-error))
+    (should (plist-get result :grader-only-failure))
     (should (gptel-auto-experiment--is-retryable-error-p
              (plist-get result :error)))))
 
@@ -3086,10 +3177,10 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should (equal (plist-get final-result :agent-output)
                      "Executor result for task: retry success")))))
 
-(ert-deftest regression/auto-experiment/run-with-retry-retries-grader-overload-errors ()
-  "Retry helper should retry transient grader overload failures surfaced via :error."
-  (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
+(ert-deftest regression/auto-experiment/run-with-retry-skips-grader-only-failures ()
+  "Retry helper should not rerun the executor when only the grader failed."
   (let ((runs 0)
+        (scheduled-retry nil)
         (final-result nil)
         (gptel-auto-experiment-max-retries 3)
         (gptel-auto-experiment-retry-delay 0)
@@ -3099,26 +3190,26 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
                  (cl-incf runs)
                  (funcall callback
-                          (if (= runs 1)
-                              (list :agent-output "Executor result for task: candidate"
-                                    :error grader-error
-                                    :grader-reason grader-error
-                                    :comparator-reason ":api-error")
-                            (list :agent-output "Executor result for task: retry success"
-                                  :comparator-reason "ok")))))
+                           (list :agent-output "Executor result for task: candidate"
+                                 :error grader-error
+                                 :grader-reason grader-error
+                                 :grader-only-failure t
+                                 :comparator-reason ":api-error"))))
               ((symbol-function 'run-with-timer)
-               (lambda (_secs _repeat fn &rest args)
-                 (apply fn args)
-                 :fake-timer))
+                (lambda (_secs _repeat fn &rest args)
+                  (setq scheduled-retry t)
+                  (apply fn args)
+                  :fake-timer))
               ((symbol-function 'message)
-               (lambda (&rest _args) nil)))
+                (lambda (&rest _args) nil)))
       (gptel-auto-experiment--run-with-retry
        "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
        (lambda (result)
-         (setq final-result result)))
-      (should (= runs 2))
-      (should (equal (plist-get final-result :agent-output)
-                     "Executor result for task: retry success")))))
+          (setq final-result result)))
+      (should (= runs 1))
+      (should-not scheduled-retry)
+      (should (plist-get final-result :grader-only-failure))
+      (should (equal (plist-get final-result :error) grader-error)))))
 
 (ert-deftest regression/auto-experiment/run-with-retry-skips-hard-quota-retries ()
   "Retry helper should not reschedule experiments once quota is exhausted."
