@@ -664,7 +664,7 @@ Cache behavior:
           (progn
             (message "[nucleus] Subagent '%s' cache hit" agent-type)
             (gptel-agent-loop--deliver-result state cached nil))
-        (let* ((preset (nconc (list :include-reasoning nil
+        (let* ((preset (append (list :include-reasoning nil
                                     :use-tools use-tools
                                     :use-context nil
                                     :stream my/gptel-subagent-stream)
