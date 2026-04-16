@@ -5444,6 +5444,53 @@ executor's prose summary."
                 status-text
                 diff-text)))))
 
+(defun gptel-auto-experiment--target-pending-changes-p (target &optional worktree)
+  "Return non-nil when TARGET has pending git changes in WORKTREE."
+  (let ((resolved-target target)
+        (resolved-worktree worktree))
+    (and (gptel-auto-workflow--non-empty-string-p resolved-target)
+         (gptel-auto-workflow--non-empty-string-p resolved-worktree)
+         (file-directory-p resolved-worktree)
+         (let* ((default-directory resolved-worktree)
+                (status-result
+                 (gptel-auto-workflow--git-result
+                  (format "git status --short -- %s"
+                          (shell-quote-argument resolved-target))
+                  30))
+                (status-output (string-trim (car status-result))))
+           (and (= (cdr status-result) 0)
+                (not (string-empty-p status-output)))))))
+
+(defun gptel-auto-experiment--timeout-salvage-output (output prompt target &optional worktree)
+  "Return synthetic executor output when timed-out OUTPUT left real target edits.
+PROMPT is the original executor prompt so the salvage path can preserve the
+intended hypothesis. TARGET and WORKTREE identify the actual edited file."
+  (when (and (gptel-auto-experiment--hard-timeout-p output)
+             (gptel-auto-experiment--target-pending-changes-p target worktree))
+    (let* ((raw-hypothesis (gptel-auto-experiment--extract-hypothesis prompt))
+           (hypothesis
+            (if (or (not (gptel-auto-workflow--non-empty-string-p raw-hypothesis))
+                    (member raw-hypothesis '("Agent error" "No hypothesis stated")))
+                (format "Timed-out executor left partial changes in %s for workflow evaluation"
+                        target)
+              raw-hypothesis)))
+      (format
+       (concat
+        "HYPOTHESIS: %s\n"
+        "CHANGED:\n"
+        "- Executor timed out before returning a final response, but the worktree contains pending changes for %s.\n"
+        "EVIDENCE:\n"
+        "- Treat the concrete worktree diff below as the source of truth for this partial attempt.\n"
+        "- Original timeout: %s\n"
+        "VERIFY:\n"
+        "- Run the normal benchmark and required tests against the changed worktree.\n"
+        "COMMIT:\n"
+        "- No commit was created before timeout; only keep the change if benchmark and review gates pass.\n"
+       "Task completed with partial work ready for workflow evaluation.")
+       hypothesis
+       target
+       (my/gptel--sanitize-for-logging output 200)))))
+
 (defun gptel-auto-experiment-grade (output callback &optional target worktree)
   "Grade experiment OUTPUT. LLM decides quality threshold.
 Timeout fails the grade (conservative).
@@ -6965,14 +7012,21 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                           (funcall callback
                                    (gptel-auto-experiment--stale-run-result
                                     target experiment-id)))
-                      (progn
+                      (let* ((salvaged-agent-output
+                              (gptel-auto-experiment--timeout-salvage-output
+                               agent-output executor-prompt target experiment-worktree))
+                             (effective-agent-output
+                              (or salvaged-agent-output agent-output)))
+                        (when salvaged-agent-output
+                          (message "[auto-exp] Executor timed out after partial changes for %s; evaluating actual worktree diff"
+                                   target))
                         (message "[auto-exp] Agent output (first 150 chars): %s"
-                                 (my/gptel--sanitize-for-logging agent-output 150))
-                         (unless finished
-                            (let ((gptel-auto-experiment--grading-target target)
-                                  (gptel-auto-experiment--grading-worktree experiment-worktree))
-                              (gptel-auto-experiment--grade-with-retry
-                               agent-output
+                                 (my/gptel--sanitize-for-logging effective-agent-output 150))
+                        (unless finished
+                           (let ((gptel-auto-experiment--grading-target target)
+                                 (gptel-auto-experiment--grading-worktree experiment-worktree))
+                             (gptel-auto-experiment--grade-with-retry
+                              effective-agent-output
                                (lambda (grade)
                                  (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
                                    (if (gptel-auto-experiment--stale-run-p run-id)
@@ -6987,22 +7041,22 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                           (grade-total (plist-get grade :total))
                                           (grade-passed (plist-get grade :passed))
                                           (grade-details (plist-get grade :details))
-                                          (hypothesis (gptel-auto-experiment--extract-hypothesis agent-output)))
-                                     (message "[auto-exp] Grade result: score=%s/%s passed=%s"
-                                              grade-score grade-total grade-passed)
-                                     (when (and agent-output (> (length agent-output) 0))
-                                       (message "[auto-exp] Agent preview: %s"
-                                                (my/gptel--sanitize-for-logging agent-output 100)))
-                                     ;; Check if grader passed
-                                     (if (not grade-passed)
-                                          ;; Grader failures should classify from grader details when
-                                          ;; they carry the real transient/API error instead of the
-                                          ;; executor's normal success output.
-                                          (let* ((grade-error-output
-                                                  (or (plist-get grade :error-source)
-                                                      (gptel-auto-experiment--grade-failure-error-output
-                                                       grade-details agent-output)))
-                                                 (error-source (or grade-error-output agent-output))
+                                          (hypothesis (gptel-auto-experiment--extract-hypothesis effective-agent-output)))
+                                      (message "[auto-exp] Grade result: score=%s/%s passed=%s"
+                                               grade-score grade-total grade-passed)
+                                      (when (and effective-agent-output (> (length effective-agent-output) 0))
+                                        (message "[auto-exp] Agent preview: %s"
+                                                (my/gptel--sanitize-for-logging effective-agent-output 100)))
+                                      ;; Check if grader passed
+                                      (if (not grade-passed)
+                                           ;; Grader failures should classify from grader details when
+                                           ;; they carry the real transient/API error instead of the
+                                           ;; executor's normal success output.
+                                           (let* ((grade-error-output
+                                                   (or (plist-get grade :error-source)
+                                                       (gptel-auto-experiment--grade-failure-error-output
+                                                        grade-details effective-agent-output)))
+                                                 (error-source (or grade-error-output effective-agent-output))
                                                  (error-info (gptel-auto-experiment--categorize-error
                                                               error-source))
                                                  (error-category (car error-info))
@@ -7018,11 +7072,11 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                    :score-after 0
                                                                    :kept nil
                                                                    :duration (- (float-time) start-time)
-                                                                   :grader-quality grade-score
-                                                                   :grader-reason grade-details
-                                                                   :comparator-reason (symbol-name error-category)
-                                                                    :analyzer-patterns (format "%s" patterns)
-                                                                    :agent-output agent-output)))
+                                                                    :grader-quality grade-score
+                                                                    :grader-reason grade-details
+                                                                    :comparator-reason (symbol-name error-category)
+                                                                     :analyzer-patterns (format "%s" patterns)
+                                                                     :agent-output effective-agent-output)))
                                               (when grade-error-output
                                                 (setq exp-result
                                                       (plist-put exp-result :error grade-error-output)))
@@ -7045,13 +7099,13 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                               (tests-passed (plist-get bench :tests-passed))
                                               (score-after (plist-get bench :eight-keys)))
                                          (if passed
-                                             (let
+                                              (let
 	                                             ((code-quality
 	                                               (or (gptel-auto-experiment--code-quality-score) 0.5)))
                                                (gptel-auto-experiment-decide
                                                 (list :score baseline :code-quality baseline-code-quality)
                                                 (list :score score-after :code-quality code-quality :output
-	                                                  agent-output)
+	                                                  effective-agent-output)
                                                 (lambda (decision)
 	                                              (unless finished
 	                                                (setq finished t)
@@ -7074,7 +7128,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 		                                                        (plist-get grade :details) :comparator-reason
 		                                                        reasoning :analyzer-patterns
 		                                                        (format "%s" patterns) :agent-output
-		                                                        agent-output)))
+		                                                        effective-agent-output)))
 	                                                  (if keep
 		                                                  (let* ((msg
 			                                                      (format

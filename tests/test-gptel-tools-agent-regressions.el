@@ -1132,10 +1132,109 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
            (setq result grade))
          "lisp/modules/gptel-tools-agent.el"
          "/tmp/worktree"))
-      (should result)
-      (should (string-match-p "WORKTREE EVIDENCE:" captured-output))
-      (should (string-match-p "M lisp/modules/gptel-tools-agent.el" captured-output))
-      (should (string-match-p "+(guarded-call)" captured-output)))))
+       (should result)
+       (should (string-match-p "WORKTREE EVIDENCE:" captured-output))
+       (should (string-match-p "M lisp/modules/gptel-tools-agent.el" captured-output))
+       (should (string-match-p "+(guarded-call)" captured-output)))))
+
+(ert-deftest regression/auto-experiment/timeout-salvage-output-requires-target-diff ()
+  "Hard executor timeouts should only salvage when the target still has pending edits."
+  (cl-letf (((symbol-function 'gptel-auto-experiment--target-pending-changes-p)
+             (lambda (&rest _args) nil)))
+    (should-not
+     (gptel-auto-experiment--timeout-salvage-output
+      "Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 1020s total runtime."
+      "HYPOTHESIS: Keep the diff instead of discarding timeout work"
+      "lisp/modules/gptel-tools-agent.el"
+      "/tmp/worktree"))))
+
+(ert-deftest regression/auto-experiment/run-salvages-hard-timeout-with-target-diff ()
+  "Dirty hard-timeout worktrees should keep flowing into benchmark/comparator evaluation."
+  (let* ((project-root (make-temp-file "aw-timeout-salvage" t))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1" project-root))
+         (worktree-buf (generate-new-buffer " *aw-timeout-salvage*"))
+         (timeout-output
+          "Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 1020s total runtime.")
+         (captured-grade-output nil)
+         (result nil)
+         (decide-called nil))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "lisp/modules" worktree-dir) t)
+          (with-temp-file (expand-file-name "lisp/modules/gptel-tools-agent.el" worktree-dir)
+            (insert "(message \"partial diff\")\n"))
+          (with-current-buffer worktree-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir)))
+          (let ((gptel-auto-experiment-auto-push nil)
+                (gptel-auto-workflow-use-staging nil)
+                (gptel-auto-workflow--running t)
+                (gptel-auto-workflow--run-id "run-timeout-salvage"))
+            (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                       (lambda (_target _experiment-id) worktree-dir))
+                      ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                       (lambda (_worktree) worktree-buf))
+                      ((symbol-function 'gptel-auto-workflow--resolve-run-root)
+                       (lambda (&optional _root) project-root))
+                      ((symbol-function 'gptel-auto-experiment-analyze)
+                       (lambda (_previous-results cb)
+                         (funcall cb '(:patterns nil))))
+                      ((symbol-function 'gptel-auto-experiment-build-prompt)
+                       (lambda (&rest _args)
+                         (concat
+                          "HYPOTHESIS: Preserve partial timeout edits for real benchmarking\n"
+                          "CHANGED:\n- Investigate timeout salvage\n")))
+                      ((symbol-function 'gptel-auto-experiment--target-pending-changes-p)
+                       (lambda (&rest _args) t))
+                      ((symbol-function 'run-with-timer)
+                       (lambda (&rest _args) :fake-timer))
+                      ((symbol-function 'cancel-timer)
+                       (lambda (&rest _args) nil))
+                      ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                       (lambda (_timeout callback _agent _description _prompt &rest _args)
+                         (funcall callback timeout-output)))
+                      ((symbol-function 'gptel-auto-experiment-grade)
+                       (lambda (output callback &rest _args)
+                         (setq captured-grade-output output)
+                         (funcall callback '(:score 9 :total 9 :passed t :details "graded"))))
+                      ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
+                       (lambda (&rest _args) "abc1234"))
+                      ((symbol-function 'gptel-auto-experiment-benchmark)
+                       (lambda (_skip-tests)
+                         '(:passed t :tests-passed t :eight-keys 0.44)))
+                      ((symbol-function 'gptel-auto-experiment--code-quality-score)
+                       (lambda () 0.81))
+                      ((symbol-function 'gptel-auto-experiment-decide)
+                       (lambda (_before _after callback)
+                         (setq decide-called t)
+                         (funcall callback '(:keep nil :reasoning "Local: Winner: A"))))
+                      ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
+                       (lambda (&rest _args) t))
+                      ((symbol-function 'magit-git-success)
+                       (lambda (&rest _args) t))
+                      ((symbol-function 'gptel-auto-experiment-log-tsv)
+                       (lambda (&rest _args) nil))
+                      ((symbol-function 'message)
+                       (lambda (&rest _args) nil)))
+              (gptel-auto-experiment-run
+               "lisp/modules/gptel-tools-agent.el" 1 5 0.40 0.50 nil
+               (lambda (exp-result)
+                 (setq result exp-result)))))
+          (should decide-called)
+          (should result)
+          (should (equal (plist-get result :hypothesis)
+                         "Preserve partial timeout edits for real benchmarking"))
+          (should-not (plist-get result :kept))
+          (should (string-prefix-p "HYPOTHESIS: Preserve partial timeout edits for real benchmarking"
+                                   captured-grade-output))
+          (should (string-match-p "Executor timed out before returning a final response"
+                                  captured-grade-output))
+          (should (string-match-p "Original timeout: Error: Task"
+                                  captured-grade-output))
+          (should (string-match-p "partial work ready for workflow evaluation"
+                                  (plist-get result :agent-output))))
+      (when (buffer-live-p worktree-buf)
+        (kill-buffer worktree-buf))
+      (delete-directory project-root t))))
 
 (ert-deftest regression/auto-experiment/api-errors-do-not-touch-loop-state ()
   "API failures should not try to mutate outer loop state from a callback."
