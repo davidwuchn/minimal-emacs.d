@@ -1777,7 +1777,8 @@ delete the request or file buffer that happened to be current when the
 subagent callback fired."
   (let ((safe-buffer (get-buffer-create " *gptel-callback*")))
     (with-current-buffer safe-buffer
-      (funcall callback result))))
+      (when callback
+        (funcall callback result)))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
@@ -6093,7 +6094,8 @@ failures do not masquerade as published kept results."
                (let ((failed-result (plist-put (copy-sequence exp-result) :kept nil)))
                  (plist-put failed-result :comparator-reason "staging-flow-failed")))))
        (funcall log-fn run-id final-result)
-       (funcall callback final-result)))))
+       (when callback
+         (funcall callback final-result))))))
 
 ;;; Error Analysis and Adaptive Workflow
 
@@ -8084,10 +8086,12 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
 (defun gptel-auto-workflow--start-status-refresh-timer ()
   "Start the workflow status refresh timer."
   (gptel-auto-workflow--stop-status-refresh-timer)
-  (setq gptel-auto-workflow--status-refresh-timer
-        (run-with-timer gptel-auto-workflow-status-refresh-interval
-                        gptel-auto-workflow-status-refresh-interval
-                        #'gptel-auto-workflow--refresh-status-if-running)))
+  (when (and (numberp gptel-auto-workflow-status-refresh-interval)
+             (> gptel-auto-workflow-status-refresh-interval 0))
+    (setq gptel-auto-workflow--status-refresh-timer
+          (run-with-timer gptel-auto-workflow-status-refresh-interval
+                          gptel-auto-workflow-status-refresh-interval
+                          #'gptel-auto-workflow--refresh-status-if-running))))
 
 (defun gptel-auto-workflow-force-stop ()
   "Force stop a stuck workflow.
