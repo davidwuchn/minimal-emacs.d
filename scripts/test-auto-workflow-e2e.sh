@@ -8,9 +8,38 @@ cd "$DIR"
 
 SOCKET_PIDS=()
 TEMP_ARTIFACTS=()
+GLOBAL_SNAPSHOT_CACHE="$DIR/var/tmp/cron/copilot-auto-workflow-snapshot-paths.txt"
+GLOBAL_SNAPSHOT_CACHE_BACKUP=""
+GLOBAL_SNAPSHOT_CACHE_HAD_FILE=0
+
+backup_global_snapshot_cache() {
+    [ -n "$GLOBAL_SNAPSHOT_CACHE_BACKUP" ] && return 0
+
+    GLOBAL_SNAPSHOT_CACHE_BACKUP="$(mktemp "$DIR/var/tmp/cron/test-snapshot-cache-XXXXXX")"
+    TEMP_ARTIFACTS+=("$GLOBAL_SNAPSHOT_CACHE_BACKUP")
+
+    if [ -e "$GLOBAL_SNAPSHOT_CACHE" ]; then
+        cp "$GLOBAL_SNAPSHOT_CACHE" "$GLOBAL_SNAPSHOT_CACHE_BACKUP"
+        GLOBAL_SNAPSHOT_CACHE_HAD_FILE=1
+    else
+        : >"$GLOBAL_SNAPSHOT_CACHE_BACKUP"
+        GLOBAL_SNAPSHOT_CACHE_HAD_FILE=0
+    fi
+}
+
+restore_global_snapshot_cache() {
+    [ -n "$GLOBAL_SNAPSHOT_CACHE_BACKUP" ] || return 0
+
+    if [ "$GLOBAL_SNAPSHOT_CACHE_HAD_FILE" -eq 1 ]; then
+        cp "$GLOBAL_SNAPSHOT_CACHE_BACKUP" "$GLOBAL_SNAPSHOT_CACHE"
+    else
+        rm -f "$GLOBAL_SNAPSHOT_CACHE"
+    fi
+}
 
 cleanup_test_artifacts() {
     local pid path
+    restore_global_snapshot_cache
     for pid in "${SOCKET_PIDS[@]:-}"; do
         kill "$pid" 2>/dev/null || true
         wait "$pid" 2>/dev/null || true
@@ -78,7 +107,7 @@ PY
 echo "=== Auto-Workflow E2E Test ==="
 echo
 
-echo "[1/8] Checking prerequisites..."
+echo "[1/9] Checking prerequisites..."
 if [ ! -x "$RUNNER" ]; then
     echo "  ✗ wrapper missing or not executable: $RUNNER"
     exit 1
@@ -92,7 +121,7 @@ fi
 echo "  ✓ emacsclient is resolvable"
 
 echo
-echo "[2/8] Checking wrapper status..."
+echo "[2/9] Checking wrapper status..."
 if "$RUNNER" status | grep -q ':phase'; then
     echo "  ✓ wrapper returns a workflow status snapshot"
 else
@@ -101,7 +130,7 @@ else
 fi
 
 echo
-echo "[3/8] Checking persisted live snapshot handling..."
+echo "[3/9] Checking persisted live snapshot handling..."
 STATUS_TMP="$(mktemp "$DIR/var/tmp/cron/test-status-XXXXXX.sexp")"
 MESSAGES_TMP="$(mktemp "$DIR/var/tmp/cron/test-messages-XXXXXX.txt")"
 TEMP_ARTIFACTS+=("$STATUS_TMP" "$MESSAGES_TMP")
@@ -161,7 +190,32 @@ else
 fi
 
 echo
-echo "[4/8] Checking required modules..."
+echo
+echo "[4/9] Checking override isolation..."
+backup_global_snapshot_cache
+CACHE_STATUS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/aw-status-dirXXXXXX")"
+TEMP_ARTIFACTS+=("$CACHE_STATUS_DIR")
+CACHE_STATUS_FILE="$CACHE_STATUS_DIR/auto-workflow-status.sexp"
+printf '%s\n' '(:running t :kept 1 :total 1 :phase "running" :run-id "cache-test" :results "var/tmp/experiments/cache-test/results.tsv")' >"$CACHE_STATUS_FILE"
+if AUTO_WORKFLOW_STATUS_FILE="$CACHE_STATUS_FILE" \
+   AUTO_WORKFLOW_EMACS_SERVER="missing-cache-test-$$" \
+   "$RUNNER" status >/dev/null &&
+   if [ "$GLOBAL_SNAPSHOT_CACHE_HAD_FILE" -eq 1 ]; then
+       cmp -s "$GLOBAL_SNAPSHOT_CACHE" "$GLOBAL_SNAPSHOT_CACHE_BACKUP"
+   else
+       [ ! -e "$GLOBAL_SNAPSHOT_CACHE" ]
+   fi; then
+    echo "  ✓ temporary status overrides do not rewrite the shared snapshot cache"
+else
+    echo "  ✗ temporary status overrides rewrote the shared snapshot cache"
+    if [ -e "$GLOBAL_SNAPSHOT_CACHE" ]; then
+        sed 's/^/    /' "$GLOBAL_SNAPSHOT_CACHE"
+    fi
+    exit 1
+fi
+
+echo
+echo "[5/9] Checking required modules..."
 for module in gptel-tools-agent.el gptel-auto-workflow-projects.el gptel-auto-workflow-strategic.el; do
     if [ -f "lisp/modules/$module" ]; then
         echo "  ✓ $module exists"
@@ -172,7 +226,7 @@ for module in gptel-tools-agent.el gptel-auto-workflow-projects.el gptel-auto-wo
 done
 
 echo
-echo "[5/8] Checking cron configuration..."
+echo "[6/9] Checking cron configuration..."
 if crontab -l 2>/dev/null | grep -Eq '^[0-9*@].*run-auto-workflow-cron\.sh auto-workflow'; then
     echo "  ✓ Auto-workflow cron job installed via wrapper"
     crontab -l | grep -E '^[0-9*@].*run-auto-workflow-cron\.sh auto-workflow' | head -1 | sed 's/^/    /'
@@ -183,7 +237,7 @@ else
 fi
 
 echo
-echo "[6/8] Checking required directories..."
+echo "[7/9] Checking required directories..."
 for dir in var/tmp/cron var/tmp/experiments; do
     if [ -d "$dir" ]; then
         echo "  ✓ $dir exists"
@@ -194,7 +248,7 @@ for dir in var/tmp/cron var/tmp/experiments; do
 done
 
 echo
-echo "[7/8] Testing batch module loading..."
+echo "[8/9] Testing batch module loading..."
 if run_batch_bootstrap >/dev/null 2>&1; then
     echo "  ✓ auto-workflow modules load successfully in batch mode"
 else
@@ -203,7 +257,7 @@ else
 fi
 
 echo
-echo "[8/8] Checking workflow entrypoints..."
+echo "[9/9] Checking workflow entrypoints..."
 if "$RUNNER" status | grep -q ':phase'; then
     echo "  ✓ wrapper status remains responsive"
 else
