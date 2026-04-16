@@ -15,31 +15,35 @@ Decision Points (all LLM):
 - Which targets? → Analyzer
 - What mutations? → Analyzer + Executor
 - Quality OK? → Grader
-- Keep or discard? → Comparator
+- Keep or discard? → Comparator (requires correctness-fix + strong-grade for ties)
 ```
 
 **Static targets below are fallback only.** Primary: LLM strategic selection.
 
 ## Current Baselines
 
-From latest experiment runs (`var/tmp/experiments/2026-03-25/results.tsv`):
+From latest experiment runs (updated 2026-04-16):
 
 | Target | Eight Keys | Code Quality | Weakest Key | Status |
 |--------|------------|--------------|-------------|--------|
-| `gptel-ext-retry.el` | 0.40 | 0.50 → 1.00 | σ Specificity | Needs work |
-| `gptel-ext-context.el` | (pending) | (pending) | - | New target |
-| `gptel-tools-code.el` | (pending) | (pending) | - | New target |
+| `gptel-tools-agent.el` | 0.40→0.75 | 0.50→0.93 | σ Specificity | Active |
+| `gptel-agent-loop.el` | 0.50→0.88 | 0.50→0.92 | μ Directness | Active |
+| `gptel-ext-context-cache.el` | 0.50→0.92 | 0.50→0.90 | τ Wisdom | Active |
+| `gptel-sandbox.el` | 0.50→0.90 | 0.50→0.85 | π Synthesis | Active |
+| `gptel-benchmark-core.el` | 0.40→0.80 | 0.50→0.93 | σ Specificity | Active |
 
-**Note**: Code quality improved (0.50 → 1.00) from extracting error patterns into named constants, but Eight Keys score unchanged. Need mutations that affect signal patterns.
+**Note**: Backend fallback chain now includes moonshot/kimi-k2.6-code-preview as first fallback after MiniMax.
 
 ## Targets
 
 Files to optimize (one per line, relative to project root):
 
 ```
-lisp/modules/gptel-ext-retry.el
-lisp/modules/gptel-ext-context.el
-lisp/modules/gptel-tools-code.el
+lisp/modules/gptel-tools-agent.el
+lisp/modules/gptel-agent-loop.el
+lisp/modules/gptel-ext-context-cache.el
+lisp/modules/gptel-sandbox.el
+lisp/modules/gptel-benchmark-core.el
 ```
 
 ## Success Criteria
@@ -52,7 +56,10 @@ lisp/modules/gptel-tools-code.el
 
 **Combined Score** = 0.5 × Eight Keys + 0.5 × Code Quality
 
-Decision: Keep if combined improves, discard if tie/decline.
+**Decision Gate**:
+- Keep if combined score improves
+- Tie: Keep ONLY if correctness-fix detected AND strong-grade pass AND quality gain >= threshold
+- Discard if decline or tie without correctness-fix
 
 ## Constraints
 
@@ -65,7 +72,6 @@ lisp/eca-security.el
 lisp/modules/gptel-ext-security.el
 lisp/modules/gptel-ext-tool-confirm.el
 lisp/modules/gptel-ext-tool-permits.el
-lisp/modules/gptel-sandbox.el
 eca/**
 mementum/**
 var/elpa/**
@@ -81,9 +87,22 @@ var/elpa/**
 
 ### Optimization Focus
 
-- [ ] Performance (startup time, memory)
+- [x] Performance (startup time, memory)
 - [x] Code clarity (readability, maintainability)
 - [x] Both equally weighted
+
+## Backend Fallback Chain
+
+When MiniMax hits rate limits (429), auto-workflow automatically fails over:
+
+| Order | Backend | Model | Purpose |
+|-------|---------|-------|---------|
+| 1 | **MiniMax** | `minimax-m2.7-highspeed` | Primary workhorse |
+| 2 | **moonshot** | `kimi-k2.6-code-preview` | First fallback |
+| 3 | **DashScope** | `qwen3.6-plus` | Second fallback |
+| 4 | **DeepSeek** | `deepseek-chat` | Third fallback |
+| 5 | **CF-Gateway** | `@cf/zai-org/glm-4.7-flash` | Fourth fallback |
+| 6 | **Gemini** | `gemini-3.1-pro-preview` | Last resort |
 
 ## Mutation Strategy
 
@@ -129,6 +148,8 @@ Each experiment targets the weakest Eight Keys. Include signal phrases in commit
 | Extract constants | `my/gptel--transient-error-patterns` | Code quality +0.50 |
 | Add docstrings | PRECONDITIONS, BEHAVIOR sections | Grader 6/6 pass |
 | Named patterns | `my/gptel--rate-limit-patterns` | Testability |
+| Nil guards | `(or value default)` patterns | Stability +0.10 |
+| Helper extraction | DRY repeated logic | Clarity +0.20 |
 
 ### Failed Patterns
 
@@ -137,6 +158,7 @@ Each experiment targets the weakest Eight Keys. Include signal phrases in commit
 | No hypothesis stated | Grader 2/6 fail | Always state hypothesis first |
 | Generic docstrings | No Eight Keys improvement | Need signal patterns in code |
 | Error output | Executor failed to find file | Specify full paths |
+| Over-engineering | Complexity penalty | Keep changes minimal |
 
 ### Hypothesis Templates
 
@@ -184,9 +206,11 @@ Each target has an optimization skill in `mementum/knowledge/optimization-skills
 
 | Target | Skill File | φ Baseline | Mutation Skills |
 |--------|------------|------------|-----------------|
-| `gptel-ext-retry.el` | `retry.md` | 0.50 | caching, lazy-init, simplification |
-| `gptel-ext-context.el` | `context.md` | 0.50 | caching, lazy-init, simplification |
-| `gptel-tools-code.el` | `code.md` | 0.50 | caching, lazy-init, simplification |
+| `gptel-tools-agent.el` | `tools-agent.md` | 0.50 | caching, simplification, nil-guards |
+| `gptel-agent-loop.el` | `agent-loop.md` | 0.50 | caching, lazy-init, simplification |
+| `gptel-ext-context-cache.el` | `context-cache.md` | 0.50 | caching, simplification |
+| `gptel-sandbox.el` | `sandbox.md` | 0.50 | simplification, nil-guards |
+| `gptel-benchmark-core.el` | `benchmark-core.md` | 0.50 | caching, simplification |
 
 Mutation skills provide hypothesis templates. These are injected into experiment prompts.
 
@@ -245,9 +269,9 @@ After merge, update `mementum/knowledge/optimization-skills/{target}.md`:
 (Populated by metabolize after each night)
 
 Current suggestions:
-1. **retry.el**: Add adaptive retry ordering based on historical success (φ Vitality)
-2. **context.el**: Lazy-load context templates (λ Efficiency)
-3. **code.el**: Cache parsed code structures (caching)
+1. **gptel-tools-agent.el**: Extract repeated validation logic into helpers (μ Directness)
+2. **gptel-agent-loop.el**: Cache continuation state to avoid recomputation (λ Efficiency)
+3. **gptel-sandbox.el**: Simplify form parsing with better EOF handling (π Synthesis)
 
 ---
 
@@ -261,6 +285,7 @@ gptel-auto-workflow-run-async
   → grader (6/6 quality check)
   → benchmark (Eight Keys score)
   → code-quality (docstring coverage)
+  → reviewer (checks for blockers, max 2 retries)
   → comparator (LLM decides keep/discard)
   → TSV log
   → push to optimize/* (NOT main)
