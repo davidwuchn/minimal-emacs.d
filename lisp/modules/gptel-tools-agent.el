@@ -3158,7 +3158,8 @@ repair just that gitlink from MAIN-REF, then rehydrate and commit the repair."
                 t)))))))))
 
 (defun gptel-auto-workflow--cleanup-staging-submodule-worktree (worktree path)
-  "Remove any staged submodule worktree for PATH under WORKTREE."
+  "Remove any staged submodule worktree for PATH under WORKTREE.
+Return nil on success, or an error string if the stale path could not be removed."
   (let* ((shared-git-dir (gptel-auto-workflow--shared-submodule-git-dir path))
          (target (expand-file-name path worktree)))
     (when (file-directory-p shared-git-dir)
@@ -3173,11 +3174,16 @@ repair just that gitlink from MAIN-REF, then rehydrate and commit the repair."
                  (shell-quote-argument shared-git-dir)
                  (shell-quote-argument target))
          60)))
-    (cond
-     ((file-directory-p target)
-      (ignore-errors (delete-directory target t)))
-     ((file-exists-p target)
-      (ignore-errors (delete-file target))))))
+    (let ((delete-by-moving-to-trash nil))
+      (cond
+       ((file-symlink-p target)
+        (ignore-errors (delete-file target)))
+       ((file-directory-p target)
+        (ignore-errors (delete-directory target t)))
+       ((file-exists-p target)
+        (ignore-errors (delete-file target)))))
+    (when (file-exists-p target)
+      (format "Failed to remove stale submodule path %s" path))))
 
 (defun gptel-auto-workflow--cleanup-staging-submodule-worktrees (&optional worktree)
   "Remove staged top-level submodule worktrees from WORKTREE."
@@ -3384,21 +3390,24 @@ This avoids broken linked-worktree submodule metadata under `.git/worktrees/.../
               (setq failure
                     (format "Missing shared submodule repo for %s: %s"
                             path shared-git-dir)))
-             (t
-              (gptel-auto-workflow--cleanup-staging-submodule-worktree root path)
-              (make-directory (file-name-directory target) t)
-              (setq add-result
-                    (gptel-auto-workflow--git-result
-                     (format "git --git-dir=%s worktree add --detach --force %s %s"
-                             (shell-quote-argument shared-git-dir)
-                             (shell-quote-argument target)
-                             (shell-quote-argument commit))
-                     180))
-              (if (= 0 (cdr add-result))
-                  (push (format "%s=%s" path (gptel-auto-workflow--truncate-hash commit))
-                        hydrated)
-                (setq failure
-                      (format "Failed to hydrate %s: %s" path (car add-result)))))))))
+              (t
+               (let ((cleanup-error
+                      (gptel-auto-workflow--cleanup-staging-submodule-worktree root path)))
+                 (if cleanup-error
+                     (setq failure cleanup-error)
+                   (make-directory (file-name-directory target) t)
+                   (setq add-result
+                         (gptel-auto-workflow--git-result
+                          (format "git --git-dir=%s worktree add --detach --force %s %s"
+                                  (shell-quote-argument shared-git-dir)
+                                  (shell-quote-argument target)
+                                  (shell-quote-argument commit))
+                          180))
+                   (if (= 0 (cdr add-result))
+                       (push (format "%s=%s" path (gptel-auto-workflow--truncate-hash commit))
+                             hydrated)
+                     (setq failure
+                           (format "Failed to hydrate %s: %s" path (car add-result)))))))))))
       (if failure
           (cons failure 1)
         (cons (if hydrated
