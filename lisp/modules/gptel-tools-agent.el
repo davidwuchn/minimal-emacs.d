@@ -1775,7 +1775,7 @@ its async continuation layer in the worker daemon."
 This prevents `Selecting deleted buffer' errors when callback side effects
 delete the request or file buffer that happened to be current when the
 subagent callback fired."
-  (when callback
+  (when (functionp callback)
     (let ((safe-buffer (get-buffer-create " *gptel-callback*")))
       (with-current-buffer safe-buffer
         (funcall callback result)))))
@@ -1857,14 +1857,9 @@ Uses hash table keyed by task-id to support parallel execution."
                   (format "Error: Task \"%s\" (%s) timed out after %ds%s."
                           description agent-type timeout-seconds timeout-suffix)))
              (funcall restore-origin-fsm child-fsm)
-             (if (buffer-live-p origin-buf)
-                 (with-current-buffer origin-buf
-                   (unwind-protect
-                       (funcall callback timeout-result)
-                     (remhash task-id my/gptel--agent-task-state)))
-               (unwind-protect
-                   (funcall callback timeout-result)
-                 (remhash task-id my/gptel--agent-task-state)))))
+             (unwind-protect
+                 (my/gptel--invoke-callback-safely callback timeout-result)
+               (remhash task-id my/gptel--agent-task-state))))
          (rearm-timeout (state)
            (when task-timeout
              (when (timerp (plist-get state :timeout-timer))
@@ -4315,25 +4310,30 @@ Uses the staging worktree instead of switching branches in the root repo."
   "Check syntax of all .el files in DIRECTORY.
 Writes errors to OUTPUT-BUFFER.
 Returns t if all files pass syntax check, nil otherwise."
-  (let ((errors nil)
-        (files (directory-files-recursively directory "\\.el\\'")))
-    (dolist (file files)
-      (when (file-readable-p file)
-        (with-temp-buffer
-          (insert-file-contents file)
-          (emacs-lisp-mode)  ; Enable proper syntax parsing for comments
-          (goto-char (point-min))
-          (condition-case err
-              (progn
-                (while (not (eobp)) (forward-sexp)))
-            (error
-             (let ((msg (format "SYNTAX ERROR: %s: %s"
-                                (file-relative-name file directory)
-                                (error-message-string err))))
-               (push msg errors)
-               (with-current-buffer output-buffer
-                 (insert msg "\n"))))))))
-    (null errors)))
+  (if (or (null directory) (null output-buffer))
+      (progn
+        (message "[auto-workflow] check-el-syntax: nil argument")
+        nil)
+    (let ((errors nil)
+          (files (ignore-errors (directory-files-recursively directory "\\.el\\'"))))
+      (dolist (file (or files nil))
+        (when (file-readable-p file)
+          (with-temp-buffer
+            (insert-file-contents file)
+            (emacs-lisp-mode)
+            (goto-char (point-min))
+            (condition-case err
+                (progn
+                  (while (not (eobp)) (forward-sexp)))
+              (error
+               (let ((msg (format "SYNTAX ERROR: %s: %s"
+                                  (file-relative-name file directory)
+                                  (error-message-string err))))
+                 (push msg errors)
+                 (when (buffer-live-p output-buffer)
+                   (with-current-buffer output-buffer
+                     (insert msg "\n"))))))))
+      (null errors)))))
 
 (defun gptel-auto-workflow--verify-staging ()
   "Run verification in the staging worktree.
