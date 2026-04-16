@@ -78,6 +78,7 @@ Preserves N most recent reasoning blocks where N is `my/gptel-reasoning-keep-tur
           (dotimes (i (length messages))
             (let ((msg (aref messages i)))
               (when (and (equal (plist-get msg :role) "assistant")
+                         (not (plist-get msg :tool_calls))
                          (plist-get msg :reasoning_content)
                          (not (equal "" (plist-get msg :reasoning_content))))
                 (push i reasoning-indices))))
@@ -945,10 +946,9 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
     (tiny-model         . 50000))
   "Test stub for model context byte limits.")
 
-;; Stub gptel--json-encode: use json-serialize (built-in C function, no require needed)
-(unless (fboundp 'gptel--json-encode)
-  (defun gptel--json-encode (obj)
-    (json-serialize obj :null-object :null :false-object :json-false)))
+(defun test-trim--json-encode (obj)
+  "Test-local JSON encoder for payload size estimation."
+  (json-serialize obj :null-object :null :false-object :json-false))
 
 ;; Copy of helper functions under test
 (defun test-trim--estimate-payload-bytes (info)
@@ -956,7 +956,7 @@ and optionally tool structs for STRUCT-NAMES (defaults to TOOL-DEF-NAMES)."
   (let ((data (plist-get info :data)))
     (if data
         (condition-case nil
-            (string-bytes (gptel--json-encode data))
+            (string-bytes (test-trim--json-encode data))
           (error 0))
       0)))
 
@@ -1133,35 +1133,43 @@ With my/gptel-reasoning-keep-turns=1, only older reasoning blocks are stripped."
         (should (not (equal "" (plist-get (aref messages 2) :reasoning_content)))))
       (should (= 0 (plist-get info :retries))))))
 
-(ert-deftest compact/repairs-tool-call-reasoning-after-strip ()
-  "Compaction preserves empty reasoning field on assistant tool-call messages.
-This matches Moonshot/Kimi's requirement when thinking is enabled." 
+(ert-deftest compact/preserves-tool-call-reasoning-during-strip ()
+  "Compaction keeps tool-call reasoning content intact for thinking models.
+Moonshot/Kimi can reject compacted tool-call history when older assistant
+tool-call turns lose their reasoning payload entirely." 
   (let* ((my/gptel-payload-byte-limit 400)
+         (my/gptel-trim-min-bytes 0)
          (my/gptel-reasoning-keep-turns 0)
+         (reasoning (make-string 2000 ?r))
          (assistant (list :role "assistant"
                           :content ""
                           :tool_calls (vector (list :id "call_repair" :type "function"
                                                     :function (list :name "Read" :arguments "{}")))
-                          :reasoning_content (make-string 2000 ?r)))
-         (tool-msg (test--make-large-tool-result 2000))
-         (info (test--make-info (list assistant tool-msg) 0)))
+                          :reasoning_content reasoning))
+         (tool-msg-1 (test--make-large-tool-result 2000))
+         (tool-msg-2 (test--make-large-tool-result 2000))
+         (tool-msg-3 (test--make-large-tool-result 2000))
+         (info (test--make-info (list assistant tool-msg-1 tool-msg-2 tool-msg-3) 0)))
     (plist-put info :model 'moonshot)
     (should (> (test--compact-payload-on-info info) 0))
     (let ((messages (plist-get (plist-get info :data) :messages)))
       (should (plist-member (aref messages 0) :reasoning_content))
-      (should (equal "" (plist-get (aref messages 0) :reasoning_content))))))
+      (should (equal reasoning
+                     (plist-get (aref messages 0) :reasoning_content))))))
 
 (ert-deftest compact/pass-3-and-4-keep-tool-call-reasoning-valid ()
-  "Even when compaction reaches later passes, tool-call reasoning remains present.
-This covers the real failure shape: pass 2 strips reasoning, then pass 3/4 still
-run because payload is oversized." 
+  "Even when compaction reaches later passes, tool-call reasoning stays intact.
+This covers the real failure shape where later compaction passes still run after
+tool-call history has already been compacted." 
   (let* ((my/gptel-payload-byte-limit 120)
+         (my/gptel-trim-min-bytes 0)
          (my/gptel-reasoning-keep-turns 0)
+         (reasoning (make-string 2000 ?r))
          (assistant (list :role "assistant"
                           :content ""
                           :tool_calls (vector (list :id "call_late" :type "function"
                                                     :function (list :name "Read" :arguments "{}")))
-                          :reasoning_content (make-string 2000 ?r)))
+                          :reasoning_content reasoning))
          (tool-msg-1 (test--make-large-tool-result 4000))
          (tool-msg-2 (test--make-large-tool-result 4000))
          (tools (vconcat (mapcar #'test--make-tool-def
@@ -1176,7 +1184,8 @@ run because payload is oversized."
            (messages (plist-get data :messages))
            (assistant-msg (aref messages 0)))
       (should (plist-member assistant-msg :reasoning_content))
-      (should (equal "" (plist-get assistant-msg :reasoning_content))))))
+      (should (equal reasoning
+                     (plist-get assistant-msg :reasoning_content))))))
 
 (ert-deftest compact/respects-model-specific-limit ()
   "Uses model-specific limit when smaller than global."
