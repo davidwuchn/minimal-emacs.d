@@ -592,7 +592,7 @@ ensure_worker_daemon() {
     seed_worker_daemon_shared_var
     env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
         MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
-        "$EMACS" --init-directory="$DIR" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
+        "$EMACS" -Q --init-directory="$DIR" --bg-daemon="$SERVER_NAME" >>"$DAEMON_LOG" 2>&1 || true
     for _ in $(seq 1 50); do
         if check_worker_daemon; then
             rc=0
