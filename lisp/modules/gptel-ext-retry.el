@@ -184,9 +184,11 @@ Returns the number of messages truncated, or 0 if nothing was done."
   "Strip reasoning_content from older assistant messages in INFO to reduce payload.
 
 Preserves the N most recent assistant turns with reasoning_content, where N is
-`my/gptel-reasoning-keep-turns'.  Older reasoning blocks are set to an empty
-string so the field remains present in the serialized payload (some APIs like
-Moonshot require the field to exist when thinking is enabled).
+`my/gptel-reasoning-keep-turns'.  Older non-tool-call reasoning blocks are set
+to an empty string so the field remains present in the serialized payload.
+Assistant turns that carry `:tool_calls' keep their reasoning intact because
+thinking-enabled backends can reject compacted tool-call history when that
+reasoning is blanked.
 
 Called on retry 2+ (retries >= 2) to remove chain-of-thought reasoning text
 that accumulates across tool-use rounds.
@@ -204,6 +206,7 @@ Returns the number of messages whose reasoning_content was stripped."
                 messages
                 (lambda (msg)
                   (and (equal (plist-get msg :role) "assistant")
+                       (not (plist-get msg :tool_calls))
                        (plist-get msg :reasoning_content)
                        (not (equal "" (plist-get msg :reasoning_content))))))))
           (when (> (length reasoning-indices) keep)
