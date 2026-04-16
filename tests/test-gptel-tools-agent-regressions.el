@@ -1227,6 +1227,15 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (equal (gptel-auto-experiment--categorize-error grader-error)
                    '(:api-rate-limit . "Provider overloaded")))))
 
+(ert-deftest regression/auto-experiment/authorized-errors-count-as-provider-failures ()
+  "Executor auth failures should stay on the provider-failover path."
+  (let ((auth-error
+         "Error: Task executor could not finish task \"Experiment 1: optimize x\". Error details: (:type \"authorized_error\" :message \"token is unusable (1004)\" :http_code \"401\")"))
+    (should (gptel-auto-experiment--provider-auth-error-p auth-error))
+    (should (gptel-auto-experiment--is-retryable-error-p auth-error))
+    (should (equal (gptel-auto-experiment--categorize-error auth-error)
+                   '(:api-error . "Provider authorization failed")))))
+
 (ert-deftest regression/auto-experiment/run-retries-grader-locally-without-rerunning-executor ()
   "Transient grader failures should retry grading locally without rerunning executor work."
   (let* ((project-root (make-temp-file "aw-project" t))
@@ -2895,6 +2904,56 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
               (should (eq (plist-get override :model) 'qwen3.6-plus)))))
       (setq gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
+       (if had-dashscope
+           (set 'gptel--dashscope old-dashscope)
+         (makunbound 'gptel--dashscope)))))
+
+(ert-deftest regression/auto-workflow/provider-failover-activates-on-authorized-errors ()
+  "Headless provider failover should activate on provider auth failures."
+  (let* ((dashscope-backend
+          (gptel-make-openai "DashScope"
+            :host "coding.dashscope.aliyuncs.com"
+            :key (lambda () "token")
+            :models '(qwen3.5-plus qwen3.6-plus)))
+         (had-dashscope (boundp 'gptel--dashscope))
+         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+         (preset '(:backend "MiniMax" :model "minimax-m2.7-highspeed"))
+         (auth-error
+          "Error: Task executor could not finish task \"x\". Error details: (:type \"authorized_error\" :message \"token is unusable (1004)\" :http_code \"401\")")
+         (gptel-auto-workflow--headless t)
+         (gptel-auto-workflow-persistent-headless t)
+         (gptel-auto-workflow--current-project "/tmp/project")
+         (gptel-auto-workflow-headless-fallback-agents
+          '("analyzer" "comparator" "executor" "grader" "reviewer"))
+         (gptel-auto-workflow-headless-subagent-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-executor-rate-limit-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow--rate-limited-backends nil)
+         (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
+    (unwind-protect
+        (progn
+          (set 'gptel--dashscope dashscope-backend)
+          (cl-letf (((symbol-function 'my/gptel-api-key)
+                     (lambda (host)
+                       (pcase host
+                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.minimaxi.com" "token")
+                         (_ nil))))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (gptel-auto-workflow--maybe-activate-rate-limit-failover
+             "executor" preset auth-error)
+            (should (member "MiniMax" gptel-auto-workflow--rate-limited-backends))
+            (let ((override
+                   (gptel-auto-workflow--maybe-override-subagent-provider
+                    "executor" preset)))
+              (should (eq (plist-get override :backend) dashscope-backend))
+              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+      (setq gptel-auto-workflow--rate-limited-backends nil
+            gptel-auto-workflow--runtime-subagent-provider-overrides nil)
       (if had-dashscope
           (set 'gptel--dashscope old-dashscope)
         (makunbound 'gptel--dashscope)))))
@@ -3364,6 +3423,42 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                (lambda (&rest _args) nil)))
       (gptel-auto-experiment--run-with-retry
        "lisp/modules/gptel-auto-workflow-strategic.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 2))
+      (should (= scheduled-retries 1))
+       (should-not gptel-auto-experiment--quota-exhausted)
+       (should (equal (plist-get final-result :agent-output)
+                      "Executor result for task: retry success")))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-retries-authorized-errors ()
+  "Provider auth failures should retry so a fallback backend can take over."
+  (let ((runs 0)
+        (scheduled-retries 0)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-experiment--quota-exhausted nil)
+        (auth-error
+         "Error: Task executor could not finish task \"x\". Error details: (:type \"authorized_error\" :message \"token is unusable (1004)\" :http_code \"401\")"))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
+                 (cl-incf runs)
+                 (funcall callback
+                          (if (= runs 1)
+                              (list :agent-output auth-error
+                                    :comparator-reason ":tool-error")
+                            (list :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (cl-incf scheduled-retries)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
        (lambda (result)
          (setq final-result result)))
       (should (= runs 2))
