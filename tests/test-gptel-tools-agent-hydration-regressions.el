@@ -1,5 +1,13 @@
+;;; test-gptel-tools-agent-hydration-regressions.el --- Hydration regressions -*- lexical-binding: t; -*-
+
+;;; Commentary:
+;; Focused regressions for workflow submodule hydration edge cases.
+
+;;; Code:
+
 (require 'ert)
 (require 'cl-lib)
+(require 'gptel-tools-agent)
 
 (ert-deftest regression/auto-workflow/hydrate-staging-submodules-removes-stale-target-before-add ()
   "Hydration should remove a stale target dir before adding the submodule worktree."
@@ -36,3 +44,5 @@
             (should saw-add)))
       (delete-directory root t)
       (delete-directory shared-git-dir t))))
+
+;;; test-gptel-tools-agent-hydration-regressions.el ends here
