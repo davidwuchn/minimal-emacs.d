@@ -6094,7 +6094,8 @@ failures do not masquerade as published kept results."
                (let ((failed-result (plist-put (copy-sequence exp-result) :kept nil)))
                  (plist-put failed-result :comparator-reason "staging-flow-failed")))))
        (funcall log-fn run-id final-result)
-       (funcall callback final-result)))))
+       (when callback
+         (funcall callback final-result))))))
 
 ;;; Error Analysis and Adaptive Workflow
 
