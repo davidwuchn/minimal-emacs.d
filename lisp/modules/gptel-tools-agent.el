@@ -1775,7 +1775,7 @@ its async continuation layer in the worker daemon."
 This prevents `Selecting deleted buffer' errors when callback side effects
 delete the request or file buffer that happened to be current when the
 subagent callback fired."
-  (when callback
+  (when (functionp callback)
     (let ((safe-buffer (get-buffer-create " *gptel-callback*")))
       (with-current-buffer safe-buffer
         (funcall callback result)))))
