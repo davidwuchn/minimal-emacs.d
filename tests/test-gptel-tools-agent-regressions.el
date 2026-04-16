@@ -1046,6 +1046,52 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should (string-match-p "Agent error: Aborted:"
                               (plist-get result :details))))))
 
+(ert-deftest regression/auto-experiment/aborted-output-matcher-ignores-diff-evidence ()
+  "Abort markers inside executor evidence should not make a successful reply look aborted."
+  (let ((output
+         (concat
+          "Executor result for task: Experiment 1: optimize lisp/modules/gptel-tools-agent.el\n"
+          "HYPOTHESIS: Guard a matcher to avoid false positives\n"
+          "EVIDENCE:\n"
+          "```diff\n"
+          "-  (string-match-p \"inspection-thrash aborted\" output)\n"
+          "+  (string-match-p \"\\\\`inspection-thrash aborted\" output)\n"
+          "```")))
+    (should-not (gptel-auto-experiment--aborted-agent-output-p output))
+    (should-not (gptel-auto-experiment--agent-error-p output))))
+
+(ert-deftest regression/auto-experiment/grade-allows-diff-evidence-with-abort-markers ()
+  "Grading should not short-circuit when executor evidence mentions abort strings."
+  (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
+        (gptel-auto-experiment--grade-counter 0)
+        (gptel-auto-experiment-use-subagents t)
+        result)
+    (cl-letf (((symbol-function 'run-with-timer)
+               (lambda (&rest _args) :fake-timer))
+              ((symbol-function 'timerp)
+               (lambda (_obj) nil))
+              ((symbol-function 'cancel-timer)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'gptel-benchmark-grade)
+               (lambda (_output _expected _forbidden callback &optional _timeout)
+                 (funcall callback '(:score 9 :total 9 :passed t :details "graded"))))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-grade
+         (concat
+          "Executor result for task: Experiment 1: optimize lisp/modules/gptel-tools-agent.el\n"
+          "HYPOTHESIS: Guard a matcher to avoid false positives\n"
+          "EVIDENCE:\n"
+          "```diff\n"
+          "-  (string-match-p \"inspection-thrash aborted\" output)\n"
+          "+  (string-match-p \"\\\\`inspection-thrash aborted\" output)\n"
+          "```")
+         (lambda (grade)
+           (setq result grade))))
+      (should (equal (plist-get result :score) 9))
+      (should (equal (plist-get result :passed) t)))))
+
 (ert-deftest regression/auto-experiment/grade-includes-worktree-diff-evidence ()
   "Grader input should include concrete git evidence from the experiment worktree."
   (let ((gptel-auto-experiment--grade-state (make-hash-table :test 'eql))
@@ -1535,8 +1581,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should (string-match-p "FOCUS: <one concrete function or variable>" prompt))
       (should (string-match-p "Do NOT use Code_Map on the whole file" prompt)))))
 
-(ert-deftest regression/auto-experiment/build-prompt-adds-large-target-focus-contract ()
-  "Large targets should get the focus contract on the first attempt."
+(ert-deftest regression/auto-experiment/build-prompt-adds-large-target-guidance ()
+  "Large targets should get advisory guidance without a forced recovery contract."
   (cl-letf (((symbol-function 'gptel-auto-workflow--get-worktree-dir)
              (lambda (_target) "/tmp/worktree"))
             ((symbol-function 'shell-command-to-string)
@@ -1558,10 +1604,12 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                    "lisp/modules/gptel-tools-agent.el" 1 5 nil 0.4)))
       (should (string-match-p "Controller-Selected Starting Symbol" prompt))
       (should (string-match-p "Symbol: `my/gptel--invoke-callback-safely`" prompt))
-      (should (string-match-p "Mandatory Focus Contract" prompt))
+      (should (string-match-p "Large Target Guidance" prompt))
       (should (string-match-p "This target is large" prompt))
       (should (string-match-p "FOCUS: my/gptel--invoke-callback-safely" prompt))
-      (should (string-match-p "line 2 must be exactly `FOCUS: my/gptel--invoke-callback-safely`" prompt)))))
+      (should (string-match-p "line 2 must be exactly `FOCUS: my/gptel--invoke-callback-safely`" prompt))
+      (should-not (string-match-p "^## Mandatory Focus Contract$" prompt))
+      (should-not (string-match-p "Follow this exact opening sequence" prompt)))))
 
 (ert-deftest regression/auto-experiment/select-large-target-focus-ranks-and-rotates ()
   "Large-target focus selector should rank helpers and rotate by experiment."

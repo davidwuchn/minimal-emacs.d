@@ -5866,6 +5866,16 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
          (focus-candidate
           (when large-target-p
             (gptel-auto-experiment--select-large-target-focus target-full-path experiment-id)))
+         (large-target-guidance
+          (when large-target-p
+            (concat "## Large Target Guidance\n"
+                    (format "This target is large (%d bytes). Start from one concrete function or variable instead of surveying the whole file.\n"
+                            target-bytes)
+                    (when focus-candidate
+                      (format "- Begin at `%s` or a direct caller/callee.\n"
+                              (plist-get focus-candidate :name)))
+                    "- Prefer focused Grep or narrow Read before broader Code_Map surveys.\n"
+                    "- Make the first edit before exploring a second subsystem.\n\n")))
          (focus-line
           (format "FOCUS: %s"
                   (or (plist-get focus-candidate :name)
@@ -5879,13 +5889,12 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
                     (plist-get focus-candidate :end-line)
                     (plist-get focus-candidate :size-lines))))
          (inspection-thrash-contract
-          (when (or recovery-p large-target-p)
+          (when recovery-p
             (concat "## Mandatory Focus Contract\n"
+                    "A previous attempt on this target already failed with inspection-thrash.\n"
                     (when large-target-p
                       (format "This target is large (%d bytes). Broad file surveys are likely to fail.\n"
                               target-bytes))
-                    (when recovery-p
-                      "A previous attempt on this target already failed with inspection-thrash.\n")
                     "Follow this exact opening sequence:\n"
                     (format "1. The second line after HYPOTHESIS must be exactly `%s`.\n"
                             focus-line)
@@ -5899,6 +5908,8 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
 %s
 
 ## Target File (full path)
+%s
+
 %s
 
 %s
@@ -5945,7 +5956,7 @@ Make minimal, targeted changes to CODE, not documentation.
 ## Instructions
 1. FIRST LINE must be: HYPOTHESIS: [What CODE change and why]
 2. If a Controller-Selected Starting Symbol is present, line 2 must be exactly `%s`
-3. If a Mandatory Focus Contract is present, obey it exactly; start with focused Grep or narrow Read on that symbol and only switch to a direct caller/callee after at most 2 reads
+3. If a Mandatory Focus Contract is present, obey it exactly; otherwise start from one concrete function or variable and prefer focused Grep or narrow Read before broader Code_Map surveys
 4. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
 5. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
 6. Implement the CODE change minimally using Edit tool
@@ -5975,6 +5986,7 @@ Example HYPOTHESES:
             worktree-path
             target-full-path
             (or controller-focus "")
+            (or large-target-guidance "")
             (or inspection-thrash-contract "")
             (or patterns "No previous experiments")
             (or suggestions "None")
@@ -6495,10 +6507,11 @@ REASON is only used for logging."
 (defun gptel-auto-experiment--aborted-agent-output-p (output)
   "Return non-nil when OUTPUT reflects an explicit subagent abort."
   (and (stringp output)
-       (let ((case-fold-search t))
+       (let ((case-fold-search t)
+             (trimmed (string-trim-left output)))
          (string-match-p
-          "\\`Aborted:\\|inspection-thrash aborted\\|doom-loop aborted\\|was aborted by the user\\|was cancelled or timed out"
-          output))))
+          "\\`\\(?:Aborted:\\|\\(?:gptel:\\s-*\\)?inspection-thrash aborted\\|\\(?:gptel:\\s-*\\)?doom-loop aborted\\|Error: Task .* was aborted by the user\\|Error: Task .* was cancelled or timed out\\)"
+          trimmed))))
 
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
   "Check if ERROR-OUTPUT is a transient/retryable error."
