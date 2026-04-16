@@ -502,34 +502,36 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
         (gptel-agent-loop--cleanup-overlay ov))
 
        ((eq resp nil)
-        (cond
-         ((gptel-agent-loop--check-aborted state ov))
-         ((and (or (null error-data)
-                   (gptel-agent-loop--transient-error-p error-data))
-               (< (gptel-agent-loop--task-retries state)
-                  gptel-agent-loop-max-retries))
-          (setf (gptel-agent-loop--task-retries state)
-                (1+ (gptel-agent-loop--task-retries state)))
-          (message "[RunAgent] Retrying %s task '%s' (attempt %d/%d)"
-                   (gptel-agent-loop--task-agent-type state)
-                   (gptel-agent-loop--task-description state)
-                   (gptel-agent-loop--task-retries state)
-                   gptel-agent-loop-max-retries)
-          ;; Reset timeout so each retry gets a full window
-          (when (timerp (gptel-agent-loop--task-timeout-timer state))
-            (cancel-timer (gptel-agent-loop--task-timeout-timer state)))
-          (setf (gptel-agent-loop--task-timeout-timer state)
-                (gptel-agent-loop--make-timeout-timer state))
-          (gptel-agent-loop--schedule-request state request-prompt use-tools 2.0))
-         (t
-          (gptel-agent-loop--cleanup-overlay ov)
-          (gptel-agent-loop--deliver-result
-           state
-           (format "Error: %s task '%s' failed after %d retries.\nDetails: %S"
-                   (gptel-agent-loop--task-agent-type state)
-                   (gptel-agent-loop--task-description state)
-                   (gptel-agent-loop--task-retries state)
-                   error-data)))))
+        (if (gptel-agent-loop--task-aborted state)
+            (progn
+              (gptel-agent-loop--cleanup-overlay ov)
+              (gptel-agent-loop--deliver-aborted state))
+          (cond
+           ((and (or (null error-data)
+                     (gptel-agent-loop--transient-error-p error-data))
+                 (< (gptel-agent-loop--task-retries state)
+                    gptel-agent-loop-max-retries))
+            (setf (gptel-agent-loop--task-retries state)
+                  (1+ (gptel-agent-loop--task-retries state)))
+            (message "[RunAgent] Retrying %s task '%s' (attempt %d/%d)"
+                     (gptel-agent-loop--task-agent-type state)
+                     (gptel-agent-loop--task-description state)
+                     (gptel-agent-loop--task-retries state)
+                     gptel-agent-loop-max-retries)
+            (when (timerp (gptel-agent-loop--task-timeout-timer state))
+              (cancel-timer (gptel-agent-loop--task-timeout-timer state)))
+            (setf (gptel-agent-loop--task-timeout-timer state)
+                  (gptel-agent-loop--make-timeout-timer state))
+            (gptel-agent-loop--schedule-request state request-prompt use-tools 2.0))
+           (t
+            (gptel-agent-loop--cleanup-overlay ov)
+            (gptel-agent-loop--deliver-result
+             state
+             (format "Error: %s task '%s' failed after %d retries.\nDetails: %S"
+                     (gptel-agent-loop--task-agent-type state)
+                     (gptel-agent-loop--task-description state)
+                     (gptel-agent-loop--task-retries state)
+                     error-data))))))
 
        ((and (consp resp) (eq (car resp) 'tool-call))
         (let ((calls (cdr resp)))
