@@ -273,10 +273,13 @@ supports a small, explicit whitelist of pure operations."
       ('quote
        (cadr expr))
       ('if
-          (let ((cond-result (gptel-sandbox--eval-expr (nth 1 expr) env)))
-            (if cond-result
-                (gptel-sandbox--eval-expr (nth 2 expr) env)
-              (gptel-sandbox--eval-expr (nth 3 expr) env))))
+          (let ((args (cdr expr)))
+            (unless (>= (length args) 2)
+              (error "Programmatic if requires at least 2 arguments (condition and then-form), got: %d" (length args)))
+            (let ((cond-result (gptel-sandbox--eval-expr (car args) env)))
+              (if cond-result
+                  (gptel-sandbox--eval-expr (cadr args) env)
+                (gptel-sandbox--eval-expr (nth 2 args) env)))))
       ('setq
        (gptel-sandbox--eval-setq-pairs (cdr expr) env))
       ('when
