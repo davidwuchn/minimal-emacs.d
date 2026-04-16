@@ -542,7 +542,12 @@ prime_snapshot_paths_for_action() {
     local shared_messages="$DIR/var/tmp/cron/auto-workflow-messages-tail.txt"
 
     if [ -n "${AUTO_WORKFLOW_STATUS_FILE:-}" ] || [ -n "${AUTO_WORKFLOW_MESSAGES_FILE:-}" ]; then
-        save_cached_snapshot_paths "$STATUS_FILE" "$MESSAGES_FILE" >/dev/null 2>&1 || true
+        # Nested callers (notably run-tests.sh during live workflow verification)
+        # use temporary status/message files. Do not poison the shared cache
+        # unless the caller also supplied a dedicated snapshot-path cache file.
+        if [ -n "${AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE:-}" ]; then
+            save_cached_snapshot_paths "$STATUS_FILE" "$MESSAGES_FILE" >/dev/null 2>&1 || true
+        fi
     elif [ "$ACTION" = "status" ] || [ "$ACTION" = "messages" ]; then
         load_cached_snapshot_paths || true
         if [ "$default_status" != "$shared_status" ] &&
