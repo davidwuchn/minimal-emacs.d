@@ -6244,10 +6244,14 @@ supplied on failure, use it as the downgrade reason."
              (final-result
               (if (or (not staging-reported-p) staging-succeeded)
                   exp-result
-                (let ((failed-result (plist-put (copy-sequence exp-result) :kept nil)))
-                  (plist-put failed-result :comparator-reason failure-reason)))))
-        (funcall log-fn run-id final-result)
-        (when callback
+                (let ((failed-result (and (listp exp-result)
+                                           (plist-put (copy-sequence exp-result) :kept nil))))
+                  (when failed-result
+                    (plist-put failed-result :comparator-reason failure-reason))
+                  (or failed-result exp-result)))))
+        (when (functionp log-fn)
+          (funcall log-fn run-id final-result))
+        (when (and callback (functionp callback))
           (funcall callback final-result))))))
 
 (defun gptel-auto-workflow--invoke-staging-completion (callback success &optional reason)
