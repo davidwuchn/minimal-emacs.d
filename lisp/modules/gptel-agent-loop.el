@@ -507,7 +507,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
               (gptel-agent-loop--cleanup-overlay ov)
               (gptel-agent-loop--deliver-aborted state))
           (cond
-           ((and (gptel-agent-loop--transient-error-p error-data)
+           ((and (or (null error-data) (gptel-agent-loop--transient-error-p error-data))
                  (< (gptel-agent-loop--task-retries state)
                     gptel-agent-loop-max-retries))
             (setf (gptel-agent-loop--task-retries state)
