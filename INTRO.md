@@ -18,7 +18,7 @@ extended with a full AI agent system built on
 | Feature | Purpose |
 |---------|---------|
 | **Auto-Workflow** | Headless experiments with grading, review, and staging merge |
-| **Backend Fallback** | MiniMax → DashScope → DeepSeek → CF-Gateway → Gemini on 429 |
+| **Backend Fallback** | MiniMax → moonshot → DashScope → DeepSeek → CF-Gateway → Gemini |
 | **Benchmark System** | Score tracking, quality metrics, evolution patterns |
 | **Shell Timeout Sentinel** | Wait for process exit before capturing results |
 | **FSM Registry Validation** | Bidirectional consistency checks |
@@ -64,8 +64,8 @@ expected config and wrapper locations.
 
 ## Package Installation
 
-This fork uses **Git main branches** for `gptel` and `gptel-agent` (44 commits
-ahead of ELPA) to get the latest features:
+This fork tracks its core AI packages from Git submodules under `packages/`
+instead of relying only on ELPA snapshots:
 
 ```bash
 ./scripts/setup-packages.sh           # Install if missing
@@ -77,12 +77,18 @@ ahead of ELPA) to get the latest features:
 Git hooks and CI now fail if a committed submodule gitlink is either missing on
 its configured remote or behind the branch head declared in `.gitmodules`.
 
-This clones to `var/elpa/`:
+Key paths:
+- `packages/` - Git-tracked package checkouts managed by `setup-packages.sh`
+- `var/elpa/` - `package.el` state, archives, and bootstrap cache
+
+Important Git-tracked packages:
 - `gptel` - Chat engine and FSM-based tool execution
 - `gptel-agent` - Subagent delegation and tool orchestration
+- `ai-code`, `ai-behaviors`, `mementum`, `nucleus`
 
-**Why Git main?** ELPA's `gptel-0.9.9.4` is missing functions required by
-`gptel-agent` (e.g., `gptel--handle-pre-tool`). Git main has these fixes.
+**Why Git-tracked packages?** ELPA's `gptel-0.9.9.4` is missing functions
+required by `gptel-agent` (e.g., `gptel--handle-pre-tool`). The tracked Git
+heads include these fixes.
 
 ## Model Configuration
 
@@ -90,19 +96,20 @@ Model is configured in YAML frontmatter (single source of truth):
 
 | Use Case | Model | YAML File |
 |----------|-------|-----------|
-| **Plan preset** | `minimax-m2.7-highspeed` | `assistant/agents/plan_agent.md` |
-| **Agent preset** | `minimax-m2.7-highspeed` | `assistant/agents/code_agent.md` |
+| **Plan preset** | `minimax-m2.5` | `assistant/agents/plan_agent.md` |
+| **Agent preset** | `minimax-m2.5` | `assistant/agents/code_agent.md` |
 | **Subagents** | per-agent YAML | `assistant/agents/*.md` |
 
 ### Backend Fallback Chain
 
-Auto-workflow uses MiniMax as the primary workhorse with automatic fallback on rate limits:
+Auto-workflow uses MiniMax as the primary workhorse with automatic provider failover:
 
 1. **MiniMax** — `minimax-m2.7-highspeed` (primary)
-2. **DashScope** — `qwen3.6-plus`
-3. **DeepSeek** — `deepseek-chat`
-4. **CF-Gateway** — `@cf/zai-org/glm-4.7-flash`
-5. **Gemini** — `gemini-3.1-pro-preview`
+2. **moonshot** — `kimi-k2.6-code-preview`
+3. **DashScope** — `qwen3.6-plus`
+4. **DeepSeek** — `deepseek-chat`
+5. **CF-Gateway** — `@cf/zai-org/glm-4.7-flash`
+6. **Gemini** — `gemini-3.1-pro-preview`
 
 Requires `api.minimaxi.com` API key in auth-source. All alternate backends require their respective API keys configured in auth-source.
 
