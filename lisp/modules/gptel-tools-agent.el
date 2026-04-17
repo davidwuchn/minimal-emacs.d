@@ -4231,7 +4231,8 @@ empty-pick OUTPUT as already applied even if `CHERRY_PICK_HEAD' is absent."
 (defun gptel-auto-workflow--merge-to-staging (optimize-branch)
   "Merge OPTIMIZE-BRANCH to staging using cherry-pick.
 Cherry-pick the tip commit of OPTIMIZE-BRANCH onto staging.
-Returns t on success, nil on failure.
+Returns t when the branch adds changes, `:already-integrated' when staging
+already contains the candidate patch, and nil on failure.
 Uses the staging worktree instead of switching branches in the root repo."
   (let* ((staging (gptel-auto-workflow--configured-staging-branch))
          (optimize-ref (gptel-auto-workflow--ensure-merge-source-ref optimize-branch))
@@ -4273,10 +4274,10 @@ Uses the staging worktree instead of switching branches in the root repo."
                      (cond
                       ((= 0 (cdr commit-result))
                        t)
-                      ((gptel-auto-workflow--empty-cherry-pick-state-p (car commit-result) t)
-                       (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --skip" 60))
-                       (message "[auto-workflow] Cherry-pick empty after apply (already in staging)")
-                       t)
+                       ((gptel-auto-workflow--empty-cherry-pick-state-p (car commit-result) t)
+                        (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --skip" 60))
+                        (message "[auto-workflow] Cherry-pick empty after apply (already in staging)")
+                        :already-integrated)
                       (t
                        (message "[auto-workflow] Commit failed after cherry-pick: %s"
                                 (my/gptel--sanitize-for-logging (car commit-result) 160))
@@ -4285,8 +4286,8 @@ Uses the staging worktree instead of switching branches in the root repo."
                        (string-match-p "already applied\\|previous cherry-pick is now empty\\|The previous cherry-pick is now empty"
                                        cherry-output))
                    (message "[auto-workflow] Cherry-pick empty (already in staging)")
-                   (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
-                   t)
+                    (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
+                    :already-integrated)
                   (t
                    (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
                    (message "[auto-workflow] Cherry-pick failed, falling back to merge: %s"
@@ -4303,7 +4304,8 @@ Uses the staging worktree instead of switching branches in the root repo."
                             (merge-output (car merge-result)))
                        (cond
                         ((= 0 (cdr merge-result)) t)
-                        ((string-match-p "Already up[ -]to[- ]date" merge-output) t)
+                         ((string-match-p "Already up[ -]to[- ]date" merge-output)
+                          :already-integrated)
                         (t
                          (ignore-errors (gptel-auto-workflow--git-cmd "git merge --abort" 60))
                          (ignore-errors (gptel-auto-workflow--git-cmd "git cherry-pick --abort" 60))
@@ -4706,7 +4708,7 @@ SAFETY: Asserts main branch is not current before any operation.
 NOTE: Human must manually merge staging to main after review."
   (let ((completion-callback
          (when completion-callback
-           (gptel-auto-workflow--make-idempotent-callback completion-callback))))
+           (gptel-auto-workflow--make-idempotent-staging-completion completion-callback))))
     (gptel-auto-workflow--assert-main-untouched)
     (setq gptel-auto-workflow--review-retry-count 0)
     (setq gptel-auto-workflow--review-error-retry-count 0)
@@ -4749,9 +4751,9 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                             (gptel-auto-workflow--review-retryable-error-p review-output)))
          (run-id (gptel-auto-workflow--current-run-id))
          (finish (gptel-auto-workflow--make-idempotent-callback
-                  (lambda (success)
-                    (when completion-callback
-                      (funcall completion-callback success))))))
+                   (lambda (success &optional reason)
+                     (gptel-auto-workflow--invoke-staging-completion
+                      completion-callback success reason)))))
     (when disproven-undefined-blocker
       (message "[auto-workflow] Reviewer undefined-function blocker disproven locally for %s; continuing"
                disproven-undefined-blocker))
@@ -4894,9 +4896,10 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                      :agent-output ""))
               (funcall finish nil))
           (let* ((staging-base (gptel-auto-workflow--current-staging-head))
-                 (merge-success
-                  (gptel-auto-workflow--merge-to-staging optimize-branch)))
-            (if (not merge-success)
+                 (merge-result
+                  (gptel-auto-workflow--merge-to-staging optimize-branch))
+                 (already-integrated-p (eq merge-result :already-integrated)))
+            (if (not merge-result)
                 (progn
                   (message "[auto-workflow] ✗ Merge to staging failed, aborting")
                   (gptel-auto-experiment-log-tsv
@@ -4912,9 +4915,11 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                          :grader-reason "staging-merge-failed"
                          :comparator-reason
                          (format "Failed to merge %s to staging" optimize-branch)
-                         :analyzer-patterns ""
-                         :agent-output ""))
+                          :analyzer-patterns ""
+                          :agent-output ""))
                   (funcall finish nil))
+              (when already-integrated-p
+                (message "[auto-workflow] Candidate changes already present in staging; verifying staged sync only"))
               (let ((worktree (or gptel-auto-workflow--staging-worktree-dir
                                   (gptel-auto-workflow--create-staging-worktree))))
                 (if (not worktree)
@@ -4936,8 +4941,12 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                       (if (gptel-auto-workflow--push-staging)
                           (progn
                             (gptel-auto-workflow--delete-staging-worktree)
-                            (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")
-                            (funcall finish t))
+                            (if already-integrated-p
+                                (progn
+                                  (message "[auto-workflow] Candidate already present in staging; published staging sync only.")
+                                  (funcall finish nil "already-in-staging"))
+                              (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")
+                              (funcall finish t)))
                         (let* ((push-output gptel-auto-workflow--last-staging-push-output)
                                (remote-advanced-p
                                 (gptel-auto-workflow--staging-push-remote-advanced-p
@@ -4953,8 +4962,12 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                                     (if retry-success
                                         (progn
                                           (gptel-auto-workflow--delete-staging-worktree)
-                                          (message "[auto-workflow] ✓ Staging pushed after refreshing remote advance.")
-                                          (funcall finish t))
+                                          (if already-integrated-p
+                                              (progn
+                                                (message "[auto-workflow] Candidate already present in staging after refresh; published staging sync only.")
+                                                (funcall finish nil "already-in-staging"))
+                                            (message "[auto-workflow] ✓ Staging pushed after refreshing remote advance.")
+                                            (funcall finish t)))
                                       (gptel-auto-workflow--log-staging-step-failure
                                        retry-reason optimize-branch retry-output)
                                       (gptel-auto-workflow--sync-staging-from-main)
@@ -6161,19 +6174,60 @@ Example HYPOTHESES:
 
 When invoked without arguments, or with a non-nil first argument, log
 EXP-RESULT as kept. When invoked with nil, downgrade the result so staging-flow
-failures do not masquerade as published kept results."
+failures do not masquerade as published kept results. When a second argument is
+supplied on failure, use it as the downgrade reason."
   (gptel-auto-workflow--make-idempotent-callback
    (lambda (&rest success-args)
-     (let* ((staging-reported-p (not (null success-args)))
-            (staging-succeeded (car success-args))
-            (final-result
-             (if (or (not staging-reported-p) staging-succeeded)
-                 exp-result
-               (let ((failed-result (plist-put (copy-sequence exp-result) :kept nil)))
-                 (plist-put failed-result :comparator-reason "staging-flow-failed")))))
-       (funcall log-fn run-id final-result)
-       (when callback
-         (funcall callback final-result))))))
+      (let* ((staging-reported-p (not (null success-args)))
+             (staging-succeeded (car-safe success-args))
+             (failure-reason-arg (cadr success-args))
+             (failure-reason
+              (cond
+               ((stringp failure-reason-arg)
+                failure-reason-arg)
+               ((and failure-reason-arg
+                     (symbolp failure-reason-arg))
+                (symbol-name failure-reason-arg))
+               (t
+                "staging-flow-failed")))
+             (final-result
+              (if (or (not staging-reported-p) staging-succeeded)
+                  exp-result
+                (let ((failed-result (plist-put (copy-sequence exp-result) :kept nil)))
+                  (plist-put failed-result :comparator-reason failure-reason)))))
+        (funcall log-fn run-id final-result)
+        (when callback
+          (funcall callback final-result))))))
+
+(defun gptel-auto-workflow--invoke-staging-completion (callback success &optional reason)
+  "Invoke staging CALLBACK with SUCCESS and optional REASON.
+
+Older completion callbacks only accept a single success flag. Newer callbacks
+may also accept a second argument describing why staging downgraded an
+experiment that had previously looked keep-worthy."
+  (when (functionp callback)
+    (let* ((arity (ignore-errors (func-arity callback)))
+           (max-args (cdr-safe arity)))
+      (if (or (eq max-args 'many)
+              (and (integerp max-args) (>= max-args 2)))
+          (funcall callback success reason)
+        (funcall callback success)))))
+
+(defun gptel-auto-workflow--make-idempotent-staging-completion (callback)
+  "Return idempotent staging completion wrapper preserving CALLBACK arity."
+  (let ((called nil)
+        (arity (ignore-errors (func-arity callback))))
+    (if (or (eq (cdr-safe arity) 'many)
+            (and (integerp (cdr-safe arity))
+                 (>= (cdr-safe arity) 2)))
+        (lambda (success &optional reason)
+          (unless called
+            (setq called t)
+            (funcall callback success reason)))
+      (lambda (success)
+        (unless called
+          (setq called t)
+          (funcall callback success))))))
 
 ;;; Error Analysis and Adaptive Workflow
 
