@@ -283,17 +283,24 @@ Pricing is in USD per million tokens (input/output).")
 
 ;;; Helpers
 
+(defconst my/gptel--cache-sentinel (make-symbol "gptel-cache-sentinel")
+  "Sentinel value for cache lookups.
+Single constant avoids allocating a new symbol on every lookup call.")
+
+(defconst my/gptel--alist-match-sentinel (make-symbol "alist-partial-match-sentinel")
+  "Sentinel value for alist partial-match searches.
+Single constant avoids allocating a new symbol on every search call.")
+
 (defun my/gptel--cache-or-alist-lookup (hash-table alist key)
   "Look up KEY in HASH-TABLE, falling back to ALIST partial match.
 Returns the value from hash table if found, otherwise searches ALIST
 for a partial match (case-insensitive).  Returns nil if not found."
   (if (and (hash-table-p hash-table) (stringp key))
-      (let ((sentinel (make-symbol "gptel-cache-sentinel")))
-        (let ((hash-value (gethash key hash-table sentinel)))
-          (if (eq hash-value sentinel)
-              (and (listp alist)
-                   (my/gptel--alist-partial-match alist key))
-            hash-value)))
+      (let ((hash-value (gethash key hash-table my/gptel--cache-sentinel)))
+        (if (eq hash-value my/gptel--cache-sentinel)
+            (and (listp alist)
+                 (my/gptel--alist-partial-match alist key))
+          hash-value))
     (and (listp alist) (stringp key)
          (my/gptel--alist-partial-match alist key))))
 
@@ -304,10 +311,8 @@ Matches if the alist key is a prefix of SEARCH-STR.
 When multiple entries match, returns the one with the longest key for most specific match."
   (when (and (listp alist) (stringp search-str))
     (let ((search-lower (downcase search-str))
-          (sentinel (make-symbol "alist-partial-match-sentinel"))
-          best-match
+          (best-match my/gptel--alist-match-sentinel)
           (best-key-len 0))
-      (setq best-match sentinel)
       (dolist (entry alist)
         (when (and (consp entry)
                    (stringp (car entry))
@@ -317,7 +322,7 @@ When multiple entries match, returns the one with the longest key for most speci
             (when (>= key-len best-key-len)
               (setq best-key-len key-len)
               (setq best-match entry-match)))))
-      (unless (eq best-match sentinel)
+      (unless (eq best-match my/gptel--alist-match-sentinel)
         best-match))))
 
 (defun my/gptel--plist-get (plist key &optional default)
