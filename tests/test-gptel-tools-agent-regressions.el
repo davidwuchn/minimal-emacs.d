@@ -12959,6 +12959,24 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (should (re-search-forward "Leave edits uncommitted in the worktree" nil t))
       (should (re-search-forward "`COMMIT:` must be `not committed`" nil t)))))
 
+(ert-deftest regression/auto-workflow/gptel-agent-edit-docs-match-tool-args ()
+  "Live gptel-agent prompts should use the current Edit argument names."
+  (dolist (rel '("packages/gptel-agent/agents/gptel-agent.md"
+                 "packages/gptel-agent/agents/executor.md"))
+    (let ((file (expand-file-name rel (gptel-auto-workflow--project-root))))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (should (search-forward "`old_str`" nil t))
+        (goto-char (point-min))
+        (should (search-forward "`new_str`" nil t))
+        (goto-char (point-min))
+        (should-not (search-forward "old_string" nil t))
+        (goto-char (point-min))
+        (should-not (search-forward "new_string" nil t))
+        (goto-char (point-min))
+        (should-not (search-forward "replace_all" nil t))))))
+
 (ert-deftest regression/auto-workflow/reviewer-agent-requires-explicit-verdict ()
   "Reviewer agent should require an explicit APPROVED/BLOCKED verdict line."
   (let ((file (expand-file-name "assistant/agents/reviewer.md"
