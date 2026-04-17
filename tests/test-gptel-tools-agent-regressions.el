@@ -11305,9 +11305,41 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (unwind-protect
+           (let ((result (gptel-auto-workflow--verify-staging)))
+             (should-not (car result))
+             (should (string-match-p "Staging submodule hydration failed" (cdr result))))
+        (when-let ((buf (get-buffer "*test-staging-verify*")))
+          (kill-buffer buf))))))
+
+(ert-deftest regression/auto-workflow/verify-staging-missing-baseline-note-fails-cleanly ()
+  "Missing baseline-note text should still fail verification without signaling."
+  (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging"))
+    (cl-letf (((symbol-function 'file-exists-p)
+               (lambda (path)
+                 (member path '("/tmp/staging" "/tmp/staging/scripts/run-tests.sh"))))
+              ((symbol-function 'gptel-auto-workflow--check-el-syntax)
+               (lambda (&rest _) t))
+              ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
+               (lambda (&rest _)
+                 (cons "" 0)))
+              ((symbol-function 'gptel-auto-workflow--call-process-with-watchdog)
+               (lambda (_program _input buffer _display &rest args)
+                 (with-current-buffer buffer
+                   (insert (format "ran %s\n" (mapconcat #'identity args " "))))
+                 1))
+              ((symbol-function 'gptel-auto-workflow--staging-tests-match-main-baseline-p)
+               (lambda (_output)
+                 (cons nil nil)))
+              ((symbol-function 'generate-new-buffer)
+               (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (unwind-protect
           (let ((result (gptel-auto-workflow--verify-staging)))
             (should-not (car result))
-            (should (string-match-p "Staging submodule hydration failed" (cdr result))))
+            (should (string-match-p "ran /tmp/staging/scripts/run-tests.sh unit" (cdr result)))
+            (should (string-match-p "Staging verification failed against main baseline"
+                                    (cdr result))))
         (when-let ((buf (get-buffer "*test-staging-verify*")))
           (kill-buffer buf))))))
 
