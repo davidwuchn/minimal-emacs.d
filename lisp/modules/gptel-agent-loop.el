@@ -455,6 +455,8 @@ not planning more work. Uses pre-compiled pattern for performance on hot path."
 Only continues if tools were called AND model seems to be
 planning without action.  Also checks continuation count
 limit for early exit."
+  (unless (stringp resp)
+    (setq resp ""))
   (let ((cont-count (or (gptel-agent-loop--task-continuation-count state) 0)))
     (and gptel-agent-loop-force-completion
          gptel-agent-loop-hard-loop
