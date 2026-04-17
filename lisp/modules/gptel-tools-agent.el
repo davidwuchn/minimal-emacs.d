@@ -2556,7 +2556,10 @@ If branch exists locally, deletes it first to avoid conflicts."
                 (when stderr-output
                   (message "[auto-workflow] Git stderr: %s" stderr-preview))
                 (error "git worktree add failed with exit code %s: %s"
-                       exit-code (or stderr-preview "no output")))))
+                       exit-code (or stderr-preview "no output")))
+              (when (gptel-auto-workflow--worktree-needs-submodule-hydration-p worktree-dir)
+                (unless (gptel-auto-workflow--ensure-staging-submodules-ready worktree-dir)
+                  (error "failed to hydrate experiment submodules in %s" worktree-dir))))
           (kill-buffer stderr-buffer)
           (message "[auto-workflow] Created: %s" branch)
           (puthash target (list :worktree-dir worktree-dir :current-branch branch)
