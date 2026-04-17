@@ -1467,6 +1467,13 @@ Dynamic variable, let-bound around gptel-agent--task calls.")
      ((buffer-live-p request-buf) request-buf)
      ((buffer-live-p origin-buf) origin-buf))))
 
+(defun my/gptel--cancel-agent-task-timers (state)
+  "Cancel any active timeout and progress timers in STATE."
+  (when (timerp (plist-get state :timeout-timer))
+    (cancel-timer (plist-get state :timeout-timer)))
+  (when (timerp (plist-get state :progress-timer))
+    (cancel-timer (plist-get state :progress-timer))))
+
 (defun my/gptel--agent-task-buffer-priority (state buffer)
   "Return a relative priority for tracking BUFFER in STATE.
 Routed worktree agent buffers outrank generic fallback buffers like
@@ -1655,10 +1662,7 @@ TIMESTAMP defaults to `current-time'."
       (maphash
        (lambda (_task-id state)
          (when (plistp state)
-           (when (timerp (plist-get state :timeout-timer))
-             (cancel-timer (plist-get state :timeout-timer)))
-           (when (timerp (plist-get state :progress-timer))
-             (cancel-timer (plist-get state :progress-timer)))
+           (my/gptel--cancel-agent-task-timers state)
            (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
              (push request-buf request-buffers))))
        my/gptel--agent-task-state)
@@ -1708,10 +1712,7 @@ same routed experiment buffer from re-entering a later retry."
     (maphash
      (lambda (task-id state)
        (when (my/gptel--agent-task-overlaps-p state origin-buf normalized-dir)
-         (when (timerp (plist-get state :timeout-timer))
-           (cancel-timer (plist-get state :timeout-timer)))
-         (when (timerp (plist-get state :progress-timer))
-           (cancel-timer (plist-get state :progress-timer)))
+         (my/gptel--cancel-agent-task-timers state)
          (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
            (push request-buf request-buffers))
          (push task-id overlap-ids)))
