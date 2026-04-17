@@ -1772,17 +1772,36 @@ its async continuation layer in the worker daemon."
   "Mark FSM as no-retry before request dispatch."
   (my/gptel--disable-auto-retry-for-fsm fsm))
 
+(defun my/gptel--first-existing-directory (&rest dirs)
+  "Return the first existing directory in DIRS, normalized with a trailing slash."
+  (catch 'found
+    (dolist (dir dirs)
+      (when (and (stringp dir)
+                 (file-directory-p dir))
+        (throw 'found (file-name-as-directory (expand-file-name dir)))))
+    nil))
+
 (defun my/gptel--invoke-callback-safely (callback result)
   "Invoke CALLBACK with RESULT from a stable internal buffer.
 
 This prevents `Selecting deleted buffer' errors when callback side effects
 delete the request or file buffer that happened to be current when the
-subagent callback fired."
+subagent callback fired, and avoids reusing a deleted worktree as
+`default-directory'."
   (when (functionp callback)
-    (let ((safe-buffer (get-buffer-create " *gptel-callback*")))
+    (let* ((caller-default-directory default-directory)
+           (safe-buffer (get-buffer-create " *gptel-callback*"))
+           (safe-default-directory
+            (or (my/gptel--first-existing-directory
+                 caller-default-directory
+                 (and (buffer-live-p safe-buffer)
+                      (buffer-local-value 'default-directory safe-buffer))
+                 (and (boundp 'user-emacs-directory) user-emacs-directory)
+                 temporary-file-directory)
+                default-directory)))
       (with-current-buffer safe-buffer
-        (let ((default-directory default-directory))
-          (funcall callback result))))))
+        (setq default-directory safe-default-directory)
+        (funcall callback result)))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.

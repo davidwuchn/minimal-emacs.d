@@ -2618,8 +2618,65 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (lambda (result)
            (kill-buffer victim)
            (setq payload result))
-         "ok")))
-    (should (equal payload "ok"))))
+          "ok")))
+     (should (equal payload "ok"))))
+
+(ert-deftest regression/subagent/safe-callback-preserves-live-default-directory ()
+  "Callback dispatch should preserve a live caller `default-directory'."
+  (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
+         (stale-dir (file-name-as-directory (make-temp-file "gptel-callback-stale-" t)))
+         (live-dir (file-name-as-directory (make-temp-file "gptel-callback-live-" t)))
+         observed)
+    (unwind-protect
+        (progn
+          (with-current-buffer safe-buffer
+            (setq default-directory stale-dir))
+          (delete-directory stale-dir t)
+          (with-temp-buffer
+            (setq default-directory live-dir)
+            (my/gptel--invoke-callback-safely
+             (lambda (_result)
+               (setq observed default-directory))
+             "ok"))
+          (should (equal observed (file-name-as-directory (expand-file-name live-dir))))
+          (with-current-buffer safe-buffer
+            (should (equal default-directory
+                           (file-name-as-directory (expand-file-name live-dir))))))
+      (when (buffer-live-p safe-buffer)
+        (kill-buffer safe-buffer))
+      (when (file-directory-p stale-dir)
+        (delete-directory stale-dir t))
+      (when (file-directory-p live-dir)
+        (delete-directory live-dir t)))))
+
+(ert-deftest regression/subagent/safe-callback-falls-back-when-directories-missing ()
+  "Callback dispatch should recover when both caller and helper dirs are gone."
+  (let* ((safe-buffer (get-buffer-create " *gptel-callback*"))
+         (safe-dir (file-name-as-directory (make-temp-file "gptel-callback-safe-" t)))
+         (caller-dir (file-name-as-directory (make-temp-file "gptel-callback-caller-" t)))
+         observed)
+    (unwind-protect
+        (progn
+          (with-current-buffer safe-buffer
+            (setq default-directory safe-dir))
+          (delete-directory safe-dir t)
+          (with-temp-buffer
+            (setq default-directory caller-dir)
+            (delete-directory caller-dir t)
+            (my/gptel--invoke-callback-safely
+             (lambda (_result)
+               (setq observed default-directory))
+             "ok"))
+          (should (stringp observed))
+          (should (file-directory-p observed))
+          (should-not (equal observed (file-name-as-directory (expand-file-name safe-dir))))
+          (should-not (equal observed (file-name-as-directory (expand-file-name caller-dir)))))
+      (when (buffer-live-p safe-buffer)
+        (kill-buffer safe-buffer))
+      (when (file-directory-p safe-dir)
+        (delete-directory safe-dir t))
+      (when (file-directory-p caller-dir)
+        (delete-directory caller-dir t)))))
 
 (ert-deftest regression/auto-experiment/error-snippet-sanitizes-output ()
   "Error snippet extraction should be sanitized and never signal."
