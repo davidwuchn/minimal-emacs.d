@@ -4356,17 +4356,24 @@ Returns (success-p . output)."
         (progn
           (message "[auto-workflow] Staging worktree not found")
           (cons nil "Staging worktree not found"))
-      (message "[auto-workflow] Verifying staging...")
-      (let* ((default-directory worktree)
-             (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
-             (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
-             (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
-             (_ (unless submodule-pass
-                  (with-current-buffer output-buffer
-                    (insert (car submodules) "\n"))))
-             (test-result (when (and submodule-pass test-script (file-exists-p test-script))
-                            (gptel-auto-workflow--call-process-with-watchdog
-                             "bash" nil output-buffer nil test-script "unit")))
+       (message "[auto-workflow] Verifying staging...")
+       (let* ((default-directory worktree)
+              (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
+              (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
+              (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
+              (submodule-note
+               (and syntax-pass
+                    (not submodule-pass)
+                    (let ((note (car-safe submodules)))
+                      (if (gptel-auto-workflow--non-empty-string-p note)
+                          note
+                        "Staging submodule hydration failed"))))
+              (_ (when submodule-note
+                   (with-current-buffer output-buffer
+                     (insert submodule-note "\n"))))
+              (test-result (when (and submodule-pass test-script (file-exists-p test-script))
+                             (gptel-auto-workflow--call-process-with-watchdog
+                              "bash" nil output-buffer nil test-script "unit")))
              (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
                               (let ((process-environment
                                      (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
