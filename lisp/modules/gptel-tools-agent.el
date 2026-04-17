@@ -1650,30 +1650,29 @@ TIMESTAMP defaults to `current-time'."
 
 (defun my/gptel--reset-agent-task-state ()
   "Abort and clear all tracked subagent task state."
-  (let (request-buffers)
-    (maphash
-     (lambda (_task-id state)
-       (when (timerp (plist-get state :timeout-timer))
-         (cancel-timer (plist-get state :timeout-timer)))
-       (when (timerp (plist-get state :progress-timer))
-         (cancel-timer (plist-get state :progress-timer)))
-       (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
-         (push request-buf request-buffers)))
-     my/gptel--agent-task-state)
-    ;; Clear state before aborting so synchronous abort callbacks are treated
-    ;; as stale and cannot mutate workflow state. Abort the live request
-    ;; buffer so stale tool writes stop too.
-    (clrhash my/gptel--agent-task-state)
-    (dolist (request-buf (delete-dups request-buffers))
-      (when (and (buffer-live-p request-buf)
-                 (fboundp 'gptel-abort))
-         (condition-case err
-             (gptel-abort request-buf)
-           (error
-            (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
-                     (buffer-name request-buf)
-                     (my/gptel--sanitize-for-logging
-                      (error-message-string err) 160))))))))
+  (when (hash-table-p my/gptel--agent-task-state)
+    (let (request-buffers)
+      (maphash
+       (lambda (_task-id state)
+         (when (plistp state)
+           (when (timerp (plist-get state :timeout-timer))
+             (cancel-timer (plist-get state :timeout-timer)))
+           (when (timerp (plist-get state :progress-timer))
+             (cancel-timer (plist-get state :progress-timer)))
+           (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
+             (push request-buf request-buffers))))
+       my/gptel--agent-task-state)
+      (clrhash my/gptel--agent-task-state)
+      (dolist (request-buf (delete-dups request-buffers))
+        (when (and (buffer-live-p request-buf)
+                   (fboundp 'gptel-abort))
+          (condition-case err
+              (gptel-abort request-buf)
+            (error
+             (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
+                      (buffer-name request-buf)
+                      (my/gptel--sanitize-for-logging
+                       (error-message-string err) 160)))))))))
 
 (defun my/gptel--normalize-agent-activity-dir (dir)
   "Return DIR as a canonical directory path with trailing slash, or nil."
