@@ -4325,7 +4325,7 @@ Returns t if all files pass syntax check, nil otherwise."
         nil)
     (let ((errors nil)
           (files (ignore-errors (directory-files-recursively directory "\\.el\\'"))))
-      (dolist (file (or files nil))
+      (dolist (file (or files nil) (null errors))
         (when (file-readable-p file)
           (with-temp-buffer
             (insert-file-contents file)
@@ -4335,14 +4335,13 @@ Returns t if all files pass syntax check, nil otherwise."
                 (progn
                   (while (not (eobp)) (forward-sexp)))
               (error
-               (let ((msg (format "SYNTAX ERROR: %s: %s"
-                                  (file-relative-name file directory)
-                                  (error-message-string err))))
-                 (push msg errors)
-                 (when (buffer-live-p output-buffer)
+                (let ((msg (format "SYNTAX ERROR: %s: %s"
+                                   (file-relative-name file directory)
+                                   (error-message-string err))))
+                  (push msg errors)
+                  (when (buffer-live-p output-buffer)
                    (with-current-buffer output-buffer
-                     (insert msg "\n"))))))))
-      (null errors)))))
+                      (insert msg "\n"))))))))))))
 
 (defun gptel-auto-workflow--verify-staging ()
   "Run verification in the staging worktree.
@@ -4356,17 +4355,24 @@ Returns (success-p . output)."
         (progn
           (message "[auto-workflow] Staging worktree not found")
           (cons nil "Staging worktree not found"))
-      (message "[auto-workflow] Verifying staging...")
-      (let* ((default-directory worktree)
-             (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
-             (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
-             (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
-             (_ (unless submodule-pass
-                  (with-current-buffer output-buffer
-                    (insert (car submodules) "\n"))))
-             (test-result (when (and submodule-pass test-script (file-exists-p test-script))
-                            (gptel-auto-workflow--call-process-with-watchdog
-                             "bash" nil output-buffer nil test-script "unit")))
+       (message "[auto-workflow] Verifying staging...")
+       (let* ((default-directory worktree)
+              (syntax-pass (gptel-auto-workflow--check-el-syntax worktree output-buffer))
+              (submodules (when syntax-pass (gptel-auto-workflow--hydrate-staging-submodules worktree)))
+              (submodule-pass (and syntax-pass (= 0 (cdr submodules))))
+              (submodule-note
+               (and syntax-pass
+                    (not submodule-pass)
+                    (let ((note (car-safe submodules)))
+                      (if (gptel-auto-workflow--non-empty-string-p note)
+                          note
+                        "Staging submodule hydration failed"))))
+              (_ (when submodule-note
+                   (with-current-buffer output-buffer
+                     (insert submodule-note "\n"))))
+              (test-result (when (and submodule-pass test-script (file-exists-p test-script))
+                             (gptel-auto-workflow--call-process-with-watchdog
+                              "bash" nil output-buffer nil test-script "unit")))
              (verify-result (when (and submodule-pass verify-script (file-exists-p verify-script))
                               (let ((process-environment
                                      (cons "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
@@ -6186,10 +6192,11 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
 (defvar gptel-auto-experiment-max-retries 2
   "Maximum retries for executor on transient errors.")
 
-(defvar gptel-auto-experiment-max-grader-retries 1
+(defvar gptel-auto-experiment-max-grader-retries 2
   "Maximum local retries for transient grader failures.
 These retries reuse the successful executor output instead of rerunning the
-entire experiment.")
+entire experiment. Two retries let the grader advance past one failing
+fallback backend before giving up on otherwise-good executor output.")
 
 (defvar gptel-auto-experiment-retry-delay 5
   "Seconds to wait between retries.")
@@ -6578,18 +6585,28 @@ REASON is only used for logging."
   "Check if ERROR-OUTPUT is a transient/retryable error."
   (and (stringp error-output)
        (not (gptel-auto-experiment--aborted-agent-output-p error-output))
+       (or (gptel-auto-experiment--provider-usage-limit-error-p error-output)
+           (let ((case-fold-search t))
+             (string-match-p
+              "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
+              error-output)))))
+
+(defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
+  "Return non-nil when ERROR-OUTPUT reflects a provider billing-cycle limit."
+  (and (stringp error-output)
        (let ((case-fold-search t))
          (string-match-p
-          "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
+          "access_terminated_error\\|usage limit exceeded\\|usage limit for this billing cycle\\|reached your usage limit for this billing cycle"
           error-output))))
 
 (defun gptel-auto-experiment--rate-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects retryable provider pressure."
   (and (stringp error-output)
-       (let ((case-fold-search t))
-         (string-match-p
-          "rate_limit_error\\|usage limit exceeded\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
-          error-output))))
+       (or (gptel-auto-experiment--provider-usage-limit-error-p error-output)
+           (let ((case-fold-search t))
+             (string-match-p
+              "rate_limit_error\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
+              error-output)))))
 
 (defun gptel-auto-experiment--provider-auth-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects provider auth failure."
@@ -6734,10 +6751,11 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
 (defun gptel-auto-experiment--quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows provider quota exhaustion."
   (and (stringp agent-output)
-       (let ((case-fold-search t))
-         (string-match-p
-          "allocated quota exceeded\\|usage limit exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
-          agent-output))))
+       (or (gptel-auto-experiment--provider-usage-limit-error-p agent-output)
+           (let ((case-fold-search t))
+             (string-match-p
+              "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
+              agent-output)))))
 
 (defun gptel-auto-experiment--hard-quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows a hard quota stop for executor work."
@@ -6841,6 +6859,8 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (cons :api-rate-limit "Hourly quota exhausted"))
    ((string-match-p "week allocated quota exceeded" agent-output)
     (cons :api-rate-limit "Weekly quota exhausted"))
+   ((gptel-auto-experiment--provider-usage-limit-error-p agent-output)
+    (cons :api-rate-limit "Provider usage limit reached"))
    ((string-match-p "throttling\\|rate.limit\\|quota exceeded\\|429" agent-output)
     (cons :api-rate-limit "API rate limit exceeded"))
    ((let ((case-fold-search t))

@@ -1326,6 +1326,29 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (equal (gptel-auto-experiment--categorize-error grader-error)
                    '(:api-rate-limit . "Provider overloaded")))))
 
+(ert-deftest regression/auto-experiment/access-terminated-errors-count-as-provider-pressure ()
+  "Billing-cycle access termination should fail over like provider pressure."
+  (let ((usage-limit-error
+         "Error: Task executor could not finish task \"Experiment 1: optimize x\". Error details: (:message \"You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade\" :type \"access_terminated_error\")"))
+    (should (gptel-auto-experiment--provider-usage-limit-error-p usage-limit-error))
+    (should (gptel-auto-experiment--rate-limit-error-p usage-limit-error))
+    (should (gptel-auto-experiment--is-retryable-error-p usage-limit-error))
+    (should (gptel-auto-experiment--quota-exhausted-p usage-limit-error))
+    (should-not (gptel-auto-experiment--hard-quota-exhausted-p usage-limit-error))
+    (should (gptel-auto-experiment--provider-pressure-error-p usage-limit-error))
+    (should (equal (gptel-auto-experiment--categorize-error usage-limit-error)
+                   '(:api-rate-limit . "Provider usage limit reached")))))
+
+(ert-deftest regression/auto-experiment/default-grader-retries-allow-second-provider-hop ()
+  "Default grader retries should cover a second provider-limit hop."
+  (let ((agent-output "Executor result for task: successful candidate")
+        (usage-limit-error
+         "Error: Task grader could not finish task \"Grade output\". Error details: (:message \"You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade\" :type \"access_terminated_error\")"))
+    (should (gptel-auto-experiment--should-retry-grader-p
+             agent-output usage-limit-error :api-rate-limit 1))
+    (should-not (gptel-auto-experiment--should-retry-grader-p
+                 agent-output usage-limit-error :api-rate-limit 2))))
+
 (ert-deftest regression/auto-experiment/authorized-errors-count-as-provider-failures ()
   "Executor auth failures should stay on the provider-failover path."
   (let ((auth-error
@@ -3049,6 +3072,109 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "executor" preset)))
+              (should (eq (plist-get override :backend) dashscope-backend))
+              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+      (setq gptel-auto-workflow--rate-limited-backends nil
+            gptel-auto-workflow--runtime-subagent-provider-overrides nil)
+       (if had-dashscope
+           (set 'gptel--dashscope old-dashscope)
+         (makunbound 'gptel--dashscope)))))
+
+(ert-deftest regression/auto-workflow/provider-failover-activates-on-access-terminated-errors ()
+  "Headless provider failover should activate on billing-cycle access termination."
+  (let* ((dashscope-backend
+          (gptel-make-openai "DashScope"
+            :host "coding.dashscope.aliyuncs.com"
+            :key (lambda () "token")
+            :models '(qwen3.5-plus qwen3.6-plus)))
+         (had-dashscope (boundp 'gptel--dashscope))
+         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+         (preset '(:backend "moonshot" :model "kimi-k2.6-code-preview"))
+         (access-terminated-error
+          "Error: Task executor could not finish task \"x\". Error details: (:message \"You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade\" :type \"access_terminated_error\")")
+         (gptel-auto-workflow--headless t)
+         (gptel-auto-workflow-persistent-headless t)
+         (gptel-auto-workflow--current-project "/tmp/project")
+         (gptel-auto-workflow-headless-fallback-agents
+          '("analyzer" "comparator" "executor" "grader" "reviewer"))
+         (gptel-auto-workflow-headless-subagent-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("moonshot" . "kimi-k2.6-code-preview")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-executor-rate-limit-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("moonshot" . "kimi-k2.6-code-preview")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow--rate-limited-backends nil)
+         (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
+    (unwind-protect
+        (progn
+          (set 'gptel--dashscope dashscope-backend)
+          (cl-letf (((symbol-function 'my/gptel-api-key)
+                     (lambda (host)
+                       (pcase host
+                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.kimi.com" "token")
+                         (_ nil))))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (gptel-auto-workflow--maybe-activate-rate-limit-failover
+             "executor" preset access-terminated-error)
+            (should (member "moonshot" gptel-auto-workflow--rate-limited-backends))
+            (let ((override
+                   (gptel-auto-workflow--maybe-override-subagent-provider
+                    "executor" preset)))
+              (should (eq (plist-get override :backend) dashscope-backend))
+              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+      (setq gptel-auto-workflow--rate-limited-backends nil
+            gptel-auto-workflow--runtime-subagent-provider-overrides nil)
+      (if had-dashscope
+          (set 'gptel--dashscope old-dashscope)
+        (makunbound 'gptel--dashscope)))))
+
+(ert-deftest regression/auto-workflow/provider-failover-advances-past-billing-cycle-usage-limits ()
+  "Headless failover should skip Moonshot after a billing-cycle usage-limit error."
+  (let* ((dashscope-backend
+          (gptel-make-openai "DashScope"
+            :host "coding.dashscope.aliyuncs.com"
+            :key (lambda () "token")
+            :models '(qwen3.5-plus qwen3.6-plus)))
+         (had-dashscope (boundp 'gptel--dashscope))
+         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+         (preset '(:backend "moonshot" :model "kimi-k2.6-code-preview"))
+         (usage-limit-error
+          "Error: Task grader could not finish task \"Grade output\". Error details: (:message \"You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade\" :type \"access_terminated_error\")")
+         (gptel-auto-workflow--headless t)
+         (gptel-auto-workflow-persistent-headless t)
+         (gptel-auto-workflow--current-project "/tmp/project")
+         (gptel-auto-workflow-headless-fallback-agents
+          '("analyzer" "comparator" "executor" "grader" "reviewer"))
+         (gptel-auto-workflow-headless-subagent-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("moonshot" . "kimi-k2.6-code-preview")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-executor-rate-limit-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("moonshot" . "kimi-k2.6-code-preview")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow--rate-limited-backends '("MiniMax"))
+         (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
+    (unwind-protect
+        (progn
+          (set 'gptel--dashscope dashscope-backend)
+          (cl-letf (((symbol-function 'my/gptel-api-key)
+                     (lambda (host)
+                       (pcase host
+                         ("coding.dashscope.aliyuncs.com" "token")
+                         (_ nil))))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (gptel-auto-workflow--maybe-activate-rate-limit-failover
+             "grader" preset usage-limit-error)
+            (should (member "moonshot" gptel-auto-workflow--rate-limited-backends))
+            (let ((override
+                   (gptel-auto-workflow--maybe-override-subagent-provider
+                    "grader" preset)))
               (should (eq (plist-get override :backend) dashscope-backend))
               (should (eq (plist-get override :model) 'qwen3.6-plus)))))
       (setq gptel-auto-workflow--rate-limited-backends nil
@@ -11086,7 +11212,89 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
              (should (equal verify-skip-env "1"))
              (should (equal test-args '("unit")))
              (should (string-match-p "ran /tmp/staging/scripts/run-tests.sh unit" (cdr result)))
-             (should (string-match-p "ran /tmp/staging/scripts/verify-nucleus.sh" (cdr result))))
+              (should (string-match-p "ran /tmp/staging/scripts/verify-nucleus.sh" (cdr result))))
+        (when-let ((buf (get-buffer "*test-staging-verify*")))
+          (kill-buffer buf))))))
+
+(ert-deftest regression/auto-workflow/check-el-syntax-passes-clean-tree ()
+  "Syntax helper should return non-nil for a clean non-empty Elisp tree."
+  (let* ((dir (make-temp-file "gptel-syntax-clean-" t))
+         (file (expand-file-name "ok.el" dir))
+         (buf (generate-new-buffer "*syntax-probe*")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun gptel-syntax-clean ()\n  t)\n"))
+          (should (gptel-auto-workflow--check-el-syntax dir buf))
+          (should (equal "" (with-current-buffer buf (buffer-string)))))
+      (when (buffer-live-p buf)
+        (kill-buffer buf))
+      (delete-directory dir t))))
+
+(ert-deftest regression/auto-workflow/check-el-syntax-reports-broken-file ()
+  "Syntax helper should report the broken file when parsing fails."
+  (let* ((dir (make-temp-file "gptel-syntax-broken-" t))
+         (file (expand-file-name "broken.el" dir))
+         (buf (generate-new-buffer "*syntax-probe*")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun gptel-syntax-broken ()\n  (list 1 2 3)\n"))
+          (should-not (gptel-auto-workflow--check-el-syntax dir buf))
+          (should (string-match-p
+                   "SYNTAX ERROR: broken\\.el"
+                   (with-current-buffer buf (buffer-string)))))
+      (when (buffer-live-p buf)
+        (kill-buffer buf))
+      (delete-directory dir t))))
+
+(ert-deftest regression/auto-workflow/verify-staging-syntax-failure-does-not-crash ()
+  "Syntax failures should fail verification cleanly instead of crashing the staging callback."
+  (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging")
+        (hydrated nil))
+    (cl-letf (((symbol-function 'file-exists-p)
+               (lambda (path)
+                 (equal path "/tmp/staging")))
+              ((symbol-function 'gptel-auto-workflow--check-el-syntax)
+               (lambda (_directory output-buffer)
+                 (with-current-buffer output-buffer
+                   (insert "SYNTAX ERROR: broken.el: End of file during parsing\n"))
+                 nil))
+              ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
+               (lambda (&rest _)
+                 (setq hydrated t)
+                 (cons "should not hydrate" 1)))
+              ((symbol-function 'generate-new-buffer)
+               (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (unwind-protect
+          (let ((result (gptel-auto-workflow--verify-staging)))
+            (should-not (car result))
+            (should-not hydrated)
+            (should (string-match-p "SYNTAX ERROR: broken\\.el" (cdr result))))
+        (when-let ((buf (get-buffer "*test-staging-verify*")))
+          (kill-buffer buf))))))
+
+(ert-deftest regression/auto-workflow/verify-staging-missing-hydrate-note-fails-cleanly ()
+  "Missing hydrate note text should still fail verification without signaling."
+  (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging"))
+    (cl-letf (((symbol-function 'file-exists-p)
+               (lambda (path)
+                 (equal path "/tmp/staging")))
+              ((symbol-function 'gptel-auto-workflow--check-el-syntax)
+               (lambda (&rest _) t))
+              ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
+               (lambda (&rest _)
+                 (cons nil 1)))
+              ((symbol-function 'generate-new-buffer)
+               (lambda (&rest _) (get-buffer-create "*test-staging-verify*")))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (unwind-protect
+          (let ((result (gptel-auto-workflow--verify-staging)))
+            (should-not (car result))
+            (should (string-match-p "Staging submodule hydration failed" (cdr result))))
         (when-let ((buf (get-buffer "*test-staging-verify*")))
           (kill-buffer buf))))))
 
