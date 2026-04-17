@@ -2584,7 +2584,7 @@ If branch exists locally, deletes it first to avoid conflicts."
           (message "[auto-workflow] Created: %s" branch)
           (puthash target (list :worktree-dir worktree-dir :current-branch branch)
                    gptel-auto-workflow--worktree-state)
-          worktree-dir)
+          worktree-dir))
       (error
        (when (buffer-live-p stderr-buffer)
          (kill-buffer stderr-buffer))
