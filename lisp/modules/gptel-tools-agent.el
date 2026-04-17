@@ -4325,7 +4325,7 @@ Returns t if all files pass syntax check, nil otherwise."
         nil)
     (let ((errors nil)
           (files (ignore-errors (directory-files-recursively directory "\\.el\\'"))))
-      (dolist (file (or files nil))
+      (dolist (file (or files nil) (null errors))
         (when (file-readable-p file)
           (with-temp-buffer
             (insert-file-contents file)
@@ -4335,14 +4335,13 @@ Returns t if all files pass syntax check, nil otherwise."
                 (progn
                   (while (not (eobp)) (forward-sexp)))
               (error
-               (let ((msg (format "SYNTAX ERROR: %s: %s"
-                                  (file-relative-name file directory)
-                                  (error-message-string err))))
-                 (push msg errors)
-                 (when (buffer-live-p output-buffer)
+                (let ((msg (format "SYNTAX ERROR: %s: %s"
+                                   (file-relative-name file directory)
+                                   (error-message-string err))))
+                  (push msg errors)
+                  (when (buffer-live-p output-buffer)
                    (with-current-buffer output-buffer
-                     (insert msg "\n"))))))))
-      (null errors)))))
+                      (insert msg "\n"))))))))))))
 
 (defun gptel-auto-workflow--verify-staging ()
   "Run verification in the staging worktree.

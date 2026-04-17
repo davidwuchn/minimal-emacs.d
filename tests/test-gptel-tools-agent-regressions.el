@@ -11216,6 +11216,38 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (when-let ((buf (get-buffer "*test-staging-verify*")))
           (kill-buffer buf))))))
 
+(ert-deftest regression/auto-workflow/check-el-syntax-passes-clean-tree ()
+  "Syntax helper should return non-nil for a clean non-empty Elisp tree."
+  (let* ((dir (make-temp-file "gptel-syntax-clean-" t))
+         (file (expand-file-name "ok.el" dir))
+         (buf (generate-new-buffer "*syntax-probe*")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun gptel-syntax-clean ()\n  t)\n"))
+          (should (gptel-auto-workflow--check-el-syntax dir buf))
+          (should (equal "" (with-current-buffer buf (buffer-string)))))
+      (when (buffer-live-p buf)
+        (kill-buffer buf))
+      (delete-directory dir t))))
+
+(ert-deftest regression/auto-workflow/check-el-syntax-reports-broken-file ()
+  "Syntax helper should report the broken file when parsing fails."
+  (let* ((dir (make-temp-file "gptel-syntax-broken-" t))
+         (file (expand-file-name "broken.el" dir))
+         (buf (generate-new-buffer "*syntax-probe*")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun gptel-syntax-broken ()\n  (list 1 2 3)\n"))
+          (should-not (gptel-auto-workflow--check-el-syntax dir buf))
+          (should (string-match-p
+                   "SYNTAX ERROR: broken\\.el"
+                   (with-current-buffer buf (buffer-string)))))
+      (when (buffer-live-p buf)
+        (kill-buffer buf))
+      (delete-directory dir t))))
+
 (ert-deftest regression/auto-workflow/verify-staging-syntax-failure-does-not-crash ()
   "Syntax failures should fail verification cleanly instead of crashing the staging callback."
   (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging")
