@@ -6578,18 +6578,28 @@ REASON is only used for logging."
   "Check if ERROR-OUTPUT is a transient/retryable error."
   (and (stringp error-output)
        (not (gptel-auto-experiment--aborted-agent-output-p error-output))
+       (or (gptel-auto-experiment--provider-usage-limit-error-p error-output)
+           (let ((case-fold-search t))
+             (string-match-p
+              "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
+              error-output)))))
+
+(defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
+  "Return non-nil when ERROR-OUTPUT reflects a provider billing-cycle limit."
+  (and (stringp error-output)
        (let ((case-fold-search t))
          (string-match-p
-          "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
+          "access_terminated_error\\|usage limit exceeded\\|usage limit for this billing cycle\\|reached your usage limit for this billing cycle"
           error-output))))
 
 (defun gptel-auto-experiment--rate-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects retryable provider pressure."
   (and (stringp error-output)
-       (let ((case-fold-search t))
-         (string-match-p
-          "rate_limit_error\\|usage limit exceeded\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
-          error-output))))
+       (or (gptel-auto-experiment--provider-usage-limit-error-p error-output)
+           (let ((case-fold-search t))
+             (string-match-p
+              "rate_limit_error\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
+              error-output)))))
 
 (defun gptel-auto-experiment--provider-auth-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects provider auth failure."
@@ -6734,10 +6744,11 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
 (defun gptel-auto-experiment--quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows provider quota exhaustion."
   (and (stringp agent-output)
-       (let ((case-fold-search t))
-         (string-match-p
-          "allocated quota exceeded\\|usage limit exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
-          agent-output))))
+       (or (gptel-auto-experiment--provider-usage-limit-error-p agent-output)
+           (let ((case-fold-search t))
+             (string-match-p
+              "allocated quota exceeded\\|insufficient_quota\\|insufficient balance\\|billing_hard_limit_reached\\|hard limit reached"
+              agent-output)))))
 
 (defun gptel-auto-experiment--hard-quota-exhausted-p (agent-output)
   "Return non-nil when AGENT-OUTPUT shows a hard quota stop for executor work."
@@ -6841,6 +6852,8 @@ Also logs agent-output snippet for debugging when category is :unknown."
     (cons :api-rate-limit "Hourly quota exhausted"))
    ((string-match-p "week allocated quota exceeded" agent-output)
     (cons :api-rate-limit "Weekly quota exhausted"))
+   ((gptel-auto-experiment--provider-usage-limit-error-p agent-output)
+    (cons :api-rate-limit "Provider usage limit reached"))
    ((string-match-p "throttling\\|rate.limit\\|quota exceeded\\|429" agent-output)
     (cons :api-rate-limit "API rate limit exceeded"))
    ((let ((case-fold-search t))

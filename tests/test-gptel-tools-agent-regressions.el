@@ -1326,6 +1326,18 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (equal (gptel-auto-experiment--categorize-error grader-error)
                    '(:api-rate-limit . "Provider overloaded")))))
 
+(ert-deftest regression/auto-experiment/access-terminated-errors-count-as-provider-pressure ()
+  "Billing-cycle access termination should fail over like provider pressure."
+  (let ((usage-limit-error
+         "Error: Task executor could not finish task \"Experiment 1: optimize x\". Error details: (:message \"You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade\" :type \"access_terminated_error\")"))
+    (should (gptel-auto-experiment--provider-usage-limit-error-p usage-limit-error))
+    (should (gptel-auto-experiment--rate-limit-error-p usage-limit-error))
+    (should (gptel-auto-experiment--is-retryable-error-p usage-limit-error))
+    (should (gptel-auto-experiment--quota-exhausted-p usage-limit-error))
+    (should-not (gptel-auto-experiment--hard-quota-exhausted-p usage-limit-error))
+    (should (equal (gptel-auto-experiment--categorize-error usage-limit-error)
+                   '(:api-rate-limit . "Provider usage limit reached")))))
+
 (ert-deftest regression/auto-experiment/authorized-errors-count-as-provider-failures ()
   "Executor auth failures should stay on the provider-failover path."
   (let ((auth-error
@@ -3046,6 +3058,58 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
              "executor" preset auth-error)
             (should (member "MiniMax" gptel-auto-workflow--rate-limited-backends))
+            (let ((override
+                   (gptel-auto-workflow--maybe-override-subagent-provider
+                    "executor" preset)))
+              (should (eq (plist-get override :backend) dashscope-backend))
+              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
+      (setq gptel-auto-workflow--rate-limited-backends nil
+            gptel-auto-workflow--runtime-subagent-provider-overrides nil)
+       (if had-dashscope
+           (set 'gptel--dashscope old-dashscope)
+         (makunbound 'gptel--dashscope)))))
+
+(ert-deftest regression/auto-workflow/provider-failover-activates-on-access-terminated-errors ()
+  "Headless provider failover should activate on billing-cycle access termination."
+  (let* ((dashscope-backend
+          (gptel-make-openai "DashScope"
+            :host "coding.dashscope.aliyuncs.com"
+            :key (lambda () "token")
+            :models '(qwen3.5-plus qwen3.6-plus)))
+         (had-dashscope (boundp 'gptel--dashscope))
+         (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
+         (preset '(:backend "moonshot" :model "kimi-k2.6-code-preview"))
+         (access-terminated-error
+          "Error: Task executor could not finish task \"x\". Error details: (:message \"You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade\" :type \"access_terminated_error\")")
+         (gptel-auto-workflow--headless t)
+         (gptel-auto-workflow-persistent-headless t)
+         (gptel-auto-workflow--current-project "/tmp/project")
+         (gptel-auto-workflow-headless-fallback-agents
+          '("analyzer" "comparator" "executor" "grader" "reviewer"))
+         (gptel-auto-workflow-headless-subagent-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("moonshot" . "kimi-k2.6-code-preview")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-executor-rate-limit-fallbacks
+          '(("MiniMax" . "minimax-m2.7-highspeed")
+            ("moonshot" . "kimi-k2.6-code-preview")
+            ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow--rate-limited-backends nil)
+         (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
+    (unwind-protect
+        (progn
+          (set 'gptel--dashscope dashscope-backend)
+          (cl-letf (((symbol-function 'my/gptel-api-key)
+                     (lambda (host)
+                       (pcase host
+                         ("coding.dashscope.aliyuncs.com" "token")
+                         ("api.kimi.com" "token")
+                         (_ nil))))
+                    ((symbol-function 'message)
+                     (lambda (&rest _) nil)))
+            (gptel-auto-workflow--maybe-activate-rate-limit-failover
+             "executor" preset access-terminated-error)
+            (should (member "moonshot" gptel-auto-workflow--rate-limited-backends))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "executor" preset)))
