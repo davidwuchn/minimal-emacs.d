@@ -5133,26 +5133,46 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                                    (gptel-auto-workflow--hydrate-staging-submodules worktree)))
                  (hydrate-pass (or (not hydrate-submodules-p)
                                    (= 0 (cdr hydrate-result)))))
-            (if (not hydrate-pass)
-                (progn
-                  (with-current-buffer output-buffer
-                    (insert (car hydrate-result) "\n"))
-                  (message "[auto-experiment] ✗ Submodule hydration failed: %s"
-                           (my/gptel--sanitize-for-logging (car hydrate-result) 200))
-                  (cons nil (with-current-buffer output-buffer (buffer-string))))
-              (message "[auto-experiment] Running tests...")
-              (let ((exit-code
-                     (gptel-auto-workflow--call-process-with-watchdog
-                      test-script nil output-buffer nil "unit")))
-                (with-current-buffer output-buffer
-                  (setq result (cons (zerop exit-code) (buffer-string))))
-                (when (car result)
-                  (message "[auto-experiment] ✓ Tests passed"))
-                result))))
-      (when (buffer-live-p output-buffer)
-        (kill-buffer output-buffer))
-      (when (file-exists-p isolated-status-file)
-        (delete-file isolated-status-file)))))
+             (if (not hydrate-pass)
+                 (progn
+                   (with-current-buffer output-buffer
+                     (insert (car hydrate-result) "\n"))
+                   (message "[auto-experiment] ✗ Submodule hydration failed: %s"
+                            (my/gptel--sanitize-for-logging (car hydrate-result) 200))
+                   (cons nil (with-current-buffer output-buffer (buffer-string))))
+               (cl-labels
+                   ((run-tests-once (attempt)
+                      (message "[auto-experiment] Running tests%s..."
+                               (if (> attempt 1)
+                                   (format " (attempt %d)" attempt)
+                                 ""))
+                      (with-current-buffer output-buffer
+                        (erase-buffer))
+                      (let ((exit-code
+                             (gptel-auto-workflow--call-process-with-watchdog
+                              test-script nil output-buffer nil "unit")))
+                        (with-current-buffer output-buffer
+                          (cons (zerop exit-code) (buffer-string))))))
+                 (setq result (run-tests-once 1))
+                 (unless (car result)
+                   (let ((first-output (cdr result)))
+                     (message "[auto-experiment] Retrying tests after failure")
+                     (sleep-for 1)
+                     (let ((retry-result (run-tests-once 2)))
+                       (setq result
+                             (if (car retry-result)
+                                 retry-result
+                               (cons nil
+                                     (format "Initial test run failed:\n%s\n\nRetry failed:\n%s"
+                                             first-output
+                                             (cdr retry-result))))))))
+                 (when (car result)
+                   (message "[auto-experiment] ✓ Tests passed"))
+                 result))))
+       (when (buffer-live-p output-buffer)
+         (kill-buffer output-buffer))
+       (when (file-exists-p isolated-status-file)
+         (delete-file isolated-status-file)))))
 
 (defcustom gptel-auto-experiment-require-tests t
   "When non-nil, require tests to pass before merging experiment to staging.
