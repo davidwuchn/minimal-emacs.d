@@ -1673,10 +1673,13 @@ TIMESTAMP defaults to `current-time'."
           (condition-case err
               (gptel-abort request-buf)
             (error
-             (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
-                      (buffer-name request-buf)
-                      (my/gptel--sanitize-for-logging
-                       (error-message-string err) 160)))))))))
+             (let ((safe-msg (condition-case nil
+                                 (my/gptel--sanitize-for-logging
+                                  (error-message-string err) 160)
+                               (error "abort-error"))))
+               (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
+                        (buffer-name request-buf)
+                        safe-msg)))))))))
 
 (defun my/gptel--normalize-agent-activity-dir (dir)
   "Return DIR as a canonical directory path with trailing slash, or nil."
