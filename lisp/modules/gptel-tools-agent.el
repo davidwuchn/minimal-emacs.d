@@ -1650,30 +1650,29 @@ TIMESTAMP defaults to `current-time'."
 
 (defun my/gptel--reset-agent-task-state ()
   "Abort and clear all tracked subagent task state."
-  (let (request-buffers)
-    (maphash
-     (lambda (_task-id state)
-       (when (timerp (plist-get state :timeout-timer))
-         (cancel-timer (plist-get state :timeout-timer)))
-       (when (timerp (plist-get state :progress-timer))
-         (cancel-timer (plist-get state :progress-timer)))
-       (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
-         (push request-buf request-buffers)))
-     my/gptel--agent-task-state)
-    ;; Clear state before aborting so synchronous abort callbacks are treated
-    ;; as stale and cannot mutate workflow state. Abort the live request
-    ;; buffer so stale tool writes stop too.
-    (clrhash my/gptel--agent-task-state)
-    (dolist (request-buf (delete-dups request-buffers))
-      (when (and (buffer-live-p request-buf)
-                 (fboundp 'gptel-abort))
-         (condition-case err
-             (gptel-abort request-buf)
-           (error
-            (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
-                     (buffer-name request-buf)
-                     (my/gptel--sanitize-for-logging
-                      (error-message-string err) 160))))))))
+  (when (hash-table-p my/gptel--agent-task-state)
+    (let (request-buffers)
+      (maphash
+       (lambda (_task-id state)
+         (when (plistp state)
+           (when (timerp (plist-get state :timeout-timer))
+             (cancel-timer (plist-get state :timeout-timer)))
+           (when (timerp (plist-get state :progress-timer))
+             (cancel-timer (plist-get state :progress-timer)))
+           (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
+             (push request-buf request-buffers))))
+       my/gptel--agent-task-state)
+      (clrhash my/gptel--agent-task-state)
+      (dolist (request-buf (delete-dups request-buffers))
+        (when (and (buffer-live-p request-buf)
+                   (fboundp 'gptel-abort))
+          (condition-case err
+              (gptel-abort request-buf)
+            (error
+             (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
+                      (buffer-name request-buf)
+                      (my/gptel--sanitize-for-logging
+                       (error-message-string err) 160)))))))))
 
 (defun my/gptel--normalize-agent-activity-dir (dir)
   "Return DIR as a canonical directory path with trailing slash, or nil."
@@ -4325,7 +4324,7 @@ Returns t if all files pass syntax check, nil otherwise."
         nil)
     (let ((errors nil)
           (files (ignore-errors (directory-files-recursively directory "\\.el\\'"))))
-      (dolist (file (or files nil))
+      (dolist (file (or files nil) (null errors))
         (when (file-readable-p file)
           (with-temp-buffer
             (insert-file-contents file)
@@ -4335,14 +4334,13 @@ Returns t if all files pass syntax check, nil otherwise."
                 (progn
                   (while (not (eobp)) (forward-sexp)))
               (error
-               (let ((msg (format "SYNTAX ERROR: %s: %s"
-                                  (file-relative-name file directory)
-                                  (error-message-string err))))
-                 (push msg errors)
-                 (when (buffer-live-p output-buffer)
+                (let ((msg (format "SYNTAX ERROR: %s: %s"
+                                   (file-relative-name file directory)
+                                   (error-message-string err))))
+                  (push msg errors)
+                  (when (buffer-live-p output-buffer)
                    (with-current-buffer output-buffer
-                     (insert msg "\n"))))))))
-      (null errors)))))
+                      (insert msg "\n"))))))))))))
 
 (defun gptel-auto-workflow--verify-staging ()
   "Run verification in the staging worktree.
@@ -7229,16 +7227,18 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                            (if (and (gptel-auto-experiment--teachable-validation-error-p
                                                      target validation-error)
                                                     (not (bound-and-true-p gptel-auto-experiment--in-retry)))
-                                               (let ((default-directory experiment-worktree)
-                                                     (gptel-auto-experiment--in-retry t))
-                                                 (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
-                                                 (message "[auto-experiment] ✗ %s"
-                                                          (my/gptel--sanitize-for-logging validation-error 200))
-                                                 (magit-git-success "checkout" "--" ".")
-                                                 (let ((gptel-auto-experiment-active-grace
-                                                        gptel-auto-experiment-validation-retry-active-grace))
-                                                   (my/gptel--run-agent-tool-with-timeout
-                                                    gptel-auto-experiment-validation-retry-time-budget
+                                                (let ((default-directory experiment-worktree)
+                                                      (gptel-auto-experiment--in-retry t))
+                                                  (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
+                                                  (message "[auto-experiment] ✗ %s"
+                                                           (my/gptel--sanitize-for-logging validation-error 200))
+                                                  (gptel-auto-experiment--prepare-validation-retry-worktree
+                                                   target provisional-commit-hash)
+                                                  (setq provisional-commit-hash nil)
+                                                  (let ((gptel-auto-experiment-active-grace
+                                                         gptel-auto-experiment-validation-retry-active-grace))
+                                                    (my/gptel--run-agent-tool-with-timeout
+                                                     gptel-auto-experiment-validation-retry-time-budget
                                                     (lambda (retry-output)
                                                       (let ((gptel-auto-experiment--grading-target target)
                                                             (gptel-auto-experiment--grading-worktree experiment-worktree))
@@ -8177,6 +8177,17 @@ ACTION is used for failure logging."
      action
      (or timeout 60))))
 
+(defun gptel-auto-experiment--prepare-validation-retry-worktree (target provisional-hash)
+  "Reset the current experiment worktree to a clean base before retrying validation.
+Drops PROVISIONAL-HASH when it is still the current HEAD so retries do not
+start from a syntax-invalid provisional commit."
+  (and (magit-git-success "checkout" "--" ".")
+       (or (null provisional-hash)
+           (not (equal provisional-hash (gptel-auto-workflow--current-head-hash)))
+           (gptel-auto-workflow--drop-provisional-commit
+            provisional-hash
+            (format "Drop provisional commit before validation retry for %s" target)))))
+
 (defun gptel-auto-workflow--with-staging-worktree (fn)
   "Run FN with `default-directory' bound to the staging worktree.
 Creates the worktree on demand and returns nil if unavailable."
@@ -8278,9 +8289,11 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
     (gptel-auto-workflow--stop-status-refresh-timer)))
 
 (defun gptel-auto-workflow--start-status-refresh-timer ()
-  "Start the workflow status refresh timer."
+  "Start the workflow status refresh timer if a workflow run is active."
   (gptel-auto-workflow--stop-status-refresh-timer)
-  (when (and (numberp gptel-auto-workflow-status-refresh-interval)
+  (when (and (or gptel-auto-workflow--running
+                 gptel-auto-workflow--cron-job-running)
+             (numberp gptel-auto-workflow-status-refresh-interval)
              (> gptel-auto-workflow-status-refresh-interval 0))
     (setq gptel-auto-workflow--status-refresh-timer
           (run-with-timer gptel-auto-workflow-status-refresh-interval

@@ -3985,6 +3985,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
            (grade-call-count 0)
            (benchmark-call-count 0)
            (tracked-commit nil)
+           (drop-calls nil)
+           (promote-provisional-hashes nil)
            (logged-result nil)
            (result nil)
            (gptel-auto-experiment-auto-push nil)
@@ -4046,9 +4048,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                       ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
                        (lambda (&rest _args) "abc123"))
                       ((symbol-function 'gptel-auto-workflow--promote-provisional-commit)
-                       (lambda (&rest _args) t))
+                       (lambda (_message _action provisional-hash &optional _timeout)
+                         (push provisional-hash promote-provisional-hashes)
+                         t))
                       ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
-                       (lambda (&rest _args) t))
+                       (lambda (provisional-hash &rest _args)
+                         (push provisional-hash drop-calls)
+                         t))
                       ((symbol-function 'gptel-auto-workflow--assert-main-untouched)
                        (lambda () nil))
                       ((symbol-function 'gptel-auto-workflow--git-step-success-p)
@@ -4057,6 +4063,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                        (lambda (&rest _args) t))
                       ((symbol-function 'magit-git-success)
                        (lambda (&rest _args) t))
+                      ((symbol-function 'gptel-auto-workflow--current-head-hash)
+                       (lambda () "abc123"))
                       ((symbol-function 'message)
                        (lambda (&rest _args) nil)))
               (with-current-buffer worktree-buf
@@ -4082,17 +4090,22 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (should (equal (plist-get result :grader-reason) "retry grade"))
             (should (equal (plist-get result :comparator-reason) (plist-get case :reason)))
             (should (equal (plist-get result :analyzer-patterns) "(syntax-retry)"))
-            (should (equal (plist-get result :agent-output)
-                           "HYPOTHESIS: retry path preserves full result"))
-            (should (= (plist-get result :retries) 1))
-            (should (plist-get result :validation-retry))
-            (should (= gptel-auto-experiment--no-improvement-count
-                       (plist-get case :no-improvement)))
-            (if (plist-get case :tracked)
+             (should (equal (plist-get result :agent-output)
+                            "HYPOTHESIS: retry path preserves full result"))
+              (should (= (plist-get result :retries) 1))
+              (should (plist-get result :validation-retry))
+              (should (= gptel-auto-experiment--no-improvement-count
+                         (plist-get case :no-improvement)))
+              (if (plist-get case :tracked)
+                  (progn
+                    (should (equal drop-calls '("abc123")))
+                    (should (equal promote-provisional-hashes '(nil)))
+                    (should tracked-commit)
+                    (should (= gptel-auto-experiment--best-score (plist-get case :score))))
                 (progn
-                  (should tracked-commit)
-                  (should (= gptel-auto-experiment--best-score (plist-get case :score))))
-              (should-not tracked-commit)))
+                  (should (equal drop-calls '(nil "abc123")))
+                  (should-not promote-provisional-hashes)
+                  (should-not tracked-commit))))
         (when (buffer-live-p worktree-buf)
           (kill-buffer worktree-buf))
         (delete-directory project-root t)))))
@@ -11215,6 +11228,38 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               (should (string-match-p "ran /tmp/staging/scripts/verify-nucleus.sh" (cdr result))))
         (when-let ((buf (get-buffer "*test-staging-verify*")))
           (kill-buffer buf))))))
+
+(ert-deftest regression/auto-workflow/check-el-syntax-passes-clean-tree ()
+  "Syntax helper should return non-nil for a clean non-empty Elisp tree."
+  (let* ((dir (make-temp-file "gptel-syntax-clean-" t))
+         (file (expand-file-name "ok.el" dir))
+         (buf (generate-new-buffer "*syntax-probe*")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun gptel-syntax-clean ()\n  t)\n"))
+          (should (gptel-auto-workflow--check-el-syntax dir buf))
+          (should (equal "" (with-current-buffer buf (buffer-string)))))
+      (when (buffer-live-p buf)
+        (kill-buffer buf))
+      (delete-directory dir t))))
+
+(ert-deftest regression/auto-workflow/check-el-syntax-reports-broken-file ()
+  "Syntax helper should report the broken file when parsing fails."
+  (let* ((dir (make-temp-file "gptel-syntax-broken-" t))
+         (file (expand-file-name "broken.el" dir))
+         (buf (generate-new-buffer "*syntax-probe*")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun gptel-syntax-broken ()\n  (list 1 2 3)\n"))
+          (should-not (gptel-auto-workflow--check-el-syntax dir buf))
+          (should (string-match-p
+                   "SYNTAX ERROR: broken\\.el"
+                   (with-current-buffer buf (buffer-string)))))
+      (when (buffer-live-p buf)
+        (kill-buffer buf))
+      (delete-directory dir t))))
 
 (ert-deftest regression/auto-workflow/verify-staging-syntax-failure-does-not-crash ()
   "Syntax failures should fail verification cleanly instead of crashing the staging callback."

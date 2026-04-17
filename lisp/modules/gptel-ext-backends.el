@@ -82,7 +82,10 @@ ARGS are passed to `gptel-make-openai'."
     :endpoint "/v1/e68f70855c32831717611057ed23aa46/mindward/workers-ai/v1/chat/completions"
     :key (lambda () (my/gptel-api-key "gateway.ai.cloudflare.com"))
     :stream t
-    :models '(\@cf/zai-org/glm-4.7-flash \@cf/openai/whisper \@cf/openai/whisper-large-v3-turbo)))
+    :models '(\@cf/zai-org/glm-4.7-flash
+              \@cf/moonshotai/kimi-k2.5
+              \@cf/openai/whisper
+              \@cf/openai/whisper-large-v3-turbo)))
 
 (provide 'gptel-ext-backends)
 ;;; gptel-ext-backends.el ends here
