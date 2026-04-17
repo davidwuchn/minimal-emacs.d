@@ -6186,10 +6186,11 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
 (defvar gptel-auto-experiment-max-retries 2
   "Maximum retries for executor on transient errors.")
 
-(defvar gptel-auto-experiment-max-grader-retries 1
+(defvar gptel-auto-experiment-max-grader-retries 2
   "Maximum local retries for transient grader failures.
 These retries reuse the successful executor output instead of rerunning the
-entire experiment.")
+entire experiment. Two retries let the grader advance past one failing
+fallback backend before giving up on otherwise-good executor output.")
 
 (defvar gptel-auto-experiment-retry-delay 5
   "Seconds to wait between retries.")

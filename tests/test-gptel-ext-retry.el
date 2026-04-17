@@ -60,10 +60,10 @@
 (defun test--transient-error-p (error-data http-status)
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error."
   (or (and (stringp error-data)
-           (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|exit code 28\\|exit code 6\\|exit code 7\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
+            (string-match-p "Malformed JSON\\|Could not parse HTTP\\|json-read-error\\|Empty reply\\|Timeout\\|timeout\\|curl: (28)\\|curl: (6)\\|curl: (7)\\|exit code 28\\|exit code 6\\|exit code 7\\|Bad Gateway\\|Service Unavailable\\|Gateway Timeout\\|Connection refused\\|Could not resolve host\\|Overloaded\\|overloaded\\|Too Many Requests" error-data))
       (and (numberp http-status) (memq http-status '(408 429 500 502 503 504)))
       (and (listp error-data)
-           (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit"
+           (string-match-p "overloaded\\|too many requests\\|rate limit\\|timeout\\|free usage limit\\|access_terminated_error\\|reached your usage limit\\|quota will be refreshed in the next cycle"
                            (downcase (or (plist-get error-data :message) ""))))))
 
 (defun test--trim-tool-results-for-retry (info)
@@ -217,7 +217,11 @@
   (should (test--transient-error-p '(:message "Too many requests") nil))
   (should (test--transient-error-p '(:message "Rate limit exceeded") nil))
   (should (test--transient-error-p '(:message "Request timeout") nil))
-  (should (test--transient-error-p '(:message "Free usage limit reached") nil)))
+  (should (test--transient-error-p '(:message "Free usage limit reached") nil))
+  (should (test--transient-error-p
+           '(:message "You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle."
+             :type "access_terminated_error")
+           nil)))
 
 (ert-deftest retry/transient-error/plist-format-with-misleading-success-status ()
   "Transient plist messages should still retry when ERRS carries a success code."
