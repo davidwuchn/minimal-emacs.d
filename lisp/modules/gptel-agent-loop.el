@@ -591,14 +591,13 @@ Returns non-nil if result was delivered."
 Returns non-nil if result was delivered."
   (when (and (gptel-agent-loop--task-max-steps-reached state)
              (not (gptel-agent-loop--task-summary-requested state)))
-    (gptel-agent-loop--append-output state resp)
     (setf (gptel-agent-loop--task-summary-requested state) t)
     (if gptel-agent-loop-hard-loop
         (gptel-agent-loop--schedule-request state (gptel-agent-loop--summary-prompt-for state) nil)
       (gptel-agent-loop--deliver-result
        state
        (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-               (gptel-agent-loop--build-final-result state "")
+               (gptel-agent-loop--build-final-result state resp)
                (gptel-agent-loop--task-step-count state))))
     t))
 
