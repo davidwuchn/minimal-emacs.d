@@ -372,9 +372,10 @@ Call once after definitions to pre-compile regex patterns."
   "Return non-nil when TEXT matches any pattern in PATTERNS.
 Patterns are matched case-insensitively against downcased TEXT and PATTERN."
   (and (stringp text)
-       (cl-some (lambda (pattern)
-                  (string-match-p (downcase pattern) (downcase text)))
-                patterns)))
+       (let ((text-lower (downcase text)))
+         (cl-some (lambda (pattern)
+                    (string-match-p (downcase pattern) text-lower))
+                  patterns))))
 
 (defun gptel-agent-loop--seems-complete-p (resp)
   "Return non-nil when RESP looks like a completion message.
