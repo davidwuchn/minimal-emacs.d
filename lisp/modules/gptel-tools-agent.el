@@ -4390,12 +4390,17 @@ Returns (success-p . output)."
                    (not checks-pass))
           (let ((baseline-check
                  (gptel-auto-workflow--staging-tests-match-main-baseline-p output)))
-            (setq checks-pass (car baseline-check))
+            (setq checks-pass (not (null (car-safe baseline-check))))
             (with-current-buffer output-buffer
               (goto-char (point-max))
               (unless (bolp)
                 (insert "\n"))
-              (insert "\n" (cdr baseline-check) "\n"))
+              (insert "\n"
+                      (let ((note (cdr-safe baseline-check)))
+                        (if (gptel-auto-workflow--non-empty-string-p note)
+                            note
+                          "Staging verification failed against main baseline"))
+                      "\n"))
             (setq output (with-current-buffer output-buffer (buffer-string)))))
         (kill-buffer output-buffer)
         (setq result (and syntax-pass submodule-pass checks-pass))
