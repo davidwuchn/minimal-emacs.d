@@ -5620,10 +5620,9 @@ still improves."
                       (format "Rejected: score tie without >= %.2f quality gain"
                               gptel-auto-experiment-min-quality-gain-on-score-tie)))))
      (t
-      (list :winner (if (string= winner "tie") "B" winner)
-            :note (and (string= winner "tie")
-                       (format "Kept: score tie with >= %.2f quality gain"
-                               gptel-auto-experiment-min-quality-gain-on-score-tie)))))))
+       (list :winner (if (string= winner "tie") "B" winner)
+             :note (and (string= winner "tie")
+                        "Kept: score improved despite combined tie"))))))
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
