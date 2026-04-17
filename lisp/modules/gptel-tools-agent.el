@@ -5621,10 +5621,9 @@ still improves."
                       (format "Rejected: score tie without >= %.2f quality gain"
                               gptel-auto-experiment-min-quality-gain-on-score-tie)))))
      (t
-      (list :winner (if (string= winner "tie") "B" winner)
-            :note (and (string= winner "tie")
-                       (format "Kept: score tie with >= %.2f quality gain"
-                               gptel-auto-experiment-min-quality-gain-on-score-tie)))))))
+       (list :winner (if (string= winner "tie") "B" winner)
+             :note (and (string= winner "tie")
+                        "Kept: score improved despite combined tie"))))))
 
 (defun gptel-auto-experiment-decide (before after callback)
   "Compare BEFORE vs AFTER using LLM comparator.
@@ -6094,6 +6093,31 @@ Example HYPOTHESES:
     (let ((s (if (stringp str) str (format "%s" str))))
       (replace-regexp-in-string "[\t\n\r]+" " | " s))))
 
+(defun gptel-auto-experiment--tsv-decision-token (value)
+  "Return a normalized TSV decision token extracted from VALUE, or nil."
+  (when (stringp value)
+    (let ((normalized (string-trim value)))
+      (when (string-prefix-p ":" normalized)
+        (setq normalized (substring normalized 1)))
+      (when (string-match-p "\\`[[:lower:]][[:lower:]-]*\\'" normalized)
+        normalized))))
+
+(defun gptel-auto-experiment--tsv-decision-label (experiment)
+  "Return the durable TSV decision label for EXPERIMENT."
+  (or (and (gptel-auto-workflow--plist-get experiment :kept nil)
+           "kept")
+      (and (gptel-auto-experiment--inspection-thrash-result-p experiment)
+           "inspection-thrash")
+      (and (gptel-auto-workflow--plist-get experiment :validation-error nil)
+           "validation-failed")
+      (gptel-auto-experiment--tsv-decision-token
+       (gptel-auto-workflow--plist-get experiment :decision nil))
+      (gptel-auto-experiment--tsv-decision-token
+       (gptel-auto-workflow--plist-get experiment :comparator-reason nil))
+      (gptel-auto-experiment--tsv-decision-token
+       (gptel-auto-workflow--plist-get experiment :grader-reason nil))
+      "discarded"))
+
 (defun gptel-auto-workflow--kept-target-count-from-results-file (file)
   "Return the number of distinct kept targets recorded in TSV FILE."
   (if (not (file-exists-p file))
@@ -6160,7 +6184,7 @@ Example HYPOTHESES:
                       (gptel-auto-workflow--plist-get experiment :code-quality 0.5)
                       (- (gptel-auto-workflow--plist-get experiment :score-after 0)
                          (gptel-auto-workflow--plist-get experiment :score-before 0))
-                      (if (gptel-auto-workflow--plist-get experiment :kept nil) "kept" "discarded")
+                      (gptel-auto-experiment--tsv-decision-label experiment)
                       (gptel-auto-workflow--plist-get experiment :duration 0)
                       (gptel-auto-workflow--plist-get experiment :grader-quality "?")
                       (gptel-auto-experiment--tsv-escape (gptel-auto-workflow--plist-get experiment :grader-reason "N/A"))

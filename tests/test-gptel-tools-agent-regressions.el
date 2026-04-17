@@ -857,6 +857,28 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (string-match-p "Winner: B" (plist-get decision :reasoning)))
     (should-not (string-match-p "Rejected:" (plist-get decision :reasoning)))))
 
+(ert-deftest regression/auto-experiment/decide-explains-score-improvement-over-combined-tie ()
+  "Comparator reasoning should explain score-driven keeps over combined ties."
+  (let ((gptel-auto-experiment-use-subagents t)
+        decision)
+    (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional _timeout)
+                 (funcall callback "tie\nCombined scores are too close to call."))))
+      (with-temp-buffer
+        (gptel-auto-experiment-decide
+         '(:score 0.40 :code-quality 0.83)
+         '(:score 0.41 :code-quality 0.82)
+         (lambda (result)
+           (setq decision result)))))
+    (should decision)
+    (should (plist-get decision :keep))
+    (should (string-match-p "Comparator override: tie -> B"
+                            (plist-get decision :reasoning)))
+    (should (string-match-p "Kept: score improved despite combined tie"
+                            (plist-get decision :reasoning)))
+    (should-not (string-match-p "quality gain"
+                                (plist-get decision :reasoning)))))
+
 (ert-deftest regression/auto-experiment/promotes-non-regressing-correctness-fix-ties ()
   "Non-regressing ties should be kept when grading shows a real bug fix."
   (let ((decision
@@ -4927,16 +4949,64 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (gptel-auto-experiment-log-tsv
              run-id
              '(:id 2 :target "one" :kept t))
-            (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
+             (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
+             (gptel-auto-experiment-log-tsv
+              run-id
+              '(:id 3 :target "two" :kept nil :comparator-reason "tests-failed"))
+             (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
+             (gptel-auto-experiment-log-tsv
+              run-id
+              '(:id 4 :target "two" :kept t))
+             (should (= (plist-get gptel-auto-workflow--stats :kept) 2))
+             (should (= persist-count 4)))
+        (delete-directory tmpdir t)))))
+
+(ert-deftest regression/auto-workflow/log-tsv-preserves-failure-decision-labels ()
+  "results.tsv should keep terminal failure labels instead of flattening to discarded."
+  (let* ((tmpdir (make-temp-file "gptel-tsv-decisions" t))
+         (run-id "run-failure-decisions")
+         (results-file (expand-file-name
+                        (format "var/tmp/experiments/%s/results.tsv" run-id)
+                        tmpdir)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () tmpdir))
+              ((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda () nil)))
+      (unwind-protect
+          (progn
             (gptel-auto-experiment-log-tsv
              run-id
-             '(:id 3 :target "two" :kept nil))
-            (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
+             '(:id 1 :target "one" :kept nil :comparator-reason "tests-failed"))
             (gptel-auto-experiment-log-tsv
              run-id
-             '(:id 4 :target "two" :kept t))
-            (should (= (plist-get gptel-auto-workflow--stats :kept) 2))
-            (should (= persist-count 4)))
+             '(:id 2 :target "two" :kept nil
+                    :validation-error "Syntax error in file.el"
+                    :comparator-reason "Syntax error in file.el"))
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 3 :target "three" :kept nil
+                    :grader-reason "staging-worktree-failed"
+                    :comparator-reason "Failed to create staging worktree"))
+            (gptel-auto-experiment-log-tsv
+             run-id
+             '(:id 4 :target "four" :kept nil :comparator-reason ":api-rate-limit"))
+            (with-temp-buffer
+              (insert-file-contents results-file)
+              (forward-line 1)
+              (let ((decisions nil))
+                (while (not (eobp))
+                  (push (nth 7 (split-string
+                                (buffer-substring-no-properties
+                                 (line-beginning-position)
+                                 (line-end-position))
+                                "\t"))
+                        decisions)
+                  (forward-line 1))
+                (should (equal (nreverse decisions)
+                               '("tests-failed"
+                                 "validation-failed"
+                                 "staging-worktree-failed"
+                                 "api-rate-limit"))))))
         (delete-directory tmpdir t)))))
 
 (ert-deftest regression/auto-workflow/run-with-targets-stops-on-quota-exhaustion ()
