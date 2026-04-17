@@ -7227,16 +7227,18 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                            (if (and (gptel-auto-experiment--teachable-validation-error-p
                                                      target validation-error)
                                                     (not (bound-and-true-p gptel-auto-experiment--in-retry)))
-                                               (let ((default-directory experiment-worktree)
-                                                     (gptel-auto-experiment--in-retry t))
-                                                 (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
-                                                 (message "[auto-experiment] ✗ %s"
-                                                          (my/gptel--sanitize-for-logging validation-error 200))
-                                                 (magit-git-success "checkout" "--" ".")
-                                                 (let ((gptel-auto-experiment-active-grace
-                                                        gptel-auto-experiment-validation-retry-active-grace))
-                                                   (my/gptel--run-agent-tool-with-timeout
-                                                    gptel-auto-experiment-validation-retry-time-budget
+                                                (let ((default-directory experiment-worktree)
+                                                      (gptel-auto-experiment--in-retry t))
+                                                  (message "[auto-experiment] Validation failed with teachable pattern, retrying...")
+                                                  (message "[auto-experiment] ✗ %s"
+                                                           (my/gptel--sanitize-for-logging validation-error 200))
+                                                  (gptel-auto-experiment--prepare-validation-retry-worktree
+                                                   target provisional-commit-hash)
+                                                  (setq provisional-commit-hash nil)
+                                                  (let ((gptel-auto-experiment-active-grace
+                                                         gptel-auto-experiment-validation-retry-active-grace))
+                                                    (my/gptel--run-agent-tool-with-timeout
+                                                     gptel-auto-experiment-validation-retry-time-budget
                                                     (lambda (retry-output)
                                                       (let ((gptel-auto-experiment--grading-target target)
                                                             (gptel-auto-experiment--grading-worktree experiment-worktree))
@@ -8174,6 +8176,17 @@ ACTION is used for failure logging."
      "git reset --hard HEAD~1"
      action
      (or timeout 60))))
+
+(defun gptel-auto-experiment--prepare-validation-retry-worktree (target provisional-hash)
+  "Reset the current experiment worktree to a clean base before retrying validation.
+Drops PROVISIONAL-HASH when it is still the current HEAD so retries do not
+start from a syntax-invalid provisional commit."
+  (and (magit-git-success "checkout" "--" ".")
+       (or (null provisional-hash)
+           (not (equal provisional-hash (gptel-auto-workflow--current-head-hash)))
+           (gptel-auto-workflow--drop-provisional-commit
+            provisional-hash
+            (format "Drop provisional commit before validation retry for %s" target)))))
 
 (defun gptel-auto-workflow--with-staging-worktree (fn)
   "Run FN with `default-directory' bound to the staging worktree.
