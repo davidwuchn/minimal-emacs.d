@@ -523,7 +523,8 @@ Returns nil if curl is unavailable or a fetch is already in flight."
                      (setq my/gptel--openrouter-context-window-fetch-inflight nil)
                      (unwind-protect
                          (let ((status (process-exit-status p)))
-                           (when (and status (= status 0))
+                           (cond
+                            ((and status (= status 0))
                              (with-current-buffer buf
                                (goto-char (point-min))
                                (condition-case err
@@ -531,7 +532,11 @@ Returns nil if curl is unavailable or a fetch is already in flight."
                                          (data (alist-get 'data obj)))
                                      (funcall callback data))
                                  (error
-                                  (message "OpenRouter: parse failed (%s)" (error-message-string err)))))))
+                                  (message "OpenRouter: parse failed (%s)" (error-message-string err))))))
+                            (status
+                             (message "OpenRouter: request failed (exit %d)" status))
+                            (t
+                             (message "OpenRouter: request terminated abnormally"))))
                        (when (buffer-live-p buf) (kill-buffer buf)))))))
             (process-put proc 'my/gptel-managed t)
             proc)))))))
