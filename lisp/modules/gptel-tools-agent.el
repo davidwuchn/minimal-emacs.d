@@ -1778,7 +1778,8 @@ subagent callback fired."
   (when (functionp callback)
     (let ((safe-buffer (get-buffer-create " *gptel-callback*")))
       (with-current-buffer safe-buffer
-        (funcall callback result)))))
+        (let ((default-directory default-directory))
+          (funcall callback result))))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
   "Wrapper around `gptel-agent--task' that adds a timeout and progress messages.
