@@ -311,6 +311,17 @@ Returns 0.0 if CHARS-BEFORE is zero to avoid division by zero."
       0.0
     (* 100 (- 1 (/ (float chars-after) chars-before)))))
 
+(defun my/gptel--format-compaction-stats (chars-before chars-after tokens-before)
+  "Format and return compaction statistics as a message string.
+Computes chars-after and tokens-after from current buffer state."
+  (let* ((chars-after (buffer-size))
+         (tokens-after (my/gptel--estimate-text-tokens chars-after))
+         (reduction (my/gptel--compaction-reduction-pct chars-before chars-after)))
+    (format "%d -> %d chars (~%d -> %d tokens, %.0f%% reduction)"
+            chars-before chars-after
+            (round tokens-before) (round tokens-after)
+            reduction)))
+
 (defun my/gptel--do-compact (&optional force-preview)
   "Perform compaction on current gptel buffer.
 If FORCE-PREVIEW is non-nil, use preview mode regardless of `my/gptel-auto-compact-preview'.
@@ -363,27 +374,19 @@ Returns non-nil if compaction was initiated."
                                 (insert (propertize "═══════════════════════════════════════════════════════════════\n"
                                                     'face '(:foreground "yellow" :weight bold)))
                                 (insert (propertize response 'face '(:foreground "cyan")))
-                                (let ((chars-after (buffer-size))
-                                      (tokens-after (my/gptel--estimate-text-tokens (buffer-size))))
-                                  (insert (propertize (format "\nCOMPACTED: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction)\n"
-                                                              chars-before chars-after
-                                                              (round tokens-before) (round tokens-after)
-                                                              (my/gptel--compaction-reduction-pct chars-before chars-after))
-                                                      'face '(:foreground "green" :weight bold)))
-                                  (insert (propertize "═══════════════════════════════════════════════════════════════\n"
-                                                      'face '(:foreground "yellow" :weight bold)))
-                                  (message "[compact] Preview appended (original kept)"))))
+                                (insert (propertize (format "\nCOMPACTED: %s\n"
+                                                            (my/gptel--format-compaction-stats chars-before (buffer-size) tokens-before))
+                                                    'face '(:foreground "green" :weight bold)))
+                                (insert (propertize "═══════════════════════════════════════════════════════════════\n"
+                                                    'face '(:foreground "yellow" :weight bold)))
+                                (message "[compact] Preview appended (original kept)")))
                           (progn
                             (kill-new backup)
                             (erase-buffer)
                             (insert response)
                             (goto-char (min point-before (point-max)))
-                            (let ((chars-after (buffer-size))
-                                  (tokens-after (my/gptel--estimate-text-tokens (buffer-size))))
-                              (message "[compact] Done: %d -> %d chars (~%d -> %d tokens, %.0f%% reduction) [backup in kill-ring]"
-                                       chars-before chars-after
-                                       (round tokens-before) (round tokens-after)
-                                       (my/gptel--compaction-reduction-pct chars-before chars-after)))))))))
+                            (message "[compact] Done: %s [backup in kill-ring]"
+                                     (my/gptel--format-compaction-stats chars-before (buffer-size) tokens-before))))))))
             (error
              (with-current-buffer buf
                (setq my/gptel-auto-compact-running nil))
