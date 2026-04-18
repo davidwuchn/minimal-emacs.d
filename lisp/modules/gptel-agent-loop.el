@@ -694,11 +694,11 @@ Cache behavior:
                                    (current-buffer)))
                    (where (or
                            (let ((tm (gptel-agent-loop--task-tracking-marker state)))
-                             (and (markerp tm) (marker-position tm) tm))
+                             (when (and (markerp tm) (numberp (marker-position tm))) tm))
                            (let ((tm (plist-get fsm-info :tracking-marker)))
-                             (and (markerp tm) (marker-position tm) tm))
+                             (when (and (markerp tm) (numberp (marker-position tm))) tm))
                            (let ((pos (plist-get fsm-info :position)))
-                             (and (markerp pos) (marker-position pos) pos))
+                             (when (and (markerp pos) (numberp (marker-position pos))) pos))
                            (with-current-buffer parent-buf (point-marker))))
                    (tracking-marker
                     (or (gptel-agent-loop--task-tracking-marker state)
