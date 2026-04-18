@@ -481,8 +481,8 @@ limit for early exit."
 USE-TOOLS determines tool usage.  DELAY defaults to 0.1 seconds.
 Extracted from duplicate scheduling patterns."
   (gptel-agent-loop--schedule (or delay 0.1)
-   (lambda ()
-     (gptel-agent-loop--request state prompt use-tools nil))))
+                              (lambda ()
+                                (gptel-agent-loop--request state prompt use-tools nil))))
 
 (defun gptel-agent-loop--check-aborted (state ov)
   "Check if STATE is aborted and deliver abort result.
@@ -557,8 +557,8 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
                        max-steps
                        (gptel-agent-loop--task-description state))))
           (unless (plist-get info :tracking-marker)
-            (plist-put info :tracking-marker
-                       (gptel-agent-loop--task-tracking-marker state)))
+            (setf (plist-get info :tracking-marker)
+                  (gptel-agent-loop--task-tracking-marker state)))
           (gptel--display-tool-calls calls info)))
 
        ((and (consp resp) (eq (car resp) 'tool-result))
@@ -677,10 +677,10 @@ Cache behavior:
             (message "[nucleus] Subagent '%s' cache hit" agent-type)
             (gptel-agent-loop--deliver-result state cached nil))
         (let* ((preset (append (list :include-reasoning nil
-                                    :use-tools use-tools
-                                    :use-context nil
-                                    :stream my/gptel-subagent-stream)
-                              (cdr (assoc agent-type gptel-agent--agents))))
+                                     :use-tools use-tools
+                                     :use-context nil
+                                     :stream my/gptel-subagent-stream)
+                               (cdr (assoc agent-type gptel-agent--agents))))
                (syms (cons 'gptel--preset (gptel--preset-syms preset)))
                (vals (mapcar (lambda (sym)
                                (if (boundp sym) (symbol-value sym) nil))
