@@ -346,15 +346,14 @@ Handles both symbol and string model identifiers with case-insensitive fallback.
     (when (or model-sym model-str)
       (catch 'found
         (dolist (var (my/gptel--gptel-model-tables))
-          (let ((table (symbol-value var)))
-            (let ((entry (and model-sym (assq model-sym table))))
-              (unless entry
-                (setq entry (and model-str (assoc model-str table :test #'string-equal))))
-              (when entry
-                (let ((cw (my/gptel--normalize-context-window
-                           (plist-get (cdr entry) :context-window))))
-                  (when (and (integerp cw) (> cw 0))
-                    (throw 'found cw)))))))
+          (let* ((table (symbol-value var))
+                 (entry (or (and model-sym (assq model-sym table))
+                            (and model-str (assoc-string model-str table t)))))
+            (when entry
+              (let ((cw (my/gptel--normalize-context-window
+                         (plist-get (cdr entry) :context-window))))
+                (when (and (integerp cw) (> cw 0))
+                  (throw 'found cw))))))
         nil))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
