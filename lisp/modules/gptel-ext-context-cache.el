@@ -409,26 +409,30 @@ Image tokens are counted from `gptel-context' if available."
 
 ;;; Cache Persistence
 
+(defun my/gptel--cache-save-context-windows ()
+  "Save the context-window cache to disk."
+  (make-directory (file-name-directory my/gptel-context-window-cache-file) t)
+  (condition-case err
+      (with-temp-file my/gptel-context-window-cache-file
+        (insert ";; Auto-generated; model context windows cache\n")
+        (insert (format ";; Updated: %s\n\n" (format-time-string "%Y-%m-%d %H:%M:%S")))
+        (insert "(setq my/gptel--context-window-cache-data\n      '")
+        (let (alist)
+          (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--context-window-cache)
+          (prin1 (sort alist (lambda (a b) (string< (car a) (car b)))) (current-buffer)))
+        (insert ")\n")
+        (insert (format "(setq my/gptel--context-window-cache-last-refresh %S)\n"
+                        (float-time (current-time)))))
+    (error
+     (message "gptel context-window cache: failed to write %s (%s)"
+              my/gptel-context-window-cache-file
+              (error-message-string err)))))
+
 (defun my/gptel--cache-put-context-window (model-id window)
   "Persist WINDOW for MODEL-ID in the cache."
   (when (and (stringp model-id) (integerp window) (> window 0))
     (puthash model-id window my/gptel--context-window-cache)
-    (make-directory (file-name-directory my/gptel-context-window-cache-file) t)
-    (condition-case err
-        (with-temp-file my/gptel-context-window-cache-file
-          (insert ";; Auto-generated; model context windows cache\n")
-          (insert (format ";; Updated: %s\n\n" (format-time-string "%Y-%m-%d %H:%M:%S")))
-          (insert "(setq my/gptel--context-window-cache-data\n      '")
-          (let (alist)
-            (maphash (lambda (k v) (push (cons k v) alist)) my/gptel--context-window-cache)
-            (prin1 (sort alist (lambda (a b) (string< (car a) (car b)))) (current-buffer)))
-          (insert ")\n")
-          (insert (format "(setq my/gptel--context-window-cache-last-refresh %S)\n"
-                          (float-time (current-time)))))
-      (error
-       (message "gptel context-window cache: failed to write %s (%s)"
-                my/gptel-context-window-cache-file
-                (error-message-string err))))))
+    (my/gptel--cache-save-context-windows)))
 
 (defun my/gptel--cache-load-context-windows ()
   "Load cached context windows from `my/gptel-context-window-cache-file'."
@@ -588,9 +592,10 @@ Runs asynchronously; returns nil immediately."
         (my/gptel--seed-cache-from-gptel-model-tables)
         ;; Fetch OpenRouter in the background when applicable.
         ;; NOTE: Cache persistence happens in the async callback, not here.
-        (when (and (boundp 'gptel--openrouter)
-                   (eq gptel-backend gptel--openrouter))
-          (my/gptel--openrouter-fetch-context-window gptel-model))))))
+        (if (and (boundp 'gptel--openrouter)
+                 (eq gptel-backend gptel--openrouter))
+            (my/gptel--openrouter-fetch-context-window gptel-model)
+          (my/gptel--cache-save-context-windows))))))
 
 (defun my/gptel-refresh-context-window-cache ()
   "Refresh (fetch) the current model's context window into the cache."
@@ -614,6 +619,8 @@ Run asynchronously. Use for bulk cache warming."
                    (when (and (stringp id) (integerp cw) (> cw 0))
                      (puthash id cw my/gptel--context-window-cache)
                      (cl-incf count))))
+               (when (> count 0)
+                 (my/gptel--cache-save-context-windows))
                (message "OpenRouter: cached %d models" count)))
            "gptel-openrouter-all-models"
            10
