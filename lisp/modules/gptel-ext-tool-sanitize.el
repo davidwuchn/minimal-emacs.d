@@ -207,7 +207,8 @@ This mirrors OpenCode's doom_loop detection (same tool + same args × N)."
                  (n my/gptel-doom-loop-threshold)
                  (fps-end (last fps))
                  (prev-fp (car fps-end)))
-            (plist-put info :doom-loop-fingerprints (append fps new-fps))
+            (setq info (plist-put info :doom-loop-fingerprints (append fps new-fps)))
+            (setf (gptel-fsm-info fsm) info)
             (dolist (fp new-fps)
               (let ((current-run
                      (if (and prev-fp (equal prev-fp fp))
