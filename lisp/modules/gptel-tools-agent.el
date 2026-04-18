@@ -1847,7 +1847,7 @@ Uses hash table keyed by task-id to support parallel execution."
          (wrapped-cb
           (lambda (result)
             (let* ((state (gethash task-id my/gptel--agent-task-state))
-                   (already-done (plist-get state :done)))
+                   (already-done (and state (plist-get state :done))))
               (if (not state)
                   (message "[nucleus] Ignoring stale subagent %s callback after reset"
                            agent-type)
@@ -1905,8 +1905,8 @@ Uses hash table keyed by task-id to support parallel execution."
                        next-delay nil
                        (lambda ()
                          (let* ((state (gethash task-id my/gptel--agent-task-state))
-                                (already-done (plist-get state :done))
-                                (last-activity (plist-get state :last-activity-time))
+                                (already-done (and state (plist-get state :done)))
+                                (last-activity (and state (plist-get state :last-activity-time)))
                                 (idle-seconds
                                  (and last-activity
                                       (float-time (time-since last-activity))))
