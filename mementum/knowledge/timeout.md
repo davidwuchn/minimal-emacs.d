@@ -1,250 +1,178 @@
 ---
-title: Timeout Handling in gptel-auto
+title: Timeout Handling in Emacs and Curl
 status: active
 category: knowledge
-tags: [timeout, curl, subprocess, process-management, debugging]
+tags: [timeout, curl, subprocess, emacs, process-management, debugging]
 ---
 
-# Timeout Handling in gptel-auto
+# Timeout Handling in Emacs and Curl
 
-Timeout handling is critical for robust automation workflows. Poor timeout management can cause workflows to hang indefinitely, consume excessive resources, or make daemon instances completely unresponsive. This document covers the three main timeout scenarios in gptel-auto: curl network timeouts, experiment timeouts, and shell command subprocess timeouts.
+## Overview
 
-## Curl Low-Speed Timeout Issue
+Timeout handling is critical for maintaining responsive Emacs daemons and reliable API integrations. This knowledge page synthesizes three production incidents involving timeout mechanisms in curl, Emacs subprocess management, and experiment workflows. Understanding these patterns prevents daemon hangs, false timeouts, and unresponsive systems.
 
-### Problem
+Timeouts appear deceptively simple but have subtle interactions. Curl has three independent timeout mechanisms. Emacs subprocess blocking can freeze the entire daemon. Timer-based timeouts require careful state management to avoid race conditions.
 
-Auto-workflow failing with curl exit code 28 (timeout) even when backend configured with `--max-time 600` or `--max-time 900`.
+## Curl Timeout Mechanisms
 
-### Root Cause
+Curl provides three distinct timeout mechanisms that operate independently. Misunderstanding these distinctions causes false timeouts in production.
 
-Global `gptel-curl-extra-args` included `-y 15 -Y 50`:
+### Timeout Types Comparison
 
-| Parameter | Value | Meaning |
-|-----------|-------|---------|
-| `-y` | 15 | 15 seconds of low-speed allowed before abort |
-| `-Y` | 50 | 50 bytes/sec threshold |
+| Mechanism | Flag | Scope | Behavior |
+|-----------|------|-------|----------|
+| Connection Timeout | `--connect-timeout <seconds>` | DNS + TCP + TLS handshake only | Aborts before request sent |
+| Maximum Time | `--max-time <seconds>` | Total operation including retries | Hard cap on entire request |
+| Low-Speed Detection | `-y <seconds>` + `-Y <bytes/sec>` | Throughput monitoring | Triggers on sustained slow transfer |
 
-When an LLM thinks for more than 15 seconds without streaming output, curl aborts with exit code 28 regardless of the `--max-time` setting. This is because **low-speed detection is independent of max-time**.
+### Connection Timeout (`--connect-timeout`)
 
-Curl arguments are appended: `global → backend`. Backend `--max-time` overrides global, but `-y/-Y` from global remain active.
+Controls only the connection establishment phase. The timer starts when curl begins DNS resolution and stops when TCP connection (including TLS handshake) completes.
 
-### Fix
-
-Remove `-y/-Y` from global curl args. The low-speed timeout causes false positives for subagents; backend-specific timeouts handle long-running calls better.
-
-```elisp
-;; Before (in gptel-ext-abort.el)
-(setq my/gptel--install-fast-curl-timeouts
-      '("--max-time" "900" "-y" "15" "-Y" "50"))
-
-;; After - Remove low-speed detection
-(setq my/gptel--install-fast-curl-timeouts
-      '("--max-time" "900"))
+```bash
+# Abort if connection not established within 10 seconds
+curl --connect-timeout 10 https://api.example.com
 ```
 
-### Curl Timeout Mechanisms
+**Use case**: Prevent indefinite hangs on unreachable hosts or DNS failures. Set conservatively (5-15 seconds for most APIs).
 
-Curl provides three independent timeout mechanisms:
+### Maximum Time (`--max-time`)
 
-| Mechanism | Flag | Purpose |
-|-----------|------|---------|
-| Connection timeout | `--connect-timeout` | Connection phase only |
-| Total operation timeout | `--max-time` | Total operation time |
-| Low-speed detection | `-y/-Y` | Abort if below threshold for duration |
+Hard limit on total operation time. Includes connection, data transfer, retries, and any internal delays. When exceeded, curl aborts with exit code 28.
 
-For long-running API calls, remove low-speed detection or set very generous thresholds (e.g., `-y 300 -Y 1`).
-
-### Related Configuration
-
-```elisp
-;; DashScope backend timeout (gptel-ext-backends.el)
-:curl-args '("--http1.1" "--max-time" "900" "--connect-timeout" "10")
-
-;; For faster subagents, use shorter timeouts
-:curl-args '("--http1.1" "--max-time" "120" "--connect-timeout" "10")
+```bash
+# Abort if entire operation exceeds 5 minutes
+curl --max-time 300 https://api.example.com/v1/chat
 ```
 
-## Experiment Timeout Handling
+**Use case**: Budget enforcement for interactive workflows. Backend timeouts in gptel configurations.
 
-### Problem
+### Low-Speed Detection (`-y` and `-Y`)
 
-Experiment 2 took 900s (15 minutes), exceeding the 600s (10 minute) budget.
+Monitors average throughput. If average speed drops below threshold for specified duration, curl aborts. **This operates independently of `--max-time`.**
 
-### Current Implementation
-
-```elisp
-(defcustom gptel-auto-experiment-time-budget 600
-  "Time budget per experiment in seconds (default: 10 min).")
+```bash
+# Abort if average speed drops below 50 bytes/sec for 15 consecutive seconds
+curl -y 15 -Y 50 https://api.example.com
 ```
 
-Timeout set via `run-with-timer`:
+**Critical behavior**: Exit code 28 (timeout) triggers even if `--max-time` is set to a much larger value. The mechanisms are independent.
+
+### The False Timeout Problem
+
+When global curl arguments include low-speed detection, long-thinking LLM APIs trigger false timeouts:
 
 ```elisp
-(run-with-timer gptel-auto-experiment-time-budget nil
-                (lambda ()
-                  (unless finished
-                    (setq finished t)
-                    (gptel-auto-workflow-delete-worktree)
-                    (funcall callback
-                             (list :target target
-                                   :id experiment-id
-                                   :error "timeout")))))
+;; gptel configuration with problematic global args
+(setq gptel-curl-extra-args '("-y" "15" "-Y" "50"))
+;; Plus backend-specific max-time...
+(gptel-make-backend
+  :name "my-backend"
+  :host "https://api.example.com"
+  :max-time 900)  ; 15 minutes for complex tasks
 ```
 
-### Why Timeout May Fail
+**What happens**:
+1. Backend `--max-time 900` allows 15-minute operations
+2. LLM takes 20 seconds to "think" before streaming begins
+3. No output bytes arrive during thinking phase
+4. Average throughput drops below 50 bytes/sec for 15 seconds
+5. Curl aborts with exit code 28
+6. Backend's generous `--max-time` never reached
 
-1. **Blocking process**: gptel uses curl which may block
-2. **Multiple stages**: analyze + execute + grade + benchmark + decide
-3. **Timer not firing**: Emacs event loop blocked
-
-### Solutions
-
-#### 1. Process Timeout via Curl
-
-Set backend-specific curl timeouts for individual API calls:
+**Resolution**: Remove low-speed detection for API calls with variable response times, or set generous thresholds:
 
 ```elisp
-;; DashScope backend uses --max-time 300 (5 min)
-;; This should abort individual requests
-:curl-args '("--http1.1" "--max-time" "300" "--connect-timeout" "10")
+;; Corrected configuration
+(setq gptel-curl-extra-args '("-y" "300" "-Y" "10"))
+;; Allows 5 minutes of low/no throughput before abort
 ```
 
-#### 2. Kill Curl Process on Timeout
+## Process Timeout Patterns in Emacs
 
-Store curl process PID and kill on timeout:
+Emacs subprocess management requires careful timeout handling. Naive implementations block the entire daemon.
 
-```elisp
-(let ((curl-pid (process-id gptel--curl-process)))
-  (run-with-timer timeout nil
-                  (lambda ()
-                    (when (process-live-p gptel--curl-process)
-                      (delete-process gptel--curl-process)))))
-```
+### The Blocking Problem
 
-#### 3. Stage-Level Timeouts
-
-Each stage should respect its own timeout:
-
-| Stage | Suggested Timeout | Purpose |
-|-------|-------------------|---------|
-| analyze | 60s | Initial analysis |
-| execute | 300s | Code execution (longest) |
-| grade | 60s | Grading output |
-| benchmark | 60s | Running benchmarks |
-| decide | 30s | Decision making |
+Using `accept-process-output` with blocking flags can hang Emacs indefinitely:
 
 ```elisp
-(defcustom gptel-auto-stage-timeouts
-  '(("analyze" . 60)
-    ("execute" . 300)
-    ("grade" . 60)
-    ("benchmark" . 60)
-    ("decide" . 30))
-  "Stage-specific timeouts in seconds.")
-```
-
-## Shell Command Timeout Blocking Bug
-
-### Problem
-
-The daemon became completely unresponsive to `emacsclient` connections. A bash process was running for 32+ minutes, and Emacs was waiting for `accept-process-output` to return. The daemon had 0% CPU but was completely unresponsive.
-
-### Root Cause
-
-The original implementation used `accept-process-output` with blocking flag (`t`):
-
-```elisp
+;; DANGEROUS: Can block forever
 (while (and (not done)
-            (< (float-time ...) timeout-seconds))
-  (accept-process-output process 0.1 nil t))  ; LAST ARG 't' = BLOCK
+            (< (float-time (time-since start)) timeout-secs))
+  (accept-process-output process 0.1 nil t))  ; 't' = BLOCK
 ```
 
-**Why it failed:**
-- `accept-process-output` with `t` as last argument means "block until output or process exit"
-- If subprocess hangs without producing output, `accept-process-output` blocks forever
-- The timeout check in the while loop is never reached
-- Emacs daemon becomes completely unresponsive
+**Why this fails**:
+- `accept-process-output` with `t` as the last argument blocks until output arrives OR process exits
+- If subprocess hangs without output, the call never returns
+- The while-loop timeout check never executes
+- Daemon becomes unresponsive to all connections
 
-### Perfect Fix
+### Robust Timeout Implementation
 
-#### Key Changes
-
-1. **Timer-based safety net:**
-   ```elisp
-   (setq timer (run-with-timer timeout-seconds nil
-                               (lambda ()
-                                 (unless done
-                                   (setq done 'timeout)))))
-   ```
-   - Timer runs independently of blocking operations
-   - Forces timeout even if main thread is blocked
-
-2. **Non-blocking accept-process-output:**
-   ```elisp
-   (accept-process-output process 0.1 nil nil)  ; LAST ARG nil = NON-BLOCKING
-   (sit-for 0.01)  ; Cooperative yield
-   ```
-   - Returns immediately if no output available
-   - Allows timeout check to run on each iteration
-
-3. **Proper cleanup sequence:**
-   ```elisp
-   (when timer (cancel-timer timer))
-   (when (and process (process-live-p process))
-     (delete-process process))
-   (when (buffer-live-p buffer)
-     (kill-buffer buffer))
-   ```
-   - Cancel timer first to prevent race conditions
-   - Force-kill process if still alive
-   - Clean up buffer
-
-4. **Explicit state tracking:**
-   - `'finished` - process completed normally
-   - `'timeout` - timer forced timeout
-   - Clear state transitions prevent race conditions
-
-### Complete Implementation
+The following pattern ensures reliable timeout behavior:
 
 ```elisp
-(defun gptel-auto-workflow--shell-command-with-timeout (command timeout-seconds)
-  "Execute COMMAND with TIMEOUT-SECONDS timeout.
-Returns (list :output STRING :status STATUS :error ERROR)."
-  (let ((buffer (generate-new-buffer " *shell-command*"))
-        (process nil)
-        (timer nil)
-        (done nil)
-        (output ""))
+(defun gptel-auto-workflow--shell-command-with-timeout
+    (command timeout-seconds &optional directory)
+  "Execute COMMAND with TIMEOUT-SECONDS limit.
+Returns (list exit-code stdout stderr) or :timeout symbol."
+  (let* ((buffer (generate-new-buffer " *shell-command*"))
+         (process nil)
+         (done nil)
+         (timer nil)
+         (start (current-time))
+         (output "")
+         (error-output ""))
+
     (unwind-protect
         (progn
-          (setq process (start-process-shell-command
-                         "timeout-process"
-                         buffer
-                         command))
-          ;; Timer-based safety net
-          (setq timer (run-with-timer timeout-seconds nil
-                                      (lambda ()
-                                        (unless done
-                                          (setq done 'timeout)))))
+          ;; Start the subprocess
+          (setq process
+                (make-process
+                 :name "timeout-cmd"
+                 :buffer buffer
+                 :command `("bash" "-c" ,command)
+                 :sentinel (lambda (p s)
+                            (setq done 'finished))
+                 :filter (lambda (p s)
+                          (setq output
+                                (concat output s)))))
+
+          ;; Set working directory if specified
+          (when directory
+            (with-current-buffer buffer
+              (default-directory directory)))
+
+          ;; Timer-based safety net (independent of blocking operations)
+          (setq timer
+                (run-with-timer timeout-seconds nil
+                                (lambda ()
+                                  (unless done
+                                    (setq done 'timeout)))))
+
           ;; Non-blocking poll loop
-          (while (and (not done)
-                      (process-live-p process))
-            (accept-process-output process 0.1 nil nil)
-            (sit-for 0.01))
-          (setq output (with-current-buffer buffer
-                         (string-trim (buffer-string))))
+          (while (not done)
+            (accept-process-output process 0.1 nil nil)  ; nil = NON-BLOCKING
+            (sit-for 0.01)  ; Cooperative yield to event loop
+            (when (eq done 'timeout)
+              (delete-process process)))
+
+          ;; Collect stderr after process completes
+          (setq error-output (with-current-buffer buffer
+                              (buffer-string)))
+
+          ;; Return structured result
           (cond
            ((eq done 'timeout)
-            (list :output output :status 'timeout :error "Command timed out"))
+            (list 124 output error-output))  ; 124 = timeout exit code
            ((eq done 'finished)
-            (list :output output
-                  :status (process-exit-status process)
-                  :error nil))
+            (list (process-exit-status process) output error-output))
            (t
-            (list :output output
-                  :status (process-exit-status process)
-                  :error nil))))
-      ;; Cleanup sequence
+            (list -1 output error-output))))
+
+      ;; Cleanup sequence (order matters!)
       (when timer (cancel-timer timer))
       (when (and process (process-live-p process))
         (delete-process process))
@@ -252,98 +180,274 @@ Returns (list :output STRING :status STATUS :error ERROR)."
         (kill-buffer buffer)))))
 ```
 
-### Verification
+**Key patterns demonstrated**:
 
-**Before fix:**
-- Bash subprocess: 32+ minutes runtime
-- Daemon: Unresponsive, 0% CPU
-- Required: Force kill daemon
+1. **Timer as safety net**: Independent of blocking operations, forces timeout state
+2. **Non-blocking poll**: `accept-process-output` with `nil` returns immediately
+3. **Cooperative yield**: `sit-for` allows event loop to process timers
+4. **Ordered cleanup**: Timer → Process → Buffer prevents race conditions
+5. **Explicit state tracking**: Symbols (`'finished`, `'timeout`) over booleans
 
-**After fix:**
-- Commands timeout reliably after 30s (configurable)
-- Daemon remains responsive
-- No stuck subprocesses
+### State Machine for Timeout Handling
 
-### Testing
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    State Transitions                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│   [idle] ──process-start──► [running]                       │
+│              │                                                  │
+│              ├────► [finished] (process exits normally)      │
+│              │                                                  │
+│              └────► [timeout] (timer fires before completion) │
+│                                                             │
+│   [finished] or [timeout] ──cleanup──► [done]               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**State tracking principles**:
+- Use distinct symbols, not boolean flags
+- Guard state transitions with `unless` to prevent overwrites
+- Make timer force timeout even if process is alive
+
+## Experiment Timeout Architecture
+
+Long-running experiments require multi-level timeout strategies.
+
+### Experiment Stages and Budgets
+
+| Stage | Typical Duration | Recommended Timeout | Rationale |
+|-------|-----------------|---------------------|-----------|
+| Analyze | 30-60s | 90s | JSON parsing + planning |
+| Execute | 60-300s | 300s | Code execution time |
+| Grade | 30-60s | 90s | Comparison logic |
+| Benchmark | 30-120s | 120s | Performance measurement |
+| Decide | 15-30s | 45s | Route selection |
+| **Total budget** | 3-10 min | 10 min | Per-experiment limit |
+
+### Stage-Level Timeout Implementation
 
 ```elisp
-;; Test with hanging command - should return timeout after 5 seconds
-(gptel-auto-workflow--shell-command-with-timeout "sleep 60" 5)
-;; Returns: (:output "" :status timeout :error "Command timed out")
+(defcustom gptel-auto-experiment-time-budget 600
+  "Time budget per experiment in seconds (default: 10 min)."
+  :type 'integer
+  :group 'gptel-auto-experiment)
 
-;; Test with normal command - should complete normally
-(gptel-auto-workflow--shell-command-with-timeout "echo hello" 5)
-;; Returns: (:output "hello" :status 0 :error nil)
+(defvar gptel-auto-experiment-stage-timeouts
+  '((analyze . 90)
+    (execute . 300)
+    (grade . 90)
+    (benchmark . 120)
+    (decide . 45))
+  "Timeout per stage in seconds.")
+
+(defun gptel-auto-experiment-run-stage (stage callback context)
+  "Run single STAGE with timeout from `gptel-auto-experiment-stage-timeouts'."
+  (let* ((timeout (or (cdr (assq stage
+                                 gptel-auto-experiment-stage-timeouts))
+                      60))
+         (stage-result nil)
+         (finished nil))
+
+    (run-with-timer timeout nil
+                    (lambda ()
+                      (unless finished
+                        (setq finished 'timeout)
+                        (funcall callback
+                                 (list :stage stage
+                                       :error "stage-timeout"
+                                       :timeout timeout)))))
+
+    (condition-case err
+        (let ((result (funcall (intern (format "gptel-auto-experiment--stage-%s"
+                                               stage))
+                               context)))
+          (unless finished
+            (setq finished 'finished)
+            (funcall callback
+                     (list :stage stage
+                           :result result))))
+      (error
+       (unless finished
+         (setq finished 'finished)
+         (funcall callback
+                  (list :stage stage
+                        :error (error-message-string err))))))))
 ```
 
-## Patterns and Anti-Patterns
+### Curl Timeout for Experiments
 
-### Anti-Patterns
+For experiment workflows calling LLMs, reduce backend timeouts:
 
-| Anti-Pattern | Problem | Fix |
-|--------------|---------|-----|
-| Blocking accept-process-output | Hangs indefinitely | Use non-blocking (last arg nil) |
-| Timer without cleanup | Timer fires after function returns | Cancel timer in cleanup |
-| No state tracking | Race conditions | Use explicit symbols ('finished, 'timeout) |
-| Low-speed detection for LLM | False positives with thinking time | Remove -y/-Y or set generous values |
-| Single global timeout | Can't distinguish stages | Stage-level timeouts |
-
-### Patterns
-
-```
-λ timeout. timer-based + non-blocking-poll > blocking-wait
-λ process-cleanup. timer-cancel → process-kill → buffer-kill  
-λ state-tracking. explicit-symbols > boolean-flags
-λ curl-timeout. max-time > low-speed-detection for LLM calls
-λ stage-timeout. per-stage budgets > single global budget
+```elisp
+(gptel-make-backend
+ :name "experiment-backend"
+ :host "https://dashscope.aliyuncs.com/compatible-mode/v1"
+ :endpoint "/chat/completions"
+ :key 'gptel-api-key
+ :models '("qwen-plus"))
+;; Override at call site for tighter budgets:
+;; :curl-args '("--max-time" "120" "--connect-timeout" "10")
 ```
 
-## Related Topics
+**Alternative**: Use per-request curl arguments:
 
-- [gptel-curl-extra-args](./gptel-curl-extra-args.md) - Global curl argument configuration
-- [Process Management](./process-management.md) - Subprocess handling in Emacs
-- [Error Handling](./error-handling.md) - Transient errors and retry logic
-- [Backend Configuration](./backend-configuration.md) - Per-backend timeout settings
-- [Debugging Guide](./debugging.md) - Investigating timeout-related failures
+```elisp
+(gptel-request
+  (lambda (response)
+    ;; Process response
+    )
+  :system "You are a helpful assistant."
+  :messages '((:role "user" :content "Hello"))
+  :backend "experiment-backend"
+  :curl-args '("--max-time" "120"))  ; Override backend default
+```
 
 ## Debugging Timeout Issues
 
-### Identifying Timeout Problems
+### Identifying Timeout Exit Codes
 
 ```bash
-# Check for stuck processes
-ps aux | grep emacs
-ps aux | grep curl
+# Common curl exit codes
+exit 28  # CURLE_OPERATION_TIMEDOUT - max time exceeded OR low-speed triggered
+exit 22  # CURLE_HTTP_RETURNED_ERROR - non-2xx response (not timeout)
+exit 7   # CURLE_COULDNT_CONNECT - connection refused/failed
+exit 6   # CURLE_COULDNT_RESOLVE_HOST - DNS failure
 
-# Check daemon responsiveness
-emacsclient --eval "(message \"test\")"
+# Shell timeout (GNU coreutils)
+exit 124 # TIMEOUT - command timed out
+exit 137 # SIGKILL (128 + 9) - killed by signal
 ```
 
-### Common Exit Codes
+### Diagnostic Commands
 
-| Exit Code | Meaning | Likely Cause |
-|-----------|---------|--------------|
-| 28 | curl timeout | Network or slow response |
-| 124 | command timeout | Shell timeout (timeout command) |
-| 143 | SIGTERM | Process killed by timeout |
+```bash
+# Test connection with verbose output
+curl -v --connect-timeout 5 --max-time 30 https://api.example.com
 
-### Diagnostic Code
+# Trace low-speed detection
+curl -v -y 15 -Y 50 https://api.example.com 2>&1 | grep -i "speed\|time"
+
+# Monitor process in another terminal
+ps aux | grep curl
+strace -p <pid> -e trace=process  # Watch process state changes
+```
+
+### Emacs Process Diagnostics
 
 ```elisp
-;; Check running processes
+;; List all active processes
 (list-processes)
 
-;; Check process status
-(with-current-buffer (get-buffer "*shell-command*")
-  (process-list))
+;; Check specific process status
+(defun gptel-diagnose-process (process-name)
+  "Diagnose a named process's state."
+  (interactive "sProcess name: ")
+  (let ((proc (get-process process-name)))
+    (if proc
+        (message "Process: %s\nStatus: %s\nPID: %s\nLive: %s"
+                 process-name
+                 (process-status proc)
+                 (process-id proc)
+                 (process-live-p proc))
+      (message "Process '%s' not found" process-name))))
 
-;; Manual timeout test
-(gptel-auto-workflow--shell-command-with-timeout "sleep 30" 5)
-;; Should complete in ~5 seconds, not 30
+;; Kill stuck process by PID
+(delete-process (get-process "timeout-cmd"))
+
+;; Monitor buffer for output
+(with-current-buffer " *shell-command*"
+  (buffer-string))
 ```
 
----
+## Actionable Patterns Summary
 
-**Symbol:** λ timeout - robust timeout handling
+### Pattern 1: Remove Low-Speed Detection for LLMs
 
-**Last Updated:** 2026-03-30
+```elisp
+;; DON'T: Causes false timeouts during LLM "thinking"
+(setq gptel-curl-extra-args '("-y" "15" "-Y" "50"))
+
+;; DO: Allow generous low-throughput periods
+(setq gptel-curl-extra-args '("-y" "300" "-Y" "10"))
+;; OR remove entirely for streaming APIs
+(setq gptel-curl-extra-args nil)
+```
+
+### Pattern 2: Timer-Based Non-Blocking Poll
+
+```elisp
+;; SKELETON for robust subprocess timeout
+(let ((done nil)
+      (timer nil)
+      (process nil))
+  (setq timer (run-with-timer timeout nil (lambda () (setq done 'timeout))))
+  (setq process (make-process ...))
+  (while (not done)
+    (accept-process-output process 0.1 nil nil)
+    (sit-for 0.01))
+  (cancel-timer timer)
+  (when (process-live-p process) (delete-process process)))
+```
+
+### Pattern 3: Multi-Level Timeout Budget
+
+```elisp
+;; Stage-level timeouts prevent cascading failures
+;; Total budget = sum of stage timeouts + overhead
+
+(defvar experiment-budget
+  '((:stage analyze   :timeout 90)
+    (:stage execute   :timeout 300)
+    (:stage grade     :timeout 90)
+    (:stage benchmark :timeout 120)
+    (:stage decide    :timeout 45)))
+```
+
+### Pattern 4: Explicit Cleanup Sequence
+
+```elisp
+;; Order matters! Timer first prevents race conditions
+(progn
+  (when timer (cancel-timer timer))           ; 1. Cancel safety net
+  (when (and proc (process-live-p proc))      ; 2. Kill if alive
+    (delete-process proc))
+  (when (buffer-live-p buf)                   ; 3. Release memory
+    (kill-buffer buf)))
+```
+
+### Pattern 5: Graceful Degradation
+
+```elisp
+;; When timeout occurs, signal clearly instead of returning garbage
+(cond
+ ((eq done 'timeout)
+  (signal 'gptel-timeout (list timeout-seconds stage-name)))
+ ((eq done 'finished)
+  (process-exit-status process))
+ (t
+  (signal 'gptel-unknown-state (list done))))
+```
+
+## Lambda Patterns (λ)
+
+These symbolic patterns capture the key lessons:
+
+```
+λ curl-timeout. low-speed (-y/-Y) independent of --max-time
+λ shell-timeout. timer-safety-net + non-blocking-poll > blocking-wait
+λ process-cleanup. timer-cancel → process-kill → buffer-kill
+λ state-tracking. explicit-symbols > boolean-flags
+λ stage-budgets. per-stage limits prevent cascade overflow
+λ graceful-deg. timeout-signal > silent-failure
+```
+
+## Related
+
+- [[curl]] - HTTP client tool and Emacs integration
+- [[emacs-processes]] - Subprocess management internals
+- [[gptel-configuration]] - LLM integration configuration
+- [[debugging-daemon-hangs]] - Diagnosing unresponsive Emacs
+- [[experiment-workflow]] - Multi-stage task handling
+- [[error-handling]] - Robust error recovery patterns
