@@ -489,7 +489,8 @@ BUFFER is the gptel buffer (default current)."
     (if (not (fboundp 'my/gptel--run-agent-tool))
         (progn
           (message "[auto-delegate] Error: RunAgent tool not available")
-          (funcall callback "Error: Auto-delegation failed - RunAgent tool not available"))
+          (when (functionp callback)
+            (funcall callback "Error: Auto-delegation failed - RunAgent tool not available")))
       (my/gptel--run-agent-tool
        callback
        "explorer"
