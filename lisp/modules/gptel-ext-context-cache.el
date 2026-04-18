@@ -564,10 +564,12 @@ Runs asynchronously; returns nil immediately."
       (my/gptel--openrouter-fetch-with-callback
        url
        (lambda (data)
-         (let* ((entry (seq-find (lambda (e)
-                                   (let ((id (alist-get 'id e)))
-                                     (and (stringp id) (string= id model-id))))
-                                 data))
+         (let* ((valid-data (and (sequencep data) (listp data) data))
+                (entry (and valid-data
+                            (seq-find (lambda (e)
+                                        (let ((id (alist-get 'id e)))
+                                          (and (stringp id) (string= id model-id))))
+                                      valid-data)))
                 (cw (and entry (alist-get 'context_length entry))))
            (if (and (integerp cw) (> cw 0))
                (progn
