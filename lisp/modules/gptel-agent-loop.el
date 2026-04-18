@@ -498,6 +498,13 @@ Extracted to reduce duplication in callback cleanup paths."
   (when (overlayp ov)
     (delete-overlay ov)))
 
+(defun gptel-agent-loop--should-retry-p (state error-data)
+  "Return non-nil when STATE should retry after ERROR-DATA.
+Retries when error is transient (or absent) and retry budget remains."
+  (and (or (null error-data) (gptel-agent-loop--transient-error-p error-data))
+       (< (gptel-agent-loop--task-retries state)
+          gptel-agent-loop-max-retries)))
+
 (defun gptel-agent-loop--make-callback (state request-prompt use-tools)
   "Build request callback for STATE.
 REQUEST-PROMPT and USE-TOOLS are reused on retries."
@@ -514,9 +521,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
               (gptel-agent-loop--cleanup-overlay ov)
               (gptel-agent-loop--deliver-aborted state))
           (cond
-           ((and (or (null error-data) (gptel-agent-loop--transient-error-p error-data))
-                 (< (gptel-agent-loop--task-retries state)
-                    gptel-agent-loop-max-retries))
+           ((gptel-agent-loop--should-retry-p state error-data)
             (setf (gptel-agent-loop--task-retries state)
                   (1+ (gptel-agent-loop--task-retries state)))
             (message "[RunAgent] Retrying %s task '%s' (attempt %d/%d)"
