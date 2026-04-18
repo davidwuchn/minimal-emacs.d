@@ -1380,6 +1380,16 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (equal (gptel-auto-experiment--categorize-error auth-error)
                    '(:api-error . "Provider authorization failed")))))
 
+(ert-deftest regression/auto-experiment/http-parse-errors-count-as-provider-pressure ()
+  "HTTP parse failures should stay on the provider-pressure retry path."
+  (let ((parse-error
+         "Error: Task executor could not finish task \"Experiment 1: optimize x\". Error details: \"Could not parse HTTP response.\""))
+    (should (my/gptel--transient-error-p parse-error nil))
+    (should (gptel-auto-experiment--is-retryable-error-p parse-error))
+    (should (gptel-auto-experiment--provider-pressure-error-p parse-error))
+    (should (equal (gptel-auto-experiment--categorize-error parse-error)
+                   '(:api-error . "Transient provider response error")))))
+
 (ert-deftest regression/auto-experiment/run-retries-grader-locally-without-rerunning-executor ()
   "Transient grader failures should retry grading locally without rerunning executor work."
   (let* ((project-root (make-temp-file "aw-project" t))
@@ -3805,6 +3815,42 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
        (should (equal (nreverse delays) '(5 10)))
        (should (equal (plist-get final-result :agent-output)
                       "Executor result for task: retry success")))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-retries-http-parse-errors ()
+  "HTTP parse failures should retry so provider fallback can recover."
+  (let ((runs 0)
+        (scheduled-retries 0)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-experiment--quota-exhausted nil)
+        (parse-error
+         "Error: Task executor could not finish task \"x\". Error details: \"Could not parse HTTP response.\""))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
+                 (cl-incf runs)
+                 (funcall callback
+                          (if (= runs 1)
+                              (list :agent-output parse-error
+                                    :comparator-reason ":tool-error")
+                            (list :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (cl-incf scheduled-retries)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 2))
+      (should (= scheduled-retries 1))
+      (should-not gptel-auto-experiment--quota-exhausted)
+      (should (equal (plist-get final-result :agent-output)
+                     "Executor result for task: retry success")))))
 
 (ert-deftest regression/auto-experiment/backend-fallback-switches-on-rate-limit ()
   "Backend fallback wrapper should switch to next backend on 429 errors."

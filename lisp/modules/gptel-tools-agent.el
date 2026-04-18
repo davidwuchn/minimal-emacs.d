@@ -17,6 +17,7 @@
                   (topic memories &optional callback))
 (declare-function gptel-benchmark-llm-synthesize-knowledge-sync "gptel-benchmark-llm"
                   (topic memories &optional timeout-seconds))
+(declare-function my/gptel--transient-error-p "gptel-ext-retry" (error-data http-status))
 
 ;; Forward declaration for variable defined in gptel-auto-workflow-projects.el.
 ;; Do not initialize it here, or later `defvar' initializers in the projects
@@ -6714,15 +6715,23 @@ REASON is only used for logging."
           "\\`\\(?:Aborted:\\|\\(?:gptel:\\s-*\\)?inspection-thrash aborted\\|\\(?:gptel:\\s-*\\)?doom-loop aborted\\|Error: Task .* was aborted by the user\\|Error: Task .* was cancelled or timed out\\)"
           trimmed))))
 
+(defun gptel-auto-experiment--shared-transient-error-p (error-output)
+  "Return non-nil when ERROR-OUTPUT matches shared transient retry rules."
+  (and (stringp error-output)
+       (not (gptel-auto-experiment--aborted-agent-output-p error-output))
+       (fboundp 'my/gptel--transient-error-p)
+       (my/gptel--transient-error-p error-output nil)))
+
 (defun gptel-auto-experiment--is-retryable-error-p (error-output)
   "Check if ERROR-OUTPUT is a transient/retryable error."
   (and (stringp error-output)
        (not (gptel-auto-experiment--aborted-agent-output-p error-output))
-       (or (gptel-auto-experiment--provider-usage-limit-error-p error-output)
-           (let ((case-fold-search t))
-             (string-match-p
-              "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
-              error-output)))))
+       (or (gptel-auto-experiment--shared-transient-error-p error-output)
+           (gptel-auto-experiment--provider-usage-limit-error-p error-output)
+            (let ((case-fold-search t))
+              (string-match-p
+               "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
+               error-output)))))
 
 (defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
   "Return non-nil when ERROR-OUTPUT reflects a provider billing-cycle limit."
@@ -6753,11 +6762,12 @@ REASON is only used for logging."
   "Return non-nil when ERROR-OUTPUT suggests trying a fallback backend."
   (or (gptel-auto-experiment--rate-limit-error-p error-output)
       (gptel-auto-experiment--provider-auth-error-p error-output)
+      (gptel-auto-experiment--shared-transient-error-p error-output)
       (and (stringp error-output)
            (let ((case-fold-search t))
              (string-match-p
-              "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
-              error-output)))))
+               "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
+               error-output)))))
 
 (defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
   "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."
@@ -7008,11 +7018,13 @@ Also logs agent-output snippet for debugging when category is :unknown."
       (string-match-p "timeout\\|timed out\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
                       agent-output))
     (cons :timeout "Experiment timed out"))
-   ((let ((case-fold-search t))
-      (string-match-p "server_error\\|WebClientRequestException" agent-output))
-    (cons :api-error "Provider server error"))
-   ((string-match-p "error.*executor\\|failed to finish" agent-output)
-    (cons :tool-error "Tool execution failed"))
+    ((let ((case-fold-search t))
+       (string-match-p "server_error\\|WebClientRequestException" agent-output))
+     (cons :api-error "Provider server error"))
+    ((gptel-auto-experiment--shared-transient-error-p agent-output)
+     (cons :api-error "Transient provider response error"))
+    ((string-match-p "error.*executor\\|failed to finish" agent-output)
+     (cons :tool-error "Tool execution failed"))
    ((string-match-p "could not finish" agent-output)
     (cons :api-error "API request failed"))
    ((string-match-p "Error:.*not available\\|Error:.*not found\\|Error:.*empty" agent-output)
