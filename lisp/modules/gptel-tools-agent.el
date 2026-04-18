@@ -7528,31 +7528,53 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                       (format "Drop provisional commit for %s" target))
                                                                      (setq provisional-commit-hash nil)
                                                                      (funcall callback exp-result))))
-                                                             (setq finished t)
-                                                             (let* ((retry-hypothesis
-                                                                     (gptel-auto-experiment--extract-hypothesis retry-output))
-                                                                    (exp-result
-                                                                     (list :target target
-                                                                           :id experiment-id
-                                                                           :hypothesis retry-hypothesis
-                                                                           :score-before baseline
-                                                                           :score-after 0
-                                                                           :validation-retry t
-                                                                           :kept nil
-                                                                           :duration (- (float-time) start-time)
-                                                                           :grader-quality (plist-get retry-grade :score)
-                                                                           :grader-reason (plist-get retry-grade :details)
-                                                                           :comparator-reason "retry-grade-failed"
-                                                                           :analyzer-patterns (format "%s" patterns)
-                                                                           :agent-output retry-output
-                                                                           :retries 1)))
-                                                               (funcall log-fn
-                                                                        run-id exp-result)
-                                                               (gptel-auto-workflow--drop-provisional-commit
-                                                                provisional-commit-hash
-                                                                (format "Drop provisional commit for %s" target))
-                                                               (setq provisional-commit-hash nil)
-                                                               (funcall callback exp-result)))))))
+                                                              (setq finished t)
+                                                              (let* ((retry-hypothesis
+                                                                      (gptel-auto-experiment--extract-hypothesis retry-output))
+                                                                     (retry-grade-details
+                                                                      (plist-get retry-grade :details))
+                                                                     (retry-grade-error-output
+                                                                      (or (plist-get retry-grade :error-source)
+                                                                          (gptel-auto-experiment--grade-failure-error-output
+                                                                           retry-grade-details retry-output)))
+                                                                     (grader-only-failure
+                                                                      (or (plist-get retry-grade :grader-only-failure)
+                                                                          (gptel-auto-experiment--grader-only-failure-p
+                                                                           retry-output retry-grade-error-output)))
+                                                                     (reason
+                                                                      (if retry-grade-error-output
+                                                                          (symbol-name
+                                                                           (car (gptel-auto-experiment--categorize-error
+                                                                                 retry-grade-error-output)))
+                                                                        "retry-grade-rejected"))
+                                                                     (exp-result
+                                                                      (list :target target
+                                                                            :id experiment-id
+                                                                            :hypothesis retry-hypothesis
+                                                                            :score-before baseline
+                                                                            :score-after 0
+                                                                            :validation-retry t
+                                                                            :kept nil
+                                                                            :duration (- (float-time) start-time)
+                                                                            :grader-quality (plist-get retry-grade :score)
+                                                                            :grader-reason retry-grade-details
+                                                                            :comparator-reason reason
+                                                                            :analyzer-patterns (format "%s" patterns)
+                                                                            :agent-output retry-output
+                                                                            :retries 1)))
+                                                                (when retry-grade-error-output
+                                                                  (setq exp-result
+                                                                        (plist-put exp-result :error retry-grade-error-output)))
+                                                                (when grader-only-failure
+                                                                  (setq exp-result
+                                                                        (plist-put exp-result :grader-only-failure t)))
+                                                                (funcall log-fn
+                                                                         run-id exp-result)
+                                                                (gptel-auto-workflow--drop-provisional-commit
+                                                                 provisional-commit-hash
+                                                                 (format "Drop provisional commit for %s" target))
+                                                                (setq provisional-commit-hash nil)
+                                                                (funcall callback exp-result)))))))
                                                     "executor"
                                                     (format "Retry: fix validation error in %s" target)
                                                     (gptel-auto-experiment--make-retry-prompt
