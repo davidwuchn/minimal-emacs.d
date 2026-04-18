@@ -20,6 +20,7 @@
 (declare-function my/gptel--cache-put-context-window "gptel-ext-context-cache")
 (declare-function my/gptel--cache-load-context-windows "gptel-ext-context-cache")
 (declare-function my/gptel--alist-partial-match "gptel-ext-context-cache")
+(declare-function my/gptel--lookup-context-window-in-gptel-tables "gptel-ext-context-cache")
 
 (defun test--context-cache-setup ()
   "Load module and reset state for each test."
@@ -206,6 +207,30 @@
     '(("qwen" . (:context-window 1000000))
       ("qwen3.5-plus" . nil))
     "qwen3.5-plus-preview")))
+
+(ert-deftest cache/gptel-tables/string-model-finds-symbol-entry ()
+  "String model ids should still find symbol-keyed gptel table entries."
+  (test--context-cache-setup)
+  (let ((test-table-symbol (make-symbol "test-gptel-models")))
+    (set test-table-symbol '((gpt-4o :context-window 128)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'my/gptel--gptel-model-tables)
+                   (lambda () (list test-table-symbol))))
+          (should (= (my/gptel--lookup-context-window-in-gptel-tables "gpt-4o")
+                     128000)))
+      (makunbound test-table-symbol))))
+
+(ert-deftest cache/gptel-tables/string-fallback-handles-string-keys ()
+  "String fallback should match string-keyed tables without signaling."
+  (test--context-cache-setup)
+  (let ((test-table-symbol (make-symbol "test-gptel-models")))
+    (set test-table-symbol '(("MiniMax-M2.5" :context-window 196608)))
+    (unwind-protect
+        (cl-letf (((symbol-function 'my/gptel--gptel-model-tables)
+                   (lambda () (list test-table-symbol))))
+          (should (= (my/gptel--lookup-context-window-in-gptel-tables "minimax-m2.5")
+                     196608)))
+      (makunbound test-table-symbol))))
 
 (provide 'test-gptel-ext-context-cache)
 
