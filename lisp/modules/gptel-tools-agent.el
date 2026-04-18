@@ -8710,6 +8710,30 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
         (throw 'skip-workflow nil)))
     (gptel-auto-workflow-run-async targets completion-callback)))
 
+(defun gptel-auto-workflow--reload-live-support (&optional proj-root)
+  "Reload workflow support modules and agent presets from PROJ-ROOT."
+  (let ((root (file-name-as-directory
+               (expand-file-name
+                (or proj-root
+                    (gptel-auto-workflow--default-dir)
+                    default-directory)))))
+    (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
+    (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root))
+    (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root))
+    (if (fboundp 'nucleus-presets-setup-agents)
+        (progn
+          (nucleus-presets-setup-agents)
+          (if (fboundp 'nucleus--after-agent-update)
+              (nucleus--after-agent-update)
+            (when (fboundp 'nucleus--register-gptel-directives)
+              (nucleus--register-gptel-directives))
+            (when (fboundp 'nucleus--override-gptel-agent-presets)
+              (nucleus--override-gptel-agent-presets))))
+      (when (fboundp 'nucleus--register-gptel-directives)
+        (nucleus--register-gptel-directives))
+      (when (fboundp 'nucleus--override-gptel-agent-presets)
+        (nucleus--override-gptel-agent-presets)))))
+
 
 (defun gptel-auto-workflow-cron-safe (&optional completion-callback)
   "Run auto-workflow with full cleanup for cron jobs.
@@ -8727,8 +8751,9 @@ When COMPLETION-CALLBACK is non-nil, call it after the workflow finishes."
     (setq default-directory proj-root)
     (require 'magit)
     (require 'json)
-    (unless (featurep 'gptel-tools-agent)
-      (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root)))
+    (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" proj-root))
+    (when (fboundp 'gptel-auto-workflow--reload-live-support)
+      (gptel-auto-workflow--reload-live-support proj-root))
     (setq gptel-auto-workflow-persistent-headless t)
     (gptel-auto-workflow--enable-headless-suppression)
     (if gptel-auto-workflow--running
