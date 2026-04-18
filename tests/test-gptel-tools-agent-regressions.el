@@ -7014,6 +7014,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                              :path "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1")
                        (list :branch "optimize/agent-riven-exp2"
                              :path "/tmp/project/var/tmp/experiments/optimize/agent-riven-exp1/var/tmp/experiments/optimize/agent-riven-exp2"))))
+              ((symbol-function 'gptel-auto-workflow--optimize-branches)
+               (lambda (&optional _proj-root) nil))
               ((symbol-function 'process-list)
                (lambda () nil))
               ((symbol-function 'process-live-p)
@@ -7061,6 +7063,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                (lambda () "riven"))
               ((symbol-function 'gptel-auto-workflow--optimize-worktrees)
                (lambda (&optional _proj-root) nil))
+              ((symbol-function 'gptel-auto-workflow--optimize-branches)
+               (lambda (&optional _proj-root) nil))
               ((symbol-function 'process-list)
                (lambda () nil))
               ((symbol-function 'process-live-p)
@@ -7085,6 +7089,32 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should (= (gptel-auto-workflow--cleanup-old-worktrees) 1))
       (should (equal deleted (list run-dir)))
       (should (string-match-p captured-pattern "agent-riven-r134423z4f47-exp1")))))
+
+(ert-deftest regression/auto-workflow/cleanup-old-worktrees-removes-detached-optimize-branches ()
+  "Cleanup should prune branch-only optimize refs from older runs."
+  (let ((calls nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--optimize-worktrees)
+               (lambda (&optional _proj-root) nil))
+              ((symbol-function 'gptel-auto-workflow--optimize-branches)
+               (lambda (&optional _proj-root)
+                 '("optimize/agent-riven-r123-exp1"
+                   "optimize/cache-riven-r456-exp2")))
+              ((symbol-function 'file-exists-p)
+               (lambda (_path) nil))
+              ((symbol-function 'call-process)
+               (lambda (_program _in _out _display &rest args)
+                 (push args calls)
+                 0))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (should (= (gptel-auto-workflow--cleanup-old-worktrees) 2))
+      (should
+       (equal (nreverse calls)
+              '(("worktree" "prune")
+                ("branch" "-D" "optimize/agent-riven-r123-exp1")
+                ("branch" "-D" "optimize/cache-riven-r456-exp2")))))))
 
 (ert-deftest regression/auto-workflow/discard-worktree-buffers-kills-tracked-gptel-buffer ()
   "Worktree cleanup should kill tracked gptel buffers before path reuse."

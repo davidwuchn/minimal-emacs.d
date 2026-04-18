@@ -2490,6 +2490,28 @@ Each item is a plist with keys :branch and :path."
         (kill-buffer buffer)))
     (nreverse entries)))
 
+(defun gptel-auto-workflow--optimize-branches (&optional proj-root)
+  "Return local optimize branches for the current host within PROJ-ROOT."
+  (let* ((default-directory (or proj-root (gptel-auto-workflow--default-dir)))
+         (buffer (generate-new-buffer " *git-optimize-branches*"))
+         (entries nil)
+         (suffix (gptel-auto-workflow--experiment-suffix))
+         (branch-pattern
+          (format "\\`optimize/.+-%s\\(?:-r[[:alnum:]]+\\)?-exp[0-9]+\\'"
+                  (regexp-quote suffix))))
+    (unwind-protect
+        (when (= 0 (call-process "git" nil buffer nil
+                                 "for-each-ref"
+                                 "--format=%(refname:short)"
+                                 "refs/heads/optimize"))
+          (with-current-buffer buffer
+            (dolist (branch (split-string (buffer-string) "\n" t))
+              (when (string-match-p branch-pattern branch)
+                (push branch entries)))))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))
+    (nreverse entries)))
+
 (defun gptel-auto-workflow--discard-worktree-buffers (worktree-dir)
   "Abort, kill, and unregister live gptel buffers rooted at WORKTREE-DIR."
   (when (and (stringp worktree-dir)
@@ -8756,57 +8778,63 @@ Works across macOS and Linux."
      (t "unknown"))))
 
 (defun gptel-auto-workflow--cleanup-old-worktrees ()
-  "Remove ALL optimize worktrees and their branches from previous runs.
+  "Remove stale optimize worktrees, directories, and branch refs from previous runs.
 Called at start of new run to ensure clean state.
-Only removes worktrees if no gptel processes are running."
+Only removes optimize refs for the current host suffix."
   (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
                                 "var/tmp/experiments"))
          (worktree-base (expand-file-name worktree-base-dir proj-root))
          (optimize-dir (expand-file-name "optimize" worktree-base))
          (suffix (gptel-auto-workflow--experiment-suffix))
-         (pattern (format "%s\\(?:-r[[:alnum:]]+\\)?-exp"
-                          (regexp-quote suffix)))
+          (pattern (format "%s\\(?:-r[[:alnum:]]+\\)?-exp"
+                           (regexp-quote suffix)))
          (removed 0)
-         (active-processes (cl-count-if
-                            (lambda (p)
-                              (and (process-live-p p)
-                                   (string-match-p "gptel" (process-name p))))
-                            (process-list))))
-    (when (= active-processes 0)
-      (let ((default-directory proj-root))
-        (call-process "git" nil nil nil "worktree" "prune"))
-      (let ((attached-worktrees
-             (sort (copy-sequence (gptel-auto-workflow--optimize-worktrees proj-root))
-                   (lambda (a b)
-                     (> (length (plist-get a :path))
-                        (length (plist-get b :path)))))))
-        (dolist (entry attached-worktrees)
-          (let ((path (plist-get entry :path))
-                (branch (plist-get entry :branch)))
+         (removed-branches (make-hash-table :test 'equal)))
+    (let ((default-directory proj-root))
+      (call-process "git" nil nil nil "worktree" "prune"))
+    (let ((attached-worktrees
+           (sort (copy-sequence (gptel-auto-workflow--optimize-worktrees proj-root))
+                 (lambda (a b)
+                   (> (length (plist-get a :path))
+                      (length (plist-get b :path)))))))
+      (dolist (entry attached-worktrees)
+        (let ((path (plist-get entry :path))
+              (branch (plist-get entry :branch)))
+          (condition-case err
+              (progn
+                (gptel-auto-workflow--discard-worktree-buffers path)
+                (call-process "git" nil nil nil "worktree" "remove" "-f" path)
+                (when (file-exists-p path)
+                  (delete-directory path t))
+                (call-process "git" nil nil nil "branch" "-D" branch)
+                (puthash branch t removed-branches)
+                (cl-incf removed))
+            (error
+             (message "[auto-workflow] Failed to cleanup %s: %s" path err))))))
+    (dolist (branch (gptel-auto-workflow--optimize-branches proj-root))
+      (unless (gethash branch removed-branches)
+        (condition-case err
+            (progn
+              (call-process "git" nil nil nil "branch" "-D" branch)
+              (puthash branch t removed-branches)
+              (cl-incf removed))
+          (error
+           (message "[auto-workflow] Failed to delete optimize branch %s: %s"
+                    branch err)))))
+    (when (file-exists-p optimize-dir)
+      (let ((dirs (directory-files optimize-dir t pattern)))
+        (dolist (dir dirs)
+          (when (file-exists-p dir)
             (condition-case err
                 (progn
-                  (gptel-auto-workflow--discard-worktree-buffers path)
-                  (call-process "git" nil nil nil "worktree" "remove" "-f" path)
-                  (when (file-exists-p path)
-                    (delete-directory path t))
-                  (call-process "git" nil nil nil "branch" "-D" branch)
+                  (gptel-auto-workflow--discard-worktree-buffers dir)
+                  (delete-directory dir t)
                   (cl-incf removed))
               (error
-               (message "[auto-workflow] Failed to cleanup %s: %s" path err))))))
-      (when (file-exists-p optimize-dir)
-        (let ((dirs (directory-files optimize-dir t pattern)))
-          (dolist (dir dirs)
-            (when (file-exists-p dir)
-              (condition-case err
-                  (progn
-                    (gptel-auto-workflow--discard-worktree-buffers dir)
-                    (delete-directory dir t)
-                    (cl-incf removed))
-                (error
-                 (message "[auto-workflow] Failed to cleanup %s: %s" dir err))))))))
+               (message "[auto-workflow] Failed to cleanup %s: %s" dir err)))))))
     (when (> removed 0)
-      (message "[auto-workflow] Cleaned %d old worktrees" removed))
+      (message "[auto-workflow] Cleaned %d old optimize items" removed))
     removed))
 
 (defun gptel-auto-workflow--cleanup-stale-state ()
