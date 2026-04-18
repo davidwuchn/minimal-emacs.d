@@ -13717,6 +13717,15 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                  (equal command "git -C /tmp/worktree/packages/gptel-agent rev-parse --git-common-dir"))
                calls)))))
 
+(ert-deftest regression/auto-workflow/worktree-base-repo-root-resolves-linked-worktree-git-common-dir ()
+  "Linked worktrees should resolve their canonical repo root, not `.git/worktrees'."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-git-common-dir)
+             (lambda () "/tmp/project/.git/worktrees/staging-verify"))
+            ((symbol-function 'gptel-auto-workflow--worktree-base-root)
+             (lambda () "/tmp/project/var/tmp/experiments/staging-verify")))
+    (should (equal (gptel-auto-workflow--worktree-base-repo-root)
+                   "/tmp/project/"))))
+
 (ert-deftest regression/auto-workflow/hydrate-staging-submodules-missing-shared-repo-fails-cleanly ()
   "Missing shared submodule repos should return a normal failure tuple."
   (let ((root (make-temp-file "staging-root" t)))
