@@ -502,13 +502,14 @@ Also handles caching and result truncation from old advice."
                     (with-current-buffer target-buf
                       ;; Ensure FSM exists for agent task
                       (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
-                       ;; Create minimal FSM for agent context
-                        (setq-local gptel--fsm-last 
-                                    (gptel-make-fsm 
-                                     :table (when (boundp 'gptel-send--transitions) gptel-send--transitions)
-                                     :handlers nil
-                                     :info (gptel-auto-workflow--routed-fsm-info
-                                            nil target-buf (point-marker)))))
+                        ;; Create minimal FSM for agent context
+                        (when (fboundp 'gptel-make-fsm)
+                          (setq-local gptel--fsm-last
+                                      (gptel-make-fsm
+                                       :table (when (boundp 'gptel-send--transitions) gptel-send--transitions)
+                                       :handlers nil
+                                       :info (gptel-auto-workflow--routed-fsm-info
+                                              nil target-buf (point-marker))))))
                        (let* ((default-directory (or worktree-dir project-root))
                                (target-marker (point-marker))
                                (parent-fsm (and (boundp 'gptel--fsm-last) gptel--fsm-last))
@@ -753,7 +754,8 @@ and restores headless state. Returns t on success, nil on failure."
     (unless (featurep feature-name)
       (load-file (expand-file-name file-path root)))
     (unless headless-was-enabled
-      (gptel-auto-workflow--enable-headless-suppression))
+      (when (fboundp 'gptel-auto-workflow--enable-headless-suppression)
+        (gptel-auto-workflow--enable-headless-suppression)))
     (unwind-protect
         (let ((gptel-auto-workflow--current-project root)
               (gptel-auto-workflow--project-root-override root)
@@ -767,7 +769,8 @@ and restores headless state. Returns t on success, nil on failure."
              (message "[%s] ✗ Failed: %s - %s" prefix root err)
              nil)))
       (unless headless-was-enabled
-        (gptel-auto-workflow--disable-headless-suppression))
+        (when (fboundp 'gptel-auto-workflow--disable-headless-suppression)
+          (gptel-auto-workflow--disable-headless-suppression)))
       (setq gptel-auto-workflow--current-project nil))))
 
 (defun gptel-auto-workflow--run-all-weekly-jobs (prefix per-project-fn)
