@@ -527,7 +527,9 @@ can consume lists, vectors, plists, and alists as readable data."
 
 (defun gptel-sandbox--execute-tool (callback tool-name arg-forms env state)
   "Execute TOOL-NAME with ARG-FORMS in ENV and STATE, then CALLBACK the result."
-  (let* ((tool-spec (and (fboundp 'gptel-get-tool) (gptel-get-tool tool-name)))
+  (let* ((tool-spec (if (fboundp 'gptel-get-tool)
+                        (gptel-get-tool tool-name)
+                      nil))
          (arg-values (and tool-spec
                           (gptel-sandbox--resolve-tool-args tool-spec arg-forms env))))
     (gptel-sandbox--check-tool tool-spec arg-values)
