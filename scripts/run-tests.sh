@@ -27,6 +27,7 @@ run_unit_tests() {
     local status_file
     local messages_file
     local snapshot_paths_file
+    local ert_status=0
     
     section "Unit Tests (ERT)"
     
@@ -49,6 +50,7 @@ run_unit_tests() {
     }
     
     local output
+    set +e
     output=$(AUTO_WORKFLOW_STATUS_FILE="$status_file" \
         AUTO_WORKFLOW_MESSAGES_FILE="$messages_file" \
         AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE="$snapshot_paths_file" \
@@ -64,7 +66,9 @@ run_unit_tests() {
         --eval "(advice-add (quote startup-redirect-eln-cache) :override (lambda (dir) (push (expand-file-name (file-name-as-directory dir) user-emacs-directory) native-comp-eln-load-path)))" \
         --eval "(when (and (boundp 'native-comp-enable-subr-trampolines) native-comp-enable-subr-trampolines (fboundp 'comp-subr-trampoline-install) (fboundp 'subr-primitive-p)) (mapc (lambda (fn) (and (fboundp fn) (subr-primitive-p (symbol-function fn)) (comp-subr-trampoline-install fn))) (quote (file-exists-p file-executable-p call-process kill-buffer message directory-files require featurep process-list process-name system-name))))" \
         $(find tests -name "test-*.el" -exec echo "-l {}" \;) \
-        --eval "(ert-run-tests-batch-and-exit \"$PATTERN\")" 2>&1) || true
+        --eval "(ert-run-tests-batch-and-exit \"$PATTERN\")" 2>&1)
+    ert_status=$?
+    set -e
     rm -f "$status_file" "$messages_file" "$snapshot_paths_file"
     
     grep -E "FAILED|unexpected|0 unexpected" <<< "$output" | head -30
@@ -72,11 +76,15 @@ run_unit_tests() {
         echo "$output" | tail -5
     fi
     
-    if grep -q "0 unexpected" <<< "$output"; then
+    if [ "$ert_status" -eq 0 ] && grep -q "0 unexpected" <<< "$output" && ! grep -q "^Aborted:" <<< "$output"; then
         pass "All ERT tests passed"
         return 0
     else
-        fail "Some ERT tests failed"
+        if grep -q "^Aborted:" <<< "$output"; then
+            fail "ERT run aborted"
+        else
+            fail "Some ERT tests failed"
+        fi
         return 1
     fi
 }
