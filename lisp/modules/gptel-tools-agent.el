@@ -1467,6 +1467,13 @@ Dynamic variable, let-bound around gptel-agent--task calls.")
      ((buffer-live-p request-buf) request-buf)
      ((buffer-live-p origin-buf) origin-buf))))
 
+(defun my/gptel--cancel-agent-task-timers (state)
+  "Cancel any active timeout and progress timers in STATE."
+  (when (timerp (plist-get state :timeout-timer))
+    (cancel-timer (plist-get state :timeout-timer)))
+  (when (timerp (plist-get state :progress-timer))
+    (cancel-timer (plist-get state :progress-timer))))
+
 (defun my/gptel--agent-task-buffer-priority (state buffer)
   "Return a relative priority for tracking BUFFER in STATE.
 Routed worktree agent buffers outrank generic fallback buffers like
@@ -1655,10 +1662,7 @@ TIMESTAMP defaults to `current-time'."
       (maphash
        (lambda (_task-id state)
          (when (plistp state)
-           (when (timerp (plist-get state :timeout-timer))
-             (cancel-timer (plist-get state :timeout-timer)))
-           (when (timerp (plist-get state :progress-timer))
-             (cancel-timer (plist-get state :progress-timer)))
+           (my/gptel--cancel-agent-task-timers state)
            (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
              (push request-buf request-buffers))))
        my/gptel--agent-task-state)
@@ -1669,10 +1673,13 @@ TIMESTAMP defaults to `current-time'."
           (condition-case err
               (gptel-abort request-buf)
             (error
-             (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
-                      (buffer-name request-buf)
-                      (my/gptel--sanitize-for-logging
-                       (error-message-string err) 160)))))))))
+             (let ((safe-msg (condition-case nil
+                                 (my/gptel--sanitize-for-logging
+                                  (error-message-string err) 160)
+                               (error "abort-error"))))
+               (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
+                        (buffer-name request-buf)
+                        safe-msg)))))))))
 
 (defun my/gptel--normalize-agent-activity-dir (dir)
   "Return DIR as a canonical directory path with trailing slash, or nil."
@@ -1708,10 +1715,7 @@ same routed experiment buffer from re-entering a later retry."
     (maphash
      (lambda (task-id state)
        (when (my/gptel--agent-task-overlaps-p state origin-buf normalized-dir)
-         (when (timerp (plist-get state :timeout-timer))
-           (cancel-timer (plist-get state :timeout-timer)))
-         (when (timerp (plist-get state :progress-timer))
-           (cancel-timer (plist-get state :progress-timer)))
+         (my/gptel--cancel-agent-task-timers state)
          (when-let* ((request-buf (my/gptel--agent-task-request-buffer state)))
            (push request-buf request-buffers))
          (push task-id overlap-ids)))
@@ -6260,10 +6264,14 @@ supplied on failure, use it as the downgrade reason."
              (final-result
               (if (or (not staging-reported-p) staging-succeeded)
                   exp-result
-                (let ((failed-result (plist-put (copy-sequence exp-result) :kept nil)))
-                  (plist-put failed-result :comparator-reason failure-reason)))))
-        (funcall log-fn run-id final-result)
-        (when callback
+                (let ((failed-result (and (listp exp-result)
+                                           (plist-put (copy-sequence exp-result) :kept nil))))
+                  (when failed-result
+                    (plist-put failed-result :comparator-reason failure-reason))
+                  (or failed-result exp-result)))))
+        (when (functionp log-fn)
+          (funcall log-fn run-id final-result))
+        (when (and callback (functionp callback))
           (funcall callback final-result))))))
 
 (defun gptel-auto-workflow--invoke-staging-completion (callback success &optional reason)

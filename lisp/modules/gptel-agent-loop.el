@@ -370,19 +370,21 @@ Call once after definitions to pre-compile regex patterns."
 
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
   "Return non-nil when TEXT matches any pattern in PATTERNS.
-Patterns are matched case-insensitively against downcased TEXT and PATTERN."
+Patterns are matched case-insensitively."
   (and (stringp text)
-       (cl-some (lambda (pattern)
-                  (string-match-p (downcase pattern) (downcase text)))
-                patterns)))
+       (let ((text-lower (downcase text)))
+         (cl-some (lambda (pattern)
+                    (string-match-p (downcase pattern) text-lower))
+                  patterns))))
 
 (defun gptel-agent-loop--seems-complete-p (resp)
   "Return non-nil when RESP looks like a completion message.
 Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
-       (if gptel-agent-loop--completion-patterns-compiled
-           (string-match-p gptel-agent-loop--completion-patterns-compiled (downcase resp))
-         (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--completion-patterns))))
+       (let ((case-fold-search t))
+         (if gptel-agent-loop--completion-patterns-compiled
+             (string-match-p gptel-agent-loop--completion-patterns-compiled resp)
+           (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--completion-patterns)))))
 
 (defconst gptel-agent-loop--turn-skipped-pattern
   "gptel: turn skipped\\|all tool calls.*malformed"
@@ -397,9 +399,10 @@ gptel skipped a turn due to malformed tool calls.")
   "Return non-nil when RESP matches malformed-tool skip output.
 Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
-       (if gptel-agent-loop--turn-skipped-pattern-compiled
-           (string-match-p gptel-agent-loop--turn-skipped-pattern-compiled (downcase resp))
-         (gptel-agent-loop--matches-any-pattern resp (list gptel-agent-loop--turn-skipped-pattern)))))
+       (let ((case-fold-search t))
+         (if gptel-agent-loop--turn-skipped-pattern-compiled
+             (string-match-p gptel-agent-loop--turn-skipped-pattern-compiled resp)
+           (gptel-agent-loop--matches-any-pattern resp (list gptel-agent-loop--turn-skipped-pattern))))))
 
 (defconst gptel-agent-loop--planning-patterns
   '("\\blet me\\b"
@@ -424,9 +427,10 @@ Detects common patterns where model talks about doing work
 but didn't call tools. Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
        (>= (length resp) 30)
-       (if gptel-agent-loop--planning-patterns-compiled
-           (string-match-p gptel-agent-loop--planning-patterns-compiled (downcase resp))
-         (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--planning-patterns))))
+       (let ((case-fold-search t))
+         (if gptel-agent-loop--planning-patterns-compiled
+             (string-match-p gptel-agent-loop--planning-patterns-compiled resp)
+           (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--planning-patterns)))))
 
 (defconst gptel-agent-loop--finishing-patterns
   '("summariz\\|conclude\\|conclusion\\|finish\\|wrap up\\|that's all\\|in summary\\|to summarize\\|final\\|overall"
@@ -446,9 +450,10 @@ when the model is concluding rather than planning more work.")
 Detects patterns indicating the model is wrapping up,
 not planning more work. Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
-       (if gptel-agent-loop--finishing-patterns-compiled
-           (string-match-p gptel-agent-loop--finishing-patterns-compiled (downcase resp))
-         (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--finishing-patterns))))
+       (let ((case-fold-search t))
+         (if gptel-agent-loop--finishing-patterns-compiled
+             (string-match-p gptel-agent-loop--finishing-patterns-compiled resp)
+           (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--finishing-patterns)))))
 
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP.
@@ -509,8 +514,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
               (gptel-agent-loop--cleanup-overlay ov)
               (gptel-agent-loop--deliver-aborted state))
           (cond
-           ((and (or (null error-data)
-                     (gptel-agent-loop--transient-error-p error-data))
+           ((and (or (null error-data) (gptel-agent-loop--transient-error-p error-data))
                  (< (gptel-agent-loop--task-retries state)
                     gptel-agent-loop-max-retries))
             (setf (gptel-agent-loop--task-retries state)
@@ -587,14 +591,13 @@ Returns non-nil if result was delivered."
 Returns non-nil if result was delivered."
   (when (and (gptel-agent-loop--task-max-steps-reached state)
              (not (gptel-agent-loop--task-summary-requested state)))
-    (gptel-agent-loop--append-output state resp)
     (setf (gptel-agent-loop--task-summary-requested state) t)
     (if gptel-agent-loop-hard-loop
         (gptel-agent-loop--schedule-request state (gptel-agent-loop--summary-prompt-for state) nil)
       (gptel-agent-loop--deliver-result
        state
        (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-               (gptel-agent-loop--build-final-result state "")
+               (gptel-agent-loop--build-final-result state resp)
                (gptel-agent-loop--task-step-count state))))
     t))
 
@@ -684,9 +687,10 @@ Cache behavior:
                                     (my/gptel--coerce-fsm gptel--fsm-last)))
                    (fsm-info (ignore-errors
                                (and parent-fsm (gptel-fsm-info parent-fsm))))
-                   (parent-buf (or (gptel-agent-loop--task-parent-buffer state)
-                                   (when (buffer-live-p (plist-get fsm-info :buffer))
-                                     (plist-get fsm-info :buffer))
+                   (parent-buf (or (let ((buf (gptel-agent-loop--task-parent-buffer state)))
+                                     (and (buffer-live-p buf) buf))
+                                   (let ((buf (plist-get fsm-info :buffer)))
+                                     (and (buffer-live-p buf) buf))
                                    (current-buffer)))
                    (where (or
                            (let ((tm (gptel-agent-loop--task-tracking-marker state)))
