@@ -7368,7 +7368,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                     (lambda (retry-output)
                                                       (let ((gptel-auto-experiment--grading-target target)
                                                             (gptel-auto-experiment--grading-worktree experiment-worktree))
-                                                        (gptel-auto-experiment-grade
+                                                        (gptel-auto-experiment--grade-with-retry
                                                          retry-output
                                                          (lambda (retry-grade)
                                                            (if (plist-get retry-grade :passed)
