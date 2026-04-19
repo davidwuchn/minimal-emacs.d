@@ -7855,6 +7855,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 
 
 
+(defun gptel-auto-experiment--placeholder-hypothesis-p (hypothesis)
+  "Return non-nil when HYPOTHESIS is still an unresolved prompt template."
+  (let ((trimmed (and (stringp hypothesis) (string-trim hypothesis))))
+    (or (not (gptel-auto-workflow--non-empty-string-p trimmed))
+        (member trimmed '("[What CODE change and why]"
+                          "What CODE change and why"))
+        (string-match-p "\\`\\[What\\b.*\\]\\'" trimmed))))
+
 (defun gptel-auto-experiment--extract-hypothesis (output)
   "Extract HYPOTHESIS from agent OUTPUT.
 Tries multiple patterns in order:
@@ -7872,9 +7880,15 @@ Tries multiple patterns in order:
    ((gptel-auto-experiment--agent-error-p output)
     "Agent error")
    ((string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
-    (match-string 1 output))
+    (let ((candidate (string-trim (match-string 1 output))))
+      (if (gptel-auto-experiment--placeholder-hypothesis-p candidate)
+          "No hypothesis stated"
+        candidate)))
    ((string-match "\\*\\*HYPOTHESIS\\*\\*:?\\s-*\\([^\n]+\\)" output)
-    (match-string 1 output))
+    (let ((candidate (string-trim (match-string 1 output))))
+      (if (gptel-auto-experiment--placeholder-hypothesis-p candidate)
+          "No hypothesis stated"
+        candidate)))
    ((string-match "[^.]*\\s-+will improve\\s-+[^.]*\\.?" output)
     (let ((match (match-string 0 output)))
       (string-trim match)))
