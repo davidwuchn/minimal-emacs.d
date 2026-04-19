@@ -194,6 +194,33 @@ Reduces duplication of three-way `or` patterns with worktree fallback."
   (or (gptel-auto-workflow--get-worktree-dir (or target gptel-auto-workflow--current-target))
       (gptel-auto-workflow--project-root)
       (expand-file-name "~/.emacs.d/")))
+
+(defun gptel-auto-workflow--restore-live-target-file (target &optional proj-root)
+  "Reload TARGET from PROJ-ROOT into the live worker after an experiment attempt.
+This clears partial definitions leaked from optimize worktrees after tools or
+executor self-checks load candidate Elisp files into the daemon."
+  (when (and (gptel-auto-workflow--non-empty-string-p target)
+             (string-match-p "\\.el\\'" target))
+    (let* ((root (file-name-as-directory
+                  (expand-file-name
+                   (or proj-root
+                       (gptel-auto-workflow--resolve-run-root)
+                       (gptel-auto-workflow--project-root)
+                       default-directory))))
+           (target-file (expand-file-name target root)))
+      (when (file-readable-p target-file)
+        (condition-case err
+            (let ((default-directory root)
+                  (message-log-max nil)
+                  (inhibit-message t))
+              (load target-file nil t t)
+              t)
+          (error
+           (message "[auto-workflow] Failed to restore live target %s: %s"
+                    target
+                    (my/gptel--sanitize-for-logging
+                     (error-message-string err) 200))
+           nil))))))
 ;;;###autoload
 (defun gptel-auto-workflow--read-file-contents (filepath)
   "Read contents of FILEPATH as string.
@@ -2312,11 +2339,17 @@ time to apply and verify a focused fix."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-validation-retry-active-grace 120
+(defcustom gptel-auto-experiment-validation-retry-active-grace 180
   "Extra wall-clock seconds active validation-retry calls may use beyond budget."
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
+
+(defconst gptel-auto-workflow--legacy-validation-retry-active-grace 120
+  "Previous default for `gptel-auto-experiment-validation-retry-active-grace'.")
+
+(defconst gptel-auto-workflow--current-validation-retry-active-grace 180
+  "Current runtime default for `gptel-auto-experiment-validation-retry-active-grace'.")
 
 (defcustom gptel-auto-experiment-delay-between 3
   "Seconds to wait between experiments to avoid API rate limits."
@@ -5836,10 +5869,11 @@ executor's prose summary."
                 (not (string-empty-p status-output)))))))
 
 (defun gptel-auto-experiment--timeout-salvage-output (output prompt target &optional worktree)
-  "Return synthetic executor output when timed-out OUTPUT left real target edits.
+  "Return synthetic executor output when timed-out error OUTPUT left real target edits.
 PROMPT is the original executor prompt so the salvage path can preserve the
 intended hypothesis. TARGET and WORKTREE identify the actual edited file."
-  (when (and (gptel-auto-experiment--hard-timeout-p output)
+  (when (and (gptel-auto-experiment--agent-error-p output)
+             (gptel-auto-experiment--hard-timeout-p output)
              (gptel-auto-experiment--target-pending-changes-p target worktree))
     (let* ((raw-hypothesis (gptel-auto-experiment--extract-hypothesis prompt))
            (hypothesis
@@ -6817,6 +6851,13 @@ the user has not explicitly customized the variable."
               (copy-tree
                gptel-auto-workflow--current-executor-rate-limit-fallbacks))
         (push 'gptel-auto-workflow-executor-rate-limit-fallbacks migrated)))
+    (unless (gptel-auto-workflow--custom-var-user-customized-p
+             'gptel-auto-experiment-validation-retry-active-grace)
+      (when (= gptel-auto-experiment-validation-retry-active-grace
+               gptel-auto-workflow--legacy-validation-retry-active-grace)
+        (setq gptel-auto-experiment-validation-retry-active-grace
+              gptel-auto-workflow--current-validation-retry-active-grace)
+        (push 'gptel-auto-experiment-validation-retry-active-grace migrated)))
     (when migrated
       (setq migrated (nreverse migrated))
       (message "[auto-workflow] Refreshed legacy fallback defaults: %s"
@@ -7247,17 +7288,18 @@ RETRY-COUNT tracks current retry attempt."
                 (or api-rate-limit-category
                     (and (not hard-timeout)
                          timeout-category)))
-               (retryable-failure
-                (and (not grader-only-failure)
-                     (or retryable-category
-                         (and raw-error
-                              (not hard-timeout)
-                              (gptel-auto-experiment--is-retryable-error-p raw-error))))))
+                (retryable-failure
+                 (and (not grader-only-failure)
+                      (or retryable-category
+                          (and raw-error
+                               (not hard-timeout)
+                               (gptel-auto-experiment--is-retryable-error-p raw-error))))))
+          (gptel-auto-workflow--restore-live-target-file target workflow-root)
           (when quota-exhausted
             (setq gptel-auto-experiment--quota-exhausted t))
           (if (and (not quota-exhausted)
                    (< retries gptel-auto-experiment-max-retries)
-                  retryable-failure)
+                   retryable-failure)
              (progn
                (setq attempt-logs nil)
                (message "[auto-exp] Retrying experiment %d (attempt %d/%d) after %ds delay"
@@ -7550,39 +7592,45 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                       (when (and effective-agent-output (> (length effective-agent-output) 0))
                                         (message "[auto-exp] Agent preview: %s"
                                                 (my/gptel--sanitize-for-logging effective-agent-output 100)))
-                                      ;; Check if grader passed
-                                      (if (not grade-passed)
-                                           ;; Grader failures should classify from grader details when
-                                           ;; they carry the real transient/API error instead of the
-                                           ;; executor's normal success output.
-                                           (let* ((grade-error-output
-                                                   (or (plist-get grade :error-source)
-                                                       (gptel-auto-experiment--grade-failure-error-output
-                                                        grade-details effective-agent-output)))
-                                                 (error-source (or grade-error-output effective-agent-output))
-                                                 (error-info (gptel-auto-experiment--categorize-error
-                                                              error-source))
-                                                 (error-category (car error-info))
-                                                 (error-details (cdr error-info))
-                                                 (grader-only-failure
-                                                  (plist-get grade :grader-only-failure)))
-                                            (setq finished t)
-                                            ;; Log the failure
-                                            (let ((exp-result (list :target target
+                                       ;; Check if grader passed
+                                       (if (not grade-passed)
+                                            ;; Grader failures should classify from grader details when
+                                            ;; they carry the real transient/API error instead of the
+                                            ;; executor's normal success output.
+                                            (let* ((grade-error-output
+                                                    (or (plist-get grade :error-source)
+                                                        (gptel-auto-experiment--grade-failure-error-output
+                                                         grade-details effective-agent-output)))
+                                                  (normal-grade-rejection
+                                                   (and (not grade-error-output)
+                                                        (not (plist-get grade :grader-only-failure))))
+                                                  (error-source (and (not normal-grade-rejection)
+                                                                     (or grade-error-output effective-agent-output)))
+                                                  (error-info (and error-source
+                                                                   (gptel-auto-experiment--categorize-error
+                                                                    error-source)))
+                                                  (error-category (car-safe error-info))
+                                                  (grader-only-failure
+                                                   (plist-get grade :grader-only-failure)))
+                                             (setq finished t)
+                                             ;; Log the failure
+                                             (let ((exp-result (list :target target
                                                                     :id experiment-id
                                                                     :hypothesis hypothesis
                                                                     :score-before baseline
                                                                    :score-after 0
-                                                                   :kept nil
-                                                                   :duration (- (float-time) start-time)
-                                                                    :grader-quality grade-score
-                                                                    :grader-reason grade-details
-                                                                    :comparator-reason (symbol-name error-category)
-                                                                     :analyzer-patterns (format "%s" patterns)
-                                                                     :agent-output effective-agent-output)))
-                                              (when grade-error-output
-                                                (setq exp-result
-                                                      (plist-put exp-result :error grade-error-output)))
+                                                                    :kept nil
+                                                                    :duration (- (float-time) start-time)
+                                                                     :grader-quality grade-score
+                                                                     :grader-reason grade-details
+                                                                     :comparator-reason (if normal-grade-rejection
+                                                                                            "grader-rejected"
+                                                                                          (symbol-name error-category))
+                                                                      :analyzer-patterns (format "%s" patterns)
+                                                                      :agent-output effective-agent-output)))
+                                               (when grade-error-output
+                                                 (setq exp-result
+                                                       (plist-put exp-result :error grade-error-output)))
                                               (when grader-only-failure
                                                 (setq exp-result
                                                       (plist-put exp-result :grader-only-failure t)))
