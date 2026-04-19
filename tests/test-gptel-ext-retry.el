@@ -21,6 +21,18 @@
 (defvar test-trim-min-bytes 0)
 (defvar test-reasoning-keep-turns 1)
 
+;;; Retry delay constants (match gptel-ext-retry.el)
+(defconst test-retry-base-delay 4.0)
+(defconst test-retry-backoff-factor 2.0)
+(defconst test-retry-max-delay 30.0)
+
+(defun test--retry-delay (retries)
+  "Compute exponential backoff delay matching `my/gptel--retry-delay'."
+  (let ((r (max 0 (or retries 0))))
+    (min test-retry-max-delay
+         (* test-retry-base-delay
+            (expt test-retry-backoff-factor r)))))
+
 (defvar test-model-context-bytes
   '((kimi-k2\.5        . 400000)
     (kimi-for-coding    . 400000)
@@ -419,11 +431,6 @@
 
 ;;; Tests for exponential backoff
 
-(defun test--retry-delay (retries)
-  "Calculate retry delay for RETRIES using exponential backoff.
-Matches logic in gptel-ext-retry.el: base=4.0, factor=2.0, max=30.0."
-  (min 30.0 (* 4.0 (expt 2.0 retries))))
-
 (ert-deftest retry/backoff/delay-retry-0 ()
   "First retry should have 4s delay."
   (should (= 4.0 (test--retry-delay 0))))
@@ -443,6 +450,14 @@ Matches logic in gptel-ext-retry.el: base=4.0, factor=2.0, max=30.0."
 (ert-deftest retry/backoff/delay-retry-10 ()
   "High retry counts should cap at 30s."
   (should (= 30.0 (test--retry-delay 10))))
+
+(ert-deftest retry/backoff/delay-negative-clamped ()
+  "Negative retry counts should be clamped to 0."
+  (should (= 4.0 (test--retry-delay -1))))
+
+(ert-deftest retry/backoff/delay-nil-clamped ()
+  "Nil retry count should be clamped to 0."
+  (should (= 4.0 (test--retry-delay nil))))
 
 ;;; Tests for curl timeout detection
 
