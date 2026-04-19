@@ -575,7 +575,7 @@ Runs asynchronously; returns nil immediately."
       (my/gptel--openrouter-fetch-with-callback
        url
        (lambda (data)
-         (let* ((valid-data (and (sequencep data) (listp data) data))
+         (let* ((valid-data (and (listp data) data))
                 (entry (and valid-data
                             (seq-find (lambda (e)
                                         (let ((id (alist-get 'id e)))
@@ -625,8 +625,9 @@ Run asynchronously. Use for bulk cache warming."
     (when (my/gptel--openrouter-fetch-with-callback
            url
            (lambda (data)
-             (let ((count 0))
-               (dolist (entry data)
+             (let* ((valid-data (and (listp data) data))
+                    (count 0))
+               (dolist (entry valid-data)
                  (let* ((id (alist-get 'id entry))
                         (cw (alist-get 'context_length entry)))
                    (when (and (stringp id) (integerp cw) (> cw 0))
