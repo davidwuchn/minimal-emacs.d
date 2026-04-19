@@ -2552,6 +2552,59 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (should (equal (plist-get (car results) :agent-output) timeout-message))
         (should (equal (plist-get (cadr results) :agent-output) "second experiment"))))))
 
+(ert-deftest regression/auto-experiment/loop-stops-after-tied-no-improvements ()
+  "Tied discards should count toward the no-improvement streak."
+  (let ((gptel-auto-experiment-delay-between 0)
+        (gptel-auto-experiment-max-per-target 5)
+        (gptel-auto-experiment-no-improvement-threshold 2)
+        (gptel-auto-experiment--quota-exhausted nil)
+        (gptel-auto-experiment--api-error-count 0)
+        (runs 0)
+        (results nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+               (lambda (&rest _) '(:eight-keys 0.4)))
+              ((symbol-function 'gptel-auto-experiment--code-quality-score)
+               (lambda () 0.5))
+              ((symbol-function 'gptel-auto-workflow--call-in-run-context)
+               (lambda (_workflow-root fn &optional _buffer _fallback-root)
+                 (funcall fn)))
+              ((symbol-function 'gptel-auto-workflow--run-callback-live-p)
+               (lambda (&rest _) t))
+              ((symbol-function 'gptel-auto-workflow--update-progress)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-auto-experiment--run-with-retry)
+               (lambda (target exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _retry-count)
+                 (cl-incf runs)
+                 (funcall callback
+                          (pcase exp-id
+                            (1 (list :target target
+                                     :id exp-id
+                                     :score-after 0.0
+                                     :kept nil
+                                     :comparator-reason "tests-failed"
+                                     :agent-output "tests failed"))
+                            (2 (list :target target
+                                     :id exp-id
+                                     :score-after 0.4
+                                     :kept nil
+                                     :comparator-reason "Rejected: score tie without >= 0.10 quality gain"
+                                     :agent-output "tie discard"))
+                            (_ (list :target target
+                                     :id exp-id
+                                     :score-after 0.4
+                                     :kept nil
+                                     :agent-output "should not run"))))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-experiment-loop
+       "lisp/modules/gptel-tools-agent.el"
+       (lambda (loop-results)
+         (setq results loop-results)))
+      (should (= runs 2))
+      (should (= (length results) 2))
+      (should (= (plist-get (car results) :id) 1))
+      (should (= (plist-get (cadr results) :id) 2)))))
+
 (ert-deftest regression/auto-experiment/validation-retry-timeout-does-not-stop-further-experiments ()
   "Timed-out validation repairs should discard one experiment, not the whole target."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")

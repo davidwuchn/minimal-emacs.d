@@ -8031,10 +8031,10 @@ Adapts max-experiments based on API error rate."
                              (setq best-score score-after
                                    baseline-code-quality quality-after
                                    no-improvement-count 0))
-                            (when (and (not kept)
-                                       score-after
-                                       (< score-after best-score))
-                              (cl-incf no-improvement-count))
+                             (when (and (not kept)
+                                        score-after
+                                        (<= score-after best-score))
+                               (cl-incf no-improvement-count))
                             (when hard-timeout
                               (message "[auto-experiment] Hard timeout for %s in experiment %d; skipping retries for this attempt and continuing if budget remains"
                                        target exp-id))
