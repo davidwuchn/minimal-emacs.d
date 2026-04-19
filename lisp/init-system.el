@@ -23,7 +23,9 @@
   (push "/post-init.el" compile-angel-excluded-files)
   (push "/pre-early-init.el" compile-angel-excluded-files)
   (push "/post-early-init.el" compile-angel-excluded-files)
-  :hook (emacs-startup . (lambda () (compile-angel-on-load-mode 1))))
+  :hook (emacs-startup . (lambda ()
+                           (unless noninteractive
+                             (compile-angel-on-load-mode 1)))))
 
 ;; Environment Variable Synchronization (Essential for macOS users)
 (use-package exec-path-from-shell
