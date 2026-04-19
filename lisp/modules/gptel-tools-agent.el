@@ -1795,7 +1795,8 @@ subagent callback fired, and avoids reusing a deleted worktree as
            (safe-default-directory
             (or (my/gptel--first-existing-directory
                  caller-default-directory
-                 (buffer-local-value 'default-directory safe-buffer)
+                 (and (buffer-live-p safe-buffer)
+                      (buffer-local-value 'default-directory safe-buffer))
                  (and (boundp 'user-emacs-directory) user-emacs-directory)
                  temporary-file-directory)
                 default-directory)))
@@ -1846,7 +1847,7 @@ Uses hash table keyed by task-id to support parallel execution."
          (wrapped-cb
           (lambda (result)
             (let* ((state (gethash task-id my/gptel--agent-task-state))
-                   (already-done (and state (plist-get state :done))))
+                   (already-done (plist-get state :done)))
               (if (not state)
                   (message "[nucleus] Ignoring stale subagent %s callback after reset"
                            agent-type)
@@ -1904,8 +1905,8 @@ Uses hash table keyed by task-id to support parallel execution."
                        next-delay nil
                        (lambda ()
                          (let* ((state (gethash task-id my/gptel--agent-task-state))
-                                (already-done (and state (plist-get state :done)))
-                                (last-activity (and state (plist-get state :last-activity-time)))
+                                (already-done (plist-get state :done))
+                                (last-activity (plist-get state :last-activity-time))
                                 (idle-seconds
                                  (and last-activity
                                       (float-time (time-since last-activity))))
@@ -2692,6 +2693,14 @@ Call this before any git operation that might modify branches."
              (member (concat "origin/" branch)
                      (magit-list-remote-branch-names))))))
 
+(defun gptel-auto-workflow--autonomous-maintenance-commit-subject-p (subject)
+  "Return non-nil when SUBJECT is an autonomous maintenance commit."
+  (and (stringp subject)
+       (or (string-match-p "\\`💡 synthesis: .+ (AI-generated)\\'" subject)
+           (string-match-p
+            "\\`instincts evolution: weekly batch update"
+            subject))))
+
 (defun gptel-auto-workflow--staging-main-ref ()
   "Return the safe main ref staging and experiments should mirror.
 Prefer local `main' when it either matches `origin/main' or is a clean
@@ -2717,33 +2726,49 @@ state does not leak into workflow branches."
                                  60))
                  (clean-main (and (= 0 (cdr status-result))
                                   (string-empty-p (string-trim (car status-result)))))
-                 (ahead-result (and clean-main
-                                    (gptel-auto-workflow--git-result
-                                     "git rev-list --left-right --count origin/main...main"
-                                     60)))
-                 (ahead-counts (and ahead-result
+                  (ahead-result (and clean-main
+                                     (gptel-auto-workflow--git-result
+                                      "git rev-list --left-right --count origin/main...main"
+                                      60)))
+                  (ahead-counts (and ahead-result
                                     (= 0 (cdr ahead-result))
                                     (split-string (string-trim (car ahead-result))
-                                                  "[[:space:]]+" t)))
-                 (behind-count (and (= (length ahead-counts) 2)
-                                    (string-to-number (nth 0 ahead-counts))))
-                 (ahead-count (and (= (length ahead-counts) 2)
-                                   (string-to-number (nth 1 ahead-counts)))))
-            (if (and clean-main
-                     (numberp behind-count)
-                     (numberp ahead-count)
-                     (= behind-count 0)
-                     (> ahead-count 0))
-                (progn
-                  (message "[auto-workflow] Local main is clean and ahead of origin/main; using main as workflow base")
-                  "main")
-              (message "[auto-workflow] Local main differs from origin/main; using origin/main as workflow base")
-              "origin/main"))))
-       (have-origin
-        "origin/main")
-       (have-main
-        "main")
-       (t
+                                                   "[[:space:]]+" t)))
+                  (behind-count (and (= (length ahead-counts) 2)
+                                     (string-to-number (nth 0 ahead-counts))))
+                  (ahead-count (and (= (length ahead-counts) 2)
+                                    (string-to-number (nth 1 ahead-counts))))
+                  (ahead-only-main (and clean-main
+                                        (numberp behind-count)
+                                        (numberp ahead-count)
+                                        (= behind-count 0)
+                                        (> ahead-count 0)))
+                  (subject-result (and ahead-only-main
+                                       (gptel-auto-workflow--git-result
+                                        "git log --format=%s origin/main..main"
+                                        60)))
+                  (ahead-subjects (and subject-result
+                                       (= 0 (cdr subject-result))
+                                       (split-string (string-trim-right (car subject-result))
+                                                     "\n"
+                                                     t))))
+             (if ahead-only-main
+                 (if (and (consp ahead-subjects)
+                          (cl-every
+                           #'gptel-auto-workflow--autonomous-maintenance-commit-subject-p
+                           ahead-subjects))
+                     (progn
+                       (message "[auto-workflow] Local main only contains autonomous maintenance commits; using origin/main as workflow base")
+                       "origin/main")
+                   (message "[auto-workflow] Local main is clean and ahead of origin/main; using main as workflow base")
+                   "main")
+               (message "[auto-workflow] Local main differs from origin/main; using origin/main as workflow base")
+               "origin/main"))))
+        (have-origin
+         "origin/main")
+        (have-main
+         "main")
+        (t
         (message "[auto-workflow] Missing main ref for staging sync")
         nil)))))
 
@@ -3029,13 +3054,9 @@ NOTE: Staging branch is never deleted, only the worktree."
 
 (defun gptel-auto-workflow--worktree-base-repo-root ()
   "Return the canonical superproject root for the stable workflow root."
-  (let* ((git-common-dir (gptel-auto-workflow--worktree-base-git-common-dir))
-         (repo-root (and git-common-dir
-                         (string-match "\\(.+/\\.git\\)\\(?:/worktrees/[^/]+\\)?\\'"
-                                       (directory-file-name git-common-dir))
-                         (file-name-directory (match-string 1
-                                                            (directory-file-name git-common-dir))))))
-    (or repo-root
+  (let ((git-common-dir (gptel-auto-workflow--worktree-base-git-common-dir)))
+    (or (and git-common-dir
+             (file-name-directory (directory-file-name git-common-dir)))
         (gptel-auto-workflow--worktree-base-root))))
 
 (defun gptel-auto-workflow--submodule-checkout-git-dir-at-root (root path)
@@ -9738,20 +9759,23 @@ Ensures agents are loaded once before processing batch."
 Shows preview and asks for human approval before saving."
   (condition-case err
       (let* ((extracted (gptel-mementum--extract-content result))
-             (line-count (with-temp-buffer (insert extracted) (count-lines 1 (point-max))))
-             (preview-buffer (get-buffer-create "*Synthesis Preview*")))
+             (line-count (with-temp-buffer (insert extracted) (count-lines 1 (point-max)))))
         (if (< line-count 50)
             (message "[mementum] Skip '%s': only %d lines (need ≥50)" topic line-count)
-          (with-current-buffer preview-buffer
-            (erase-buffer)
-            (insert (format "# Synthesis Preview: %s\n\n" topic))
-            (insert (format "Generated: %d lines\n\n" line-count))
-            (insert "## Generated Knowledge Page\n\n")
-            (insert extracted)
-            (goto-char (point-min)))
-          (display-buffer preview-buffer)
-          (when (y-or-n-p (format "Create knowledge page for '%s'? (%d lines) " topic line-count))
-            (gptel-mementum--save-knowledge-page topic files extracted))))
+          (if (bound-and-true-p gptel-auto-workflow--headless)
+              (message "[mementum] Pending '%s': human approval required before saving (%d lines)"
+                       topic line-count)
+            (let ((preview-buffer (get-buffer-create "*Synthesis Preview*")))
+              (with-current-buffer preview-buffer
+                (erase-buffer)
+                (insert (format "# Synthesis Preview: %s\n\n" topic))
+                (insert (format "Generated: %d lines\n\n" line-count))
+                (insert "## Generated Knowledge Page\n\n")
+                (insert extracted)
+                (goto-char (point-min)))
+              (display-buffer preview-buffer)
+              (when (y-or-n-p (format "Create knowledge page for '%s'? (%d lines) " topic line-count))
+                (gptel-mementum--save-knowledge-page topic files extracted))))))
     (error
      (message "[mementum] Error handling synthesis for '%s': %s" topic err))))
 
@@ -9823,14 +9847,12 @@ Returns the content between the first --- and end, or the whole result."
     (make-directory know-dir t)
     (with-temp-file know-file
       (insert content))
-    (message "[mementum] Created knowledge page: %s (%d lines)" 
-             know-file 
+    (message "[mementum] Created knowledge page draft: %s (%d lines)"
+             know-file
              (with-temp-buffer (insert content) (count-lines 1 (point-max))))
-    (shell-command-to-string
-     (format "cd %s && git add %s && git commit -m %s"
-             (shell-quote-argument (gptel-auto-workflow--project-root))
-             (shell-quote-argument know-file)
-             (shell-quote-argument (format "💡 synthesis: %s (AI-generated)" topic))))))
+    (message "[mementum] Review and commit manually: %s"
+             (file-relative-name know-file (gptel-auto-workflow--project-root)))
+    know-file))
 
 
 
