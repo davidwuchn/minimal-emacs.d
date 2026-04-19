@@ -188,6 +188,10 @@ run_cron_tests() {
     local RUNNER="$DIR/scripts/run-auto-workflow-cron.sh"
     local INSTALLER="$DIR/scripts/install-cron.sh"
     local LOGDIR="$DIR/var/tmp/cron"
+    local RENDERED
+    local FAKE_ROOT
+    local FAKE_BIN
+    local FAKE_CRONTAB
     
     section "Cron Installation"
     
@@ -212,9 +216,11 @@ run_cron_tests() {
     fi
     
     # Rendered crontab
-    local RENDERED
     RENDERED=$(mktemp)
-    trap 'rm -f "$RENDERED"' RETURN
+    FAKE_ROOT=$(mktemp -d)
+    FAKE_BIN="$FAKE_ROOT/bin"
+    FAKE_CRONTAB="$FAKE_ROOT/crontab.txt"
+    trap 'rm -f "${RENDERED:-}"; rm -rf "${FAKE_ROOT:-}"' RETURN
     "$INSTALLER" --render > "$RENDERED"
     
     if grep -Eq '^[0-9*@]' "$RENDERED"; then
@@ -222,6 +228,41 @@ run_cron_tests() {
     else
         fail "Rendered crontab has no active schedules"
         rm -f "$RENDERED"
+        return 1
+    fi
+
+    mkdir -p "$FAKE_BIN"
+    cat > "$FAKE_BIN/crontab" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+store="${FAKE_CRONTAB_STORE:?}"
+
+case "${1:-}" in
+    -l)
+        [ -f "$store" ] || exit 1
+        cat "$store"
+        ;;
+    "")
+        cat > "$store"
+        ;;
+    *)
+        cat "$1" > "$store"
+        ;;
+esac
+EOF
+    chmod +x "$FAKE_BIN/crontab"
+    printf '30 2 * * * /usr/bin/true\n' > "$FAKE_CRONTAB"
+
+    PATH="$FAKE_BIN:$PATH" FAKE_CRONTAB_STORE="$FAKE_CRONTAB" "$INSTALLER" install >/dev/null
+    PATH="$FAKE_BIN:$PATH" FAKE_CRONTAB_STORE="$FAKE_CRONTAB" "$INSTALLER" install >/dev/null
+
+    if grep -q '^30 2 \* \* \* /usr/bin/true$' "$FAKE_CRONTAB" &&
+       grep -Eq '^[0-9*@].*run-auto-workflow-cron\.sh auto-workflow' "$FAKE_CRONTAB" &&
+       [ "$(grep -c '^# >>> minimal-emacs\.d auto-workflow >>>$' "$FAKE_CRONTAB")" -eq 1 ]; then
+        pass "Installer merges workflow block idempotently"
+    else
+        fail "Installer did not merge workflow block correctly"
         return 1
     fi
     

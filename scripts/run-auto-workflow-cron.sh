@@ -19,6 +19,7 @@ DAEMON_LOG="$DIR/var/tmp/cron/${SERVER_NAME}.log"
 MESSAGES_FILE="${AUTO_WORKFLOW_MESSAGES_FILE:-$DIR/var/tmp/cron/${SNAPSHOT_NAME}-messages-tail.txt}"
 MESSAGES_CHARS="${AUTO_WORKFLOW_MESSAGES_CHARS:-16000}"
 SNAPSHOT_PATHS_FILE="${AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE:-$DIR/var/tmp/cron/${SERVER_NAME}-snapshot-paths.txt}"
+STALE_DAEMON_RECOVERED=0
 
 lisp_escape() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -180,8 +181,9 @@ status_has_live_run_id() {
 
 snapshot_file_fresh() {
     local path="$1"
+    local ttl="${2:-${AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL:-45}}"
     [ -r "$path" ] || return 1
-    python3 - "$path" "${AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL:-45}" <<'PY'
+    python3 - "$path" "$ttl" <<'PY'
 from pathlib import Path
 import sys
 import time
@@ -203,6 +205,43 @@ status_snapshot_fresh() {
 
 messages_snapshot_fresh() {
     snapshot_file_fresh "$MESSAGES_FILE"
+}
+
+snapshot_file_stale_for_recovery() {
+    local path="$1"
+    ! snapshot_file_fresh "$path" "${AUTO_WORKFLOW_STALE_DAEMON_TTL:-1800}"
+}
+
+stale_active_snapshot_recoverable() {
+    status_indicates_running &&
+        status_has_live_run_id &&
+        snapshot_file_stale_for_recovery "$STATUS_FILE" &&
+        snapshot_file_stale_for_recovery "$MESSAGES_FILE"
+}
+
+worker_daemon_pid() {
+    ps -eo pid=,args= | awk -v marker="--bg-daemon=$SERVER_NAME" '
+        index($0, marker) { print $1; exit }
+    '
+}
+
+discard_stale_worker_daemon() {
+    local pid
+    pid="$(worker_daemon_pid || true)"
+    if [ -n "$pid" ]; then
+        kill "$pid" 2>/dev/null || true
+        for _ in $(seq 1 20); do
+            if ! kill -0 "$pid" 2>/dev/null; then
+                break
+            fi
+            sleep 0.1
+        done
+        if kill -0 "$pid" 2>/dev/null; then
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+    fi
+    STALE_DAEMON_RECOVERED=1
+    rewrite_status_idle
 }
 
 daemon_socket_has_owner() {
@@ -458,6 +497,8 @@ clear_stale_running_status() {
 
     if [ "$rc" -eq 1 ]; then
         rewrite_status_idle
+    elif [ "$rc" -eq 2 ] && stale_active_snapshot_recoverable; then
+        discard_stale_worker_daemon
     fi
     return 0
 }
@@ -594,7 +635,10 @@ ensure_worker_daemon() {
         return 0
     fi
     if [ "$rc" -eq 2 ]; then
-        return 0
+        if [ "$STALE_DAEMON_RECOVERED" -eq 0 ]; then
+            return 0
+        fi
+        rc=1
     fi
     # Keep the dedicated workflow daemon truly headless. A GUI-attached Emacs
     # daemon can die when its X/Wayland connection disappears, which is fatal
@@ -615,7 +659,9 @@ ensure_worker_daemon() {
             return 0
         fi
         if [ "$rc" -eq 2 ]; then
-            return 0
+            if [ "$STALE_DAEMON_RECOVERED" -eq 0 ]; then
+                return 0
+            fi
         fi
         sleep 0.2
     done
