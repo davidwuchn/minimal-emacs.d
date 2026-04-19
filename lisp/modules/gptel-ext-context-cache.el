@@ -439,14 +439,15 @@ Image tokens are counted from `gptel-context' if available."
 (defun my/gptel--cache-put-context-window (model-id window)
   "Persist WINDOW for MODEL-ID in the cache."
   (when (and (stringp model-id) (integerp window) (> window 0))
-    (puthash model-id window my/gptel--context-window-cache)
-    (my/gptel--cache-save-context-windows)))
+    (atomic-change-group
+      (puthash model-id window my/gptel--context-window-cache)
+      (my/gptel--cache-save-context-windows))))
 
 (defun my/gptel--cache-load-context-windows ()
   "Load cached context windows from `my/gptel-context-window-cache-file'."
   (when (file-readable-p my/gptel-context-window-cache-file)
     (condition-case err
-        (progn
+        (atomic-change-group
           (setq my/gptel--context-window-cache-data nil)
           (load my/gptel-context-window-cache-file nil t)
           (when (listp my/gptel--context-window-cache-data)
@@ -471,16 +472,17 @@ Filters to only bound variables."
 
 (defun my/gptel--seed-cache-from-gptel-model-tables ()
   "Seed context-window cache from gptel's built-in model tables."
-  (dolist (var (my/gptel--gptel-model-tables))
-    (dolist (entry (symbol-value var))
-      (when (and (consp entry) (symbolp (car entry)))
-        (let* ((model (car entry))
-               (plist (cdr entry))
-               (cw (plist-get plist :context-window))
-               (tokens (my/gptel--normalize-context-window cw))
-               (id (my/gptel--model-id-string model)))
-          (when (and (stringp id) (integerp tokens) (> tokens 0))
-            (puthash id tokens my/gptel--context-window-cache)))))))
+  (atomic-change-group
+    (dolist (var (my/gptel--gptel-model-tables))
+      (dolist (entry (symbol-value var))
+        (when (and (consp entry) (symbolp (car entry)))
+          (let* ((model (car entry))
+                 (plist (cdr entry))
+                 (cw (plist-get plist :context-window))
+                 (tokens (my/gptel--normalize-context-window cw))
+                 (id (my/gptel--model-id-string model)))
+            (when (and (stringp id) (integerp tokens) (> tokens 0))
+              (puthash id tokens my/gptel--context-window-cache))))))))
 
 (defun my/gptel--openrouter-curl-command (url connect-timeout max-time key)
   "Build curl command list for OpenRouter API request.
@@ -625,16 +627,17 @@ Run asynchronously. Use for bulk cache warming."
     (when (my/gptel--openrouter-fetch-with-callback
            url
            (lambda (data)
-             (let ((count 0))
-               (dolist (entry data)
-                 (let* ((id (alist-get 'id entry))
-                        (cw (alist-get 'context_length entry)))
-                   (when (and (stringp id) (integerp cw) (> cw 0))
-                     (puthash id cw my/gptel--context-window-cache)
-                     (cl-incf count))))
-               (when (> count 0)
-                 (my/gptel--cache-save-context-windows))
-               (message "OpenRouter: cached %d models" count)))
+             (atomic-change-group
+               (let ((count 0))
+                 (dolist (entry data)
+                   (let* ((id (alist-get 'id entry))
+                          (cw (alist-get 'context_length entry)))
+                     (when (and (stringp id) (integerp cw) (> cw 0))
+                       (puthash id cw my/gptel--context-window-cache)
+                       (cl-incf count))))
+                 (when (> count 0)
+                   (my/gptel--cache-save-context-windows))
+                 (message "OpenRouter: cached %d models" count))))
            "gptel-openrouter-all-models"
            10
            120)
