@@ -1181,6 +1181,23 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       "lisp/modules/gptel-tools-agent.el"
       "/tmp/worktree"))))
 
+(ert-deftest regression/auto-experiment/timeout-salvage-output-replaces-template-hypothesis ()
+  "Timeout salvage should not preserve unresolved prompt placeholders."
+  (cl-letf (((symbol-function 'gptel-auto-experiment--target-pending-changes-p)
+             (lambda (&rest _args) t)))
+    (let ((salvaged
+           (gptel-auto-experiment--timeout-salvage-output
+            "Error: Task \"Experiment 1: optimize lisp/modules/gptel-ext-tool-sanitize.el\" (executor) timed out after 1020s total runtime."
+            "HYPOTHESIS: [What CODE change and why]\nCHANGED:\n- pending diff"
+            "lisp/modules/gptel-ext-tool-sanitize.el"
+            "/tmp/worktree")))
+      (should salvaged)
+      (should
+       (string-prefix-p
+        "HYPOTHESIS: Timed-out executor left partial changes in lisp/modules/gptel-ext-tool-sanitize.el for workflow evaluation"
+        salvaged))
+      (should-not (string-match-p "\\[What CODE change and why\\]" salvaged)))))
+
 (ert-deftest regression/auto-experiment/run-salvages-hard-timeout-with-target-diff ()
   "Dirty hard-timeout worktrees should keep flowing into benchmark/comparator evaluation."
   (let* ((project-root (make-temp-file "aw-timeout-salvage" t))
