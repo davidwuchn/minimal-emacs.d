@@ -5536,6 +5536,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (process (start-process-shell-command "aw-test-sleep" buffer "sleep 30")))
     (unwind-protect
         (progn
+          (set-process-query-on-exit-flag process nil)
           (gptel-auto-workflow--register-shell-process process)
           (should (gethash process gptel-auto-workflow--active-shell-processes))
           (cl-letf (((symbol-function 'gptel-auto-workflow--persist-status)
@@ -5549,10 +5550,10 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
               (accept-process-output process 0.1 nil)))
           (should-not (process-live-p process))
           (should (= 0 (hash-table-count gptel-auto-workflow--active-shell-processes))))
-      (when (buffer-live-p buffer)
-        (kill-buffer buffer))
       (when (process-live-p process)
-        (delete-process process)))))
+        (delete-process process))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
 
 (ert-deftest regression/auto-workflow/force-stop-clears-grade-timeouts ()
   "Force-stop should clear pending grade timeouts so experiments cannot resume."
