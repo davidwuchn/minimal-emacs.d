@@ -138,12 +138,14 @@ JSON parsing returns vectors for arrays; this normalizes to lists."
 (defun gptel-benchmark--get-field (obj field)
   "Get FIELD from OBJ, handling both plist and alist formats.
 FIELD should be a keyword like :score.
-For alist lookup, tries both keyword and symbol keys."
-  (or (plist-get obj field)
-      (cdr (assoc field obj))
-      (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
-        (unless (eq alist-key field)
-          (cdr (assoc alist-key obj))))))
+For alist lookup, tries both keyword and symbol keys.
+Returns nil if OBJ is not a valid plist or alist."
+  (when (listp obj)
+    (or (plist-get obj field)
+        (cdr (assoc field obj))
+        (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
+          (unless (eq alist-key field)
+            (cdr (assoc alist-key obj)))))))
 
 (defun gptel-benchmark--plist-get (obj field &optional default)
   "Get FIELD from OBJ with optional DEFAULT value.
@@ -251,22 +253,26 @@ with a warning logged for debugging."
 Returns a new alist with accumulated values.
 TOTALS is an alist of (score-type . accumulated-value).
 SCORES-ALIST is an alist of (score-type . current-score).
-Handles nil scores by treating them as 0."
-  (mapcar (lambda (pair)
-            (let ((score-type (car pair))
-                  (current (cdr pair)))
-              (cons score-type
-                    (gptel-benchmark--accumulate-score
-                     current
-                     (alist-get score-type scores-alist)))))
-          totals))
+Handles nil scores by treating them as 0.
+Returns TOTALS unchanged if SCORES-ALIST is nil."
+  (if (null scores-alist)
+      totals
+    (mapcar (lambda (pair)
+              (let ((score-type (car pair))
+                    (current (cdr pair)))
+                (cons score-type
+                      (gptel-benchmark--accumulate-score
+                       current
+                       (alist-get score-type scores-alist)))))
+            totals)))
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist or alist.
 Returns alist of (score-type . value) for the standard scores.
 Handles nil values gracefully by returning 0.0 for missing scores.
-Handles both plist format (keyword keys) and alist format (symbol or keyword keys)."
-  (when scores
+Handles both plist format (keyword keys) and alist format (symbol or keyword keys).
+Returns nil if SCORES is not a list."
+  (when (listp scores)
     (mapcar (lambda (score-type)
               (cons score-type (or (gptel-benchmark--get-field scores score-type) 0.0)))
             gptel-benchmark--score-types)))
