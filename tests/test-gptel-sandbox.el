@@ -272,6 +272,35 @@ Returns error message string on failure, nil on success."
     (should (equal "Error: Programmatic execution finished without calling result"
                    actual))))
 
+(defun test-sandbox--eval-real-expr (expr &optional bindings)
+  "Evaluate sandbox EXPR with optional BINDINGS in a fresh real env."
+  (require 'gptel-sandbox)
+  (let ((env (gptel-sandbox--make-env)))
+    (dolist (binding bindings)
+      (gptel-sandbox--bind-result (car binding) (cdr binding) env))
+    (gptel-sandbox--eval-expr expr env)))
+
+(ert-deftest sandbox/eval-mapcar/isolates-setq-state-per-item ()
+  "Mapcar should not leak setq state between lambda invocations."
+  (should
+   (equal '((nil "a") (nil "b") (nil "c"))
+          (test-sandbox--eval-real-expr
+           '(mapcar (lambda (item)
+                      (list prev (setq prev item)))
+                    '("a" "b" "c"))
+           '((prev . nil))))))
+
+(ert-deftest sandbox/eval-filter/isolates-setq-state-per-item ()
+  "Filter should not leak setq state between predicate invocations."
+  (should
+   (equal '("a" "b" "c")
+          (test-sandbox--eval-real-expr
+           '(filter (lambda (item)
+                      (setq prev (not prev))
+                      prev)
+                    '("a" "b" "c"))
+           '((prev . nil))))))
+
 ;;; Footer
 
 (provide 'test-gptel-sandbox)
