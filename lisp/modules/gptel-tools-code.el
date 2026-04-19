@@ -397,32 +397,33 @@ MSG is the original error message, FILE-PATH is the file being operated on."
 
 (defun gptel-tools-code--elisp-byte-compile (file-path)
   "Run byte-compile on FILE-PATH and return warnings/errors as a string."
-  (let ((byte-compile-error-on-warn nil)
-        (byte-compile-warnings '(not obsolete free-vars unresolved))
-        (warnings nil)
-        (elc-file (concat file-path "c"))
-        (compile-log-buffer nil)
-        (original-log (get-buffer "*Compile-Log*")))
+  (let* ((byte-compile-error-on-warn nil)
+         (byte-compile-warnings '(not obsolete free-vars unresolved))
+         (byte-compile-verbose nil)
+         (warnings nil)
+         (temp-elc-file (make-temp-file "gptel-tools-code-byte-compile-" nil ".elc"))
+         (compile-log-buffer (generate-new-buffer " *gptel-tools-code-byte-compile-log*"))
+         (byte-compile-log-buffer compile-log-buffer)
+         (byte-compile-dest-file-function (lambda (_source-file) temp-elc-file))
+         (inhibit-message t)
+         (message-log-max nil))
     (unwind-protect
         (progn
           (byte-compile-file file-path)
-          (sit-for 0.5)
-          (setq compile-log-buffer (get-buffer "*Compile-Log*"))
-          (when compile-log-buffer
-            (with-current-buffer compile-log-buffer
-              (save-excursion
-                (goto-char (if original-log
-                               (with-current-buffer original-log (point-max))
-                             (point-min)))
-                (while (not (eobp))
-                  (let ((line (buffer-substring-no-properties
-                               (line-beginning-position) (line-end-position))))
-                    (when (and (not (string-empty-p (string-trim line)))
-                               (string-match-p "[Ww]arning\\|[Ee]rror\\|Compiling\\|Done" line))
-                      (push line warnings)))
-                  (forward-line 1))))))
-      (when (file-exists-p elc-file)
-        (delete-file elc-file)))
+          (with-current-buffer compile-log-buffer
+            (save-excursion
+              (goto-char (point-min))
+              (while (not (eobp))
+                (let ((line (buffer-substring-no-properties
+                             (line-beginning-position) (line-end-position))))
+                  (when (and (not (string-empty-p (string-trim line)))
+                             (string-match-p "[Ww]arning\\|[Ee]rror" line))
+                    (push line warnings)))
+                (forward-line 1)))))
+      (when (file-exists-p temp-elc-file)
+        (delete-file temp-elc-file))
+      (when (buffer-live-p compile-log-buffer)
+        (kill-buffer compile-log-buffer)))
     (if warnings
         (mapconcat #'identity (reverse warnings) "\n")
       "✓ No byte-compile warnings")))
