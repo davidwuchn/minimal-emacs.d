@@ -211,8 +211,10 @@ Supported shape:
              (results nil))
          (unless (listp items)
            (error "Programmatic %s expects a list input" op-name))
-         (let ((child-env (gptel-sandbox--copy-env env)))
-           (dolist (item items (nreverse results))
+         (dolist (item items (nreverse results))
+           ;; Each lambda invocation needs an isolated child env so `setq'
+           ;; state does not leak between map/filter iterations.
+           (let ((child-env (gptel-sandbox--copy-env env)))
              (puthash arg item child-env)
              (let ((value nil))
                (dolist (form body)
