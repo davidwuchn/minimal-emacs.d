@@ -497,7 +497,6 @@ Extracted to reduce duplication in callback cleanup paths."
   (when (overlayp ov)
     (delete-overlay ov)))
 
-(defun gptel-agent-loop--should-retry-p (state error-data)
 (defun gptel-agent-loop--handle-aborted-state (state ov &optional set-aborted)
   "Handle aborted STATE, cleaning up overlay OV.
 When SET-ABORTED is non-nil, also mark state as aborted.
@@ -506,6 +505,8 @@ Extracted from duplicate abort handling patterns."
     (setf (gptel-agent-loop--task-aborted state) t))
   (gptel-agent-loop--cleanup-overlay ov)
   (gptel-agent-loop--deliver-aborted state))
+
+(defun gptel-agent-loop--should-retry-p (state error-data)
   "Return non-nil when STATE should retry after ERROR-DATA.
 Retries when error is transient (or absent) and retry budget remains."
   (and (or (null error-data) (gptel-agent-loop--transient-error-p error-data))
