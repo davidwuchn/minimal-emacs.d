@@ -488,8 +488,7 @@ Extracted from duplicate scheduling patterns."
   "Check if STATE is aborted and deliver abort result.
 Cleans up overlay OV if present.  Returns non-nil if aborted."
   (when (gptel-agent-loop--task-aborted state)
-    (gptel-agent-loop--cleanup-overlay ov)
-    (gptel-agent-loop--deliver-aborted state)
+    (gptel-agent-loop--handle-aborted-state state ov)
     t))
 
 (defun gptel-agent-loop--cleanup-overlay (ov)
@@ -497,6 +496,15 @@ Cleans up overlay OV if present.  Returns non-nil if aborted."
 Extracted to reduce duplication in callback cleanup paths."
   (when (overlayp ov)
     (delete-overlay ov)))
+
+(defun gptel-agent-loop--handle-aborted-state (state ov &optional set-aborted)
+  "Handle aborted STATE, cleaning up overlay OV.
+When SET-ABORTED is non-nil, also mark state as aborted.
+Extracted from duplicate abort handling patterns."
+  (when set-aborted
+    (setf (gptel-agent-loop--task-aborted state) t))
+  (gptel-agent-loop--cleanup-overlay ov)
+  (gptel-agent-loop--deliver-aborted state))
 
 (defun gptel-agent-loop--should-retry-p (state error-data)
   "Return non-nil when STATE should retry after ERROR-DATA.
@@ -517,9 +525,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 
        ((eq resp nil)
         (if (gptel-agent-loop--task-aborted state)
-            (progn
-              (gptel-agent-loop--cleanup-overlay ov)
-              (gptel-agent-loop--deliver-aborted state))
+            (gptel-agent-loop--handle-aborted-state state ov)
           (cond
            ((gptel-agent-loop--should-retry-p state error-data)
             (setf (gptel-agent-loop--task-retries state)
@@ -572,9 +578,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
               (gptel-agent-loop--handle-string-response state resp use-tools)))))
 
        ((eq resp 'abort)
-        (gptel-agent-loop--cleanup-overlay ov)
-        (setf (gptel-agent-loop--task-aborted state) t)
-        (gptel-agent-loop--deliver-aborted state))))))
+        (gptel-agent-loop--handle-aborted-state state ov t))))))
 
 (defun gptel-agent-loop--handle-empty-response (state resp)
   "Handle empty string RESP for STATE.
