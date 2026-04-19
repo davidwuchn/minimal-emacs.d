@@ -5380,11 +5380,148 @@ resume from buffers outside the original project context."
       ,@body)
     ,run-root))
 
+(defun gptel-auto-experiment--analysis-value-present-p (value)
+  "Return non-nil when VALUE contains usable analyzer content."
+  (cond
+   ((null value) nil)
+   ((stringp value) (not (string-empty-p (string-trim value))))
+   ((vectorp value) (> (length value) 0))
+   ((listp value) (not (null value)))
+   (t t)))
+
+(defun gptel-auto-experiment--analysis-list (value)
+  "Return VALUE as a list for analyzer prompt composition."
+  (cond
+   ((null value) nil)
+   ((vectorp value) (append value nil))
+   ((listp value) value)
+   (t (list value))))
+
+(defun gptel-auto-experiment--summarize-previous-results (previous-results)
+  "Return a prompt-friendly summary string for PREVIOUS-RESULTS."
+  (when previous-results
+    (mapconcat
+     (lambda (result)
+       (let* ((experiment-id (gptel-auto-workflow--plist-get result :id "?"))
+              (decision (gptel-auto-experiment--tsv-decision-label result))
+              (hypothesis
+               (truncate-string-to-width
+                (gptel-auto-experiment--tsv-escape
+                 (gptel-auto-workflow--plist-get result :hypothesis "unknown"))
+                220 nil nil "...")))
+         (format "- Experiment %s: %s - %s"
+                 experiment-id decision hypothesis)))
+     previous-results
+     "\n")))
+
+(defun gptel-auto-experiment--fallback-analysis (previous-results)
+  "Return deterministic analysis plist derived from PREVIOUS-RESULTS."
+  (when previous-results
+    (let ((recommendations '()))
+      (push "Do not repeat a previous hypothesis verbatim. Choose a materially different change or explain why it avoids the earlier outcome."
+            recommendations)
+      (when (cl-some
+             (lambda (result)
+               (string= (gptel-auto-experiment--tsv-decision-label result)
+                        "discarded"))
+             previous-results)
+        (push "At least one prior attempt was discarded as no improvement; pivot to a different function, defect, or improvement type."
+              recommendations))
+      (when (cl-some
+             (lambda (result)
+               (member (gptel-auto-experiment--tsv-decision-label result)
+                       '("tests-failed"
+                         "validation-failed"
+                         "inspection-thrash"
+                         "repeated-focus-symbol"
+                         "retry-grade-failed")))
+             previous-results)
+        (push "At least one prior attempt failed validation/tests; avoid editing the same code path again unless the new change directly fixes that failure."
+              recommendations))
+      (list :patterns (gptel-auto-experiment--summarize-previous-results
+                       previous-results)
+            :issues nil
+            :recommendations (nreverse (delete-dups recommendations))))))
+
+(defun gptel-auto-experiment--merge-analysis (analysis previous-results)
+  "Merge ANALYSIS with deterministic history from PREVIOUS-RESULTS."
+  (let* ((fallback (gptel-auto-experiment--fallback-analysis previous-results))
+         (patterns (if (gptel-auto-experiment--analysis-value-present-p
+                        (plist-get analysis :patterns))
+                       (plist-get analysis :patterns)
+                     (plist-get fallback :patterns)))
+         (issues (if (gptel-auto-experiment--analysis-value-present-p
+                      (plist-get analysis :issues))
+                     (plist-get analysis :issues)
+                   (plist-get fallback :issues)))
+         (recommendations
+          (delete-dups
+           (append (gptel-auto-experiment--analysis-list
+                    (plist-get analysis :recommendations))
+                   (gptel-auto-experiment--analysis-list
+                    (plist-get fallback :recommendations))))))
+    (when (or (gptel-auto-experiment--analysis-value-present-p patterns)
+              (gptel-auto-experiment--analysis-value-present-p issues)
+              recommendations)
+      (list :patterns patterns
+            :issues issues
+            :recommendations recommendations))))
+
+(defcustom gptel-auto-experiment-repeat-focus-threshold 2
+  "Prior non-kept attempts on the same changed symbol before short-circuiting repeats."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
+(defun gptel-auto-experiment--extract-focus-symbols (output)
+  "Return deduplicated function-like symbols mentioned in OUTPUT."
+  (let (symbols)
+    (when (stringp output)
+      (with-temp-buffer
+        (insert output)
+        (goto-char (point-min))
+        (while (re-search-forward "`\\([^`\n]+\\)`" nil t)
+          (let ((candidate (match-string 1)))
+            (when (and (stringp candidate)
+                       (string-match-p "--\\|::" candidate)
+                       (not (string-match-p "\\.el\\'" candidate)))
+              (push candidate symbols))))))
+    (nreverse (cl-remove-duplicates symbols :test #'string=))))
+
+(defun gptel-auto-experiment--repeated-focus-match (output previous-results)
+  "Return plist when OUTPUT repeats a changed symbol in PREVIOUS-RESULTS.
+Only counts prior non-kept results and triggers once a symbol appears in at
+least `gptel-auto-experiment-repeat-focus-threshold' previous attempts."
+  (let ((current-symbols (gptel-auto-experiment--extract-focus-symbols output)))
+    (when current-symbols
+      (let ((counts (make-hash-table :test 'equal))
+            matches)
+        (dolist (result previous-results)
+          (unless (gptel-auto-workflow--plist-get result :kept nil)
+            (dolist (symbol
+                     (gptel-auto-experiment--extract-focus-symbols
+                      (gptel-auto-workflow--plist-get result :agent-output "")))
+              (puthash symbol (1+ (gethash symbol counts 0)) counts))))
+        (dolist (symbol current-symbols)
+          (let ((count (gethash symbol counts 0)))
+            (when (>= count gptel-auto-experiment-repeat-focus-threshold)
+              (push (cons symbol count) matches))))
+        (when matches
+          (let* ((sorted (sort matches (lambda (a b) (> (cdr a) (cdr b)))))
+                 (best (car sorted)))
+            (list :symbol (car best)
+                  :count (cdr best)
+                  :matches (nreverse sorted))))))))
+
 (defun gptel-auto-experiment-analyze (previous-results callback)
   "Analyze patterns from PREVIOUS-RESULTS. Call CALLBACK with analysis.
 The analyzer subagent overlay will appear in the current buffer at time of call."
   ;; Capture the current buffer to ensure analyzer overlay appears in right place
-  (let ((analyze-buffer (current-buffer)))
+  (let ((analyze-buffer (current-buffer))
+        (finalize
+         (lambda (analysis)
+           (funcall callback
+                    (gptel-auto-experiment--merge-analysis
+                     analysis previous-results)))))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-analyze)
              previous-results)
@@ -5392,8 +5529,8 @@ The analyzer subagent overlay will appear in the current buffer at time of call.
           (gptel-benchmark-analyze
            previous-results
            "Experiment patterns"
-           callback))
-      (funcall callback nil))))
+           finalize))
+      (funcall finalize nil))))
 
 (defvar gptel-auto-experiment--grade-state (make-hash-table :test 'eql)
   "Hash table for per-grade state. Keyed by grade-id.
@@ -7232,17 +7369,51 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                               (gptel-auto-experiment--timeout-salvage-output
                                agent-output executor-prompt target experiment-worktree))
                              (effective-agent-output
-                              (or salvaged-agent-output agent-output)))
+                              (or salvaged-agent-output agent-output))
+                             (repeated-focus
+                              (gptel-auto-experiment--repeated-focus-match
+                               effective-agent-output previous-results)))
                         (when salvaged-agent-output
                           (message "[auto-exp] Executor timed out after partial changes for %s; evaluating actual worktree diff"
                                    target))
                         (message "[auto-exp] Agent output (first 150 chars): %s"
                                  (my/gptel--sanitize-for-logging effective-agent-output 150))
                         (unless finished
-                           (let ((gptel-auto-experiment--grading-target target)
-                                 (gptel-auto-experiment--grading-worktree experiment-worktree))
-                             (gptel-auto-experiment--grade-with-retry
-                              effective-agent-output
+                          (if repeated-focus
+                              (let* ((hypothesis
+                                      (gptel-auto-experiment--extract-hypothesis
+                                       effective-agent-output))
+                                     (symbol (plist-get repeated-focus :symbol))
+                                     (count (plist-get repeated-focus :count))
+                                     (reason
+                                      (format "Repeated focus on `%s` after %d prior non-kept attempts; choose a different function or subsystem."
+                                              symbol count))
+                                     (exp-result
+                                      (list :target target
+                                            :id experiment-id
+                                            :hypothesis hypothesis
+                                            :score-before baseline
+                                            :score-after 0
+                                            :code-quality baseline-code-quality
+                                            :kept nil
+                                            :duration (- (float-time) start-time)
+                                            :grader-quality 0
+                                            :grader-reason reason
+                                            :comparator-reason "repeated-focus-symbol"
+                                            :analyzer-patterns (format "%s" patterns)
+                                            :agent-output effective-agent-output)))
+                                (setq finished t)
+                                (let ((default-directory experiment-worktree))
+                                  (message "[auto-exp] Repeated focus on %s after %d prior non-kept attempts; discarding without grading"
+                                           symbol count)
+                                  (magit-git-success "checkout" "--" "."))
+                                (cl-incf gptel-auto-experiment--no-improvement-count)
+                                (funcall log-fn run-id exp-result)
+                                (funcall callback exp-result))
+                            (let ((gptel-auto-experiment--grading-target target)
+                                  (gptel-auto-experiment--grading-worktree experiment-worktree))
+                              (gptel-auto-experiment--grade-with-retry
+                               effective-agent-output
                                (lambda (grade)
                                  (gptel-auto-experiment--with-run-context experiment-buffer experiment-worktree workflow-root
                                    (if (gptel-auto-experiment--stale-run-p run-id)
@@ -7673,7 +7844,7 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                  (funcall log-fn
                                                           run-id exp-result)
                                                  (funcall callback exp-result))))))
-                                       ))))))))))))
+                                       )))))))))))))
                 "executor"
                 (format "Experiment %d: optimize %s" experiment-id target)
                 executor-prompt
@@ -7683,6 +7854,14 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 
 
 
+
+(defun gptel-auto-experiment--placeholder-hypothesis-p (hypothesis)
+  "Return non-nil when HYPOTHESIS is still an unresolved prompt template."
+  (let ((trimmed (and (stringp hypothesis) (string-trim hypothesis))))
+    (or (not (gptel-auto-workflow--non-empty-string-p trimmed))
+        (member trimmed '("[What CODE change and why]"
+                          "What CODE change and why"))
+        (string-match-p "\\`\\[What\\b.*\\]\\'" trimmed))))
 
 (defun gptel-auto-experiment--extract-hypothesis (output)
   "Extract HYPOTHESIS from agent OUTPUT.
@@ -7701,9 +7880,15 @@ Tries multiple patterns in order:
    ((gptel-auto-experiment--agent-error-p output)
     "Agent error")
    ((string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
-    (match-string 1 output))
+    (let ((candidate (string-trim (match-string 1 output))))
+      (if (gptel-auto-experiment--placeholder-hypothesis-p candidate)
+          "No hypothesis stated"
+        candidate)))
    ((string-match "\\*\\*HYPOTHESIS\\*\\*:?\\s-*\\([^\n]+\\)" output)
-    (match-string 1 output))
+    (let ((candidate (string-trim (match-string 1 output))))
+      (if (gptel-auto-experiment--placeholder-hypothesis-p candidate)
+          "No hypothesis stated"
+        candidate)))
    ((string-match "[^.]*\\s-+will improve\\s-+[^.]*\\.?" output)
     (let ((match (match-string 0 output)))
       (string-trim match)))
@@ -7860,10 +8045,10 @@ Adapts max-experiments based on API error rate."
                              (setq best-score score-after
                                    baseline-code-quality quality-after
                                    no-improvement-count 0))
-                            (when (and (not kept)
-                                       score-after
-                                       (< score-after best-score))
-                              (cl-incf no-improvement-count))
+                             (when (and (not kept)
+                                        score-after
+                                        (<= score-after best-score))
+                               (cl-incf no-improvement-count))
                             (when hard-timeout
                               (message "[auto-experiment] Hard timeout for %s in experiment %d; skipping retries for this attempt and continuing if budget remains"
                                        target exp-id))

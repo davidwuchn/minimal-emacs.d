@@ -1181,6 +1181,23 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       "lisp/modules/gptel-tools-agent.el"
       "/tmp/worktree"))))
 
+(ert-deftest regression/auto-experiment/timeout-salvage-output-replaces-template-hypothesis ()
+  "Timeout salvage should not preserve unresolved prompt placeholders."
+  (cl-letf (((symbol-function 'gptel-auto-experiment--target-pending-changes-p)
+             (lambda (&rest _args) t)))
+    (let ((salvaged
+           (gptel-auto-experiment--timeout-salvage-output
+            "Error: Task \"Experiment 1: optimize lisp/modules/gptel-ext-tool-sanitize.el\" (executor) timed out after 1020s total runtime."
+            "HYPOTHESIS: [What CODE change and why]\nCHANGED:\n- pending diff"
+            "lisp/modules/gptel-ext-tool-sanitize.el"
+            "/tmp/worktree")))
+      (should salvaged)
+      (should
+       (string-prefix-p
+        "HYPOTHESIS: Timed-out executor left partial changes in lisp/modules/gptel-ext-tool-sanitize.el for workflow evaluation"
+        salvaged))
+      (should-not (string-match-p "\\[What CODE change and why\\]" salvaged)))))
+
 (ert-deftest regression/auto-experiment/run-salvages-hard-timeout-with-target-diff ()
   "Dirty hard-timeout worktrees should keep flowing into benchmark/comparator evaluation."
   (let* ((project-root (make-temp-file "aw-timeout-salvage" t))
@@ -2551,6 +2568,59 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (should (= (length results) 2))
         (should (equal (plist-get (car results) :agent-output) timeout-message))
         (should (equal (plist-get (cadr results) :agent-output) "second experiment"))))))
+
+(ert-deftest regression/auto-experiment/loop-stops-after-tied-no-improvements ()
+  "Tied discards should count toward the no-improvement streak."
+  (let ((gptel-auto-experiment-delay-between 0)
+        (gptel-auto-experiment-max-per-target 5)
+        (gptel-auto-experiment-no-improvement-threshold 2)
+        (gptel-auto-experiment--quota-exhausted nil)
+        (gptel-auto-experiment--api-error-count 0)
+        (runs 0)
+        (results nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+               (lambda (&rest _) '(:eight-keys 0.4)))
+              ((symbol-function 'gptel-auto-experiment--code-quality-score)
+               (lambda () 0.5))
+              ((symbol-function 'gptel-auto-workflow--call-in-run-context)
+               (lambda (_workflow-root fn &optional _buffer _fallback-root)
+                 (funcall fn)))
+              ((symbol-function 'gptel-auto-workflow--run-callback-live-p)
+               (lambda (&rest _) t))
+              ((symbol-function 'gptel-auto-workflow--update-progress)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-auto-experiment--run-with-retry)
+               (lambda (target exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _retry-count)
+                 (cl-incf runs)
+                 (funcall callback
+                          (pcase exp-id
+                            (1 (list :target target
+                                     :id exp-id
+                                     :score-after 0.0
+                                     :kept nil
+                                     :comparator-reason "tests-failed"
+                                     :agent-output "tests failed"))
+                            (2 (list :target target
+                                     :id exp-id
+                                     :score-after 0.4
+                                     :kept nil
+                                     :comparator-reason "Rejected: score tie without >= 0.10 quality gain"
+                                     :agent-output "tie discard"))
+                            (_ (list :target target
+                                     :id exp-id
+                                     :score-after 0.4
+                                     :kept nil
+                                     :agent-output "should not run"))))))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-experiment-loop
+       "lisp/modules/gptel-tools-agent.el"
+       (lambda (loop-results)
+         (setq results loop-results)))
+      (should (= runs 2))
+      (should (= (length results) 2))
+      (should (= (plist-get (car results) :id) 1))
+      (should (= (plist-get (cadr results) :id) 2)))))
 
 (ert-deftest regression/auto-experiment/validation-retry-timeout-does-not-stop-further-experiments ()
   "Timed-out validation repairs should discard one experiment, not the whole target."
@@ -4245,6 +4315,119 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (when (buffer-live-p worktree-buf)
           (kill-buffer worktree-buf))
         (delete-directory project-root t)))))
+
+(ert-deftest regression/auto-experiment/analyze-falls-back-to-previous-results-history ()
+  "Analyzer fallback should preserve prior outcomes when subagent output is unusable."
+  (let* ((gptel-auto-experiment-use-subagents t)
+         (previous-results
+          '((:id 1
+             :target "lisp/modules/gptel-ext-tool-sanitize.el"
+             :hypothesis "Moving doom-loop state from global symbol property to FSM info plist will fix a concurrency bug."
+             :kept nil
+             :comparator-reason "tests-failed")
+            (:id 2
+             :target "lisp/modules/gptel-ext-tool-sanitize.el"
+             :hypothesis "Storing the doom-loop current-run count in the FSM info plist instead of using global symbol properties will fix state isolation issues."
+             :kept nil
+             :comparator-reason "discarded")))
+         result)
+    (cl-letf (((symbol-function 'gptel-benchmark-analyze)
+               (lambda (_data _description cb)
+                 (funcall cb nil))))
+      (gptel-auto-experiment-analyze
+       previous-results
+       (lambda (analysis)
+         (setq result analysis))))
+    (should (stringp (plist-get result :patterns)))
+    (should (string-match-p "Experiment 1: tests-failed"
+                            (plist-get result :patterns)))
+    (should (string-match-p "Experiment 2: discarded"
+                            (plist-get result :patterns)))
+    (should (string-match-p "doom-loop"
+                            (plist-get result :patterns)))
+    (should (cl-some
+             (lambda (text)
+               (string-match-p "Do not repeat a previous hypothesis" text))
+             (plist-get result :recommendations)))
+    (should (cl-some
+             (lambda (text)
+               (string-match-p "failed validation/tests" text))
+             (plist-get result :recommendations)))))
+
+(ert-deftest regression/auto-experiment/repeated-focus-symbol-skips-grading ()
+  "Repeated focus on the same changed symbol should short-circuit before grading."
+  (let* ((project-root (make-temp-file "aw-repeat-focus-root" t))
+         (worktree-dir (make-temp-file "aw-repeat-focus-worktree" t))
+         (worktree-buf (get-buffer-create "*aw-repeat-focus*"))
+         (gptel-auto-workflow--run-id "run-repeat-focus")
+         (result nil)
+         (logged-result nil)
+         (grade-call-count 0)
+         (checkout-call-count 0)
+         (previous-results
+          '((:id 1
+             :target "lisp/modules/gptel-ext-tool-sanitize.el"
+             :hypothesis "Move inspection thrash state save before threshold check."
+             :kept nil
+             :comparator-reason "tests-failed"
+             :agent-output "CHANGED:\n- lisp/modules/gptel-ext-tool-sanitize.el :: `my/gptel--detect-inspection-thrash`\nTask completed")
+            (:id 2
+             :target "lisp/modules/gptel-ext-tool-sanitize.el"
+             :hypothesis "Persist inspection thrash state before early return."
+             :kept nil
+             :comparator-reason "discarded"
+             :agent-output "CHANGED:\n- lisp/modules/gptel-ext-tool-sanitize.el :: `my/gptel--detect-inspection-thrash`\nTask completed"))))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (lambda (_target _experiment-id) worktree-dir))
+                  ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                   (lambda (_worktree-dir) worktree-buf))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results cb)
+                     (funcall cb '(:patterns "history"))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _args) "prompt"))
+                  ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                   (lambda (_timeout cb &rest _args)
+                     (funcall cb
+                              (concat
+                               "HYPOTHESIS: Optimize another path\n"
+                               "CHANGED:\n"
+                               "- lisp/modules/gptel-ext-tool-sanitize.el :: `my/gptel--detect-inspection-thrash`\n"
+                               "Task completed"))))
+                  ((symbol-function 'gptel-auto-experiment--stale-run-p)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'gptel-auto-experiment-grade)
+                   (lambda (&rest _args)
+                     (cl-incf grade-call-count)
+                     (error "grade should not run for repeated focus")))
+                  ((symbol-function 'magit-git-success)
+                   (lambda (&rest args)
+                     (when (equal args '("checkout" "--" "."))
+                       (cl-incf checkout-call-count))
+                     t))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (with-current-buffer worktree-buf
+            (setq default-directory project-root)
+            (gptel-auto-experiment-run
+             "lisp/modules/gptel-ext-tool-sanitize.el" 3 5 0.4 0.5 previous-results
+             (lambda (exp-result)
+               (setq result exp-result))
+             (lambda (_run-id exp-result)
+               (setq logged-result exp-result)))))
+      (when (buffer-live-p worktree-buf)
+        (kill-buffer worktree-buf))
+      (delete-directory worktree-dir t)
+      (delete-directory project-root t))
+    (should result)
+    (should (equal logged-result result))
+    (should (= grade-call-count 0))
+    (should (= checkout-call-count 1))
+    (should (equal (plist-get result :comparator-reason) "repeated-focus-symbol"))
+    (should (string-match-p "my/gptel--detect-inspection-thrash"
+                            (plist-get result :grader-reason)))
+    (should (equal (plist-get result :analyzer-patterns) "history"))))
 
 (ert-deftest regression/subagent/payload-compaction-binds-lexical-byte-state ()
   "Payload compaction should not fail when byte tracking lives in lexical scope."
