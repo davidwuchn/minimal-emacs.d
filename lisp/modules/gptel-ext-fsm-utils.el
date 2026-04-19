@@ -354,45 +354,32 @@ PROACTIVE_MITIGATION: Can be called periodically or after operations
 to ensure registry remains in valid state.
 
 Returns t on success, signals error on failure."
-  (let ((id-to-fsm (make-hash-table :test 'equal))
-        (fsm-to-id (make-hash-table :test 'eq))
-        (fsm-to-count (make-hash-table :test 'eq)))
-    ;; Collect all ID→FSM and FSM→ID mappings
-    (maphash (lambda (k v)
+  (let ((fsm-counts (make-hash-table :test 'eq)))
+    ;; Single pass validation
+    (maphash (lambda (key value)
                (cond
-                ((stringp k) (puthash k v id-to-fsm))
-                ((not (stringp v)) (puthash k v fsm-to-id))))
+                ;; ID → FSM mapping
+                ((stringp key)
+                 ;; Check ID format
+                 (unless (my/gptel--fsm-id-valid-p key)
+                   (error "FSM registry invariant violated: invalid ID format: %s" key))
+                 ;; Check bidirectional consistency
+                 (let ((expected-fsm (gethash key my/gptel--fsm-registry))
+                       (expected-id (gethash value my/gptel--fsm-registry)))
+                   (unless (and (eq expected-fsm value)
+                                (equal expected-id key))
+                     (error "FSM registry invariant violated: bidirectional mismatch for ID %s" key)))
+                 ;; Track FSM usage count
+                 (let ((count (gethash value fsm-counts 0)))
+                   (puthash value (1+ count) fsm-counts)))
+                ;; FSM → ID mapping (already validated above)
+                ((not (stringp value)))))
              my/gptel--fsm-registry)
-    ;; Check bidirectional consistency for ID→FSM mappings
-    (maphash (lambda (id fsm)
-               (let ((lookup-fsm (gethash id my/gptel--fsm-registry))
-                     (lookup-id (gethash fsm my/gptel--fsm-registry)))
-                 (unless (and (eq lookup-fsm fsm)
-                              (equal lookup-id id))
-                   (error "FSM registry invariant violated: bidirectional mismatch for ID %s" id))))
-             id-to-fsm)
-    ;; Check bidirectional consistency for FSM→ID mappings
-    (maphash (lambda (fsm id)
-               (let ((lookup-id (gethash fsm my/gptel--fsm-registry))
-                     (lookup-fsm (gethash id my/gptel--fsm-registry)))
-                 (unless (and (equal lookup-id id)
-                              (eq lookup-fsm fsm))
-                   (error "FSM registry invariant violated: bidirectional mismatch for FSM %s" fsm))))
-             fsm-to-id)
-    ;; Check unique IDs: no FSM should be mapped by multiple IDs
-    (maphash (lambda (_id fsm)
-               (let ((count (gethash fsm fsm-to-count 0)))
-                 (puthash fsm (1+ count) fsm-to-count)))
-             id-to-fsm)
+    ;; Check unique IDs
     (maphash (lambda (fsm count)
                (unless (= count 1)
                  (error "FSM registry invariant violated: FSM mapped by %d IDs" count)))
-             fsm-to-count)
-    ;; Check ID format
-    (maphash (lambda (id _fsm)
-               (unless (my/gptel--fsm-id-valid-p id)
-                 (error "FSM registry invariant violated: invalid ID format: %s" id)))
-             id-to-fsm)
+             fsm-counts)
     t))
 
 (provide 'gptel-ext-fsm-utils)

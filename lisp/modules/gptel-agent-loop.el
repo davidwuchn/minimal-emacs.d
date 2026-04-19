@@ -251,9 +251,13 @@ memory after long sessions or if tasks appear stuck."
 (defun gptel-agent-loop--transient-error-p (error-data)
   "Check if ERROR-DATA represents a transient/retryable error.
 Delegates to `my/gptel--transient-error-p' for consistent error detection.
-Returns nil if the helper function is not available."
+Extracts :code/:status from error-data to enable HTTP status checks."
   (when (and error-data (fboundp 'my/gptel--transient-error-p))
-    (my/gptel--transient-error-p error-data nil)))
+    (let ((http-status (or (when (listp error-data)
+                              (or (plist-get error-data :code)
+                                  (plist-get error-data :status)))
+                            (and (numberp error-data) error-data))))
+      (my/gptel--transient-error-p error-data http-status))))
 
 (defun gptel-agent-loop--maybe-cache-get (agent-type prompt)
   "Return cached subagent result for AGENT-TYPE and PROMPT if available."
@@ -655,9 +659,9 @@ Returns non-nil if result was delivered."
   "Handle string response RESP for STATE.
 USE-TOOLS indicates whether tools were requested on this turn.
 Returns non-nil if result was delivered."
-  (or (gptel-agent-loop--handle-empty-response state resp)
-      (gptel-agent-loop--handle-max-steps-reached state resp)
+  (or (gptel-agent-loop--handle-max-steps-reached state resp)
       (gptel-agent-loop--handle-summary-turn state resp use-tools)
+      (gptel-agent-loop--handle-empty-response state resp)
       (gptel-agent-loop--handle-continuation state resp)
       (gptel-agent-loop--handle-final-response state resp)))
 
