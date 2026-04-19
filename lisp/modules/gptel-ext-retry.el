@@ -718,9 +718,9 @@ EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'."
 (defconst my/gptel--compaction-passes
   `((1 ,(lambda (i) (my/gptel--trim-tool-results-for-retry i 1 t))
        "gptel: Pass 1: trimmed %d tool result(s), now %dKB")
-    (2 #'my/gptel--trim-reasoning-content
+    (2 my/gptel--trim-reasoning-content
        "gptel: Pass 2: stripped reasoning from %d message(s), now %dKB")
-    (3 #'my/gptel--reduce-tools-for-retry
+    (3 my/gptel--reduce-tools-for-retry
        "gptel: Pass 3: removed %d unused tool def(s), now %dKB")
     (4 ,(lambda (_info)
           (and (fboundp 'my/gptel--trim-context-images)
@@ -728,9 +728,9 @@ EDGE CASE: Unknown models fall back to `my/gptel--unbounded-byte-limit'."
        "gptel: Pass 4: trimmed %d context image(s), now %dKB")
     (5 ,(lambda (i) (my/gptel--trim-tool-results-for-retry i 3 t))
        "gptel: Pass 5: truncated %d remaining tool results, now %dKB")
-    (6 #'my/gptel--truncate-old-messages
+    (6 my/gptel--truncate-old-messages
        "gptel: Pass 6: truncated %d old message(s), now %dKB")
-    (7 #'my/gptel--strip-images-from-messages
+    (7 my/gptel--strip-images-from-messages
        "gptel: Pass 7: stripped %d image(s) from messages, now %dKB"))
   "Ordered list of compaction passes for `my/gptel--compact-payload'.
 Each entry is (PASS-NUM TRIM-FN LOG-FMT).

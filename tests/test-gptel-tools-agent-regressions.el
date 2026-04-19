@@ -4463,9 +4463,38 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
            (progn
              (my/gptel--compact-payload fsm)
              nil)
-          (error t)))
+           (error t)))
       (should (= 1 trim-calls))
       (should (> estimate-calls 1)))))
+
+(ert-deftest regression/subagent/payload-compaction-pass-table-keeps-callable-trim-functions ()
+  "Compaction passes must store callables, not raw `(function ...)' forms."
+  (dolist (entry my/gptel--compaction-passes)
+    (pcase-let ((`(,_pass-num ,trim-fn ,_log-fmt) entry))
+      (should-not (and (consp trim-fn) (eq (car trim-fn) 'function)))
+      (should (or (functionp trim-fn)
+                  (and (symbolp trim-fn) (fboundp trim-fn)))))))
+
+(ert-deftest regression/subagent/payload-compaction-pass-2-remains-callable ()
+  "Compaction should be able to execute pass 2 from the published pass table."
+  (let ((info (list :data (list :messages (vector (list :role "assistant"
+                                                        :content ""
+                                                        :reasoning_content "reasoning"))))))
+    (cl-letf (((symbol-function 'my/gptel--estimate-payload-bytes)
+               (lambda (_info) 512))
+              ((symbol-function 'my/gptel--trim-reasoning-content)
+               (lambda (_info) 1)))
+      (cl-progv '(bytes trimmed-total pass)
+          (list 2048 0 0)
+        (should-not
+         (condition-case _err
+             (my/gptel--run-compaction-pass
+              info 2 1024 'bytes 'trimmed-total 'pass
+              (nth 1 (assoc 2 my/gptel--compaction-passes)))
+           (error t)))
+        (should (= trimmed-total 1))
+        (should (= pass 2))
+        (should (= bytes 512))))))
 
 (ert-deftest regression/auto-experiment/empty-localized-commit-keeps-result ()
   "Localized clean no-op commits should not discard kept experiment results."
