@@ -249,6 +249,36 @@ Returns nil if file doesn't exist or isn't readable."
       (when (process-live-p process)
         (delete-process process)))))
 
+(defvar gptel-auto-workflow--active-shell-processes (make-hash-table :test 'eq)
+  "Shell processes currently owned by auto-workflow helpers.")
+
+(defun gptel-auto-workflow--register-shell-process (process)
+  "Track PROCESS so force-stop can terminate it."
+  (when (processp process)
+    (puthash process t gptel-auto-workflow--active-shell-processes))
+  process)
+
+(defun gptel-auto-workflow--unregister-shell-process (process)
+  "Stop tracking PROCESS."
+  (when (and (processp process)
+             (hash-table-p gptel-auto-workflow--active-shell-processes))
+    (remhash process gptel-auto-workflow--active-shell-processes))
+  process)
+
+(defun gptel-auto-workflow--terminate-active-shell-processes ()
+  "Terminate all shell processes currently tracked by auto-workflow."
+  (when (hash-table-p gptel-auto-workflow--active-shell-processes)
+    (let (processes)
+      (maphash (lambda (process _)
+                 (push process processes))
+               gptel-auto-workflow--active-shell-processes)
+      (clrhash gptel-auto-workflow--active-shell-processes)
+      (dolist (process processes)
+        (when (processp process)
+          (ignore-errors
+            (when (process-live-p process)
+              (gptel-auto-workflow--terminate-process-tree process))))))))
+
 (defun gptel-auto-workflow--shell-command-with-timeout (command &optional timeout)
   "Execute shell COMMAND with TIMEOUT (default 30s).
 Returns (output . exit-code) or (error-message . -1) on timeout.
@@ -263,8 +293,9 @@ Uses robust timeout mechanism to prevent blocking indefinitely."
          (start-time (current-time))
          (timer nil))
     (unwind-protect
-        (progn
-          (setq process (start-process-shell-command "shell-timeout" buffer command))
+      (progn
+          (setq process (gptel-auto-workflow--register-shell-process
+                         (start-process-shell-command "shell-timeout" buffer command)))
           ;; Set up a timer to force timeout even if accept-process-output blocks
           (setq timer (run-with-timer timeout-seconds nil
                                       (lambda ()
@@ -274,6 +305,7 @@ Uses robust timeout mechanism to prevent blocking indefinitely."
                                 (lambda (proc _event)
                                   (when (and (not done)
                                              (not (process-live-p proc)))
+                                    (gptel-auto-workflow--unregister-shell-process proc)
                                     (setq done 'finished)
                                     (setq exit-code (process-exit-status proc))
                                     (with-current-buffer buffer
@@ -305,6 +337,8 @@ Uses robust timeout mechanism to prevent blocking indefinitely."
       ;; Cleanup
       (when timer
         (cancel-timer timer))
+      (when process
+        (gptel-auto-workflow--unregister-shell-process process))
       (when (and process (process-live-p process))
         (delete-process process))
       (when (buffer-live-p buffer)
@@ -4900,7 +4934,10 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                 (gptel-auto-experiment--categorize-error review-output))))
          (review-error (and (not approved)
                             (gptel-auto-workflow--review-retryable-error-p review-output)))
-         (run-id (gptel-auto-workflow--current-run-id))
+         (run-id (and (or gptel-auto-workflow--running
+                          (bound-and-true-p gptel-auto-workflow--cron-job-running))
+                      (boundp 'gptel-auto-workflow--run-id)
+                      gptel-auto-workflow--run-id))
          (finish (gptel-auto-workflow--make-idempotent-callback
                    (lambda (success &optional reason)
                      (gptel-auto-workflow--invoke-staging-completion
@@ -5046,12 +5083,32 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                      :analyzer-patterns ""
                      :agent-output ""))
               (funcall finish nil))
-          (let* ((staging-base (gptel-auto-workflow--current-staging-head))
-                 (merge-result
-                  (gptel-auto-workflow--merge-to-staging optimize-branch))
-                 (already-integrated-p (eq merge-result :already-integrated)))
-            (if (not merge-result)
-                (progn
+              (let* ((staging-base (gptel-auto-workflow--current-staging-head))
+                     (merge-result
+                      (gptel-auto-workflow--merge-to-staging optimize-branch))
+                     (already-integrated-p (eq merge-result :already-integrated))
+                     (finish-publish
+                      (lambda (&optional retried)
+                        (gptel-auto-workflow--delete-staging-worktree)
+                        (if (not (gptel-auto-workflow--run-callback-live-p run-id))
+                            (progn
+                              (message "[auto-workflow] Skipping stale staging publish for %s; run %s is no longer active"
+                                       optimize-branch run-id)
+                              (funcall finish nil "stale-staging-publish"))
+                          (if already-integrated-p
+                              (progn
+                                (message
+                                 (if retried
+                                     "[auto-workflow] Candidate already present in staging after refresh; published staging sync only."
+                                   "[auto-workflow] Candidate already present in staging; published staging sync only."))
+                                (funcall finish nil "already-in-staging"))
+                            (message
+                             (if retried
+                                 "[auto-workflow] ✓ Staging pushed after refreshing remote advance."
+                               "[auto-workflow] ✓ Staging pushed. Human must merge to main."))
+                            (funcall finish t))))))
+                (if (not merge-result)
+                    (progn
                   (message "[auto-workflow] ✗ Merge to staging failed, aborting")
                   (gptel-auto-experiment-log-tsv
                    (gptel-auto-workflow--current-run-id)
@@ -5090,14 +5147,7 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                           (funcall finish nil))
                       (message "[auto-workflow] ✓ Staging verification PASSED")
                       (if (gptel-auto-workflow--push-staging)
-                          (progn
-                            (gptel-auto-workflow--delete-staging-worktree)
-                            (if already-integrated-p
-                                (progn
-                                  (message "[auto-workflow] Candidate already present in staging; published staging sync only.")
-                                  (funcall finish nil "already-in-staging"))
-                              (message "[auto-workflow] ✓ Staging pushed. Human must merge to main.")
-                              (funcall finish t)))
+                          (funcall finish-publish nil)
                         (let* ((push-output gptel-auto-workflow--last-staging-push-output)
                                (remote-advanced-p
                                 (gptel-auto-workflow--staging-push-remote-advanced-p
@@ -5111,14 +5161,7 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                                          (retry-reason (plist-get retry-result :reason))
                                          (retry-output (plist-get retry-result :output)))
                                     (if retry-success
-                                        (progn
-                                          (gptel-auto-workflow--delete-staging-worktree)
-                                          (if already-integrated-p
-                                              (progn
-                                                (message "[auto-workflow] Candidate already present in staging after refresh; published staging sync only.")
-                                                (funcall finish nil "already-in-staging"))
-                                            (message "[auto-workflow] ✓ Staging pushed after refreshing remote advance.")
-                                            (funcall finish t)))
+                                        (funcall finish-publish t)
                                       (gptel-auto-workflow--log-staging-step-failure
                                        retry-reason optimize-branch retry-output)
                                       (gptel-auto-workflow--sync-staging-from-main)
@@ -8813,11 +8856,13 @@ Interactive command to recover from hung workflow state."
     (cancel-timer gptel-auto-workflow--cron-job-timer)
     (setq gptel-auto-workflow--cron-job-timer nil))
   (gptel-auto-workflow--stop-status-refresh-timer)
+  (gptel-auto-workflow--terminate-active-shell-processes)
   (setq gptel-auto-workflow--running nil
-        gptel-auto-workflow--cron-job-running nil
-        gptel-auto-workflow--run-project-root nil
-        gptel-auto-workflow--current-project nil
-        gptel-auto-workflow--current-target nil)
+         gptel-auto-workflow--cron-job-running nil
+         gptel-auto-workflow--run-id nil
+         gptel-auto-workflow--run-project-root nil
+         gptel-auto-workflow--current-project nil
+         gptel-auto-workflow--current-target nil)
   (setq gptel-auto-workflow--stats
         (plist-put gptel-auto-workflow--stats :phase "idle"))
   (gptel-auto-workflow--persist-status)
