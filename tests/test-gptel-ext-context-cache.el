@@ -21,6 +21,8 @@
 (declare-function my/gptel--cache-load-context-windows "gptel-ext-context-cache")
 (declare-function my/gptel--alist-partial-match "gptel-ext-context-cache")
 (declare-function my/gptel--lookup-context-window-in-gptel-tables "gptel-ext-context-cache")
+(declare-function my/gptel--openrouter-fetch-context-window "gptel-ext-context-cache")
+(declare-function my/gptel-fetch-all-model-metadata "gptel-ext-context-cache")
 
 (defun test--context-cache-setup ()
   "Load module and reset state for each test."
@@ -228,9 +230,41 @@
     (unwind-protect
         (cl-letf (((symbol-function 'my/gptel--gptel-model-tables)
                    (lambda () (list test-table-symbol))))
-          (should (= (my/gptel--lookup-context-window-in-gptel-tables "minimax-m2.5")
-                     196608)))
+           (should (= (my/gptel--lookup-context-window-in-gptel-tables "minimax-m2.5")
+                      196608)))
       (makunbound test-table-symbol))))
+
+(ert-deftest cache/openrouter-fetch-context-window/ignores-non-list-data ()
+  "Malformed OpenRouter payloads should not signal during single-model fetch."
+  (test--context-cache-setup)
+  (let ((my/gptel--context-window-cache (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'my/gptel--openrouter-fetch-with-callback)
+               (lambda (_url callback &rest _rest)
+                 (funcall callback [((id . "demo") (context_length . 1234))])
+                 t))
+              ((symbol-function 'message) (lambda (&rest _args) nil)))
+      (should-not
+       (condition-case err
+           (my/gptel--openrouter-fetch-context-window "demo")
+         (error err)))
+      (should (= (hash-table-count my/gptel--context-window-cache) 0)))))
+
+(ert-deftest cache/fetch-all-model-metadata/ignores-non-list-data ()
+  "Malformed OpenRouter payloads should not signal during bulk metadata fetch."
+  (test--context-cache-setup)
+  (let ((my/gptel--context-window-cache (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'my/gptel--openrouter-fetch-with-callback)
+               (lambda (_url callback &rest _rest)
+                 (funcall callback [((id . "demo") (context_length . 1234))])
+                 t))
+              ((symbol-function 'my/gptel--cache-save-context-windows)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'message) (lambda (&rest _args) nil)))
+      (should-not
+       (condition-case err
+           (my/gptel-fetch-all-model-metadata)
+         (error err)))
+      (should (= (hash-table-count my/gptel--context-window-cache) 0)))))
 
 (provide 'test-gptel-ext-context-cache)
 
