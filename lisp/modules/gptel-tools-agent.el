@@ -1797,7 +1797,7 @@ subagent callback fired, and avoids reusing a deleted worktree as
                  caller-default-directory
                  (and (buffer-live-p safe-buffer)
                       (buffer-local-value 'default-directory safe-buffer))
-                 (and (boundp 'user-emacs-directory) user-emacs-directory)
+                 user-emacs-directory
                  temporary-file-directory)
                 default-directory)))
       (with-current-buffer safe-buffer
