@@ -104,7 +104,7 @@ TIMEOUT overrides the default benchmark subagent timeout."
             (files gptel-benchmark--subagent-files))
         (if (fboundp 'my/gptel--agent-task-with-timeout)
             (let ((my/gptel-agent-task-timeout
-                    (or timeout gptel-benchmark-subagent-timeout)))
+                   (or timeout gptel-benchmark-subagent-timeout)))
               (my/gptel--agent-task-with-timeout
                callback
                agent-type
@@ -186,8 +186,8 @@ FORBIDDEN:
 ...
 SUMMARY: SCORE: X/Y"
           output
-          (mapconcat (lambda (b) (format "- %s" b)) expected "\n")
-          (mapconcat (lambda (b) (format "- %s" b)) forbidden "\n")))
+          (mapconcat (lambda (b) (concat "- " b)) expected "\n")
+          (mapconcat (lambda (b) (concat "- " b)) forbidden "\n")))
 
 (defun gptel-benchmark--parse-grade-response (response expected forbidden)
   "Parse LLM grading RESPONSE into plist.
@@ -336,11 +336,11 @@ Positive patterns (weighted):
 
 This rewards code that follows Emacs Lisp best practices."
   (let* ((error-handling-terms '("condition-case" "user-error" "error" "signal"
-                                  "cl-assert" "cl-check-type" "assert"))
+                                 "cl-assert" "cl-check-type" "assert"))
          (bad-naming '("my-" "foo-" "bar-" "baz-"))
          (good-predicates '("null" "stringp" "listp" "numberp" "integerp"
-                           "symbolp" "functionp" "boundp" "fboundp" "keywordp"
-                           "arrayp" "sequencep" "consp" "atom" "listp"))
+                            "symbolp" "functionp" "boundp" "fboundp" "keywordp"
+                            "arrayp" "sequencep" "consp" "atom" "listp"))
          (error-score 0.0)
          (naming-score 1.0)
          (predicate-score 0.0)
@@ -397,7 +397,7 @@ Returns plist: (:degraded-p :reason :score)."
                    (t expected-score))))
       (list :degraded-p degraded-p
             :reason (if (> forbidden-matches 0)
-                        (mapconcat #'identity (nreverse reasons) ", ")
+                        (string-join (nreverse reasons) ", ")
                       (if (= expected-matches 0) "no expected keywords" ""))
             :score score))))
 

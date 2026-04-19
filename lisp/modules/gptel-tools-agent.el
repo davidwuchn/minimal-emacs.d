@@ -8873,7 +8873,9 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
       (condition-case-unless-debug err
           (progn
             (gptel-auto-workflow--persist-status)
-            (gptel-auto-workflow--stop-status-refresh-timer))
+            (unless (or gptel-auto-workflow--running
+                        gptel-auto-workflow--cron-job-running)
+              (gptel-auto-workflow--stop-status-refresh-timer)))
         (error
          (message "[auto-workflow] Status refresh failed: %s"
                   (error-message-string err))

@@ -109,6 +109,21 @@ Used by `my/gptel-auto-retry' to compute retry delays.")
   "Maximum delay in seconds for exponential backoff retries.
 Prevents excessively long waits when many retries are needed.")
 
+(defun my/gptel--retry-delay (retries)
+  "Compute exponential backoff delay in seconds for RETRIES attempt.
+Uses `my/gptel--retry-base-delay', `my/gptel--retry-backoff-factor',
+and `my/gptel--retry-max-delay' constants.
+
+ASSUMPTION: retries >= 0; negative values treated as 0.
+BEHAVIOR: delay = min(max-delay, base-delay * backoff-factor^retries)
+EDGE CASE: Negative retries clamped to 0 to prevent sub-second delays.
+TEST: (my/gptel--retry-delay 0) => 4.0
+TEST: (my/gptel--retry-delay 3) => 30.0 (capped)"
+  (let ((r (max 0 (or retries 0))))
+    (min my/gptel--retry-max-delay
+         (* my/gptel--retry-base-delay
+            (expt my/gptel--retry-backoff-factor r)))))
+
 (defconst my/gptel--unbounded-byte-limit 999999999
   "Unbounded byte limit for model-specific context limits.
 Used as fallback when a model is not in `my/gptel-model-context-bytes'
@@ -570,9 +585,7 @@ TEST: Verify with network failure simulation — should retry 3 times with
              (not subagent-p)
              (or (null my/gptel-max-retries) (< retries my/gptel-max-retries))
              (my/gptel--transient-error-p error-data http-status))
-        (let* ((delay (min my/gptel--retry-max-delay
-                           (* my/gptel--retry-base-delay
-                              (expt my/gptel--retry-backoff-factor retries))))
+        (let* ((delay (my/gptel--retry-delay retries))
                (error-msg (my/gptel--format-error-message error-data http-status)))
           (if my/gptel-max-retries
               (message "gptel: API failed with '%s'. Retrying (%d/%d) in %.1fs..."

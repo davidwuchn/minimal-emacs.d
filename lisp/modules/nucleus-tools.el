@@ -586,7 +586,7 @@ Supports JSON Schema-like validators:
             (cond
               ;; Check for missing required arguments
               ((and (null val) (not optional) (not (member type '("boolean" boolean))))
-              (nucleus-tools--validation-error tool-name :required arg-name))
+               (nucleus-tools--validation-error tool-name :required arg-name))
              
              ;; Validate non-null values
              ((not (null val))
