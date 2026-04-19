@@ -8409,6 +8409,14 @@ Relative paths are resolved from the project root."
        (zerop (or (plist-get status :kept) 0))
        (zerop (or (plist-get status :total) 0))))
 
+(defun gptel-auto-workflow--status-owned-by-current-run-p (status)
+  "Return non-nil when STATUS belongs to the current workflow run."
+  (and (listp status)
+       (stringp gptel-auto-workflow--run-id)
+       (not (string-empty-p gptel-auto-workflow--run-id))
+       (equal (plist-get status :run-id)
+              gptel-auto-workflow--run-id)))
+
 (defun gptel-auto-workflow--persist-status ()
   "Persist current workflow status for non-blocking cron health checks."
   (let* ((file (gptel-auto-workflow--status-file))
@@ -8420,7 +8428,9 @@ Relative paths are resolved from the project root."
     ;; stale-active detection; this guard prevents bogus idle rewrites with
     ;; synthetic run ids while a real run is still active elsewhere.
     (when (and (gptel-auto-workflow--status-placeholder-p status)
-               (gptel-auto-workflow--status-active-p existing-status))
+               (gptel-auto-workflow--status-active-p existing-status)
+               (not (gptel-auto-workflow--status-owned-by-current-run-p
+                     existing-status)))
       (setq status existing-status))
     (when dir
       (make-directory dir t))

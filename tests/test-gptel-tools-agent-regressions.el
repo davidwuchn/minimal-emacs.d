@@ -9546,6 +9546,77 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (when (file-exists-p emacs-log)
         (delete-file emacs-log)))))
 
+(ert-deftest regression/auto-workflow/cron-wrapper-recovers-stale-active-timeout ()
+  "Wrapper should restart after a timed-out daemon leaves a stale active snapshot."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (status-dir (make-temp-file "aw-status-dir" t))
+         (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
+         (messages-file (expand-file-name "auto-workflow-messages-tail.txt" status-dir))
+         (calls-file (expand-file-name "calls.txt" status-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (argv-log (make-temp-file "aw-emacsclient-argv"))
+         (emacs-log (make-temp-file "aw-emacs-log"))
+         (fake-emacsclient (make-temp-file "fake-emacsclient" nil ".py"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "echo emacs-invoked >> %s\nexit 0" (shell-quote-argument emacs-log))))
+         (script (expand-file-name "scripts/run-auto-workflow-cron.sh" repo-root))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "AUTO_WORKFLOW_STATUS_FILE=%s" status-file)
+                        (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" messages-file))
+                  process-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (with-temp-file fake-emacsclient
+            (insert "#!/usr/bin/env python3\n"
+                    "from pathlib import Path\n"
+                    "import json, sys, time\n"
+                    (format "with Path(%S).open('a', encoding='utf-8') as handle:\n" argv-log)
+                    "    handle.write(json.dumps(sys.argv) + \"\\n\")\n"
+                    (format "calls_path = Path(%S)\n" calls-file)
+                    "expr = sys.argv[sys.argv.index('--eval') + 1] if '--eval' in sys.argv else ''\n"
+                    "count = int(calls_path.read_text() or '0') if calls_path.exists() else 0\n"
+                    "if expr == 't':\n"
+                    "    count += 1\n"
+                    "    calls_path.write_text(str(count))\n"
+                    "    if count <= 2:\n"
+                    "        time.sleep(5)\n"
+                    "    print('t')\n"
+                    "elif 'gptel-auto-workflow-queue-all-projects' in expr:\n"
+                    "    print('queued')\n"
+                    "else:\n"
+                    "    print('nil')\n"
+                    "raise SystemExit(0)\n"))
+          (set-file-modes fake-emacsclient #o755)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (with-temp-file status-file
+            (insert "(:running t :kept 0 :total 0 :phase \"research\" :run-id \"2026-04-15T080001Z-a628\" :results \"var/tmp/experiments/2026-04-15T080001Z-a628/results.tsv\")\n"))
+          (with-temp-file messages-file
+            (insert "stale workflow log\n"))
+          (set-file-times status-file (time-subtract (current-time) (seconds-to-time 7200)))
+          (set-file-times messages-file (time-subtract (current-time) (seconds-to-time 7200)))
+          (let ((output (shell-command-to-string (format "%s auto-workflow" script))))
+            (should-not (string-match-p "already-running" output)))
+          (with-temp-buffer
+            (insert-file-contents argv-log)
+            (should (string-match-p
+                     (regexp-quote "gptel-auto-workflow-queue-all-projects")
+                     (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running nil" (buffer-string)))
+            (should (string-match-p ":phase \"idle\"" (buffer-string)))))
+      (delete-directory status-dir t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p argv-log)
+        (delete-file argv-log))
+      (when (file-exists-p emacs-log)
+        (delete-file emacs-log)))))
+
 (ert-deftest regression/auto-workflow/recover-all-orphans-untracks-recovered-commits ()
   "Recovered orphan hashes should be removed from the tracking file."
   (let* ((gptel-auto-workflow--run-id nil)
@@ -10008,7 +10079,30 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (insert-file-contents status-file)
             (should (string-match-p ":running t" (buffer-string)))
             (should (string-match-p ":phase \"running\"" (buffer-string)))
-            (should (string-match-p "2026-04-11T105552Z-80d6" (buffer-string)))))
+             (should (string-match-p "2026-04-11T105552Z-80d6" (buffer-string)))))
+      (when (file-exists-p status-file)
+        (delete-file status-file)))))
+
+(ert-deftest regression/auto-workflow/persist-status-rewrites-current-run-placeholder ()
+  "Idle placeholder writes should replace the active snapshot for the same run."
+  (let* ((status-file (make-temp-file "aw-status-live" nil ".sexp"))
+         (run-id "2026-04-11T105552Z-80d6")
+         (gptel-auto-workflow-status-file status-file)
+         (gptel-auto-workflow--run-id run-id)
+         (gptel-auto-workflow--running nil)
+         (gptel-auto-workflow--cron-job-running nil)
+         (gptel-auto-workflow--stats '(:phase "idle" :total 0 :kept 0)))
+    (unwind-protect
+        (progn
+          (with-temp-file status-file
+            (insert (format "(:running t :kept 1 :total 5 :phase \"running\" :run-id \"%s\" :results \"var/tmp/experiments/%s/results.tsv\")\n"
+                            run-id run-id)))
+          (gptel-auto-workflow--persist-status)
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running nil" (buffer-string)))
+            (should (string-match-p ":phase \"idle\"" (buffer-string)))
+            (should (string-match-p run-id (buffer-string)))))
       (when (file-exists-p status-file)
         (delete-file status-file)))))
 
