@@ -659,6 +659,44 @@ FILE-PATH determines the language."
       (when (buffer-live-p buf)
         (kill-buffer buf)))))
 
+(ert-deftest test-gptel-code-elisp-byte-compile-is-silent-and-cleans-output ()
+  "Byte-compile diagnostics should not spam *Messages* or leave sibling .elc files."
+  (let* ((tmp-dir (make-temp-file "gptel-tools-code-byte-compile-" t))
+         (file (expand-file-name "sample-byte-compile.el" tmp-dir))
+         (messages-buffer (get-buffer-create "*Messages*"))
+         start result)
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert ";;; sample-byte-compile.el --- test -*- lexical-binding: t; -*-\n\n")
+            (insert "(defun sample-byte-compile ()\n  t)\n\n")
+            (insert "(provide 'sample-byte-compile)\n"))
+          (setq start (with-current-buffer messages-buffer (point-max)))
+          (setq result (gptel-tools-code--elisp-byte-compile file))
+          (should (equal result "✓ No byte-compile warnings"))
+          (should-not (file-exists-p (concat file "c")))
+          (let ((delta (with-current-buffer messages-buffer
+                         (buffer-substring-no-properties start (point-max)))))
+            (should-not (string-match-p "Compiling " delta))
+            (should-not (string-match-p "Wrote " delta))))
+      (ignore-errors (delete-directory tmp-dir t)))))
+
+(ert-deftest test-gptel-code-elisp-byte-compile-still-returns-errors ()
+  "Byte-compile diagnostics should still surface real compile errors."
+  (let* ((tmp-dir (make-temp-file "gptel-tools-code-byte-compile-warning-" t))
+         (file (expand-file-name "sample-error.el" tmp-dir))
+         result)
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert ";;; sample-error.el --- test -*- lexical-binding: t; -*-\n\n")
+            (insert "(defun sample-error ()\n  (message \"oops\")\n")
+            (insert "(provide 'sample-error)\n"))
+          (setq result (gptel-tools-code--elisp-byte-compile file))
+          (should (string-match-p "Error: End of file during parsing" result))
+          (should-not (file-exists-p (concat file "c"))))
+      (ignore-errors (delete-directory tmp-dir t)))))
+
 (provide 'test-gptel-tools-code)
 
 ;;; test-gptel-tools-code.el ends here
