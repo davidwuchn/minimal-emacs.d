@@ -510,6 +510,9 @@ Returns nil if curl is unavailable or a fetch is already in flight."
         (connect-timeout (or connect-timeout 10))
         (max-time (or max-time 120)))
     (cond
+     ((not (stringp url))
+      (message "OpenRouter: invalid URL (not a string)")
+      nil)
      ((not (executable-find "curl"))
       (message "OpenRouter: curl not found")
       nil)
