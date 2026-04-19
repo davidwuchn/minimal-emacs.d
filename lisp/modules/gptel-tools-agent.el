@@ -491,7 +491,7 @@ Returns non-nil when at least one entry was removed."
   "Return non-nil when COMMIT-HASH resolves to an existing commit object."
   (and (gptel-auto-workflow--non-empty-string-p commit-hash)
        (= 0 (cdr (gptel-auto-workflow--git-result
-                   (format "git cat-file -e %s^{commit}"
+                    (format "git cat-file -e %s^{commit}"
                            (shell-quote-argument commit-hash))
                    30)))))
 
@@ -531,7 +531,27 @@ the workflow base before scanning tracked ledgers."
                         (shell-quote-argument ref)))))
           (when (or (not (string-empty-p ancestor-check))
                     (gptel-auto-workflow--commit-patch-equivalent-p commit-hash ref))
-            (setq integrated t)))))))
+             (setq integrated t)))))))
+
+(defun gptel-auto-workflow--resolve-ref-commit-hash (ref)
+  "Return normalized commit hash for REF, or nil when REF cannot be resolved."
+  (when (gptel-auto-workflow--non-empty-string-p ref)
+    (let* ((rev-result
+            (gptel-auto-workflow--git-result
+             (format "git rev-parse %s"
+                     (shell-quote-argument ref))
+             60))
+           (commit-hash (string-trim (car rev-result))))
+      (and (= 0 (cdr rev-result))
+           (string-match-p "^[a-f0-9]\\{7,40\\}$" commit-hash)
+           commit-hash))))
+
+(defun gptel-auto-workflow--optimize-branch-integrated-p (optimize-branch)
+  "Return non-nil when OPTIMIZE-BRANCH tip is already represented in staging or main."
+  (let* ((optimize-ref (gptel-auto-workflow--ensure-merge-source-ref optimize-branch))
+         (commit-hash (gptel-auto-workflow--resolve-ref-commit-hash optimize-ref)))
+    (and commit-hash
+         (gptel-auto-workflow--commit-integrated-p commit-hash))))
 
 (defun gptel-auto-workflow--track-commit (experiment-id &optional target worktree-dir)
   "Save current commit hash to tracking file for EXPERIMENT-ID.
@@ -4826,22 +4846,40 @@ NOTE: Human must manually merge staging to main after review."
     (setq gptel-auto-workflow--review-retry-count 0)
     (setq gptel-auto-workflow--review-error-retry-count 0)
     (message "[auto-workflow] Starting staging flow for %s" optimize-branch)
-    (gptel-auto-workflow--review-changes
-     optimize-branch
-     (lambda (review-result)
-       (condition-case err
-           (gptel-auto-workflow--staging-flow-after-review
-            optimize-branch
-            review-result
-            completion-callback)
-         (error
-          (message "[auto-workflow] Staging flow callback failed for %s: %s"
-                   optimize-branch
-                   (my/gptel--sanitize-for-logging
-                    (error-message-string err) 200))
-          (ignore-errors (gptel-auto-workflow--delete-staging-worktree))
-          (when completion-callback
-            (my/gptel--invoke-callback-safely completion-callback nil))))))))
+    (let ((skip-review (gptel-auto-workflow--optimize-branch-integrated-p optimize-branch)))
+      (if skip-review
+          (condition-case err
+              (progn
+                (message "[auto-workflow] Candidate already present in staging or main; skipping review for %s"
+                         optimize-branch)
+                (gptel-auto-workflow--staging-flow-after-review
+                 optimize-branch
+                 '(t . "Review skipped: branch already integrated")
+                 completion-callback))
+            (error
+             (message "[auto-workflow] Staging flow callback failed for %s: %s"
+                      optimize-branch
+                      (my/gptel--sanitize-for-logging
+                       (error-message-string err) 200))
+             (ignore-errors (gptel-auto-workflow--delete-staging-worktree))
+             (when completion-callback
+               (my/gptel--invoke-callback-safely completion-callback nil))))
+        (gptel-auto-workflow--review-changes
+         optimize-branch
+         (lambda (review-result)
+           (condition-case err
+               (gptel-auto-workflow--staging-flow-after-review
+                optimize-branch
+                review-result
+                completion-callback)
+             (error
+              (message "[auto-workflow] Staging flow callback failed for %s: %s"
+                       optimize-branch
+                       (my/gptel--sanitize-for-logging
+                        (error-message-string err) 200))
+              (ignore-errors (gptel-auto-workflow--delete-staging-worktree))
+              (when completion-callback
+                (my/gptel--invoke-callback-safely completion-callback nil))))))))))
 
 
 (defun gptel-auto-workflow--staging-flow-after-review (optimize-branch review-result &optional completion-callback)

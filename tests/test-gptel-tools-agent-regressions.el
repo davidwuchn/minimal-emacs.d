@@ -12877,9 +12877,50 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
        "optimize/test"
        (lambda (success)
          (setq completion success)))
-      (should-not completion)
-      (should (equal restore-arg "staging-base"))
-      (should (= sync-count 0)))))
+       (should-not completion)
+       (should (equal restore-arg "staging-base"))
+       (should (= sync-count 0)))))
+
+(ert-deftest regression/auto-workflow/staging-flow-skips-review-for-integrated-branch ()
+  "Staging flow should bypass review when the optimize branch is already integrated."
+  (let (completion-args
+        review-called
+        delete-called)
+    (cl-letf (((symbol-function 'gptel-auto-workflow--assert-main-untouched)
+               (lambda (&rest _) t))
+              ((symbol-function 'gptel-auto-workflow--optimize-branch-integrated-p)
+               (lambda (_branch) t))
+              ((symbol-function 'gptel-auto-workflow--review-changes)
+               (lambda (&rest _args)
+                 (setq review-called t)
+                 (error "review should be skipped")))
+              ((symbol-function 'gptel-auto-experiment--check-scope)
+               (lambda () '(t)))
+              ((symbol-function 'gptel-auto-workflow--current-staging-head)
+               (lambda () "staging-base"))
+              ((symbol-function 'gptel-auto-workflow--merge-to-staging)
+               (lambda (_branch) :already-integrated))
+              ((symbol-function 'gptel-auto-workflow--create-staging-worktree)
+               (lambda () "/tmp/staging"))
+              ((symbol-function 'gptel-auto-workflow--verify-staging)
+               (lambda () '(t . "ok")))
+              ((symbol-function 'gptel-auto-workflow--push-staging)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--delete-staging-worktree)
+               (lambda ()
+                 (setq delete-called t)
+                 t))
+              ((symbol-function 'gptel-auto-experiment-log-tsv)
+               (lambda (&rest _) nil))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-workflow--staging-flow
+       "optimize/test"
+       (lambda (&rest args)
+         (setq completion-args args)))
+      (should-not review-called)
+      (should delete-called)
+      (should (equal completion-args '(nil "already-in-staging"))))))
 
 (ert-deftest regression/auto-workflow/staging-verification-failure-restores-staging-baseline ()
   "Failed staging verification should restore the pre-merge staging baseline."
