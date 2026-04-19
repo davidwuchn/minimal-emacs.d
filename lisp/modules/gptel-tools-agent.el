@@ -7902,6 +7902,9 @@ Adapts max-experiments based on API error rate."
 (defvar gptel-auto-workflow--uniquify-style nil
   "Remember uniquify-buffer-name-style before headless operation.")
 
+(defvar gptel-auto-workflow--compile-angel-on-load-was-enabled nil
+  "Remember whether `compile-angel-on-load-mode' was enabled before headless operation.")
+
 (defvar gptel-auto-workflow--create-lockfiles-value t
   "Remember `create-lockfiles' before headless operation.")
 
@@ -8137,13 +8140,21 @@ In headless mode, marks buffer as unmodified before killing to bypass prompt."
 
 (defun gptel-auto-workflow--enable-headless-suppression ()
   "Enable suppression of interactive prompts for headless operation.
-Also disables auto-revert and uniquify to prevent buffer issues when worktree files change."
+Also disables auto-revert, compile-angel, and uniquify to prevent
+buffer churn in ephemeral workflow worktrees."
   (setq gptel-auto-workflow--headless t)
   ;; Remember and disable auto-revert
   (setq gptel-auto-workflow--auto-revert-was-enabled 
         (bound-and-true-p global-auto-revert-mode))
   (when gptel-auto-workflow--auto-revert-was-enabled
     (global-auto-revert-mode -1))
+  ;; Disable on-load auto-compilation so clean replay/worktree buffers do not
+  ;; spend their first analyzer/executor pass byte-compiling repo files.
+  (setq gptel-auto-workflow--compile-angel-on-load-was-enabled
+        (bound-and-true-p compile-angel-on-load-mode))
+  (when (and gptel-auto-workflow--compile-angel-on-load-was-enabled
+             (fboundp 'compile-angel-on-load-mode))
+    (compile-angel-on-load-mode -1))
   ;; Disable lockfiles so repeated experiment/worktree reuse does not prompt.
   (setq gptel-auto-workflow--create-lockfiles-value create-lockfiles
         create-lockfiles nil)
@@ -8175,7 +8186,8 @@ Set to t when running as daemon/cron to prevent interactive prompts."
 
 (defun gptel-auto-workflow--disable-headless-suppression ()
   "Disable suppression of interactive prompts.
-Restores auto-revert and uniquify if they were enabled before headless operation.
+Restores auto-revert, compile-angel, and uniquify if they were
+enabled before headless operation.
 Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
   (when (and (not gptel-auto-workflow-persistent-headless)
              gptel-auto-workflow--headless)
@@ -8184,6 +8196,11 @@ Does nothing if `gptel-auto-workflow-persistent-headless' is non-nil."
     (when (and (boundp 'gptel-auto-workflow--auto-revert-was-enabled)
                gptel-auto-workflow--auto-revert-was-enabled)
       (global-auto-revert-mode 1))
+    ;; Restore on-load auto-compilation only when this session disabled it.
+    (when (and gptel-auto-workflow--compile-angel-on-load-was-enabled
+               (fboundp 'compile-angel-on-load-mode))
+      (compile-angel-on-load-mode 1))
+    (setq gptel-auto-workflow--compile-angel-on-load-was-enabled nil)
     ;; Restore lockfile behavior
     (setq create-lockfiles gptel-auto-workflow--create-lockfiles-value)
     ;; Restore uniquify

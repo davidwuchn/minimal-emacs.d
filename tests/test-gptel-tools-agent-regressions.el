@@ -162,8 +162,19 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (delete-file mktemp-log))
       (when (file-exists-p mktemp-counter)
         (delete-file mktemp-counter))
-      (when (file-exists-p fake-emacs)
-        (delete-file fake-emacs)))))
+       (when (file-exists-p fake-emacs)
+         (delete-file fake-emacs)))))
+
+(ert-deftest regression/init-system/compile-angel-on-load-skips-noninteractive ()
+  "Batch sessions should not enable compile-angel on-load hooks."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (init-system (expand-file-name "lisp/init-system.el" repo-root)))
+    (with-temp-buffer
+      (insert-file-contents init-system)
+      (should (string-match-p
+               (regexp-quote
+                ":hook (emacs-startup . (lambda ()\n                           (unless noninteractive\n                             (compile-angel-on-load-mode 1))))")
+               (buffer-string))))))
 
 (ert-deftest regression/auto-workflow/verify-nucleus-binds-worktree-root-before-early-init ()
   "verify-nucleus.sh should start from the worktree init dir before loading early-init."
@@ -7283,6 +7294,31 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (gptel-auto-workflow--disable-headless-suppression)
       (should create-lockfiles)
       (should-not gptel-auto-workflow--headless))))
+
+(ert-deftest regression/auto-workflow/headless-suppression-disables-and-restores-compile-angel ()
+  "Headless suppression should suspend compile-angel's on-load hooks during workflow runs."
+  (let ((compile-angel-calls nil)
+        (gptel-auto-workflow--headless nil)
+        (gptel-auto-workflow-persistent-headless nil)
+        (gptel-auto-workflow--compile-angel-on-load-was-enabled nil))
+    (setq compile-angel-on-load-mode t)
+    (unwind-protect
+        (cl-letf (((symbol-function 'advice-add) (lambda (&rest _) nil))
+                  ((symbol-function 'advice-remove) (lambda (&rest _) nil))
+                  ((symbol-function 'global-auto-revert-mode) (lambda (&rest _) nil))
+                  ((symbol-function 'add-hook) (lambda (&rest _) nil))
+                  ((symbol-function 'remove-hook) (lambda (&rest _) nil))
+                  ((symbol-function 'compile-angel-on-load-mode)
+                   (lambda (arg)
+                     (push arg compile-angel-calls)
+                     (setq compile-angel-on-load-mode (> arg 0)))))
+          (gptel-auto-workflow--enable-headless-suppression)
+          (should-not compile-angel-on-load-mode)
+          (should (equal compile-angel-calls '(-1)))
+          (gptel-auto-workflow--disable-headless-suppression)
+          (should compile-angel-on-load-mode)
+          (should (equal compile-angel-calls '(1 -1))))
+      (makunbound 'compile-angel-on-load-mode))))
 
 (ert-deftest regression/auto-workflow/watchdog-clears-cron-job-running ()
   "Watchdog force-stop should clear the cron-job latch."
