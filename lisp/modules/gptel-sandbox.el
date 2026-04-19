@@ -211,16 +211,16 @@ Supported shape:
              (results nil))
          (unless (listp items)
            (error "Programmatic %s expects a list input" op-name))
-         (dolist (item items (nreverse results))
-           (let ((child-env (gptel-sandbox--copy-env env))
-                 (value nil))
+         (let ((child-env (gptel-sandbox--copy-env env)))
+           (dolist (item items (nreverse results))
              (puthash arg item child-env)
-             (dolist (form body)
-               (setq value (gptel-sandbox--eval-expr form child-env)))
-             (if keep-original
-                 (when value
-                   (push item results))
-               (push value results))))))
+             (let ((value nil))
+               (dolist (form body)
+                 (setq value (gptel-sandbox--eval-expr form child-env)))
+               (if keep-original
+                   (when value
+                     (push item results))
+                 (push value results)))))))
       (_
        (error "Programmatic %s requires (lambda (item) ...) and a list" op-name)))))
 
