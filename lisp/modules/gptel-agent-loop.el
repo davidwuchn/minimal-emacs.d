@@ -481,15 +481,14 @@ limit for early exit."
 USE-TOOLS determines tool usage.  DELAY defaults to 0.1 seconds.
 Extracted from duplicate scheduling patterns."
   (gptel-agent-loop--schedule (or delay 0.1)
-   (lambda ()
-     (gptel-agent-loop--request state prompt use-tools nil))))
+                              (lambda ()
+                                (gptel-agent-loop--request state prompt use-tools nil))))
 
 (defun gptel-agent-loop--check-aborted (state ov)
   "Check if STATE is aborted and deliver abort result.
 Cleans up overlay OV if present.  Returns non-nil if aborted."
   (when (gptel-agent-loop--task-aborted state)
-    (gptel-agent-loop--cleanup-overlay ov)
-    (gptel-agent-loop--deliver-aborted state)
+    (gptel-agent-loop--handle-aborted-state state ov)
     t))
 
 (defun gptel-agent-loop--cleanup-overlay (ov)
@@ -499,6 +498,14 @@ Extracted to reduce duplication in callback cleanup paths."
     (delete-overlay ov)))
 
 (defun gptel-agent-loop--should-retry-p (state error-data)
+(defun gptel-agent-loop--handle-aborted-state (state ov &optional set-aborted)
+  "Handle aborted STATE, cleaning up overlay OV.
+When SET-ABORTED is non-nil, also mark state as aborted.
+Extracted from duplicate abort handling patterns."
+  (when set-aborted
+    (setf (gptel-agent-loop--task-aborted state) t))
+  (gptel-agent-loop--cleanup-overlay ov)
+  (gptel-agent-loop--deliver-aborted state))
   "Return non-nil when STATE should retry after ERROR-DATA.
 Retries when error is transient (or absent) and retry budget remains."
   (and (or (null error-data) (gptel-agent-loop--transient-error-p error-data))
@@ -517,9 +524,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 
        ((eq resp nil)
         (if (gptel-agent-loop--task-aborted state)
-            (progn
-              (gptel-agent-loop--cleanup-overlay ov)
-              (gptel-agent-loop--deliver-aborted state))
+            (gptel-agent-loop--handle-aborted-state state ov)
           (cond
            ((gptel-agent-loop--should-retry-p state error-data)
             (setf (gptel-agent-loop--task-retries state)
@@ -572,9 +577,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
               (gptel-agent-loop--handle-string-response state resp use-tools)))))
 
        ((eq resp 'abort)
-        (gptel-agent-loop--cleanup-overlay ov)
-        (setf (gptel-agent-loop--task-aborted state) t)
-        (gptel-agent-loop--deliver-aborted state))))))
+        (gptel-agent-loop--handle-aborted-state state ov t))))))
 
 (defun gptel-agent-loop--handle-empty-response (state resp)
   "Handle empty string RESP for STATE.
@@ -677,10 +680,10 @@ Cache behavior:
             (message "[nucleus] Subagent '%s' cache hit" agent-type)
             (gptel-agent-loop--deliver-result state cached nil))
         (let* ((preset (append (list :include-reasoning nil
-                                    :use-tools use-tools
-                                    :use-context nil
-                                    :stream my/gptel-subagent-stream)
-                              (cdr (assoc agent-type gptel-agent--agents))))
+                                     :use-tools use-tools
+                                     :use-context nil
+                                     :stream my/gptel-subagent-stream)
+                               (cdr (assoc agent-type gptel-agent--agents))))
                (syms (cons 'gptel--preset (gptel--preset-syms preset)))
                (vals (mapcar (lambda (sym)
                                (if (boundp sym) (symbol-value sym) nil))
