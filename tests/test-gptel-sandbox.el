@@ -13,6 +13,12 @@
 (require 'ert)
 (require 'cl-lib)
 
+(declare-function gptel-sandbox--bind-result "gptel-sandbox" (symbol value env))
+(declare-function gptel-sandbox--eval-expr "gptel-sandbox" (expr env))
+(declare-function gptel-sandbox--make-env "gptel-sandbox" ())
+(declare-function gptel-sandbox--run-forms "gptel-sandbox"
+                  (forms env state callback))
+
 ;;; Mock tool structure
 
 (cl-defstruct (test-gptel-tool (:constructor test-gptel-tool-create))
