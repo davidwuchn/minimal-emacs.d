@@ -3054,9 +3054,13 @@ NOTE: Staging branch is never deleted, only the worktree."
 
 (defun gptel-auto-workflow--worktree-base-repo-root ()
   "Return the canonical superproject root for the stable workflow root."
-  (let ((git-common-dir (gptel-auto-workflow--worktree-base-git-common-dir)))
-    (or (and git-common-dir
-             (file-name-directory (directory-file-name git-common-dir)))
+  (let* ((git-common-dir (gptel-auto-workflow--worktree-base-git-common-dir))
+         (repo-root (and git-common-dir
+                         (string-match "\\(.+/\\.git\\)\\(?:/worktrees/[^/]+\\)?\\'"
+                                       (directory-file-name git-common-dir))
+                         (file-name-directory (match-string 1
+                                                            (directory-file-name git-common-dir))))))
+    (or repo-root
         (gptel-auto-workflow--worktree-base-root))))
 
 (defun gptel-auto-workflow--submodule-checkout-git-dir-at-root (root path)
