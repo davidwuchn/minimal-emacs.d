@@ -7343,6 +7343,88 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                 ("branch" "-D" "optimize/agent-riven-r123-exp1")
                 ("branch" "-D" "optimize/cache-riven-r456-exp2")))))))
 
+(ert-deftest regression/auto-workflow/remote-optimize-branches-ignore-ssh-noise ()
+  "Remote optimize branch listing should ignore SSH noise lines."
+  (let ((expected-command
+         (format "git ls-remote --heads origin %s"
+                 (shell-quote-argument "refs/heads/optimize/*"))))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                 (should (equal command expected-command))
+                 (cons
+                  (concat
+                   "mux_client_request_session: read from master failed: Broken pipe\n"
+                   "5043dae3e83ee7ea00e044870e04a40cf986d196\trefs/heads/optimize/agent-riven-exp1\n"
+                   "ddabfb2816264e0fe4198e49bf05ae655771d82c\trefs/heads/optimize/cache-riven-exp2\n")
+                  0))))
+      (should
+       (equal
+        (gptel-auto-workflow--remote-optimize-branches temporary-file-directory)
+        '((:branch "optimize/agent-riven-exp1"
+           :head "5043dae3e83ee7ea00e044870e04a40cf986d196")
+          (:branch "optimize/cache-riven-exp2"
+           :head "ddabfb2816264e0fe4198e49bf05ae655771d82c")))))))
+
+(ert-deftest regression/auto-workflow/cleanup-integrated-remote-optimize-branches-prunes-tracking-refs ()
+  "Startup cleanup should delete integrated remote optimize branches and prune stale tracking refs."
+  (let* ((project-root (make-temp-file "aw-remote-cleanup" t))
+         (integrated-head "5043dae3e83ee7ea00e044870e04a40cf986d196")
+         (pending-head "ddabfb2816264e0fe4198e49bf05ae655771d82c")
+         (tracking-state
+          '("origin/optimize/agent-riven-exp1"
+            "origin/optimize/stale-exp9"
+            "origin/optimize/cache-riven-exp2"))
+         (commands nil)
+         (messages nil)
+         (expected-delete
+          (format "git push origin --delete %s"
+                  (shell-quote-argument "optimize/agent-riven-exp1"))))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--remote-optimize-branches)
+                   (lambda (&optional _proj-root)
+                     (list (list :branch "optimize/agent-riven-exp1"
+                                 :head integrated-head)
+                           (list :branch "optimize/cache-riven-exp2"
+                                 :head pending-head))))
+                  ((symbol-function 'gptel-auto-workflow--remote-tracking-optimize-branches)
+                   (lambda (&optional _proj-root)
+                     tracking-state))
+                  ((symbol-function 'gptel-auto-workflow--commit-integrated-p)
+                   (lambda (head)
+                     (string= head integrated-head)))
+                  ((symbol-function 'gptel-auto-workflow--git-result)
+                   (lambda (command &optional _timeout)
+                     (push command commands)
+                     (cond
+                      ((equal command expected-delete)
+                       (cons "" 0))
+                      ((equal command "git remote prune origin")
+                       (setq tracking-state
+                             '("origin/optimize/cache-riven-exp2"))
+                       (cons "pruned" 0))
+                      (t
+                       (cons "" 1)))))
+                  ((symbol-function 'message)
+                   (lambda (fmt &rest args)
+                     (push (apply #'format fmt args) messages))))
+          (should
+           (= (gptel-auto-workflow--cleanup-integrated-remote-optimize-branches
+               project-root)
+              1))
+          (should (member expected-delete commands))
+          (should (member "git remote prune origin" commands))
+          (should (seq-some
+                   (lambda (msg)
+                     (string-match-p
+                      "Deleted 1 integrated remote optimize branch" msg))
+                   messages))
+          (should (seq-some
+                   (lambda (msg)
+                     (string-match-p
+                      "Pruned 2 stale remote optimize tracking ref" msg))
+                   messages)))
+      (delete-directory project-root t))))
+
 (ert-deftest regression/auto-workflow/discard-worktree-buffers-kills-tracked-gptel-buffer ()
   "Worktree cleanup should kill tracked gptel buffers before path reuse."
   (let* ((project-root (make-temp-file "aw-worktree" t))

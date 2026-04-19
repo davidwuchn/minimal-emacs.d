@@ -2512,6 +2512,41 @@ Each item is a plist with keys :branch and :path."
         (kill-buffer buffer)))
     (nreverse entries)))
 
+(defun gptel-auto-workflow--remote-tracking-optimize-branches (&optional proj-root)
+  "Return local `origin/optimize/*' tracking refs within PROJ-ROOT."
+  (let ((default-directory (or proj-root (gptel-auto-workflow--default-dir))))
+    (if (not (file-directory-p default-directory))
+        nil
+      (let ((result
+             (gptel-auto-workflow--git-result
+              "git for-each-ref --format=%(refname:short) refs/remotes/origin/optimize"
+              60)))
+        (when (= 0 (cdr result))
+          (split-string (string-trim-right (or (car result) "")) "\n" t))))))
+
+(defun gptel-auto-workflow--remote-optimize-branches (&optional proj-root)
+  "Return remote optimize branches within PROJ-ROOT.
+
+Each entry is a plist with `:branch' and `:head'. SSH noise is ignored."
+  (let ((default-directory (or proj-root (gptel-auto-workflow--default-dir)))
+        (entries nil))
+    (if (not (file-directory-p default-directory))
+        nil
+      (let ((result
+             (gptel-auto-workflow--git-result
+              (format "git ls-remote --heads origin %s"
+                      (shell-quote-argument "refs/heads/optimize/*"))
+              180)))
+        (when (= 0 (cdr result))
+          (dolist (line (split-string (or (car result) "") "\n" t))
+            (when (string-match
+                   "^\\([0-9a-f]\\{40\\}\\)\trefs/heads/\\(optimize/.+\\)$"
+                   line)
+              (push (list :branch (match-string 2 line)
+                          :head (match-string 1 line))
+                    entries))))
+        (nreverse entries)))))
+
 (defun gptel-auto-workflow--discard-worktree-buffers (worktree-dir)
   "Abort, kill, and unregister live gptel buffers rooted at WORKTREE-DIR."
   (when (and (stringp worktree-dir)
@@ -9022,10 +9057,73 @@ Works across macOS and Linux."
       (match-string 1 name))
      (t "unknown"))))
 
+(defun gptel-auto-workflow--cleanup-integrated-remote-optimize-branches (&optional proj-root)
+  "Delete remote optimize branches already integrated and prune stale tracking refs.
+
+Only remote optimize branches whose tip commit is already contained in staging or
+main are deleted. Stale `origin/optimize/*' tracking refs are pruned afterward."
+  (let* ((default-directory (or proj-root (gptel-auto-workflow--default-dir))))
+    (if (not (file-directory-p default-directory))
+        0
+      (let* ((tracking-before
+              (length
+               (gptel-auto-workflow--remote-tracking-optimize-branches default-directory)))
+             (remote-branches
+              (gptel-auto-workflow--remote-optimize-branches default-directory))
+             (integrated nil)
+             (deleted 0))
+        (dolist (entry remote-branches)
+          (let ((branch (plist-get entry :branch))
+                (head (plist-get entry :head)))
+            (when (and (gptel-auto-workflow--non-empty-string-p branch)
+                       (gptel-auto-workflow--non-empty-string-p head)
+                       (gptel-auto-workflow--commit-integrated-p head))
+              (push branch integrated))))
+        (let ((pending (nreverse integrated)))
+          (while pending
+            (let ((batch nil)
+                  (count 0))
+              (while (and pending (< count 25))
+                (push (car pending) batch)
+                (setq pending (cdr pending))
+                (cl-incf count))
+              (setq batch (nreverse batch))
+              (let* ((delete-command
+                      (format "git push origin --delete %s"
+                              (mapconcat #'shell-quote-argument batch " ")))
+                     (delete-result
+                      (gptel-auto-workflow--with-skipped-submodule-sync
+                       (lambda ()
+                         (gptel-auto-workflow--git-result delete-command 180)))))
+                (if (= 0 (cdr delete-result))
+                    (cl-incf deleted (length batch))
+                  (message "[auto-workflow] Failed to delete remote optimize branches %s: %s"
+                           (mapconcat #'identity batch ", ")
+                           (my/gptel--sanitize-for-logging (car delete-result) 200)))))))
+        (when (> deleted 0)
+          (message "[auto-workflow] Deleted %d integrated remote optimize branch(es)" deleted))
+        (when (> tracking-before 0)
+          (let ((prune-result
+                 (gptel-auto-workflow--git-result "git remote prune origin" 180)))
+            (if (= 0 (cdr prune-result))
+                (let* ((tracking-after
+                        (length
+                         (gptel-auto-workflow--remote-tracking-optimize-branches
+                          default-directory)))
+                       (pruned (max 0 (- tracking-before tracking-after))))
+                  (when (> pruned 0)
+                    (message "[auto-workflow] Pruned %d stale remote optimize tracking ref(s)"
+                             pruned)))
+              (message "[auto-workflow] Failed to prune origin optimize tracking refs: %s"
+                       (my/gptel--sanitize-for-logging (car prune-result) 200)))))
+        deleted))))
+
 (defun gptel-auto-workflow--cleanup-old-worktrees ()
-  "Remove stale optimize worktrees, directories, and branch refs from previous runs.
+  "Remove stale optimize state from previous runs.
 Called at start of new run to ensure clean state.
-Only removes optimize refs for the current host suffix."
+Local optimize branches are only removed for the current host suffix. Remote
+optimize branches are only removed when their tip commit is already integrated
+into staging or main."
   (let* ((proj-root (gptel-auto-workflow--worktree-base-root))
          (worktree-base-dir (or gptel-auto-workflow-worktree-base
                                 "var/tmp/experiments"))
@@ -9067,6 +9165,9 @@ Only removes optimize refs for the current host suffix."
           (error
            (message "[auto-workflow] Failed to delete optimize branch %s: %s"
                     branch err)))))
+    (cl-incf removed
+             (gptel-auto-workflow--cleanup-integrated-remote-optimize-branches
+              proj-root))
     (when (file-exists-p optimize-dir)
       (let ((dirs (directory-files optimize-dir t pattern)))
         (dolist (dir dirs)
