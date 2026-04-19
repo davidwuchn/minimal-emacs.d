@@ -1198,6 +1198,21 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         salvaged))
       (should-not (string-match-p "\\[What CODE change and why\\]" salvaged)))))
 
+(ert-deftest regression/auto-experiment/timeout-salvage-output-ignores-successful-timeout-mentions ()
+  "Successful executor prose that quotes timeout text should not trigger salvage."
+  (cl-letf (((symbol-function 'gptel-auto-experiment--target-pending-changes-p)
+             (lambda (&rest _args) t)))
+    (should-not
+     (gptel-auto-experiment--timeout-salvage-output
+      (concat
+       "Executor result for task: Experiment 1: optimize lisp/modules/gptel-ext-fsm-utils.el\n"
+       "HYPOTHESIS: Fix the consp branch in my/gptel--coerce-fsm\n"
+       "EVIDENCE:\n"
+       "- Earlier sanitize attempt: Error: Task \"Experiment 1: optimize lisp/modules/gptel-ext-tool-sanitize.el\" (executor) timed out after 1020s total runtime.\n")
+      "HYPOTHESIS: Fix the consp branch in my/gptel--coerce-fsm"
+      "lisp/modules/gptel-ext-fsm-utils.el"
+      "/tmp/worktree"))))
+
 (ert-deftest regression/auto-experiment/run-salvages-hard-timeout-with-target-diff ()
   "Dirty hard-timeout worktrees should keep flowing into benchmark/comparator evaluation."
   (let* ((project-root (make-temp-file "aw-timeout-salvage" t))
@@ -1282,6 +1297,94 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                   captured-grade-output))
           (should (string-match-p "partial work ready for workflow evaluation"
                                   (plist-get result :agent-output))))
+      (when (buffer-live-p worktree-buf)
+        (kill-buffer worktree-buf))
+      (delete-directory project-root t))))
+
+(ert-deftest regression/auto-experiment/run-does-not-salvage-successful-output-with-timeout-text ()
+  "Successful executor output that quotes timeout errors should stay on the normal path."
+  (let* ((project-root (make-temp-file "aw-timeout-no-salvage" t))
+         (worktree-dir (expand-file-name "var/tmp/experiments/optimize/agent-riven-exp1" project-root))
+         (worktree-buf (generate-new-buffer " *aw-timeout-no-salvage*"))
+         (successful-output
+          (concat
+           "Executor result for task: Experiment 1: optimize lisp/modules/gptel-ext-fsm-utils.el\n"
+           "HYPOTHESIS: Fix the consp branch in my/gptel--coerce-fsm\n"
+           "CHANGED:\n"
+           "- lisp/modules/gptel-ext-fsm-utils.el :: `my/gptel--coerce-fsm` - remove the stray `prog1 t` wrapper.\n"
+           "EVIDENCE:\n"
+           "- Earlier sanitize attempt: Error: Task \"Experiment 1: optimize lisp/modules/gptel-ext-tool-sanitize.el\" (executor) timed out after 1020s total runtime.\n"
+           "VERIFY:\n"
+           "- 5 targeted checks passed.\n"))
+         (captured-grade-output nil)
+         (result nil)
+         (decide-called nil))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "lisp/modules" worktree-dir) t)
+          (with-temp-file (expand-file-name "lisp/modules/gptel-ext-fsm-utils.el" worktree-dir)
+            (insert "(defun my/gptel--coerce-fsm (state) state)\n"))
+          (with-current-buffer worktree-buf
+            (setq-local default-directory (file-name-as-directory worktree-dir)))
+          (let ((gptel-auto-experiment-auto-push nil)
+                (gptel-auto-workflow-use-staging nil)
+                (gptel-auto-workflow--running t)
+                (gptel-auto-workflow--run-id "run-timeout-no-salvage"))
+            (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                       (lambda (_target _experiment-id) worktree-dir))
+                      ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
+                       (lambda (_worktree) worktree-buf))
+                      ((symbol-function 'gptel-auto-workflow--resolve-run-root)
+                       (lambda (&optional _root) project-root))
+                      ((symbol-function 'gptel-auto-experiment-analyze)
+                       (lambda (_previous-results cb)
+                         (funcall cb '(:patterns nil))))
+                      ((symbol-function 'gptel-auto-experiment-build-prompt)
+                       (lambda (&rest _args) "HYPOTHESIS: Fix the consp branch in my/gptel--coerce-fsm"))
+                      ((symbol-function 'gptel-auto-experiment--target-pending-changes-p)
+                       (lambda (&rest _args) t))
+                      ((symbol-function 'run-with-timer)
+                       (lambda (&rest _args) :fake-timer))
+                      ((symbol-function 'cancel-timer)
+                       (lambda (&rest _args) nil))
+                      ((symbol-function 'my/gptel--run-agent-tool-with-timeout)
+                       (lambda (_timeout callback _agent _description _prompt &rest _args)
+                         (funcall callback successful-output)))
+                      ((symbol-function 'gptel-auto-experiment-grade)
+                       (lambda (output callback &rest _args)
+                         (setq captured-grade-output output)
+                         (funcall callback '(:score 9 :total 9 :passed t :details "graded"))))
+                      ((symbol-function 'gptel-auto-workflow--create-provisional-experiment-commit)
+                       (lambda (&rest _args) "abc1234"))
+                      ((symbol-function 'gptel-auto-experiment-benchmark)
+                       (lambda (_skip-tests)
+                         '(:passed t :tests-passed t :eight-keys 0.44)))
+                      ((symbol-function 'gptel-auto-experiment--code-quality-score)
+                       (lambda () 0.81))
+                      ((symbol-function 'gptel-auto-experiment-decide)
+                       (lambda (_before _after callback)
+                         (setq decide-called t)
+                         (funcall callback '(:keep nil :reasoning "Local: Winner: A"))))
+                      ((symbol-function 'gptel-auto-workflow--drop-provisional-commit)
+                       (lambda (&rest _args) t))
+                      ((symbol-function 'magit-git-success)
+                       (lambda (&rest _args) t))
+                      ((symbol-function 'gptel-auto-experiment-log-tsv)
+                       (lambda (&rest _args) nil))
+                      ((symbol-function 'message)
+                       (lambda (&rest _args) nil)))
+              (gptel-auto-experiment-run
+               "lisp/modules/gptel-ext-fsm-utils.el" 1 5 0.40 0.50 nil
+               (lambda (exp-result)
+                 (setq result exp-result)))))
+          (should decide-called)
+          (should result)
+          (should (equal captured-grade-output successful-output))
+          (should (equal (plist-get result :hypothesis)
+                         "Fix the consp branch in my/gptel--coerce-fsm"))
+          (should (equal (plist-get result :agent-output) successful-output))
+          (should-not (string-match-p "partial work ready for workflow evaluation"
+                                      (plist-get result :agent-output))))
       (when (buffer-live-p worktree-buf)
         (kill-buffer worktree-buf))
       (delete-directory project-root t))))
@@ -1543,10 +1646,51 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (delete-directory temp-dir t))
     (should result)
     (should (equal (plist-get result :error) grader-error))
-    (should (equal (plist-get result :grader-reason) grader-error))
-    (should (plist-get result :grader-only-failure))
-    (should (gptel-auto-experiment--is-retryable-error-p
-             (plist-get result :error)))))
+     (should (equal (plist-get result :grader-reason) grader-error))
+     (should (plist-get result :grader-only-failure))
+     (should (gptel-auto-experiment--is-retryable-error-p
+              (plist-get result :error)))))
+
+(ert-deftest regression/auto-experiment/run-normal-grade-rejections-are-not-timeouts ()
+  "Normal failed grades should not classify executor prose as timeout/error noise."
+  (let ((result nil)
+        (temp-dir (make-temp-file "exp-worktree" t))
+        (grade-details
+         "Grader result for task: Grade output | EXPECTED: | 1. change clearly described: PASS")
+        (agent-output
+         "Executor result for task: successful candidate\nVERIFY:\n- Mentioned timeout handling in nearby code."))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (lambda (_target _experiment-id) temp-dir))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results cb)
+                     (funcall cb '(:patterns nil))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _args) "prompt"))
+                  ((symbol-function 'run-with-timer)
+                   (lambda (&rest _args) :fake-timer))
+                  ((symbol-function 'cancel-timer)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'my/gptel--run-agent-tool)
+                   (lambda (cb &rest _args)
+                     (funcall cb agent-output)))
+                  ((symbol-function 'gptel-auto-experiment-grade)
+                   (lambda (_output cb &rest _args)
+                     (funcall cb `(:score 0 :total 9 :passed nil :details ,grade-details))))
+                  ((symbol-function 'gptel-auto-experiment-log-tsv)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (gptel-auto-experiment-run
+           "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+           (lambda (exp-result)
+             (setq result exp-result))))
+      (delete-directory temp-dir t))
+    (should result)
+    (should (equal (plist-get result :grader-reason) grade-details))
+    (should (equal (plist-get result :comparator-reason) "grader-rejected"))
+    (should-not (plist-get result :error))
+    (should-not (plist-get result :grader-only-failure))))
 
 (ert-deftest regression/auto-experiment/run-uses-new-worktree-buffer-context ()
   "Later experiments should switch into the new worktree buffer before subagents run."
@@ -1951,7 +2095,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
            (let ((gptel-auto-experiment-time-budget 600)
                  (gptel-auto-experiment-active-grace 300)
                 (gptel-auto-experiment-validation-retry-time-budget 240)
-                (gptel-auto-experiment-validation-retry-active-grace 120))
+                 (gptel-auto-experiment-validation-retry-active-grace 180))
              (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
                         (lambda (_target _experiment-id) worktree-dir))
                       ((symbol-function 'gptel-auto-workflow--get-worktree-buffer)
@@ -1996,7 +2140,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                 captured-graces (nreverse captured-graces))
           (should result)
           (should (equal captured-timeouts '(600 240)))
-          (should (equal captured-graces '(300 120))))
+          (should (equal captured-graces '(300 180))))
       (when (buffer-live-p worktree-buf)
         (kill-buffer worktree-buf))
       (delete-directory project-root t)))))
@@ -2107,6 +2251,15 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                  (+ gptel-auto-experiment-time-budget
                     gptel-auto-experiment-active-grace)))
       (should (> captured-hard-timeout 900)))))
+
+(ert-deftest regression/subagent/default-validation-retry-hard-timeout-keeps-repair-headroom ()
+  "Default validation-retry hard timeout should leave headroom for active repairs."
+  (should (= (+ gptel-auto-experiment-validation-retry-time-budget
+                gptel-auto-experiment-validation-retry-active-grace)
+             420))
+  (should (> (+ gptel-auto-experiment-validation-retry-time-budget
+                gptel-auto-experiment-validation-retry-active-grace)
+             360)))
 
 (ert-deftest regression/subagent/minimax-backend-max-time-keeps-provider-headroom ()
   "MiniMax backend should not undercut long-running executor requests."
@@ -2646,8 +2799,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                     :kept nil
                                     :comparator-reason "retry-grade-failed"
                                     :agent-output
-                                    (format "Error: Task \"Retry: fix validation error in %s\" (executor) timed out after 360s total runtime."
-                                            target))
+                                     (format "Error: Task \"Retry: fix validation error in %s\" (executor) timed out after 420s total runtime."
+                                             target))
                             (list :target target
                                   :id exp-id
                                   :score-after 0.4
@@ -3463,6 +3616,31 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (put 'gptel-auto-workflow-headless-fallback-agents 'customized-value old-headless-customized)
       (put 'gptel-auto-workflow-headless-fallback-agents 'theme-value old-headless-theme))))
 
+(ert-deftest regression/auto-workflow/migrates-legacy-validation-retry-grace ()
+  "Hot reload should migrate the prior validation-retry grace default."
+  (let* ((old-grace gptel-auto-experiment-validation-retry-active-grace)
+         (old-saved (get 'gptel-auto-experiment-validation-retry-active-grace
+                         'saved-value))
+         (old-customized (get 'gptel-auto-experiment-validation-retry-active-grace
+                              'customized-value))
+         (old-theme (get 'gptel-auto-experiment-validation-retry-active-grace
+                         'theme-value)))
+    (unwind-protect
+        (progn
+          (setq gptel-auto-experiment-validation-retry-active-grace
+                gptel-auto-workflow--legacy-validation-retry-active-grace)
+          (put 'gptel-auto-experiment-validation-retry-active-grace 'saved-value nil)
+          (put 'gptel-auto-experiment-validation-retry-active-grace 'customized-value nil)
+          (put 'gptel-auto-experiment-validation-retry-active-grace 'theme-value nil)
+          (let ((migrated (gptel-auto-workflow--migrate-legacy-provider-defaults)))
+            (should (member 'gptel-auto-experiment-validation-retry-active-grace migrated))
+            (should (= gptel-auto-experiment-validation-retry-active-grace
+                       gptel-auto-workflow--current-validation-retry-active-grace))))
+      (setq gptel-auto-experiment-validation-retry-active-grace old-grace)
+      (put 'gptel-auto-experiment-validation-retry-active-grace 'saved-value old-saved)
+      (put 'gptel-auto-experiment-validation-retry-active-grace 'customized-value old-customized)
+      (put 'gptel-auto-experiment-validation-retry-active-grace 'theme-value old-theme))))
+
 (ert-deftest regression/auto-workflow/migrates-legacy-provider-defaults ()
   "Run startup should refresh known legacy headless provider defaults."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
@@ -3773,6 +3951,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                     :comparator-reason ":api-rate-limit")
                             (list :agent-output "Executor result for task: retry success"
                                   :comparator-reason "ok")))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (&rest _args) t))
               ((symbol-function 'run-with-timer)
                (lambda (_secs _repeat fn &rest args)
                  (cl-incf scheduled-retries)
@@ -3809,6 +3989,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                     :comparator-reason ":tool-error")
                             (list :agent-output "Executor result for task: retry success"
                                   :comparator-reason "ok")))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (&rest _args) t))
               ((symbol-function 'run-with-timer)
                (lambda (_secs _repeat fn &rest args)
                  (cl-incf scheduled-retries)
@@ -3845,6 +4027,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                     :comparator-reason ":tool-error")
                             (list :agent-output "Executor result for task: retry success"
                                   :comparator-reason "ok")))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (&rest _args) t))
               ((symbol-function 'run-with-timer)
                (lambda (_secs _repeat fn &rest args)
                  (cl-incf scheduled-retries)
@@ -3881,6 +4065,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                     :comparator-reason ":api-rate-limit")
                             (list :agent-output "Executor result for task: retry success"
                                   :comparator-reason "ok")))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (&rest _args) t))
               ((symbol-function 'run-with-timer)
                (lambda (secs _repeat fn &rest args)
                  (push secs delays)
@@ -3916,6 +4102,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                     :comparator-reason ":tool-error")
                             (list :agent-output "Executor result for task: retry success"
                                   :comparator-reason "ok")))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (&rest _args) t))
               ((symbol-function 'run-with-timer)
                (lambda (_secs _repeat fn &rest args)
                  (cl-incf scheduled-retries)
@@ -4163,10 +4351,51 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (should captured)
         (funcall captured))
       (should (= runs 1))
-      (should (plist-get final-result :stale-run))
-      (should (equal (plist-get final-result :target)
+       (should (plist-get final-result :stale-run))
+       (should (equal (plist-get final-result :target)
                      "lisp/modules/gptel-agent-loop.el"))
-      (should (= (plist-get final-result :id) 1)))))
+       (should (= (plist-get final-result :id) 1)))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-restores-live-target-between-attempts ()
+  "Retry wrapper should restore the live target before rerunning an experiment."
+  (let ((runs 0)
+        (restore-count 0)
+        final-result
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-workflow--run-project-root "/tmp/project/"))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
+                 (cl-incf runs)
+                 (when (= runs 2)
+                   (should (= restore-count 1)))
+                 (funcall callback
+                          (if (= runs 1)
+                              (list :agent-output
+                                    "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 28. See Curl manpage for details.\""
+                                    :comparator-reason ":timeout")
+                            (list :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (target &optional root)
+                 (should (equal target "lisp/modules/gptel-ext-fsm-utils.el"))
+                 (should (equal root "/tmp/project/"))
+                 (cl-incf restore-count)
+                 t))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-ext-fsm-utils.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 2))
+      (should (= restore-count 2))
+      (should (equal (plist-get final-result :agent-output)
+                     "Executor result for task: retry success")))))
 
 (ert-deftest regression/auto-experiment/retry-success-preserves-full-result-shape ()
   "Successful validation retries should keep the normal result/logging shape."
@@ -8259,6 +8488,38 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                    "Dangerous pattern"
                    (gptel-auto-experiment--validate-code file))))
       (delete-file file))))
+
+(ert-deftest regression/auto-workflow/restore-live-target-file-recovers-from-partial-load ()
+  "Restoring a target file should undo partial definitions from a broken worktree load."
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-restore-live-root" t)))
+         (worktree-root (file-name-as-directory (make-temp-file "aw-restore-live-worktree" t)))
+         (target "lisp/modules/aw-restore-live-target.el")
+         (root-file (expand-file-name target project-root))
+         (worktree-file (expand-file-name target worktree-root))
+         (sentinel 'aw-test-restore-live-target))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory root-file) t)
+          (make-directory (file-name-directory worktree-file) t)
+          (with-temp-file root-file
+            (insert ";;; aw-restore-live-target.el -*- lexical-binding: t; -*-\n"
+                    "(defun aw-test-restore-live-target () :root)\n"))
+          (load root-file nil t t)
+          (should (eq (funcall sentinel) :root))
+          (with-temp-file worktree-file
+            (insert ";;; aw-restore-live-target.el -*- lexical-binding: t; -*-\n"
+                    "(defun aw-test-restore-live-target () :poison)\n"
+                    ")\n"))
+          (should-not (condition-case nil
+                          (progn
+                            (load worktree-file nil t t)
+                            t)
+                        (error nil)))
+          (should (eq (funcall sentinel) :poison))
+          (should (gptel-auto-workflow--restore-live-target-file target project-root))
+          (should (eq (funcall sentinel) :root)))
+      (when (fboundp sentinel)
+        (fmakunbound sentinel)))))
 
 (ert-deftest regression/auto-workflow/validate-code-allows-cl-loop-dotted-bindings ()
   "Code validation should handle dotted `cl-loop' bindings without crashing or false positives."
