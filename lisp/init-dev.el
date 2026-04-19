@@ -118,13 +118,13 @@
 
 ;; Python + ty + ruff via rass
 (use-package eglot-python-preset
-  :vc (:url "https://github.com/mwolson/eglot-python-preset")
+  :ensure t
   :custom
   (eglot-python-preset-lsp-server 'rass)
   (eglot-python-preset-rass-tools '(ty ruff)))
 
 ;; TypeScript/JS + CSS + frameworks (Astro/Vue/Svelte)
 (use-package eglot-typescript-preset
-  :vc (:url "https://github.com/mwolson/eglot-typescript-preset"))
+  :ensure t)
 
 (provide 'init-dev)
