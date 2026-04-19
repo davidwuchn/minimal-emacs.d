@@ -5628,9 +5628,10 @@ TARGET and WORKTREE let the grader inspect concrete git evidence."
                                 "Unknown error"))
                (error-category (car (gptel-auto-experiment--categorize-error output))))
           (message "[auto-exp] Executor error detected: %s" error-snippet)
-          (funcall callback (list :score 0 :passed nil
-                                  :details (format "Agent error: %s" error-snippet)
-                                  :error-category error-category))
+          (my/gptel--invoke-callback-safely
+           callback (list :score 0 :passed nil
+                          :details (format "Agent error: %s" error-snippet)
+                          :error-category error-category))
           (cl-return-from gptel-auto-experiment-grade)))
       (puthash grade-id (list :done nil :timer nil)
                gptel-auto-experiment--grade-state)
