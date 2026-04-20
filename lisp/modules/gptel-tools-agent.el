@@ -9395,6 +9395,7 @@ Same as `gptel-auto-workflow-run-async' but safe for cron jobs."
                 (or proj-root
                     (gptel-auto-workflow--default-dir)
                     default-directory)))))
+    (load-file (expand-file-name "lisp/modules/gptel-ext-retry.el" root))
     (load-file (expand-file-name "lisp/modules/nucleus-presets.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-strategic.el" root))
     (load-file (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" root))

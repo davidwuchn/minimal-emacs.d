@@ -5000,6 +5000,27 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (should (= pass 2))
         (should (= bytes 512))))))
 
+(ert-deftest regression/subagent/payload-compaction-pass-accepts-legacy-function-form ()
+  "Compaction should tolerate stale `(function ...)' trim entries on warm daemons."
+  (let ((info (list :data (list :messages (vector (list :role "assistant"
+                                                        :content ""
+                                                        :reasoning_content "reasoning"))))))
+    (cl-letf (((symbol-function 'my/gptel--estimate-payload-bytes)
+               (lambda (_info) 512))
+              ((symbol-function 'my/gptel--trim-reasoning-content)
+               (lambda (_info) 1)))
+      (cl-progv '(bytes trimmed-total pass)
+          (list 2048 0 0)
+        (should-not
+         (condition-case _err
+             (my/gptel--run-compaction-pass
+              info 2 1024 'bytes 'trimmed-total 'pass
+              '(function my/gptel--trim-reasoning-content))
+           (error t)))
+        (should (= trimmed-total 1))
+        (should (= pass 2))
+        (should (= bytes 512))))))
+
 (ert-deftest regression/auto-experiment/empty-localized-commit-keeps-result ()
   "Localized clean no-op commits should not discard kept experiment results."
   (let ((callback-count 0)
@@ -7000,6 +7021,23 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should (member (expand-file-name "lisp/modules/gptel-tools-agent.el" "/tmp/project")
                       loaded))
       (should (equal reloaded "/tmp/project")))))
+
+(ert-deftest regression/auto-workflow/reload-live-support-reloads-retry-module ()
+  "Warm-daemon workflow reloads should refresh retry support too."
+  (let ((loaded nil))
+    (cl-letf (((symbol-function 'load-file)
+               (lambda (path)
+                 (push path loaded)
+                 t))
+              ((symbol-function 'nucleus-presets-setup-agents)
+               (lambda () t))
+              ((symbol-function 'nucleus--after-agent-update)
+               (lambda () t)))
+      (gptel-auto-workflow--reload-live-support "/tmp/project")
+      (should (member (expand-file-name "lisp/modules/gptel-ext-retry.el" "/tmp/project")
+                      loaded))
+      (should (member (expand-file-name "lisp/modules/gptel-auto-workflow-projects.el" "/tmp/project")
+                      loaded)))))
 
 (ert-deftest regression/auto-workflow/cron-safe-disables-headless-on-skip ()
   "Cron-safe should restore headless suppression when the active-use guard skips."
