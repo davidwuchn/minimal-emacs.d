@@ -254,9 +254,9 @@ Delegates to `my/gptel--transient-error-p' for consistent error detection.
 Extracts :code/:status from error-data to enable HTTP status checks."
   (when (and error-data (fboundp 'my/gptel--transient-error-p))
     (let ((http-status (or (when (listp error-data)
-                              (or (plist-get error-data :code)
-                                  (plist-get error-data :status)))
-                            (and (numberp error-data) error-data))))
+                             (or (plist-get error-data :code)
+                                 (plist-get error-data :status)))
+                           (and (numberp error-data) error-data))))
       (my/gptel--transient-error-p error-data http-status))))
 
 (defun gptel-agent-loop--maybe-cache-get (agent-type prompt)
@@ -378,7 +378,7 @@ Patterns are matched case-insensitively."
   (and (stringp text)
        (let ((text-lower (downcase text)))
          (cl-some (lambda (pattern)
-                    (string-match-p (downcase pattern) text-lower))
+                    (string-match-p pattern text-lower))
                   patterns))))
 
 (defun gptel-agent-loop--seems-complete-p (resp)
