@@ -4687,9 +4687,11 @@ Returns t if all files pass syntax check, nil otherwise."
           (condition-case err
               (with-temp-buffer
                 (insert-file-contents file)
-                ;; Use the Elisp syntax table directly so syntax verification
-                ;; cannot trigger mode hooks or other buffer-local setup.
-                (set-syntax-table emacs-lisp-mode-syntax-table)
+                ;; Parse with `emacs-lisp-mode' so syntax-propertize handles
+                ;; reader forms correctly, but suppress mode hooks so staging
+                ;; verification cannot trip unrelated editor setup.
+                (delay-mode-hooks
+                  (emacs-lisp-mode))
                 (goto-char (point-min))
                 (while (not (eobp))
                   (forward-sexp)))
