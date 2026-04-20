@@ -6581,6 +6581,15 @@ Rotates across the top-ranked candidates using EXPERIMENT-ID."
   "Return non-nil when PREVIOUS-RESULTS include inspection-thrash failures."
   (cl-some #'gptel-auto-experiment--inspection-thrash-result-p previous-results))
 
+(defun gptel-auto-experiment--retry-history (previous-results result)
+  "Return retry history from PREVIOUS-RESULTS plus any durable guidance in RESULT.
+Retries should learn from inspection-thrash failures immediately so the next
+prompt activates the focused recovery contract."
+  (if (and result
+           (gptel-auto-experiment--inspection-thrash-result-p result))
+      (append previous-results (list result))
+    previous-results))
+
 (defun gptel-auto-experiment-build-prompt (target experiment-id max-experiments analysis baseline
                                                   &optional previous-results)
   "Build prompt for experiment EXPERIMENT-ID on TARGET.
@@ -7567,23 +7576,25 @@ RETRY-COUNT tracks current retry attempt."
                     (gptel-auto-experiment--hard-quota-exhausted-p quota-source)))
                (api-rate-limit-category
                 (memq error-type '(:api-rate-limit)))
-              (timeout-category
-               (memq error-type '(:timeout)))
-               (retryable-category
-                (or api-rate-limit-category
-                    (and (not hard-timeout)
-                         timeout-category)))
-                (retryable-failure
-                 (and (not grader-only-failure)
-                      (or retryable-category
-                          (and raw-error
-                               (not hard-timeout)
-                               (gptel-auto-experiment--is-retryable-error-p raw-error))))))
-          (gptel-auto-workflow--restore-live-target-file target workflow-root)
-          (when quota-exhausted
-            (setq gptel-auto-experiment--quota-exhausted t))
-          (if (and (not quota-exhausted)
-                   (< retries gptel-auto-experiment-max-retries)
+               (timeout-category
+                (memq error-type '(:timeout)))
+                (retryable-category
+                 (or api-rate-limit-category
+                     (and (not hard-timeout)
+                          timeout-category)))
+                 (retryable-failure
+                  (and (not grader-only-failure)
+                       (or retryable-category
+                           (and raw-error
+                                (not hard-timeout)
+                                (gptel-auto-experiment--is-retryable-error-p raw-error)))))
+                (retry-history
+                 (gptel-auto-experiment--retry-history previous-results result)))
+           (gptel-auto-workflow--restore-live-target-file target workflow-root)
+           (when quota-exhausted
+             (setq gptel-auto-experiment--quota-exhausted t))
+           (if (and (not quota-exhausted)
+                    (< retries gptel-auto-experiment-max-retries)
                    retryable-failure)
              (progn
                (setq attempt-logs nil)
@@ -7595,15 +7606,15 @@ RETRY-COUNT tracks current retry attempt."
                                  (if (gptel-auto-workflow--run-callback-live-p run-id)
                                      (gptel-auto-workflow--call-in-run-context
                                       workflow-root
-                                      (lambda ()
-                                        (gptel-auto-experiment--run-with-retry
-                                         target experiment-id max-experiments baseline baseline-code-quality
-                                         previous-results callback (1+ retries)))
-                                      retry-buffer
-                                      workflow-root)
-                                   (progn
-                                     (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
-                                              experiment-id run-id)
+                                       (lambda ()
+                                         (gptel-auto-experiment--run-with-retry
+                                          target experiment-id max-experiments baseline baseline-code-quality
+                                         retry-history callback (1+ retries)))
+                                       retry-buffer
+                                       workflow-root)
+                                    (progn
+                                      (message "[auto-exp] Skipping stale retry for experiment %d; run %s is no longer active"
+                                               experiment-id run-id)
                                      (funcall callback
                                               (list :target target
                                                     :id experiment-id
