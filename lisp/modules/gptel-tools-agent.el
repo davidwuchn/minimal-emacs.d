@@ -1779,6 +1779,7 @@ TIMESTAMP defaults to `current-time'."
                  updated-state
                  my/gptel--agent-task-state)
         (when (and (not (plist-get updated-state :launching))
+                   (not gptel-auto-workflow--defer-subagent-env-persistence)
                    (plist-get updated-state :process-environment)
                    (fboundp 'gptel-auto-workflow--persist-subagent-process-environment))
           (gptel-auto-workflow--persist-subagent-process-environment
