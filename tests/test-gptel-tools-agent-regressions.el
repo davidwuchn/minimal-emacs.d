@@ -6029,11 +6029,81 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should (= (plist-get gptel-auto-workflow--stats :kept) 1))
       (should (equal gptel-auto-workflow--current-target "two"))
       (funcall (cdr (assoc "two" callbacks)) '((:target "two" :kept nil)))
-      (should (equal completed '((:target "one" :kept t)
-                                 (:target "two" :kept nil))))
-       (should (equal (plist-get gptel-auto-workflow--stats :phase) "complete"))
+        (should (equal completed '((:target "one" :kept t)
+                                  (:target "two" :kept nil))))
+        (should (equal (plist-get gptel-auto-workflow--stats :phase) "complete"))
         (should-not gptel-auto-workflow--running)
         (should-not gptel-auto-workflow--current-target))))
+
+(ert-deftest regression/auto-workflow/run-with-targets-completes-using-run-buffer-state ()
+  "Completion persistence should use the run buffer env and clear active run state."
+  (let* ((live-status-file (make-temp-file "aw-live-status" nil ".sexp"))
+         (live-messages-file (make-temp-file "aw-live-messages" nil ".txt"))
+         (isolated-status-file (make-temp-file "aw-isolated-status" nil ".sexp"))
+         (isolated-messages-file (make-temp-file "aw-isolated-messages" nil ".txt"))
+         (process-environment
+          (append (list (format "AUTO_WORKFLOW_STATUS_FILE=%s" live-status-file)
+                        (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" live-messages-file))
+                  process-environment))
+         (gptel-auto-workflow-status-file "var/tmp/cron/auto-workflow-status.sexp")
+         (gptel-auto-workflow-messages-file "var/tmp/cron/auto-workflow-messages-tail.txt")
+         (gptel-auto-workflow--stats nil)
+         (gptel-auto-workflow--running t)
+         (gptel-auto-workflow--cron-job-running t)
+         (gptel-auto-workflow--run-id "run-complete-env")
+         (gptel-auto-workflow--status-run-id "run-complete-env")
+         (gptel-auto-workflow--current-target nil)
+         (captured-callback nil)
+         (persist-calls nil)
+         (completed nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+                   (lambda () "/tmp/project"))
+                  ((symbol-function 'gptel-auto-experiment-loop)
+                   (lambda (_target cb)
+                     (setq captured-callback cb)))
+                  ((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                   (lambda () nil))
+                  ((symbol-function 'gptel-auto-workflow--stop-status-refresh-timer)
+                   (lambda () nil))
+                  ((symbol-function 'message)
+                   (lambda (&rest _) nil))
+                  ((symbol-function 'gptel-auto-workflow--persist-status)
+                   (lambda ()
+                     (push (list :status-file (gptel-auto-workflow--status-file)
+                                 :messages-file (gptel-auto-workflow--messages-file)
+                                 :status (gptel-auto-workflow--status-plist))
+                           persist-calls))))
+          (gptel-auto-workflow--run-with-targets
+           '("one")
+           (lambda (results)
+             (setq completed results)))
+          (with-temp-buffer
+            (setq-local process-environment
+                        (append (list (format "AUTO_WORKFLOW_STATUS_FILE=%s" isolated-status-file)
+                                      (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" isolated-messages-file))
+                                process-environment))
+            (funcall captured-callback '((:target "one" :kept t))))
+          (should (equal completed '((:target "one" :kept t))))
+          (should-not gptel-auto-workflow--running)
+          (should-not gptel-auto-workflow--cron-job-running)
+          (should-not gptel-auto-workflow--run-id)
+          (should (equal gptel-auto-workflow--status-run-id "run-complete-env"))
+          (should-not
+           (seq-some (lambda (call)
+                       (or (equal (plist-get call :status-file) isolated-status-file)
+                           (equal (plist-get call :messages-file) isolated-messages-file)))
+                     persist-calls))
+          (let ((final-status (plist-get (car persist-calls) :status)))
+            (should-not (plist-get final-status :running))
+            (should (equal (plist-get final-status :phase) "complete"))
+            (should (equal (plist-get final-status :run-id) "run-complete-env"))
+            (should (equal (plist-get final-status :results)
+                           "var/tmp/experiments/run-complete-env/results.tsv"))))
+      (dolist (file (list live-status-file live-messages-file
+                          isolated-status-file isolated-messages-file))
+        (when (file-exists-p file)
+          (delete-file file))))))
 
 (ert-deftest regression/auto-workflow/run-with-targets-kept-counts-unique-targets ()
   "Workflow kept count should track distinct improved targets, not kept experiments."
@@ -10651,6 +10721,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
 (ert-deftest regression/auto-workflow/status-plist-omits-run-metadata-when-idle ()
   "Idle status should not synthesize run metadata when no run is active."
   (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--status-run-id nil)
         (gptel-auto-workflow--running nil)
         (gptel-auto-workflow--cron-job-running nil)
         (gptel-auto-workflow--stats '(:phase "idle" :total 5 :kept 0)))
@@ -10658,9 +10729,24 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                    '(:running nil
                      :kept 0
                      :total 5
-                     :phase "idle"
-                     :run-id nil
-                     :results nil)))))
+                      :phase "idle"
+                      :run-id nil
+                      :results nil)))))
+
+(ert-deftest regression/auto-workflow/status-plist-keeps-terminal-run-metadata ()
+  "Completed workflow status should keep the last run metadata after cleanup."
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--status-run-id "2026-04-21T030002Z-d267")
+        (gptel-auto-workflow--running nil)
+        (gptel-auto-workflow--cron-job-running nil)
+        (gptel-auto-workflow--stats '(:phase "complete" :total 4 :kept 1)))
+    (should (equal (gptel-auto-workflow--status-plist)
+                   '(:running nil
+                     :kept 1
+                     :total 4
+                     :phase "complete"
+                     :run-id "2026-04-21T030002Z-d267"
+                     :results "var/tmp/experiments/2026-04-21T030002Z-d267/results.tsv")))))
 
 (ert-deftest regression/auto-workflow/status-file-honors-environment-override ()
   "Workflow status file should honor AUTO_WORKFLOW_STATUS_FILE."
