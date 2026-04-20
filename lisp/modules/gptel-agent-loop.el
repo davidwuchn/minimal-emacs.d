@@ -459,6 +459,16 @@ not planning more work. Uses pre-compiled pattern for performance on hot path."
              (string-match-p gptel-agent-loop--finishing-patterns-compiled resp)
            (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--finishing-patterns)))))
 
+(defun gptel-agent-loop--continuation-count (state)
+  "Return continuation count for STATE, defaulting to 0 if nil."
+  (or (gptel-agent-loop--task-continuation-count state) 0))
+
+(defun gptel-agent-loop--increment-continuation-count (state)
+  "Increment and return the new continuation count for STATE.
+Assumes STATE is a valid task structure."
+  (setf (gptel-agent-loop--task-continuation-count state)
+        (1+ (gptel-agent-loop--continuation-count state))))
+
 (defun gptel-agent-loop--continuation-needed-p (state resp)
   "Return non-nil when STATE should continue after RESP.
 Only continues if tools were called AND model seems to be
@@ -466,7 +476,7 @@ planning without action.  Also checks continuation count
 limit for early exit."
   (unless (stringp resp)
     (setq resp ""))
-  (let ((cont-count (or (gptel-agent-loop--task-continuation-count state) 0)))
+  (let ((cont-count (gptel-agent-loop--continuation-count state)))
     (and gptel-agent-loop-force-completion
          gptel-agent-loop-hard-loop
          (< cont-count gptel-agent-loop-max-continuations)
@@ -630,8 +640,7 @@ Returns non-nil if result was delivered."
   "Handle STATE when continuation is needed after RESP.
 Returns non-nil if result was delivered."
   (when (gptel-agent-loop--continuation-needed-p state resp)
-    (let ((cont-count (1+ (or (gptel-agent-loop--task-continuation-count state) 0))))
-      (setf (gptel-agent-loop--task-continuation-count state) cont-count)
+    (let ((cont-count (gptel-agent-loop--increment-continuation-count state)))
       (if gptel-agent-loop-hard-loop
           (progn
             (message "[RunAgent] Auto-continuing after %d steps (continuation %d/%d)..."
