@@ -1113,6 +1113,21 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
              "Rejected: score tie without >= 0.10 quality gain"
              (plist-get decision :reasoning)))))
 
+(ert-deftest regression/auto-experiment/does-not-promote-rubric-bug-keyword-ties ()
+  "Rubric boilerplate mentioning 'fixes bug' must not trigger tie promotion."
+  (let ((decision
+         (gptel-auto-experiment--promote-correctness-fix-decision
+          '(:keep nil
+            :reasoning "Winner: A | Rejected: score tie without >= 0.10 quality gain"
+            :improvement (:score 0.0 :quality 0.05 :combined 0.02))
+          t 5 5
+          "Grader result for task: Grade output | EXPECTED: | 1. change clearly described: PASS - Output clearly explains the issue (unconditional stop before condition check) and the fix (moving stop inside the when block) | 2. change is minimal and focused: PASS - Single line moved from outside to inside the when block; no other changes | 3. improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability: PASS - Improves correctness (no wasteful timer cancellation when conditions aren't met) and performance (avoids unnecessary stop/start operations) | 4. verification attempted (byte-compile, nucleus, tests, or manual): PASS - Verification performed: verify-nucleus.sh, byte-compile, and checkdoc all passed | FORBIDDEN: | 1. large refactor unrelated to stated improvement: PASS - No large refactor; change is precisely targeted | 2. changed security files without review: PASS - No security files involved | 3. no description or unclear purpose: PASS - Purpose is clear: fix redundant timer cancellation logic | 4. style-only change without functional impact: PASS - Change has clear functional impact on behavior | 5. replaces working code without clear improvement: PASS - Clear improvement in avoiding unnecessary operations | SUMMARY: SCORE: 5/5"
+          "Moving the timer stop operation inside the conditional check in `gptel-auto-workflow--start-status-refresh-timer` prevents unnecessary timer cancellation when conditions are not met, improving both correctness and avoiding wasteful operations.")))
+    (should-not (plist-get decision :keep))
+    (should (string-match-p
+             "Rejected: score tie without >= 0.10 quality gain"
+             (plist-get decision :reasoning)))))
+
 (ert-deftest regression/auto-experiment/does-not-promote-non-correctness-ties ()
   "Non-correctness ties should still be discarded."
   (let ((decision

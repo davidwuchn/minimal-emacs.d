@@ -6379,6 +6379,12 @@ GRADE-TOTAL can be nil when the grader omits an explicit denominator."
              "making the control flow explicit"
              "consistent with "
              "reducing code duplication"
+             "avoid unnecessary"
+             "avoids unnecessary"
+             "unnecessary timer cancellation"
+             "unnecessary stop/start operations"
+             "wasteful operations"
+             "redundant timer cancellation"
              "edge case"
              "edge cases"
              "could "
@@ -6386,10 +6392,32 @@ GRADE-TOTAL can be nil when the grader omits an explicit denominator."
              "may "))
      text)))
 
+(defun gptel-auto-experiment--grade-explanation-text (grade-details)
+  "Return explanation-only text extracted from GRADE-DETAILS.
+When the grader emits rubric bullets like `PASS - ...', ignore the rubric labels
+and preserve only the explanatory text to avoid matching static prompt wording."
+  (when (stringp grade-details)
+    (let ((start 0)
+          explanations)
+      (while (string-match
+              (rx (or "PASS - " "FAIL - ")
+                  (group (*? (not (any "|")))))
+              grade-details
+              start)
+        (let ((segment (string-trim (match-string 1 grade-details))))
+          (unless (string-empty-p segment)
+            (push segment explanations)))
+        (setq start (match-end 0)))
+      (if explanations
+          (string-join (nreverse explanations) "\n")
+        grade-details))))
+
 (defun gptel-auto-experiment--grader-indicates-correctness-fix-p (grade-details)
   "Return non-nil when GRADE-DETAILS describes a real correctness fix.
 Speculative or purely defensive hardening language does not count."
-  (when (stringp grade-details)
+  (let ((grade-signals
+         (gptel-auto-experiment--grade-explanation-text grade-details)))
+    (when (stringp grade-signals)
     (let ((case-fold-search t))
       (and
        (string-match-p
@@ -6423,10 +6451,10 @@ Speculative or purely defensive hardening language does not count."
                  "actual functional bug"
                  "actual functional bugs"
                  "demonstrably buggy"))
-        grade-details)
+        grade-signals)
         (not
          (gptel-auto-experiment--speculative-correctness-language-p
-          grade-details))))))
+          grade-signals)))))))
 
 (defun gptel-auto-experiment--promote-correctness-fix-decision
     (decision tests-passed grade-score grade-total grade-details &optional hypothesis)
