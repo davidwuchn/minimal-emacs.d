@@ -13265,6 +13265,27 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (kill-buffer buf))
       (delete-directory dir t))))
 
+(ert-deftest regression/auto-workflow/check-el-syntax-skips-mode-hooks ()
+  "Syntax verification should not run `emacs-lisp-mode-hook'."
+  (let* ((dir (make-temp-file "gptel-syntax-hooks-" t))
+         (file (expand-file-name "ok.el" dir))
+         (buf (generate-new-buffer "*syntax-probe*"))
+         (hook-fired nil)
+         (emacs-lisp-mode-hook
+          (list (lambda ()
+                  (setq hook-fired t)
+                  (error "mode hook should not run during syntax verification")))))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun gptel-syntax-hook-safe ()\n  t)\n"))
+          (should (gptel-auto-workflow--check-el-syntax dir buf))
+          (should-not hook-fired)
+          (should (equal "" (with-current-buffer buf (buffer-string)))))
+      (when (buffer-live-p buf)
+        (kill-buffer buf))
+      (delete-directory dir t))))
+
 (ert-deftest regression/auto-workflow/verify-staging-syntax-failure-does-not-crash ()
   "Syntax failures should fail verification cleanly instead of crashing the staging callback."
   (let ((gptel-auto-workflow--staging-worktree-dir "/tmp/staging")
