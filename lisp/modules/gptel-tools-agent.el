@@ -5324,18 +5324,20 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                         (not (file-equal-p proj-root worktree)))
                    (gptel-auto-workflow--worktree-needs-submodule-hydration-p worktree))))
           (default-directory worktree)
-          (isolated-status-file (let ((path (make-temp-file "auto-workflow-status-" nil ".sexp")))
-                                  (delete-file path)
-                                  path))
-          (process-environment
-           (append
-            (list "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
-                  (format "AUTO_WORKFLOW_STATUS_FILE=%s" isolated-status-file))
-            (cl-remove-if
-             (lambda (entry)
-               (or (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" entry)
-                   (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" entry)
-                   (string-prefix-p "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=" entry)
+           (isolated-status-file (let ((path (make-temp-file "auto-workflow-status-" nil ".sexp")))
+                                   (delete-file path)
+                                   path))
+           (isolated-server-name (make-temp-name "copilot-auto-workflow-test-"))
+           (process-environment
+            (append
+             (list "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
+                   (format "AUTO_WORKFLOW_STATUS_FILE=%s" isolated-status-file)
+                   (format "AUTO_WORKFLOW_EMACS_SERVER=%s" isolated-server-name))
+             (cl-remove-if
+              (lambda (entry)
+                (or (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" entry)
+                    (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" entry)
+                    (string-prefix-p "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=" entry)
                    (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" entry)))
              process-environment)))
           (test-script (expand-file-name "scripts/run-tests.sh" worktree))
