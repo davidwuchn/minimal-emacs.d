@@ -1098,6 +1098,21 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
              "Rejected: score tie without >= 0.10 quality gain"
              (plist-get decision :reasoning)))))
 
+(ert-deftest regression/auto-experiment/does-not-promote-speculative-clarity-bugfix-ties ()
+  "Clarity-only hypotheses with speculative bug prose must not override the tie gate."
+  (let ((decision
+         (gptel-auto-experiment--promote-correctness-fix-decision
+          '(:keep nil
+            :reasoning "Winner: A | Rejected: score tie without >= 0.10 quality gain"
+            :improvement (:score 0.0 :quality 0.07 :combined 0.03))
+          t 5 5
+          "Identifies this as a bug fix where `unless` wrapping the entire recursion caused inconsistent behavior with cycle detection. Fix makes control flow explicit and matches the pattern in `my/gptel--coerce-fsm`."
+          "Restructuring the cons branch in `my/gptel--collect-all-fsms` to separate cycle detection from recursion improves code Clarity by making the control flow explicit and consistent with `my/gptel--coerce-fsm`. The change ensures results are always collected via `append` rather than conditionally, preventing potential edge cases where recursion might be skipped.")))
+    (should-not (plist-get decision :keep))
+    (should (string-match-p
+             "Rejected: score tie without >= 0.10 quality gain"
+             (plist-get decision :reasoning)))))
+
 (ert-deftest regression/auto-experiment/does-not-promote-non-correctness-ties ()
   "Non-correctness ties should still be discarded."
   (let ((decision
