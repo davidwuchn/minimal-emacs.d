@@ -8225,6 +8225,21 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                           "What CODE change and why"))
         (string-match-p "\\`\\[What\\b.*\\]\\'" trimmed))))
 
+(defun gptel-auto-experiment--extract-last-explicit-hypothesis (output pattern)
+  "Return the last non-placeholder hypothesis in OUTPUT matching PATTERN."
+  (when (stringp output)
+    (let ((start 0)
+          candidate)
+      (while (and (< start (length output))
+                  (string-match pattern output start))
+        (let ((match (string-trim (match-string 1 output))))
+          (unless (gptel-auto-experiment--placeholder-hypothesis-p match)
+            (setq candidate match)))
+        ;; Advance from the current match start so nested/repeated markers on the
+        ;; same logical line still get a chance to replace malformed earlier text.
+        (setq start (1+ (match-beginning 0))))
+      candidate)))
+
 (defun gptel-auto-experiment--extract-hypothesis (output)
   "Extract HYPOTHESIS from agent OUTPUT.
 Tries multiple patterns in order:
@@ -8241,16 +8256,12 @@ Tries multiple patterns in order:
    ;; Check for error message first
    ((gptel-auto-experiment--agent-error-p output)
     "Agent error")
-   ((string-match "HYPOTHESIS:\\s-*\\([^\n]+\\)" output)
-    (let ((candidate (string-trim (match-string 1 output))))
-      (if (gptel-auto-experiment--placeholder-hypothesis-p candidate)
-          "No hypothesis stated"
-        candidate)))
-   ((string-match "\\*\\*HYPOTHESIS\\*\\*:?\\s-*\\([^\n]+\\)" output)
-    (let ((candidate (string-trim (match-string 1 output))))
-      (if (gptel-auto-experiment--placeholder-hypothesis-p candidate)
-          "No hypothesis stated"
-        candidate)))
+   ((gptel-auto-experiment--extract-last-explicit-hypothesis
+     output
+     "HYPOTHESIS:\\s-*\\([^\n]+\\)"))
+   ((gptel-auto-experiment--extract-last-explicit-hypothesis
+     output
+     "\\*\\*HYPOTHESIS\\*\\*:?\\s-*\\([^\n]+\\)"))
    ((string-match "[^.]*\\s-+will improve\\s-+[^.]*\\.?" output)
     (let ((match (match-string 0 output)))
       (string-trim match)))

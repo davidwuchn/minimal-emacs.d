@@ -1374,9 +1374,33 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should
      (gptel-auto-experiment--timeout-salvage-output
       "Error: Task \"Experiment 1: optimize lisp/modules/gptel-ext-fsm-utils.el\" (executor) timed out after 600s idle timeout (991.1s total runtime)."
-      "HYPOTHESIS: Keep partial idle-timeout changes"
-      "lisp/modules/gptel-ext-fsm-utils.el"
-      "/tmp/worktree"))))
+       "HYPOTHESIS: Keep partial idle-timeout changes"
+       "lisp/modules/gptel-ext-fsm-utils.el"
+       "/tmp/worktree"))))
+
+(ert-deftest regression/auto-experiment/extract-hypothesis-prefers-last-explicit-marker ()
+  "Repeated inline HYPOTHESIS markers should collapse to the last explicit one."
+  (let* ((expected
+          (concat
+           "Extracting the duplicated cycle-detection traversal pattern from "
+           "`my/gptel--coerce-fsm` and `my/gptel--collect-all-fsms` into a "
+           "reusable `my/gptel--fsm-walk` function will improve Clarity by "
+           "making the traversal logic explicit and testable, while reducing "
+           "code duplication."))
+         (output
+          (concat
+           "Executor result for task: Experiment 4: optimize "
+           "lisp/modules/gptel-ext-fsm-utils.el\n"
+           "HYPOTHESIS: Extracting duplicated FSM state transition validation "
+           "logic into a reusable predicate will improve Clarity by making "
+           "assumptions explicit and testable, while reducing code "
+           "duplication."
+           "HYPOTHESIS: " expected
+           "HYPOTHESIS: " expected "\n"
+           "CHANGED:\n"
+           "- Extract traversal helper.\n")))
+    (should (equal (gptel-auto-experiment--extract-hypothesis output)
+                   expected))))
 
 (ert-deftest regression/auto-experiment/run-salvages-hard-timeout-with-target-diff ()
   "Dirty hard-timeout worktrees should keep flowing into benchmark/comparator evaluation."
