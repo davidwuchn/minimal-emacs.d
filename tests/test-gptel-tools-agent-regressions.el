@@ -14409,6 +14409,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (calls nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
                (lambda () project-root))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-repo-root)
+               (lambda () project-root))
               ((symbol-function 'gptel-auto-workflow--default-dir)
                (lambda () "/tmp/project/var/tmp/experiments/staging-verify"))
               ((symbol-function 'file-directory-p)
@@ -14418,21 +14420,23 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                            "/tmp/project/packages/gptel-agent/.git"
                            "/tmp/project/.git/modules/packages/gptel-agent"))))
               ((symbol-function 'gptel-auto-workflow--git-result)
-               (lambda (command &optional _timeout)
-                 (push command calls)
-                 (cond
-                  ((equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir")
-                   (cons ".git\n" 0))
-                  ((equal command "git --git-dir=/tmp/project/packages/gptel-agent/.git cat-file -e abc123^{commit}")
-                   (cons "" 0))
-                  ((equal command "git --git-dir=/tmp/project/.git/modules/packages/gptel-agent cat-file -e abc123^{commit}")
-                   (cons "" 1))
-                  (t
-                   (cons "" 1))))))
+                (lambda (command &optional _timeout)
+                  (push command calls)
+                  (cond
+                   ((equal command
+                           "git config --file /tmp/project/packages/gptel-agent/.git/config core.worktree /tmp/project/packages/gptel-agent")
+                    (cons "" 0))
+                   ((equal command "git --git-dir=/tmp/project/packages/gptel-agent/.git cat-file -e abc123^{commit}")
+                    (cons "" 0))
+                   ((equal command "git --git-dir=/tmp/project/.git/modules/packages/gptel-agent cat-file -e abc123^{commit}")
+                    (cons "" 1))
+                   (t
+                     (cons "" 1))))))
       (should (equal (gptel-auto-workflow--shared-submodule-git-dir "packages/gptel-agent" "abc123")
                      "/tmp/project/packages/gptel-agent/.git"))
       (should (seq-some (lambda (command)
-                          (equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir"))
+                          (equal command
+                                 "git config --file /tmp/project/packages/gptel-agent/.git/config core.worktree /tmp/project/packages/gptel-agent"))
                         calls)))))
 
 (ert-deftest regression/auto-workflow/shared-submodule-git-dir-uses-worktree-common-git-dir ()
@@ -14468,32 +14472,97 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (calls nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
                (lambda () project-root))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-repo-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-git-common-dir)
+               (lambda () "/tmp/project/.git"))
               ((symbol-function 'file-directory-p)
                (lambda (path)
                  (member path
                          '("/tmp/project/.git"
                            "/tmp/project/packages/gptel-agent"
-                           "/tmp/project/packages/gptel-agent/.git"))))
+                            "/tmp/project/packages/gptel-agent/.git"))))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                  (push command calls)
+                  (cond
+                   ((equal command
+                           "git config --file /tmp/project/packages/gptel-agent/.git/config core.worktree /tmp/project/packages/gptel-agent")
+                    (cons "" 0))
+                   ((equal command "git --git-dir=/tmp/project/packages/gptel-agent/.git cat-file -e abc123^{commit}")
+                    (cons "" 0))
+                   (t
+                    (cons "" 1))))))
+      (should (equal (gptel-auto-workflow--shared-submodule-git-dir "packages/gptel-agent" "abc123")
+                     "/tmp/project/packages/gptel-agent/.git"))
+      (should (seq-some (lambda (command)
+                          (equal command
+                                 "git config --file /tmp/project/packages/gptel-agent/.git/config core.worktree /tmp/project/packages/gptel-agent"))
+                        calls))
+      (should (seq-some (lambda (command)
+                          (equal command "git --git-dir=/tmp/project/packages/gptel-agent/.git cat-file -e abc123^{commit}"))
+                        calls)))))
+
+(ert-deftest regression/auto-workflow/submodule-checkout-git-dir-at-root-reads-gitfile-without-rev-parse ()
+  "Submodule checkout git dirs should be recoverable from `.git' markers alone."
+  (let* ((root (make-temp-file "gptel-submodule-root" t))
+         (checkout (expand-file-name "packages/gptel" root))
+         (linked-git-dir (expand-file-name ".git/modules/packages/gptel/worktrees/gptel6" root))
+         (common-dir (expand-file-name ".git/modules/packages/gptel" root)))
+    (unwind-protect
+        (progn
+          (make-directory checkout t)
+          (make-directory linked-git-dir t)
+          (with-temp-file (expand-file-name ".git" checkout)
+            (insert "gitdir: ../../.git/modules/packages/gptel/worktrees/gptel6\n"))
+          (with-temp-file (expand-file-name "commondir" linked-git-dir)
+            (insert "../..\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--git-result)
+                     (lambda (&rest _)
+                       (ert-fail "git rev-parse should not run when the .git marker is readable"))))
+            (should (equal (gptel-auto-workflow--submodule-checkout-git-dir-at-root
+                            root "packages/gptel")
+                           common-dir))))
+      (delete-directory root t))))
+
+(ert-deftest regression/auto-workflow/shared-submodule-git-dir-normalizes-poisoned-common-worktree ()
+  "Shared submodule lookup should restore the canonical checkout before commit probes."
+  (let ((project-root "/tmp/project")
+        (common-dir "/tmp/project/.git/modules/packages/gptel")
+        (calls nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () project-root))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-repo-root)
+               (lambda () project-root))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-git-common-dir)
+               (lambda () "/tmp/project/.git"))
+              ((symbol-function 'file-directory-p)
+               (lambda (path)
+                 (member path
+                         (list "/tmp/project/packages/gptel"
+                               "/tmp/project/.git"
+                               common-dir))))
+              ((symbol-function 'gptel-auto-workflow--checkout-git-common-dir-from-marker)
+               (lambda (checkout)
+                 (and (equal checkout "/tmp/project/packages/gptel")
+                      common-dir)))
               ((symbol-function 'gptel-auto-workflow--git-result)
                (lambda (command &optional _timeout)
                  (push command calls)
                  (cond
-                  ((equal command "git -C /tmp/project-wt rev-parse --git-common-dir")
-                   (cons "/tmp/project/.git\n" 0))
-                  ((equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir")
-                   (cons ".git\n" 0))
-                  ((equal command "git --git-dir=/tmp/project/packages/gptel-agent/.git cat-file -e abc123^{commit}")
+                  ((equal command
+                          "git config --file /tmp/project/.git/modules/packages/gptel/config core.worktree /tmp/project/packages/gptel")
+                   (cons "" 0))
+                  ((equal command
+                          "git --git-dir=/tmp/project/.git/modules/packages/gptel cat-file -e abc123^{commit}")
                    (cons "" 0))
                   (t
                    (cons "" 1))))))
-      (should (equal (gptel-auto-workflow--shared-submodule-git-dir "packages/gptel-agent" "abc123")
-                     "/tmp/project/packages/gptel-agent/.git"))
-      (should (seq-some (lambda (command)
-                          (equal command "git -C /tmp/project-wt rev-parse --git-common-dir"))
-                        calls))
-      (should (seq-some (lambda (command)
-                          (equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir"))
-                        calls)))))
+      (should (equal (gptel-auto-workflow--shared-submodule-git-dir "packages/gptel" "abc123")
+                     common-dir))
+      (should (equal (reverse calls)
+                     '("git config --file /tmp/project/.git/modules/packages/gptel/config core.worktree /tmp/project/packages/gptel"
+                       "git --git-dir=/tmp/project/.git/modules/packages/gptel cat-file -e abc123^{commit}"))))))
 
 (ert-deftest regression/auto-workflow/shared-submodule-git-dir-uses-current-worktree-checkout-when-root-is-stale ()
   "Use the current workflow worktree checkout when the canonical root lacks the gitlink commit."
@@ -14534,6 +14603,51 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                 (lambda (command)
                   (equal command "git -C /tmp/worktree/packages/gptel-agent rev-parse --git-common-dir"))
                 calls)))))
+
+(ert-deftest regression/auto-workflow/hydrate-staging-submodules-restores-shared-core-worktree-after-add ()
+  "Hydration should re-anchor shared submodule repos after creating linked worktrees."
+  (let ((root (make-temp-file "staging-root" t))
+        (git-dir "/tmp/project/.git/modules/packages/gptel")
+        (normalize-calls nil)
+        (commands nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--staging-submodule-paths)
+                   (lambda (&optional _worktree)
+                     '("packages/gptel")))
+                  ((symbol-function 'gptel-auto-workflow--staging-submodule-gitlink-revision)
+                   (lambda (_worktree _path)
+                     "abc123"))
+                  ((symbol-function 'file-directory-p)
+                   (lambda (path)
+                     (or (equal path root)
+                         (equal path git-dir))))
+                  ((symbol-function 'gptel-auto-workflow--shared-submodule-git-dir)
+                   (lambda (_path &optional _commit)
+                     git-dir))
+                  ((symbol-function 'gptel-auto-workflow--cleanup-staging-submodule-worktree)
+                   (lambda (_worktree _path)
+                     nil))
+                  ((symbol-function 'gptel-auto-workflow--normalize-shared-submodule-core-worktree)
+                   (lambda (path git-dir-arg)
+                     (push (list path git-dir-arg) normalize-calls)
+                     git-dir-arg))
+                  ((symbol-function 'gptel-auto-workflow--git-result)
+                   (lambda (command &optional _timeout)
+                     (push command commands)
+                     (cond
+                      ((string-match-p "worktree add --detach --force" command)
+                       (cons "" 0))
+                      (t
+                       (cons "" 0))))))
+          (should (equal (gptel-auto-workflow--hydrate-staging-submodules root)
+                         '("Hydrated submodules: packages/gptel=abc123" . 0)))
+          (should (equal (reverse normalize-calls)
+                         '(("packages/gptel" "/tmp/project/.git/modules/packages/gptel")
+                           ("packages/gptel" "/tmp/project/.git/modules/packages/gptel"))))
+          (should (seq-some (lambda (command)
+                              (string-match-p "worktree add --detach --force" command))
+                            commands)))
+      (delete-directory root t))))
 
 (ert-deftest regression/auto-workflow/worktree-base-repo-root-resolves-linked-worktree-git-common-dir ()
   "Linked worktrees should resolve their canonical repo root, not `.git/worktrees'."

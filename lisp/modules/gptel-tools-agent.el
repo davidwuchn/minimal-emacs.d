@@ -3209,19 +3209,42 @@ NOTE: Staging branch is never deleted, only the worktree."
     (or repo-root
         (gptel-auto-workflow--worktree-base-root))))
 
+(defun gptel-auto-workflow--checkout-git-common-dir-from-marker (checkout)
+  "Return CHECKOUT's git-common-dir by reading its `.git' marker directly."
+  (let ((git-marker (expand-file-name ".git" checkout)))
+    (cond
+     ((file-directory-p git-marker)
+      git-marker)
+     ((file-regular-p git-marker)
+      (let ((git-dir
+             (with-temp-buffer
+               (insert-file-contents git-marker)
+               (goto-char (point-min))
+               (when (re-search-forward "^gitdir: \\(.+\\)$" nil t)
+                 (expand-file-name (string-trim (match-string 1)) checkout)))))
+        (when git-dir
+          (let ((commondir-file (expand-file-name "commondir" git-dir)))
+            (if (file-regular-p commondir-file)
+                (with-temp-buffer
+                  (insert-file-contents commondir-file)
+                  (expand-file-name (string-trim (buffer-string)) git-dir))
+              git-dir)))))
+     (t nil))))
+
 (defun gptel-auto-workflow--submodule-checkout-git-dir-at-root (root path)
   "Return the absolute git-common-dir for submodule PATH checked out under ROOT."
   (let ((checkout (and root (expand-file-name path root))))
     (when (file-directory-p checkout)
-      (let* ((git-common-result
-              (gptel-auto-workflow--git-result
-               (format "git -C %s rev-parse --git-common-dir"
-                       (shell-quote-argument checkout))
-               60))
-             (git-common (string-trim (car git-common-result))))
-        (when (and (= 0 (cdr git-common-result))
-                   (not (string-empty-p git-common)))
-          (expand-file-name git-common checkout))))))
+      (or (gptel-auto-workflow--checkout-git-common-dir-from-marker checkout)
+          (let* ((git-common-result
+                  (gptel-auto-workflow--git-result
+                   (format "git -C %s rev-parse --git-common-dir"
+                           (shell-quote-argument checkout))
+                   60))
+                 (git-common (string-trim (car git-common-result))))
+            (when (and (= 0 (cdr git-common-result))
+                       (not (string-empty-p git-common)))
+              (expand-file-name git-common checkout)))))))
 
 (defun gptel-auto-workflow--submodule-checkout-git-dirs (path)
   "Return candidate checked-out git dirs for submodule PATH.
@@ -3233,11 +3256,41 @@ root, since one may have a fresher submodule checkout than the other."
                        (list (gptel-auto-workflow--worktree-base-root)
                              (gptel-auto-workflow--worktree-base-repo-root)))
                  :test #'string=))
-         (git-dirs
-          (mapcar (lambda (root)
-                    (gptel-auto-workflow--submodule-checkout-git-dir-at-root root path))
-                  roots)))
+          (git-dirs
+           (mapcar (lambda (root)
+                     (gptel-auto-workflow--submodule-checkout-git-dir-at-root root path))
+                   roots)))
     (cl-remove-duplicates (delq nil git-dirs) :test #'string=)))
+
+(defun gptel-auto-workflow--normalize-shared-submodule-core-worktree (path git-dir)
+  "Re-anchor shared submodule GIT-DIR for PATH to the canonical checkout."
+  (let* ((repo-root (or (gptel-auto-workflow--worktree-base-repo-root)
+                        (gptel-auto-workflow--worktree-base-root)))
+         (checkout (and repo-root (expand-file-name path repo-root)))
+         (canonical-git-dir
+          (and (stringp checkout)
+               (file-directory-p checkout)
+               (gptel-auto-workflow--checkout-git-common-dir-from-marker checkout))))
+    (when (and (stringp git-dir)
+               (file-directory-p git-dir)
+               (stringp checkout)
+               (file-directory-p checkout)
+               (stringp canonical-git-dir)
+               (file-directory-p canonical-git-dir)
+               (string=
+                (directory-file-name (expand-file-name git-dir))
+                (directory-file-name (expand-file-name canonical-git-dir))))
+      (pcase-let ((`(,output . ,exit-code)
+                   (gptel-auto-workflow--git-result
+                    (format "git config --file %s core.worktree %s"
+                            (shell-quote-argument (expand-file-name "config" git-dir))
+                            (shell-quote-argument (directory-file-name checkout)))
+                    60)))
+        (unless (= exit-code 0)
+          (message "[auto-workflow] Failed to normalize shared submodule worktree for %s: %s"
+                   path
+                   (my/gptel--sanitize-for-logging output 200)))))
+    git-dir))
 
 (defun gptel-auto-workflow--worktree-base-git-common-dir ()
   "Return the git-common-dir for the stable workflow root."
@@ -3274,11 +3327,14 @@ superproject-managed `.git/modules/...` store."
          (repo-git-dir (gptel-auto-workflow--worktree-base-git-common-dir))
          (module-git-dir (and repo-git-dir
                               (expand-file-name (format "modules/%s" path) repo-git-dir)))
-         (candidates (cl-remove-duplicates
-                      (append checkout-git-dirs (delq nil (list module-git-dir)))
-                      :test #'string=)))
+          (candidates (cl-remove-duplicates
+                       (append checkout-git-dirs (delq nil (list module-git-dir)))
+                       :test #'string=)))
     (cl-find-if (lambda (git-dir)
-                  (gptel-auto-workflow--git-dir-has-commit-p git-dir commit))
+                  (gptel-auto-workflow--git-dir-has-commit-p
+                   (gptel-auto-workflow--normalize-shared-submodule-core-worktree
+                    path git-dir)
+                   commit))
                 candidates)))
 
 (defun gptel-auto-workflow--finalize-refreshed-staging-submodules (worktree main-ref)
@@ -3386,17 +3442,21 @@ Return nil on success, or an error string if the stale path could not be removed
   (let* ((shared-git-dir (gptel-auto-workflow--shared-submodule-git-dir path))
          (target (expand-file-name path worktree)))
     (when (file-directory-p shared-git-dir)
-      (ignore-errors
-        (gptel-auto-workflow--git-result
-         (format "git --git-dir=%s worktree prune --expire now"
-                 (shell-quote-argument shared-git-dir))
-         60))
-      (ignore-errors
-        (gptel-auto-workflow--git-result
-         (format "git --git-dir=%s worktree remove --force %s"
-                 (shell-quote-argument shared-git-dir)
-                 (shell-quote-argument target))
-         60)))
+      (gptel-auto-workflow--normalize-shared-submodule-core-worktree path shared-git-dir)
+      (unwind-protect
+          (progn
+            (ignore-errors
+              (gptel-auto-workflow--git-result
+               (format "git --git-dir=%s worktree prune --expire now"
+                       (shell-quote-argument shared-git-dir))
+               60))
+            (ignore-errors
+              (gptel-auto-workflow--git-result
+               (format "git --git-dir=%s worktree remove --force %s"
+                       (shell-quote-argument shared-git-dir)
+                       (shell-quote-argument target))
+               60)))
+        (gptel-auto-workflow--normalize-shared-submodule-core-worktree path shared-git-dir)))
     (let ((delete-by-moving-to-trash nil))
       (cond
        ((file-symlink-p target)
@@ -3614,22 +3674,27 @@ This avoids broken linked-worktree submodule metadata under `.git/worktrees/.../
                     (format "Missing shared submodule repo for %s: %s"
                             path shared-git-dir)))
               (t
-               (let ((cleanup-error
-                      (gptel-auto-workflow--cleanup-staging-submodule-worktree root path)))
-                 (if cleanup-error
-                     (setq failure cleanup-error)
-                   (make-directory (file-name-directory target) t)
-                   (setq add-result
-                         (gptel-auto-workflow--git-result
-                          (format "git --git-dir=%s worktree add --detach --force %s %s"
-                                  (shell-quote-argument shared-git-dir)
-                                  (shell-quote-argument target)
-                                  (shell-quote-argument commit))
-                          180))
-                   (if (= 0 (cdr add-result))
-                       (push (format "%s=%s" path (gptel-auto-workflow--truncate-hash commit))
-                             hydrated)
-                     (setq failure
+                (let ((cleanup-error
+                       (gptel-auto-workflow--cleanup-staging-submodule-worktree root path)))
+                  (if cleanup-error
+                      (setq failure cleanup-error)
+                    (make-directory (file-name-directory target) t)
+                    (gptel-auto-workflow--normalize-shared-submodule-core-worktree
+                     path shared-git-dir)
+                    (setq add-result
+                          (unwind-protect
+                              (gptel-auto-workflow--git-result
+                               (format "git --git-dir=%s worktree add --detach --force %s %s"
+                                       (shell-quote-argument shared-git-dir)
+                                       (shell-quote-argument target)
+                                       (shell-quote-argument commit))
+                               180)
+                            (gptel-auto-workflow--normalize-shared-submodule-core-worktree
+                             path shared-git-dir)))
+                    (if (= 0 (cdr add-result))
+                        (push (format "%s=%s" path (gptel-auto-workflow--truncate-hash commit))
+                              hydrated)
+                      (setq failure
                            (format "Failed to hydrate %s: %s" path (car add-result)))))))))))
       (if failure
           (cons failure 1)
