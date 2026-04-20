@@ -4100,7 +4100,49 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
        "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
        (lambda (result)
          (setq final-result result)))
+       (should (= runs 2))
+       (should (equal (plist-get final-result :agent-output)
+                      "Executor result for task: retry success")))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-carries-inspection-thrash-into-retry-history ()
+  "Retry attempts should inherit the just-failed inspection-thrash result."
+  (let ((runs 0)
+        (captured-previous-results nil)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality previous-results callback &optional _log-fn)
+                 (cl-incf runs)
+                 (when (= runs 2)
+                   (setq captured-previous-results previous-results))
+                 (funcall callback
+                          (if (= runs 1)
+                              (list :id 1
+                                    :target "lisp/modules/gptel-agent-loop.el"
+                                    :agent-output
+                                    "gptel: inspection-thrash aborted — 25 consecutive read-only inspections on target without a write-capable tool."
+                                    :comparator-reason :api-rate-limit)
+                            (list :id 1
+                                  :target "lisp/modules/gptel-agent-loop.el"
+                                  :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (&rest _args) t))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-agent-loop.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
       (should (= runs 2))
+      (should (= (length captured-previous-results) 1))
+      (should (gptel-auto-experiment--inspection-thrash-result-p
+               (car captured-previous-results)))
       (should (equal (plist-get final-result :agent-output)
                      "Executor result for task: retry success")))))
 
