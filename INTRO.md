@@ -105,7 +105,7 @@ Model is configured in YAML frontmatter (single source of truth):
 Auto-workflow uses MiniMax as the primary workhorse with automatic provider failover:
 
 1. **MiniMax** — `minimax-m2.7-highspeed` (primary)
-2. **moonshot** — `kimi-k2.6-code-preview`
+2. **moonshot** — `kimi-k2.6`
 3. **DashScope** — `qwen3.6-plus`
 4. **DeepSeek** — `deepseek-chat`
 5. **CF-Gateway** — `@cf/zai-org/glm-4.7-flash`

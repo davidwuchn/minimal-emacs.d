@@ -3398,7 +3398,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (cl-letf (((symbol-function 'gptel--get-api-key)
                (lambda () "token")))
       (let ((header (gptel-backend-header gptel--moonshot)))
-        (should (equal (funcall header '(:model kimi-k2.6-code-preview))
+        (should (equal (funcall header '(:model kimi-k2.6))
                        '(("Authorization" . "Bearer token")
                          ("User-Agent" . "KimiCLI/1.3"))))))))
 
@@ -3742,7 +3742,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             :models '(qwen3.5-plus qwen3.6-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
-         (preset '(:backend "moonshot" :model "kimi-k2.6-code-preview"))
+         (preset '(:backend "moonshot" :model "kimi-k2.6"))
          (access-terminated-error
           "Error: Task executor could not finish task \"x\". Error details: (:message \"You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade\" :type \"access_terminated_error\")")
          (gptel-auto-workflow--headless t)
@@ -3752,11 +3752,11 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           '("analyzer" "comparator" "executor" "grader" "reviewer"))
          (gptel-auto-workflow-headless-subagent-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("moonshot" . "kimi-k2.6-code-preview")
+            ("moonshot" . "kimi-k2.6")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("moonshot" . "kimi-k2.6-code-preview")
+            ("moonshot" . "kimi-k2.6")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
@@ -3794,7 +3794,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             :models '(qwen3.5-plus qwen3.6-plus)))
          (had-dashscope (boundp 'gptel--dashscope))
          (old-dashscope (and had-dashscope (symbol-value 'gptel--dashscope)))
-         (preset '(:backend "moonshot" :model "kimi-k2.6-code-preview"))
+         (preset '(:backend "moonshot" :model "kimi-k2.6"))
          (usage-limit-error
           "Error: Task grader could not finish task \"Grade output\". Error details: (:message \"You've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade\" :type \"access_terminated_error\")")
          (gptel-auto-workflow--headless t)
@@ -3804,11 +3804,11 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           '("analyzer" "comparator" "executor" "grader" "reviewer"))
          (gptel-auto-workflow-headless-subagent-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("moonshot" . "kimi-k2.6-code-preview")
+            ("moonshot" . "kimi-k2.6")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
           '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("moonshot" . "kimi-k2.6-code-preview")
+            ("moonshot" . "kimi-k2.6")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow--rate-limited-backends '("MiniMax"))
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))

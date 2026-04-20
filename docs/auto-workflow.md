@@ -40,7 +40,7 @@ When MiniMax hits rate limits (429), auto-workflow automatically fails over:
 | Order | Backend | Model | Purpose |
 |-------|---------|-------|---------|
 | 1 | **MiniMax** | `minimax-m2.7-highspeed` | Primary workhorse |
-| 2 | **moonshot** | `kimi-k2.6-code-preview` | First fallback |
+| 2 | **moonshot** | `kimi-k2.6` | First fallback |
 | 3 | **DashScope** | `qwen3.6-plus` | Second fallback |
 | 4 | **DeepSeek** | `deepseek-chat` | Third fallback |
 | 5 | **CF-Gateway** | `@cf/zai-org/glm-4.7-flash` | Fourth fallback |
