@@ -13830,7 +13830,51 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
             (should-not (local-variable-p 'gptel-auto-workflow--subagent-process-environment))
             (should-not (local-variable-p 'process-environment)))
           (should (eq (plist-get (gethash 4 my/gptel--agent-task-state) :request-buf)
-                      buf)))
+                       buf)))
+      (kill-buffer buf))))
+
+(ert-deftest regression/subagent/register-agent-task-buffer-respects-deferred-env-persistence ()
+  "Registration should not persist env while launch-time deferral is active."
+  (let* ((buf (generate-new-buffer "*test-subagent-deferred-env*"))
+         (old-env '("AUTO_WORKFLOW_EMACS_SERVER=old-server"
+                    "AUTO_WORKFLOW_STATUS_FILE=/tmp/old-status.sexp"
+                    "PATH=/bin"))
+         (task-env '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
+                     "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+                     "PATH=/usr/bin"))
+         (messages nil)
+         (my/gptel--agent-task-state (make-hash-table :test 'eql))
+         (my/gptel--current-agent-task-id 9))
+    (unwind-protect
+        (cl-letf (((symbol-function 'message)
+                   (lambda (fmt &rest args)
+                     (push (apply #'format fmt args) messages)))
+                  ((symbol-function 'my/gptel--agent-task-buffer-priority)
+                   (lambda (_state _buffer) 0)))
+          (with-current-buffer buf
+            (setq-local gptel-auto-workflow--subagent-process-environment
+                        (copy-sequence old-env))
+            (setq-local process-environment
+                        (copy-sequence old-env)))
+          (puthash 9 (list :request-buf nil
+                           :launching nil
+                           :process-environment task-env)
+                   my/gptel--agent-task-state)
+          (let ((gptel-auto-workflow--defer-subagent-env-persistence t)
+                (gptel-auto-workflow--subagent-process-environment task-env)
+                (process-environment task-env))
+            (my/gptel--register-agent-task-buffer buf))
+          (with-current-buffer buf
+            (should (equal gptel-auto-workflow--subagent-process-environment old-env))
+            (should (equal process-environment old-env)))
+          (should-not
+           (cl-some (lambda (msg)
+                      (string-match-p "buffer-local while locally let-bound" msg))
+                    messages))
+          (gptel-auto-workflow--persist-subagent-process-environment buf task-env)
+          (with-current-buffer buf
+            (should (equal gptel-auto-workflow--subagent-process-environment task-env))
+            (should (equal process-environment task-env))))
       (kill-buffer buf))))
 
 (ert-deftest regression/bash/context-environment-prefers-related-fsm-buffer ()
