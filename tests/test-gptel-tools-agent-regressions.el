@@ -21,6 +21,7 @@
 (require 'gptel-ext-fsm-utils)
 (require 'gptel-tools-bash)
 (require 'gptel-tools-agent)
+(require 'gptel-tools-bash)
 (require 'gptel-agent-tools)
 (require 'gptel-auto-workflow-projects)
 
@@ -13001,6 +13002,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                       '("AUTO_WORKFLOW_EMACS_SERVER=live-server"
                         "PATH=/bin"))
           (gptel-auto-workflow--persist-subagent-process-environment)
+          (should (equal gptel-auto-workflow--subagent-process-environment
+                         isolated-env))
           (should (equal process-environment isolated-env))
           (should-not (eq process-environment isolated-env)))
       (kill-buffer target-buf))))
@@ -13111,11 +13114,106 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (should-not (equal status-file "/tmp/live-status.sexp"))
         (should-not (equal messages-file "/tmp/live-messages.txt"))
         (should-not (equal snapshot-file "/tmp/live-snapshots.txt"))
-        (should-not (equal server-name "live-server"))
-        (should (string-prefix-p "copilot-auto-workflow-subagent-" server-name))
-        (should-not (file-exists-p status-file))
-        (should-not (file-exists-p messages-file))
-        (should-not (file-exists-p snapshot-file))))))
+         (should-not (equal server-name "live-server"))
+         (should (string-prefix-p "copilot-auto-workflow-subagent-" server-name))
+         (should-not (file-exists-p status-file))
+         (should-not (file-exists-p messages-file))
+         (should-not (file-exists-p snapshot-file))))))
+
+(ert-deftest regression/subagent/headless-task-launch-stores-task-process-environment ()
+  "Headless task launch should store isolated env on the active task state."
+  (let ((callback-result nil)
+        (my/gptel--agent-task-state (make-hash-table :test 'eql))
+        (my/gptel--current-agent-task-id 7))
+    (puthash 7 (list :request-buf nil) my/gptel--agent-task-state)
+    (cl-letf (((symbol-function 'my/gptel-agent--task-override)
+               (lambda (cb _agent-type _description _prompt)
+                 (funcall cb "ok")))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (let ((gptel-auto-workflow--headless t)
+            (gptel-auto-workflow-persistent-headless t)
+            (gptel-auto-workflow--current-project "/tmp/project/")
+            (process-environment
+             (append '("AUTO_WORKFLOW_EMACS_SERVER=live-server"
+                       "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.sexp"
+                       "AUTO_WORKFLOW_MESSAGES_FILE=/tmp/live-messages.txt"
+                       "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=/tmp/live-snapshots.txt")
+                     process-environment)))
+        (my/gptel--call-gptel-agent-task
+         (lambda (result)
+           (setq callback-result result))
+         "executor"
+         "Store workflow env"
+         "Prompt body")))
+    (should (equal callback-result "ok"))
+    (let* ((state (gethash 7 my/gptel--agent-task-state))
+           (stored-env (plist-get state :process-environment))
+           (server-prefix "AUTO_WORKFLOW_EMACS_SERVER=")
+           (server-entry
+            (seq-find (lambda (item)
+                        (string-prefix-p server-prefix item))
+                      stored-env))
+           (server-name (and server-entry
+                             (substring server-entry (length server-prefix)))))
+      (should stored-env)
+      (should server-name)
+      (should-not (equal server-name "live-server"))
+      (should (string-prefix-p "copilot-auto-workflow-subagent-" server-name)))))
+
+(ert-deftest regression/subagent/register-agent-task-buffer-persists-task-env ()
+  "Registering a request buffer should copy tracked task env onto it."
+  (let* ((buf (generate-new-buffer "*test-subagent-request*"))
+         (task-env '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
+                     "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+                     "PATH=/usr/bin"))
+         (my/gptel--agent-task-state (make-hash-table :test 'eql))
+         (my/gptel--current-agent-task-id 3))
+    (unwind-protect
+        (cl-letf (((symbol-function 'my/gptel--agent-task-buffer-priority)
+                   (lambda (_state _buffer) 0)))
+          (puthash 3 (list :request-buf nil
+                           :process-environment task-env)
+                   my/gptel--agent-task-state)
+          (my/gptel--register-agent-task-buffer buf)
+          (with-current-buffer buf
+            (should (equal gptel-auto-workflow--subagent-process-environment task-env))
+            (should (equal process-environment task-env)))
+          (should (eq (plist-get (gethash 3 my/gptel--agent-task-state) :request-buf)
+                      buf)))
+      (kill-buffer buf))))
+
+(ert-deftest regression/bash/context-environment-prefers-related-fsm-buffer ()
+  "Bash context should recover isolated env and directory from the FSM buffer."
+  (let* ((request-buf (generate-new-buffer "*test-bash-request*"))
+         (target-buf (generate-new-buffer "*test-bash-target*"))
+         (target-dir (make-temp-file "test-bash-target" t))
+         (isolated-env '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
+                         "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+                         "PATH=/usr/bin"))
+         (fake-fsm (gptel-make-fsm :info (list :buffer target-buf))))
+    (unwind-protect
+        (progn
+          (with-current-buffer request-buf
+            (setq-local gptel--fsm-last fake-fsm)
+            (setq-local gptel-auto-workflow--subagent-process-environment nil)
+            (setq-local process-environment '("PATH=/bin"))
+            (setq default-directory "/tmp/"))
+          (with-current-buffer target-buf
+            (setq-local gptel-auto-workflow--subagent-process-environment
+                        (copy-sequence isolated-env))
+            (setq-local process-environment
+                        (copy-sequence isolated-env))
+            (setq default-directory target-dir))
+          (should (eq (my/gptel--bash-context-buffer request-buf)
+                      target-buf))
+          (should (equal (my/gptel--bash-context-environment request-buf)
+                         isolated-env))
+          (should (equal (my/gptel--bash-context-directory request-buf)
+                         (file-name-as-directory target-dir))))
+      (kill-buffer request-buf)
+      (kill-buffer target-buf)
+      (delete-directory target-dir t))))
 
 (ert-deftest regression/auto-experiment/run-tests-retries-transient-failure ()
   "Transient local test failures should be rerun once before failing."
