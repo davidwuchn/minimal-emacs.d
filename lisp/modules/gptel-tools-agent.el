@@ -4680,21 +4680,23 @@ Returns t if all files pass syntax check, nil otherwise."
           (files (ignore-errors (directory-files-recursively directory "\\.el\\'"))))
       (dolist (file (or files nil) (null errors))
         (when (file-readable-p file)
-          (with-temp-buffer
-            (insert-file-contents file)
-            (emacs-lisp-mode)
-            (goto-char (point-min))
-            (condition-case err
-                (progn
-                  (while (not (eobp)) (forward-sexp)))
-              (error
-                (let ((msg (format "SYNTAX ERROR: %s: %s"
-                                   (file-relative-name file directory)
-                                   (error-message-string err))))
-                  (push msg errors)
-                  (when (buffer-live-p output-buffer)
-                   (with-current-buffer output-buffer
-                      (insert msg "\n"))))))))))))
+          (condition-case err
+              (with-temp-buffer
+                (insert-file-contents file)
+                ;; Use the Elisp syntax table directly so syntax verification
+                ;; cannot trigger mode hooks or other buffer-local setup.
+                (set-syntax-table emacs-lisp-mode-syntax-table)
+                (goto-char (point-min))
+                (while (not (eobp))
+                  (forward-sexp)))
+            (error
+             (let ((msg (format "SYNTAX ERROR: %s: %s"
+                                (file-relative-name file directory)
+                                (error-message-string err))))
+               (push msg errors)
+               (when (buffer-live-p output-buffer)
+                 (with-current-buffer output-buffer
+                   (insert msg "\n")))))))))))
 
 (defun gptel-auto-workflow--verify-staging ()
   "Run verification in the staging worktree.
