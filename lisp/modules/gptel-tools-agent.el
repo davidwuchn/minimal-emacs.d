@@ -5830,9 +5830,20 @@ least `gptel-auto-experiment-repeat-focus-threshold' previous attempts."
     (plist-get result :raw))
    (t nil)))
 
+(defun gptel-auto-experiment--subagent-error-output-p (raw)
+  "Return non-nil when RAW looks like a real subagent failure payload.
+Successful analyzer/comparator text can mention prior timeouts or failures in
+its narrative.  Those references must not be treated as retryable transport
+errors."
+  (and (stringp raw)
+       (or (string-match-p "\\`Error:" raw)
+           (string-match-p "\\`Warning:.*not available" raw)
+           (gptel-auto-experiment--aborted-agent-output-p raw))))
+
 (defun gptel-auto-experiment--retryable-aux-subagent-category (result)
   "Return retryable transient error category for RESULT, or nil."
   (when-let* ((raw (gptel-auto-experiment--subagent-raw-result result))
+              ((gptel-auto-experiment--subagent-error-output-p raw))
               (category (car (gptel-auto-experiment--categorize-error raw))))
     (when (or (memq category '(:timeout :api-rate-limit))
               (and (eq category :api-error)
