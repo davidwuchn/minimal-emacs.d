@@ -9301,8 +9301,7 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
           (gptel-auto-workflow--persist-status)
         (error
          (message "[auto-workflow] Status refresh failed: %s"
-                  (error-message-string err))
-         (gptel-auto-workflow--stop-status-refresh-timer)))
+                  (error-message-string err))))
     (gptel-auto-workflow--stop-status-refresh-timer)))
 
 (defun gptel-auto-workflow--start-status-refresh-timer ()
