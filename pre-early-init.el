@@ -45,18 +45,17 @@ Returns non-nil if cache was loaded successfully."
                 (error nil))))))
       loaded)))
 
-(defun my/package-skip-network-refresh-p (&rest _args)
+(defun my/package-skip-network-refresh-p (&optional _async)
   "Return non-nil if package-refresh-contents should skip network access.
 Uses cached archives if available and less than 24 hours old."
   (when (and (not package-archive-contents)
-             (file-exists-p (expand-file-name "archives/melpa/archive-contents" 
+             (file-exists-p (expand-file-name "archives/melpa/archive-contents"
                                                package-user-dir)))
     (let ((cache-time (file-attribute-modification-time
-                       (file-attributes 
-                        (expand-file-name "archives/melpa/archive-contents" 
+                       (file-attributes
+                        (expand-file-name "archives/melpa/archive-contents"
                                           package-user-dir))))
           (now (current-time)))
-      ;; Use cache if less than 24 hours old
       (when (and cache-time
                  (< (time-to-seconds (time-subtract now cache-time)) 86400))
         (my/package-load-archive-cache)
