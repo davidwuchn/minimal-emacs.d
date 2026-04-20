@@ -12683,8 +12683,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
          (should-not (plist-get result :tests-skipped))
          (should (equal (plist-get result :tests-output) "tests ok"))))))
 
-(ert-deftest regression/auto-experiment/run-tests-isolates-status-file ()
-  "Experiment test subprocesses should not share the live workflow status file."
+(ert-deftest regression/auto-experiment/run-tests-isolates-workflow-state ()
+  "Experiment test subprocesses should not share the live workflow daemon state."
   (let* ((proj-root (make-temp-file "aw-tests-root" t))
          (worktree (make-temp-file "aw-tests-worktree" t))
          captured-env
@@ -12734,17 +12734,23 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                    (entry (seq-find (lambda (item)
                                       (string-prefix-p prefix item))
                                     captured-env))
-                    (status-file (and entry
-                                      (substring entry (length prefix)))))
-             (should (equal captured-program
-                            (expand-file-name "scripts/run-tests.sh" worktree)))
+                   (status-file (and entry
+                                     (substring entry (length prefix))))
+                   (server-prefix "AUTO_WORKFLOW_EMACS_SERVER=")
+                   (server-entry
+                    (seq-find (lambda (item)
+                                (string-prefix-p server-prefix item))
+                              captured-env))
+                   (server-name (and server-entry
+                                     (substring server-entry (length server-prefix)))))
+              (should (equal captured-program
+                             (expand-file-name "scripts/run-tests.sh" worktree)))
               (should status-file)
               (should (file-name-absolute-p status-file))
               (should (member "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1" captured-env))
-              (should-not
-               (seq-find (lambda (item)
-                           (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" item))
-                         captured-env))
+              (should server-name)
+              (should (string-prefix-p "copilot-auto-workflow-test-" server-name))
+              (should-not (equal server-name "test-server"))
               (should-not
                (seq-find (lambda (item)
                            (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" item))
