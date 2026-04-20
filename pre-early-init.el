@@ -45,7 +45,7 @@ Returns non-nil if cache was loaded successfully."
                 (error nil))))))
       loaded)))
 
-(defun my/package-skip-network-refresh-p ()
+(defun my/package-skip-network-refresh-p (&rest _args)
   "Return non-nil if package-refresh-contents should skip network access.
 Uses cached archives if available and less than 24 hours old."
   (when (and (not package-archive-contents)
