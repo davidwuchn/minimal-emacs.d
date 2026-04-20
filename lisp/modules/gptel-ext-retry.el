@@ -176,22 +176,21 @@ Returns the number of messages truncated, or 0 if nothing was done."
                 (lambda (msg) (equal (plist-get msg :role) "tool")))))
           (when (> (length tool-indices) keep)
             (let ((to-truncate (seq-take tool-indices (- (length tool-indices) keep))))
-              ;; Single pass: calculate bytes-saved AND truncate
-              ;; ASSUMPTION: Truncation decision based on total potential savings
-              ;; EDGE CASE: Must check min-bytes threshold before modifying messages
-              (dolist (idx to-truncate)
-                (let* ((msg (aref messages idx))
-                       (content (plist-get msg :content)))
-                  (when (and (stringp content)
-                             (> (string-bytes content) (string-bytes replacement)))
-                    (cl-incf bytes-saved (- (string-bytes content) (string-bytes replacement))))))
-              (when (or (= my/gptel-trim-min-bytes 0)
-                        (>= bytes-saved my/gptel-trim-min-bytes))
+              ;; Single pass: collect candidates and calculate bytes-saved
+              ;; Then check threshold before modifying messages
+              (let ((candidates))
                 (dolist (idx to-truncate)
                   (let* ((msg (aref messages idx))
                          (content (plist-get msg :content)))
                     (when (and (stringp content)
                                (> (string-bytes content) (string-bytes replacement)))
+                      (push idx candidates)
+                      (cl-incf bytes-saved (- (string-bytes content) (string-bytes replacement))))))
+                (when (or (= my/gptel-trim-min-bytes 0)
+                          (>= bytes-saved my/gptel-trim-min-bytes))
+                  (dolist (idx (nreverse candidates))
+                    (let* ((msg (aref messages idx))
+                           (content (plist-get msg :content)))
                       (plist-put msg :content replacement)
                       (cl-incf truncated)))))))))
       truncated)))
