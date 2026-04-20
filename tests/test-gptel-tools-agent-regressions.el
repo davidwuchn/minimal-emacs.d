@@ -18,6 +18,7 @@
 (require 'gptel-ext-retry)
 (require 'gptel-ext-fsm)
 (require 'gptel-ext-fsm-utils)
+(require 'gptel-tools-bash)
 (require 'gptel-tools-agent)
 (require 'gptel-agent-tools)
 (require 'gptel-auto-workflow-projects)
@@ -12813,6 +12814,64 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
           (should-not
            (directory-files temp-dir nil directory-files-no-dot-files-regexp)))
       (delete-directory temp-dir t))))
+
+(ert-deftest regression/subagent/persist-subagent-process-environment-copies-env ()
+  "Persisted subagent env should survive on the routed buffer."
+  (let* ((target-buf (get-buffer-create " *aw-subagent-env*"))
+         (isolated-env
+          '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
+            "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+            "PATH=/usr/bin"
+            "HOME=/tmp/test-home"))
+         (gptel-auto-workflow--subagent-process-environment isolated-env))
+    (unwind-protect
+        (with-current-buffer target-buf
+          (setq-local process-environment
+                      '("AUTO_WORKFLOW_EMACS_SERVER=live-server"
+                        "PATH=/bin"))
+          (gptel-auto-workflow--persist-subagent-process-environment)
+          (should (equal process-environment isolated-env))
+          (should-not (eq process-environment isolated-env)))
+      (kill-buffer target-buf))))
+
+(ert-deftest regression/bash/persistent-shell-resets-when-workflow-context-changes ()
+  "Persistent bash should reset when workflow env or worktree changes."
+  (let* ((dir-a (make-temp-file "aw-bash-dir-a" t))
+         (dir-b (make-temp-file "aw-bash-dir-b" t))
+         (base-env
+          (cl-remove-if #'my/gptel--bash-context-entry-p process-environment))
+         proc-a
+         proc-b)
+    (unwind-protect
+        (let ((my/gptel--persistent-bash-process nil))
+          (let ((default-directory dir-a)
+                (process-environment
+                 (append '("AUTO_WORKFLOW_EMACS_SERVER=server-a")
+                         base-env)))
+            (my/gptel--ensure-persistent-bash)
+            (setq proc-a my/gptel--persistent-bash-process)
+            (should (process-live-p proc-a))
+            (should
+             (equal (process-get proc-a 'my/gptel-bash-context-signature)
+                    `(:directory ,(file-name-as-directory
+                                   (expand-file-name dir-a))
+                      :env ("AUTO_WORKFLOW_EMACS_SERVER=server-a")))))
+          (let ((default-directory dir-b)
+                (process-environment
+                 (append '("AUTO_WORKFLOW_EMACS_SERVER=server-b")
+                         base-env)))
+            (my/gptel--ensure-persistent-bash)
+            (setq proc-b my/gptel--persistent-bash-process)
+            (should (process-live-p proc-b))
+            (should-not (eq proc-a proc-b))
+            (should
+             (equal (process-get proc-b 'my/gptel-bash-context-signature)
+                    `(:directory ,(file-name-as-directory
+                                   (expand-file-name dir-b))
+                      :env ("AUTO_WORKFLOW_EMACS_SERVER=server-b"))))))
+      (my/gptel--reset-persistent-bash)
+      (delete-directory dir-a t)
+      (delete-directory dir-b t))))
 
 (ert-deftest regression/subagent/headless-task-launch-isolates-workflow-state ()
   "Headless workflow subagents should not inherit live workflow state."

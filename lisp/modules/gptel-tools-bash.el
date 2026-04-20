@@ -29,6 +29,38 @@ interactive commands like git commit."
 (defvar my/gptel--persistent-bash-process nil
   "Persistent background bash process for gptel-agent's Bash tool.")
 
+(defconst my/gptel--bash-context-env-prefixes
+  '("AUTO_WORKFLOW_STATUS_FILE="
+    "AUTO_WORKFLOW_MESSAGES_FILE="
+    "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE="
+    "AUTO_WORKFLOW_EMACS_SERVER=")
+  "Environment prefixes that require a fresh persistent bash context.")
+
+(defun my/gptel--bash-context-entry-p (entry)
+  "Return non-nil when ENTRY should trigger bash process recreation."
+  (and (stringp entry)
+       (seq-some (lambda (prefix)
+                   (string-prefix-p prefix entry))
+                 my/gptel--bash-context-env-prefixes)))
+
+(defun my/gptel--bash-context-signature ()
+  "Return the persistent bash context signature for the current buffer."
+  (list :directory (and (stringp default-directory)
+                        (file-name-as-directory
+                         (expand-file-name default-directory)))
+        :env (seq-filter #'my/gptel--bash-context-entry-p process-environment)))
+
+(defun my/gptel--reset-persistent-bash ()
+  "Terminate the current persistent bash process, if any."
+  (when (process-live-p my/gptel--persistent-bash-process)
+    (ignore-errors
+      (set-process-filter my/gptel--persistent-bash-process #'ignore))
+    (ignore-errors
+      (set-process-sentinel my/gptel--persistent-bash-process #'ignore))
+    (ignore-errors
+      (delete-process my/gptel--persistent-bash-process)))
+  (setq my/gptel--persistent-bash-process nil))
+
 (defun my/gptel--safe-bash-command-p (command)
   "Check if a Bash COMMAND is safe for Plan mode.
 Returns t if safe, or a string explaining why it was rejected."
@@ -68,23 +100,32 @@ Returns t if safe, or a string explaining why it was rejected."
 
 (defun my/gptel--ensure-persistent-bash ()
   "Create a persistent background bash process if one doesn't exist or died.
-Sets `my/gptel--persistent-bash-process' to a live process with TERM=dumb."
-  (unless (and my/gptel--persistent-bash-process
-               (process-live-p my/gptel--persistent-bash-process))
-    (let ((buf (get-buffer-create " *gptel-persistent-bash*")))
-      (with-current-buffer buf (erase-buffer))
-      (setq my/gptel--persistent-bash-process
-            (make-process
-             :name "gptel-bash"
-             :buffer buf
-             :command '("bash" "--norc" "--noprofile")
-             :connection-type 'pipe
-             :noquery t))
-      (process-put my/gptel--persistent-bash-process 'my/gptel-managed t)
-      ;; Initialize Dumb Terminal variables to prevent interactive hanging
-      (process-send-string my/gptel--persistent-bash-process
-                           "export TERM=dumb PAGER=cat GIT_PAGER=cat DEBIAN_FRONTEND=noninteractive PS1=''\n")
-      (sleep-for 0.1))))
+Sets `my/gptel--persistent-bash-process' to a live process with TERM=dumb.
+Recreates the shell when the workflow env or working directory changes."
+  (let ((signature (my/gptel--bash-context-signature)))
+    (when (and (process-live-p my/gptel--persistent-bash-process)
+               (not (equal signature
+                           (process-get my/gptel--persistent-bash-process
+                                        'my/gptel-bash-context-signature))))
+      (my/gptel--reset-persistent-bash))
+    (unless (and my/gptel--persistent-bash-process
+                 (process-live-p my/gptel--persistent-bash-process))
+      (let ((buf (get-buffer-create " *gptel-persistent-bash*")))
+        (with-current-buffer buf (erase-buffer))
+        (setq my/gptel--persistent-bash-process
+              (make-process
+               :name "gptel-bash"
+               :buffer buf
+               :command '("bash" "--norc" "--noprofile")
+               :connection-type 'pipe
+               :noquery t))
+        (process-put my/gptel--persistent-bash-process 'my/gptel-managed t)
+        (process-put my/gptel--persistent-bash-process
+                     'my/gptel-bash-context-signature signature)
+        ;; Initialize Dumb Terminal variables to prevent interactive hanging
+        (process-send-string my/gptel--persistent-bash-process
+                             "export TERM=dumb PAGER=cat GIT_PAGER=cat DEBIAN_FRONTEND=noninteractive PS1=''\n")
+        (sleep-for 0.1)))))
 
 (defun my/gptel--bash-process-filter (proc output marker finish-fn)
   "Process filter for gptel persistent bash.

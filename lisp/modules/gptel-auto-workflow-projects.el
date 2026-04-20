@@ -501,6 +501,9 @@ Also handles caching and result truncation from old advice."
                   (when (fboundp 'my/gptel--register-agent-task-buffer)
                     (my/gptel--register-agent-task-buffer target-buf))
                   (with-current-buffer target-buf
+                    (when (fboundp 'gptel-auto-workflow--persist-subagent-process-environment)
+                      (gptel-auto-workflow--persist-subagent-process-environment
+                       target-buf))
                     ;; Ensure FSM exists for agent task
                     (unless (and (boundp 'gptel--fsm-last) gptel--fsm-last)
                       ;; Create minimal FSM for agent context

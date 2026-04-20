@@ -1133,17 +1133,21 @@ large-result truncation, and result caching."
              (syms (cons 'gptel--preset (gptel--preset-syms preset)))
              (vals (mapcar (lambda (sym) (if (boundp sym) (symbol-value sym) nil)) syms)))
         (cl-progv syms vals
-          (gptel--apply-preset preset)
-          (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
-                 (parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
-                 (info (and parent-fsm (gptel-fsm-info parent-fsm)))
-                 (info-buf (plist-get info :buffer))
-                 (parent-buf (or (when (buffer-live-p info-buf)
-                                   info-buf)
-                                 (current-buffer)))
-                 (where (or (let ((tm (plist-get info :tracking-marker)))
-                              (and (markerp tm) (marker-position tm) tm))
-                            (let ((pos (plist-get info :position)))
+           (gptel--apply-preset preset)
+           (let* ((request-tools (and gptel-use-tools (copy-sequence gptel-tools)))
+                  (parent-fsm (my/gptel--coerce-fsm gptel--fsm-last))
+                  (info (and parent-fsm (gptel-fsm-info parent-fsm)))
+                  (info-buf (plist-get info :buffer))
+                  (parent-buf (or (when (buffer-live-p info-buf)
+                                    info-buf)
+                                  (current-buffer)))
+                  (_
+                   (when (fboundp 'gptel-auto-workflow--persist-subagent-process-environment)
+                     (gptel-auto-workflow--persist-subagent-process-environment
+                      parent-buf)))
+                  (where (or (let ((tm (plist-get info :tracking-marker)))
+                               (and (markerp tm) (marker-position tm) tm))
+                             (let ((pos (plist-get info :position)))
                               (and (markerp pos) (marker-position pos) pos))
                             (with-current-buffer parent-buf (point-marker))))
                  (tracking-marker (let ((m (copy-marker where t)))
@@ -1843,13 +1847,15 @@ its async continuation layer in the worker daemon."
           (and (bound-and-true-p gptel-auto-workflow--headless)
                (bound-and-true-p gptel-auto-workflow-persistent-headless)
                (bound-and-true-p gptel-auto-workflow--current-project)))
+         (isolated-env
+          (and headless-auto-workflow
+               (gptel-auto-workflow--isolated-state-environment
+                "copilot-auto-workflow-subagent-"
+                nil
+                t)))
+         (gptel-auto-workflow--subagent-process-environment isolated-env)
          (process-environment
-          (if headless-auto-workflow
-              (gptel-auto-workflow--isolated-state-environment
-               "copilot-auto-workflow-subagent-"
-               nil
-               t)
-            process-environment))
+          (or isolated-env process-environment))
          (task-runner nil))
     (setq task-runner
           (cond
@@ -8635,6 +8641,9 @@ Automatically adds --no-pager to prevent blocking on pager output."
     "AUTO_WORKFLOW_EMACS_SERVER=")
   "Environment prefixes that bind a process to workflow state.")
 
+(defvar gptel-auto-workflow--subagent-process-environment nil
+  "Full environment to persist on routed headless subagent buffers.")
+
 (defun gptel-auto-workflow--isolated-state-env-entry-p (entry)
   "Return non-nil when ENTRY binds shared workflow state."
   (and (stringp entry)
@@ -8672,6 +8681,15 @@ When INCLUDE-MESSAGES-P is non-nil, also isolate messages and snapshot files."
     (append (flatten-tree env)
             (cl-remove-if #'gptel-auto-workflow--isolated-state-env-entry-p
                           process-environment))))
+
+(defun gptel-auto-workflow--persist-subagent-process-environment (&optional buffer)
+  "Persist isolated workflow env onto BUFFER for later async tool processes."
+  (when (and (buffer-live-p (or buffer (current-buffer)))
+             (listp gptel-auto-workflow--subagent-process-environment))
+    (with-current-buffer (or buffer (current-buffer))
+      (setq-local process-environment
+                  (copy-sequence
+                   gptel-auto-workflow--subagent-process-environment)))))
 
 (defun gptel-auto-workflow--git-step-success-p (cmd action &optional timeout)
   "Run git CMD and report whether it succeeded.
