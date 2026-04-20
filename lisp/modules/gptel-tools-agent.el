@@ -1144,11 +1144,6 @@ large-result truncation, and result caching."
                  (parent-buf (or (when (buffer-live-p info-buf)
                                     info-buf)
                                   (current-buffer)))
-                 (_
-                  (when (and (not gptel-auto-workflow--defer-subagent-env-persistence)
-                             (fboundp 'gptel-auto-workflow--persist-subagent-process-environment))
-                    (gptel-auto-workflow--persist-subagent-process-environment
-                     parent-buf)))
                  (where (or (let ((tm (plist-get info :tracking-marker)))
                               (and (markerp tm) (marker-position tm) tm))
                             (let ((pos (plist-get info :position)))
@@ -1753,11 +1748,6 @@ TIMESTAMP defaults to `current-time'."
              (buffer-live-p buffer))
     (when-let* ((state (gethash my/gptel--current-agent-task-id
                                 my/gptel--agent-task-state)))
-      (when-let* ((task-env (plist-get state :process-environment))
-                  ((not gptel-auto-workflow--defer-subagent-env-persistence))
-                  ((fboundp 'gptel-auto-workflow--persist-subagent-process-environment)))
-        (gptel-auto-workflow--persist-subagent-process-environment
-         buffer task-env))
       (let* ((current (plist-get state :request-buf))
              (current-priority (my/gptel--agent-task-buffer-priority state current))
              (new-priority (my/gptel--agent-task-buffer-priority state buffer))
