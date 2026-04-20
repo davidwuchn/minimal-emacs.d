@@ -404,6 +404,9 @@ On timeout or error, returns empty string and logs warning."
 (defvar gptel-auto-workflow--run-id nil
   "Unique identifier for the current auto-workflow run.")
 
+(defvar gptel-auto-workflow--status-run-id nil
+  "Run identifier to expose in terminal workflow status snapshots.")
+
 (defun gptel-auto-workflow--make-run-id ()
   "Return a unique identifier for a workflow launch."
   (format "%s-%s"
@@ -8770,13 +8773,20 @@ Relative paths are resolved from the project root."
   "Return current workflow status as a plist."
   (let* ((running (or gptel-auto-workflow--running
                       (bound-and-true-p gptel-auto-workflow--cron-job-running)))
-         (run-id (and (stringp gptel-auto-workflow--run-id)
-                      (not (string-empty-p gptel-auto-workflow--run-id))
-                      gptel-auto-workflow--run-id)))
+         (phase (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :phase "idle"))
+         (active-run-id (and (stringp gptel-auto-workflow--run-id)
+                             (not (string-empty-p gptel-auto-workflow--run-id))
+                             gptel-auto-workflow--run-id))
+         (status-run-id (and (stringp gptel-auto-workflow--status-run-id)
+                             (not (string-empty-p gptel-auto-workflow--status-run-id))
+                             gptel-auto-workflow--status-run-id))
+         (run-id (or active-run-id
+                     (and (member phase '("complete" "quota-exhausted" "error"))
+                          status-run-id))))
     (list :running running
           :kept (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :kept 0)
           :total (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :total 0)
-          :phase (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :phase "idle")
+          :phase phase
           :run-id run-id
           :results (and run-id
                         (gptel-auto-workflow--results-relative-path run-id)))))
@@ -9255,6 +9265,8 @@ Prevents workflow from hanging indefinitely due to callback failures."
         (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
         (setq gptel-auto-workflow--running nil
               gptel-auto-workflow--cron-job-running nil
+              gptel-auto-workflow--status-run-id nil
+              gptel-auto-workflow--run-id nil
               gptel-auto-workflow--run-project-root nil
               gptel-auto-workflow--current-project nil
               gptel-auto-workflow--current-target nil)
@@ -9272,6 +9284,8 @@ Prevents workflow from hanging indefinitely due to callback failures."
         (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
         (setq gptel-auto-workflow--running nil
               gptel-auto-workflow--cron-job-running nil
+              gptel-auto-workflow--status-run-id nil
+              gptel-auto-workflow--run-id nil
               gptel-auto-workflow--run-project-root nil
               gptel-auto-workflow--current-project nil
               gptel-auto-workflow--current-target nil)
@@ -9364,6 +9378,7 @@ Interactive command to recover from hung workflow state."
   (gptel-auto-workflow--terminate-active-shell-processes)
   (setq gptel-auto-workflow--running nil
          gptel-auto-workflow--cron-job-running nil
+         gptel-auto-workflow--status-run-id nil
          gptel-auto-workflow--run-id nil
          gptel-auto-workflow--run-project-root nil
          gptel-auto-workflow--current-project nil
@@ -9536,6 +9551,7 @@ Usage:
           gptel-auto-workflow--run-project-root (gptel-auto-workflow--default-dir)
           gptel-auto-workflow--run-id (or gptel-auto-workflow--run-id
                                           (gptel-auto-workflow--make-run-id))
+          gptel-auto-workflow--status-run-id gptel-auto-workflow--run-id
           gptel-auto-experiment--api-error-count 0
           gptel-auto-experiment--quota-exhausted nil
           gptel-auto-workflow--running t
@@ -9821,6 +9837,8 @@ into staging or main."
               (kill-buffer buf)
               (cl-incf cleaned)))))
       (setq gptel-auto-workflow--running nil
+            gptel-auto-workflow--status-run-id nil
+            gptel-auto-workflow--run-id nil
             gptel-auto-workflow--current-target nil)
       (setq gptel-auto-workflow--stats
             (plist-put gptel-auto-workflow--stats
@@ -9852,27 +9870,54 @@ into staging or main."
                                gptel-auto-workflow--run-id))
          (proj-root (gptel-auto-workflow--default-dir))
          (run-buffer (current-buffer))
+         (run-in-context
+          (lambda (thunk)
+             (if (buffer-live-p run-buffer)
+                 (with-current-buffer run-buffer
+                   (let ((default-directory proj-root)
+                         (gptel-auto-workflow--project-root-override proj-root)
+                         (gptel-auto-workflow--current-project proj-root)
+                         (gptel-auto-workflow--run-project-root proj-root))
+                     (funcall thunk)))
+               (let ((default-directory proj-root)
+                     (gptel-auto-workflow--project-root-override proj-root)
+                     (gptel-auto-workflow--current-project proj-root)
+                     (gptel-auto-workflow--run-project-root proj-root))
+                 (funcall thunk)))))
          (all-results '())
          (kept-count 0)
          (finish
           (gptel-auto-workflow--make-idempotent-callback
            (lambda ()
-              (let ((final-phase (if gptel-auto-experiment--quota-exhausted
-                                     "quota-exhausted"
-                                   "complete")))
-                (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-                (gptel-auto-workflow--stop-status-refresh-timer)
-                (setq gptel-auto-workflow--running nil
-                      gptel-auto-workflow--run-project-root nil
-                      gptel-auto-workflow--current-target nil
-                      gptel-auto-workflow--current-project nil)
-                (setq gptel-auto-workflow--stats
-                      (plist-put gptel-auto-workflow--stats :phase final-phase))
-                (message "[auto-workflow] Complete: %d experiments, %d targets improved"
-                         (length all-results) kept-count)
-                (gptel-auto-workflow--persist-status)
-                (when completion-callback
-                  (funcall completion-callback all-results)))))))
+             (funcall
+              run-in-context
+              (lambda ()
+                (let ((final-phase (if gptel-auto-experiment--quota-exhausted
+                                       "quota-exhausted"
+                                     "complete")))
+                  (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                  (gptel-auto-workflow--stop-status-refresh-timer)
+                   (setq gptel-auto-workflow--status-run-id run-id
+                         gptel-auto-workflow--running nil
+                         gptel-auto-workflow--cron-job-running nil
+                         gptel-auto-workflow--run-id nil
+                         gptel-auto-workflow--run-project-root nil
+                         gptel-auto-workflow--current-target nil
+                         gptel-auto-workflow--current-project nil)
+                   (set-default-toplevel-value 'gptel-auto-workflow--status-run-id run-id)
+                   (set-default-toplevel-value 'gptel-auto-workflow--running nil)
+                   (set-default-toplevel-value 'gptel-auto-workflow--cron-job-running nil)
+                   (set-default-toplevel-value 'gptel-auto-workflow--run-id nil)
+                   (set-default-toplevel-value 'gptel-auto-workflow--run-project-root nil)
+                   (set-default-toplevel-value 'gptel-auto-workflow--current-target nil)
+                   (set-default-toplevel-value 'gptel-auto-workflow--current-project nil)
+                   (setq gptel-auto-workflow--stats
+                         (plist-put gptel-auto-workflow--stats :phase final-phase))
+                  (message "[auto-workflow] Complete: %d experiments, %d targets improved"
+                           (length all-results) kept-count)
+                  (gptel-auto-workflow--persist-status)
+                  (when completion-callback
+                    (funcall completion-callback all-results)))))))))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root
           gptel-auto-workflow--run-project-root proj-root)
@@ -9898,41 +9943,22 @@ into staging or main."
                          (if (not (gptel-auto-workflow--run-callback-live-p callback-run-id))
                              (message "[auto-workflow] Ignoring stale target completion for %s; run %s is no longer active"
                                       target run-id)
-                           (setq all-results (append all-results results))
-                           (setq kept-count
-                                 (gptel-auto-workflow--kept-target-count all-results))
-                           (setq gptel-auto-workflow--stats
-                                 (plist-put gptel-auto-workflow--stats :kept kept-count))
-                           (gptel-auto-workflow--persist-status)
-                           (if gptel-auto-experiment--quota-exhausted
-                               (progn
-                                 (message "[auto-workflow] Provider quota exhausted; stopping remaining targets")
-                                 (finish-run))
-                             (if (buffer-live-p run-buffer)
-                                 (with-current-buffer run-buffer
-                                   (let ((default-directory proj-root)
-                                         (gptel-auto-workflow--project-root-override proj-root)
-                                         (gptel-auto-workflow--current-project proj-root)
-                                         (gptel-auto-workflow--run-project-root proj-root))
-                                     (run-next (cdr remaining-targets))))
-                               (let ((default-directory proj-root)
-                                     (gptel-auto-workflow--project-root-override proj-root)
-                                     (gptel-auto-workflow--current-project proj-root)
-                                     (gptel-auto-workflow--run-project-root proj-root))
+                            (funcall
+                             run-in-context
+                             (lambda ()
+                               (setq all-results (append all-results results))
+                               (setq kept-count
+                                     (gptel-auto-workflow--kept-target-count all-results))
+                               (setq gptel-auto-workflow--stats
+                                     (plist-put gptel-auto-workflow--stats :kept kept-count))
+                               (gptel-auto-workflow--persist-status)
+                               (if gptel-auto-experiment--quota-exhausted
+                                   (progn
+                                     (message "[auto-workflow] Provider quota exhausted; stopping remaining targets")
+                                     (finish-run))
                                  (run-next (cdr remaining-targets))))))))))
-                 (gptel-auto-experiment-loop target target-complete))))))
-      (if (buffer-live-p run-buffer)
-          (with-current-buffer run-buffer
-            (let ((default-directory proj-root)
-                  (gptel-auto-workflow--project-root-override proj-root)
-                  (gptel-auto-workflow--current-project proj-root)
-                  (gptel-auto-workflow--run-project-root proj-root))
-              (run-next targets)))
-        (let ((default-directory proj-root)
-              (gptel-auto-workflow--project-root-override proj-root)
-              (gptel-auto-workflow--current-project proj-root)
-              (gptel-auto-workflow--run-project-root proj-root))
-          (run-next targets))))))
+                  (gptel-auto-experiment-loop target target-complete))))))
+      (funcall run-in-context (lambda () (run-next targets))))))
 
 (defun gptel-auto-workflow-run (&optional targets)
   "Run auto-workflow asynchronously.
