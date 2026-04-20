@@ -7439,7 +7439,8 @@ fall back to an error-shaped AGENT-OUTPUT."
 Only successful executor output may take the local grader retry path."
   (and (gptel-auto-experiment--grader-only-failure-p agent-output grade-error-output)
        (memq error-category '(:api-rate-limit :api-error :timeout))
-       (not (gptel-auto-experiment--hard-quota-exhausted-p grade-error-output))
+       (not (gptel-auto-experiment--hard-quota-stops-run-p "grader"
+                                                           grade-error-output))
        (< retries gptel-auto-experiment-max-grader-retries)))
 
 (defun gptel-auto-experiment--remaining-provider-failover-candidate (agent-type)

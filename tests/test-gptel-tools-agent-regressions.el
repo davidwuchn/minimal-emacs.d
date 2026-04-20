@@ -4271,6 +4271,49 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (= gptel-auto-experiment--api-error-count 1))
     (should-not gptel-auto-experiment--quota-exhausted)))
 
+(ert-deftest regression/auto-experiment/grade-with-retry-retries-hard-quota-when-grader-fallback-remains ()
+  "Grader hard quota should retry locally while another provider fallback remains."
+  (let ((grade-calls 0)
+        (scheduled-retries 0)
+        (final-grade nil)
+        (gptel-auto-experiment-max-grader-retries 2)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-experiment--api-error-count 0)
+        (gptel-auto-experiment--quota-exhausted nil)
+        (gptel-auto-experiment--grading-target "lisp/modules/gptel-tools-agent.el")
+        (gptel-auto-experiment--grading-worktree "/tmp/project"))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-grade)
+               (lambda (_output callback &optional _target _worktree)
+                 (cl-incf grade-calls)
+                 (funcall callback
+                          (if (= grade-calls 1)
+                              (list :score 0
+                                    :passed nil
+                                    :details
+                                    "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"insufficient_quota\" :message \"week allocated quota exceeded\" :http_code \"429\")")
+                            (list :score 4
+                                  :total 4
+                                  :passed t
+                                  :details "ok")))))
+              ((symbol-function 'gptel-auto-experiment--remaining-provider-failover-candidate)
+               (lambda (&rest _args) '("DashScope" . "qwen3.6-plus")))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (cl-incf scheduled-retries)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--grade-with-retry
+       "Executor result for task: candidate"
+       (lambda (grade)
+         (setq final-grade grade)))
+      (should (= grade-calls 2))
+      (should (= scheduled-retries 1))
+      (should-not gptel-auto-experiment--quota-exhausted)
+      (should (plist-get final-grade :passed))
+      (should (= (plist-get final-grade :score) 4)))))
+
 (ert-deftest regression/auto-experiment/run-with-retry-does-not-stop-successful-quota-discussion ()
   "Successful results should not trip the run-wide quota stop just by mentioning quota tokens."
   (let ((runs 0)
