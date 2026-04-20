@@ -83,7 +83,7 @@ ARGS are passed to `gptel-make-openai'."
     :key (lambda () (my/gptel-api-key "gateway.ai.cloudflare.com"))
     :stream t
     :models '(\@cf/zai-org/glm-4.7-flash
-              \@cf/moonshotai/kimi-k2.5
+              \@cf/moonshotai/kimi-k2.6
               \@cf/openai/whisper
               \@cf/openai/whisper-large-v3-turbo)))
 
