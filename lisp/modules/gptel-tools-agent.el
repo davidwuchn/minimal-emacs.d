@@ -425,6 +425,25 @@ allowed for compatibility with isolated tests."
   (format "var/tmp/experiments/%s/results.tsv"
           (or run-id (gptel-auto-workflow--current-run-id))))
 
+(defconst gptel-auto-workflow--results-tsv-header
+  "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\n"
+  "Header row written to auto-workflow results.tsv artifacts.")
+
+(defun gptel-auto-workflow--results-file-path (&optional run-id)
+  "Return the absolute results.tsv path for RUN-ID or the active run."
+  (expand-file-name
+   (gptel-auto-workflow--results-relative-path run-id)
+   (gptel-auto-workflow--worktree-base-root)))
+
+(defun gptel-auto-workflow--ensure-results-file (&optional run-id)
+  "Ensure results.tsv exists for RUN-ID and return its absolute path."
+  (let ((file (gptel-auto-workflow--results-file-path run-id)))
+    (make-directory (file-name-directory file) t)
+    (unless (file-exists-p file)
+      (with-temp-file file
+        (insert gptel-auto-workflow--results-tsv-header)))
+    file))
+
 (defun gptel-auto-workflow--tracking-file (&optional run-id)
   "Return orphan commit tracking file path for RUN-ID or the active run."
   (expand-file-name
@@ -6545,19 +6564,10 @@ Example HYPOTHESES:
 
 (defun gptel-auto-experiment-log-tsv (run-id experiment)
   "Append EXPERIMENT to results.tsv for RUN-ID."
-  (let* ((base-dir (gptel-auto-workflow--worktree-base-root))
-         (worktree-base-dir (or gptel-auto-workflow-worktree-base
-                                "var/tmp/experiments"))
-         (file (expand-file-name
-                (format "%s/%s/results.tsv" worktree-base-dir run-id)
-                base-dir))
+  (let* ((file (gptel-auto-workflow--ensure-results-file run-id))
          (agent-output (gptel-auto-workflow--plist-get experiment :agent-output ""))
          (truncated-output (gptel-auto-experiment--tsv-escape
                             (truncate-string-to-width agent-output 500 nil nil "..."))))
-    (make-directory (file-name-directory file) t)
-    (unless (file-exists-p file)
-      (with-temp-file file
-        (insert "experiment_id\ttarget\thypothesis\tscore_before\tscore_after\tcode_quality\tdelta\tdecision\tduration\tgrader_quality\tgrader_reason\tcomparator_reason\tanalyzer_patterns\tagent_output\n")))
     (with-temp-buffer
       (insert-file-contents file)
       (goto-char (point-max))
@@ -9097,6 +9107,7 @@ Usage:
           gptel-auto-workflow--running t
           gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
           gptel-auto-workflow--last-progress-time (current-time))
+    (gptel-auto-workflow--ensure-results-file gptel-auto-workflow--run-id)
     (unless gptel-auto-workflow--cron-job-running
       (gptel-auto-workflow--mark-messages-start))
     (gptel-auto-workflow--start-status-refresh-timer)
@@ -9411,22 +9422,22 @@ into staging or main."
          (finish
           (gptel-auto-workflow--make-idempotent-callback
            (lambda ()
-             (let ((final-phase (if gptel-auto-experiment--quota-exhausted
-                                    "quota-exhausted"
-                                  "complete")))
-               (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-               (gptel-auto-workflow--stop-status-refresh-timer)
-               (setq gptel-auto-workflow--running nil
-                     gptel-auto-workflow--run-project-root nil
-                     gptel-auto-workflow--current-target nil
-                     gptel-auto-workflow--current-project nil)
-               (setq gptel-auto-workflow--stats
-                     (plist-put gptel-auto-workflow--stats :phase final-phase))
-               (gptel-auto-workflow--persist-status)
-               (message "[auto-workflow] Complete: %d experiments, %d targets improved"
-                        (length all-results) kept-count)
-               (when completion-callback
-                 (funcall completion-callback all-results)))))))
+              (let ((final-phase (if gptel-auto-experiment--quota-exhausted
+                                     "quota-exhausted"
+                                   "complete")))
+                (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                (gptel-auto-workflow--stop-status-refresh-timer)
+                (setq gptel-auto-workflow--running nil
+                      gptel-auto-workflow--run-project-root nil
+                      gptel-auto-workflow--current-target nil
+                      gptel-auto-workflow--current-project nil)
+                (setq gptel-auto-workflow--stats
+                      (plist-put gptel-auto-workflow--stats :phase final-phase))
+                (message "[auto-workflow] Complete: %d experiments, %d targets improved"
+                         (length all-results) kept-count)
+                (gptel-auto-workflow--persist-status)
+                (when completion-callback
+                  (funcall completion-callback all-results)))))))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root
           gptel-auto-workflow--run-project-root proj-root)

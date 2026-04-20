@@ -5509,8 +5509,74 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (funcall (cdr (assoc "four" callbacks)) '((:target "four" :kept t)))
        (should (= (plist-get gptel-auto-workflow--stats :kept) 3))
        (funcall (cdr (assoc "five" callbacks)) '((:target "five" :kept nil)))
-       (should (= (plist-get gptel-auto-workflow--stats :kept) 3))
-       (should (= (gptel-auto-workflow--kept-target-count completed) 3)))))
+        (should (= (plist-get gptel-auto-workflow--stats :kept) 3))
+        (should (= (gptel-auto-workflow--kept-target-count completed) 3)))))
+
+(ert-deftest regression/auto-workflow/run-async-persists-empty-results-artifacts ()
+  "Zero-row runs should still create results.tsv and capture the completion tail."
+  (let* ((tmpdir (make-temp-file "gptel-empty-results" t))
+         (run-id "run-empty-results")
+         (status-file (expand-file-name "auto-workflow-status.sexp" tmpdir))
+         (messages-file (expand-file-name "auto-workflow-messages-tail.txt" tmpdir))
+         (results-file (expand-file-name
+                        (format "var/tmp/experiments/%s/results.tsv" run-id)
+                        tmpdir))
+         (message-log-max t)
+         (gptel-auto-workflow-status-file status-file)
+         (gptel-auto-workflow-messages-file messages-file)
+         (gptel-auto-workflow--stats nil)
+         (gptel-auto-workflow--running nil)
+         (gptel-auto-workflow--cron-job-running nil)
+         (gptel-auto-workflow--run-id run-id)
+         (gptel-auto-workflow--current-target nil)
+         completed)
+    (with-current-buffer (get-buffer-create "*Messages*")
+      (let ((inhibit-read-only t))
+        (erase-buffer)))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--active-use-p)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--require-magit-dependencies)
+               (lambda () t))
+              ((symbol-function 'gptel-auto-workflow--migrate-legacy-provider-defaults)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--start-status-refresh-timer)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--restart-watchdog-timer)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--stop-status-refresh-timer)
+               (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--default-dir)
+               (lambda () tmpdir))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () tmpdir))
+              ((symbol-function 'gptel-auto-experiment-loop)
+               (lambda (_target cb)
+                 (funcall cb nil))))
+      (unwind-protect
+          (progn
+            (gptel-auto-workflow-run-async
+             '("one")
+             (lambda (results)
+               (setq completed results)))
+            (should (null completed))
+            (should (file-exists-p results-file))
+            (with-temp-buffer
+              (insert-file-contents results-file)
+              (should (equal (buffer-string)
+                             gptel-auto-workflow--results-tsv-header)))
+            (with-temp-buffer
+              (insert-file-contents status-file)
+              (should (string-match-p
+                       (regexp-quote "run-empty-results/results.tsv")
+                       (buffer-string))))
+            (with-temp-buffer
+              (insert-file-contents messages-file)
+              (should (string-match-p
+                       "Complete: 0 experiments, 0 targets improved"
+                       (buffer-string)))))
+        (delete-directory tmpdir t)))))
 
 (ert-deftest regression/auto-workflow/log-tsv-updates-live-kept-count ()
   "Durable kept rows should update live kept status before a target finishes."
