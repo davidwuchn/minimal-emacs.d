@@ -211,7 +211,7 @@
          (info (list :tool-use (list tc)
                      :buffer request-buffer
                      :doom-loop-fingerprints (list fp)
-                     :doom-loop-current-run 2))
+                     :doom-loop-run-counts (list (cons fp 2))))
          (fsm (gptel-make-fsm :info info))
          logged-message
          callback-message
