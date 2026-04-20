@@ -13337,6 +13337,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (cl-letf (((symbol-function 'my/gptel--agent-task-buffer-priority)
                    (lambda (_state _buffer) 0)))
           (puthash 3 (list :request-buf nil
+                           :launching nil
                            :process-environment task-env)
                    my/gptel--agent-task-state)
           (my/gptel--register-agent-task-buffer buf)
@@ -13344,6 +13345,29 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
             (should (equal gptel-auto-workflow--subagent-process-environment task-env))
             (should (equal process-environment task-env)))
           (should (eq (plist-get (gethash 3 my/gptel--agent-task-state) :request-buf)
+                      buf)))
+      (kill-buffer buf))))
+
+(ert-deftest regression/subagent/register-agent-task-buffer-defers-env-during-launch ()
+  "Request buffer registration should defer env persistence until launch completes."
+  (let* ((buf (generate-new-buffer "*test-subagent-launching*"))
+         (task-env '("AUTO_WORKFLOW_EMACS_SERVER=isolated-server"
+                     "AUTO_WORKFLOW_STATUS_FILE=/tmp/isolated-status.sexp"
+                     "PATH=/usr/bin"))
+         (my/gptel--agent-task-state (make-hash-table :test 'eql))
+         (my/gptel--current-agent-task-id 4))
+    (unwind-protect
+        (cl-letf (((symbol-function 'my/gptel--agent-task-buffer-priority)
+                   (lambda (_state _buffer) 0)))
+          (puthash 4 (list :request-buf nil
+                           :launching t
+                           :process-environment task-env)
+                   my/gptel--agent-task-state)
+          (my/gptel--register-agent-task-buffer buf)
+          (with-current-buffer buf
+            (should-not (local-variable-p 'gptel-auto-workflow--subagent-process-environment))
+            (should-not (local-variable-p 'process-environment)))
+          (should (eq (plist-get (gethash 4 my/gptel--agent-task-state) :request-buf)
                       buf)))
       (kill-buffer buf))))
 

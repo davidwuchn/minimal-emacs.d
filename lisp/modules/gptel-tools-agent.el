@@ -1141,10 +1141,6 @@ large-result truncation, and result caching."
                  (parent-buf (or (when (buffer-live-p info-buf)
                                     info-buf)
                                   (current-buffer)))
-                 (_
-                  (when (fboundp 'gptel-auto-workflow--persist-subagent-process-environment)
-                    (gptel-auto-workflow--persist-subagent-process-environment
-                     parent-buf)))
                  (where (or (let ((tm (plist-get info :tracking-marker)))
                               (and (markerp tm) (marker-position tm) tm))
                             (let ((pos (plist-get info :position)))
@@ -1749,19 +1745,24 @@ TIMESTAMP defaults to `current-time'."
              (buffer-live-p buffer))
     (when-let* ((state (gethash my/gptel--current-agent-task-id
                                 my/gptel--agent-task-state)))
-      (when-let* ((task-env (plist-get state :process-environment))
-                  ((fboundp 'gptel-auto-workflow--persist-subagent-process-environment)))
-        (gptel-auto-workflow--persist-subagent-process-environment
-         buffer task-env))
       (let* ((current (plist-get state :request-buf))
              (current-priority (my/gptel--agent-task-buffer-priority state current))
-             (new-priority (my/gptel--agent-task-buffer-priority state buffer)))
-        (when (or (not (buffer-live-p current))
-                  (eq current buffer)
-                  (> new-priority current-priority))
-          (puthash my/gptel--current-agent-task-id
-                   (plist-put state :request-buf buffer)
-                   my/gptel--agent-task-state)))))
+             (new-priority (my/gptel--agent-task-buffer-priority state buffer))
+             (updated-state
+              (if (or (not (buffer-live-p current))
+                      (eq current buffer)
+                      (> new-priority current-priority))
+                  (plist-put state :request-buf buffer)
+                state)))
+        (puthash my/gptel--current-agent-task-id
+                 updated-state
+                 my/gptel--agent-task-state)
+        (when (and (not (plist-get updated-state :launching))
+                   (plist-get updated-state :process-environment)
+                   (fboundp 'gptel-auto-workflow--persist-subagent-process-environment))
+          (gptel-auto-workflow--persist-subagent-process-environment
+           buffer
+           (plist-get updated-state :process-environment))))))
   buffer)
 
 (defun my/gptel--reset-agent-task-state ()
@@ -2141,6 +2142,7 @@ Uses hash table keyed by task-id to support parallel execution."
                                :progress-timer progress-timer
                                :origin-buf origin-buf
                                :request-buf nil
+                               :launching t
                                :process-environment nil
                                :last-buffer-tick nil
                                :last-activity-time (current-time)
@@ -2160,26 +2162,28 @@ Uses hash table keyed by task-id to support parallel execution."
                       (my/gptel--call-gptel-agent-task
                        wrapped-cb agent-type description packaged-prompt)
                       (setq request-started t)
-                      (when-let* ((state (gethash task-id my/gptel--agent-task-state))
-                                  (request-buf (my/gptel--agent-task-request-buffer state))
-                                  ((buffer-live-p request-buf)))
-                        (when-let* ((task-env (plist-get state :process-environment))
-                                    ((fboundp 'gptel-auto-workflow--persist-subagent-process-environment)))
-                          (gptel-auto-workflow--persist-subagent-process-environment
-                           request-buf task-env))
-                        (with-current-buffer request-buf
-                          (when (local-variable-p 'gptel--fsm-last)
-                            (setq child-fsm gptel--fsm-last)
-                            (when (and (boundp 'gptel-tools)
-                                       gptel-tools)
-                              (my/gptel--seed-fsm-tools child-fsm gptel-tools))
-                            (my/gptel--disable-auto-retry-for-fsm child-fsm)))
-                        (let* ((state (gethash task-id my/gptel--agent-task-state))
-                               (tick (my/gptel--agent-task-buffer-tick request-buf)))
-                          (when (and state tick)
-                            (puthash task-id
-                                     (plist-put state :last-buffer-tick tick)
-                                     my/gptel--agent-task-state)))))
+                      (when-let* ((state (gethash task-id my/gptel--agent-task-state)))
+                        (setq state (plist-put state :launching nil))
+                        (puthash task-id state my/gptel--agent-task-state)
+                        (let ((request-buf (my/gptel--agent-task-request-buffer state)))
+                          (when (buffer-live-p request-buf)
+                           (when-let* ((task-env (plist-get state :process-environment))
+                                       ((fboundp 'gptel-auto-workflow--persist-subagent-process-environment)))
+                             (gptel-auto-workflow--persist-subagent-process-environment
+                              request-buf task-env))
+                            (with-current-buffer request-buf
+                              (when (local-variable-p 'gptel--fsm-last)
+                                (setq child-fsm gptel--fsm-last)
+                                (when (and (boundp 'gptel-tools)
+                                           gptel-tools)
+                                  (my/gptel--seed-fsm-tools child-fsm gptel-tools))
+                                (my/gptel--disable-auto-retry-for-fsm child-fsm)))
+                            (let* ((state (gethash task-id my/gptel--agent-task-state))
+                                   (tick (my/gptel--agent-task-buffer-tick request-buf)))
+                              (when (and state tick)
+                                (puthash task-id
+                                         (plist-put state :last-buffer-tick tick)
+                                         my/gptel--agent-task-state)))))))
                   (error
                    (setq launch-error err)))
               (unless request-started
