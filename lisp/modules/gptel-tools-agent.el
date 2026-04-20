@@ -8703,14 +8703,18 @@ Relative paths are resolved from the project root."
 
 (defun gptel-auto-workflow--status-plist ()
   "Return current workflow status as a plist."
-  (let ((run-id (gptel-auto-workflow--current-run-id)))
-    (list :running (or gptel-auto-workflow--running
-                       (bound-and-true-p gptel-auto-workflow--cron-job-running))
+  (let* ((running (or gptel-auto-workflow--running
+                      (bound-and-true-p gptel-auto-workflow--cron-job-running)))
+         (run-id (and (stringp gptel-auto-workflow--run-id)
+                      (not (string-empty-p gptel-auto-workflow--run-id))
+                      gptel-auto-workflow--run-id)))
+    (list :running running
           :kept (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :kept 0)
           :total (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :total 0)
           :phase (gptel-auto-workflow--plist-get gptel-auto-workflow--stats :phase "idle")
           :run-id run-id
-          :results (gptel-auto-workflow--results-relative-path run-id))))
+          :results (and run-id
+                        (gptel-auto-workflow--results-relative-path run-id)))))
 
 (defun gptel-auto-workflow--status-active-p (status)
   "Return non-nil when STATUS reflects an active workflow snapshot."

@@ -6201,6 +6201,29 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
        (when (timerp gptel-auto-workflow--status-refresh-timer)
          (cancel-timer gptel-auto-workflow--status-refresh-timer)))))
 
+(ert-deftest regression/auto-workflow/force-stop-clears-idle-run-metadata ()
+  "Force stop should clear idle run metadata before persisting status."
+  (let ((persisted-status nil)
+        (gptel-auto-workflow--stats '(:phase "running" :total 5 :kept 1))
+        (gptel-auto-workflow--run-id "2026-04-20T223106Z-119c")
+        (gptel-auto-workflow--running t)
+        (gptel-auto-workflow--cron-job-running t))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--persist-status)
+               (lambda ()
+                 (setq persisted-status (gptel-auto-workflow--status-plist))))
+              ((symbol-function 'gptel-auto-workflow--terminate-active-shell-processes)
+               (lambda () nil))
+              ((symbol-function 'my/gptel--reset-agent-task-state) (lambda () nil))
+              ((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+               (lambda () nil))
+              ((symbol-function 'gptel-mementum--reset-synthesis-state) (lambda () nil))
+              ((symbol-function 'gptel-auto-experiment--reset-grade-state) (lambda () nil)))
+      (gptel-auto-workflow-force-stop))
+    (should-not (plist-get persisted-status :running))
+    (should (equal (plist-get persisted-status :phase) "idle"))
+    (should-not (plist-get persisted-status :run-id))
+    (should-not (plist-get persisted-status :results))))
+
 (ert-deftest regression/auto-workflow/force-stop-invalidates-stale-subagent-callbacks ()
   "Late subagent completions after force-stop should be ignored."
   (let ((captured-callback nil)
@@ -10485,6 +10508,20 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                      :phase "selecting"
                      :run-id "2026-04-06T022911Z-0af8"
                      :results "var/tmp/experiments/2026-04-06T022911Z-0af8/results.tsv")))))
+
+(ert-deftest regression/auto-workflow/status-plist-omits-run-metadata-when-idle ()
+  "Idle status should not synthesize run metadata when no run is active."
+  (let ((gptel-auto-workflow--run-id nil)
+        (gptel-auto-workflow--running nil)
+        (gptel-auto-workflow--cron-job-running nil)
+        (gptel-auto-workflow--stats '(:phase "idle" :total 5 :kept 0)))
+    (should (equal (gptel-auto-workflow--status-plist)
+                   '(:running nil
+                     :kept 0
+                     :total 5
+                     :phase "idle"
+                     :run-id nil
+                     :results nil)))))
 
 (ert-deftest regression/auto-workflow/status-file-honors-environment-override ()
   "Workflow status file should honor AUTO_WORKFLOW_STATUS_FILE."
