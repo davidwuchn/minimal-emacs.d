@@ -7442,15 +7442,45 @@ Only successful executor output may take the local grader retry path."
        (not (gptel-auto-experiment--hard-quota-exhausted-p grade-error-output))
        (< retries gptel-auto-experiment-max-grader-retries)))
 
-(defun gptel-auto-experiment--note-api-pressure (target error-category error-source)
-  "Record shared API pressure state for TARGET after ERROR-CATEGORY from ERROR-SOURCE."
+(defun gptel-auto-experiment--remaining-provider-failover-candidate (agent-type)
+  "Return the next available provider fallback for AGENT-TYPE in this run, or nil."
+  (when (and (stringp agent-type)
+             (fboundp 'gptel-auto-workflow--headless-provider-override-active-p)
+             (gptel-auto-workflow--headless-provider-override-active-p)
+             (fboundp 'gptel-auto-workflow--rate-limit-failover-candidates)
+             (fboundp 'gptel-auto-workflow--first-available-provider-candidate))
+    (gptel-auto-workflow--first-available-provider-candidate
+     (gptel-auto-workflow--rate-limit-failover-candidates agent-type)
+     gptel-auto-workflow--rate-limited-backends)))
+
+(defun gptel-auto-experiment--hard-quota-stops-run-p (agent-type error-output)
+  "Return non-nil when ERROR-OUTPUT should stop the run for AGENT-TYPE.
+
+Hard quota errors only stop the whole run after the configured provider fallback
+chain is exhausted. When another backend is still available, the workflow keeps
+retrying on that provider instead."
+  (and (gptel-auto-experiment--hard-quota-exhausted-p error-output)
+       (not (gptel-auto-experiment--remaining-provider-failover-candidate
+             agent-type))))
+
+(defun gptel-auto-experiment--note-api-pressure (target error-category error-source &optional agent-type)
+  "Record shared API pressure state for TARGET after ERROR-CATEGORY from ERROR-SOURCE.
+
+AGENT-TYPE is the subagent that produced ERROR-SOURCE, when known."
   (when (memq error-category '(:api-rate-limit :api-error))
     (cl-incf gptel-auto-experiment--api-error-count)
     (message "[auto-workflow] API error #%d: %s"
              gptel-auto-experiment--api-error-count error-category)
     (when (gptel-auto-experiment--hard-quota-exhausted-p error-source)
-      (setq gptel-auto-experiment--quota-exhausted t)
-      (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run"))
+      (if-let ((remaining
+                (gptel-auto-experiment--remaining-provider-failover-candidate
+                 (or agent-type "executor"))))
+          (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
+                   (or agent-type "subagent")
+                   (car remaining)
+                   (cdr remaining))
+        (setq gptel-auto-experiment--quota-exhausted t)
+        (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run")))
     (when (>= gptel-auto-experiment--api-error-count gptel-auto-experiment--api-error-threshold)
       (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
                target))))
@@ -7479,8 +7509,8 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
                   (gptel-auto-experiment--should-retry-grader-p
                    output grade-error-output error-category retries))
              (progn
-               (gptel-auto-experiment--note-api-pressure
-                target error-category grade-error-output)
+                (gptel-auto-experiment--note-api-pressure
+                 target error-category grade-error-output "grader")
                (let ((retry-delay
                       (gptel-auto-experiment--retry-delay-seconds
                        grade-error-output retries)))
@@ -7505,7 +7535,8 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
                         (funcall callback final-grade)))))))
            (when (and (not grade-passed)
                       (memq error-category '(:api-rate-limit :api-error)))
-             (gptel-auto-experiment--note-api-pressure target error-category error-source))
+              (gptel-auto-experiment--note-api-pressure
+               target error-category error-source "grader"))
            (let ((final-grade (copy-sequence grade)))
              (when grade-error-output
                (setq final-grade
@@ -7573,7 +7604,8 @@ RETRY-COUNT tracks current retry attempt."
                 (gptel-auto-experiment--hard-timeout-p raw-error))
                (quota-exhausted
                 (or gptel-auto-experiment--quota-exhausted
-                    (gptel-auto-experiment--hard-quota-exhausted-p quota-source)))
+                    (gptel-auto-experiment--hard-quota-stops-run-p
+                     "executor" quota-source)))
                (api-rate-limit-category
                 (memq error-type '(:api-rate-limit)))
                (timeout-category

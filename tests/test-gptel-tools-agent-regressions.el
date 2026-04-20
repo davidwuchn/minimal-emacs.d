@@ -4195,24 +4195,81 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                  (cl-incf runs)
                  (funcall callback
                           (list :agent-output
-                                "Error: Task executor could not finish task \"x\". Error details: (:type \"insufficient_quota\" :message \"week allocated quota exceeded\" :http_code \"429\")"
-                                :comparator-reason ":api-rate-limit"))))
-               ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
-                (lambda (&rest _args) t))
-               ((symbol-function 'run-with-timer)
-                (lambda (&rest _args)
-                  (setq scheduled-retry t)
-                  :fake-timer))
+                                 "Error: Task executor could not finish task \"x\". Error details: (:type \"insufficient_quota\" :message \"week allocated quota exceeded\" :http_code \"429\")"
+                                 :comparator-reason ":api-rate-limit"))))
+                ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+                 (lambda (&rest _args) t))
+                ((symbol-function 'gptel-auto-experiment--remaining-provider-failover-candidate)
+                 (lambda (&rest _args) nil))
+                ((symbol-function 'run-with-timer)
+                 (lambda (&rest _args)
+                   (setq scheduled-retry t)
+                   :fake-timer))
                ((symbol-function 'message)
                (lambda (&rest _args) nil)))
       (gptel-auto-experiment--run-with-retry
        "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
         (lambda (result)
           (setq final-result result)))
-       (should (= runs 1))
-        (should-not scheduled-retry)
-         (should gptel-auto-experiment--quota-exhausted)
-         (should (string-match-p "week allocated quota exceeded" (plist-get final-result :agent-output))))))
+        (should (= runs 1))
+         (should-not scheduled-retry)
+          (should gptel-auto-experiment--quota-exhausted)
+          (should (string-match-p "week allocated quota exceeded" (plist-get final-result :agent-output))))))
+
+(ert-deftest regression/auto-experiment/run-with-retry-retries-hard-quota-when-fallback-remains ()
+  "Hard quota errors should retry when another provider fallback is still available."
+  (let ((runs 0)
+        (scheduled-retries 0)
+        (final-result nil)
+        (gptel-auto-experiment-max-retries 3)
+        (gptel-auto-experiment-retry-delay 0)
+        (gptel-auto-experiment--quota-exhausted nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
+                 (cl-incf runs)
+                 (funcall callback
+                          (if (= runs 1)
+                              (list :agent-output
+                                    "Error: Task executor could not finish task \"x\". Error details: (:type \"insufficient_quota\" :message \"month allocated quota exceeded\" :http_code \"429\")"
+                                    :comparator-reason ":api-rate-limit")
+                            (list :agent-output "Executor result for task: retry success"
+                                  :comparator-reason "ok")))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (&rest _args) t))
+              ((symbol-function 'gptel-auto-experiment--remaining-provider-failover-candidate)
+               (lambda (&rest _args) '("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")))
+              ((symbol-function 'run-with-timer)
+               (lambda (_secs _repeat fn &rest args)
+                 (cl-incf scheduled-retries)
+                 (apply fn args)
+                 :fake-timer))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--run-with-retry
+       "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+       (lambda (result)
+         (setq final-result result)))
+      (should (= runs 2))
+      (should (= scheduled-retries 1))
+      (should-not gptel-auto-experiment--quota-exhausted)
+      (should (equal (plist-get final-result :agent-output)
+                     "Executor result for task: retry success")))))
+
+(ert-deftest regression/auto-experiment/note-api-pressure-keeps-run-alive-when-fallback-remains ()
+  "Hard quota telemetry should not stop the run while a fallback provider remains."
+  (let ((gptel-auto-experiment--api-error-count 0)
+        (gptel-auto-experiment--quota-exhausted nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment--remaining-provider-failover-candidate)
+               (lambda (&rest _args) '("Gemini" . "gemini-3.1-pro-preview")))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--note-api-pressure
+       "lisp/modules/gptel-ext-fsm-utils.el"
+       :api-rate-limit
+       "Error: Task executor could not finish task \"x\". Error details: (:code \"insufficient_quota\" :message \"month allocated quota exceeded.\" :param :null :type \"invalid_request_error\")"
+       "executor"))
+    (should (= gptel-auto-experiment--api-error-count 1))
+    (should-not gptel-auto-experiment--quota-exhausted)))
 
 (ert-deftest regression/auto-experiment/run-with-retry-does-not-stop-successful-quota-discussion ()
   "Successful results should not trip the run-wide quota stop just by mentioning quota tokens."
