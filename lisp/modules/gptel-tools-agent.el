@@ -1103,6 +1103,9 @@ FSM-local snapshot so later tool dispatch matches the request payload."
 ;; position and large-result truncation.  Respects `my/gptel-subagent-stream'
 ;; (default nil = non-streaming for reliability with DashScope).
 
+(defvar gptel-auto-workflow--defer-subagent-env-persistence nil
+  "When non-nil, defer buffer-local subagent env persistence until launch ends.")
+
 (defun my/gptel-agent--task-override (main-cb agent-type description prompt)
   "Call a gptel agent to do specific compound tasks.
 Like upstream `gptel-agent--task' but adds parent-buffer tracking-marker,
@@ -1858,6 +1861,8 @@ its async continuation layer in the worker daemon."
                 "copilot-auto-workflow-subagent-"
                 nil
                 t)))
+         (gptel-auto-workflow--defer-subagent-env-persistence
+          (and isolated-env t))
          (gptel-auto-workflow--subagent-process-environment isolated-env)
          (process-environment
           (or isolated-env process-environment))
@@ -5808,9 +5813,64 @@ least `gptel-auto-experiment-repeat-focus-threshold' previous attempts."
         (when matches
           (let* ((sorted (sort matches (lambda (a b) (> (cdr a) (cdr b)))))
                  (best (car sorted)))
-            (list :symbol (car best)
-                  :count (cdr best)
-                  :matches (nreverse sorted))))))))
+             (list :symbol (car best)
+                   :count (cdr best)
+                   :matches (nreverse sorted))))))))
+
+(defun gptel-auto-experiment--subagent-raw-result (result)
+  "Return raw transient error text from RESULT, or nil when unavailable."
+  (cond
+   ((stringp result) result)
+   ((and (listp result)
+         (stringp (plist-get result :raw)))
+    (plist-get result :raw))
+   (t nil)))
+
+(defun gptel-auto-experiment--retryable-aux-subagent-category (result)
+  "Return retryable transient error category for RESULT, or nil."
+  (when-let* ((raw (gptel-auto-experiment--subagent-raw-result result))
+              (category (car (gptel-auto-experiment--categorize-error raw))))
+    (when (or (memq category '(:timeout :api-rate-limit))
+              (and (eq category :api-error)
+                   (gptel-auto-experiment--is-retryable-error-p raw)))
+      category)))
+
+(defun gptel-auto-experiment--current-subagent-preset (agent-type)
+  "Return the effective preset for AGENT-TYPE in the current run."
+  (when-let* ((base-preset
+               (and (fboundp 'gptel-auto-workflow--agent-base-preset)
+                    (gptel-auto-workflow--agent-base-preset agent-type))))
+    (if (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider)
+        (gptel-auto-workflow--maybe-override-subagent-provider agent-type base-preset)
+      base-preset)))
+
+(defun gptel-auto-experiment--call-aux-subagent-with-retry
+    (agent-type invoke callback &optional retries)
+  "Invoke AGENT-TYPE via INVOKE, retrying transient failures before CALLBACK.
+
+INVOKE is called with a single callback argument and must start the actual
+subagent request."
+  (funcall
+   invoke
+   (lambda (result)
+     (let* ((attempt (or retries 0))
+            (category
+             (gptel-auto-experiment--retryable-aux-subagent-category result))
+            (raw (gptel-auto-experiment--subagent-raw-result result)))
+       (if (and category
+                (< attempt gptel-auto-experiment-max-aux-subagent-retries))
+           (progn
+             (when-let ((preset
+                         (gptel-auto-experiment--current-subagent-preset
+                          agent-type)))
+               (gptel-auto-workflow--activate-provider-failover
+                agent-type preset raw))
+             (message "[auto-exp] %s failed transiently (%s), retrying (%d/%d)"
+                      agent-type category
+                      (1+ attempt) gptel-auto-experiment-max-aux-subagent-retries)
+             (gptel-auto-experiment--call-aux-subagent-with-retry
+              agent-type invoke callback (1+ attempt)))
+         (funcall callback result))))))
 
 (defun gptel-auto-experiment-analyze (previous-results callback)
   "Analyze patterns from PREVIOUS-RESULTS. Call CALLBACK with analysis.
@@ -5826,9 +5886,13 @@ The analyzer subagent overlay will appear in the current buffer at time of call.
              (fboundp 'gptel-benchmark-analyze)
              previous-results)
         (with-current-buffer analyze-buffer
-          (gptel-benchmark-analyze
-           previous-results
-           "Experiment patterns"
+          (gptel-auto-experiment--call-aux-subagent-with-retry
+           "analyzer"
+           (lambda (cb)
+             (gptel-benchmark-analyze
+              previous-results
+              "Experiment patterns"
+              cb))
            finalize))
       (funcall finalize nil))))
 
@@ -6222,51 +6286,55 @@ Then on a new line, briefly explain why (1 sentence)."
                                       decision-threshold
                                       decision-threshold
                                       decision-threshold)))
-          (with-current-buffer decide-buffer
-            (gptel-benchmark-call-subagent
-             'comparator
-             "Compare experiment results"
-             compare-prompt
-             (lambda (result)
-               (let* ((response (if (stringp result) result (format "%S" result)))
-                      (reported-winner (or (gptel-auto-experiment--parse-comparator-winner response)
-                                           "unparsed"))
-                      (winner expected-winner)
-                      (override (not (string= reported-winner expected-winner)))
-                      (keep (string= winner "B")))
-                 (my/gptel--invoke-callback-safely
-                  callback
-                  (list :keep keep
-                        :reasoning (format "%sWinner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
-                                           (if override
-                                               (format "Comparator override: %s -> %s | "
-                                                       reported-winner winner)
-                                             "")
-                                           winner score-before score-after
-                                           quality-before quality-after
-                                           combined-before combined-after
-                                           (if gate-note
-                                               (format " | %s" gate-note)
-                                             ""))
-                        :improvement (list :score (- score-after score-before)
-                                           :quality (- quality-after quality-before)
-                                           :combined (- combined-after combined-before)))))))))
+           (with-current-buffer decide-buffer
+             (gptel-auto-experiment--call-aux-subagent-with-retry
+              "comparator"
+              (lambda (cb)
+                (gptel-benchmark-call-subagent
+                 'comparator
+                 "Compare experiment results"
+                 compare-prompt
+                 cb))
+              (lambda (result)
+                (let* ((response (if (stringp result) result (format "%S" result)))
+                       (reported-winner (or (gptel-auto-experiment--parse-comparator-winner response)
+                                            "unparsed"))
+                       (winner expected-winner)
+                       (override (not (string= reported-winner expected-winner)))
+                       (keep (string= winner "B")))
+                  (my/gptel--invoke-callback-safely
+                   callback
+                   (list :keep keep
+                         :reasoning (format "%sWinner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
+                                            (if override
+                                                (format "Comparator override: %s -> %s | "
+                                                        reported-winner winner)
+                                              "")
+                                            winner score-before score-after
+                                            quality-before quality-after
+                                            combined-before combined-after
+                                            (if gate-note
+                                                (format " | %s" gate-note)
+                                              ""))
+                         :improvement (list :score (- score-after score-before)
+                                            :quality (- quality-after quality-before)
+                                            :combined (- combined-after combined-before)))))))))
       (let ((winner expected-winner)
             (keep (string= expected-winner "B")))
         (my/gptel--invoke-callback-safely
          callback
          (list :keep keep
-               :reasoning (format "Local: Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
-                                  winner
-                                  score-before score-after
-                                  quality-before quality-after
-                                  combined-before combined-after
-                                  (if gate-note
-                                      (format " | %s" gate-note)
-                                    ""))
-               :improvement (list :score (- score-after score-before)
-                                  :quality (- quality-after quality-before)
-                                  :combined (- combined-after combined-before))))))))
+                :reasoning (format "Local: Winner: %s | Score: %.2f → %.2f, Quality: %.2f → %.2f, Combined: %.2f → %.2f%s"
+                                   winner
+                                   score-before score-after
+                                   quality-before quality-after
+                                   combined-before combined-after
+                                   (if gate-note
+                                       (format " | %s" gate-note)
+                                     ""))
+                :improvement (list :score (- score-after score-before)
+                                   :quality (- quality-after quality-before)
+                                   :combined (- combined-after combined-before))))))))
 
 (defun gptel-auto-experiment--strong-grade-pass-p (grade-score grade-total)
   "Return non-nil when GRADE-SCORE reflects a strong pass.
@@ -6850,6 +6918,11 @@ MAX-LEN defaults to 200 characters. Handles nil/empty strings safely."
 These retries reuse the successful executor output instead of rerunning the
 entire experiment. Two retries let the grader advance past one failing
 fallback backend before giving up on otherwise-good executor output.")
+
+(defvar gptel-auto-experiment-max-aux-subagent-retries 2
+  "Maximum local retries for transient analyzer/comparator failures.
+These retries keep the current experiment alive while headless provider
+failover advances past transient timeout or provider-pressure failures.")
 
 (defvar gptel-auto-experiment-retry-delay 5
   "Seconds to wait between retries.")
