@@ -7395,7 +7395,7 @@ REASON is only used for logging."
            (gptel-auto-experiment--provider-usage-limit-error-p error-output)
             (let ((case-fold-search t))
               (string-match-p
-               "throttling\\|rate.limit\\|quota\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
+               "rate_limit_error\\|rate.limit.exceeded\\|rate.limit.hit\\|quota.exceeded\\|quota.insufficient\\|429\\|timeout\\|timed out\\|temporary\\|overloaded\\|server_error\\|WebClientRequestException\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out\\|authorized_error\\|token is unusable\\|invalid[_ ]api[_ ]key\\|unauthorized\\|http_code \"401\""
                error-output)))))
 
 (defun gptel-auto-experiment--provider-usage-limit-error-p (error-output)
@@ -7407,12 +7407,13 @@ REASON is only used for logging."
           error-output))))
 
 (defun gptel-auto-experiment--rate-limit-error-p (error-output)
-  "Return non-nil when ERROR-OUTPUT reflects retryable provider pressure."
+  "Return non-nil when ERROR-OUTPUT reflects retryable provider pressure.
+Only triggers on actual quota/rate limit errors, not general throttling."
   (and (stringp error-output)
        (or (gptel-auto-experiment--provider-usage-limit-error-p error-output)
            (let ((case-fold-search t))
              (string-match-p
-              "rate_limit_error\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|throttling\\|rate.limit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
+              "rate_limit_error\\|allocated quota exceeded\\|insufficient_quota\\|billing_hard_limit_reached\\|rate.limit.exceeded\\|rate.limit.hit\\|429\\|overloaded_error\\|cluster overloaded\\|529\\|负载较高"
               error-output)))))
 
 (defun gptel-auto-experiment--provider-auth-error-p (error-output)
