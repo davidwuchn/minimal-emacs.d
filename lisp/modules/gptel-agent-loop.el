@@ -476,15 +476,12 @@ planning without action.  Also checks continuation count
 limit for early exit."
   (unless (stringp resp)
     (setq resp ""))
-  (let ((cont-count (gptel-agent-loop--continuation-count state)))
-    (and gptel-agent-loop-force-completion
-         gptel-agent-loop-hard-loop
-         (< cont-count gptel-agent-loop-max-continuations)
-         (not (gptel-agent-loop--seems-complete-p resp))
-         (not (gptel-agent-loop--looks-like-finishing-p resp))
-         (not (gptel-agent-loop--task-max-steps-reached state))
-         (or (gptel-agent-loop--turn-skipped-p resp)
-             (gptel-agent-loop--looks-like-planning-p resp)))))
+  (and gptel-agent-loop-force-completion
+       (not (gptel-agent-loop--seems-complete-p resp))
+       (not (gptel-agent-loop--looks-like-finishing-p resp))
+       (not (gptel-agent-loop--task-max-steps-reached state))
+       (or (gptel-agent-loop--turn-skipped-p resp)
+           (gptel-agent-loop--looks-like-planning-p resp))))
 
 (defun gptel-agent-loop--schedule (delay fn)
   "Run FN after DELAY seconds."
@@ -641,7 +638,8 @@ Returns non-nil if result was delivered."
 Returns non-nil if result was delivered."
   (when (gptel-agent-loop--continuation-needed-p state resp)
     (let ((cont-count (gptel-agent-loop--increment-continuation-count state)))
-      (if gptel-agent-loop-hard-loop
+      (if (and gptel-agent-loop-hard-loop
+               (<= cont-count gptel-agent-loop-max-continuations))
           (progn
             (message "[RunAgent] Auto-continuing after %d steps (continuation %d/%d)..."
                      (gptel-agent-loop--task-step-count state)
@@ -736,7 +734,9 @@ Cache behavior:
                     (gptel-agent-loop--task-tracking-marker state) tracking-marker)
               (gptel--update-status " Calling Agent..." 'font-lock-escape-face)
               (gptel-request prompt
-                :context (gptel-agent--task-overlay tracking-marker agent-type description)
+                :context (if (fboundp 'gptel-agent--task-overlay)
+                             (gptel-agent--task-overlay tracking-marker agent-type description)
+                           nil)
                 :fsm child-fsm
                 :position tracking-marker
                 :buffer parent-buf
