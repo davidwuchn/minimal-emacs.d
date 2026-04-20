@@ -527,7 +527,7 @@ Returns nil if curl is unavailable or a fetch is already in flight."
                      nil)))
              (buf (generate-new-buffer (format " *%s*" process-name))))
         (if (not (and (stringp key) (not (string-empty-p key))))
-            (progn
+            (prog1 nil
               (when (buffer-live-p buf) (kill-buffer buf))
               (message "OpenRouter: no API key found"))
           (setq my/gptel--openrouter-context-window-fetch-inflight t)
