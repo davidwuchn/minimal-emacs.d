@@ -383,7 +383,7 @@ Returns the number of image parts removed, or 0 if nothing was done."
                  (not (stringp part))
                  (let ((type (if (listp part)
                                  (plist-get part :type)
-                               (cl-loop for i from 0 below (1- (length part)) by 2
+                               (cl-loop for i from 0 below (length part) by 2
                                         when (eq (aref part i) :type)
                                         return (aref part (1+ i))))))
                    (equal type "image_url"))))))
