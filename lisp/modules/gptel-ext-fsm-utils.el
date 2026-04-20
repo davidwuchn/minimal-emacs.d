@@ -217,10 +217,9 @@ Returns FSM struct or nil if not found."
                       (let ((id (my/gptel--fsm-get-id obj)))
                         (when (and id (equal id context-id)) obj))))
                    ((consp obj)
-                    (prog1 t
-                      (puthash obj t seen)
-                      (or (coerce (car obj))
-                          (coerce (cdr obj))))))))
+                    (puthash obj t seen)
+                    (or (coerce (car obj))
+                        (coerce (cdr obj)))))))
       (coerce object))))
 
 (defun my/gptel--coerce-fsm-with-context (object)
@@ -372,8 +371,11 @@ Returns t on success, signals error on failure."
                  ;; Track FSM usage count
                  (let ((count (gethash value fsm-counts 0)))
                    (puthash value (1+ count) fsm-counts)))
-                ;; FSM → ID mapping (already validated above)
-                ((not (stringp value)))))
+                ;; FSM → ID mapping: skip, validated via ID→FSM entry
+                ((my/gptel--fsm-p key) nil)
+                ;; Unknown key type is a corruption
+                (t
+                 (error "FSM registry invariant violated: unknown key type %S" key))))
              my/gptel--fsm-registry)
     ;; Check unique IDs
     (maphash (lambda (fsm count)
