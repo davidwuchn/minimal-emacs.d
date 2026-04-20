@@ -7000,7 +7000,7 @@ failover advances past transient timeout or provider-pressure failures.")
     ("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-reasoner")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Ordered backend/model fallbacks for headless auto-workflow subagents.
 
@@ -7025,7 +7025,7 @@ DashScope and others when rate-limited or unavailable."
     ("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-reasoner")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Ordered backend/model fallbacks for executor after provider rate limits.
 
@@ -7048,7 +7048,7 @@ run can advance through this list instead of repeatedly hammering the same provi
   '(("MiniMax" . "minimax-m2.7-highspeed")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-reasoner")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Previous default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
 
@@ -7057,13 +7057,13 @@ run can advance through this list instead of repeatedly hammering the same provi
     ("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-reasoner")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Current runtime default for `gptel-auto-workflow-headless-subagent-fallbacks'.")
 
 (defconst gptel-auto-workflow--legacy-executor-rate-limit-fallbacks
   '(("DeepSeek" . "deepseek-reasoner")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Previous default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
@@ -7077,7 +7077,7 @@ run can advance through this list instead of repeatedly hammering the same provi
     ("moonshot" . "kimi-k2.6")
     ("DashScope" . "qwen3.6-plus")
     ("DeepSeek" . "deepseek-reasoner")
-    ("CF-Gateway" . "@cf/zai-org/glm-4.7-flash")
+    ("CF-Gateway" . "@cf/moonshotai/kimi-k2.6")
     ("Gemini" . "gemini-3.1-pro-preview"))
   "Current runtime default for `gptel-auto-workflow-executor-rate-limit-fallbacks'.")
 
