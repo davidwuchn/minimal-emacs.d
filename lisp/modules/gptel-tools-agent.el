@@ -8873,10 +8873,10 @@ When INCLUDE-MESSAGES-P is non-nil, also isolate messages and snapshot files."
     (when (and (buffer-live-p target)
                (listp effective-env))
       (with-current-buffer target
-        (setq-local gptel-auto-workflow--subagent-process-environment
-                    (copy-sequence effective-env))
-        (setq-local process-environment
-                    (copy-sequence effective-env))))))
+        (set (make-local-variable 'gptel-auto-workflow--subagent-process-environment)
+             (copy-sequence effective-env))
+        (set (make-local-variable 'process-environment)
+             (copy-sequence effective-env))))))
 
 (defun gptel-auto-workflow--git-step-success-p (cmd action &optional timeout)
   "Run git CMD and report whether it succeeded.
