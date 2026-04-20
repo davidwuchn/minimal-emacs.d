@@ -42,6 +42,7 @@
 (require 'cl-lib)
 (require 'gptel)
 (require 'gptel-openai)
+(require 'seq)
 
 (defvar gptel-send--handlers)
 (defvar gptel-request--handlers)
