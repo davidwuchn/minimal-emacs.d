@@ -2305,10 +2305,12 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                 :score-after 0.8
                                 :comparator-reason "kept"
                                 :agent-output "HYPOTHESIS: improve timeout handling without retry churn"))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (&rest _args) t))
               ((symbol-function 'run-with-timer)
                (lambda (&rest args)
-                 (setq scheduled args)
-                 :fake-timer))
+                  (setq scheduled args)
+                  :fake-timer))
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (gptel-auto-experiment--run-with-retry
@@ -3764,11 +3766,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                     :comparator-reason ":timeout")
                             (list :agent-output "Executor result for task: retry success"
                                   :comparator-reason "ok")))))
-              ((symbol-function 'run-with-timer)
-               (lambda (_secs _repeat fn &rest args)
-                 (apply fn args)
-                 :fake-timer))
-              ((symbol-function 'message)
+               ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+                (lambda (&rest _args) t))
+               ((symbol-function 'run-with-timer)
+                (lambda (_secs _repeat fn &rest args)
+                  (apply fn args)
+                  :fake-timer))
+               ((symbol-function 'message)
                (lambda (&rest _args) nil)))
       (gptel-auto-experiment--run-with-retry
        "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
@@ -3795,11 +3799,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                     :comparator-reason ":timeout")
                             (list :agent-output "Executor result for task: retry success"
                                   :comparator-reason "ok")))))
-              ((symbol-function 'run-with-timer)
-               (lambda (_secs _repeat fn &rest args)
-                 (apply fn args)
-                 :fake-timer))
-              ((symbol-function 'message)
+               ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+                (lambda (&rest _args) t))
+               ((symbol-function 'run-with-timer)
+                (lambda (_secs _repeat fn &rest args)
+                  (apply fn args)
+                  :fake-timer))
+               ((symbol-function 'message)
                (lambda (&rest _args) nil)))
       (gptel-auto-experiment--run-with-retry
        "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
@@ -3827,7 +3833,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                  :grader-reason grader-error
                                  :grader-only-failure t
                                  :comparator-reason ":api-error"))))
-              ((symbol-function 'run-with-timer)
+               ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+                (lambda (&rest _args) t))
+               ((symbol-function 'run-with-timer)
                 (lambda (_secs _repeat fn &rest args)
                   (setq scheduled-retry t)
                   (apply fn args)
@@ -3852,17 +3860,19 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (gptel-auto-experiment-retry-delay 0)
         (gptel-auto-experiment--quota-exhausted nil))
     (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-                (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
-                  (cl-incf runs)
-                  (funcall callback
-                           (list :agent-output
-                                 "Error: Task executor could not finish task \"x\". Error details: (:type \"insufficient_quota\" :message \"week allocated quota exceeded\" :http_code \"429\")"
-                                 :comparator-reason ":api-rate-limit"))))
-              ((symbol-function 'run-with-timer)
-               (lambda (&rest _args)
-                 (setq scheduled-retry t)
-                 :fake-timer))
-              ((symbol-function 'message)
+               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
+                 (cl-incf runs)
+                 (funcall callback
+                          (list :agent-output
+                                "Error: Task executor could not finish task \"x\". Error details: (:type \"insufficient_quota\" :message \"week allocated quota exceeded\" :http_code \"429\")"
+                                :comparator-reason ":api-rate-limit"))))
+               ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+                (lambda (&rest _args) t))
+               ((symbol-function 'run-with-timer)
+                (lambda (&rest _args)
+                  (setq scheduled-retry t)
+                  :fake-timer))
+               ((symbol-function 'message)
                (lambda (&rest _args) nil)))
       (gptel-auto-experiment--run-with-retry
        "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
@@ -3888,6 +3898,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                           (list :agent-output
                                 "Executor result for task: x\n\nHYPOTHESIS: Extract a shared quota regex for allocated quota exceeded, insufficient_quota, insufficient balance, billing_hard_limit_reached, and hard limit reached."
                                 :comparator-reason "ok"))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (&rest _args) t))
               ((symbol-function 'run-with-timer)
                (lambda (&rest _args)
                  (setq scheduled-retry t)
@@ -3918,6 +3930,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                           (list :agent-output
                                 "Aborted: executor task 'Experiment 1: optimize lisp/modules/gptel-tools-agent.el' was cancelled or timed out."
                                 :comparator-reason ":tool-error"))))
+              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+               (lambda (&rest _args) t))
               ((symbol-function 'run-with-timer)
                (lambda (&rest _args)
                  (setq scheduled-retry t)
@@ -4224,6 +4238,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                      (funcall callback
                               (list :agent-output timeout-message
                                     :comparator-reason timeout-category))))
+                  ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+                   (lambda (&rest _args) t))
                   ((symbol-function 'run-with-timer)
                    (lambda (&rest _args)
                      (setq scheduled-retry t)
@@ -4266,11 +4282,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                             (list :agent-output
                                   "Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 10s total runtime."
                                   :comparator-reason ":timeout")))))
-              ((symbol-function 'run-with-timer)
-               (lambda (_secs _repeat fn &rest args)
-                 (cl-incf scheduled-retries)
-                 (apply fn args)
-                 :fake-timer))
+               ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+                (lambda (&rest _args) t))
+               ((symbol-function 'run-with-timer)
+                (lambda (_secs _repeat fn &rest args)
+                  (cl-incf scheduled-retries)
+                  (apply fn args)
+                  :fake-timer))
               ((symbol-function 'message)
                (lambda (&rest _args) nil)))
       (gptel-auto-experiment--run-with-retry
@@ -4333,11 +4351,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                           (list :agent-output
                                 "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 28. See Curl manpage for details.\""
                                 :comparator-reason ":timeout"))))
-              ((symbol-function 'run-with-timer)
-               (lambda (_secs _repeat fn &rest args)
-                 (setq scheduled-retry (lambda () (apply fn args)))
-                 :fake-timer))
-              ((symbol-function 'message)
+               ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
+                (lambda (&rest _args) t))
+               ((symbol-function 'run-with-timer)
+                (lambda (_secs _repeat fn &rest args)
+                  (setq scheduled-retry (lambda () (apply fn args)))
+                  :fake-timer))
+               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (gptel-auto-experiment--run-with-retry
        "lisp/modules/gptel-agent-loop.el" 1 5 0.4 0.5 nil
@@ -4358,44 +4378,53 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
 
 (ert-deftest regression/auto-experiment/run-with-retry-restores-live-target-between-attempts ()
   "Retry wrapper should restore the live target before rerunning an experiment."
-  (let ((runs 0)
-        (restore-count 0)
-        final-result
-        (gptel-auto-experiment-max-retries 3)
-        (gptel-auto-experiment-retry-delay 0)
-        (gptel-auto-workflow--run-project-root "/tmp/project/"))
-    (cl-letf (((symbol-function 'gptel-auto-experiment-run)
-               (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
-                 (cl-incf runs)
-                 (when (= runs 2)
-                   (should (= restore-count 1)))
-                 (funcall callback
-                          (if (= runs 1)
-                              (list :agent-output
-                                    "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 28. See Curl manpage for details.\""
-                                    :comparator-reason ":timeout")
-                            (list :agent-output "Executor result for task: retry success"
-                                  :comparator-reason "ok")))))
-              ((symbol-function 'gptel-auto-workflow--restore-live-target-file)
-               (lambda (target &optional root)
-                 (should (equal target "lisp/modules/gptel-ext-fsm-utils.el"))
-                 (should (equal root "/tmp/project/"))
-                 (cl-incf restore-count)
-                 t))
-              ((symbol-function 'run-with-timer)
-               (lambda (_secs _repeat fn &rest args)
-                 (apply fn args)
-                 :fake-timer))
-              ((symbol-function 'message)
-               (lambda (&rest _args) nil)))
-      (gptel-auto-experiment--run-with-retry
-       "lisp/modules/gptel-ext-fsm-utils.el" 1 5 0.4 0.5 nil
-       (lambda (result)
-         (setq final-result result)))
-      (should (= runs 2))
-      (should (= restore-count 2))
-      (should (equal (plist-get final-result :agent-output)
-                     "Executor result for task: retry success")))))
+  (let* ((project-root (make-temp-file "aw-restore-run-root" t))
+         (target "lisp/modules/gptel-ext-fsm-utils.el")
+         (target-file (expand-file-name target project-root))
+         (runs 0)
+         final-result
+         (gptel-auto-experiment-max-retries 3)
+         (gptel-auto-experiment-retry-delay 0)
+         (gptel-auto-workflow--run-project-root project-root))
+    (unwind-protect
+        (progn
+          (set 'test-auto-workflow--restore-counter 0)
+          (make-directory (file-name-directory target-file) t)
+          (with-temp-file target-file
+            (insert
+             "(set 'test-auto-workflow--restore-counter\n"
+             "      (1+ (or (and (boundp 'test-auto-workflow--restore-counter)\n"
+             "                   (symbol-value 'test-auto-workflow--restore-counter))\n"
+             "              0)))\n"))
+          (cl-letf (((symbol-function 'gptel-auto-experiment-run)
+                     (lambda (_target _exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _log-fn)
+                       (cl-incf runs)
+                       (when (= runs 2)
+                         (should (= (symbol-value 'test-auto-workflow--restore-counter) 1)))
+                       (funcall callback
+                                (if (= runs 1)
+                                    (list :agent-output
+                                          "Error: Task executor could not finish task. Error details: \"Curl failed with exit code 28. See Curl manpage for details.\""
+                                          :comparator-reason ":timeout")
+                                  (list :agent-output "Executor result for task: retry success"
+                                        :comparator-reason "ok")))))
+                    ((symbol-function 'run-with-timer)
+                     (lambda (_secs _repeat fn &rest args)
+                       (apply fn args)
+                       :fake-timer))
+                    ((symbol-function 'message)
+                     (lambda (&rest _args) nil)))
+            (gptel-auto-experiment--run-with-retry
+             target 1 5 0.4 0.5 nil
+             (lambda (result)
+               (setq final-result result)))
+            (should (= runs 2))
+            (should (= (symbol-value 'test-auto-workflow--restore-counter) 2))
+            (should (equal (plist-get final-result :agent-output)
+                           "Executor result for task: retry success"))))
+      (when (boundp 'test-auto-workflow--restore-counter)
+        (makunbound 'test-auto-workflow--restore-counter))
+      (delete-directory project-root t))))
 
 (ert-deftest regression/auto-experiment/retry-success-preserves-full-result-shape ()
   "Successful validation retries should keep the normal result/logging shape."
