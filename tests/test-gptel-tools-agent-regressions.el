@@ -1960,9 +1960,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   (let ((result nil)
         (temp-dir (make-temp-file "exp-worktree" t))
         (grade-details
-         "Grader result for task: Grade output | EXPECTED: | 1. change clearly described: PASS")
+         "Grader result for task: Grade output | EXPECTED: | 1. change clearly described: PASS | SUMMARY: SCORE: 3/9")
         (agent-output
-         "Executor result for task: successful candidate\nVERIFY:\n- Mentioned timeout handling in nearby code."))
+         "HYPOTHESIS: Timeout salvage still produced a plausible edit\nCHANGED:\n- Partial worktree diff captured\nVERIFY:\n- Original timeout: Error: Task \"Experiment 1\" (executor) timed out after 1020s total runtime.\nTask completed"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
                    (lambda (_target _experiment-id) temp-dir))
@@ -1990,6 +1990,57 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
            (lambda (exp-result)
              (setq result exp-result))))
       (delete-directory temp-dir t))
+    (should result)
+    (should (equal (plist-get result :grader-reason) grade-details))
+    (should (equal (plist-get result :comparator-reason) "grader-rejected"))
+    (should-not (plist-get result :error))
+    (should-not (plist-get result :grader-only-failure))))
+
+(ert-deftest regression/auto-experiment/final-grade-rejection-clears-grader-timeout-metadata ()
+  "A final rubric rejection should clear transient grader-timeout metadata."
+  (let ((result nil)
+        (grade-call-count 0)
+        (temp-dir (make-temp-file "exp-worktree" t))
+        (agent-output
+         "HYPOTHESIS: Timeout salvage still produced a plausible edit\nCHANGED:\n- Partial worktree diff captured\nVERIFY:\n- Original timeout: Error: Task \"Experiment 1\" (executor) timed out after 1020s total runtime.\nTask completed")
+        (grader-timeout
+         "Error: Task grader could not finish task \"Grade output\" (grader) timed out after 120s.")
+        (grade-details
+         "Grader result for task: Grade output | EXPECTED: | 1. change clearly described: FAIL - Hypothesis does not match the actual diff. | 2. verification attempted: FAIL - No verification was performed after the timeout salvage. | SUMMARY: SCORE: 3/9"))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (lambda (_target _experiment-id) temp-dir))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results cb)
+                     (funcall cb '(:patterns nil))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _args) "prompt"))
+                  ((symbol-function 'run-with-timer)
+                   (lambda (_delay _repeat fn &rest args)
+                     (apply fn args)
+                     :fake-timer))
+                  ((symbol-function 'cancel-timer)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'my/gptel--run-agent-tool)
+                   (lambda (cb &rest _args)
+                     (funcall cb agent-output)))
+                  ((symbol-function 'gptel-auto-experiment-grade)
+                   (lambda (_output cb &rest _args)
+                     (cl-incf grade-call-count)
+                     (funcall cb
+                              (if (= grade-call-count 1)
+                                  `(:score 0 :total 9 :passed nil :details ,grader-timeout)
+                                `(:score 3 :total 9 :passed nil :details ,grade-details)))))
+                  ((symbol-function 'gptel-auto-experiment-log-tsv)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (gptel-auto-experiment-run
+           "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+           (lambda (exp-result)
+             (setq result exp-result))))
+      (delete-directory temp-dir t))
+    (should (= grade-call-count 2))
     (should result)
     (should (equal (plist-get result :grader-reason) grade-details))
     (should (equal (plist-get result :comparator-reason) "grader-rejected"))
