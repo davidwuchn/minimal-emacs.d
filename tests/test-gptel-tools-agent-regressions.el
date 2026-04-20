@@ -5150,6 +5150,74 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (equal (gptel-auto-experiment--retryable-aux-subagent-category parsed)
                    :timeout))))
 
+(ert-deftest regression/benchmark-analysis/nonerror-raw-analysis-does-not-retry ()
+  "Successful analyzer text mentioning a prior timeout must not retry.
+Live analyzer responses can mention previous timed-out experiments in their
+summary.  That narrative should not be mistaken for a transient analyzer
+failure."
+  (let* ((response
+          (concat
+           "Analyzer result for task: Analyze: Experiment patterns\n\n"
+           "```json\n"
+           "{\n"
+           "  \"summary\": \"Experiment 1 timed out after 1020s total runtime; pivot to a different function.\",\n"
+           "  \"patterns\": [\"timeout-history\"],\n"
+           "  \"recommendations\": [\"try a materially different change\"]\n"
+           "}\n"
+           "```"))
+         (parsed (gptel-benchmark--parse-analysis-response response)))
+    (should (equal (plist-get parsed :raw) response))
+    (should-not (gptel-auto-experiment--retryable-aux-subagent-category parsed))))
+
+(ert-deftest regression/auto-experiment/analyze-does-not-retry-timeout-history ()
+  "Analyzer success mentioning prior timeout history must not trigger retries."
+  (let* ((gptel-auto-experiment-use-subagents t)
+         (gptel-auto-experiment-max-aux-subagent-retries 2)
+         (previous-results
+          '((:id 1
+             :target "lisp/modules/gptel-auto-workflow-projects.el"
+             :hypothesis "Timed out previously."
+             :kept nil
+             :comparator-reason "timeout")))
+         (call-count 0)
+         result
+         failover-call)
+    (cl-letf (((symbol-function 'gptel-benchmark-analyze)
+               (lambda (_data _description cb)
+                 (cl-incf call-count)
+                 (funcall
+                  cb
+                  (gptel-benchmark--parse-analysis-response
+                   (concat
+                    "Analyzer result for task: Analyze: Experiment patterns\n\n"
+                    "```json\n"
+                    "{\n"
+                    "  \"summary\": \"Experiment 1 timed out after 1020s total runtime; pivot to a different function.\",\n"
+                    "  \"patterns\": [\"timeout-history\"],\n"
+                    "  \"issues\": [],\n"
+                    "  \"recommendations\": [\"try a materially different change\"]\n"
+                    "}\n"
+                    "```")))))
+              ((symbol-function 'gptel-auto-workflow--agent-base-preset)
+               (lambda (_agent-type)
+                 '(:backend "MiniMax" :model "minimax-m2.7-highspeed")))
+              ((symbol-function 'gptel-auto-workflow--maybe-override-subagent-provider)
+               (lambda (_agent-type preset)
+                 preset))
+              ((symbol-function 'gptel-auto-workflow--activate-provider-failover)
+               (lambda (&rest args)
+                 (setq failover-call args)
+                 nil))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment-analyze
+       previous-results
+       (lambda (analysis)
+         (setq result analysis))))
+    (should (= call-count 1))
+    (should-not failover-call)
+    (should result)))
+
 (ert-deftest regression/auto-experiment/repeated-focus-symbol-skips-grading ()
   "Repeated focus on the same changed symbol should short-circuit before grading."
   (let* ((project-root (make-temp-file "aw-repeat-focus-root" t))
