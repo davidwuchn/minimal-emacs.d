@@ -583,6 +583,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
 
        ((stringp resp)
         (unless (gptel-agent-loop--check-aborted state ov)
+          (gptel-agent-loop--append-output state resp)
           (let ((final-turn (not (plist-get info :tool-use))))
             (when final-turn
               (gptel-agent-loop--cleanup-overlay ov)
