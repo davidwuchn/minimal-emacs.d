@@ -9,6 +9,7 @@
 
 (require 'ert)
 (require 'cl-lib)
+(require 'subr-x)
 
 (require 'gptel)
 (require 'gptel-request)
@@ -60,9 +61,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   (test-auto-workflow--write-shell-script
    name
    (format
-    "log=%s\ncounter=%s\ncount=0\nif [ -f \"$counter\" ]; then count=$(cat \"$counter\"); fi\ncount=$((count + 1))\nprintf '%%s\\n' \"$count\" > \"$counter\"\nif [ \"$#\" -gt 0 ]; then printf '%%s\\n' \"$1\" >> \"$log\"; fi\npath=${TMPDIR:-/tmp}/fake-mktemp-$count\n: > \"$path\"\nprintf '%%s\\n' \"$path\"\n"
-    (shell-quote-argument log-file)
-    (shell-quote-argument counter-file))))
+    "log=%s\ncounter=%s\ncount=0\nif [ -f \"$counter\" ]; then count=$(cat \"$counter\"); fi\ncount=$((count + 1))\nprintf '%%s\\n' \"$count\" > \"$counter\"\nif [ \"$#\" -gt 0 ]; then template=\"$1\"; if [ \"$1\" = \"-d\" ] && [ \"$#\" -gt 1 ]; then template=\"$2\"; fi; printf '%%s\\n' \"$template\" >> \"$log\"; fi\npath=${TMPDIR:-/tmp}/fake-mktemp-$count\n: > \"$path\"\nprintf '%%s\\n' \"$path\"\n"
+     (shell-quote-argument log-file)
+     (shell-quote-argument counter-file))))
 
 (ert-deftest regression/auto-workflow/run-tests-uses-bsd-safe-mktemp-templates ()
   "run-tests.sh should use BSD-safe mktemp templates without suffixes after Xs."
@@ -91,37 +92,102 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (progn
           (rename-file fake-mktemp (expand-file-name "mktemp" fake-bin) t)
           (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
-          (shell-command-to-string (format "%s unit" script))
-           (let ((calls (with-temp-buffer
-                          (insert-file-contents mktemp-log)
-                          (split-string (buffer-string) "\n" t))))
-             (should (= (length calls) 3))
-             (should (member (format "%s/auto-workflow-test-status.XXXXXX"
-                                     (or (getenv "TMPDIR") "/tmp"))
-                             calls))
-             (should (member (format "%s/auto-workflow-test-messages.XXXXXX"
-                                     (or (getenv "TMPDIR") "/tmp"))
-                             calls))
-             (should (member (format "%s/auto-workflow-test-snapshot-paths.XXXXXX"
-                                     (or (getenv "TMPDIR") "/tmp"))
-                             calls))
-             (should-not (seq-some
-                          (lambda (call)
-                            (string-match-p "\\.XXXXXX\\.sexp\\'" call))
-                          calls))
-             (should-not (seq-some
+           (shell-command-to-string (format "%s unit" script))
+            (let ((calls (with-temp-buffer
+                           (insert-file-contents mktemp-log)
+                           (split-string (buffer-string) "\n" t))))
+             (should (= (length calls) 4))
+              (should (member (format "%s/auto-workflow-test-status.XXXXXX"
+                                      (or (getenv "TMPDIR") "/tmp"))
+                              calls))
+              (should (member (format "%s/auto-workflow-test-messages.XXXXXX"
+                                      (or (getenv "TMPDIR") "/tmp"))
+                              calls))
+              (should (member (format "%s/auto-workflow-test-snapshot-paths.XXXXXX"
+                                      (or (getenv "TMPDIR") "/tmp"))
+                              calls))
+              (should (member (format "%s/auto-workflow-test-runtime.XXXXXX"
+                                      (or (getenv "TMPDIR") "/tmp"))
+                              calls))
+              (should-not (seq-some
+                           (lambda (call)
+                             (string-match-p "\\.XXXXXX\\.sexp\\'" call))
+                           calls))
+              (should-not (seq-some
                           (lambda (call)
                             (string-match-p "\\.XXXXXX\\.txt\\'" call))
                           calls))
              (should-not (seq-some
-                          (lambda (call)
-                            (string-match-p "\\.XXXXXX\\.paths\\'" call))
-                          calls))))
+                           (lambda (call)
+                             (string-match-p "\\.XXXXXX\\.paths\\'" call))
+                           calls))))
       (delete-directory fake-bin t)
       (when (file-exists-p mktemp-log)
         (delete-file mktemp-log))
       (when (file-exists-p mktemp-counter)
         (delete-file mktemp-counter)))))
+
+(ert-deftest regression/auto-workflow/run-tests-unit-isolates-runtime-socket-namespace ()
+  "run-tests.sh should isolate the unit-test runtime dir and workflow server name."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (script (expand-file-name "scripts/run-tests.sh" repo-root))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (temp-root (make-temp-file "aw-run-tests-tmp" t))
+         (ambient-runtime (make-temp-file "aw-run-tests-xdg" t))
+         (env-log (make-temp-file "aw-run-tests-env"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format
+            "printf 'XDG_RUNTIME_DIR=%%s\\n' \"$XDG_RUNTIME_DIR\" > %s\nprintf 'TMPDIR=%%s\\n' \"$TMPDIR\" >> %s\nprintf 'AUTO_WORKFLOW_EMACS_SERVER=%%s\\n' \"$AUTO_WORKFLOW_EMACS_SERVER\" >> %s\nprintf 'Ran 1 tests, 1 results as expected, 0 unexpected, 0 skipped\\n'\n"
+             (shell-quote-argument env-log)
+             (shell-quote-argument env-log)
+             (shell-quote-argument env-log))))
+          (base-environment
+           (cl-remove-if
+            (lambda (entry)
+              (or (string-prefix-p "PATH=" entry)
+                  (string-prefix-p "TMPDIR=" entry)
+                 (string-prefix-p "XDG_RUNTIME_DIR=" entry)))
+           process-environment))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH"))
+                        (format "TMPDIR=%s" temp-root)
+                        (format "XDG_RUNTIME_DIR=%s" ambient-runtime))
+                   base-environment))
+          (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (shell-command-to-string (format "%s unit" script))
+          (let (captured-xdg captured-tmp captured-server)
+            (with-temp-buffer
+              (insert-file-contents env-log)
+              (dolist (line (split-string (buffer-string) "\n" t))
+                (cond
+                 ((string-prefix-p "XDG_RUNTIME_DIR=" line)
+                  (setq captured-xdg (string-remove-prefix "XDG_RUNTIME_DIR=" line)))
+                 ((string-prefix-p "TMPDIR=" line)
+                  (setq captured-tmp (string-remove-prefix "TMPDIR=" line)))
+                 ((string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" line)
+                  (setq captured-server
+                        (string-remove-prefix "AUTO_WORKFLOW_EMACS_SERVER=" line))))))
+            (should (stringp captured-xdg))
+            (should (stringp captured-tmp))
+            (should (stringp captured-server))
+            (should (equal captured-xdg captured-tmp))
+            (should-not (equal captured-xdg ambient-runtime))
+            (should-not (equal captured-tmp temp-root))
+            (should (string-prefix-p (file-name-as-directory temp-root)
+                                     (file-name-as-directory captured-tmp)))
+            (should (string-match-p "auto-workflow-test-runtime\\." captured-tmp))
+            (should (string-prefix-p "copilot-auto-workflow-test-" captured-server))
+            (should-not (equal captured-server "copilot-auto-workflow"))))
+      (delete-directory fake-bin t)
+      (delete-directory temp-root t)
+      (delete-directory ambient-runtime t)
+      (when (file-exists-p env-log)
+        (delete-file env-log)))))
 
 (ert-deftest regression/auto-workflow/verify-nucleus-uses-bsd-safe-mktemp-template ()
   "verify-nucleus.sh should use a BSD-safe mktemp template without a suffix."
@@ -155,16 +221,88 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (let ((calls (with-temp-buffer
                          (insert-file-contents mktemp-log)
                          (split-string (buffer-string) "\n" t))))
-            (should (= (length calls) 1))
-            (should (string-match-p "verify-nucleus\\.XXXXXX\\'" (car calls)))
-            (should-not (string-match-p "verify-nucleus\\.XXXXXX\\.el\\'" (car calls)))))
+            (should (= (length calls) 2))
+            (should (member (format "%s/verify-nucleus.XXXXXX"
+                                    (or (getenv "TMPDIR") "/tmp"))
+                            calls))
+            (should (member (format "%s/verify-nucleus-runtime.XXXXXX"
+                                    (or (getenv "TMPDIR") "/tmp"))
+                            calls))
+            (should-not (seq-some
+                         (lambda (call)
+                           (string-match-p "verify-nucleus\\.XXXXXX\\.el\\'" call))
+                         calls))))
       (delete-directory fake-bin t)
       (when (file-exists-p mktemp-log)
         (delete-file mktemp-log))
       (when (file-exists-p mktemp-counter)
         (delete-file mktemp-counter))
-       (when (file-exists-p fake-emacs)
-         (delete-file fake-emacs)))))
+        (when (file-exists-p fake-emacs)
+          (delete-file fake-emacs)))))
+
+(ert-deftest regression/auto-workflow/verify-nucleus-isolates-runtime-socket-namespace ()
+  "verify-nucleus.sh should give its batch Emacs a private runtime namespace."
+  (let* ((repo-root test-auto-workflow--repo-root)
+         (script (expand-file-name "scripts/verify-nucleus.sh" repo-root))
+         (temp-root (make-temp-file "aw-verify-tmp" t))
+         (ambient-runtime (make-temp-file "aw-verify-xdg" t))
+         (env-log (make-temp-file "aw-verify-env"))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format
+            "printf 'XDG_RUNTIME_DIR=%%s\\n' \"$XDG_RUNTIME_DIR\" > %s\nprintf 'TMPDIR=%%s\\n' \"$TMPDIR\" >> %s\nprintf 'AUTO_WORKFLOW_EMACS_SERVER=%%s\\n' \"$AUTO_WORKFLOW_EMACS_SERVER\" >> %s\nexit 0\n"
+            (shell-quote-argument env-log)
+            (shell-quote-argument env-log)
+            (shell-quote-argument env-log))))
+         (base-environment
+          (cl-remove-if
+           (lambda (entry)
+             (or (string-prefix-p "PATH=" entry)
+                 (string-prefix-p "EMACS=" entry)
+                 (string-prefix-p "TMPDIR=" entry)
+                 (string-prefix-p "XDG_RUNTIME_DIR=" entry)
+                 (string-prefix-p "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=" entry)))
+           process-environment))
+         (process-environment
+          (append (list (format "EMACS=%s" fake-emacs)
+                        (format "TMPDIR=%s" temp-root)
+                        (format "XDG_RUNTIME_DIR=%s" ambient-runtime)
+                        "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1")
+                  base-environment))
+         (default-directory repo-root))
+    (unwind-protect
+        (progn
+          (shell-command-to-string script)
+          (let (captured-xdg captured-tmp captured-server)
+            (with-temp-buffer
+              (insert-file-contents env-log)
+              (dolist (line (split-string (buffer-string) "\n" t))
+                (cond
+                 ((string-prefix-p "XDG_RUNTIME_DIR=" line)
+                  (setq captured-xdg (string-remove-prefix "XDG_RUNTIME_DIR=" line)))
+                 ((string-prefix-p "TMPDIR=" line)
+                  (setq captured-tmp (string-remove-prefix "TMPDIR=" line)))
+                 ((string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" line)
+                  (setq captured-server
+                        (string-remove-prefix "AUTO_WORKFLOW_EMACS_SERVER=" line))))))
+            (should (stringp captured-xdg))
+            (should (stringp captured-tmp))
+            (should (stringp captured-server))
+            (should (equal captured-xdg captured-tmp))
+            (should-not (equal captured-xdg ambient-runtime))
+            (should-not (equal captured-tmp temp-root))
+            (should (string-prefix-p (file-name-as-directory temp-root)
+                                     (file-name-as-directory captured-tmp)))
+            (should (string-match-p "verify-nucleus-runtime\\." captured-tmp))
+            (should (string-prefix-p "copilot-auto-workflow-verify-" captured-server))
+            (should-not (equal captured-server "copilot-auto-workflow"))))
+      (delete-directory temp-root t)
+      (delete-directory ambient-runtime t)
+      (when (file-exists-p env-log)
+        (delete-file env-log))
+      (when (file-exists-p fake-emacs)
+        (delete-file fake-emacs)))))
 
 (ert-deftest regression/init-system/compile-angel-on-load-skips-noninteractive ()
   "Batch sessions should not enable compile-angel on-load hooks."
@@ -10301,21 +10439,21 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                (lambda (timer) (eq timer 'fake-watchdog)))
               ((symbol-function 'cancel-timer)
                (lambda (timer) (setq cancelled timer)))
-              ((symbol-function 'call-process)
-               (lambda (&rest _args) 0))
-              ((symbol-function 'gptel-auto-workflow--update-progress)
-               (lambda () (cl-incf progress)))
-              ((symbol-function 'gptel-auto-workflow--persist-status)
-               (lambda () (cl-incf persisted)))
-              ((symbol-function 'gptel-auto-workflow--restart-watchdog-timer)
+               ((symbol-function 'call-process)
+                (lambda (&rest _args) 0))
+               ((symbol-function 'gptel-auto-workflow--update-progress)
+                (lambda () (cl-incf progress)))
+               ((symbol-function 'gptel-auto-workflow--persist-status)
+                (lambda () (cl-incf persisted)))
+               ((symbol-function 'gptel-auto-workflow--restart-watchdog-timer)
                (lambda () (cl-incf restarted))))
       (should (= (gptel-auto-workflow--call-process-with-watchdog
-                  "git" nil nil nil "status")
-                 0))
-      (should (eq cancelled 'fake-watchdog))
-      (should (= progress 1))
-      (should (= persisted 1))
-      (should (= restarted 1)))))
+                   "git" nil nil nil "status")
+                  0))
+       (should (eq cancelled 'fake-watchdog))
+       (should (= progress 1))
+       (should (= persisted 1))
+       (should (= restarted 1)))))
 
 (ert-deftest regression/auto-workflow/queue-cron-job-assigns-run-id-before-first-persist ()
   "Queued workflow snapshots should get a fresh run id before persisting."
@@ -12663,6 +12801,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
 (ert-deftest regression/auto-experiment/benchmark-runs-required-tests-even-when-skipped ()
   "Required experiment tests should still run even when callers pass SKIP-TESTS."
   (let ((gptel-auto-experiment-require-tests t)
+        (gptel-auto-workflow--headless nil)
         (gptel-auto-workflow--current-target "lisp/modules/gptel-tools-agent.el")
         (run-count 0))
     (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-or-project-dir)
@@ -12683,6 +12822,38 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (should (plist-get result :tests-passed))
          (should-not (plist-get result :tests-skipped))
          (should (equal (plist-get result :tests-output) "tests ok"))))))
+
+(ert-deftest regression/auto-experiment/benchmark-defers-required-tests-to-staging-in-headless-workflow ()
+  "Headless staged workflows should defer benchmark tests to staging."
+  (let ((gptel-auto-experiment-require-tests t)
+        (gptel-auto-workflow-use-staging t)
+        (gptel-auto-workflow--headless t)
+        (gptel-auto-workflow--current-target "lisp/modules/gptel-tools-agent.el")
+        (run-count 0)
+        (messages nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-or-project-dir)
+               (lambda () "/tmp/worktree"))
+              ((symbol-function 'gptel-auto-experiment--validate-code)
+               (lambda (_file) nil))
+              ((symbol-function 'gptel-auto-experiment-run-tests)
+               (lambda ()
+                 (cl-incf run-count)
+                 (cons t "tests ok")))
+              ((symbol-function 'gptel-auto-experiment--eight-keys-scores)
+               (lambda () '((overall . 0.6))))
+              ((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) messages))))
+      (let ((result (gptel-auto-experiment-benchmark t)))
+        (should (= run-count 0))
+        (should (plist-get result :passed))
+        (should (plist-get result :tests-passed))
+        (should (plist-get result :tests-skipped))
+        (should-not (plist-get result :tests-output))
+        (should (cl-some
+                 (lambda (line)
+                   (string-match-p "Deferring tests to staging flow" line))
+                 messages))))))
 
 (ert-deftest regression/auto-experiment/run-tests-isolates-workflow-state ()
   "Experiment test subprocesses should not share the live workflow daemon state."

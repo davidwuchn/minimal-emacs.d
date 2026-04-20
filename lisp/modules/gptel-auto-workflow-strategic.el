@@ -43,6 +43,19 @@ Monthly subscription: 5 is optimal (diminishing returns after 3-4)."
   :type 'integer
   :group 'gptel-tools-agent)
 
+(defcustom gptel-auto-workflow-headless-target-denylist
+  '("lisp/modules/gptel-tools-bash.el"
+    "lisp/modules/gptel-tools-code.el"
+    "lisp/modules/gptel-tools-edit.el"
+    "lisp/modules/gptel-tools-glob.el"
+    "lisp/modules/gptel-tools-grep.el")
+  "Targets to skip during headless workflow runs.
+These modules define tools the executor actively depends on. Loading optimize
+worktree edits for them into the live daemon can destabilize the run before the
+worker restores the original file."
+  :type '(repeat string)
+  :group 'gptel-tools-agent)
+
 (defcustom gptel-auto-workflow-research-targets nil
   "When non-nil, researcher finds patterns/issues before target selection.
 Adds ~30-60s latency but may improve target quality.
@@ -109,6 +122,14 @@ Uses `gptel-auto-workflow--project-root' if available, otherwise
 falls back to the user's Emacs configuration directory."
   (or (gptel-auto-workflow--project-root)
       (expand-file-name "~/.emacs.d/")))
+
+(defun gptel-auto-workflow--skip-headless-target-p (rel-path)
+  "Return non-nil when REL-PATH should be skipped for a headless run."
+  (and (stringp rel-path)
+       (or gptel-auto-workflow--headless
+           gptel-auto-workflow--cron-job-running
+           gptel-auto-workflow-persistent-headless)
+       (member rel-path gptel-auto-workflow-headless-target-denylist)))
 
 (defun gptel-auto-workflow--discover-targets ()
   "Discover all Elisp files in lisp/modules/ as potential targets."
@@ -276,15 +297,20 @@ Returns updated targets list."
           (root-prefix (if (string-suffix-p "/" proj-root)
                            proj-root
                          (concat proj-root "/"))))
-      (if (and (file-exists-p abs-path)
-               (file-regular-p abs-path)
-               (string-prefix-p root-prefix abs-path)
-               (gptel-auto-workflow--target-in-root-repo-p abs-path proj-root))
-          (let ((rel-path (file-relative-name abs-path proj-root)))
-            (if (member rel-path targets)
-                targets
-              (cons rel-path targets)))
-        targets)))))
+       (if (and (file-exists-p abs-path)
+                (file-regular-p abs-path)
+                (string-prefix-p root-prefix abs-path)
+                (gptel-auto-workflow--target-in-root-repo-p abs-path proj-root))
+           (let ((rel-path (file-relative-name abs-path proj-root)))
+             (if (gptel-auto-workflow--skip-headless-target-p rel-path)
+                 (progn
+                   (message "[auto-workflow] Skipping self-hosting target in headless run: %s"
+                            rel-path)
+                   targets)
+                (if (member rel-path targets)
+                    targets
+                  (cons rel-path targets))))
+         targets)))))
 
 (defun gptel-auto-workflow--normalize-response (response)
   "Normalize RESPONSE to a string.

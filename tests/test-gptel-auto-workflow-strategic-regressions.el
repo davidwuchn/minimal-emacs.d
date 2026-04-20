@@ -225,6 +225,51 @@
                          '("lisp/modules/foo.el"))))
       (delete-directory proj-root t))))
 
+(ert-deftest regression/auto-workflow-strategic/filter-valid-targets-skips-self-hosting-tools-in-headless-runs ()
+  "Headless runs should skip tool modules that can destabilize the live daemon."
+  (let* ((proj-root (make-temp-file "aw-strategic" t))
+         (root-git (expand-file-name ".git" proj-root))
+         (safe-file (expand-file-name "lisp/modules/foo.el" proj-root))
+         (tool-file (expand-file-name "lisp/modules/gptel-tools-code.el" proj-root))
+         (messages nil)
+         (gptel-auto-workflow--headless t))
+    (unwind-protect
+        (progn
+          (make-directory root-git t)
+          (make-directory (file-name-directory safe-file) t)
+          (with-temp-file safe-file (insert ";; safe\n"))
+          (with-temp-file tool-file (insert ";; tool\n"))
+          (cl-letf (((symbol-function 'message)
+                     (lambda (format-string &rest args)
+                       (push (apply #'format format-string args) messages))))
+            (should (equal (gptel-auto-workflow--filter-valid-targets
+                            '("lisp/modules/gptel-tools-code.el" "lisp/modules/foo.el")
+                            proj-root
+                            5)
+                           '("lisp/modules/foo.el")))
+            (should (member
+                     "[auto-workflow] Skipping self-hosting target in headless run: lisp/modules/gptel-tools-code.el"
+                     messages))))
+      (delete-directory proj-root t))))
+
+(ert-deftest regression/auto-workflow-strategic/filter-valid-targets-keeps-self-hosting-tools-interactively ()
+  "Interactive runs should still allow explicit tool-module targets."
+  (let* ((proj-root (make-temp-file "aw-strategic" t))
+         (root-git (expand-file-name ".git" proj-root))
+         (tool-file (expand-file-name "lisp/modules/gptel-tools-code.el" proj-root))
+         (gptel-auto-workflow--headless nil))
+    (unwind-protect
+        (progn
+          (make-directory root-git t)
+          (make-directory (file-name-directory tool-file) t)
+          (with-temp-file tool-file (insert ";; tool\n"))
+          (should (equal (gptel-auto-workflow--filter-valid-targets
+                          '("lisp/modules/gptel-tools-code.el")
+                          proj-root
+                          5)
+                         '("lisp/modules/gptel-tools-code.el"))))
+      (delete-directory proj-root t))))
+
 (ert-deftest regression/auto-workflow-strategic/static-fallback-filters-nested-repos ()
   "Static fallback targets should also exclude nested git repos."
   (let* ((proj-root (make-temp-file "aw-strategic" t))

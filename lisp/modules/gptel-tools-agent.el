@@ -5404,6 +5404,15 @@ Set to nil to disable (only for emergency situations)."
   :type 'boolean
   :group 'gptel-auto-workflow)
 
+(defun gptel-auto-experiment--defer-tests-to-staging-p (skip-tests)
+  "Return non-nil when benchmark tests should be deferred to staging.
+This only applies to headless auto-workflow runs that already verify candidates
+through the staging gate."
+  (and skip-tests
+       gptel-auto-experiment-require-tests
+       gptel-auto-workflow-use-staging
+       (bound-and-true-p gptel-auto-workflow--headless)))
+
 (defcustom gptel-auto-experiment-max-changed-files 3
   "Maximum number of files an experiment can change.
 Prevents scope creep where executor touches many unrelated files.
@@ -5430,8 +5439,8 @@ Checks that the number of changed files is within limits."
 
 (defun gptel-auto-experiment-benchmark (&optional skip-tests)
   "Run syntax validation + Eight Keys scoring.
-If SKIP-TESTS is non-nil, skip test execution (tests run in staging flow).
-Returns plist with :passed, :tests-passed, :eight-keys, etc.
+  If SKIP-TESTS is non-nil, skip test execution (tests run in staging flow).
+  Returns plist with :passed, :tests-passed, :eight-keys, etc.
 
 NOTE: Nucleus script validation is skipped for experiments because:
 1. verify-nucleus.sh uses script location ($DIR), not worktree context
@@ -5439,9 +5448,9 @@ NOTE: Nucleus script validation is skipped for experiments because:
 3. Full validation happens in staging flow
 
 IMPORTANT: When `gptel-auto-experiment-require-tests' is non-nil (default),
-tests are run BEFORE the experiment is considered passed, even if skip-tests
-is t. This catches bugs like using CL idioms (multiple-value-bind) that don't
-work correctly in Emacs Lisp."
+tests still run before the experiment is considered passed, even if SKIP-TESTS
+is t. The exception is the normal headless staging workflow, where benchmark
+tests are deferred to the staging gate to keep the worker daemon alive."
   (let* ((start (float-time))
          (default-directory (gptel-auto-workflow--worktree-or-project-dir))
          (target-file (when gptel-auto-workflow--current-target
@@ -5455,8 +5464,12 @@ work correctly in Emacs Lisp."
           (list :passed nil
                 :validation-error validation-error
                 :time (- (float-time) start)))
-      (let* ((should-run-tests (or (not skip-tests)
-                                   gptel-auto-experiment-require-tests))
+      (let* ((defer-tests-to-staging
+              (gptel-auto-experiment--defer-tests-to-staging-p skip-tests))
+             (should-run-tests
+              (or (not skip-tests)
+                  (and gptel-auto-experiment-require-tests
+                       (not defer-tests-to-staging))))
              (tests-result (when should-run-tests
                              (gptel-auto-experiment-run-tests)))
              (raw-tests-passed (and tests-result (car tests-result)))
@@ -5464,12 +5477,16 @@ work correctly in Emacs Lisp."
              ;; Allow test failures that match main baseline
              (baseline-check (when (and should-run-tests (not raw-tests-passed))
                                (gptel-auto-workflow--staging-tests-match-main-baseline-p tests-output)))
-             (tests-passed (or (and skip-tests (not gptel-auto-experiment-require-tests))
+             (tests-passed (or (not should-run-tests)
+                               (and skip-tests (not gptel-auto-experiment-require-tests))
                                raw-tests-passed
                                (and baseline-check (car baseline-check))))
              (final-tests-output (or (and baseline-check (cdr baseline-check))
                                      tests-output))
              (scores (gptel-auto-experiment--eight-keys-scores)))
+        (when defer-tests-to-staging
+          (message "[auto-exp] Deferring tests to staging flow for %s"
+                   (or gptel-auto-workflow--current-target default-directory)))
         (when (and skip-tests gptel-auto-experiment-require-tests)
           (message "[auto-exp] Tests required before staging merge: %s"
                    (if tests-passed "PASS" "FAIL")))
@@ -5478,7 +5495,7 @@ work correctly in Emacs Lisp."
               :nucleus-skipped t
               :tests-passed tests-passed
               :tests-output final-tests-output
-              :tests-skipped (and skip-tests (not gptel-auto-experiment-require-tests))
+              :tests-skipped (not should-run-tests)
               :time (- (float-time) start)
               :eight-keys (when scores (alist-get 'overall scores))
               :eight-keys-scores scores)))))

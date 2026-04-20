@@ -13,9 +13,16 @@ TMP_ELISP=$(mktemp "${TMPDIR:-/tmp}/verify-nucleus.XXXXXX") || {
     echo "Failed to create temporary verifier script" >&2
     exit 1
 }
+RUNTIME_DIR=$(mktemp -d "${TMPDIR:-/tmp}/verify-nucleus-runtime.XXXXXX") || {
+    rm -f "$TMP_ELISP"
+    echo "Failed to create isolated verifier runtime directory" >&2
+    exit 1
+}
+WORKFLOW_SERVER="copilot-auto-workflow-verify-$(basename "$RUNTIME_DIR")"
 
 cleanup() {
     rm -f "$TMP_ELISP"
+    rm -rf "$RUNTIME_DIR"
 }
 trap cleanup EXIT
 
@@ -85,6 +92,9 @@ cat >"$TMP_ELISP" <<EOF
     (message "✓ All tool signatures are valid.")))
 EOF
 
+XDG_RUNTIME_DIR="$RUNTIME_DIR" \
+TMPDIR="$RUNTIME_DIR" \
+AUTO_WORKFLOW_EMACS_SERVER="$WORKFLOW_SERVER" \
 $EMACS -Q --batch --init-directory="$DIR" \
        --eval "(let ((root (file-name-as-directory \"$ROOT_ELISP\"))) (setq minimal-emacs-user-directory root user-emacs-directory root))" \
        -l "$DIR/early-init.el" \
