@@ -27,6 +27,8 @@ run_unit_tests() {
     local status_file
     local messages_file
     local snapshot_paths_file
+    local runtime_dir
+    local workflow_server
     local ert_status=0
     
     section "Unit Tests (ERT)"
@@ -48,12 +50,22 @@ run_unit_tests() {
         fail "Failed to create isolated workflow snapshot cache file"
         return 1
     }
+    runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/auto-workflow-test-runtime.XXXXXX")" || {
+        rm -f "$status_file" "$messages_file" "$snapshot_paths_file"
+        fail "Failed to create isolated workflow runtime directory"
+        return 1
+    }
+    chmod 700 "$runtime_dir"
+    workflow_server="copilot-auto-workflow-test-$(basename "$runtime_dir")"
     
     local output
     set +e
     output=$(AUTO_WORKFLOW_STATUS_FILE="$status_file" \
         AUTO_WORKFLOW_MESSAGES_FILE="$messages_file" \
         AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE="$snapshot_paths_file" \
+        AUTO_WORKFLOW_EMACS_SERVER="$workflow_server" \
+        XDG_RUNTIME_DIR="$runtime_dir" \
+        TMPDIR="$runtime_dir" \
         emacs --batch -Q \
         -L "$DIR" \
         -L "$DIR/lisp" \
@@ -70,6 +82,7 @@ run_unit_tests() {
     ert_status=$?
     set -e
     rm -f "$status_file" "$messages_file" "$snapshot_paths_file"
+    rm -rf "$runtime_dir"
     
     grep -E "FAILED|unexpected|0 unexpected" <<< "$output" | head -30
     if [ -z "$(grep -E "FAILED|unexpected" <<< "$output")" ]; then

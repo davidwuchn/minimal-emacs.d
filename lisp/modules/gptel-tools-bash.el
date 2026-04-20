@@ -10,6 +10,10 @@
 (require 'seq)
 (require 'gptel-ext-abort)
 
+(declare-function gptel-fsm-info "gptel-request" (&optional fsm))
+(defvar gptel-auto-workflow--subagent-process-environment nil)
+(defvar gptel--fsm-last)
+
 ;;; Customization
 
 (defgroup gptel-tools-bash nil
@@ -28,6 +32,87 @@ interactive commands like git commit."
 
 (defvar my/gptel--persistent-bash-process nil
   "Persistent background bash process for gptel-agent's Bash tool.")
+
+(defconst my/gptel--bash-context-env-prefixes
+  '("AUTO_WORKFLOW_STATUS_FILE="
+    "AUTO_WORKFLOW_MESSAGES_FILE="
+    "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE="
+    "AUTO_WORKFLOW_EMACS_SERVER=")
+  "Environment prefixes that require a fresh persistent bash context.")
+
+(defun my/gptel--bash-context-entry-p (entry)
+  "Return non-nil when ENTRY should trigger bash process recreation."
+  (and (stringp entry)
+       (seq-some (lambda (prefix)
+                   (string-prefix-p prefix entry))
+                 my/gptel--bash-context-env-prefixes)))
+
+(defun my/gptel--bash-related-fsm-buffer (&optional buffer)
+  "Return the related FSM request buffer for BUFFER, when available."
+  (let ((source (or buffer (current-buffer))))
+    (when (buffer-live-p source)
+      (with-current-buffer source
+        (when (and (boundp 'gptel--fsm-last)
+                   gptel--fsm-last
+                   (fboundp 'gptel-fsm-info))
+          (let* ((info (ignore-errors (gptel-fsm-info gptel--fsm-last)))
+                 (info-buffer (and (listp info) (plist-get info :buffer))))
+            (and (buffer-live-p info-buffer) info-buffer)))))))
+
+(defun my/gptel--bash-context-buffer (&optional buffer)
+  "Return the best buffer to use for bash process context."
+  (let* ((source (or buffer (current-buffer)))
+         (related (my/gptel--bash-related-fsm-buffer source))
+         (candidates (delete-dups (delq nil (list source related)))))
+    (or (seq-find
+         (lambda (candidate)
+           (when (buffer-live-p candidate)
+             (with-current-buffer candidate
+               (let ((env (or gptel-auto-workflow--subagent-process-environment
+                              process-environment)))
+                 (and (listp env)
+                      (seq-some #'my/gptel--bash-context-entry-p env))))))
+         candidates)
+        source)))
+
+(defun my/gptel--bash-context-environment (&optional buffer)
+  "Return the process environment to use for bash tool execution."
+  (let ((context-buffer (my/gptel--bash-context-buffer buffer)))
+    (if (buffer-live-p context-buffer)
+        (with-current-buffer context-buffer
+          (copy-sequence
+           (or gptel-auto-workflow--subagent-process-environment
+               process-environment)))
+      (copy-sequence process-environment))))
+
+(defun my/gptel--bash-context-directory (&optional buffer)
+  "Return the working directory to use for bash tool execution."
+  (let ((context-buffer (my/gptel--bash-context-buffer buffer)))
+    (if (buffer-live-p context-buffer)
+        (with-current-buffer context-buffer
+          (if (and (stringp default-directory)
+                   (file-directory-p default-directory))
+              (file-name-as-directory
+               (expand-file-name default-directory))
+            default-directory))
+      default-directory)))
+
+(defun my/gptel--bash-context-signature (&optional buffer)
+  "Return the persistent bash context signature for BUFFER."
+  (let ((context-env (my/gptel--bash-context-environment buffer)))
+    (list :directory (my/gptel--bash-context-directory buffer)
+          :env (seq-filter #'my/gptel--bash-context-entry-p context-env))))
+
+(defun my/gptel--reset-persistent-bash ()
+  "Terminate the current persistent bash process, if any."
+  (when (process-live-p my/gptel--persistent-bash-process)
+    (ignore-errors
+      (set-process-filter my/gptel--persistent-bash-process #'ignore))
+    (ignore-errors
+      (set-process-sentinel my/gptel--persistent-bash-process #'ignore))
+    (ignore-errors
+      (delete-process my/gptel--persistent-bash-process)))
+  (setq my/gptel--persistent-bash-process nil))
 
 (defun my/gptel--safe-bash-command-p (command)
   "Check if a Bash COMMAND is safe for Plan mode.
@@ -66,25 +151,54 @@ Returns t if safe, or a string explaining why it was rejected."
 
 ;;; Internal Helpers
 
+(defun my/gptel--bash-context-signature (&optional buffer)
+  "Return the persistent bash context signature for BUFFER."
+  (let ((context-env (my/gptel--bash-context-environment buffer)))
+    (list :directory (my/gptel--bash-context-directory buffer)
+          :env (seq-filter #'my/gptel--bash-context-entry-p context-env))))
+
+(defun my/gptel--reset-persistent-bash ()
+  "Terminate the current persistent bash process, if any."
+  (when (process-live-p my/gptel--persistent-bash-process)
+    (ignore-errors
+      (set-process-filter my/gptel--persistent-bash-process #'ignore))
+    (ignore-errors
+      (set-process-sentinel my/gptel--persistent-bash-process #'ignore))
+    (ignore-errors
+      (delete-process my/gptel--persistent-bash-process)))
+  (setq my/gptel--persistent-bash-process nil))
+
 (defun my/gptel--ensure-persistent-bash ()
   "Create a persistent background bash process if one doesn't exist or died.
-Sets `my/gptel--persistent-bash-process' to a live process with TERM=dumb."
-  (unless (and my/gptel--persistent-bash-process
-               (process-live-p my/gptel--persistent-bash-process))
-    (let ((buf (get-buffer-create " *gptel-persistent-bash*")))
-      (with-current-buffer buf (erase-buffer))
-      (setq my/gptel--persistent-bash-process
-            (make-process
-             :name "gptel-bash"
-             :buffer buf
-             :command '("bash" "--norc" "--noprofile")
-             :connection-type 'pipe
-             :noquery t))
-      (process-put my/gptel--persistent-bash-process 'my/gptel-managed t)
-      ;; Initialize Dumb Terminal variables to prevent interactive hanging
-      (process-send-string my/gptel--persistent-bash-process
-                           "export TERM=dumb PAGER=cat GIT_PAGER=cat DEBIAN_FRONTEND=noninteractive PS1=''\n")
-      (sleep-for 0.1))))
+Sets `my/gptel--persistent-bash-process' to a live process with TERM=dumb.
+Recreates the shell when the workflow env or working directory changes."
+  (let* ((context-buffer (my/gptel--bash-context-buffer))
+         (process-environment (my/gptel--bash-context-environment context-buffer))
+         (default-directory (my/gptel--bash-context-directory context-buffer))
+         (signature (my/gptel--bash-context-signature context-buffer)))
+    (when (and (process-live-p my/gptel--persistent-bash-process)
+               (not (equal signature
+                           (process-get my/gptel--persistent-bash-process
+                                        'my/gptel-bash-context-signature))))
+      (my/gptel--reset-persistent-bash))
+    (unless (and my/gptel--persistent-bash-process
+                 (process-live-p my/gptel--persistent-bash-process))
+      (let ((buf (get-buffer-create " *gptel-persistent-bash*")))
+        (with-current-buffer buf (erase-buffer))
+        (setq my/gptel--persistent-bash-process
+              (make-process
+               :name "gptel-bash"
+               :buffer buf
+               :command '("bash" "--norc" "--noprofile")
+               :connection-type 'pipe
+               :noquery t))
+        (process-put my/gptel--persistent-bash-process 'my/gptel-managed t)
+        (process-put my/gptel--persistent-bash-process
+                     'my/gptel-bash-context-signature signature)
+        ;; Initialize Dumb Terminal variables to prevent interactive hanging
+        (process-send-string my/gptel--persistent-bash-process
+                             "export TERM=dumb PAGER=cat GIT_PAGER=cat DEBIAN_FRONTEND=noninteractive PS1=''\n")
+        (sleep-for 0.1)))))
 
 (defun my/gptel--bash-process-filter (proc output marker finish-fn)
   "Process filter for gptel persistent bash.
