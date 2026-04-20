@@ -552,8 +552,8 @@ workflow_action_elisp() {
         *) return 1 ;;
     esac
 
-    printf '(let ((root (or (bound-and-true-p minimal-emacs-user-directory) (file-name-as-directory user-emacs-directory)))) (setq default-directory root) (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)) (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root)) %s)' \
-           "$dispatch"
+    printf '(let ((root (file-name-as-directory "%s"))) (load-file (expand-file-name "lisp/modules/gptel-tools-agent.el" root)) (when (fboundp (quote gptel-auto-workflow--activate-live-root)) (gptel-auto-workflow--activate-live-root root)) (when (fboundp (quote gptel-auto-workflow--reload-live-support)) (gptel-auto-workflow--reload-live-support root)) %s)' \
+           "$ROOT_LISP" "$dispatch"
 }
 
 refresh_snapshot_paths_from_daemon() {

@@ -26,6 +26,7 @@
 (defvar gptel-auto-workflow--worktree-buffers)
 (defvar gptel-auto-workflow--current-project nil)
 (defvar gptel-auto-workflow--run-project-root nil)
+(defvar gptel-auto-workflow--project-root-override)
 (defvar gptel-agent-loop--bypass nil)
 (defvar gptel-benchmark--subagent-files nil)
 
@@ -142,6 +143,20 @@ Uses `gptel-auto-workflow--project-root' if available, falls back to ~/.emacs.d/
 Reduces duplication of `(or (gptel-auto-workflow--project-root) (expand-file-name \"~/.emacs.d/\"))` patterns."
   (or (gptel-auto-workflow--project-root)
       (expand-file-name "~/.emacs.d/")))
+
+(defun gptel-auto-workflow--activate-live-root (proj-root)
+  "Retarget the live daemon to PROJ-ROOT for queued workflow actions."
+  (let ((root (file-name-as-directory (expand-file-name proj-root))))
+    (setq default-directory root
+          user-emacs-directory root
+          gptel-auto-workflow--project-root-override root
+          gptel-auto-workflow--current-project nil
+          gptel-auto-workflow--run-project-root nil)
+    (when (boundp 'minimal-emacs-user-directory)
+      (setq minimal-emacs-user-directory root))
+    (when (boundp 'gptel-auto-workflow-projects)
+      (setq gptel-auto-workflow-projects (list root)))
+    root))
 
 (defun gptel-auto-workflow--worktree-base-root ()
   "Return a stable root for workflow-owned worktree artifacts.
@@ -1983,35 +1998,29 @@ Uses hash table keyed by task-id to support parallel execution."
               (if (not state)
                   (message "[nucleus] Ignoring stale subagent %s callback after reset"
                            agent-type)
-                ;; Atomic test-and-set: mark done before acting to prevent
-                ;; double-invocation if gptel-abort fires synchronously in timeout.
-                (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                (unless already-done
-                  (when (timerp (plist-get state :timeout-timer))
-                    (cancel-timer (plist-get state :timeout-timer)))
-                  (when (timerp (plist-get state :progress-timer))
-                    (cancel-timer (plist-get state :progress-timer)))
-                  (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
-                           agent-type (float-time (time-since start-time))
-                           (if (stringp result) (length result) 0))
-                  (funcall restore-origin-fsm child-fsm)
+                 ;; Atomic test-and-set: mark done before acting to prevent
+                 ;; double-invocation if gptel-abort fires synchronously in timeout.
+                 (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                 (unless already-done
+                   (my/gptel--cancel-agent-task-timers state)
+                   (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
+                            agent-type (float-time (time-since start-time))
+                            (if (stringp result) (length result) 0))
+                   (funcall restore-origin-fsm child-fsm)
                   (unwind-protect
                       (my/gptel--invoke-callback-safely callback result)
                     (remhash task-id my/gptel--agent-task-state))))))))
     (cl-labels
-        ((finish-timeout (state timeout-seconds timeout-suffix
-                                &optional timeout-kind total-elapsed-seconds)
-           (puthash task-id (plist-put state :done t)
-                    my/gptel--agent-task-state)
-           (when (timerp (plist-get state :timeout-timer))
-             (cancel-timer (plist-get state :timeout-timer)))
-           (when (timerp (plist-get state :progress-timer))
-             (cancel-timer (plist-get state :progress-timer)))
-           (if (eq timeout-kind :idle)
-               (message "[nucleus] Subagent %s timed out after %ds idle timeout (%.1fs total runtime), aborting request"
-                        agent-type timeout-seconds (or total-elapsed-seconds 0.0))
-             (message "[nucleus] Subagent %s timed out after %ds%s, aborting request"
-                      agent-type timeout-seconds timeout-suffix))
+         ((finish-timeout (state timeout-seconds timeout-suffix
+                                 &optional timeout-kind total-elapsed-seconds)
+            (puthash task-id (plist-put state :done t)
+                     my/gptel--agent-task-state)
+            (my/gptel--cancel-agent-task-timers state)
+            (if (eq timeout-kind :idle)
+                (message "[nucleus] Subagent %s timed out after %ds idle timeout (%.1fs total runtime), aborting request"
+                         agent-type timeout-seconds (or total-elapsed-seconds 0.0))
+              (message "[nucleus] Subagent %s timed out after %ds%s, aborting request"
+                       agent-type timeout-seconds timeout-suffix))
            (my/gptel--cleanup-agent-request-buffer state)
            (let ((timeout-result
                   (if (eq timeout-kind :idle)
@@ -2192,20 +2201,15 @@ Uses hash table keyed by task-id to support parallel execution."
                   (error
                    (setq launch-error err)))
               (unless request-started
-                (funcall restore-origin-fsm)))
-            (when launch-error
-              (let* ((state (gethash task-id my/gptel--agent-task-state))
-                     (timeout-timer (and state (plist-get state :timeout-timer)))
-                     (progress-timer (and state (plist-get state :progress-timer))))
-                (when state
-                  (when (timerp timeout-timer)
-                    (cancel-timer timeout-timer))
-                  (when (timerp progress-timer)
-                    (cancel-timer progress-timer))
-                  (remhash task-id my/gptel--agent-task-state))
-                (funcall restore-origin-fsm child-fsm)
-                (my/gptel--cleanup-agent-request-buffer state)
-                (message "[nucleus] Subagent %s failed before startup completed: %s"
+                 (funcall restore-origin-fsm)))
+             (when launch-error
+               (let ((state (gethash task-id my/gptel--agent-task-state)))
+                 (when state
+                   (my/gptel--cancel-agent-task-timers state)
+                   (remhash task-id my/gptel--agent-task-state))
+                 (funcall restore-origin-fsm child-fsm)
+                 (my/gptel--cleanup-agent-request-buffer state)
+                 (message "[nucleus] Subagent %s failed before startup completed: %s"
                          agent-type
                          (my/gptel--sanitize-for-logging
                           (error-message-string launch-error) 160))
@@ -6364,6 +6368,12 @@ GRADE-TOTAL can be nil when the grader omits an explicit denominator."
              "making the control flow explicit"
              "consistent with "
              "reducing code duplication"
+             "avoid unnecessary"
+             "avoids unnecessary"
+             "unnecessary timer cancellation"
+             "unnecessary stop/start operations"
+             "wasteful operations"
+             "redundant timer cancellation"
              "edge case"
              "edge cases"
              "could "
@@ -6371,10 +6381,32 @@ GRADE-TOTAL can be nil when the grader omits an explicit denominator."
              "may "))
      text)))
 
+(defun gptel-auto-experiment--grade-explanation-text (grade-details)
+  "Return explanation-only text extracted from GRADE-DETAILS.
+When the grader emits rubric bullets like `PASS - ...', ignore the rubric labels
+and preserve only the explanatory text to avoid matching static prompt wording."
+  (when (stringp grade-details)
+    (let ((start 0)
+          explanations)
+      (while (string-match
+              (rx (or "PASS - " "FAIL - ")
+                  (group (*? (not (any "|")))))
+              grade-details
+              start)
+        (let ((segment (string-trim (match-string 1 grade-details))))
+          (unless (string-empty-p segment)
+            (push segment explanations)))
+        (setq start (match-end 0)))
+      (if explanations
+          (string-join (nreverse explanations) "\n")
+        grade-details))))
+
 (defun gptel-auto-experiment--grader-indicates-correctness-fix-p (grade-details)
   "Return non-nil when GRADE-DETAILS describes a real correctness fix.
 Speculative or purely defensive hardening language does not count."
-  (when (stringp grade-details)
+  (let ((grade-signals
+         (gptel-auto-experiment--grade-explanation-text grade-details)))
+    (when (stringp grade-signals)
     (let ((case-fold-search t))
       (and
        (string-match-p
@@ -6408,10 +6440,10 @@ Speculative or purely defensive hardening language does not count."
                  "actual functional bug"
                  "actual functional bugs"
                  "demonstrably buggy"))
-        grade-details)
+        grade-signals)
         (not
          (gptel-auto-experiment--speculative-correctness-language-p
-          grade-details))))))
+          grade-signals)))))))
 
 (defun gptel-auto-experiment--promote-correctness-fix-decision
     (decision tests-passed grade-score grade-total grade-details &optional hypothesis)

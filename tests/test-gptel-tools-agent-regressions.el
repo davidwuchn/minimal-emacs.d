@@ -1113,6 +1113,21 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
              "Rejected: score tie without >= 0.10 quality gain"
              (plist-get decision :reasoning)))))
 
+(ert-deftest regression/auto-experiment/does-not-promote-rubric-bug-keyword-ties ()
+  "Rubric boilerplate mentioning 'fixes bug' must not trigger tie promotion."
+  (let ((decision
+         (gptel-auto-experiment--promote-correctness-fix-decision
+          '(:keep nil
+            :reasoning "Winner: A | Rejected: score tie without >= 0.10 quality gain"
+            :improvement (:score 0.0 :quality 0.05 :combined 0.02))
+          t 5 5
+          "Grader result for task: Grade output | EXPECTED: | 1. change clearly described: PASS - Output clearly explains the issue (unconditional stop before condition check) and the fix (moving stop inside the when block) | 2. change is minimal and focused: PASS - Single line moved from outside to inside the when block; no other changes | 3. improves code: fixes bug, improves performance, addresses TODO/FIXME, or enhances clarity/testability: PASS - Improves correctness (no wasteful timer cancellation when conditions aren't met) and performance (avoids unnecessary stop/start operations) | 4. verification attempted (byte-compile, nucleus, tests, or manual): PASS - Verification performed: verify-nucleus.sh, byte-compile, and checkdoc all passed | FORBIDDEN: | 1. large refactor unrelated to stated improvement: PASS - No large refactor; change is precisely targeted | 2. changed security files without review: PASS - No security files involved | 3. no description or unclear purpose: PASS - Purpose is clear: fix redundant timer cancellation logic | 4. style-only change without functional impact: PASS - Change has clear functional impact on behavior | 5. replaces working code without clear improvement: PASS - Clear improvement in avoiding unnecessary operations | SUMMARY: SCORE: 5/5"
+          "Moving the timer stop operation inside the conditional check in `gptel-auto-workflow--start-status-refresh-timer` prevents unnecessary timer cancellation when conditions are not met, improving both correctness and avoiding wasteful operations.")))
+    (should-not (plist-get decision :keep))
+    (should (string-match-p
+             "Rejected: score tie without >= 0.10 quality gain"
+             (plist-get decision :reasoning)))))
+
 (ert-deftest regression/auto-experiment/does-not-promote-non-correctness-ties ()
   "Non-correctness ties should still be discarded."
   (let ((decision
@@ -2125,8 +2140,32 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (kill-buffer worktree-buf))
       (when (buffer-live-p drift-buf)
         (kill-buffer drift-buf))
-      (delete-directory project-root t)
-      (delete-directory drift-root t))))
+       (delete-directory project-root t)
+       (delete-directory drift-root t))))
+
+(ert-deftest regression/auto-workflow/activate-live-root-retargets-daemon-state ()
+  "Activating a live root should retarget queued workflow globals."
+  (defvar minimal-emacs-user-directory)
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-live-root" t)))
+         (default-directory "/tmp/original-root/")
+         (user-emacs-directory "/tmp/original-root/")
+         (minimal-emacs-user-directory "/tmp/original-root/")
+         (gptel-auto-workflow-projects '("/tmp/original-root/"))
+         (gptel-auto-workflow--current-project "/tmp/drift/")
+         (gptel-auto-workflow--run-project-root "/tmp/drift/")
+         (gptel-auto-workflow--project-root-override "/tmp/drift/"))
+    (unwind-protect
+        (progn
+          (should (equal (gptel-auto-workflow--activate-live-root project-root)
+                         project-root))
+          (should (equal default-directory project-root))
+          (should (equal user-emacs-directory project-root))
+          (should (equal minimal-emacs-user-directory project-root))
+          (should (equal gptel-auto-workflow-projects (list project-root)))
+          (should (equal gptel-auto-workflow--project-root-override project-root))
+          (should-not gptel-auto-workflow--current-project)
+          (should-not gptel-auto-workflow--run-project-root))
+      (delete-directory project-root t))))
 
 (ert-deftest regression/auto-experiment/run-forwards-executor-runagent-args ()
   "Primary executor dispatch should pass the expected RunAgent args."
@@ -11075,10 +11114,10 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
              (should (seq-some
                       (lambda (elisp)
                         (and (string-match-p
-                              (regexp-quote "(setq default-directory root)")
+                              (regexp-quote "(load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))")
                               elisp)
                              (string-match-p
-                              (regexp-quote "(load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))")
+                              (regexp-quote "(gptel-auto-workflow--activate-live-root root)")
                               elisp)
                              (string-match-p
                               (regexp-quote "(gptel-auto-workflow--reload-live-support root)")
@@ -11095,8 +11134,11 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                                    messages-file))
                               elisp)
                              (not (string-match-p
-                                   (regexp-quote "gptel-auto-workflow-bootstrap.el")
+                                   (regexp-quote "bound-and-true-p minimal-emacs-user-directory")
                                    elisp))
+                             (not (string-match-p
+                                    (regexp-quote "gptel-auto-workflow-bootstrap.el")
+                                    elisp))
                              (not (string-match-p
                                    (regexp-quote "(require 'gptel)")
                                    elisp))
