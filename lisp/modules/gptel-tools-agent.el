@@ -1998,35 +1998,29 @@ Uses hash table keyed by task-id to support parallel execution."
               (if (not state)
                   (message "[nucleus] Ignoring stale subagent %s callback after reset"
                            agent-type)
-                ;; Atomic test-and-set: mark done before acting to prevent
-                ;; double-invocation if gptel-abort fires synchronously in timeout.
-                (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
-                (unless already-done
-                  (when (timerp (plist-get state :timeout-timer))
-                    (cancel-timer (plist-get state :timeout-timer)))
-                  (when (timerp (plist-get state :progress-timer))
-                    (cancel-timer (plist-get state :progress-timer)))
-                  (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
-                           agent-type (float-time (time-since start-time))
-                           (if (stringp result) (length result) 0))
-                  (funcall restore-origin-fsm child-fsm)
+                 ;; Atomic test-and-set: mark done before acting to prevent
+                 ;; double-invocation if gptel-abort fires synchronously in timeout.
+                 (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
+                 (unless already-done
+                   (my/gptel--cancel-agent-task-timers state)
+                   (message "[nucleus] Subagent %s completed in %.1fs, result-len=%d"
+                            agent-type (float-time (time-since start-time))
+                            (if (stringp result) (length result) 0))
+                   (funcall restore-origin-fsm child-fsm)
                   (unwind-protect
                       (my/gptel--invoke-callback-safely callback result)
                     (remhash task-id my/gptel--agent-task-state))))))))
     (cl-labels
-        ((finish-timeout (state timeout-seconds timeout-suffix
-                                &optional timeout-kind total-elapsed-seconds)
-           (puthash task-id (plist-put state :done t)
-                    my/gptel--agent-task-state)
-           (when (timerp (plist-get state :timeout-timer))
-             (cancel-timer (plist-get state :timeout-timer)))
-           (when (timerp (plist-get state :progress-timer))
-             (cancel-timer (plist-get state :progress-timer)))
-           (if (eq timeout-kind :idle)
-               (message "[nucleus] Subagent %s timed out after %ds idle timeout (%.1fs total runtime), aborting request"
-                        agent-type timeout-seconds (or total-elapsed-seconds 0.0))
-             (message "[nucleus] Subagent %s timed out after %ds%s, aborting request"
-                      agent-type timeout-seconds timeout-suffix))
+         ((finish-timeout (state timeout-seconds timeout-suffix
+                                 &optional timeout-kind total-elapsed-seconds)
+            (puthash task-id (plist-put state :done t)
+                     my/gptel--agent-task-state)
+            (my/gptel--cancel-agent-task-timers state)
+            (if (eq timeout-kind :idle)
+                (message "[nucleus] Subagent %s timed out after %ds idle timeout (%.1fs total runtime), aborting request"
+                         agent-type timeout-seconds (or total-elapsed-seconds 0.0))
+              (message "[nucleus] Subagent %s timed out after %ds%s, aborting request"
+                       agent-type timeout-seconds timeout-suffix))
            (my/gptel--cleanup-agent-request-buffer state)
            (let ((timeout-result
                   (if (eq timeout-kind :idle)
@@ -2207,20 +2201,15 @@ Uses hash table keyed by task-id to support parallel execution."
                   (error
                    (setq launch-error err)))
               (unless request-started
-                (funcall restore-origin-fsm)))
-            (when launch-error
-              (let* ((state (gethash task-id my/gptel--agent-task-state))
-                     (timeout-timer (and state (plist-get state :timeout-timer)))
-                     (progress-timer (and state (plist-get state :progress-timer))))
-                (when state
-                  (when (timerp timeout-timer)
-                    (cancel-timer timeout-timer))
-                  (when (timerp progress-timer)
-                    (cancel-timer progress-timer))
-                  (remhash task-id my/gptel--agent-task-state))
-                (funcall restore-origin-fsm child-fsm)
-                (my/gptel--cleanup-agent-request-buffer state)
-                (message "[nucleus] Subagent %s failed before startup completed: %s"
+                 (funcall restore-origin-fsm)))
+             (when launch-error
+               (let ((state (gethash task-id my/gptel--agent-task-state)))
+                 (when state
+                   (my/gptel--cancel-agent-task-timers state)
+                   (remhash task-id my/gptel--agent-task-state))
+                 (funcall restore-origin-fsm child-fsm)
+                 (my/gptel--cleanup-agent-request-buffer state)
+                 (message "[nucleus] Subagent %s failed before startup completed: %s"
                          agent-type
                          (my/gptel--sanitize-for-logging
                           (error-message-string launch-error) 160))
