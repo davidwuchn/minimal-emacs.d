@@ -100,7 +100,7 @@ When MiniMax hits rate limits (429), auto-workflow automatically fails over:
 | 1 | **MiniMax** | `minimax-m2.7-highspeed` | Primary workhorse |
 | 2 | **moonshot** | `kimi-k2.6` | First fallback |
 | 3 | **DashScope** | `qwen3.6-plus` | Second fallback |
-| 4 | **DeepSeek** | `deepseek-chat` | Third fallback |
+| 4 | **DeepSeek** | `deepseek-reasoner` | Third fallback |
 | 5 | **CF-Gateway** | `@cf/moonshotai/kimi-k2.6` | Fourth fallback |
 | 6 | **Gemini** | `gemini-3.1-pro-preview` | Last resort |
 

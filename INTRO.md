@@ -107,8 +107,8 @@ Auto-workflow uses MiniMax as the primary workhorse with automatic provider fail
 1. **MiniMax** — `minimax-m2.7-highspeed` (primary)
 2. **moonshot** — `kimi-k2.6`
 3. **DashScope** — `qwen3.6-plus`
-4. **DeepSeek** — `deepseek-chat`
-5. **CF-Gateway** — `@cf/zai-org/glm-4.7-flash`
+4. **DeepSeek** — `deepseek-reasoner`
+5. **CF-Gateway** — `@cf/moonshotai/kimi-k2.6`
 6. **Gemini** — `gemini-3.1-pro-preview`
 
 Requires `api.minimaxi.com` API key in auth-source. All alternate backends require their respective API keys configured in auth-source.
