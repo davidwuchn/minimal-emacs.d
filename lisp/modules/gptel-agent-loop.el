@@ -406,7 +406,7 @@ Uses pre-compiled pattern for performance on hot path."
        (let ((case-fold-search t))
          (if gptel-agent-loop--turn-skipped-pattern-compiled
              (string-match-p gptel-agent-loop--turn-skipped-pattern-compiled resp)
-           (gptel-agent-loop--matches-any-pattern resp (list gptel-agent-loop--turn-skipped-pattern))))))
+           (string-match-p gptel-agent-loop--turn-skipped-pattern resp)))))
 
 (defconst gptel-agent-loop--planning-patterns
   '("\\blet me\\b"
