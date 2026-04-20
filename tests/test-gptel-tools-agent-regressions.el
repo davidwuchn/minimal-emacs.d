@@ -904,6 +904,20 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
              "Override: keep non-regressing high-confidence tie with passing tests"
              (plist-get decision :reasoning)))))
 
+(ert-deftest regression/auto-experiment/does-not-promote-speculative-runtime-hardening-ties ()
+  "Speculative defensive runtime hardening must not override the tie gate."
+  (let ((decision
+         (gptel-auto-experiment--promote-correctness-fix-decision
+          '(:keep nil
+            :reasoning "Winner: A | Rejected: score tie without >= 0.10 quality gain"
+            :improvement (:score 0.0 :quality 0.05 :combined 0.02))
+          t 4 4
+          "Adds explicit nil checks to prevent potential runtime errors and enhances robustness when default-directory is unexpectedly nil.")))
+    (should-not (plist-get decision :keep))
+    (should (string-match-p
+             "Rejected: score tie without >= 0.10 quality gain"
+             (plist-get decision :reasoning)))))
+
 (ert-deftest regression/auto-experiment/does-not-promote-non-correctness-ties ()
   "Non-correctness ties should still be discarded."
   (let ((decision
@@ -1210,6 +1224,17 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
        "EVIDENCE:\n"
        "- Earlier sanitize attempt: Error: Task \"Experiment 1: optimize lisp/modules/gptel-ext-tool-sanitize.el\" (executor) timed out after 1020s total runtime.\n")
       "HYPOTHESIS: Fix the consp branch in my/gptel--coerce-fsm"
+      "lisp/modules/gptel-ext-fsm-utils.el"
+      "/tmp/worktree"))))
+
+(ert-deftest regression/auto-experiment/timeout-salvage-output-allows-idle-timeout-errors ()
+  "Idle-timeout executor errors should still salvage pending target diffs."
+  (cl-letf (((symbol-function 'gptel-auto-experiment--target-pending-changes-p)
+             (lambda (&rest _args) t)))
+    (should
+     (gptel-auto-experiment--timeout-salvage-output
+      "Error: Task \"Experiment 1: optimize lisp/modules/gptel-ext-fsm-utils.el\" (executor) timed out after 600s idle timeout (991.1s total runtime)."
+      "HYPOTHESIS: Keep partial idle-timeout changes"
       "lisp/modules/gptel-ext-fsm-utils.el"
       "/tmp/worktree"))))
 
@@ -1642,14 +1667,59 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (gptel-auto-experiment-run
            "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
            (lambda (exp-result)
-             (setq result exp-result))))
-        (delete-directory temp-dir t))
-    (should result)
-    (should (equal (plist-get result :error) grader-error))
+              (setq result exp-result))))
+         (delete-directory temp-dir t))
+     (should result)
+     (should (equal (plist-get result :error) grader-error))
      (should (equal (plist-get result :grader-reason) grader-error))
+     (should (equal (plist-get result :comparator-reason) "grader-api-rate-limit"))
+     (should (equal (gptel-auto-experiment--tsv-decision-label result)
+                    "grader-api-rate-limit"))
      (should (plist-get result :grader-only-failure))
      (should (gptel-auto-experiment--is-retryable-error-p
               (plist-get result :error)))))
+
+(ert-deftest regression/auto-experiment/run-labels-final-grader-timeouts-separately ()
+  "Final grader-only timeouts should not be logged as executor timeouts."
+  (let ((result nil)
+        (temp-dir (make-temp-file "exp-worktree" t))
+        (gptel-auto-experiment-max-grader-retries 0)
+        (grader-error
+         "Error: Task grader could not finish task \"Grade output\" (grader) timed out after 120s.")) 
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (lambda (_target _experiment-id) temp-dir))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results cb)
+                     (funcall cb '(:patterns nil))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _args) "prompt"))
+                  ((symbol-function 'run-with-timer)
+                   (lambda (&rest _args) :fake-timer))
+                  ((symbol-function 'cancel-timer)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'my/gptel--run-agent-tool)
+                   (lambda (cb &rest _args)
+                     (funcall cb "Executor result for task: successful candidate")))
+                  ((symbol-function 'gptel-auto-experiment-grade)
+                   (lambda (_output cb &rest _args)
+                     (funcall cb `(:score 0 :total 9 :passed nil :details ,grader-error))))
+                  ((symbol-function 'gptel-auto-experiment-log-tsv)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (gptel-auto-experiment-run
+           "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+           (lambda (exp-result)
+             (setq result exp-result))))
+      (delete-directory temp-dir t))
+    (should result)
+    (should (equal (plist-get result :grader-reason) grader-error))
+    (should (equal (plist-get result :comparator-reason) "grader-timeout"))
+    (should (equal (gptel-auto-experiment--tsv-decision-label result)
+                   "grader-timeout"))
+    (should (plist-get result :grader-only-failure))
+    (should (equal (plist-get result :error) grader-error))))
 
 (ert-deftest regression/auto-experiment/run-normal-grade-rejections-are-not-timeouts ()
   "Normal failed grades should not classify executor prose as timeout/error noise."
@@ -2853,7 +2923,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (funcall scheduled-timeout)
          (funcall wrapped-callback "late success")
          (should (= (length callback-results) 1))
-         (should (string-match-p "timed out after 42s" (car callback-results)))))))
+          (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))))))
 
 (ert-deftest regression/subagent/safe-callback-survives-deleted-current-buffer ()
   "Callback dispatch should not signal when the callback deletes the current buffer."
@@ -4225,8 +4295,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   "Retry helper should not reschedule hard executor timeout failures."
   (dolist (timeout-category '(:timeout ":timeout"))
     (dolist (timeout-message
-             '("Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s total runtime."
-               "Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s."))
+             '("Error: Task \"Experiment 1: optimize lisp/modules/gptel-tools-agent.el\" (executor) timed out after 900s total runtime."))
       (let ((runs 0)
             (scheduled-retry nil)
             (final-result nil)
@@ -4254,14 +4323,27 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           (should-not scheduled-retry)
           (should (equal (plist-get final-result :agent-output) timeout-message)))))))
 
-(ert-deftest regression/auto-experiment/hard-timeout-p-detects-plain-executor-timeouts ()
-  "Hard-timeout detection should recognize both executor timeout message formats."
-  (should (gptel-auto-experiment--hard-timeout-p
+(ert-deftest regression/auto-experiment/executor-timeout-p-detects-idle-and-hard-timeouts ()
+  "Executor timeout detection should recognize idle and total-runtime timeout strings."
+  (should (gptel-auto-experiment--executor-timeout-p
            "Error: Task \"Experiment 2\" (executor) timed out after 600s."))
+  (should (gptel-auto-experiment--executor-timeout-p
+           "Error: Task \"Experiment 2\" (executor) timed out after 600s idle timeout (991.1s total runtime)."))
+  (should (gptel-auto-experiment--executor-timeout-p
+           "Error: Task \"Experiment 2\" (executor) timed out after 600s total runtime."))
+  (should-not (gptel-auto-experiment--executor-timeout-p
+               "curl failed with exit code 28: operation timed out")))
+
+(ert-deftest regression/auto-experiment/hard-timeout-p-ignores-idle-timeouts ()
+  "Hard-timeout detection should only treat total-runtime stops as hard timeouts."
+  (should-not (gptel-auto-experiment--hard-timeout-p
+               "Error: Task \"Experiment 2\" (executor) timed out after 600s."))
+  (should-not (gptel-auto-experiment--hard-timeout-p
+               "Error: Task \"Experiment 2\" (executor) timed out after 600s idle timeout (991.1s total runtime)."))
   (should (gptel-auto-experiment--hard-timeout-p
            "Error: Task \"Experiment 2\" (executor) timed out after 600s total runtime."))
   (should-not (gptel-auto-experiment--hard-timeout-p
-               "curl failed with exit code 28: operation timed out")))
+                "curl failed with exit code 28: operation timed out")))
 
 (ert-deftest regression/auto-experiment/run-with-retry-stops-after-hard-timeout-following-idle-timeout ()
   "Retry helper should stop once a retried timeout becomes a hard total-runtime timeout."
@@ -6338,7 +6420,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (funcall (cdr (cadr scheduled-timeouts)))
             (should (equal aborted-buffers (list request-buf)))
             (should (= (length callback-results) 1))
-            (should (string-match-p "timed out after 42s" (car callback-results)))
+            (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
             (should (= (hash-table-count my/gptel--agent-task-state) 0)))
         (when (buffer-live-p request-buf)
           (kill-buffer request-buf))
@@ -6403,7 +6485,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (funcall (cdr (cadr scheduled-timeouts)))
             (should (equal aborted-buffers (list request-buf)))
             (should (= (length callback-results) 1))
-            (should (string-match-p "timed out after 42s" (car callback-results)))
+            (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
             (should (= (hash-table-count my/gptel--agent-task-state) 0)))
         (when (buffer-live-p request-buf)
           (kill-buffer request-buf))))))
@@ -6450,7 +6532,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
               (funcall scheduled-timeout)
               (should (equal aborted-buffers (list request-buf)))
               (should (= (length callback-results) 1))
-              (should (string-match-p "timed out after 42s" (car callback-results)))
+              (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
               (should (= (hash-table-count my/gptel--agent-task-state) 0))))
        (when (buffer-live-p request-buf)
          (kill-buffer request-buf))))))
@@ -6577,8 +6659,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                  (should-not discarded)
                  (should (buffer-live-p request-buf))
                  (should (= (length callback-results) 1))
-                 (should (string-match-p "timed out after 42s" (car callback-results)))
-                 (should (= (hash-table-count my/gptel--agent-task-state) 0)))))
+                  (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
+                  (should (= (hash-table-count my/gptel--agent-task-state) 0)))))
         (when (buffer-live-p request-buf)
           (kill-buffer request-buf))
         (delete-directory project-root t)))))
@@ -6627,7 +6709,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (funcall scheduled-timeout)
             (should (equal aborted-buffers (list request-buf)))
             (should (= (length callback-results) 1))
-            (should (string-match-p "timed out after 42s" (car callback-results)))
+            (should (string-match-p "timed out after 42s idle timeout" (car callback-results)))
             (should (= (hash-table-count my/gptel--agent-task-state) 0)))
         (when (buffer-live-p origin-buf)
           (kill-buffer origin-buf))
@@ -8157,7 +8239,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                          scheduled-timers)))
            (should timeout-timer)
             (funcall (plist-get timeout-timer :fn)))
-          (should (string-match-p "timed out after 42s" callback-result))))))
+          (should (string-match-p "timed out after 42s idle timeout" callback-result))))))
 
 (ert-deftest regression/auto-workflow/subagent-launch-errors-fail-fast ()
   "Synchronous subagent launch errors should fail immediately and clear task state."
@@ -10278,14 +10360,15 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                (lambda (timer) (eq timer 'fake-refresh)))
               ((symbol-function 'cancel-timer)
                (lambda (timer) (setq cancelled timer))))
-      (gptel-auto-workflow--refresh-status-if-running)
-      (should (= persisted 1))
-      (should (equal gptel-auto-workflow--last-progress-time '(1 2 3 4)))
-      (setq gptel-auto-workflow--running nil
-            gptel-auto-workflow--cron-job-running nil)
        (gptel-auto-workflow--refresh-status-if-running)
-       (should (eq cancelled 'fake-refresh))
-       (should-not gptel-auto-workflow--status-refresh-timer))))
+       (should (= persisted 1))
+       (should (equal gptel-auto-workflow--last-progress-time '(1 2 3 4)))
+       (should (eq gptel-auto-workflow--status-refresh-timer 'fake-refresh))
+       (setq gptel-auto-workflow--running nil
+             gptel-auto-workflow--cron-job-running nil)
+        (gptel-auto-workflow--refresh-status-if-running)
+        (should (eq cancelled 'fake-refresh))
+        (should-not gptel-auto-workflow--status-refresh-timer))))
 
 (ert-deftest regression/auto-workflow/blocking-call-refreshes-status-after-return ()
   "Blocking workflow work should refresh the persisted snapshot on return."
@@ -13216,7 +13299,9 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
     (should (equal (plist-get result :retries) 1))
     (should (equal (plist-get result :hypothesis) "retry hypothesis"))
     (should (equal (plist-get result :grader-reason) grader-error))
-    (should (equal (plist-get result :comparator-reason) ":api-rate-limit"))
+    (should (equal (plist-get result :comparator-reason) "grader-api-rate-limit"))
+    (should (equal (gptel-auto-experiment--tsv-decision-label result)
+                   "grader-api-rate-limit"))
     (should (plist-get result :grader-only-failure))
     (should (equal (plist-get result :error) grader-error))))
 
@@ -14655,6 +14740,8 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (calls nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
                (lambda () project-root))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-repo-root)
+               (lambda () project-root))
               ((symbol-function 'gptel-auto-workflow--default-dir)
                (lambda () "/tmp/project/var/tmp/experiments/staging-verify"))
               ((symbol-function 'file-directory-p)
@@ -14664,21 +14751,23 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                            "/tmp/project/packages/gptel-agent/.git"
                            "/tmp/project/.git/modules/packages/gptel-agent"))))
               ((symbol-function 'gptel-auto-workflow--git-result)
-               (lambda (command &optional _timeout)
-                 (push command calls)
-                 (cond
-                  ((equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir")
-                   (cons ".git\n" 0))
-                  ((equal command "git --git-dir=/tmp/project/packages/gptel-agent/.git cat-file -e abc123^{commit}")
-                   (cons "" 0))
-                  ((equal command "git --git-dir=/tmp/project/.git/modules/packages/gptel-agent cat-file -e abc123^{commit}")
-                   (cons "" 1))
-                  (t
-                   (cons "" 1))))))
+                (lambda (command &optional _timeout)
+                  (push command calls)
+                  (cond
+                   ((equal command
+                           "git config --file /tmp/project/packages/gptel-agent/.git/config core.worktree /tmp/project/packages/gptel-agent")
+                    (cons "" 0))
+                   ((equal command "git --git-dir=/tmp/project/packages/gptel-agent/.git cat-file -e abc123^{commit}")
+                    (cons "" 0))
+                   ((equal command "git --git-dir=/tmp/project/.git/modules/packages/gptel-agent cat-file -e abc123^{commit}")
+                    (cons "" 1))
+                   (t
+                     (cons "" 1))))))
       (should (equal (gptel-auto-workflow--shared-submodule-git-dir "packages/gptel-agent" "abc123")
                      "/tmp/project/packages/gptel-agent/.git"))
       (should (seq-some (lambda (command)
-                          (equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir"))
+                          (equal command
+                                 "git config --file /tmp/project/packages/gptel-agent/.git/config core.worktree /tmp/project/packages/gptel-agent"))
                         calls)))))
 
 (ert-deftest regression/auto-workflow/shared-submodule-git-dir-uses-worktree-common-git-dir ()
@@ -14714,32 +14803,97 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
         (calls nil))
     (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
                (lambda () project-root))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-repo-root)
+               (lambda () "/tmp/project"))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-git-common-dir)
+               (lambda () "/tmp/project/.git"))
               ((symbol-function 'file-directory-p)
                (lambda (path)
                  (member path
                          '("/tmp/project/.git"
                            "/tmp/project/packages/gptel-agent"
-                           "/tmp/project/packages/gptel-agent/.git"))))
+                            "/tmp/project/packages/gptel-agent/.git"))))
+              ((symbol-function 'gptel-auto-workflow--git-result)
+               (lambda (command &optional _timeout)
+                  (push command calls)
+                  (cond
+                   ((equal command
+                           "git config --file /tmp/project/packages/gptel-agent/.git/config core.worktree /tmp/project/packages/gptel-agent")
+                    (cons "" 0))
+                   ((equal command "git --git-dir=/tmp/project/packages/gptel-agent/.git cat-file -e abc123^{commit}")
+                    (cons "" 0))
+                   (t
+                    (cons "" 1))))))
+      (should (equal (gptel-auto-workflow--shared-submodule-git-dir "packages/gptel-agent" "abc123")
+                     "/tmp/project/packages/gptel-agent/.git"))
+      (should (seq-some (lambda (command)
+                          (equal command
+                                 "git config --file /tmp/project/packages/gptel-agent/.git/config core.worktree /tmp/project/packages/gptel-agent"))
+                        calls))
+      (should (seq-some (lambda (command)
+                          (equal command "git --git-dir=/tmp/project/packages/gptel-agent/.git cat-file -e abc123^{commit}"))
+                        calls)))))
+
+(ert-deftest regression/auto-workflow/submodule-checkout-git-dir-at-root-reads-gitfile-without-rev-parse ()
+  "Submodule checkout git dirs should be recoverable from `.git' markers alone."
+  (let* ((root (make-temp-file "gptel-submodule-root" t))
+         (checkout (expand-file-name "packages/gptel" root))
+         (linked-git-dir (expand-file-name ".git/modules/packages/gptel/worktrees/gptel6" root))
+         (common-dir (expand-file-name ".git/modules/packages/gptel" root)))
+    (unwind-protect
+        (progn
+          (make-directory checkout t)
+          (make-directory linked-git-dir t)
+          (with-temp-file (expand-file-name ".git" checkout)
+            (insert "gitdir: ../../.git/modules/packages/gptel/worktrees/gptel6\n"))
+          (with-temp-file (expand-file-name "commondir" linked-git-dir)
+            (insert "../..\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--git-result)
+                     (lambda (&rest _)
+                       (ert-fail "git rev-parse should not run when the .git marker is readable"))))
+            (should (equal (gptel-auto-workflow--submodule-checkout-git-dir-at-root
+                            root "packages/gptel")
+                           common-dir))))
+      (delete-directory root t))))
+
+(ert-deftest regression/auto-workflow/shared-submodule-git-dir-normalizes-poisoned-common-worktree ()
+  "Shared submodule lookup should restore the canonical checkout before commit probes."
+  (let ((project-root "/tmp/project")
+        (common-dir "/tmp/project/.git/modules/packages/gptel")
+        (calls nil))
+    (cl-letf (((symbol-function 'gptel-auto-workflow--worktree-base-root)
+               (lambda () project-root))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-repo-root)
+               (lambda () project-root))
+              ((symbol-function 'gptel-auto-workflow--worktree-base-git-common-dir)
+               (lambda () "/tmp/project/.git"))
+              ((symbol-function 'file-directory-p)
+               (lambda (path)
+                 (member path
+                         (list "/tmp/project/packages/gptel"
+                               "/tmp/project/.git"
+                               common-dir))))
+              ((symbol-function 'gptel-auto-workflow--checkout-git-common-dir-from-marker)
+               (lambda (checkout)
+                 (and (equal checkout "/tmp/project/packages/gptel")
+                      common-dir)))
               ((symbol-function 'gptel-auto-workflow--git-result)
                (lambda (command &optional _timeout)
                  (push command calls)
                  (cond
-                  ((equal command "git -C /tmp/project-wt rev-parse --git-common-dir")
-                   (cons "/tmp/project/.git\n" 0))
-                  ((equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir")
-                   (cons ".git\n" 0))
-                  ((equal command "git --git-dir=/tmp/project/packages/gptel-agent/.git cat-file -e abc123^{commit}")
+                  ((equal command
+                          "git config --file /tmp/project/.git/modules/packages/gptel/config core.worktree /tmp/project/packages/gptel")
+                   (cons "" 0))
+                  ((equal command
+                          "git --git-dir=/tmp/project/.git/modules/packages/gptel cat-file -e abc123^{commit}")
                    (cons "" 0))
                   (t
                    (cons "" 1))))))
-      (should (equal (gptel-auto-workflow--shared-submodule-git-dir "packages/gptel-agent" "abc123")
-                     "/tmp/project/packages/gptel-agent/.git"))
-      (should (seq-some (lambda (command)
-                          (equal command "git -C /tmp/project-wt rev-parse --git-common-dir"))
-                        calls))
-      (should (seq-some (lambda (command)
-                          (equal command "git -C /tmp/project/packages/gptel-agent rev-parse --git-common-dir"))
-                        calls)))))
+      (should (equal (gptel-auto-workflow--shared-submodule-git-dir "packages/gptel" "abc123")
+                     common-dir))
+      (should (equal (reverse calls)
+                     '("git config --file /tmp/project/.git/modules/packages/gptel/config core.worktree /tmp/project/packages/gptel"
+                       "git --git-dir=/tmp/project/.git/modules/packages/gptel cat-file -e abc123^{commit}"))))))
 
 (ert-deftest regression/auto-workflow/shared-submodule-git-dir-uses-current-worktree-checkout-when-root-is-stale ()
   "Use the current workflow worktree checkout when the canonical root lacks the gitlink commit."
@@ -14780,6 +14934,51 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                 (lambda (command)
                   (equal command "git -C /tmp/worktree/packages/gptel-agent rev-parse --git-common-dir"))
                 calls)))))
+
+(ert-deftest regression/auto-workflow/hydrate-staging-submodules-restores-shared-core-worktree-after-add ()
+  "Hydration should re-anchor shared submodule repos after creating linked worktrees."
+  (let ((root (make-temp-file "staging-root" t))
+        (git-dir "/tmp/project/.git/modules/packages/gptel")
+        (normalize-calls nil)
+        (commands nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow--staging-submodule-paths)
+                   (lambda (&optional _worktree)
+                     '("packages/gptel")))
+                  ((symbol-function 'gptel-auto-workflow--staging-submodule-gitlink-revision)
+                   (lambda (_worktree _path)
+                     "abc123"))
+                  ((symbol-function 'file-directory-p)
+                   (lambda (path)
+                     (or (equal path root)
+                         (equal path git-dir))))
+                  ((symbol-function 'gptel-auto-workflow--shared-submodule-git-dir)
+                   (lambda (_path &optional _commit)
+                     git-dir))
+                  ((symbol-function 'gptel-auto-workflow--cleanup-staging-submodule-worktree)
+                   (lambda (_worktree _path)
+                     nil))
+                  ((symbol-function 'gptel-auto-workflow--normalize-shared-submodule-core-worktree)
+                   (lambda (path git-dir-arg)
+                     (push (list path git-dir-arg) normalize-calls)
+                     git-dir-arg))
+                  ((symbol-function 'gptel-auto-workflow--git-result)
+                   (lambda (command &optional _timeout)
+                     (push command commands)
+                     (cond
+                      ((string-match-p "worktree add --detach --force" command)
+                       (cons "" 0))
+                      (t
+                       (cons "" 0))))))
+          (should (equal (gptel-auto-workflow--hydrate-staging-submodules root)
+                         '("Hydrated submodules: packages/gptel=abc123" . 0)))
+          (should (equal (reverse normalize-calls)
+                         '(("packages/gptel" "/tmp/project/.git/modules/packages/gptel")
+                           ("packages/gptel" "/tmp/project/.git/modules/packages/gptel"))))
+          (should (seq-some (lambda (command)
+                              (string-match-p "worktree add --detach --force" command))
+                            commands)))
+      (delete-directory root t))))
 
 (ert-deftest regression/auto-workflow/worktree-base-repo-root-resolves-linked-worktree-git-common-dir ()
   "Linked worktrees should resolve their canonical repo root, not `.git/worktrees'."
