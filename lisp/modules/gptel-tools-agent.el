@@ -1839,15 +1839,22 @@ same routed experiment buffer from re-entering a later retry."
   "Invoke the active gptel subagent task runner.
 In headless auto-workflow runs, bypass `gptel-agent-loop-task' to avoid
 its async continuation layer in the worker daemon."
-  (let ((headless-auto-workflow
-         (and (bound-and-true-p gptel-auto-workflow--headless)
-              (bound-and-true-p gptel-auto-workflow-persistent-headless)
-              (bound-and-true-p gptel-auto-workflow--current-project)))
-        (task-runner nil))
+  (let* ((headless-auto-workflow
+          (and (bound-and-true-p gptel-auto-workflow--headless)
+               (bound-and-true-p gptel-auto-workflow-persistent-headless)
+               (bound-and-true-p gptel-auto-workflow--current-project)))
+         (process-environment
+          (if headless-auto-workflow
+              (gptel-auto-workflow--isolated-state-environment
+               "copilot-auto-workflow-subagent-"
+               nil
+               t)
+            process-environment))
+         (task-runner nil))
     (setq task-runner
           (cond
            ((and headless-auto-workflow
-                 (fboundp 'my/gptel-agent--task-override))
+                  (fboundp 'my/gptel-agent--task-override))
             #'my/gptel-agent--task-override)
            ((fboundp 'gptel-agent--task) #'gptel-agent--task)
            ((fboundp 'my/gptel-agent--task-override)
@@ -5324,25 +5331,14 @@ Returns cons cell: (t . output) if all pass, (nil . output) if any fail."
                         (not (file-equal-p proj-root worktree)))
                    (gptel-auto-workflow--worktree-needs-submodule-hydration-p worktree))))
           (default-directory worktree)
-           (isolated-status-file (let ((path (make-temp-file "auto-workflow-status-" nil ".sexp")))
-                                   (delete-file path)
-                                   path))
-           (isolated-server-name (make-temp-name "copilot-auto-workflow-test-"))
-           (process-environment
-            (append
-             (list "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1"
-                   (format "AUTO_WORKFLOW_STATUS_FILE=%s" isolated-status-file)
-                   (format "AUTO_WORKFLOW_EMACS_SERVER=%s" isolated-server-name))
-             (cl-remove-if
-              (lambda (entry)
-                (or (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" entry)
-                    (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" entry)
-                    (string-prefix-p "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=" entry)
-                   (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" entry)))
-             process-environment)))
-          (test-script (expand-file-name "scripts/run-tests.sh" worktree))
-          (output-buffer (generate-new-buffer "*test-output*"))
-          result)
+          (process-environment
+           (gptel-auto-workflow--isolated-state-environment
+            "copilot-auto-workflow-test-"
+            (list "VERIFY_NUCLEUS_SKIP_SUBMODULE_SYNC=1")))
+          (isolated-status-file (getenv "AUTO_WORKFLOW_STATUS_FILE"))
+           (test-script (expand-file-name "scripts/run-tests.sh" worktree))
+           (output-buffer (generate-new-buffer "*test-output*"))
+           result)
     (unwind-protect
         (if (not (file-executable-p test-script))
             (progn
@@ -8632,6 +8628,51 @@ Automatically adds --no-pager to prevent blocking on pager output."
          (cons gptel-auto-workflow--skip-submodule-sync-env
                process-environment)))
     (funcall fn)))
+
+(defconst gptel-auto-workflow--isolated-state-env-prefixes
+  '("AUTO_WORKFLOW_STATUS_FILE="
+    "AUTO_WORKFLOW_MESSAGES_FILE="
+    "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE="
+    "AUTO_WORKFLOW_EMACS_SERVER=")
+  "Environment prefixes that bind a process to workflow state.")
+
+(defun gptel-auto-workflow--isolated-state-env-entry-p (entry)
+  "Return non-nil when ENTRY binds shared workflow state."
+  (and (stringp entry)
+       (cl-some (lambda (prefix)
+                  (string-prefix-p prefix entry))
+                gptel-auto-workflow--isolated-state-env-prefixes)))
+
+(defun gptel-auto-workflow--isolated-state-environment (&optional server-prefix extra-env include-messages-p)
+  "Return `process-environment' isolated from live workflow state.
+SERVER-PREFIX customizes the temporary daemon name prefix.
+EXTRA-ENV entries are prepended ahead of the isolated workflow vars.
+When INCLUDE-MESSAGES-P is non-nil, also isolate messages and snapshot files."
+  (let* ((isolated-status-file (make-temp-file "auto-workflow-status-" nil ".sexp"))
+         (isolated-messages-file
+          (and include-messages-p
+               (make-temp-file "auto-workflow-messages-" nil ".txt")))
+         (isolated-snapshot-file
+          (and include-messages-p
+               (make-temp-file "auto-workflow-snapshot-paths-" nil ".txt")))
+         (isolated-server-name
+          (make-temp-name (or server-prefix "copilot-auto-workflow-test-")))
+         (env
+          (append
+           extra-env
+           (list (format "AUTO_WORKFLOW_STATUS_FILE=%s" isolated-status-file))
+           (when include-messages-p
+             (list (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" isolated-messages-file)
+                   (format "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=%s" isolated-snapshot-file)))
+           (list (format "AUTO_WORKFLOW_EMACS_SERVER=%s" isolated-server-name)))))
+    (dolist (path (delq nil (list isolated-status-file
+                                  (and include-messages-p isolated-messages-file)
+                                  (and include-messages-p isolated-snapshot-file))))
+      (when (file-exists-p path)
+        (delete-file path)))
+    (append (flatten-tree env)
+            (cl-remove-if #'gptel-auto-workflow--isolated-state-env-entry-p
+                          process-environment))))
 
 (defun gptel-auto-workflow--git-step-success-p (cmd action &optional timeout)
   "Run git CMD and report whether it succeeded.
