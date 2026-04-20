@@ -478,6 +478,8 @@ limit for early exit."
   (unless (stringp resp)
     (setq resp ""))
   (and gptel-agent-loop-force-completion
+       (< (gptel-agent-loop--continuation-count state)
+          gptel-agent-loop-max-continuations)
        (not (gptel-agent-loop--seems-complete-p resp))
        (not (gptel-agent-loop--looks-like-finishing-p resp))
        (not (gptel-agent-loop--task-max-steps-reached state))
@@ -638,21 +640,15 @@ Returns non-nil if result was delivered."
 (defun gptel-agent-loop--handle-continuation (state resp)
   "Handle STATE when continuation is needed after RESP.
 Returns non-nil if result was delivered."
-  (when (gptel-agent-loop--continuation-needed-p state resp)
-    (let ((cont-count (gptel-agent-loop--increment-continuation-count state)))
-      (if (and gptel-agent-loop-hard-loop
-               (<= cont-count gptel-agent-loop-max-continuations))
-          (progn
-            (message "[RunAgent] Auto-continuing after %d steps (continuation %d/%d)..."
-                     (gptel-agent-loop--task-step-count state)
-                     cont-count gptel-agent-loop-max-continuations)
-            (gptel-agent-loop--append-output state resp)
-            (gptel-agent-loop--schedule-request state (gptel-agent-loop--continuation-prompt-for state) t))
-        (gptel-agent-loop--deliver-result
-         state
-         (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-                 (gptel-agent-loop--build-final-result state "")
-                 (gptel-agent-loop--task-step-count state)))))
+  (when (and (gptel-agent-loop--continuation-needed-p state resp)
+             gptel-agent-loop-hard-loop)
+    (gptel-agent-loop--increment-continuation-count state)
+    (message "[RunAgent] Auto-continuing after %d steps (continuation %d/%d)..."
+             (gptel-agent-loop--task-step-count state)
+             (gptel-agent-loop--continuation-count state)
+             gptel-agent-loop-max-continuations)
+    (gptel-agent-loop--append-output state resp)
+    (gptel-agent-loop--schedule-request state (gptel-agent-loop--continuation-prompt-for state) t)
     t))
 
 (defun gptel-agent-loop--handle-final-response (state resp)
