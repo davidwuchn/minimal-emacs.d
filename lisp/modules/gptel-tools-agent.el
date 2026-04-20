@@ -6344,6 +6344,33 @@ GRADE-TOTAL can be nil when the grader omits an explicit denominator."
         (>= (/ (float score) grade-total) 0.85)
       (>= score 8))))
 
+(defun gptel-auto-experiment--speculative-correctness-language-p (text)
+  "Return non-nil when TEXT describes a speculative or clarity-only fix."
+  (when (stringp text)
+    (string-match-p
+     (rx (or "potential "
+             "possible "
+             "hypothetical"
+             "defensive hardening"
+             "improves robustness"
+             "enhances robustness"
+             "without changing behavior"
+             "without altering behavior"
+             "improves clarity"
+             "improves testability"
+             "improve clarity"
+             "improve testability"
+             "clarity by "
+             "making the control flow explicit"
+             "consistent with "
+             "reducing code duplication"
+             "edge case"
+             "edge cases"
+             "could "
+             "might "
+             "may "))
+     text)))
+
 (defun gptel-auto-experiment--grader-indicates-correctness-fix-p (grade-details)
   "Return non-nil when GRADE-DETAILS describes a real correctness fix.
 Speculative or purely defensive hardening language does not count."
@@ -6378,26 +6405,16 @@ Speculative or purely defensive hardening language does not count."
                          "functional regressions"))
                 "genuine bug"
                 "genuine bugs"
-                "actual functional bug"
-                "actual functional bugs"
-                "demonstrably buggy"))
+                 "actual functional bug"
+                 "actual functional bugs"
+                 "demonstrably buggy"))
         grade-details)
-       (not
-        (string-match-p
-         (rx (or "potential "
-                 "possible "
-                 "hypothetical"
-                 "defensive hardening"
-                 "improves robustness"
-                 "enhances robustness"
-                 "without changing behavior"
-                 "without altering behavior"
-                 "improves clarity"
-                 "improves testability"))
-         grade-details))))))
+        (not
+         (gptel-auto-experiment--speculative-correctness-language-p
+          grade-details))))))
 
 (defun gptel-auto-experiment--promote-correctness-fix-decision
-    (decision tests-passed grade-score grade-total grade-details)
+    (decision tests-passed grade-score grade-total grade-details &optional hypothesis)
   "Return DECISION or a promoted keep decision for high-confidence ties.
 Promotion is allowed only for non-regressing ties with passing tests, some
 positive quality/combined improvement, and strong grader evidence of a real
@@ -6414,11 +6431,14 @@ correctness fix."
                              (or (plist-get improvement :combined) 0)
                            0))
          (reasoning (and (listp decision) (plist-get decision :reasoning)))
-         (correctness-fix-p
-          (gptel-auto-experiment--grader-indicates-correctness-fix-p
-           grade-details))
+          (correctness-fix-p
+           (gptel-auto-experiment--grader-indicates-correctness-fix-p
+            grade-details))
+         (speculative-hypothesis-p
+          (gptel-auto-experiment--speculative-correctness-language-p
+           hypothesis))
          (override-note
-          "Override: keep non-regressing high-confidence tie with passing tests"))
+           "Override: keep non-regressing high-confidence tie with passing tests"))
     (if (or (not (listp decision))
             (plist-get decision :keep)
             (not tests-passed)
@@ -6426,6 +6446,7 @@ correctness fix."
             (<= quality-delta 0)
             (<= combined-delta 0)
             (not correctness-fix-p)
+            speculative-hypothesis-p
             (not (gptel-auto-experiment--strong-grade-pass-p
                   grade-score grade-total)))
         decision
@@ -7937,7 +7958,8 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
 	                                                       tests-passed
 	                                                       grade-score
 	                                                       grade-total
-	                                                       grade-details))
+	                                                       grade-details
+	                                                       hypothesis))
 	                                                     (keep (plist-get decision :keep))
 		                                                 (reasoning (plist-get decision :reasoning))
 		                                                 (exp-result
@@ -8065,17 +8087,18 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                         (lambda (decision)
                                                                           (unless finished
                                                                             (setq finished t)
-                                                                            (let* ((decision
-                                                                                    (gptel-auto-experiment--promote-correctness-fix-decision
-                                                                                     decision
-                                                                                     (plist-get retry-bench :tests-passed)
-                                                                                     (plist-get retry-grade :score)
-                                                                                     (plist-get retry-grade :total)
-                                                                                     (plist-get retry-grade :details)))
-                                                                                   (keep (plist-get decision :keep))
-                                                                                   (reasoning (plist-get decision :reasoning))
-                                                                                   (exp-result
-                                                                                    (list :target target
+		                                                                            (let* ((decision
+		                                                                                    (gptel-auto-experiment--promote-correctness-fix-decision
+		                                                                                     decision
+		                                                                                     (plist-get retry-bench :tests-passed)
+		                                                                                     (plist-get retry-grade :score)
+		                                                                                     (plist-get retry-grade :total)
+		                                                                                     (plist-get retry-grade :details)
+		                                                                                     retry-hypothesis))
+		                                                                                   (keep (plist-get decision :keep))
+		                                                                                   (reasoning (plist-get decision :reasoning))
+		                                                                                   (exp-result
+		                                                                                    (list :target target
                                                                                           :id experiment-id
                                                                                           :hypothesis retry-hypothesis
                                                                                           :score-before baseline
