@@ -131,6 +131,7 @@ under `lexical-binding: t'.")
     ("MiniMax-M2.5" . 196608)
     ("minimax-m2.1" . 196608)
     ;; Kimi/Moonshot
+    ("kimi-k2.6" . 262144)
     ("kimi-k2.5" . 262144)
     ("kimi-for-coding" . 131072)
     ;; GLM (Zhipu AI)
