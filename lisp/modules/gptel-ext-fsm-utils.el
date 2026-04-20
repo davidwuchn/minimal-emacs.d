@@ -209,17 +209,19 @@ forcing caller to handle the case explicitly.
 Returns FSM struct or nil if not found."
   (let ((seen (make-hash-table :test 'eq)))
     (cl-labels ((coerce (obj)
-                  (cond
-                   ((gethash obj seen) nil)
-                   ((my/gptel--fsm-p obj)
-                    (if (null context-id)
-                        obj
-                      (let ((id (my/gptel--fsm-get-id obj)))
-                        (when (and id (equal id context-id)) obj))))
-                   ((consp obj)
-                    (puthash obj t seen)
-                    (or (coerce (car obj))
-                        (coerce (cdr obj)))))))
+                  (let ((result nil))
+                    (while (and (consp obj) (not (gethash obj seen)) (not result))
+                      (puthash obj t seen)
+                      (setq result (coerce (car obj)))
+                      (setq obj (cdr obj)))
+                    (or result
+                        (cond
+                         ((gethash obj seen) nil)
+                         ((my/gptel--fsm-p obj)
+                          (if (null context-id)
+                              obj
+                            (let ((id (my/gptel--fsm-get-id obj)))
+                              (when (and id (equal id context-id)) obj)))))))))
       (coerce object))))
 
 (defun my/gptel--coerce-fsm-with-context (object)
@@ -275,22 +277,21 @@ nested subagent scenarios and select appropriate FSM.
 
 ADAPTS TO: Pure functional approach eliminates mutable state,
 improving testability and reducing cognitive load."
-  (let ((seen (make-hash-table :test 'eq)))
+  (let ((seen (make-hash-table :test 'eq))
+        (result nil))
     (cl-labels ((collect (obj)
+                  (while (and (consp obj) (not (gethash obj seen)))
+                    (puthash obj t seen)
+                    (collect (car obj))
+                    (setq obj (cdr obj)))
                   (cond
                    ((null obj) nil)
                    ((gethash obj seen) nil)
                    ((my/gptel--fsm-p obj)
-                    (prog1 (list obj)
-                      (puthash obj t seen)))
-                   ((consp obj)
-                    (if (gethash obj seen)
-                        nil
-                      (puthash obj t seen)
-                      (append (collect (car obj))
-                              (collect (cdr obj)))))
-                   (t nil))))
-      (delq nil (collect object)))))
+                    (puthash obj t seen)
+                    (push obj result)))))
+      (collect object)
+      (nreverse result))))
 
 (defun my/gptel--fsm-depth (object)
   "Return nesting depth of FSMs in OBJECT.
