@@ -446,13 +446,14 @@ FALLBACK defaults to nil if not provided."
 (defun gptel-benchmark--parse-analysis-response (response)
   "Parse analyzer RESPONSE into plist."
   (let ((parsed (gptel-benchmark--parse-json-response response)))
-    (if (listp parsed)
+    (if (and parsed (listp parsed))
         (list :patterns (cdr (assq 'patterns parsed))
               :issues (cdr (assq 'issues parsed))
               :recommendations (cdr (assq 'recommendations parsed)))
       (list :patterns nil
             :issues nil
-            :recommendations nil))))
+            :recommendations nil
+            :raw response))))
 
 ;;; Executor Subagent
 

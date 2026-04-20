@@ -1030,6 +1030,46 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should-not (string-match-p "quality gain"
                                 (plist-get decision :reasoning)))))
 
+(ert-deftest regression/auto-experiment/decide-retries-transient-comparator-timeouts ()
+  "Comparator timeout outputs should fail over and retry locally."
+  (let ((gptel-auto-experiment-use-subagents t)
+        (gptel-auto-experiment-max-aux-subagent-retries 2)
+        (call-count 0)
+        decision
+        failover-call)
+    (cl-letf (((symbol-function 'gptel-benchmark-call-subagent)
+               (lambda (_agent _description _prompt callback &optional _timeout)
+                 (cl-incf call-count)
+                 (funcall
+                  callback
+                  (if (= call-count 1)
+                      "Error: Task comparator could not finish task \"Compare experiment results\". Error details: (:message \"operation timed out\" :type \"timeout\")"
+                    "B\nAfter is better."))))
+              ((symbol-function 'gptel-auto-workflow--agent-base-preset)
+               (lambda (_agent-type)
+                 '(:backend "MiniMax" :model "minimax-m2.7-highspeed")))
+              ((symbol-function 'gptel-auto-workflow--maybe-override-subagent-provider)
+               (lambda (_agent-type preset)
+                 preset))
+              ((symbol-function 'gptel-auto-workflow--activate-provider-failover)
+               (lambda (agent-type preset reason)
+                 (setq failover-call (list agent-type preset reason))
+                 '("moonshot" . "kimi-k2.6-code-preview")))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (with-temp-buffer
+        (gptel-auto-experiment-decide
+         '(:score 0.40 :code-quality 0.77)
+         '(:score 0.42 :code-quality 0.93)
+         (lambda (result)
+           (setq decision result)))))
+    (should (= call-count 2))
+    (should decision)
+    (should (plist-get decision :keep))
+    (should (equal (car failover-call) "comparator"))
+    (should (equal (car (last failover-call))
+                   "Error: Task comparator could not finish task \"Compare experiment results\". Error details: (:message \"operation timed out\" :type \"timeout\")"))))
+
 (ert-deftest regression/auto-experiment/promotes-non-regressing-correctness-fix-ties ()
   "Non-regressing ties should be kept when grading shows a real bug fix."
   (let ((decision
@@ -4856,7 +4896,63 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (cl-some
              (lambda (text)
                (string-match-p "failed validation/tests" text))
-             (plist-get result :recommendations)))))
+              (plist-get result :recommendations)))))
+
+(ert-deftest regression/auto-experiment/analyze-retries-transient-timeouts ()
+  "Analyzer timeout outputs should fail over and retry before falling back."
+  (let* ((gptel-auto-experiment-use-subagents t)
+         (gptel-auto-experiment-max-aux-subagent-retries 2)
+         (previous-results
+          '((:id 1
+             :target "lisp/modules/gptel-tools-agent.el"
+             :hypothesis "Retry analyzer on timeout."
+             :kept nil
+             :comparator-reason "discarded")))
+         (call-count 0)
+         result
+         failover-call)
+    (cl-letf (((symbol-function 'gptel-benchmark-analyze)
+               (lambda (_data _description cb)
+                 (cl-incf call-count)
+                 (funcall
+                  cb
+                  (if (= call-count 1)
+                      (gptel-benchmark--parse-analysis-response
+                       "Error: Task analyzer could not finish task \"Experiment patterns\". Error details: (:message \"operation timed out\" :type \"timeout\")")
+                    '(:patterns "Recovered after failover"
+                      :issues nil
+                      :recommendations ("Use the fallback provider"))))))
+              ((symbol-function 'gptel-auto-workflow--agent-base-preset)
+               (lambda (_agent-type)
+                 '(:backend "MiniMax" :model "minimax-m2.7-highspeed")))
+              ((symbol-function 'gptel-auto-workflow--maybe-override-subagent-provider)
+               (lambda (_agent-type preset)
+                 preset))
+              ((symbol-function 'gptel-auto-workflow--activate-provider-failover)
+               (lambda (agent-type preset reason)
+                 (setq failover-call (list agent-type preset reason))
+                 '("moonshot" . "kimi-k2.6-code-preview")))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment-analyze
+       previous-results
+       (lambda (analysis)
+         (setq result analysis))))
+    (should (= call-count 2))
+    (should (equal (car failover-call) "analyzer"))
+    (should (equal (plist-get result :patterns) "Recovered after failover"))
+    (should (equal (plist-get result :recommendations)
+                   '("Use the fallback provider"
+                     "Do not repeat a previous hypothesis verbatim. Choose a materially different change or explain why it avoids the earlier outcome."
+                     "At least one prior attempt was discarded as no improvement; pivot to a different function, defect, or improvement type.")))))
+
+(ert-deftest regression/benchmark-analysis/parser-preserves-raw-timeout-errors ()
+  "Analyzer parser should preserve raw timeout text for retry classification."
+  (let* ((response "Error: Task \"Analyze: Experiment patterns\" (analyzer) timed out after 60s.")
+         (parsed (gptel-benchmark--parse-analysis-response response)))
+    (should (equal (plist-get parsed :raw) response))
+    (should (equal (gptel-auto-experiment--retryable-aux-subagent-category parsed)
+                   :timeout))))
 
 (ert-deftest regression/auto-experiment/repeated-focus-symbol-skips-grading ()
   "Repeated focus on the same changed symbol should short-circuit before grading."
@@ -13324,6 +13420,50 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (should server-name)
       (should-not (equal server-name "live-server"))
       (should (string-prefix-p "copilot-auto-workflow-subagent-" server-name)))))
+
+(ert-deftest regression/subagent/headless-task-launch-defers-buffer-local-env-persistence ()
+  "Headless task launch should avoid buffer-local env warnings during startup."
+  (let ((callback-result nil)
+        (messages nil)
+        (request-buf (generate-new-buffer "*test-subagent-launch*"))
+        (my/gptel--agent-task-state (make-hash-table :test 'eql))
+        (my/gptel--current-agent-task-id 8))
+    (unwind-protect
+        (progn
+          (puthash 8 (list :request-buf nil) my/gptel--agent-task-state)
+          (cl-letf (((symbol-function 'my/gptel-agent--task-override)
+                     (lambda (cb _agent-type _description _prompt)
+                       (with-current-buffer request-buf
+                         (when (and (not gptel-auto-workflow--defer-subagent-env-persistence)
+                                    (fboundp 'gptel-auto-workflow--persist-subagent-process-environment))
+                           (gptel-auto-workflow--persist-subagent-process-environment
+                            request-buf))
+                         (my/gptel--register-agent-task-buffer request-buf))
+                       (funcall cb "ok")))
+                    ((symbol-function 'message)
+                     (lambda (fmt &rest args)
+                       (push (apply #'format fmt args) messages))))
+            (let ((gptel-auto-workflow--headless t)
+                  (gptel-auto-workflow-persistent-headless t)
+                  (gptel-auto-workflow--current-project "/tmp/project/")
+                  (process-environment
+                   (append '("AUTO_WORKFLOW_EMACS_SERVER=live-server"
+                             "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.sexp"
+                             "AUTO_WORKFLOW_MESSAGES_FILE=/tmp/live-messages.txt"
+                             "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=/tmp/live-snapshots.txt")
+                           process-environment)))
+              (my/gptel--call-gptel-agent-task
+               (lambda (result)
+                 (setq callback-result result))
+               "executor"
+               "Defer workflow env persistence"
+               "Prompt body")))
+          (should (equal callback-result "ok"))
+          (should-not
+           (cl-some (lambda (msg)
+                      (string-match-p "buffer-local while locally let-bound" msg))
+                    messages)))
+      (kill-buffer request-buf))))
 
 (ert-deftest regression/subagent/register-agent-task-buffer-persists-task-env ()
   "Registering a request buffer should copy tracked task env onto it."
