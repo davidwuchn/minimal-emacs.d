@@ -12687,6 +12687,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
   "Experiment test subprocesses should not share the live workflow daemon state."
   (let* ((proj-root (make-temp-file "aw-tests-root" t))
          (worktree (make-temp-file "aw-tests-worktree" t))
+         (test-script (expand-file-name "scripts/run-tests.sh" worktree))
          captured-env
          captured-program
          captured-args
@@ -12696,8 +12697,6 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda () proj-root))
               ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
                (lambda (&rest _) worktree))
-              ((symbol-function 'file-executable-p)
-               (lambda (_file) t))
               ((symbol-function 'timerp)
                (lambda (timer) (eq timer 'fake-watchdog)))
               ((symbol-function 'cancel-timer)
@@ -12719,7 +12718,12 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'message)
                 (lambda (&rest _) nil)))
       (unwind-protect
-          (let* ((gptel-auto-workflow--running t)
+          (progn
+            (make-directory (file-name-directory test-script) t)
+            (with-temp-file test-script
+              (insert "#!/bin/sh\nexit 0\n"))
+            (set-file-modes test-script #o755)
+            (let* ((gptel-auto-workflow--running t)
                  (gptel-auto-workflow--cron-job-running nil)
                  (gptel-auto-workflow--watchdog-timer 'fake-watchdog)
                  (process-environment
@@ -12766,15 +12770,128 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               (should-not (file-exists-p status-file))
               (should saw-paused-watchdog)
               (should (eq watchdog-cancelled 'fake-watchdog))
-              (should (eq gptel-auto-workflow--watchdog-timer
-                          'fake-restarted-watchdog))))
+               (should (eq gptel-auto-workflow--watchdog-timer
+                           'fake-restarted-watchdog)))))
         (delete-directory proj-root t)
         (delete-directory worktree t)))))
+
+(ert-deftest regression/auto-workflow/isolated-state-environment-skips-unused-temp-files ()
+  "Workflow env isolation should not leave unused temp files behind."
+  (let* ((temp-dir (make-temp-file "aw-isolated-env" t))
+         (process-environment
+          (append '("AUTO_WORKFLOW_EMACS_SERVER=live-server"
+                    "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.sexp"
+                    "AUTO_WORKFLOW_MESSAGES_FILE=/tmp/live-messages.txt"
+                    "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=/tmp/live-snapshots.txt")
+                  process-environment))
+         isolated-env)
+    (unwind-protect
+        (let ((temporary-file-directory temp-dir))
+          (setq isolated-env
+                (gptel-auto-workflow--isolated-state-environment
+                 "copilot-auto-workflow-test-"))
+          (should
+           (seq-find
+            (lambda (item)
+              (string-prefix-p "AUTO_WORKFLOW_STATUS_FILE=" item))
+            isolated-env))
+          (should
+           (seq-find
+            (lambda (item)
+              (string-prefix-p "AUTO_WORKFLOW_EMACS_SERVER=" item))
+            isolated-env))
+          (should-not
+           (seq-find
+            (lambda (item)
+              (string-prefix-p "AUTO_WORKFLOW_MESSAGES_FILE=" item))
+            isolated-env))
+          (should-not
+           (seq-find
+            (lambda (item)
+              (string-prefix-p "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=" item))
+            isolated-env))
+          (should-not
+           (directory-files temp-dir nil directory-files-no-dot-files-regexp)))
+      (delete-directory temp-dir t))))
+
+(ert-deftest regression/subagent/headless-task-launch-isolates-workflow-state ()
+  "Headless workflow subagents should not inherit live workflow state."
+  (let ((captured-env nil)
+        (callback-result nil))
+    (cl-letf (((symbol-function 'my/gptel-agent--task-override)
+               (lambda (cb agent-type description prompt)
+                 (setq captured-env (copy-sequence process-environment))
+                 (should (equal agent-type "executor"))
+                 (should (equal description "Isolate workflow env"))
+                 (should (equal prompt "Prompt body"))
+                 (funcall cb "ok")))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (let ((gptel-auto-workflow--headless t)
+            (gptel-auto-workflow-persistent-headless t)
+            (gptel-auto-workflow--current-project "/tmp/project/")
+            (process-environment
+             (append '("AUTO_WORKFLOW_EMACS_SERVER=live-server"
+                       "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.sexp"
+                       "AUTO_WORKFLOW_MESSAGES_FILE=/tmp/live-messages.txt"
+                       "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=/tmp/live-snapshots.txt")
+                     process-environment)))
+        (my/gptel--call-gptel-agent-task
+         (lambda (result)
+           (setq callback-result result))
+         "executor"
+         "Isolate workflow env"
+         "Prompt body"))
+      (should (equal callback-result "ok"))
+      (let* ((status-prefix "AUTO_WORKFLOW_STATUS_FILE=")
+             (status-entry
+              (seq-find (lambda (item)
+                          (string-prefix-p status-prefix item))
+                        captured-env))
+             (status-file (and status-entry
+                               (substring status-entry (length status-prefix))))
+             (messages-prefix "AUTO_WORKFLOW_MESSAGES_FILE=")
+             (messages-entry
+              (seq-find (lambda (item)
+                          (string-prefix-p messages-prefix item))
+                        captured-env))
+             (messages-file (and messages-entry
+                                 (substring messages-entry (length messages-prefix))))
+             (snapshot-prefix "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=")
+             (snapshot-entry
+              (seq-find (lambda (item)
+                          (string-prefix-p snapshot-prefix item))
+                        captured-env))
+             (snapshot-file (and snapshot-entry
+                                 (substring snapshot-entry (length snapshot-prefix))))
+             (server-prefix "AUTO_WORKFLOW_EMACS_SERVER=")
+             (server-entry
+              (seq-find (lambda (item)
+                          (string-prefix-p server-prefix item))
+                        captured-env))
+             (server-name (and server-entry
+                               (substring server-entry (length server-prefix)))))
+        (should status-file)
+        (should messages-file)
+        (should snapshot-file)
+        (should server-name)
+        (should (file-name-absolute-p status-file))
+        (should (file-name-absolute-p messages-file))
+        (should (file-name-absolute-p snapshot-file))
+        (should-not (equal status-file "/tmp/live-status.sexp"))
+        (should-not (equal messages-file "/tmp/live-messages.txt"))
+        (should-not (equal snapshot-file "/tmp/live-snapshots.txt"))
+        (should-not (equal server-name "live-server"))
+        (should (string-prefix-p "copilot-auto-workflow-subagent-" server-name))
+        (should-not (file-exists-p status-file))
+        (should-not (file-exists-p messages-file))
+        (should-not (file-exists-p snapshot-file))))))
 
 (ert-deftest regression/auto-experiment/run-tests-retries-transient-failure ()
   "Transient local test failures should be rerun once before failing."
   (let* ((proj-root (make-temp-file "aw-tests-root" t))
          (worktree (make-temp-file "aw-tests-worktree" t))
+         (test-script (expand-file-name "scripts/run-tests.sh" worktree))
          (calls 0))
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () proj-root))
@@ -12782,8 +12899,6 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda (&rest _) worktree))
               ((symbol-function 'gptel-auto-workflow--worktree-needs-submodule-hydration-p)
                (lambda (_dir) nil))
-              ((symbol-function 'file-executable-p)
-               (lambda (_file) t))
               ((symbol-function 'sleep-for)
                (lambda (&rest _) nil))
               ((symbol-function 'gptel-auto-workflow--call-process-with-watchdog)
@@ -12797,10 +12912,15 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (unwind-protect
-          (let ((result (gptel-auto-experiment-run-tests)))
+          (progn
+            (make-directory (file-name-directory test-script) t)
+            (with-temp-file test-script
+              (insert "#!/bin/sh\nexit 0\n"))
+            (set-file-modes test-script #o755)
+            (let ((result (gptel-auto-experiment-run-tests)))
             (should (= calls 2))
             (should (car result))
-            (should (string-match-p "0 unexpected" (cdr result))))
+            (should (string-match-p "0 unexpected" (cdr result)))))
         (delete-directory proj-root t)
         (delete-directory worktree t)))))
 
@@ -12808,6 +12928,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
   "Persistent local test failures should still fail after one retry."
   (let* ((proj-root (make-temp-file "aw-tests-root" t))
          (worktree (make-temp-file "aw-tests-worktree" t))
+         (test-script (expand-file-name "scripts/run-tests.sh" worktree))
          (calls 0))
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () proj-root))
@@ -12815,8 +12936,6 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda (&rest _) worktree))
               ((symbol-function 'gptel-auto-workflow--worktree-needs-submodule-hydration-p)
                (lambda (_dir) nil))
-              ((symbol-function 'file-executable-p)
-               (lambda (_file) t))
               ((symbol-function 'sleep-for)
                (lambda (&rest _) nil))
               ((symbol-function 'gptel-auto-workflow--call-process-with-watchdog)
@@ -12828,11 +12947,16 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (unwind-protect
-          (let ((result (gptel-auto-experiment-run-tests)))
+          (progn
+            (make-directory (file-name-directory test-script) t)
+            (with-temp-file test-script
+              (insert "#!/bin/sh\nexit 0\n"))
+            (set-file-modes test-script #o755)
+            (let ((result (gptel-auto-experiment-run-tests)))
             (should (= calls 2))
             (should-not (car result))
             (should (string-match-p "Initial test run failed:" (cdr result)))
-            (should (string-match-p "Retry failed:" (cdr result))))
+            (should (string-match-p "Retry failed:" (cdr result)))))
         (delete-directory proj-root t)
         (delete-directory worktree t)))))
 
@@ -12840,6 +12964,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
   "Experiment tests should hydrate top-level submodules before running in a linked worktree."
   (let* ((proj-root (make-temp-file "aw-tests-root" t))
          (worktree (make-temp-file "aw-tests-worktree" t))
+         (test-script (expand-file-name "scripts/run-tests.sh" worktree))
          hydrate-dir
          captured-program
          captured-args)
@@ -12847,8 +12972,6 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                (lambda () proj-root))
               ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
                (lambda (&rest _) worktree))
-              ((symbol-function 'file-executable-p)
-               (lambda (_file) t))
               ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
                (lambda (dir)
                  (setq hydrate-dir dir)
@@ -12863,19 +12986,25 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (unwind-protect
-          (let ((result (gptel-auto-experiment-run-tests)))
+          (progn
+            (make-directory (file-name-directory test-script) t)
+            (with-temp-file test-script
+              (insert "#!/bin/sh\nexit 0\n"))
+            (set-file-modes test-script #o755)
+            (let ((result (gptel-auto-experiment-run-tests)))
             (should (car result))
             (should (equal (cdr result) "tests ok"))
             (should (equal hydrate-dir worktree))
             (should (equal captured-program
                            (expand-file-name "scripts/run-tests.sh" worktree)))
-             (should (equal captured-args '("unit"))))
+             (should (equal captured-args '("unit")))))
         (delete-directory proj-root t)
         (delete-directory worktree t)))))
 
 (ert-deftest regression/auto-experiment/run-tests-hydrates-project-root-submodules-when-empty ()
   "Experiment tests should hydrate empty project-root submodule dirs before running."
   (let* ((proj-root (make-temp-file "aw-tests-root" t))
+         (test-script (expand-file-name "scripts/run-tests.sh" proj-root))
          hydrate-dir
          captured-program
          captured-args)
@@ -12886,8 +13015,6 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'gptel-auto-workflow--worktree-needs-submodule-hydration-p)
                (lambda (dir)
                  (equal dir proj-root)))
-              ((symbol-function 'file-executable-p)
-               (lambda (_file) t))
               ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
                (lambda (dir)
                  (setq hydrate-dir dir)
@@ -12902,26 +13029,30 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (unwind-protect
-          (let ((result (gptel-auto-experiment-run-tests)))
+          (progn
+            (make-directory (file-name-directory test-script) t)
+            (with-temp-file test-script
+              (insert "#!/bin/sh\nexit 0\n"))
+            (set-file-modes test-script #o755)
+            (let ((result (gptel-auto-experiment-run-tests)))
             (should (car result))
             (should (equal (cdr result) "tests ok"))
             (should (equal hydrate-dir proj-root))
             (should (equal captured-program
                            (expand-file-name "scripts/run-tests.sh" proj-root)))
-            (should (equal captured-args '("unit"))))
+            (should (equal captured-args '("unit")))))
         (delete-directory proj-root t)))))
 
 (ert-deftest regression/auto-experiment/run-tests-fails-on-submodule-hydration-error ()
   "Experiment tests should fail fast when linked worktree submodules cannot be hydrated."
   (let* ((proj-root (make-temp-file "aw-tests-root" t))
          (worktree (make-temp-file "aw-tests-worktree" t))
+         (test-script (expand-file-name "scripts/run-tests.sh" worktree))
          call-process-called)
     (cl-letf (((symbol-function 'gptel-auto-workflow--project-root)
                (lambda () proj-root))
               ((symbol-function 'gptel-auto-workflow--get-worktree-dir)
                (lambda (&rest _) worktree))
-              ((symbol-function 'file-executable-p)
-               (lambda (_file) t))
               ((symbol-function 'gptel-auto-workflow--hydrate-staging-submodules)
                (lambda (_dir)
                  (cons "Missing shared submodule repo for packages/gptel" 1)))
@@ -12932,11 +13063,16 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
       (unwind-protect
-          (let ((result (gptel-auto-experiment-run-tests)))
+          (progn
+            (make-directory (file-name-directory test-script) t)
+            (with-temp-file test-script
+              (insert "#!/bin/sh\nexit 0\n"))
+            (set-file-modes test-script #o755)
+            (let ((result (gptel-auto-experiment-run-tests)))
             (should-not (car result))
             (should (string-match-p "Missing shared submodule repo for packages/gptel"
                                     (cdr result)))
-            (should-not call-process-called))
+            (should-not call-process-called)))
         (delete-directory proj-root t)
         (delete-directory worktree t)))))
 
