@@ -210,7 +210,8 @@
          (fp (my/gptel--tool-call-fingerprint tc))
          (info (list :tool-use (list tc)
                      :buffer request-buffer
-                      :doom-loop-fingerprints (list fp)))
+                     :doom-loop-fingerprints (list fp)
+                     :doom-loop-run-counts (list (cons fp 2))))
          (fsm (gptel-make-fsm :info info))
          logged-message
          callback-message
@@ -218,7 +219,6 @@
          transition)
     (unwind-protect
         (progn
-          (put 'doom-loop :current-run 2)
           (plist-put info :callback
                      (lambda (msg _info)
                         (setq callback-message msg)))
@@ -236,7 +236,6 @@
            (should (string-match-p "\"Read\" called 3 consecutive times" callback-message))
            (should (eq aborted-buffer request-buffer))
            (should (eq transition 'DONE)))
-      (put 'doom-loop :current-run nil)
       (when (buffer-live-p request-buffer)
         (kill-buffer request-buffer)))))
 
