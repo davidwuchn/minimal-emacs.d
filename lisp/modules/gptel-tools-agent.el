@@ -26,6 +26,7 @@
 (defvar gptel-auto-workflow--worktree-buffers)
 (defvar gptel-auto-workflow--current-project nil)
 (defvar gptel-auto-workflow--run-project-root nil)
+(defvar gptel-auto-workflow--project-root-override)
 (defvar gptel-agent-loop--bypass nil)
 (defvar gptel-benchmark--subagent-files nil)
 
@@ -142,6 +143,20 @@ Uses `gptel-auto-workflow--project-root' if available, falls back to ~/.emacs.d/
 Reduces duplication of `(or (gptel-auto-workflow--project-root) (expand-file-name \"~/.emacs.d/\"))` patterns."
   (or (gptel-auto-workflow--project-root)
       (expand-file-name "~/.emacs.d/")))
+
+(defun gptel-auto-workflow--activate-live-root (proj-root)
+  "Retarget the live daemon to PROJ-ROOT for queued workflow actions."
+  (let ((root (file-name-as-directory (expand-file-name proj-root))))
+    (setq default-directory root
+          user-emacs-directory root
+          gptel-auto-workflow--project-root-override root
+          gptel-auto-workflow--current-project nil
+          gptel-auto-workflow--run-project-root nil)
+    (when (boundp 'minimal-emacs-user-directory)
+      (setq minimal-emacs-user-directory root))
+    (when (boundp 'gptel-auto-workflow-projects)
+      (setq gptel-auto-workflow-projects (list root)))
+    root))
 
 (defun gptel-auto-workflow--worktree-base-root ()
   "Return a stable root for workflow-owned worktree artifacts.

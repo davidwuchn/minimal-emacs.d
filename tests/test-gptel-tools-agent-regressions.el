@@ -2125,8 +2125,32 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
         (kill-buffer worktree-buf))
       (when (buffer-live-p drift-buf)
         (kill-buffer drift-buf))
-      (delete-directory project-root t)
-      (delete-directory drift-root t))))
+       (delete-directory project-root t)
+       (delete-directory drift-root t))))
+
+(ert-deftest regression/auto-workflow/activate-live-root-retargets-daemon-state ()
+  "Activating a live root should retarget queued workflow globals."
+  (defvar minimal-emacs-user-directory)
+  (let* ((project-root (file-name-as-directory (make-temp-file "aw-live-root" t)))
+         (default-directory "/tmp/original-root/")
+         (user-emacs-directory "/tmp/original-root/")
+         (minimal-emacs-user-directory "/tmp/original-root/")
+         (gptel-auto-workflow-projects '("/tmp/original-root/"))
+         (gptel-auto-workflow--current-project "/tmp/drift/")
+         (gptel-auto-workflow--run-project-root "/tmp/drift/")
+         (gptel-auto-workflow--project-root-override "/tmp/drift/"))
+    (unwind-protect
+        (progn
+          (should (equal (gptel-auto-workflow--activate-live-root project-root)
+                         project-root))
+          (should (equal default-directory project-root))
+          (should (equal user-emacs-directory project-root))
+          (should (equal minimal-emacs-user-directory project-root))
+          (should (equal gptel-auto-workflow-projects (list project-root)))
+          (should (equal gptel-auto-workflow--project-root-override project-root))
+          (should-not gptel-auto-workflow--current-project)
+          (should-not gptel-auto-workflow--run-project-root))
+      (delete-directory project-root t))))
 
 (ert-deftest regression/auto-experiment/run-forwards-executor-runagent-args ()
   "Primary executor dispatch should pass the expected RunAgent args."
@@ -11075,10 +11099,10 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
              (should (seq-some
                       (lambda (elisp)
                         (and (string-match-p
-                              (regexp-quote "(setq default-directory root)")
+                              (regexp-quote "(load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))")
                               elisp)
                              (string-match-p
-                              (regexp-quote "(load-file (expand-file-name \"lisp/modules/gptel-tools-agent.el\" root))")
+                              (regexp-quote "(gptel-auto-workflow--activate-live-root root)")
                               elisp)
                              (string-match-p
                               (regexp-quote "(gptel-auto-workflow--reload-live-support root)")
@@ -11095,8 +11119,11 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                                                    messages-file))
                               elisp)
                              (not (string-match-p
-                                   (regexp-quote "gptel-auto-workflow-bootstrap.el")
+                                   (regexp-quote "bound-and-true-p minimal-emacs-user-directory")
                                    elisp))
+                             (not (string-match-p
+                                    (regexp-quote "gptel-auto-workflow-bootstrap.el")
+                                    elisp))
                              (not (string-match-p
                                    (regexp-quote "(require 'gptel)")
                                    elisp))
