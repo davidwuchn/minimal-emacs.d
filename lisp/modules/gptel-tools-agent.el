@@ -7430,17 +7430,17 @@ times before the workflow stops using it."
               (setq candidate
                     (gptel-auto-workflow--runtime-provider-failover-candidate
                      agent-type preset))
-               (when candidate
-                 (message "[auto-workflow] Provider failure threshold reached on %s/%s for %s%s; future retries will use %s/%s"
-                          (or current-backend "unknown")
-                          (or current-model "unknown")
-                          agent-type
+              (when candidate
+                (message "[auto-workflow] Provider failure threshold reached on %s/%s for %s%s; future retries will use %s/%s"
+                         (or current-backend "unknown")
+                         (or current-model "unknown")
+                         agent-type
                          (if (and (stringp reason) (not (string-empty-p reason)))
-                              (format " (%s)"
-                                      (my/gptel--sanitize-for-logging reason 120))
-                            "")
-                          (car candidate)
-                          (cdr candidate)))))))
+                             (format " (%s)"
+                                     (my/gptel--sanitize-for-logging reason 120))
+                           "")
+                         (car candidate)
+                         (cdr candidate)))))))
       candidate)))
 
 (defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
