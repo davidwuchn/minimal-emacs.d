@@ -7110,10 +7110,20 @@ Each element is (AGENT-TYPE . (BACKEND . MODEL)). These overrides are cleared
 at run start and whenever workflow state is force-reset.")
 
 (defvar gptel-auto-workflow--rate-limited-backends nil
-  "Per-run backend names that hit rate limits during workflow execution.
+  "Per-run backend rate-limit state with timestamps.
 
-All matching headless subagents skip these backends for the rest of the run
-and advance through the configured fallback chain instead.")
+Each element is (BACKEND . TIMESTAMP). BACKEND is a string, TIMESTAMP
+is the time when it was marked rate-limited (via current-time).
+After the cooldown period expires, the backend becomes available again.
+
+Format: ((\"MiniMax\" . 415500.123) (\"DeepSeek\" . 415500.456))")
+
+(defcustom gptel-auto-workflow-rate-limit-cooldown-seconds 7200
+  "Seconds to wait before retrying a rate-limited backend.
+Default 7200 = 2 hours. After this period, the backend becomes available
+again for new attempts. Set to 3600 for 1 hour, 14400 for 4 hours."
+  :type 'integer
+  :group 'gptel-tools-agent)
 
 (defvar gptel-auto-workflow--backend-failure-counts nil
   "Per-run failure count per backend before marking as rate-limited.
@@ -7264,11 +7274,28 @@ can use newer models without a restart."
              nil nil #'string=))
 
 (defun gptel-auto-workflow--backend-rate-limited-p (backend-name)
-  "Return non-nil when BACKEND-NAME has already rate-limited this run."
-  (and (stringp backend-name)
-       (seq-contains-p gptel-auto-workflow--rate-limited-backends
-                       backend-name
-                       #'string=)))
+  "Return non-nil when BACKEND-NAME is currently rate-limited.
+A backend is considered rate-limited if it was marked within the
+cooldown period (`gptel-auto-workflow-rate-limit-cooldown-seconds').
+After the cooldown expires, the backend becomes available again."
+  (when (stringp backend-name)
+    (when-let* ((entry (assoc backend-name gptel-auto-workflow--rate-limited-backends
+                              :test #'string=))
+                (timestamp (cdr entry))
+                (elapsed (- (float-time (current-time)) timestamp))
+                ((>= elapsed gptel-auto-workflow-rate-limit-cooldown-seconds)))
+      (cl-callf2 delq nil gptel-auto-workflow--rate-limited-backends)
+      (setq gptel-auto-workflow--rate-limited-backends
+            (cl-remove-if (lambda (e) (null e))
+                          gptel-auto-workflow--rate-limited-backends))
+      nil)
+    (assoc backend-name gptel-auto-workflow--rate-limited-backends
+           :test #'string=)))
+
+(defun gptel-auto-workflow--rate-limited-backend-names ()
+  "Return list of backend names currently rate-limited.
+Extracts just the backend names from the timestamp alist."
+  (mapcar #'car gptel-auto-workflow--rate-limited-backends))
 
 (defun gptel-auto-workflow--preset-backend-name (backend)
   "Return a readable backend name for BACKEND."
@@ -7392,9 +7419,15 @@ times before the workflow stops using it."
                      new-count
                      gptel-auto-workflow-backend-rate-limit-failure-threshold)
             (when (>= new-count gptel-auto-workflow-backend-rate-limit-failure-threshold)
-              (cl-pushnew current-backend
-                          gptel-auto-workflow--rate-limited-backends
-                          :test #'string=)
+              (push (cons current-backend (float-time (current-time)))
+                    gptel-auto-workflow--rate-limited-backends)
+              (message "[auto-workflow] Backend %s marked rate-limited until %s (%d second cooldown)"
+                       current-backend
+                       (format-time-string "%H:%M:%S"
+                                           (time-add (current-time)
+                                                     (seconds-to-time
+                                                      gptel-auto-workflow-rate-limit-cooldown-seconds)))
+                       gptel-auto-workflow-rate-limit-cooldown-seconds)
               (setq candidate
                     (gptel-auto-workflow--runtime-provider-failover-candidate
                      agent-type preset))
