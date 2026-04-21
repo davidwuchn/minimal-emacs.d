@@ -3529,8 +3529,10 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           '(("MiniMax" . "minimax-m2.7-highspeed")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+           '(("MiniMax" . "minimax-m2.7-highspeed")
+             ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-backend-rate-limit-failure-threshold 1)
+         (gptel-auto-workflow--backend-failure-counts nil)
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
@@ -3547,14 +3549,15 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
              "grader" preset
              "Error: Task grader could not finish task \"Grade output\". Error details: (:type \"rate_limit_error\" :message \"usage limit exceeded (2056)\" :http_code \"429\")")
-            (should (member "MiniMax" gptel-auto-workflow--rate-limited-backends))
+            (should (gptel-auto-workflow--backend-rate-limited-p "MiniMax"))
             (dolist (agent-type '("analyzer" "comparator" "executor" "grader" "reviewer"))
               (let ((override
                      (gptel-auto-workflow--maybe-override-subagent-provider
                       agent-type preset)))
                 (should (eq (plist-get override :backend) dashscope-backend))
                 (should (eq (plist-get override :model) 'qwen3.6-plus))))))
-      (setq gptel-auto-workflow--rate-limited-backends nil
+      (setq gptel-auto-workflow--backend-failure-counts nil
+            gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
       (if had-dashscope
           (set 'gptel--dashscope old-dashscope)
@@ -3588,10 +3591,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             ("DashScope" . "qwen3.6-plus")
             ("DeepSeek" . "deepseek-chat")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")
-            ("DeepSeek" . "deepseek-chat")))
-         (gptel-auto-workflow--rate-limited-backends nil)
+           '(("MiniMax" . "minimax-m2.7-highspeed")
+             ("DashScope" . "qwen3.6-plus")
+             ("DeepSeek" . "deepseek-chat")))
+         (gptel-auto-workflow-backend-rate-limit-failure-threshold 1)
+         (gptel-auto-workflow--backend-failure-counts nil)
+         (gptel-auto-workflow--rate-limited-backends
+          (list (cons "MiniMax" (float-time (current-time)))))
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
         (progn
@@ -3617,7 +3623,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                     "reviewer" minimax-preset)))
               (should (eq (plist-get override :backend) deepseek-backend))
               (should (eq (plist-get override :model) 'deepseek-chat)))))
-      (setq gptel-auto-workflow--rate-limited-backends nil
+      (setq gptel-auto-workflow--backend-failure-counts nil
+            gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
       (if had-dashscope
           (set 'gptel--dashscope old-dashscope)
@@ -3647,8 +3654,10 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           '(("MiniMax" . "minimax-m2.7-highspeed")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+           '(("MiniMax" . "minimax-m2.7-highspeed")
+             ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-backend-rate-limit-failure-threshold 1)
+         (gptel-auto-workflow--backend-failure-counts nil)
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
@@ -3664,20 +3673,21 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                      (lambda (&rest _) nil)))
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
              "grader" preset overloaded-error)
-            (should (member "MiniMax" gptel-auto-workflow--rate-limited-backends))
+            (should (gptel-auto-workflow--backend-rate-limited-p "MiniMax"))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "grader" preset)))
               (should (eq (plist-get override :backend) dashscope-backend))
               (should (eq (plist-get override :model) 'qwen3.6-plus)))))
-      (setq gptel-auto-workflow--rate-limited-backends nil
+      (setq gptel-auto-workflow--backend-failure-counts nil
+            gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
       (if had-dashscope
           (set 'gptel--dashscope old-dashscope)
         (makunbound 'gptel--dashscope)))))
 
-(ert-deftest regression/auto-workflow/provider-failover-activates-on-curl-exit-56 ()
-  "Headless provider failover should also activate on curl 56 transport errors."
+(ert-deftest regression/auto-workflow/provider-failover-does-not-activate-on-curl-exit-56 ()
+  "Curl 56 transport errors should stay retryable without forcing provider failover."
   (let* ((dashscope-backend
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
@@ -3697,8 +3707,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           '(("MiniMax" . "minimax-m2.7-highspeed")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+           '(("MiniMax" . "minimax-m2.7-highspeed")
+             ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow--backend-failure-counts nil)
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
@@ -3712,22 +3723,25 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                          (_ nil))))
                     ((symbol-function 'message)
                      (lambda (&rest _) nil)))
+            (should (gptel-auto-experiment--is-retryable-error-p curl-error))
+            (should-not (gptel-auto-experiment--provider-pressure-error-p curl-error))
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
              "executor" preset curl-error)
-            (should (member "MiniMax" gptel-auto-workflow--rate-limited-backends))
+            (should-not (gptel-auto-workflow--backend-rate-limited-p "MiniMax"))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "executor" preset)))
-              (should (eq (plist-get override :backend) dashscope-backend))
-              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
-      (setq gptel-auto-workflow--rate-limited-backends nil
+              (should (equal (plist-get override :backend) "MiniMax"))
+              (should (equal (plist-get override :model) "minimax-m2.7-highspeed")))))
+      (setq gptel-auto-workflow--backend-failure-counts nil
+            gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
       (if had-dashscope
           (set 'gptel--dashscope old-dashscope)
         (makunbound 'gptel--dashscope)))))
 
-(ert-deftest regression/auto-workflow/provider-failover-activates-on-webclient-server-errors ()
-  "Headless provider failover should activate on retryable server transport errors."
+(ert-deftest regression/auto-workflow/provider-failover-does-not-activate-on-webclient-server-errors ()
+  "WebClient transport failures should stay retryable without forcing provider failover."
   (let* ((dashscope-backend
           (gptel-make-openai "DashScope"
             :host "coding.dashscope.aliyuncs.com"
@@ -3747,8 +3761,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           '(("MiniMax" . "minimax-m2.7-highspeed")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+           '(("MiniMax" . "minimax-m2.7-highspeed")
+             ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow--backend-failure-counts nil)
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
@@ -3762,15 +3777,18 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                          (_ nil))))
                     ((symbol-function 'message)
                      (lambda (&rest _) nil)))
+            (should (gptel-auto-experiment--is-retryable-error-p server-error))
+            (should-not (gptel-auto-experiment--provider-pressure-error-p server-error))
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
              "executor" preset server-error)
-            (should (member "MiniMax" gptel-auto-workflow--rate-limited-backends))
+            (should-not (gptel-auto-workflow--backend-rate-limited-p "MiniMax"))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "executor" preset)))
-              (should (eq (plist-get override :backend) dashscope-backend))
-              (should (eq (plist-get override :model) 'qwen3.6-plus)))))
-      (setq gptel-auto-workflow--rate-limited-backends nil
+              (should (equal (plist-get override :backend) "MiniMax"))
+              (should (equal (plist-get override :model) "minimax-m2.7-highspeed")))))
+      (setq gptel-auto-workflow--backend-failure-counts nil
+            gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
        (if had-dashscope
            (set 'gptel--dashscope old-dashscope)
@@ -3797,8 +3815,10 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
           '(("MiniMax" . "minimax-m2.7-highspeed")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("DashScope" . "qwen3.6-plus")))
+           '(("MiniMax" . "minimax-m2.7-highspeed")
+             ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-backend-rate-limit-failure-threshold 1)
+         (gptel-auto-workflow--backend-failure-counts nil)
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
@@ -3814,13 +3834,14 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                      (lambda (&rest _) nil)))
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
              "executor" preset auth-error)
-            (should (member "MiniMax" gptel-auto-workflow--rate-limited-backends))
+            (should (gptel-auto-workflow--backend-rate-limited-p "MiniMax"))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "executor" preset)))
               (should (eq (plist-get override :backend) dashscope-backend))
               (should (eq (plist-get override :model) 'qwen3.6-plus)))))
-      (setq gptel-auto-workflow--rate-limited-backends nil
+      (setq gptel-auto-workflow--backend-failure-counts nil
+            gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
        (if had-dashscope
            (set 'gptel--dashscope old-dashscope)
@@ -3848,9 +3869,11 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             ("moonshot" . "kimi-k2.6")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("moonshot" . "kimi-k2.6")
-            ("DashScope" . "qwen3.6-plus")))
+           '(("MiniMax" . "minimax-m2.7-highspeed")
+             ("moonshot" . "kimi-k2.6")
+             ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-backend-rate-limit-failure-threshold 1)
+         (gptel-auto-workflow--backend-failure-counts nil)
          (gptel-auto-workflow--rate-limited-backends nil)
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
@@ -3866,13 +3889,14 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                      (lambda (&rest _) nil)))
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
              "executor" preset access-terminated-error)
-            (should (member "moonshot" gptel-auto-workflow--rate-limited-backends))
+            (should (gptel-auto-workflow--backend-rate-limited-p "moonshot"))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "executor" preset)))
               (should (eq (plist-get override :backend) dashscope-backend))
               (should (eq (plist-get override :model) 'qwen3.6-plus)))))
-      (setq gptel-auto-workflow--rate-limited-backends nil
+      (setq gptel-auto-workflow--backend-failure-counts nil
+            gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
       (if had-dashscope
           (set 'gptel--dashscope old-dashscope)
@@ -3900,10 +3924,13 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             ("moonshot" . "kimi-k2.6")
             ("DashScope" . "qwen3.6-plus")))
          (gptel-auto-workflow-executor-rate-limit-fallbacks
-          '(("MiniMax" . "minimax-m2.7-highspeed")
-            ("moonshot" . "kimi-k2.6")
-            ("DashScope" . "qwen3.6-plus")))
-         (gptel-auto-workflow--rate-limited-backends '("MiniMax"))
+           '(("MiniMax" . "minimax-m2.7-highspeed")
+             ("moonshot" . "kimi-k2.6")
+             ("DashScope" . "qwen3.6-plus")))
+         (gptel-auto-workflow-backend-rate-limit-failure-threshold 1)
+         (gptel-auto-workflow--backend-failure-counts nil)
+         (gptel-auto-workflow--rate-limited-backends
+          (list (cons "MiniMax" (float-time (current-time)))))
          (gptel-auto-workflow--runtime-subagent-provider-overrides nil))
     (unwind-protect
         (progn
@@ -3917,13 +3944,14 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                      (lambda (&rest _) nil)))
             (gptel-auto-workflow--maybe-activate-rate-limit-failover
              "grader" preset usage-limit-error)
-            (should (member "moonshot" gptel-auto-workflow--rate-limited-backends))
+            (should (gptel-auto-workflow--backend-rate-limited-p "moonshot"))
             (let ((override
                    (gptel-auto-workflow--maybe-override-subagent-provider
                     "grader" preset)))
               (should (eq (plist-get override :backend) dashscope-backend))
               (should (eq (plist-get override :model) 'qwen3.6-plus)))))
-      (setq gptel-auto-workflow--rate-limited-backends nil
+      (setq gptel-auto-workflow--backend-failure-counts nil
+            gptel-auto-workflow--rate-limited-backends nil
             gptel-auto-workflow--runtime-subagent-provider-overrides nil)
       (if had-dashscope
           (set 'gptel--dashscope old-dashscope)

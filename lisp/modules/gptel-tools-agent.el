@@ -7347,7 +7347,7 @@ name strings."
     (when (gptel-auto-workflow--backend-rate-limited-p current-backend)
       (gptel-auto-workflow--first-available-provider-candidate
        candidates
-       gptel-auto-workflow--rate-limited-backends))))
+       (gptel-auto-workflow--rate-limited-backend-names)))))
 
 (defun gptel-auto-workflow--rewrite-subagent-provider (preset candidate)
   "Return PRESET rewritten to use CANDIDATE backend/model."
@@ -7406,17 +7406,16 @@ times before the workflow stops using it."
                                      :test #'string=))
                       0))
                  (new-count (1+ existing-count)))
-            (setq gptel-auto-workflow--backend-failure-counts
-                  (cons (cons current-backend new-count)
-                        (cl-remove-if
-                         (lambda (pair) (string= (car pair) current-backend))
-                         gptel-auto-workflow--backend-failure-counts
-                         :test t)))
-            (message "[auto-workflow] Provider pressure on %s/%s for %s (failure %d/%d)"
-                     (or current-backend "unknown")
-                     (or current-model "unknown")
-                     agent-type
-                     new-count
+             (setq gptel-auto-workflow--backend-failure-counts
+                   (cons (cons current-backend new-count)
+                         (cl-remove-if
+                          (lambda (pair) (string= (car pair) current-backend))
+                          gptel-auto-workflow--backend-failure-counts)))
+             (message "[auto-workflow] Provider pressure on %s/%s for %s (failure %d/%d)"
+                      (or current-backend "unknown")
+                      (or current-model "unknown")
+                      agent-type
+                      new-count
                      gptel-auto-workflow-backend-rate-limit-failure-threshold)
             (when (>= new-count gptel-auto-workflow-backend-rate-limit-failure-threshold)
               (push (cons current-backend (float-time (current-time)))
@@ -7431,17 +7430,18 @@ times before the workflow stops using it."
               (setq candidate
                     (gptel-auto-workflow--runtime-provider-failover-candidate
                      agent-type preset))
-              (when candidate
-                (message "[auto-workflow] Provider failure threshold reached on %s/%s for %s%s; future retries will use %s/%s"
-                         (or current-backend "unknown")
-                         (or current-model "unknown")
-                         agent-type
+               (when candidate
+                 (message "[auto-workflow] Provider failure threshold reached on %s/%s for %s%s; future retries will use %s/%s"
+                          (or current-backend "unknown")
+                          (or current-model "unknown")
+                          agent-type
                          (if (and (stringp reason) (not (string-empty-p reason)))
-                             (format " (%s)"
-                                     (my/gptel--sanitize-for-logging reason 120))
-                           "")
-                         (car candidate)
-                         (cdr candidate)))))))))))
+                              (format " (%s)"
+                                      (my/gptel--sanitize-for-logging reason 120))
+                            "")
+                          (car candidate)
+                          (cdr candidate)))))))
+      candidate)))
 
 (defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
   "Activate a per-run fallback for AGENT-TYPE when RESULT shows provider pressure."
