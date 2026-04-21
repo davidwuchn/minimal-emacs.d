@@ -1746,8 +1746,10 @@ TIMESTAMP defaults to `current-time'."
 
 (defconst my/gptel--agent-task-nonactivity-message-formats
   '("gptel: sanitizing nil :content on %s message"
-    "gptel: sanitizing :null :content on %s message"
-    "gptel: converting non-string :content on %s message: %S")
+     "gptel: sanitizing :null :content on %s message"
+     "gptel: converting non-string :content on %s message: %S"
+     "[LSP] Waiting for server... (%d retries left)"
+     "[LSP] Connection error, retrying... (%d left)")
   "Message format strings that should not count as executor progress.")
 
 (defun my/gptel--agent-task-note-message-activity (format-string &rest _args)
