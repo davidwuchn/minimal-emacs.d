@@ -7,6 +7,8 @@ RUNNER="$DIR/scripts/run-auto-workflow-cron.sh"
 cd "$DIR"
 
 SOCKET_PIDS=()
+DAEMON_SERVERS=()
+DAEMON_RUNTIME_DIRS=()
 TEMP_ARTIFACTS=()
 GLOBAL_SNAPSHOT_CACHE="$DIR/var/tmp/cron/copilot-auto-workflow-snapshot-paths.txt"
 GLOBAL_SNAPSHOT_CACHE_BACKUP=""
@@ -38,11 +40,17 @@ restore_global_snapshot_cache() {
 }
 
 cleanup_test_artifacts() {
-    local pid path
+    local pid path idx server runtime_dir
     restore_global_snapshot_cache
     for pid in "${SOCKET_PIDS[@]:-}"; do
         kill "$pid" 2>/dev/null || true
         wait "$pid" 2>/dev/null || true
+    done
+    for idx in "${!DAEMON_SERVERS[@]}"; do
+        server="${DAEMON_SERVERS[$idx]}"
+        runtime_dir="${DAEMON_RUNTIME_DIRS[$idx]:-}"
+        env XDG_RUNTIME_DIR="$runtime_dir" \
+            emacsclient -a false -s "$server" --eval "(kill-emacs)" >/dev/null 2>&1 || true
     done
     for path in "${TEMP_ARTIFACTS[@]:-}"; do
         rm -rf "$path" 2>/dev/null || true
@@ -104,10 +112,32 @@ PY
     return 1
 }
 
+start_test_daemon() {
+    local server_name="$1"
+    local runtime_dir="$2"
+
+    env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+        XDG_RUNTIME_DIR="$runtime_dir" \
+        emacs --init-directory="$DIR" --bg-daemon="$server_name" >/dev/null 2>&1 || true
+    DAEMON_SERVERS+=("$server_name")
+    DAEMON_RUNTIME_DIRS+=("$runtime_dir")
+
+    for _ in $(seq 1 50); do
+        if env XDG_RUNTIME_DIR="$runtime_dir" \
+           emacsclient -a false -s "$server_name" --eval "t" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 0.2
+    done
+
+    echo "  ✗ test daemon did not start: $server_name"
+    return 1
+}
+
 echo "=== Auto-Workflow E2E Test ==="
 echo
 
-echo "[1/9] Checking prerequisites..."
+echo "[1/10] Checking prerequisites..."
 if [ ! -x "$RUNNER" ]; then
     echo "  ✗ wrapper missing or not executable: $RUNNER"
     exit 1
@@ -121,7 +151,7 @@ fi
 echo "  ✓ emacsclient is resolvable"
 
 echo
-echo "[2/9] Checking wrapper status..."
+echo "[2/10] Checking wrapper status..."
 if "$RUNNER" status | grep -q ':phase'; then
     echo "  ✓ wrapper returns a workflow status snapshot"
 else
@@ -130,7 +160,7 @@ else
 fi
 
 echo
-echo "[3/9] Checking persisted live snapshot handling..."
+echo "[3/10] Checking persisted live snapshot handling..."
 STATUS_TMP="$(mktemp "$DIR/var/tmp/cron/test-status-XXXXXX.sexp")"
 MESSAGES_TMP="$(mktemp "$DIR/var/tmp/cron/test-messages-XXXXXX.txt")"
 TEMP_ARTIFACTS+=("$STATUS_TMP" "$MESSAGES_TMP")
@@ -190,8 +220,40 @@ else
 fi
 
 echo
+echo "[4/10] Checking daemon completion overrides stale running snapshot..."
+COMPLETE_RUNTIME_DIR="$(mktemp -d "$DIR/var/tmp/cron/test-complete-runtime-XXXXXX")"
+TEMP_ARTIFACTS+=("$COMPLETE_RUNTIME_DIR")
+COMPLETE_SERVER="complete-status-test-$$"
+start_test_daemon "$COMPLETE_SERVER" "$COMPLETE_RUNTIME_DIR"
+printf '%s\n' '(:running t :kept 0 :total 5 :phase "running" :run-id "stale-complete" :results "var/tmp/experiments/stale-complete/results.tsv")' >"$STATUS_TMP"
+printf '%s\n' '[auto-workflow] stale running snapshot' >"$MESSAGES_TMP"
+env XDG_RUNTIME_DIR="$COMPLETE_RUNTIME_DIR" \
+    emacsclient -a false -s "$COMPLETE_SERVER" --eval \
+    "(progn
+       (load-file \"$DIR/lisp/modules/gptel-tools-agent.el\")
+       (setq gptel-auto-workflow--stats '(:phase \"complete\" :total 5 :kept 0)
+             gptel-auto-workflow--running nil
+             gptel-auto-workflow--run-id nil
+             gptel-auto-workflow--current-target nil
+             gptel-auto-workflow--current-project nil)
+       t)" >/dev/null
+if AUTO_WORKFLOW_STATUS_FILE="$STATUS_TMP" \
+   AUTO_WORKFLOW_MESSAGES_FILE="$MESSAGES_TMP" \
+   AUTO_WORKFLOW_EMACS_SERVER="$COMPLETE_SERVER" \
+   XDG_RUNTIME_DIR="$COMPLETE_RUNTIME_DIR" \
+   AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=45 \
+   "$RUNNER" status | grep -q ':phase "complete"' &&
+   grep -q ':phase "complete"' "$STATUS_TMP" &&
+   ! grep -q ':running t' "$STATUS_TMP"; then
+    echo "  ✓ live daemon completion overrides stale persisted running state"
+else
+    echo "  ✗ wrapper kept stale running snapshot after daemon completion"
+    exit 1
+fi
+
 echo
-echo "[4/9] Checking override isolation..."
+echo
+echo "[5/10] Checking override isolation..."
 backup_global_snapshot_cache
 CACHE_STATUS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/aw-status-dirXXXXXX")"
 TEMP_ARTIFACTS+=("$CACHE_STATUS_DIR")
@@ -215,7 +277,7 @@ else
 fi
 
 echo
-echo "[5/9] Checking required modules..."
+echo "[6/10] Checking required modules..."
 for module in gptel-tools-agent.el gptel-auto-workflow-projects.el gptel-auto-workflow-strategic.el; do
     if [ -f "lisp/modules/$module" ]; then
         echo "  ✓ $module exists"
@@ -226,7 +288,7 @@ for module in gptel-tools-agent.el gptel-auto-workflow-projects.el gptel-auto-wo
 done
 
 echo
-echo "[6/9] Checking cron configuration..."
+echo "[7/10] Checking cron configuration..."
 if crontab -l 2>/dev/null | grep -Eq '^[0-9*@].*run-auto-workflow-cron\.sh auto-workflow'; then
     echo "  ✓ Auto-workflow cron job installed via wrapper"
     crontab -l | grep -E '^[0-9*@].*run-auto-workflow-cron\.sh auto-workflow' | head -1 | sed 's/^/    /'
@@ -237,7 +299,7 @@ else
 fi
 
 echo
-echo "[7/9] Checking required directories..."
+echo "[8/10] Checking required directories..."
 for dir in var/tmp/cron var/tmp/experiments; do
     if [ -d "$dir" ]; then
         echo "  ✓ $dir exists"
@@ -248,7 +310,7 @@ for dir in var/tmp/cron var/tmp/experiments; do
 done
 
 echo
-echo "[8/9] Testing batch module loading..."
+echo "[9/10] Testing batch module loading..."
 if run_batch_bootstrap >/dev/null 2>&1; then
     echo "  ✓ auto-workflow modules load successfully in batch mode"
 else
@@ -257,7 +319,7 @@ else
 fi
 
 echo
-echo "[9/9] Checking workflow entrypoints..."
+echo "[10/10] Checking workflow entrypoints..."
 if "$RUNNER" status | grep -q ':phase'; then
     echo "  ✓ wrapper status remains responsive"
 else

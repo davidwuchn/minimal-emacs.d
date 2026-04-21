@@ -296,9 +296,23 @@ PY
 }
 
 status_can_use_persisted_active_snapshot() {
-    status_indicates_active_phase &&
-        status_has_live_run_id &&
-        { status_snapshot_fresh || messages_snapshot_fresh || daemon_socket_has_owner; }
+    local rc
+
+    status_indicates_active_phase || return 1
+    status_has_live_run_id || return 1
+
+    if check_worker_daemon; then
+        if daemon_reports_active_workflow; then
+            return 0
+        else
+            rc=$?
+            if [ "$rc" -eq 1 ]; then
+                return 1
+            fi
+        fi
+    fi
+
+    status_snapshot_fresh || messages_snapshot_fresh || daemon_socket_has_owner
 }
 
 rewrite_status_idle() {
@@ -562,6 +576,8 @@ refresh_snapshot_paths_from_daemon() {
     local payload
     local daemon_status
     local daemon_messages
+    local effective_status
+    local effective_messages
 
     body='(if (and (fboundp '"'"'gptel-auto-workflow--status-file)
                    (fboundp '"'"'gptel-auto-workflow--messages-file))
@@ -580,9 +596,23 @@ refresh_snapshot_paths_from_daemon() {
     [ -n "$daemon_messages" ] || return 1
     [ -d "$(dirname "$daemon_status")" ] || return 1
     [ -d "$(dirname "$daemon_messages")" ] || return 1
-    STATUS_FILE="$daemon_status"
-    MESSAGES_FILE="$daemon_messages"
-    save_cached_snapshot_paths "$STATUS_FILE" "$MESSAGES_FILE"
+
+    effective_status="$daemon_status"
+    effective_messages="$daemon_messages"
+    if [ -n "${AUTO_WORKFLOW_STATUS_FILE:-}" ]; then
+        effective_status="$STATUS_FILE"
+    fi
+    if [ -n "${AUTO_WORKFLOW_MESSAGES_FILE:-}" ]; then
+        effective_messages="$MESSAGES_FILE"
+    fi
+
+    if [ -n "${AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE:-}" ] ||
+       { [ -z "${AUTO_WORKFLOW_STATUS_FILE:-}" ] && [ -z "${AUTO_WORKFLOW_MESSAGES_FILE:-}" ]; }; then
+        save_cached_snapshot_paths "$daemon_status" "$daemon_messages"
+    fi
+
+    STATUS_FILE="$effective_status"
+    MESSAGES_FILE="$effective_messages"
     return 0
 }
 

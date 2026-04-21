@@ -108,6 +108,12 @@ run_unit_tests() {
 
 run_e2e_tests() {
     local RUNNER="$DIR/scripts/run-auto-workflow-cron.sh"
+    local complete_status_file=""
+    local complete_messages_file=""
+    local complete_runtime_dir=""
+    local complete_server=""
+    local daemon_ready=0
+    local status_output=""
     
     section "Auto-Workflow E2E"
     
@@ -146,6 +152,98 @@ run_e2e_tests() {
             return 1
         fi
     done
+
+    # Daemon truth should override stale persisted running snapshots
+    echo ""
+    echo "Checking daemon completion recovery..."
+    complete_status_file="$(mktemp "${TMPDIR:-/tmp}/auto-workflow-complete-status.XXXXXX")" || {
+        fail "Failed to create complete-state status file"
+        return 1
+    }
+    complete_messages_file="$(mktemp "${TMPDIR:-/tmp}/auto-workflow-complete-messages.XXXXXX")" || {
+        rm -f "$complete_status_file"
+        fail "Failed to create complete-state messages file"
+        return 1
+    }
+    complete_runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/auto-workflow-complete-runtime.XXXXXX")" || {
+        rm -f "$complete_status_file" "$complete_messages_file"
+        fail "Failed to create complete-state runtime dir"
+        return 1
+    }
+    chmod 700 "$complete_runtime_dir"
+    complete_server="aw-complete-$$"
+
+    printf '%s\n' '(:running t :kept 0 :total 5 :phase "running" :run-id "stale-complete" :results "var/tmp/experiments/stale-complete/results.tsv")' >"$complete_status_file"
+    printf '%s\n' '[auto-workflow] stale running snapshot' >"$complete_messages_file"
+
+    env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+        XDG_RUNTIME_DIR="$complete_runtime_dir" \
+        emacs --init-directory="$DIR" --bg-daemon="$complete_server" >/dev/null 2>&1 || true
+
+    for _ in $(seq 1 50); do
+        if env XDG_RUNTIME_DIR="$complete_runtime_dir" \
+           emacsclient -a false -s "$complete_server" --eval "t" >/dev/null 2>&1; then
+            daemon_ready=1
+            break
+        fi
+        sleep 0.2
+    done
+
+    if [ "$daemon_ready" -ne 1 ]; then
+        emacsclient -a false -s "$complete_server" --eval "(kill-emacs)" >/dev/null 2>&1 || true
+        rm -f "$complete_status_file" "$complete_messages_file"
+        rm -rf "$complete_runtime_dir"
+        fail "Test daemon did not start"
+        return 1
+    fi
+
+    env XDG_RUNTIME_DIR="$complete_runtime_dir" \
+        emacsclient -a false -s "$complete_server" --eval \
+        "(progn
+           (load-file \"$DIR/lisp/modules/gptel-tools-agent.el\")
+           (setq gptel-auto-workflow--stats '(:phase \"complete\" :total 5 :kept 0)
+                 gptel-auto-workflow--running nil
+                 gptel-auto-workflow--run-id nil
+                 gptel-auto-workflow--current-target nil
+                 gptel-auto-workflow--current-project nil)
+           t)" >/dev/null 2>&1 || {
+        emacsclient -a false -s "$complete_server" --eval "(kill-emacs)" >/dev/null 2>&1 || true
+        rm -f "$complete_status_file" "$complete_messages_file"
+        rm -rf "$complete_runtime_dir"
+        fail "Failed to seed daemon with completed workflow state"
+        return 1
+    }
+
+    if ! status_output=$(AUTO_WORKFLOW_STATUS_FILE="$complete_status_file" \
+        AUTO_WORKFLOW_MESSAGES_FILE="$complete_messages_file" \
+        AUTO_WORKFLOW_EMACS_SERVER="$complete_server" \
+        XDG_RUNTIME_DIR="$complete_runtime_dir" \
+        AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=45 \
+        "$RUNNER" status); then
+        env XDG_RUNTIME_DIR="$complete_runtime_dir" \
+            emacsclient -a false -s "$complete_server" --eval "(kill-emacs)" >/dev/null 2>&1 || true
+        rm -f "$complete_status_file" "$complete_messages_file"
+        rm -rf "$complete_runtime_dir"
+        fail "wrapper status failed while checking daemon completion recovery"
+        return 1
+    fi
+
+    env XDG_RUNTIME_DIR="$complete_runtime_dir" \
+        emacsclient -a false -s "$complete_server" --eval "(kill-emacs)" >/dev/null 2>&1 || true
+
+    if grep -q ':phase "complete"' <<< "$status_output" &&
+       grep -q ':phase "complete"' "$complete_status_file" &&
+       ! grep -q ':running t' "$complete_status_file"; then
+        pass "wrapper rewrites stale running snapshot from daemon completion"
+    else
+        rm -f "$complete_status_file" "$complete_messages_file"
+        rm -rf "$complete_runtime_dir"
+        fail "wrapper kept stale running snapshot after daemon completion"
+        return 1
+    fi
+
+    rm -f "$complete_status_file" "$complete_messages_file"
+    rm -rf "$complete_runtime_dir"
     
     # Cron configuration
     echo ""
