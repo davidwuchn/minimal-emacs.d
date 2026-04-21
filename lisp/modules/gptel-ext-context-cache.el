@@ -330,7 +330,9 @@ When multiple entries match, returns the one with the longest key for most speci
 (defun my/gptel--plist-get (plist key &optional default)
   "Get value from PLIST for KEY, returning DEFAULT if not found.
 Reduces duplication of `(or (plist-get ...) default-value)` patterns."
-  (or (plist-get plist key) default))
+  (if (plist-member plist key)
+      (plist-get plist key)
+    default))
 
 
 (defun my/gptel--lookup-context-window-in-gptel-tables (model)
