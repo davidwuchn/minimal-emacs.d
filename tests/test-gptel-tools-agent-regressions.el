@@ -11786,6 +11786,132 @@ failure."
       (delete-directory temp-root t)
       (delete-directory base-root t)
       (delete-directory fake-bin t)
+       (when (file-exists-p daemon-ready)
+         (delete-file daemon-ready)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-hydrates-missing-submodules-before-daemon-start ()
+  "Wrapper should initialize unhydrated submodules before launching a fresh daemon."
+  (let* ((temp-root (make-temp-file "aw-cron-root" t))
+         (script-dir (expand-file-name "scripts" temp-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (git-log (make-temp-file "aw-git-log"))
+         (daemon-ready (make-temp-name (expand-file-name "aw-daemon-ready" temporary-file-directory)))
+         (fake-git
+          (test-auto-workflow--write-shell-script
+           "fake-git"
+           (format
+            "cmd=\"$*\"\nprintf '%%s\\n' \"$cmd\" >> %s\ncase \"$cmd\" in\n  *\"submodule status\"*) printf '%%s\\n%%s\\n' %s %s ;;\n  *\"submodule sync -- packages/gptel packages/gptel-agent\"*) exit 0 ;;\n  *\"submodule update --init --recursive -- packages/gptel packages/gptel-agent\"*) exit 0 ;;\n  *\"rev-parse --git-common-dir\"*) exit 1 ;;\n  *) exit 1 ;;\nesac"
+            (shell-quote-argument git-log)
+            (shell-quote-argument "-5b2d9f89431c8542f2b3f8c686f4dbc9afec21b2 packages/gptel")
+            (shell-quote-argument "-70dca8e4e13b530505fb4ad318f6ff3f40be350f packages/gptel-agent"))))
+         (fake-emacsclient
+          (test-auto-workflow--write-shell-script
+           "fake-emacsclient"
+           (format "if [ -f %s ]; then exit 0; fi\nexit 1"
+                   (shell-quote-argument daemon-ready))))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "touch %s\nexit 0" (shell-quote-argument daemon-ready))))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH")))
+                  process-environment))
+         (default-directory temp-root))
+    (unwind-protect
+        (progn
+          (make-directory script-dir t)
+          (with-temp-file (expand-file-name ".gitmodules" temp-root)
+            (insert "[submodule \"packages/gptel\"]\n"
+                    "\tpath = packages/gptel\n"
+                    "\turl = https://example.invalid/gptel.git\n"
+                    "[submodule \"packages/gptel-agent\"]\n"
+                    "\tpath = packages/gptel-agent\n"
+                    "\turl = https://example.invalid/gptel-agent.git\n"))
+          (copy-file (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root)
+                     script t)
+          (set-file-modes script #o755)
+          (rename-file fake-git (expand-file-name "git" fake-bin) t)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (shell-command-to-string (format "%s auto-workflow >/dev/null 2>&1 || true" script))
+          (should (file-exists-p daemon-ready))
+          (with-temp-buffer
+            (insert-file-contents git-log)
+            (let ((output (buffer-string)))
+              (should (string-match-p "submodule status" output))
+              (should (string-match-p
+                       (regexp-quote "submodule sync -- packages/gptel packages/gptel-agent")
+                       output))
+              (should (string-match-p
+                       (regexp-quote "submodule update --init --recursive -- packages/gptel packages/gptel-agent")
+                       output)))))
+      (delete-directory temp-root t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p git-log)
+        (delete-file git-log))
+      (when (file-exists-p daemon-ready)
+        (delete-file daemon-ready)))))
+
+(ert-deftest regression/auto-workflow/cron-wrapper-skips-initialized-submodules-before-daemon-start ()
+  "Wrapper should not rewrite already-initialized submodules before daemon launch."
+  (let* ((temp-root (make-temp-file "aw-cron-root" t))
+         (script-dir (expand-file-name "scripts" temp-root))
+         (script (expand-file-name "run-auto-workflow-cron.sh" script-dir))
+         (fake-bin (make-temp-file "aw-fake-bin" t))
+         (git-log (make-temp-file "aw-git-log"))
+         (daemon-ready (make-temp-name (expand-file-name "aw-daemon-ready" temporary-file-directory)))
+         (fake-git
+          (test-auto-workflow--write-shell-script
+           "fake-git"
+           (format
+            "cmd=\"$*\"\nprintf '%%s\\n' \"$cmd\" >> %s\ncase \"$cmd\" in\n  *\"submodule status\"*) printf '%%s\\n%%s\\n' %s %s ;;\n  *\"rev-parse --git-common-dir\"*) exit 1 ;;\n  *) exit 1 ;;\nesac"
+            (shell-quote-argument git-log)
+            (shell-quote-argument "+fa99ca59f5f2be5f6973144c259f73727d416196 packages/gptel")
+            (shell-quote-argument " 70dca8e4e13b530505fb4ad318f6ff3f40be350f packages/gptel-agent"))))
+         (fake-emacsclient
+          (test-auto-workflow--write-shell-script
+           "fake-emacsclient"
+           (format "if [ -f %s ]; then exit 0; fi\nexit 1"
+                   (shell-quote-argument daemon-ready))))
+         (fake-emacs
+          (test-auto-workflow--write-shell-script
+           "fake-emacs"
+           (format "touch %s\nexit 0" (shell-quote-argument daemon-ready))))
+         (process-environment
+          (append (list (format "PATH=%s:%s" fake-bin (getenv "PATH")))
+                  process-environment))
+         (default-directory temp-root))
+    (unwind-protect
+        (progn
+          (make-directory script-dir t)
+          (with-temp-file (expand-file-name ".gitmodules" temp-root)
+            (insert "[submodule \"packages/gptel\"]\n"
+                    "\tpath = packages/gptel\n"
+                    "\turl = https://example.invalid/gptel.git\n"
+                    "[submodule \"packages/gptel-agent\"]\n"
+                    "\tpath = packages/gptel-agent\n"
+                    "\turl = https://example.invalid/gptel-agent.git\n"))
+          (copy-file (expand-file-name "scripts/run-auto-workflow-cron.sh"
+                                       test-auto-workflow--repo-root)
+                     script t)
+          (set-file-modes script #o755)
+          (rename-file fake-git (expand-file-name "git" fake-bin) t)
+          (rename-file fake-emacsclient (expand-file-name "emacsclient" fake-bin) t)
+          (rename-file fake-emacs (expand-file-name "emacs" fake-bin) t)
+          (shell-command-to-string (format "%s auto-workflow >/dev/null 2>&1 || true" script))
+          (should (file-exists-p daemon-ready))
+          (with-temp-buffer
+            (insert-file-contents git-log)
+            (let ((output (buffer-string)))
+              (should (string-match-p "submodule status" output))
+              (should-not (string-match-p "submodule update --init --recursive --" output))
+              (should-not (string-match-p "submodule sync --" output)))))
+      (delete-directory temp-root t)
+      (delete-directory fake-bin t)
+      (when (file-exists-p git-log)
+        (delete-file git-log))
       (when (file-exists-p daemon-ready)
         (delete-file daemon-ready)))))
 

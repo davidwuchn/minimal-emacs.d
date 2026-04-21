@@ -123,6 +123,23 @@ resolve_worktree_common_root() {
     dirname "$common_dir"
 }
 
+hydrate_missing_worktree_submodules() {
+    local missing=()
+    local path
+
+    [ -f "$DIR/.gitmodules" ] || return 0
+
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        missing+=("$path")
+    done < <(git -C "$DIR" submodule status 2>/dev/null | awk 'substr($1, 1, 1) == "-" { print $2 }')
+
+    [ "${#missing[@]}" -gt 0 ] || return 0
+
+    git -C "$DIR" submodule sync -- "${missing[@]}" >/dev/null 2>&1 || true
+    git -C "$DIR" submodule update --init --recursive -- "${missing[@]}"
+}
+
 seed_worker_daemon_shared_var() {
     local common_root shared_var target_var entry target source rel
 
@@ -644,6 +661,7 @@ ensure_worker_daemon() {
     # daemon can die when its X/Wayland connection disappears, which is fatal
     # for long-running cron/worker runs. Load the worktree's normal init so the
     # worker uses the same package/module graph as interactive Emacs.
+    hydrate_missing_worktree_submodules
     seed_worker_daemon_shared_var
     env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
         MINIMAL_EMACS_ALLOW_SECOND_DAEMON=1 \
