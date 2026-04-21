@@ -7153,10 +7153,11 @@ Each element is (BACKEND . COUNT). Backend is only added to
 rate-limited-backends after reaching `gptel-auto-workflow--backend-rate-limit-failure-threshold'
 consecutive failures. This prevents single errors from permanently skipping a backend.")
 
-(defcustom gptel-auto-workflow-backend-rate-limit-failure-threshold 3
+(defcustom gptel-auto-workflow-backend-rate-limit-failure-threshold 10
   "Number of consecutive failures before a backend is marked as rate-limited.
 Lower values make fallback trigger faster but risk skipping good backends.
-Higher values try harder on the primary backend before falling back."
+Higher values try harder on the primary backend before falling back.
+With MiniMax quota at 10%, set high to prefer MiniMax over fallback providers."
   :type 'integer
   :group 'gptel-tools-agent)
 
