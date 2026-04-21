@@ -1960,9 +1960,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   (let ((result nil)
         (temp-dir (make-temp-file "exp-worktree" t))
         (grade-details
-         "Grader result for task: Grade output | EXPECTED: | 1. change clearly described: PASS")
+         "Grader result for task: Grade output | EXPECTED: | 1. change clearly described: PASS | SUMMARY: SCORE: 3/9")
         (agent-output
-         "Executor result for task: successful candidate\nVERIFY:\n- Mentioned timeout handling in nearby code."))
+         "HYPOTHESIS: Timeout salvage still produced a plausible edit\nCHANGED:\n- Partial worktree diff captured\nVERIFY:\n- Original timeout: Error: Task \"Experiment 1\" (executor) timed out after 1020s total runtime.\nTask completed"))
     (unwind-protect
         (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
                    (lambda (_target _experiment-id) temp-dir))
@@ -1990,6 +1990,57 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
            (lambda (exp-result)
              (setq result exp-result))))
       (delete-directory temp-dir t))
+    (should result)
+    (should (equal (plist-get result :grader-reason) grade-details))
+    (should (equal (plist-get result :comparator-reason) "grader-rejected"))
+    (should-not (plist-get result :error))
+    (should-not (plist-get result :grader-only-failure))))
+
+(ert-deftest regression/auto-experiment/final-grade-rejection-clears-grader-timeout-metadata ()
+  "A final rubric rejection should clear transient grader-timeout metadata."
+  (let ((result nil)
+        (grade-call-count 0)
+        (temp-dir (make-temp-file "exp-worktree" t))
+        (agent-output
+         "HYPOTHESIS: Timeout salvage still produced a plausible edit\nCHANGED:\n- Partial worktree diff captured\nVERIFY:\n- Original timeout: Error: Task \"Experiment 1\" (executor) timed out after 1020s total runtime.\nTask completed")
+        (grader-timeout
+         "Error: Task grader could not finish task \"Grade output\" (grader) timed out after 120s.")
+        (grade-details
+         "Grader result for task: Grade output | EXPECTED: | 1. change clearly described: FAIL - Hypothesis does not match the actual diff. | 2. verification attempted: FAIL - No verification was performed after the timeout salvage. | SUMMARY: SCORE: 3/9"))
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-auto-workflow-create-worktree)
+                   (lambda (_target _experiment-id) temp-dir))
+                  ((symbol-function 'gptel-auto-experiment-analyze)
+                   (lambda (_previous-results cb)
+                     (funcall cb '(:patterns nil))))
+                  ((symbol-function 'gptel-auto-experiment-build-prompt)
+                   (lambda (&rest _args) "prompt"))
+                  ((symbol-function 'run-with-timer)
+                   (lambda (_delay _repeat fn &rest args)
+                     (apply fn args)
+                     :fake-timer))
+                  ((symbol-function 'cancel-timer)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'my/gptel--run-agent-tool)
+                   (lambda (cb &rest _args)
+                     (funcall cb agent-output)))
+                  ((symbol-function 'gptel-auto-experiment-grade)
+                   (lambda (_output cb &rest _args)
+                     (cl-incf grade-call-count)
+                     (funcall cb
+                              (if (= grade-call-count 1)
+                                  `(:score 0 :total 9 :passed nil :details ,grader-timeout)
+                                `(:score 3 :total 9 :passed nil :details ,grade-details)))))
+                  ((symbol-function 'gptel-auto-experiment-log-tsv)
+                   (lambda (&rest _args) nil))
+                  ((symbol-function 'message)
+                   (lambda (&rest _args) nil)))
+          (gptel-auto-experiment-run
+           "lisp/modules/gptel-tools-agent.el" 1 5 0.4 0.5 nil
+           (lambda (exp-result)
+             (setq result exp-result))))
+      (delete-directory temp-dir t))
+    (should (= grade-call-count 2))
     (should result)
     (should (equal (plist-get result :grader-reason) grade-details))
     (should (equal (plist-get result :comparator-reason) "grader-rejected"))
@@ -5149,6 +5200,74 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (equal (plist-get parsed :raw) response))
     (should (equal (gptel-auto-experiment--retryable-aux-subagent-category parsed)
                    :timeout))))
+
+(ert-deftest regression/benchmark-analysis/nonerror-raw-analysis-does-not-retry ()
+  "Successful analyzer text mentioning a prior timeout must not retry.
+Live analyzer responses can mention previous timed-out experiments in their
+summary.  That narrative should not be mistaken for a transient analyzer
+failure."
+  (let* ((response
+          (concat
+           "Analyzer result for task: Analyze: Experiment patterns\n\n"
+           "```json\n"
+           "{\n"
+           "  \"summary\": \"Experiment 1 timed out after 1020s total runtime; pivot to a different function.\",\n"
+           "  \"patterns\": [\"timeout-history\"],\n"
+           "  \"recommendations\": [\"try a materially different change\"]\n"
+           "}\n"
+           "```"))
+         (parsed (gptel-benchmark--parse-analysis-response response)))
+    (should (equal (plist-get parsed :raw) response))
+    (should-not (gptel-auto-experiment--retryable-aux-subagent-category parsed))))
+
+(ert-deftest regression/auto-experiment/analyze-does-not-retry-timeout-history ()
+  "Analyzer success mentioning prior timeout history must not trigger retries."
+  (let* ((gptel-auto-experiment-use-subagents t)
+         (gptel-auto-experiment-max-aux-subagent-retries 2)
+         (previous-results
+          '((:id 1
+             :target "lisp/modules/gptel-auto-workflow-projects.el"
+             :hypothesis "Timed out previously."
+             :kept nil
+             :comparator-reason "timeout")))
+         (call-count 0)
+         result
+         failover-call)
+    (cl-letf (((symbol-function 'gptel-benchmark-analyze)
+               (lambda (_data _description cb)
+                 (cl-incf call-count)
+                 (funcall
+                  cb
+                  (gptel-benchmark--parse-analysis-response
+                   (concat
+                    "Analyzer result for task: Analyze: Experiment patterns\n\n"
+                    "```json\n"
+                    "{\n"
+                    "  \"summary\": \"Experiment 1 timed out after 1020s total runtime; pivot to a different function.\",\n"
+                    "  \"patterns\": [\"timeout-history\"],\n"
+                    "  \"issues\": [],\n"
+                    "  \"recommendations\": [\"try a materially different change\"]\n"
+                    "}\n"
+                    "```")))))
+              ((symbol-function 'gptel-auto-workflow--agent-base-preset)
+               (lambda (_agent-type)
+                 '(:backend "MiniMax" :model "minimax-m2.7-highspeed")))
+              ((symbol-function 'gptel-auto-workflow--maybe-override-subagent-provider)
+               (lambda (_agent-type preset)
+                 preset))
+              ((symbol-function 'gptel-auto-workflow--activate-provider-failover)
+               (lambda (&rest args)
+                 (setq failover-call args)
+                 nil))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment-analyze
+       previous-results
+       (lambda (analysis)
+         (setq result analysis))))
+    (should (= call-count 1))
+    (should-not failover-call)
+    (should result)))
 
 (ert-deftest regression/auto-experiment/repeated-focus-symbol-skips-grading ()
   "Repeated focus on the same changed symbol should short-circuit before grading."
@@ -13193,6 +13312,27 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
           (should (string-match-p
                    "SYNTAX ERROR: broken\\.el"
                    (with-current-buffer buf (buffer-string)))))
+      (when (buffer-live-p buf)
+        (kill-buffer buf))
+      (delete-directory dir t))))
+
+(ert-deftest regression/auto-workflow/check-el-syntax-skips-mode-hooks ()
+  "Syntax verification should not run `emacs-lisp-mode-hook'."
+  (let* ((dir (make-temp-file "gptel-syntax-hooks-" t))
+         (file (expand-file-name "ok.el" dir))
+         (buf (generate-new-buffer "*syntax-probe*"))
+         (hook-fired nil)
+         (emacs-lisp-mode-hook
+          (list (lambda ()
+                  (setq hook-fired t)
+                  (error "mode hook should not run during syntax verification")))))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert "(defun gptel-syntax-hook-safe ()\n  t)\n"))
+          (should (gptel-auto-workflow--check-el-syntax dir buf))
+          (should-not hook-fired)
+          (should (equal "" (with-current-buffer buf (buffer-string)))))
       (when (buffer-live-p buf)
         (kill-buffer buf))
       (delete-directory dir t))))

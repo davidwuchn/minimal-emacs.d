@@ -4684,21 +4684,25 @@ Returns t if all files pass syntax check, nil otherwise."
           (files (ignore-errors (directory-files-recursively directory "\\.el\\'"))))
       (dolist (file (or files nil) (null errors))
         (when (file-readable-p file)
-          (with-temp-buffer
-            (insert-file-contents file)
-            (emacs-lisp-mode)
-            (goto-char (point-min))
-            (condition-case err
-                (progn
-                  (while (not (eobp)) (forward-sexp)))
-              (error
-                (let ((msg (format "SYNTAX ERROR: %s: %s"
-                                   (file-relative-name file directory)
-                                   (error-message-string err))))
-                  (push msg errors)
-                  (when (buffer-live-p output-buffer)
-                   (with-current-buffer output-buffer
-                      (insert msg "\n"))))))))))))
+          (condition-case err
+              (with-temp-buffer
+                (insert-file-contents file)
+                ;; Parse with `emacs-lisp-mode' so syntax-propertize handles
+                ;; reader forms correctly, but suppress mode hooks so staging
+                ;; verification cannot trip unrelated editor setup.
+                (delay-mode-hooks
+                  (emacs-lisp-mode))
+                (goto-char (point-min))
+                (while (not (eobp))
+                  (forward-sexp)))
+            (error
+             (let ((msg (format "SYNTAX ERROR: %s: %s"
+                                (file-relative-name file directory)
+                                (error-message-string err))))
+               (push msg errors)
+               (when (buffer-live-p output-buffer)
+                 (with-current-buffer output-buffer
+                   (insert msg "\n")))))))))))
 
 (defun gptel-auto-workflow--verify-staging ()
   "Run verification in the staging worktree.
@@ -5834,9 +5838,20 @@ least `gptel-auto-experiment-repeat-focus-threshold' previous attempts."
     (plist-get result :raw))
    (t nil)))
 
+(defun gptel-auto-experiment--subagent-error-output-p (raw)
+  "Return non-nil when RAW looks like a real subagent failure payload.
+Successful analyzer/comparator text can mention prior timeouts or failures in
+its narrative.  Those references must not be treated as retryable transport
+errors."
+  (and (stringp raw)
+       (or (string-match-p "\\`Error:" raw)
+           (string-match-p "\\`Warning:.*not available" raw)
+           (gptel-auto-experiment--aborted-agent-output-p raw))))
+
 (defun gptel-auto-experiment--retryable-aux-subagent-category (result)
   "Return retryable transient error category for RESULT, or nil."
   (when-let* ((raw (gptel-auto-experiment--subagent-raw-result result))
+              ((gptel-auto-experiment--subagent-error-output-p raw))
               (category (car (gptel-auto-experiment--categorize-error raw))))
     (when (or (memq category '(:timeout :api-rate-limit))
               (and (eq category :api-error)
@@ -6448,6 +6463,12 @@ Speculative or purely defensive hardening language does not count."
         (not
          (gptel-auto-experiment--speculative-correctness-language-p
           grade-signals)))))))
+
+(defun gptel-auto-experiment--normal-grade-details-p (grade-details)
+  "Return non-nil when GRADE-DETAILS is a normal rubric result."
+  (and (stringp grade-details)
+       (string-match-p "Grader result for task:[[:space:]]*Grade output" grade-details)
+       (string-match-p "SUMMARY:[[:space:]]*SCORE:" grade-details)))
 
 (defun gptel-auto-experiment--promote-correctness-fix-decision
     (decision tests-passed grade-score grade-total grade-details &optional hypothesis)
@@ -7448,6 +7469,8 @@ Only triggers on actual quota/rate limit errors, not general throttling."
 Prefer GRADE-DETAILS when the grader itself failed transiently; otherwise
 fall back to an error-shaped AGENT-OUTPUT."
   (cond
+   ((gptel-auto-experiment--normal-grade-details-p grade-details)
+    nil)
    ((and (stringp grade-details)
          (or (gptel-auto-experiment--agent-error-p grade-details)
              (gptel-auto-experiment--is-retryable-error-p grade-details)
@@ -7963,21 +7986,23 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                             ;; Grader failures should classify from grader details when
                                             ;; they carry the real transient/API error instead of the
                                             ;; executor's normal success output.
-                                            (let* ((grade-error-output
-                                                    (or (plist-get grade :error-source)
-                                                        (gptel-auto-experiment--grade-failure-error-output
-                                                         grade-details effective-agent-output)))
-                                                  (normal-grade-rejection
-                                                   (and (not grade-error-output)
-                                                        (not (plist-get grade :grader-only-failure))))
-                                                  (error-source (and (not normal-grade-rejection)
+                                            (let* ((normal-grade-rejection
+                                                    (gptel-auto-experiment--normal-grade-details-p
+                                                     grade-details))
+                                                   (grade-error-output
+                                                    (and (not normal-grade-rejection)
+                                                         (or (plist-get grade :error-source)
+                                                             (gptel-auto-experiment--grade-failure-error-output
+                                                              grade-details effective-agent-output))))
+                                                   (error-source (and (not normal-grade-rejection)
                                                                       (or grade-error-output effective-agent-output)))
-                                                   (error-info (and error-source
-                                                                    (gptel-auto-experiment--categorize-error
-                                                                     error-source)))
-                                                   (error-category (car-safe error-info))
-                                                   (grader-only-failure
-                                                    (plist-get grade :grader-only-failure)))
+                                                    (error-info (and error-source
+                                                                     (gptel-auto-experiment--categorize-error
+                                                                      error-source)))
+                                                    (error-category (car-safe error-info))
+                                                    (grader-only-failure
+                                                    (and (not normal-grade-rejection)
+                                                         (plist-get grade :grader-only-failure))))
                                               (setq finished t)
                                               ;; Log the failure
                                               (let ((exp-result (list :target target
@@ -8305,14 +8330,19 @@ LOG-FN receives deferred results as (RUN-ID EXPERIMENT)."
                                                                       (gptel-auto-experiment--extract-hypothesis retry-output))
                                                                      (retry-grade-details
                                                                       (plist-get retry-grade :details))
+                                                                     (normal-grade-rejection
+                                                                      (gptel-auto-experiment--normal-grade-details-p
+                                                                       retry-grade-details))
                                                                      (retry-grade-error-output
-                                                                      (or (plist-get retry-grade :error-source)
-                                                                          (gptel-auto-experiment--grade-failure-error-output
-                                                                           retry-grade-details retry-output)))
+                                                                      (and (not normal-grade-rejection)
+                                                                           (or (plist-get retry-grade :error-source)
+                                                                               (gptel-auto-experiment--grade-failure-error-output
+                                                                                retry-grade-details retry-output))))
                                                                      (grader-only-failure
-                                                                      (or (plist-get retry-grade :grader-only-failure)
-                                                                          (gptel-auto-experiment--grader-only-failure-p
-                                                                           retry-output retry-grade-error-output)))
+                                                                      (and (not normal-grade-rejection)
+                                                                           (or (plist-get retry-grade :grader-only-failure)
+                                                                               (gptel-auto-experiment--grader-only-failure-p
+                                                                                retry-output retry-grade-error-output))))
                                                                      (retry-error-category
                                                                       (and retry-grade-error-output
                                                                            (car (gptel-auto-experiment--categorize-error
