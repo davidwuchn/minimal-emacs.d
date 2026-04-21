@@ -8991,9 +8991,28 @@ Relative paths are resolved from the project root."
     (with-temp-file file
       (let ((print-length nil)
             (print-level nil))
-        (prin1 status (current-buffer))
-        (insert "\n")))
+         (prin1 status (current-buffer))
+         (insert "\n")))
     (gptel-auto-workflow--persist-messages-tail)))
+
+(defun gptel-auto-workflow--append-messages-line (text)
+  "Append TEXT to *Messages* without going through `message'."
+  (when (gptel-auto-workflow--non-empty-string-p text)
+    (with-current-buffer (get-buffer-create "*Messages*")
+      (let ((inhibit-read-only t))
+        (goto-char (point-max))
+        (unless (bolp)
+          (insert "\n"))
+        (insert text)
+        (unless (string-suffix-p "\n" text)
+          (insert "\n"))))))
+
+(defun gptel-auto-workflow--report-finalization-error (context err)
+  "Record a finalization failure for CONTEXT and ERR in *Messages*."
+  (gptel-auto-workflow--append-messages-line
+   (format "[auto-workflow] %s: %s"
+           context
+           (my/gptel--sanitize-for-logging (error-message-string err) 200))))
 
 (defun gptel-auto-workflow-read-persisted-status ()
   "Read the persisted workflow status snapshot, or nil if unavailable."
@@ -10064,16 +10083,33 @@ into staging or main."
                    (set-default-toplevel-value 'gptel-auto-workflow--running nil)
                    (set-default-toplevel-value 'gptel-auto-workflow--cron-job-running nil)
                    (set-default-toplevel-value 'gptel-auto-workflow--run-id nil)
-                   (set-default-toplevel-value 'gptel-auto-workflow--run-project-root nil)
-                   (set-default-toplevel-value 'gptel-auto-workflow--current-target nil)
-                   (set-default-toplevel-value 'gptel-auto-workflow--current-project nil)
-                   (setq gptel-auto-workflow--stats
-                         (plist-put gptel-auto-workflow--stats :phase final-phase))
-                  (message "[auto-workflow] Complete: %d experiments, %d targets improved"
-                           (length all-results) kept-count)
-                  (gptel-auto-workflow--persist-status)
-                  (when completion-callback
-                    (funcall completion-callback all-results)))))))))
+                    (set-default-toplevel-value 'gptel-auto-workflow--run-project-root nil)
+                    (set-default-toplevel-value 'gptel-auto-workflow--current-target nil)
+                    (set-default-toplevel-value 'gptel-auto-workflow--current-project nil)
+                    (setq gptel-auto-workflow--stats
+                          (plist-put gptel-auto-workflow--stats :phase final-phase))
+                   (condition-case err
+                       (gptel-auto-workflow--persist-status)
+                     (error
+                      (gptel-auto-workflow--report-finalization-error
+                       "Failed to persist completion status" err)))
+                   (condition-case err
+                       (message "[auto-workflow] Complete: %d experiments, %d targets improved"
+                                (length all-results) kept-count)
+                     (error
+                      (gptel-auto-workflow--report-finalization-error
+                       "Failed to log completion message" err)))
+                   (condition-case err
+                       (gptel-auto-workflow--persist-messages-tail)
+                     (error
+                      (gptel-auto-workflow--report-finalization-error
+                       "Failed to persist completion messages" err)))
+                   (when completion-callback
+                     (condition-case err
+                         (funcall completion-callback all-results)
+                       (error
+                        (gptel-auto-workflow--report-finalization-error
+                         "Completion callback failed" err)))))))))))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root
           gptel-auto-workflow--run-project-root proj-root)

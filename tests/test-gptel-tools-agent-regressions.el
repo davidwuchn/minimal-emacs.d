@@ -6307,8 +6307,75 @@ failure."
             (should (equal (plist-get final-status :run-id) "run-complete-env"))
             (should (equal (plist-get final-status :results)
                            "var/tmp/experiments/run-complete-env/results.tsv"))))
-      (dolist (file (list live-status-file live-messages-file
-                          isolated-status-file isolated-messages-file))
+       (dolist (file (list live-status-file live-messages-file
+                           isolated-status-file isolated-messages-file))
+         (when (file-exists-p file)
+           (delete-file file))))))
+
+(ert-deftest regression/auto-workflow/run-with-targets-persists-final-status-before-completion-log ()
+  "Final snapshots should persist even if the completion `message' path errors."
+  (let* ((status-file (make-temp-file "aw-final-status" nil ".sexp"))
+         (messages-file (make-temp-file "aw-final-messages" nil ".txt"))
+         (messages-buffer (get-buffer-create "*Messages*"))
+         (original-text nil)
+         (orig-message (symbol-function 'message))
+         (gptel-auto-workflow-status-file status-file)
+         (gptel-auto-workflow-messages-file messages-file)
+         (gptel-auto-workflow-messages-chars 2000)
+         (gptel-auto-workflow--messages-start-pos nil)
+         (gptel-auto-workflow--stats nil)
+         (gptel-auto-workflow--running t)
+         (gptel-auto-workflow--cron-job-running t)
+         (gptel-auto-workflow--run-id "run-final-log-failure")
+         (gptel-auto-workflow--status-run-id "run-final-log-failure")
+         (captured-callback nil)
+         (completed nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer messages-buffer
+            (setq original-text (buffer-string))
+            (let ((inhibit-read-only t))
+              (erase-buffer)))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+                     (lambda () "/tmp/project"))
+                    ((symbol-function 'gptel-auto-experiment-loop)
+                     (lambda (_target cb)
+                       (setq captured-callback cb)))
+                    ((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                     (lambda () nil))
+                    ((symbol-function 'gptel-auto-workflow--stop-status-refresh-timer)
+                     (lambda () nil))
+                    ((symbol-function 'message)
+                     (lambda (format-string &rest args)
+                       (if (and (stringp format-string)
+                                (string-prefix-p "[auto-workflow] Complete:" format-string))
+                           (error "final completion log failed")
+                         (apply orig-message format-string args)))))
+            (gptel-auto-workflow--run-with-targets
+             '("one")
+             (lambda (results)
+               (setq completed results)))
+            (funcall captured-callback '((:target "one" :kept t))))
+          (should (equal completed '((:target "one" :kept t))))
+          (should-not gptel-auto-workflow--running)
+          (should-not gptel-auto-workflow--cron-job-running)
+          (should-not gptel-auto-workflow--run-id)
+          (should (equal gptel-auto-workflow--status-run-id "run-final-log-failure"))
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running nil" (buffer-string)))
+            (should (string-match-p ":phase \"complete\"" (buffer-string)))
+            (should (string-match-p "run-final-log-failure" (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents messages-file)
+            (should (string-match-p
+                     "Failed to log completion message: final completion log failed"
+                     (buffer-string)))))
+      (with-current-buffer messages-buffer
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert original-text)))
+      (dolist (file (list status-file messages-file))
         (when (file-exists-p file)
           (delete-file file))))))
 
