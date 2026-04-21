@@ -590,6 +590,7 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
           (gptel--display-tool-calls calls info)))
 
        ((and (consp resp) (eq (car resp) 'tool-result))
+        (gptel-agent-loop--cleanup-overlay ov)
         nil)
 
        ((stringp resp)
