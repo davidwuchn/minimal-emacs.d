@@ -482,7 +482,7 @@ Assumes STATE is a valid task structure."
 Only continues if tools were called AND model seems to be
 planning without action.  Also checks continuation count
 limit for early exit."
-  (when (gptel-agent-loop--task-p state)
+  (when (and (listp state) (symbolp (car state)))
     (unless (stringp resp)
       (setq resp ""))
     (and gptel-agent-loop-force-completion
