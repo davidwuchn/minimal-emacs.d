@@ -532,6 +532,7 @@ Returns nil if curl is unavailable or a fetch is already in flight."
       (message "OpenRouter: curl not found")
       nil)
      (my/gptel--openrouter-context-window-fetch-inflight
+      (message "OpenRouter: fetch already in flight, skipping")
       nil)
      (t
       (let* ((key (condition-case err
