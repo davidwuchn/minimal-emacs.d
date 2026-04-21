@@ -1741,12 +1741,21 @@ TIMESTAMP defaults to `current-time'."
                                (my/gptel--path-within-directory-p dir activity-dir))
                           (and file
                                (my/gptel--path-within-directory-p file activity-dir))))
-             (my/gptel--agent-task-note-activity task-id activity-time))))
+              (my/gptel--agent-task-note-activity task-id activity-time))))
        my/gptel--agent-task-state))))
 
-(defun my/gptel--agent-task-note-message-activity (&rest _args)
-  "Treat worktree-context messages as executor activity."
-  (my/gptel--agent-task-note-context-activity))
+(defconst my/gptel--agent-task-nonactivity-message-formats
+  '("gptel: sanitizing nil :content on %s message"
+    "gptel: sanitizing :null :content on %s message"
+    "gptel: converting non-string :content on %s message: %S")
+  "Message format strings that should not count as executor progress.")
+
+(defun my/gptel--agent-task-note-message-activity (format-string &rest _args)
+  "Treat worktree-context messages as executor activity unless they are noise."
+  (unless (and (stringp format-string)
+               (member format-string
+                       my/gptel--agent-task-nonactivity-message-formats))
+    (my/gptel--agent-task-note-context-activity)))
 
 (unless (advice-member-p 'message #'my/gptel--agent-task-note-message-activity)
   (advice-add 'message :before #'my/gptel--agent-task-note-message-activity))
@@ -1989,12 +1998,24 @@ Uses hash table keyed by task-id to support parallel execution."
          (restore-origin-fsm
           (lambda (&optional expected-fsm)
             (when (buffer-live-p origin-buf)
-              (with-current-buffer origin-buf
-                (when (or (null expected-fsm)
-                          (eq gptel--fsm-last expected-fsm))
-                  (if parent-fsm-local-p
-                      (setq-local gptel--fsm-last parent-fsm)
-                    (kill-local-variable 'gptel--fsm-last)))))))
+              (let ((default-directory
+                      (or (my/gptel--first-existing-directory
+                           (and (buffer-live-p origin-buf)
+                                (buffer-local-value 'default-directory origin-buf))
+                           user-emacs-directory
+                           temporary-file-directory)
+                          temporary-file-directory)))
+                (condition-case err
+                    (with-current-buffer origin-buf
+                      (when (or (null expected-fsm)
+                                (eq gptel--fsm-last expected-fsm))
+                        (if parent-fsm-local-p
+                            (setq-local gptel--fsm-last parent-fsm)
+                          (kill-local-variable 'gptel--fsm-last))))
+                  (file-missing
+                   (message "[nucleus] Skipping FSM restore for %s after origin directory vanished: %s"
+                            agent-type
+                            (error-message-string err))))))))
          (wrapped-cb
           (lambda (result)
             (let* ((state (gethash task-id my/gptel--agent-task-state))

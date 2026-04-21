@@ -49,14 +49,17 @@
     (list "Read" "Edit" "Grep")))
 
 (defun test-pre-serialize-sanitize-messages (info _token)
-  "Sanitize nil :content in INFO."
+  "Sanitize unsupported message :content values in INFO."
   (when-let* ((data (plist-get info :data))
               (msgs (plist-get data :messages)))
     (cl-loop for msg across msgs
-             when (and (listp msg)
-                       (null (plist-get msg :content))
-                       (null (plist-get msg :tool_calls)))
-             do (plist-put msg :content ""))))
+             when (listp msg)
+             do
+             (let ((content (plist-get msg :content))
+                   (tool-calls (plist-get msg :tool_calls)))
+               (when (or (eq content :null)
+                         (and (null content) (null tool-calls)))
+                 (plist-put msg :content ""))))))
 
 (defun test-curl-parse-response-safe (orig proc-info)
   "Safe wrapper for curl response parsing."
@@ -147,12 +150,35 @@
     (test-pre-serialize-sanitize-messages info nil)
     (should (equal (plist-get msg :content) "hello"))))
 
+(ert-deftest core/sanitize/null-content-becomes-empty ()
+  "Should convert :null :content to empty string."
+  (let* ((msg '(:role "assistant" :content :null))
+         (info (list :data (list :messages (vector msg)))))
+    (test-pre-serialize-sanitize-messages info nil)
+    (should (equal (plist-get (aref (plist-get (plist-get info :data) :messages) 0)
+                              :content)
+                   ""))))
+
 (ert-deftest core/sanitize/ignores-tool-call-messages ()
   "Should not touch messages with :tool_calls."
   (let* ((msg '(:role "assistant" :content nil :tool_calls [(:id "1")]))
          (info (list :data (list :messages (vector msg)))))
     (test-pre-serialize-sanitize-messages info nil)
     (should (null (plist-get msg :content)))))
+
+(ert-deftest core/sanitize/null-tool-call-messages-are-silent ()
+  "Should sanitize :null tool-call messages without noisy warnings."
+  (let* ((msg '(:role "assistant" :content :null :tool_calls [(:id "1")]))
+         (info (list :data (list :messages (vector msg))))
+         (messages nil))
+    (cl-letf (((symbol-function 'message)
+               (lambda (format-string &rest args)
+                 (push (apply #'format format-string args) messages))))
+      (test-pre-serialize-sanitize-messages info nil))
+    (should (equal (plist-get (aref (plist-get (plist-get info :data) :messages) 0)
+                              :content)
+                   ""))
+    (should-not messages)))
 
 (ert-deftest core/sanitize/handles-empty-messages ()
   "Should handle empty messages array."
