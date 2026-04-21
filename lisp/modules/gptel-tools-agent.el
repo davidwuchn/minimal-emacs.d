@@ -7279,18 +7279,18 @@ A backend is considered rate-limited if it was marked within the
 cooldown period (`gptel-auto-workflow-rate-limit-cooldown-seconds').
 After the cooldown expires, the backend becomes available again."
   (when (stringp backend-name)
-    (when-let* ((entry (assoc backend-name gptel-auto-workflow--rate-limited-backends
-                              :test #'string=))
+    (when-let* ((entry (cl-assoc backend-name gptel-auto-workflow--rate-limited-backends
+                                 :test #'string=))
                 (timestamp (cdr entry))
                 (elapsed (- (float-time (current-time)) timestamp))
                 ((>= elapsed gptel-auto-workflow-rate-limit-cooldown-seconds)))
-      (cl-callf2 delq nil gptel-auto-workflow--rate-limited-backends)
       (setq gptel-auto-workflow--rate-limited-backends
-            (cl-remove-if (lambda (e) (null e))
+            (cl-remove-if (lambda (e)
+                            (and (consp e) (string= (car e) backend-name)))
                           gptel-auto-workflow--rate-limited-backends))
       nil)
-    (assoc backend-name gptel-auto-workflow--rate-limited-backends
-           :test #'string=)))
+    (cl-assoc backend-name gptel-auto-workflow--rate-limited-backends
+               :test #'string=)))
 
 (defun gptel-auto-workflow--rate-limited-backend-names ()
   "Return list of backend names currently rate-limited.
@@ -7401,9 +7401,9 @@ times before the workflow stops using it."
       (when (stringp current-backend)
         (unless already-limited
           (let* ((existing-count
-                  (or (cdr (assoc current-backend
-                                  gptel-auto-workflow--backend-failure-counts
-                                  :test #'string=))
+                  (or (cdr (cl-assoc current-backend
+                                     gptel-auto-workflow--backend-failure-counts
+                                     :test #'string=))
                       0))
                  (new-count (1+ existing-count)))
             (setq gptel-auto-workflow--backend-failure-counts
