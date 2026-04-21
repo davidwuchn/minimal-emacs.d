@@ -8995,7 +8995,11 @@ Relative paths are resolved from the project root."
             (print-level nil))
         (prin1 status (current-buffer))
         (insert "\n")))
-    (gptel-auto-workflow--persist-messages-tail)))
+    (condition-case err
+        (gptel-auto-workflow--persist-messages-tail)
+      (error
+       (message "[auto-workflow] Messages tail persist failed: %s"
+                (error-message-string err))))))
 
 (defun gptel-auto-workflow-read-persisted-status ()
   "Read the persisted workflow status snapshot, or nil if unavailable."
