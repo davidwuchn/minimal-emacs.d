@@ -294,6 +294,12 @@ Guards against delivering to a killed parent buffer by checking
         (gptel-agent-loop--cleanup-state state)
         (cl-return-from gptel-agent-loop--deliver-result)))
     (let ((main-cb (gptel-agent-loop--task-main-cb state)))
+      (unless (functionp main-cb)
+        (message "[RunAgent] Error: main callback is not a function for task '%s', dropping result"
+                 (gptel-agent-loop--task-description state))
+        (setf (gptel-agent-loop--task-finished state) t)
+        (gptel-agent-loop--cleanup-state state)
+        (cl-return-from gptel-agent-loop--deliver-result))
       (unless (gptel-agent-loop--task-finished state)
         (setf (gptel-agent-loop--task-finished state) t)
         (gptel-agent-loop--cleanup-state state)
