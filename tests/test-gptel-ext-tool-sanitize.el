@@ -316,6 +316,94 @@
       (should (equal (plist-get state :file) "/tmp/test.el"))
       (should (= (plist-get state :count) 1)))))
 
+(ert-deftest sanitize/inspection-thrash/large-file-gets-extra-headroom ()
+  "Large files should receive extra same-file inspection headroom."
+  (require 'gptel-ext-tool-sanitize)
+  (let ((file (make-temp-file "gptel-inspection-thrash-large" nil ".el")))
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert (make-string 4096 ?x)))
+          (let ((my/gptel-inspection-thrash-threshold 25)
+                (my/gptel-inspection-thrash-bytes-per-extra-step 1024)
+                (my/gptel-inspection-thrash-max-extra 10))
+            (should (= (my/gptel--inspection-thrash-threshold-for-file file) 29))))
+      (when (file-exists-p file)
+        (delete-file file)))))
+
+(ert-deftest sanitize/inspection-thrash/large-file-waits-for-expanded-threshold ()
+  "Large files should not abort at the base threshold alone."
+  (require 'gptel-ext-tool-sanitize)
+  (let* ((file (make-temp-file "gptel-inspection-thrash-large" nil ".el"))
+         (tc nil)
+         (info nil)
+         (fsm nil)
+         transition)
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert (make-string 4096 ?x)))
+          (setq tc `(:name "Code_Inspect"
+                           :args (:file_path ,file :node_name "next-node")))
+          (setq info (list :tool-use (list tc)
+                           :callback (lambda (&rest _args))
+                           :inspection-thrash-state (list :file file :count 24)))
+          (setq fsm (gptel-make-fsm :info info))
+          (let ((my/gptel-inspection-thrash-threshold 25)
+                (my/gptel-inspection-thrash-bytes-per-extra-step 1024)
+                (my/gptel-inspection-thrash-max-extra 10))
+            (cl-letf (((symbol-function 'gptel--fsm-transition)
+                       (lambda (_fsm state)
+                         (setq transition state))))
+              (my/gptel--detect-inspection-thrash fsm)))
+          (should-not transition)
+          (let ((state (plist-get (gptel-fsm-info fsm) :inspection-thrash-state)))
+            (should (equal (plist-get state :file) file))
+            (should (= (plist-get state :count) 25))))
+      (when (file-exists-p file)
+        (delete-file file)))))
+
+(ert-deftest sanitize/inspection-thrash/large-file-triggers-at-expanded-threshold ()
+  "Large files should still abort once the expanded threshold is reached."
+  (require 'gptel-ext-tool-sanitize)
+  (let* ((file (make-temp-file "gptel-inspection-thrash-large" nil ".el"))
+         (request-buffer (generate-new-buffer " *inspection-thrash-large*"))
+         logged-message
+         callback-message
+         transition)
+    (unwind-protect
+        (progn
+          (with-temp-file file
+            (insert (make-string 4096 ?x)))
+          (let* ((tc `(:name "Code_Inspect"
+                             :args (:file_path ,file :node_name "next-node")))
+                 (info (list :tool-use (list tc)
+                             :buffer request-buffer
+                             :inspection-thrash-state (list :file file :count 28)))
+                 (fsm (gptel-make-fsm :info info)))
+            (plist-put info :callback
+                       (lambda (msg _info)
+                         (setq callback-message msg)))
+            (let ((my/gptel-inspection-thrash-threshold 25)
+                  (my/gptel-inspection-thrash-bytes-per-extra-step 1024)
+                  (my/gptel-inspection-thrash-max-extra 10))
+              (cl-letf (((symbol-function 'gptel--fsm-transition)
+                         (lambda (_fsm state)
+                           (setq transition state)))
+                        ((symbol-function 'my/gptel-abort-here)
+                         (lambda ()))
+                        ((symbol-function 'message)
+                         (lambda (fmt &rest args)
+                           (setq logged-message (apply #'format fmt args)))))
+                (my/gptel--detect-inspection-thrash fsm)))
+            (should (eq transition 'DONE))
+            (should (string-match-p "29 read-only inspections" logged-message))
+            (should (string-match-p "29 consecutive read-only inspections" callback-message))))
+      (when (buffer-live-p request-buffer)
+        (kill-buffer request-buffer))
+      (when (file-exists-p file)
+        (delete-file file)))))
+
 ;;; ========================================
 ;;; Tests for sanitize-tool-calls scenarios
 ;;; ========================================
