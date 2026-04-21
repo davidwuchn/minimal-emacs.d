@@ -3968,7 +3968,7 @@ The returned plist contains:
 Calls CALLBACK with (approved-p . review-output).
 Reviewer checks for Blocker/Critical issues."
   (if (not gptel-auto-workflow-require-review)
-      (funcall callback (cons t "Review disabled by config"))
+      (my/gptel--invoke-callback-safely callback (cons t "Review disabled by config"))
     (let* ((proj-root (gptel-auto-workflow--project-root))
            (worktree (car (gptel-auto-workflow--branch-worktree-paths
                            optimize-branch proj-root)))
@@ -4038,7 +4038,7 @@ Maximum response: 1000 characters."
                   callback
                   (cons approved response))))
              review-timeout))
-        (funcall callback (cons t "No reviewer agent available, auto-approving"))))))
+        (my/gptel--invoke-callback-safely callback (cons t "No reviewer agent available, auto-approving"))))))
 
 (defun gptel-auto-workflow--review-approved-p (response)
   "Return non-nil when RESPONSE approves a staging review.
