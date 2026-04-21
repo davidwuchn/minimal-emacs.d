@@ -7115,6 +7115,20 @@ at run start and whenever workflow state is force-reset.")
 All matching headless subagents skip these backends for the rest of the run
 and advance through the configured fallback chain instead.")
 
+(defvar gptel-auto-workflow--backend-failure-counts nil
+  "Per-run failure count per backend before marking as rate-limited.
+
+Each element is (BACKEND . COUNT). Backend is only added to
+rate-limited-backends after reaching `gptel-auto-workflow--backend-rate-limit-failure-threshold'
+consecutive failures. This prevents single errors from permanently skipping a backend.")
+
+(defcustom gptel-auto-workflow-backend-rate-limit-failure-threshold 3
+  "Number of consecutive failures before a backend is marked as rate-limited.
+Lower values make fallback trigger faster but risk skipping good backends.
+Higher values try harder on the primary backend before falling back."
+  :type 'integer
+  :group 'gptel-tools-agent)
+
 (defconst gptel-auto-workflow--backend-key-hosts
   '(("MiniMax" . "api.minimaxi.com")
     ("DeepSeek" . "api.deepseek.com")
@@ -7220,7 +7234,8 @@ can use newer models without a restart."
 (defun gptel-auto-workflow--clear-runtime-subagent-provider-overrides ()
   "Reset per-run provider failover state."
   (setq gptel-auto-workflow--runtime-subagent-provider-overrides nil
-        gptel-auto-workflow--rate-limited-backends nil))
+        gptel-auto-workflow--rate-limited-backends nil
+        gptel-auto-workflow--backend-failure-counts nil))
 
 (defun gptel-auto-workflow--rate-limit-failover-candidates (agent-type)
   "Return fallback provider candidates for AGENT-TYPE after rate limiting."
@@ -7341,9 +7356,11 @@ name strings."
     override))
 
 (defun gptel-auto-workflow--activate-provider-failover (agent-type preset &optional reason)
-  "Mark PRESET's backend unavailable for this run and fail AGENT-TYPE over.
+  "Increment failure count for PRESET's backend; mark as rate-limited after threshold.
 
-REASON is only used for logging."
+REASON is only used for logging. This implements retry-before-failover:
+a backend must fail `gptel-auto-workflow-backend-rate-limit-failure-threshold'
+times before the workflow stops using it."
   (when (and (gptel-auto-workflow--headless-provider-override-active-p)
              (stringp agent-type)
              (listp preset))
@@ -7351,26 +7368,47 @@ REASON is only used for logging."
             (gptel-auto-workflow--preset-backend-name
              (plist-get preset :backend)))
            (current-model (plist-get preset :model))
-           (candidate nil))
+           (candidate nil)
+           (already-limited
+            (gptel-auto-workflow--backend-rate-limited-p current-backend)))
       (when (stringp current-backend)
-        (cl-pushnew current-backend
-                    gptel-auto-workflow--rate-limited-backends
-                    :test #'string=)
-        (setq candidate
-              (gptel-auto-workflow--runtime-provider-failover-candidate
-               agent-type preset)))
-      (when candidate
-        (message "[auto-workflow] Provider failure on %s/%s for %s%s; future retries will use %s/%s"
-                 (or current-backend "unknown")
-                 (or current-model "unknown")
-                 agent-type
-                 (if (and (stringp reason) (not (string-empty-p reason)))
-                     (format " (%s)"
-                             (my/gptel--sanitize-for-logging reason 120))
-                   "")
-                 (car candidate)
-                 (cdr candidate)))
-      candidate)))
+        (unless already-limited
+          (let* ((existing-count
+                  (or (cdr (assoc current-backend
+                                  gptel-auto-workflow--backend-failure-counts
+                                  :test #'string=))
+                      0))
+                 (new-count (1+ existing-count)))
+            (setq gptel-auto-workflow--backend-failure-counts
+                  (cons (cons current-backend new-count)
+                        (cl-remove-if
+                         (lambda (pair) (string= (car pair) current-backend))
+                         gptel-auto-workflow--backend-failure-counts
+                         :test t)))
+            (message "[auto-workflow] Provider pressure on %s/%s for %s (failure %d/%d)"
+                     (or current-backend "unknown")
+                     (or current-model "unknown")
+                     agent-type
+                     new-count
+                     gptel-auto-workflow-backend-rate-limit-failure-threshold)
+            (when (>= new-count gptel-auto-workflow-backend-rate-limit-failure-threshold)
+              (cl-pushnew current-backend
+                          gptel-auto-workflow--rate-limited-backends
+                          :test #'string=)
+              (setq candidate
+                    (gptel-auto-workflow--runtime-provider-failover-candidate
+                     agent-type preset))
+              (when candidate
+                (message "[auto-workflow] Provider failure threshold reached on %s/%s for %s%s; future retries will use %s/%s"
+                         (or current-backend "unknown")
+                         (or current-model "unknown")
+                         agent-type
+                         (if (and (stringp reason) (not (string-empty-p reason)))
+                             (format " (%s)"
+                                     (my/gptel--sanitize-for-logging reason 120))
+                           "")
+                         (car candidate)
+                         (cdr candidate)))))))))))
 
 (defun gptel-auto-workflow--maybe-activate-rate-limit-failover (agent-type preset result)
   "Activate a per-run fallback for AGENT-TYPE when RESULT shows provider pressure."
@@ -7446,15 +7484,13 @@ Only triggers on actual quota/rate limit errors, not general throttling."
           error-output))))
 
 (defun gptel-auto-experiment--provider-pressure-error-p (error-output)
-  "Return non-nil when ERROR-OUTPUT suggests trying a fallback backend."
+  "Return non-nil when ERROR-OUTPUT suggests trying a fallback backend.
+
+Be conservative: only trigger fallback for actual quota/rate-limit errors.
+Generic timeouts and server errors may be transient and recover on retry."
   (or (gptel-auto-experiment--rate-limit-error-p error-output)
       (gptel-auto-experiment--provider-auth-error-p error-output)
-      (gptel-auto-experiment--shared-transient-error-p error-output)
-      (and (stringp error-output)
-           (let ((case-fold-search t))
-             (string-match-p
-               "WebClientRequestException\\|server_error\\|curl failed with exit code 28\\|curl failed with exit code 56\\|operation timed out"
-               error-output)))))
+      (gptel-auto-experiment--shared-transient-error-p error-output)))
 
 (defun gptel-auto-experiment--retry-delay-seconds (error-output retries)
   "Return retry delay for ERROR-OUTPUT after RETRIES previous attempts."
