@@ -362,8 +362,8 @@ a RunAgent task has finished successfully.")
 
 (defun gptel-agent-loop--compile-patterns (patterns)
   "Compile PATTERNS list into a single combined regex string.
-Returns nil if patterns list is empty."
-  (when patterns
+Returns nil if patterns list is empty or contains non-string elements."
+  (when (and patterns (cl-every #'stringp patterns))
     (mapconcat (lambda (p) (concat "\\(" p "\\)")) patterns "\\|")))
 
 (defun gptel-agent-loop--ensure-patterns-compiled ()
@@ -379,13 +379,14 @@ Call once after definitions to pre-compile regex patterns."
         (gptel-agent-loop--compile-patterns gptel-agent-loop--finishing-patterns)))
 
 (defun gptel-agent-loop--matches-any-pattern (text patterns)
-  "Return non-nil when TEXT matches any pattern in PATTERNS.
+  "Return non-nil when TEXT matches any string in PATTERNS.
+Returns nil if TEXT is not a string or PATTERNS is not a list of strings.
 Patterns are matched case-insensitively."
   (and (stringp text)
+       (cl-every #'stringp patterns)
        (cl-some (lambda (pattern)
-                  (ignore-errors
-                    (let ((case-fold-search t))
-                      (string-match-p pattern text))))
+                  (let ((case-fold-search t))
+                    (string-match-p pattern text)))
                 patterns)))
 
 (defun gptel-agent-loop--seems-complete-p (resp)
