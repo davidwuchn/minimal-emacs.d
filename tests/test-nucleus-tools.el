@@ -211,6 +211,17 @@
   (should (= 0 (gptel-tools-grep--normalize-context-lines -3)))
   (should (equal "many" (gptel-tools-grep--normalize-context-lines "many"))))
 
+(ert-deftest test-nucleus-tools-grep-prompt-signature-matches-registered-args ()
+  "The Grep tool prompt should advertise the registered Grep arg names."
+  (require 'nucleus-prompts)
+  (require 'nucleus-tools-validate)
+  (nucleus-load-tool-prompts)
+  (let* ((prompt (alist-get 'Grep nucleus-tool-prompts))
+         (signature (and prompt
+                         (nucleus--extract-prompt-signature 'Grep prompt))))
+    (should (stringp prompt))
+    (should (equal signature '(regex path glob context_lines)))))
+
 ;;; Provide
 
 (provide 'test-nucleus-tools)

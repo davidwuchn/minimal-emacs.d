@@ -112,6 +112,10 @@ run_e2e_tests() {
     local complete_messages_file=""
     local complete_runtime_dir=""
     local complete_server=""
+    local live_messages_status_file=""
+    local live_messages_file=""
+    local live_messages_runtime_dir=""
+    local live_messages_server=""
     local daemon_ready=0
     local status_output=""
     
@@ -244,6 +248,97 @@ run_e2e_tests() {
 
     rm -f "$complete_status_file" "$complete_messages_file"
     rm -rf "$complete_runtime_dir"
+
+    echo ""
+    echo "Checking live messages refresh..."
+    live_messages_status_file="$(mktemp "${TMPDIR:-/tmp}/auto-workflow-live-status.XXXXXX")" || {
+        fail "Failed to create live-messages status file"
+        return 1
+    }
+    live_messages_file="$(mktemp "${TMPDIR:-/tmp}/auto-workflow-live-messages.XXXXXX")" || {
+        rm -f "$live_messages_status_file"
+        fail "Failed to create live-messages file"
+        return 1
+    }
+    live_messages_runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/auto-workflow-live-runtime.XXXXXX")" || {
+        rm -f "$live_messages_status_file" "$live_messages_file"
+        fail "Failed to create live-messages runtime dir"
+        return 1
+    }
+    chmod 700 "$live_messages_runtime_dir"
+    live_messages_server="aw-live-msg-$$"
+
+    printf '%s\n' '(:running t :kept 0 :total 3 :phase "running" :run-id "live-messages" :results "var/tmp/experiments/live-messages/results.tsv")' >"$live_messages_status_file"
+    printf '%s\n' '[auto-workflow] stale persisted tail' >"$live_messages_file"
+    touch -d '2 minutes ago' "$live_messages_file"
+
+    daemon_ready=0
+    env -u DISPLAY -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u XAUTHORITY \
+        XDG_RUNTIME_DIR="$live_messages_runtime_dir" \
+        emacs --init-directory="$DIR" --bg-daemon="$live_messages_server" >/dev/null 2>&1 || true
+
+    for _ in $(seq 1 50); do
+        if env XDG_RUNTIME_DIR="$live_messages_runtime_dir" \
+           emacsclient -a false -s "$live_messages_server" --eval "t" >/dev/null 2>&1; then
+            daemon_ready=1
+            break
+        fi
+        sleep 0.2
+    done
+
+    if [ "$daemon_ready" -ne 1 ]; then
+        env XDG_RUNTIME_DIR="$live_messages_runtime_dir" \
+            emacsclient -a false -s "$live_messages_server" --eval "(kill-emacs)" >/dev/null 2>&1 || true
+        rm -f "$live_messages_status_file" "$live_messages_file"
+        rm -rf "$live_messages_runtime_dir"
+        fail "Live-messages test daemon did not start"
+        return 1
+    fi
+
+    env XDG_RUNTIME_DIR="$live_messages_runtime_dir" \
+        emacsclient -a false -s "$live_messages_server" --eval \
+        "(progn
+           (load-file \"$DIR/lisp/modules/gptel-tools-agent.el\")
+           (setq gptel-auto-workflow--stats '(:phase \"running\" :total 3 :kept 0)
+                 gptel-auto-workflow--running t
+                 gptel-auto-workflow--run-id \"live-messages\"
+                 gptel-auto-workflow--current-target \"lisp/modules/gptel-agent-loop.el\")
+           (with-current-buffer (get-buffer-create \"*Messages*\")
+             (let ((inhibit-read-only t))
+               (goto-char (point-max))
+               (insert \"[auto-workflow] live daemon message sentinel\\n\")))
+           t)" >/dev/null 2>&1 || {
+        env XDG_RUNTIME_DIR="$live_messages_runtime_dir" \
+            emacsclient -a false -s "$live_messages_server" --eval "(kill-emacs)" >/dev/null 2>&1 || true
+        rm -f "$live_messages_status_file" "$live_messages_file"
+        rm -rf "$live_messages_runtime_dir"
+        fail "Failed to seed daemon with live messages state"
+        return 1
+    }
+
+    if status_output=$(AUTO_WORKFLOW_STATUS_FILE="$live_messages_status_file" \
+        AUTO_WORKFLOW_MESSAGES_FILE="$live_messages_file" \
+        AUTO_WORKFLOW_EMACS_SERVER="$live_messages_server" \
+        XDG_RUNTIME_DIR="$live_messages_runtime_dir" \
+        AUTO_WORKFLOW_ACTIVE_SNAPSHOT_TTL=45 \
+        "$RUNNER" messages) &&
+       grep -q 'live daemon message sentinel' <<< "$status_output" &&
+       grep -q 'live daemon message sentinel' "$live_messages_file" &&
+       ! grep -q 'stale persisted tail' "$live_messages_file"; then
+        pass "wrapper refreshes stale messages from active daemon"
+    else
+        env XDG_RUNTIME_DIR="$live_messages_runtime_dir" \
+            emacsclient -a false -s "$live_messages_server" --eval "(kill-emacs)" >/dev/null 2>&1 || true
+        rm -f "$live_messages_status_file" "$live_messages_file"
+        rm -rf "$live_messages_runtime_dir"
+        fail "wrapper kept stale messages while daemon was active"
+        return 1
+    fi
+
+    env XDG_RUNTIME_DIR="$live_messages_runtime_dir" \
+        emacsclient -a false -s "$live_messages_server" --eval "(kill-emacs)" >/dev/null 2>&1 || true
+    rm -f "$live_messages_status_file" "$live_messages_file"
+    rm -rf "$live_messages_runtime_dir"
     
     # Cron configuration
     echo ""

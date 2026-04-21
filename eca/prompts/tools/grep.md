@@ -1,3 +1,3 @@
 ```
-λ(p,pat,inc,max). grep(pat∈contents) | p:abs | pat:regex | inc:glob(*.ext) | max:limit | ret:paths(line-sep)
+λ(regex,path,glob?,context_lines?). grep(regex∈contents) | path:abs | glob:glob(*.ext) | context_lines:int≤30 | ret:paths(line-sep)
 ```

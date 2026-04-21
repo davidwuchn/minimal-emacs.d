@@ -301,18 +301,62 @@ status_can_use_persisted_active_snapshot() {
     status_indicates_active_phase || return 1
     status_has_live_run_id || return 1
 
+    case "$ACTION" in
+        messages)
+            if messages_snapshot_fresh && ! daemon_socket_has_owner; then
+                return 0
+            fi
+            ;;
+        status)
+            if status_snapshot_fresh && ! daemon_socket_has_owner; then
+                return 0
+            fi
+            ;;
+        *)
+            if { status_snapshot_fresh || messages_snapshot_fresh; } &&
+               ! daemon_socket_has_owner; then
+                return 0
+            fi
+            ;;
+    esac
+
     if check_worker_daemon; then
         if daemon_reports_active_workflow; then
-            return 0
+            case "$ACTION" in
+                messages)
+                    messages_snapshot_fresh
+                    ;;
+                status)
+                    status_snapshot_fresh
+                    ;;
+                *)
+                    status_snapshot_fresh || messages_snapshot_fresh
+                    ;;
+            esac
+            return $?
         else
             rc=$?
             if [ "$rc" -eq 1 ]; then
                 return 1
+            elif [ "$rc" -eq 2 ]; then
+                return 0
             fi
+        fi
+    else
+        rc=$?
+        if [ "$rc" -eq 2 ]; then
+            return 0
         fi
     fi
 
-    status_snapshot_fresh || messages_snapshot_fresh || daemon_socket_has_owner
+    case "$ACTION" in
+        messages)
+            messages_snapshot_fresh || daemon_socket_has_owner
+            ;;
+        *)
+            status_snapshot_fresh || messages_snapshot_fresh || daemon_socket_has_owner
+            ;;
+    esac
 }
 
 rewrite_status_idle() {
