@@ -423,9 +423,12 @@ Returns non-nil if error state was handled."
     (gptel-auto-workflow--normalize-target-candidate item))
    ((gptel-auto-workflow--json-object-p item)
     (gptel-auto-workflow--normalize-target-candidate
-     (or (alist-get 'file item)
-         (alist-get 'path item)
-         (alist-get 'target item))))
+     (or (cl-getf item 'file)
+         (cl-getf item "file")
+         (cl-getf item 'path)
+         (cl-getf item "path")
+         (cl-getf item 'target)
+         (cl-getf item "target"))))
    (t nil)))
 
 (defun gptel-auto-workflow--nonempty-string-p (s)
@@ -453,9 +456,12 @@ Logs parsing failures for debugging."
                    (target-list
                     (cond
                      ((gptel-auto-workflow--json-object-p data)
-                      (or (alist-get 'targets data)
-                          (alist-get 'files data)
-                          (alist-get 'paths data)
+                      (or (cl-getf data 'targets)
+                          (cl-getf data "targets")
+                          (cl-getf data 'files)
+                          (cl-getf data "files")
+                          (cl-getf data 'paths)
+                          (cl-getf data "paths")
                           (and (gptel-auto-workflow--json-target-file data)
                                (list data))))
                      ((listp data) data)))
