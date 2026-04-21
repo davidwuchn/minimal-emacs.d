@@ -481,7 +481,8 @@ Filters to only bound variables."
                (tokens (my/gptel--normalize-context-window cw))
                (id (my/gptel--model-id-string model)))
           (when (and (stringp id) (integerp tokens) (> tokens 0))
-            (puthash id tokens my/gptel--context-window-cache)))))))
+            (puthash id tokens my/gptel--context-window-cache)
+            (puthash id plist my/gptel--model-metadata-cache)))))))
 
 (defun my/gptel--openrouter-curl-command (url connect-timeout max-time key)
   "Build curl command list for OpenRouter API request.

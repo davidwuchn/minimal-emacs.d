@@ -294,6 +294,12 @@ Guards against delivering to a killed parent buffer by checking
         (gptel-agent-loop--cleanup-state state)
         (cl-return-from gptel-agent-loop--deliver-result)))
     (let ((main-cb (gptel-agent-loop--task-main-cb state)))
+      (unless (functionp main-cb)
+        (message "[RunAgent] Error: main callback is not a function for task '%s', dropping result"
+                 (gptel-agent-loop--task-description state))
+        (setf (gptel-agent-loop--task-finished state) t)
+        (gptel-agent-loop--cleanup-state state)
+        (cl-return-from gptel-agent-loop--deliver-result))
       (unless (gptel-agent-loop--task-finished state)
         (setf (gptel-agent-loop--task-finished state) t)
         (gptel-agent-loop--cleanup-state state)
@@ -522,8 +528,8 @@ Extracted from duplicate abort handling patterns."
 
 (defun gptel-agent-loop--should-retry-p (state error-data)
   "Return non-nil when STATE should retry after ERROR-DATA.
-Retries when error is transient (or absent) and retry budget remains."
-  (and (or (null error-data) (gptel-agent-loop--transient-error-p error-data))
+Retries when error is transient and retry budget remains."
+  (and (gptel-agent-loop--transient-error-p error-data)
        (< (gptel-agent-loop--task-retries state)
           gptel-agent-loop-max-retries)))
 
@@ -610,7 +616,7 @@ Returns non-nil if result was delivered."
        (gptel-agent-loop--build-final-result state "[empty response]")))
     t))
 
-(defun gptel-agent-loop--handle-max-steps-reached (state resp)
+(defun gptel-agent-loop--handle-max-steps-reached (state _resp)
   "Handle STATE when max steps were reached and RESP is final turn.
 Returns non-nil if result was delivered."
   (when (and (gptel-agent-loop--task-max-steps-reached state)
@@ -621,11 +627,11 @@ Returns non-nil if result was delivered."
       (gptel-agent-loop--deliver-result
        state
        (format "%s\n\n[RUNAGENT_INCOMPLETE:%d steps]"
-               (gptel-agent-loop--build-final-result state resp)
+               (gptel-agent-loop--build-final-result state "")
                (gptel-agent-loop--task-step-count state))))
     t))
 
-(defun gptel-agent-loop--handle-summary-turn (state resp use-tools)
+(defun gptel-agent-loop--handle-summary-turn (state _resp use-tools)
   "Handle STATE when summary was requested and RESP is summary turn.
 USE-TOOLS indicates whether tools were requested.
 Returns non-nil if result was delivered."
@@ -633,7 +639,7 @@ Returns non-nil if result was delivered."
              (not use-tools))
     (gptel-agent-loop--deliver-result
      state
-     (gptel-agent-loop--build-final-result state resp)
+     (gptel-agent-loop--build-final-result state "")
      t)
     t))
 
@@ -647,16 +653,15 @@ Returns non-nil if result was delivered."
              (gptel-agent-loop--task-step-count state)
              (gptel-agent-loop--continuation-count state)
              gptel-agent-loop-max-continuations)
-    (gptel-agent-loop--append-output state resp)
     (gptel-agent-loop--schedule-request state (gptel-agent-loop--continuation-prompt-for state) t)
     t))
 
-(defun gptel-agent-loop--handle-final-response (state resp)
+(defun gptel-agent-loop--handle-final-response (state _resp)
   "Handle STATE when RESP is a final response to deliver.
 Returns non-nil if result was delivered."
   (gptel-agent-loop--deliver-result
    state
-   (gptel-agent-loop--build-final-result state resp)
+   (gptel-agent-loop--build-final-result state "")
    t)
   t)
 
