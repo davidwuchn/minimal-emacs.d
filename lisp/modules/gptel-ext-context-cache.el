@@ -808,7 +808,7 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
   (require 'gptel)
   (let ((model-id (my/gptel--model-id-string gptel-model)))
     (cond
-     ((not (stringp model-id)) my/gptel-default-context-window)
+     ((string= model-id "nil") my/gptel-default-context-window)
      ((my/gptel--cache-or-alist-lookup my/gptel--context-window-cache
                                        my/gptel--known-model-context-windows
                                        model-id))
