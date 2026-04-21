@@ -339,14 +339,15 @@ Reduces duplication of `(or (plist-get ...) default-value)` patterns."
   "Look up context window for MODEL in gptel's built-in model tables.
 Returns the context window in tokens, or nil if not found.
 Handles both symbol and string model identifiers with case-insensitive fallback."
-  (let ((model-sym (cond
-                    ((symbolp model) model)
-                    ((stringp model) (intern-soft model))
-                    (t nil)))
-        (model-str (cond
-                    ((stringp model) model)
-                    ((symbolp model) (symbol-name model))
-                    (t nil))))
+  (let* ((model (or model gptel-model))
+         (model-sym (cond
+                      ((symbolp model) model)
+                      ((stringp model) (intern-soft model))
+                      (t nil)))
+         (model-str (cond
+                      ((stringp model) model)
+                      ((symbolp model) (symbol-name model))
+                      (t nil))))
     (when (or model-sym model-str)
       (cl-some
        (lambda (var)
