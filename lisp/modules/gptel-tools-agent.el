@@ -7524,27 +7524,49 @@ retrying on that provider instead."
        (not (gptel-auto-experiment--remaining-provider-failover-candidate
              agent-type))))
 
-(defun gptel-auto-experiment--note-api-pressure (target error-category error-source &optional agent-type)
-  "Record shared API pressure state for TARGET after ERROR-CATEGORY from ERROR-SOURCE.
+(cl-defun gptel-auto-experiment--note-api-pressure (target error-category error-source
+                                                           &optional agent-type
+                                                           (escalate-run-pressure t))
+  "Record API pressure state for TARGET after ERROR-CATEGORY from ERROR-SOURCE.
 
-AGENT-TYPE is the subagent that produced ERROR-SOURCE, when known."
+AGENT-TYPE is the subagent that produced ERROR-SOURCE, when known.
+When ESCALATE-RUN-PRESSURE is nil, log provider pressure without incrementing
+the shared run-wide API counter or stopping the rest of the workflow."
   (when (memq error-category '(:api-rate-limit :api-error))
-    (cl-incf gptel-auto-experiment--api-error-count)
-    (message "[auto-workflow] API error #%d: %s"
-             gptel-auto-experiment--api-error-count error-category)
-    (when (gptel-auto-experiment--hard-quota-exhausted-p error-source)
-      (if-let ((remaining
-                (gptel-auto-experiment--remaining-provider-failover-candidate
-                 (or agent-type "executor"))))
-          (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
-                   (or agent-type "subagent")
-                   (car remaining)
-                   (cdr remaining))
-        (setq gptel-auto-experiment--quota-exhausted t)
-        (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run")))
-    (when (>= gptel-auto-experiment--api-error-count gptel-auto-experiment--api-error-threshold)
-      (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
-               target))))
+    (let* ((resolved-agent-type (or agent-type "executor"))
+           (hard-quota (gptel-auto-experiment--hard-quota-exhausted-p error-source)))
+      (if escalate-run-pressure
+          (progn
+            (cl-incf gptel-auto-experiment--api-error-count)
+            (message "[auto-workflow] API error #%d: %s"
+                     gptel-auto-experiment--api-error-count error-category)
+            (when hard-quota
+              (if-let ((remaining
+                        (gptel-auto-experiment--remaining-provider-failover-candidate
+                         resolved-agent-type)))
+                  (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
+                           resolved-agent-type
+                           (car remaining)
+                           (cdr remaining))
+                (setq gptel-auto-experiment--quota-exhausted t)
+                (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run")))
+            (when (>= gptel-auto-experiment--api-error-count
+                      gptel-auto-experiment--api-error-threshold)
+              (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
+                       target)))
+        (progn
+          (message "[auto-workflow] Local API pressure on %s for %s; keeping run-wide pressure unchanged"
+                   resolved-agent-type target)
+          (when hard-quota
+            (if-let ((remaining
+                      (gptel-auto-experiment--remaining-provider-failover-candidate
+                       resolved-agent-type)))
+                (message "[auto-workflow] Provider hard quota on %s; continuing with %s/%s"
+                         resolved-agent-type
+                         (car remaining)
+                         (cdr remaining))
+              (message "[auto-workflow] Provider quota exhausted for %s; continuing other workflow work"
+                       resolved-agent-type))))))))
 
 (defun gptel-auto-experiment--grade-with-retry (output callback &optional retry-count)
   "Grade OUTPUT and locally retry transient grader failures.
@@ -7566,15 +7588,15 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
               (error-category (car error-info))
               (grader-only-failure
                (gptel-auto-experiment--grader-only-failure-p output grade-error-output)))
-         (if (and (not grade-passed)
-                  (gptel-auto-experiment--should-retry-grader-p
-                   output grade-error-output error-category retries))
-             (progn
+          (if (and (not grade-passed)
+                   (gptel-auto-experiment--should-retry-grader-p
+                    output grade-error-output error-category retries))
+              (progn
                 (gptel-auto-experiment--note-api-pressure
-                 target error-category grade-error-output "grader")
-               (let ((retry-delay
-                      (gptel-auto-experiment--retry-delay-seconds
-                       grade-error-output retries)))
+                 target error-category grade-error-output "grader" nil)
+                (let ((retry-delay
+                       (gptel-auto-experiment--retry-delay-seconds
+                        grade-error-output retries)))
                  (message "[auto-exp] Retrying grader (attempt %d/%d) after %ds delay"
                           (1+ retries) gptel-auto-experiment-max-grader-retries retry-delay)
                  (run-with-timer
@@ -7594,13 +7616,15 @@ CALLBACK receives the final grade plist. RETRY-COUNT tracks local grader retries
                           (setq final-grade
                                 (plist-put final-grade :grader-only-failure t)))
                         (funcall callback final-grade)))))))
-           (when (and (not grade-passed)
-                      (memq error-category '(:api-rate-limit :api-error)))
+            (when (and (not grade-passed)
+                       (memq error-category '(:api-rate-limit :api-error)))
               (gptel-auto-experiment--note-api-pressure
-               target error-category error-source "grader"))
-           (let ((final-grade (copy-sequence grade)))
-             (when grade-error-output
-               (setq final-grade
+               target error-category error-source
+               (if grader-only-failure "grader" "executor")
+               (not grader-only-failure)))
+            (let ((final-grade (copy-sequence grade)))
+              (when grade-error-output
+                (setq final-grade
                      (plist-put final-grade :error-source grade-error-output)))
              (when grader-only-failure
                (setq final-grade
@@ -8624,21 +8648,27 @@ Adapts max-experiments based on API error rate."
                                  (gptel-auto-workflow--plist-get result :code-quality baseline-code-quality))
                                 (hard-timeout
                                  (gptel-auto-experiment--result-hard-timeout-p result))
+                                (grader-only-failure
+                                 (plist-get result :grader-only-failure))
                                 (next-exp-id (1+ exp-id)))
-                           (when kept
-                             (setq best-score score-after
-                                   baseline-code-quality quality-after
-                                   no-improvement-count 0))
-                             (when (and (not kept)
-                                        score-after
-                                        (<= score-after best-score))
-                               (cl-incf no-improvement-count))
+                            (when grader-only-failure
+                              (message "[auto-experiment] Final grader-only failure for %s in experiment %d; stopping further experiments for this target"
+                                       target exp-id)
+                              (setq max-exp exp-id))
+                            (when kept
+                              (setq best-score score-after
+                                    baseline-code-quality quality-after
+                                    no-improvement-count 0))
+                            (when (and (not kept)
+                                       score-after
+                                       (<= score-after best-score))
+                              (cl-incf no-improvement-count))
                             (when hard-timeout
                               (message "[auto-experiment] Hard timeout for %s in experiment %d; skipping retries for this attempt and continuing if budget remains"
                                        target exp-id))
-                           (let ((continue
-                                  (lambda ()
-                                    (if (gptel-auto-workflow--run-callback-live-p run-id)
+                            (let ((continue
+                                   (lambda ()
+                                     (if (gptel-auto-workflow--run-callback-live-p run-id)
                                         (gptel-auto-workflow--call-in-run-context
                                          workflow-root
                                          (lambda () (run-next next-exp-id))

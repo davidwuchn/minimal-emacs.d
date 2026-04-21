@@ -1862,7 +1862,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (should (= benchmark-call-count 1))
             (should-not (plist-get result :grader-only-failure))
             (should-not (plist-get result :error))
-            (should (= gptel-auto-experiment--api-error-count 1))
+            (should (= gptel-auto-experiment--api-error-count 0))
             (should (equal (plist-get result :grader-reason) "graded after retry"))
             (should (equal (plist-get result :comparator-reason) "Winner: A"))))
       (when (buffer-live-p worktree-buf)
@@ -3156,6 +3156,48 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should (= (plist-get (car results) :id) 1))
       (should (= (plist-get (cadr results) :id) 2)))))
 
+(ert-deftest regression/auto-experiment/grader-only-failure-stops-current-target ()
+  "Final grader-only failures should stop the current target without poisoning later targets."
+  (let ((gptel-auto-experiment-delay-between 0)
+        (gptel-auto-experiment-max-per-target 3)
+        (gptel-auto-experiment-no-improvement-threshold 99)
+        (gptel-auto-experiment--api-error-count 0)
+        (runs 0)
+        (results nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+               (lambda (&rest _) '(:eight-keys 0.4)))
+              ((symbol-function 'gptel-auto-experiment--code-quality-score)
+               (lambda () 0.5))
+              ((symbol-function 'gptel-auto-workflow--call-in-run-context)
+               (lambda (_workflow-root fn &optional _buffer _fallback-root)
+                 (funcall fn)))
+              ((symbol-function 'gptel-auto-workflow--run-callback-live-p)
+               (lambda (&rest _) t))
+              ((symbol-function 'gptel-auto-workflow--update-progress)
+               (lambda (&rest _) nil))
+              ((symbol-function 'gptel-auto-experiment--run-with-retry)
+               (lambda (target exp-id max-exp baseline baseline-code-quality previous-results callback &optional _retry-count)
+                 (cl-incf runs)
+                 (funcall callback
+                          (list :target target
+                                :id exp-id
+                                :score-after 0
+                                :kept nil
+                                :grader-only-failure t
+                                :comparator-reason "grader-api-rate-limit"
+                                :grader-reason "grader quota"
+                                :agent-output "Executor result for task: candidate"))
+                 (list target max-exp baseline baseline-code-quality previous-results)))
+              ((symbol-function 'message)
+               (lambda (&rest _) nil)))
+      (gptel-auto-experiment-loop
+       "lisp/modules/gptel-tools-agent.el"
+       (lambda (loop-results)
+         (setq results loop-results)))
+      (should (= runs 1))
+      (should (= (length results) 1))
+      (should (plist-get (car results) :grader-only-failure)))))
+
 (ert-deftest regression/auto-experiment/validation-retry-timeout-does-not-stop-further-experiments ()
   "Timed-out validation repairs should discard one experiment, not the whole target."
   (ert-skip "flaky in batch mode: test isolation issue with async callbacks")
@@ -4361,6 +4403,23 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (should (= gptel-auto-experiment--api-error-count 1))
     (should-not gptel-auto-experiment--quota-exhausted)))
 
+(ert-deftest regression/auto-experiment/note-api-pressure-can-stay-local ()
+  "Grader-only API pressure should not mutate run-wide pressure counters."
+  (let ((gptel-auto-experiment--api-error-count 0)
+        (gptel-auto-experiment--quota-exhausted nil))
+    (cl-letf (((symbol-function 'gptel-auto-experiment--remaining-provider-failover-candidate)
+               (lambda (&rest _args) nil))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment--note-api-pressure
+       "lisp/modules/gptel-tools-agent.el"
+       :api-rate-limit
+       "Error: Task grader could not finish task \"Grade output\". Error details: (:code \"insufficient_quota\" :message \"month allocated quota exceeded.\" :param :null :type \"invalid_request_error\")"
+       "grader"
+       nil))
+    (should (= gptel-auto-experiment--api-error-count 0))
+    (should-not gptel-auto-experiment--quota-exhausted)))
+
 (ert-deftest regression/auto-experiment/grade-with-retry-retries-hard-quota-when-grader-fallback-remains ()
   "Grader hard quota should retry locally while another provider fallback remains."
   (let ((grade-calls 0)
@@ -4400,6 +4459,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
          (setq final-grade grade)))
       (should (= grade-calls 2))
       (should (= scheduled-retries 1))
+      (should (= gptel-auto-experiment--api-error-count 0))
       (should-not gptel-auto-experiment--quota-exhausted)
       (should (plist-get final-grade :passed))
       (should (= (plist-get final-grade :score) 4)))))
@@ -14367,7 +14427,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
     (should (= grade-call-count 2))
     (should (= benchmark-call-count 1))
     (should (= prepare-call-count 1))
-    (should (= gptel-auto-experiment--api-error-count 1))
+    (should (= gptel-auto-experiment--api-error-count 0))
     (should (plist-get result :validation-retry))
     (should (equal (plist-get result :retries) 1))
     (should (equal (plist-get result :hypothesis) "retry hypothesis"))
@@ -14492,7 +14552,7 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
     (should (= grade-call-count 3))
     (should (= benchmark-call-count 2))
     (should (= prepare-call-count 1))
-    (should (= gptel-auto-experiment--api-error-count 1))
+    (should (= gptel-auto-experiment--api-error-count 0))
     (should (plist-get result :validation-retry))
     (should (equal (plist-get result :retries) 1))
     (should (equal (plist-get result :hypothesis) "retry hypothesis"))
