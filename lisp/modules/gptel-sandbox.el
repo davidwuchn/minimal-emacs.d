@@ -182,9 +182,10 @@ When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
   (let ((child-env (gptel-sandbox--copy-env env)))
     (if sequentialp
         (dolist (binding bindings)
-          (pcase-let ((`(,symbol . ,value)
-                       (gptel-sandbox--eval-let-binding binding child-env)))
-            (puthash symbol value child-env)))
+          (pcase-let ((`(,symbol ,value-form)
+                       (gptel-sandbox--normalize-binding binding)))
+            (let ((value (gptel-sandbox--eval-expr value-form child-env)))
+              (puthash symbol value child-env))))
       (let ((pairs nil))
         (dolist (binding bindings)
           (pcase-let ((`(,symbol . ,value)
