@@ -432,6 +432,18 @@ Matched case-insensitively against error message text.")
 401: Unauthorized (invalid API key)
 403: Forbidden (access denied)")
 
+(defun my/gptel--extract-error-message (error-data)
+  "Extract error message string from ERROR-DATA.
+ERROR-DATA can be a string, plist, or alist.
+Returns the message string if found, nil otherwise.
+ASSUMPTION: Error messages can be in :message (plist) or 'message (alist) keys."
+  (cond
+    ((stringp error-data) error-data)
+    ((listp error-data)
+     (or (plist-get error-data :message)
+         (cdr (assq 'message error-data))))
+    (t nil)))
+
 (defun my/gptel--transient-error-p (error-data http-status)
   "Return non-nil if ERROR-DATA or HTTP-STATUS indicate a transient API error.
 Matches network failures, overload responses, rate limits, and common
@@ -458,14 +470,11 @@ EDGE CASE: Misleading success codes can still accompany application-level
 TEST: (my/gptel--transient-error-p \"Malformed JSON\" 500) => t
 TEST: (my/gptel--transient-error-p \"Invalid API key\" 401) => nil
 TEST: (my/gptel--transient-error-p nil 429) => t"
-  (let ((status (cond
-                 ((stringp http-status) (string-to-number http-status))
-                 ((numberp http-status) http-status)
-                 (t nil)))
-        (error-msg (when (listp error-data)
-                     (or (plist-get error-data :message)
-                         (cdr (assq 'message error-data))
-                         ""))))
+  (let* ((status (cond
+                  ((stringp http-status) (string-to-number http-status))
+                  ((numberp http-status) http-status)
+                  (t nil)))
+         (error-msg (my/gptel--extract-error-message error-data)))
     (or (and (stringp error-data)
              (string-match-p my/gptel--transient-error-string-patterns error-data))
         (and (numberp status) (memq status my/gptel--transient-http-statuses))
@@ -499,12 +508,12 @@ start <= tracking to avoid corrupting the buffer."
           (set-marker tracking-marker start-marker))))))
 
 (defun my/gptel--format-error-message (error-data http-status)
-  "Format error message from ERROR-DATA and HTTP-STATUS."
-  (if (stringp error-data)
-      (string-trim error-data)
-    (if (and http-status (not (eq http-status t)))
-        (format "HTTP %s" http-status)
-      "Transient API Error")))
+  "Format error message from ERROR-DATA and HTTP-STATUS.
+Extracts message from plist/alist when error-data is not a string."
+  (or (my/gptel--extract-error-message error-data)
+      (if (and http-status (not (eq http-status t)))
+          (format "HTTP %s" http-status)
+        "Transient API Error")))
 
 (defun my/gptel--headless-auto-workflow-agent-buffer-p (info)
   "Return non-nil when INFO belongs to a headless auto-workflow agent buffer."
