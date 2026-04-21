@@ -2021,11 +2021,11 @@ Uses hash table keyed by task-id to support parallel execution."
                             (error-message-string err))))))))
          (wrapped-cb
           (lambda (result)
-            (let* ((state (gethash task-id my/gptel--agent-task-state))
-                   (already-done (plist-get state :done)))
+            (let* ((state (gethash task-id my/gptel--agent-task-state)))
               (if (not state)
                   (message "[nucleus] Ignoring stale subagent %s callback after reset"
                            agent-type)
+                (let ((already-done (plist-get state :done)))
                  ;; Atomic test-and-set: mark done before acting to prevent
                  ;; double-invocation if gptel-abort fires synchronously in timeout.
                  (puthash task-id (plist-put state :done t) my/gptel--agent-task-state)
@@ -2037,7 +2037,7 @@ Uses hash table keyed by task-id to support parallel execution."
                    (funcall restore-origin-fsm child-fsm)
                   (unwind-protect
                       (my/gptel--invoke-callback-safely callback result)
-                    (remhash task-id my/gptel--agent-task-state))))))))
+                    (remhash task-id my/gptel--agent-task-state)))))))))
     (cl-labels
          ((finish-timeout (state timeout-seconds timeout-suffix
                                  &optional timeout-kind total-elapsed-seconds)
