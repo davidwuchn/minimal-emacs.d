@@ -388,6 +388,16 @@ raw tokens."
    ;; Larger values are already in raw tokens
    (t (round n))))
 
+(defun my/gptel--openrouter-entry-context-window (entry)
+  "Extract valid context_window from an OpenRouter model ENTRY alist.
+Returns the context_length value if ENTRY is a plist/alist with a string id
+and a positive integer context_length; otherwise returns nil."
+  (when (consp entry)
+    (let ((id (alist-get 'id entry))
+          (cw (alist-get 'context_length entry)))
+      (when (and (stringp id) (integerp cw) (> cw 0))
+        cw))))
+
 (defun my/gptel--estimate-text-tokens (chars)
   "Estimate text token count from CHARS.
 
@@ -591,8 +601,8 @@ Runs asynchronously; returns nil immediately."
                                          (let ((id (alist-get 'id e)))
                                            (and (stringp id) (string= id model-id))))
                                        valid-data)))
-                (cw (and entry (alist-get 'context_length entry))))
-           (if (and (integerp cw) (> cw 0))
+                (cw (my/gptel--openrouter-entry-context-window entry)))
+           (if cw
                (progn
                  (my/gptel--cache-put-context-window model-id cw)
                  (message "OpenRouter context-window cached: %s -> %d" model-id cw))
@@ -639,10 +649,9 @@ Run asynchronously. Use for bulk cache warming."
                (let* ((valid-data (and (listp data) data))
                       (count 0))
                  (dolist (entry valid-data)
-                   (let* ((id (alist-get 'id entry))
-                          (cw (alist-get 'context_length entry)))
-                     (when (and (stringp id) (integerp cw) (> cw 0))
-                       (puthash id cw my/gptel--context-window-cache)
+                   (let ((cw (my/gptel--openrouter-entry-context-window entry)))
+                     (when cw
+                       (puthash (alist-get 'id entry) cw my/gptel--context-window-cache)
                        (cl-incf count))))
                  (when (> count 0)
                    (my/gptel--cache-save-context-windows))
