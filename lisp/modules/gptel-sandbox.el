@@ -355,15 +355,21 @@ supports a small, explicit whitelist of pure operations."
 
 (defun gptel-sandbox--allowed-tool-p (tool-name)
   "Return non-nil when TOOL-NAME may run inside Programmatic."
-  (member tool-name
-          (pcase (gptel-sandbox--current-profile)
-            ('readonly my/gptel-programmatic-readonly-tools)
-            (_ my/gptel-programmatic-allowed-tools))))
+  (let ((name-str (if (symbolp tool-name)
+                      (symbol-name tool-name)
+                    tool-name)))
+    (member name-str
+            (pcase (gptel-sandbox--current-profile)
+              ('readonly my/gptel-programmatic-readonly-tools)
+              (_ my/gptel-programmatic-allowed-tools)))))
 
 (defun gptel-sandbox--confirm-supported-p (tool-name)
   "Return non-nil when TOOL-NAME may request confirmation in Programmatic."
-  (and (eq (gptel-sandbox--current-profile) 'agent)
-       (member tool-name my/gptel-programmatic-confirming-tools)))
+  (let ((name-str (if (symbolp tool-name)
+                      (symbol-name tool-name)
+                    tool-name)))
+    (and (eq (gptel-sandbox--current-profile) 'agent)
+         (member name-str my/gptel-programmatic-confirming-tools))))
 
 (defun gptel-sandbox--current-profile ()
   "Return the active Programmatic capability profile.
