@@ -10069,11 +10069,11 @@ into staging or main."
              (funcall
               run-in-context
               (lambda ()
-                (let ((final-phase (if gptel-auto-experiment--quota-exhausted
-                                       "quota-exhausted"
-                                     "complete")))
-                  (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
-                  (gptel-auto-workflow--stop-status-refresh-timer)
+                 (let ((final-phase (if gptel-auto-experiment--quota-exhausted
+                                        "quota-exhausted"
+                                      "complete")))
+                   (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                   (gptel-auto-workflow--stop-status-refresh-timer)
                    (setq gptel-auto-workflow--status-run-id run-id
                          gptel-auto-workflow--running nil
                          gptel-auto-workflow--cron-job-running nil
@@ -10085,11 +10085,11 @@ into staging or main."
                    (set-default-toplevel-value 'gptel-auto-workflow--running nil)
                    (set-default-toplevel-value 'gptel-auto-workflow--cron-job-running nil)
                    (set-default-toplevel-value 'gptel-auto-workflow--run-id nil)
-                    (set-default-toplevel-value 'gptel-auto-workflow--run-project-root nil)
-                    (set-default-toplevel-value 'gptel-auto-workflow--current-target nil)
-                    (set-default-toplevel-value 'gptel-auto-workflow--current-project nil)
-                    (setq gptel-auto-workflow--stats
-                          (plist-put gptel-auto-workflow--stats :phase final-phase))
+                   (set-default-toplevel-value 'gptel-auto-workflow--run-project-root nil)
+                   (set-default-toplevel-value 'gptel-auto-workflow--current-target nil)
+                   (set-default-toplevel-value 'gptel-auto-workflow--current-project nil)
+                   (setq gptel-auto-workflow--stats
+                         (plist-put gptel-auto-workflow--stats :phase final-phase))
                    (condition-case err
                        (gptel-auto-workflow--persist-status)
                      (error
@@ -10101,17 +10101,17 @@ into staging or main."
                      (error
                       (gptel-auto-workflow--report-finalization-error
                        "Failed to log completion message" err)))
-                   (condition-case err
-                       (gptel-auto-workflow--persist-messages-tail)
-                     (error
-                      (gptel-auto-workflow--report-finalization-error
-                       "Failed to persist completion messages" err)))
                    (when completion-callback
                      (condition-case err
                          (funcall completion-callback all-results)
                        (error
                         (gptel-auto-workflow--report-finalization-error
-                         "Completion callback failed" err)))))))))))
+                         "Completion callback failed" err))))
+                   (condition-case err
+                       (gptel-auto-workflow--persist-messages-tail)
+                     (error
+                      (gptel-auto-workflow--report-finalization-error
+                       "Failed to persist completion messages" err))))))))))
     ;; Set project context for subagent routing
     (setq gptel-auto-workflow--current-project proj-root
           gptel-auto-workflow--run-project-root proj-root)

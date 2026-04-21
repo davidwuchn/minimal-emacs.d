@@ -6375,6 +6375,66 @@ failure."
         (let ((inhibit-read-only t))
           (erase-buffer)
           (insert original-text)))
+       (dolist (file (list status-file messages-file))
+         (when (file-exists-p file)
+           (delete-file file))))))
+
+(ert-deftest regression/auto-workflow/run-with-targets-persists-final-messages-after-completion-callback ()
+  "Final message snapshots should include completion-callback log lines."
+  (let* ((status-file (make-temp-file "aw-final-status" nil ".sexp"))
+         (messages-file (make-temp-file "aw-final-messages" nil ".txt"))
+         (messages-buffer (get-buffer-create "*Messages*"))
+         (original-text nil)
+         (gptel-auto-workflow-status-file status-file)
+         (gptel-auto-workflow-messages-file messages-file)
+         (gptel-auto-workflow-messages-chars 4000)
+         (gptel-auto-workflow--messages-start-pos nil)
+         (gptel-auto-workflow--stats nil)
+         (gptel-auto-workflow--running t)
+         (gptel-auto-workflow--cron-job-running t)
+         (gptel-auto-workflow--run-id "run-final-message-persist")
+         (gptel-auto-workflow--status-run-id "run-final-message-persist")
+         (captured-callback nil)
+         (completed nil))
+    (unwind-protect
+        (progn
+          (with-current-buffer messages-buffer
+            (setq original-text (buffer-string))
+            (let ((inhibit-read-only t))
+              (erase-buffer)))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--default-dir)
+                     (lambda () "/tmp/project"))
+                    ((symbol-function 'gptel-auto-experiment-loop)
+                     (lambda (_target cb)
+                       (setq captured-callback cb)))
+                    ((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                     (lambda () nil))
+                    ((symbol-function 'gptel-auto-workflow--stop-status-refresh-timer)
+                     (lambda () nil)))
+            (gptel-auto-workflow--run-with-targets
+             '("one")
+             (lambda (results)
+               (setq completed results)
+               (message "[auto-workflow] ✓ Completed: %s" "/tmp/project")
+               (message "[auto-workflow] All projects processed: %s:success"
+                        "/tmp/project")))
+            (funcall captured-callback '((:target "one" :kept t))))
+          (should (equal completed '((:target "one" :kept t))))
+          (with-temp-buffer
+            (insert-file-contents messages-file)
+            (should (string-match-p
+                     "\\[auto-workflow\\] Complete: 1 experiments, 1 targets improved"
+                     (buffer-string)))
+            (should (string-match-p
+                     "\\[auto-workflow\\] ✓ Completed: /tmp/project"
+                     (buffer-string)))
+            (should (string-match-p
+                     "\\[auto-workflow\\] All projects processed: /tmp/project:success"
+                     (buffer-string)))))
+      (with-current-buffer messages-buffer
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert original-text)))
       (dolist (file (list status-file messages-file))
         (when (file-exists-p file)
           (delete-file file))))))
