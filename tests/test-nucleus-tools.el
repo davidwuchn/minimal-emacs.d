@@ -222,6 +222,17 @@
     (should (stringp prompt))
     (should (equal signature '(regex path glob context_lines)))))
 
+(ert-deftest test-nucleus-tools-edit-prompt-signature-matches-registered-args ()
+  "The Edit tool prompt should advertise the registered Edit arg names."
+  (require 'nucleus-prompts)
+  (require 'nucleus-tools-validate)
+  (nucleus-load-tool-prompts)
+  (let* ((prompt (alist-get 'Edit nucleus-tool-prompts))
+         (signature (and prompt
+                         (nucleus--extract-prompt-signature 'Edit prompt))))
+    (should (stringp prompt))
+    (should (equal signature '(file_path old_str new_str diffp)))))
+
 ;;; Provide
 
 (provide 'test-nucleus-tools)
