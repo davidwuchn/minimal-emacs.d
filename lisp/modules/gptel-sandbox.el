@@ -180,10 +180,18 @@ Raises an error if PAIRS is malformed."
   "Evaluate let-style BINDINGS and BODY in ENV.
 When SEQUENTIALP is non-nil, evaluate bindings sequentially like `let*'."
   (let ((child-env (gptel-sandbox--copy-env env)))
-    (dolist (binding bindings)
-      (pcase-let ((`(,symbol . ,value)
-                   (gptel-sandbox--eval-let-binding binding (if sequentialp child-env env))))
-        (puthash symbol value child-env)))
+    (if sequentialp
+        (dolist (binding bindings)
+          (pcase-let ((`(,symbol . ,value)
+                       (gptel-sandbox--eval-let-binding binding child-env)))
+            (puthash symbol value child-env)))
+      (let ((pairs nil))
+        (dolist (binding bindings)
+          (pcase-let ((`(,symbol . ,value)
+                       (gptel-sandbox--eval-let-binding binding env)))
+            (push (cons symbol value) pairs)))
+        (dolist (pair pairs)
+          (puthash (car pair) (cdr pair) child-env))))
     (let ((value nil))
       (dolist (form body value)
         (setq value (gptel-sandbox--eval-expr form child-env))))))
