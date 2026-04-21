@@ -241,6 +241,16 @@
       (error
        (should (string-match-p "void-function" (format "%S" err)))))))
 
+(ert-deftest tools/eval/preserves-buffer-default-directory ()
+  "Eval tool should not leak an invalid `default-directory' into the live buffer."
+  (test-tools--with-temp
+    (let ((root (file-name-as-directory test-tools--temp-dir)))
+      (with-temp-buffer
+        (setq default-directory root)
+        (should (equal "Result:\nnil"
+                       (gptel-tools--eval-expression "(setq default-directory nil)")))
+        (should (equal root default-directory))))))
+
 ;;; Tests for WebSearch tool
 
 (ert-deftest tools/websearch/searches-query ()

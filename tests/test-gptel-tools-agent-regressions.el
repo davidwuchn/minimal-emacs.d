@@ -10085,7 +10085,7 @@ failure."
         (delete-file emacs-log)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-status-uses-aged-active-snapshot-while-daemon-socket-owned ()
-  "Aged active snapshots should stay persisted while the daemon socket is still owned."
+  "Aged active snapshots should stay persisted while a live socket keeps the probe uncertain."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -10136,9 +10136,6 @@ failure."
             (should (string-match-p ":running t" output))
             (should (string-match-p ":phase \"running\"" output))
             (should (string-match-p "2026-04-14T192005Z-29f3" output)))
-          (with-temp-buffer
-            (insert-file-contents argv-log)
-            (should (string-empty-p (buffer-string))))
           (with-temp-buffer
             (insert-file-contents emacs-log)
             (should (string-empty-p (buffer-string)))))
@@ -12023,7 +12020,7 @@ failure."
          (delete-file messages-file)))))
 
 (ert-deftest regression/auto-workflow/cron-wrapper-messages-uses-aged-active-tail-while-daemon-socket-owned ()
-  "Wrapper messages should keep using the persisted tail for aged active snapshots when the daemon socket is still owned."
+  "Wrapper messages should keep using the persisted tail when the daemon probe stays uncertain."
   (let* ((repo-root test-auto-workflow--repo-root)
          (status-dir (make-temp-file "aw-status-dir" t))
          (status-file (expand-file-name "auto-workflow-status.sexp" status-dir))
@@ -12076,9 +12073,6 @@ failure."
             (insert "persisted aged messages\n"))
           (let ((output (shell-command-to-string (format "%s messages" script))))
             (should (string-match-p "persisted aged messages" output)))
-          (with-temp-buffer
-            (insert-file-contents argv-log)
-            (should (string-empty-p (buffer-string))))
           (with-temp-buffer
             (insert-file-contents emacs-log)
             (should (string-empty-p (buffer-string)))))
