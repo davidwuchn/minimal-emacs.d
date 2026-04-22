@@ -483,7 +483,9 @@ Image tokens are counted from `gptel-context' if available."
             (dolist (kv my/gptel--context-window-cache-data)
               (when (and (stringp (car kv)) (integerp (cdr kv)))
                 (puthash (car kv) (cdr kv) my/gptel--context-window-cache))))
-          (setq my/gptel--context-window-cache-data nil))
+          (let ((saved-last-refresh my/gptel--context-window-cache-last-refresh))
+            (setq my/gptel--context-window-cache-data nil)
+            (setq my/gptel--context-window-cache-last-refresh saved-last-refresh)))
       (error
        (message "gptel context-window cache: failed to load %s (%s)"
                 my/gptel-context-window-cache-file
