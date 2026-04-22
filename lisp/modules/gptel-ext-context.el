@@ -379,14 +379,14 @@ Returns non-nil if compaction was initiated."
                                                     'face '(:foreground "green" :weight bold)))
                                 (insert (propertize "═══════════════════════════════════════════════════════════════\n"
                                                     'face '(:foreground "yellow" :weight bold)))
-                                (message "[compact] Preview appended (original kept)")))
-                          (progn
-                            (kill-new backup)
-                            (erase-buffer)
-                            (insert response)
-                            (goto-char (min point-before (point-max)))
-                            (message "[compact] Done: %s [backup in kill-ring]"
-                                     (my/gptel--format-compaction-stats chars-before (buffer-size) tokens-before))))))))
+                                (message "[compact] Preview appended (original kept)"))
+                          (t
+                           (kill-new backup)
+                           (erase-buffer)
+                           (insert response)
+                           (goto-char (min point-before (point-max)))
+                           (message "[compact] Done: %s [backup in kill-ring]"
+                                    (my/gptel--format-compaction-stats chars-before (buffer-size) tokens-before)))))))))
             (error
              (with-current-buffer buf
                (setq my/gptel-auto-compact-running nil))
