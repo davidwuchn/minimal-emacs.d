@@ -6602,8 +6602,13 @@ correctness fix."
 
 ;;; Prompt Building
 
+(defconst gptel-auto-experiment-focused-target-byte-threshold 32768
+  "Byte size above which prompts require a controller-selected starting symbol.
+This covers medium-large targets that are prone to inspection-thrash before the
+first edit, even when they are smaller than the large-target guidance band.")
+
 (defconst gptel-auto-experiment-large-target-byte-threshold 60000
-  "Byte size above which experiment prompts enable the focus contract.")
+  "Byte size above which experiment prompts add large-target advisory guidance.")
 
 (defconst gptel-auto-experiment-large-target-focus-token-weights
   '(("callback" . 6.0)
@@ -6754,16 +6759,30 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
           (gptel-auto-experiment--needs-inspection-thrash-recovery-p previous-results))
          (follow-up-focus-p
           (and previous-results (not recovery-p)))
-         (large-target-p
+         (focused-target-p
           (and (numberp target-bytes)
-               (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
+               (>= target-bytes gptel-auto-experiment-focused-target-byte-threshold)))
+         (large-target-p
+           (and (numberp target-bytes)
+                 (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
          (focus-candidate
-          (when large-target-p
-            (gptel-auto-experiment--select-large-target-focus target-full-path experiment-id)))
+           (when focused-target-p
+             (gptel-auto-experiment--select-large-target-focus target-full-path experiment-id)))
+         (focused-target-guidance
+          (when (and focused-target-p
+                     (not large-target-p))
+            (concat "## Focused Target Guidance\n"
+                    (format "This target is medium-large (%d bytes). Start from one concrete function or variable before broader file surveys.\n"
+                            target-bytes)
+                    (when focus-candidate
+                      (format "- Begin at `%s` or a direct caller/callee.\n"
+                              (plist-get focus-candidate :name)))
+                    "- Prefer focused Grep or narrow Read before broader Code_Map surveys.\n"
+                    "- Make the first edit before exploring a second subsystem.\n\n")))
          (large-target-guidance
-          (when large-target-p
-            (concat "## Large Target Guidance\n"
-                    (format "This target is large (%d bytes). Start from one concrete function or variable instead of surveying the whole file.\n"
+           (when large-target-p
+             (concat "## Large Target Guidance\n"
+                     (format "This target is large (%d bytes). Start from one concrete function or variable instead of surveying the whole file.\n"
                             target-bytes)
                     (when focus-candidate
                       (format "- Begin at `%s` or a direct caller/callee.\n"
@@ -6775,23 +6794,24 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
                   (or (plist-get focus-candidate :name)
                       "<one concrete function or variable>")))
          (controller-focus
-          (when focus-candidate
-            (format "## Controller-Selected Starting Symbol\n- Symbol: `%s`\n- Kind: %s\n- Approx lines: %d-%d (%d lines)\n- Reason: controller-selected small or medium helper in a very large file; start here or at a direct caller/callee.\n\n"
-                    (plist-get focus-candidate :name)
-                    (plist-get focus-candidate :kind)
-                    (plist-get focus-candidate :start-line)
+           (when focus-candidate
+             (format "## Controller-Selected Starting Symbol\n- Symbol: `%s`\n- Kind: %s\n- Approx lines: %d-%d (%d lines)\n- Reason: controller-selected small or medium helper in a medium or large file; start here or at a direct caller/callee.\n\n"
+                     (plist-get focus-candidate :name)
+                     (plist-get focus-candidate :kind)
+                     (plist-get focus-candidate :start-line)
                     (plist-get focus-candidate :end-line)
                     (plist-get focus-candidate :size-lines))))
          (inspection-thrash-contract
-          (when recovery-p
-            (concat "## Mandatory Focus Contract\n"
-                    "A previous attempt on this target already failed with inspection-thrash.\n"
-                    (when large-target-p
-                      (format "This target is large (%d bytes). Broad file surveys are likely to fail.\n"
-                              target-bytes))
-                    "Follow this exact opening sequence:\n"
-                    (format "1. The second line after HYPOTHESIS must be exactly `%s`.\n"
-                            focus-line)
+           (when recovery-p
+             (concat "## Mandatory Focus Contract\n"
+                     "A previous attempt on this target already failed with inspection-thrash.\n"
+                     (when focused-target-p
+                       (format "This target is %s (%d bytes). Broad file surveys are likely to fail.\n"
+                               (if large-target-p "large" "medium-large")
+                               target-bytes))
+                     "Follow this exact opening sequence:\n"
+                     (format "1. The second line after HYPOTHESIS must be exactly `%s`.\n"
+                             focus-line)
                     "2. Do NOT use Code_Map on the whole file.\n"
                     "3. Use at most 3 read-only tool calls, all on that same symbol or its direct callers/callees.\n"
                     "4. Your next tool call after those reads must be a write-capable tool on that same symbol.\n"
@@ -6813,6 +6833,8 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
 %s
 
 ## Target File (full path)
+%s
+
 %s
 
 %s
@@ -6889,16 +6911,17 @@ Example HYPOTHESES:
 - HYPOTHESIS: Extracting duplicate retry logic into a helper will reduce code duplication
 - HYPOTHESIS: Adding a cache for expensive computation will improve performance
 - HYPOTHESIS: Fixing the off-by-one error in the loop will correct the boundary case"
-            experiment-id max-experiments target
-            worktree-path
-            target-full-path
-             (or controller-focus "")
-             (or large-target-guidance "")
-             (or inspection-thrash-contract "")
-             (or follow-up-focus-contract "")
+             experiment-id max-experiments target
+             worktree-path
+             target-full-path
+              (or controller-focus "")
+              (or focused-target-guidance "")
+              (or large-target-guidance "")
+              (or inspection-thrash-contract "")
+              (or follow-up-focus-contract "")
              (or patterns "No previous experiments")
-            (or suggestions "None")
-            git-history
+             (or suggestions "None")
+             git-history
             (or baseline 0.5)
             (if weakest-keys
                 (format "## Weakest Keys (Priority Focus)\n%s" weakest-keys)
