@@ -389,14 +389,22 @@ Patterns are matched case-insensitively."
                     (string-match-p pattern text)))
                 patterns)))
 
+(defun gptel-agent-loop--match-precompiled-pattern (resp patterns compiled)
+  "Match RESP against PATTERNS using COMPILED regex if available.
+Assumes RESP is a string and patterns are strings.
+Extracted from duplicate pattern-matching boilerplate."
+  (let ((case-fold-search t))
+    (if compiled
+        (string-match-p compiled resp)
+      (gptel-agent-loop--matches-any-pattern resp patterns))))
+
 (defun gptel-agent-loop--seems-complete-p (resp)
   "Return non-nil when RESP looks like a completion message.
 Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
-       (let ((case-fold-search t))
-         (if gptel-agent-loop--completion-patterns-compiled
-             (string-match-p gptel-agent-loop--completion-patterns-compiled resp)
-           (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--completion-patterns)))))
+       (gptel-agent-loop--match-precompiled-pattern
+        resp gptel-agent-loop--completion-patterns
+        gptel-agent-loop--completion-patterns-compiled)))
 
 (defconst gptel-agent-loop--turn-skipped-pattern
   "gptel: turn skipped\\|all tool calls.*malformed"
@@ -411,10 +419,9 @@ gptel skipped a turn due to malformed tool calls.")
   "Return non-nil when RESP matches malformed-tool skip output.
 Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
-       (let ((case-fold-search t))
-         (if gptel-agent-loop--turn-skipped-pattern-compiled
-             (string-match-p gptel-agent-loop--turn-skipped-pattern-compiled resp)
-           (string-match-p gptel-agent-loop--turn-skipped-pattern resp)))))
+       (gptel-agent-loop--match-precompiled-pattern
+        resp (list gptel-agent-loop--turn-skipped-pattern)
+        gptel-agent-loop--turn-skipped-pattern-compiled)))
 
 (defconst gptel-agent-loop--planning-patterns
   '("\\blet me\\b"
@@ -439,10 +446,9 @@ Detects common patterns where model talks about doing work
 but didn't call tools. Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
        (>= (length resp) 30)
-       (let ((case-fold-search t))
-         (if gptel-agent-loop--planning-patterns-compiled
-             (string-match-p gptel-agent-loop--planning-patterns-compiled resp)
-           (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--planning-patterns)))))
+       (gptel-agent-loop--match-precompiled-pattern
+        resp gptel-agent-loop--planning-patterns
+        gptel-agent-loop--planning-patterns-compiled)))
 
 (defconst gptel-agent-loop--finishing-patterns
   '("summariz\\|conclude\\|conclusion\\|finish\\|wrap up\\|that's all\\|in summary\\|to summarize\\|final\\|overall"
@@ -462,10 +468,9 @@ when the model is concluding rather than planning more work.")
 Detects patterns indicating the model is wrapping up,
 not planning more work. Uses pre-compiled pattern for performance on hot path."
   (and (stringp resp)
-       (let ((case-fold-search t))
-         (if gptel-agent-loop--finishing-patterns-compiled
-             (string-match-p gptel-agent-loop--finishing-patterns-compiled resp)
-           (gptel-agent-loop--matches-any-pattern resp gptel-agent-loop--finishing-patterns)))))
+       (gptel-agent-loop--match-precompiled-pattern
+        resp gptel-agent-loop--finishing-patterns
+        gptel-agent-loop--finishing-patterns-compiled)))
 
 (defun gptel-agent-loop--continuation-count (state)
   "Return continuation count for STATE, defaulting to 0 if nil."
