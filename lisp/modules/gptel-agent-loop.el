@@ -765,7 +765,8 @@ Cache behavior:
       (run-with-timer
        timeout nil
        (lambda ()
-         (when (and (gptel-agent-loop--task-p state)
+         (when (and state
+                    (gptel-agent-loop--task-p state)
                     (not (gptel-agent-loop--task-finished state))
                     (not (gptel-agent-loop--task-aborted state)))
            (setf (gptel-agent-loop--task-aborted state) t)
