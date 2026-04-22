@@ -453,26 +453,30 @@ Returns a short description of what the user was asking for."
   "Build context for subagent delegation.
 BUFFER-STRING is the full conversation. LAST-TASK is the extracted task.
 Returns plist with :strategy and :context keys."
-  (let* ((lines (my/gptel--buffer-lines buffer-string))
-         (total-lines (length lines))
-         (recent-lines (last lines (min 50 total-lines)))
-         (has-tool-results (cl-some
-                            (lambda (line)
-                              (string-match-p "tool_result\\|tool-result\\|Tool result" line))
-                            recent-lines)))
-    (cond
-     ((and has-tool-results (< total-lines 100))
-      (list :strategy 'recent-history
-            :context (string-join recent-lines "\n")
-            :reason "Task involves recent tool results"))
-     ((< total-lines 30)
-      (list :strategy 'full-context
-            :context buffer-string
-            :reason "Short conversation, full context safe"))
-     (t
+  (if (not (stringp buffer-string))
       (list :strategy 'task-only
-            :context last-task
-            :reason "Large conversation, delegating with task only")))))
+            :context (or last-task "Continue the task")
+            :reason "Empty or invalid buffer")
+    (let* ((lines (my/gptel--buffer-lines buffer-string))
+           (total-lines (length lines))
+           (recent-lines (last lines (min 50 total-lines)))
+           (has-tool-results (cl-some
+                              (lambda (line)
+                                (string-match-p "tool_result\\|tool-result\\|Tool result" line))
+                              recent-lines)))
+      (cond
+       ((and has-tool-results (< total-lines 100))
+        (list :strategy 'recent-history
+              :context (string-join recent-lines "\n")
+              :reason "Task involves recent tool results"))
+       ((< total-lines 30)
+        (list :strategy 'full-context
+              :context buffer-string
+              :reason "Short conversation, full context safe"))
+       (t
+        (list :strategy 'task-only
+              :context last-task
+              :reason "Large conversation, delegating with task only"))))))
 
 (defun my/gptel--do-auto-delegate (prompt callback &optional buffer)
   "Auto-delegate to subagent when context is too large.
