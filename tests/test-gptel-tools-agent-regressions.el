@@ -11556,7 +11556,59 @@ failure."
             (insert-file-contents status-file)
             (should (string-match-p ":running nil" (buffer-string)))
             (should (string-match-p ":phase \"idle\"" (buffer-string)))
-            (should (string-match-p run-id (buffer-string)))))
+             (should (string-match-p run-id (buffer-string)))))
+      (when (file-exists-p status-file)
+        (delete-file status-file)))))
+
+(ert-deftest regression/auto-workflow/persist-status-explicitly-overwrites-stale-active-snapshot ()
+  "Explicit idle writes should replace a stale active snapshot when requested."
+  (let* ((status-file (make-temp-file "aw-status-live" nil ".sexp"))
+         (gptel-auto-workflow-status-file status-file)
+         (gptel-auto-workflow--run-id nil)
+         (gptel-auto-workflow--running nil)
+         (gptel-auto-workflow--cron-job-running nil)
+         (gptel-auto-workflow--stats '(:phase "idle" :total 0 :kept 0))
+         (gptel-auto-workflow--allow-placeholder-status-overwrite t))
+    (unwind-protect
+        (progn
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 4 :phase \"running\" :run-id \"2026-04-22T104255Z-d037\" :results \"var/tmp/experiments/2026-04-22T104255Z-d037/results.tsv\")\n"))
+          (gptel-auto-workflow--persist-status)
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running nil" (buffer-string)))
+            (should (string-match-p ":phase \"idle\"" (buffer-string)))
+            (should-not (string-match-p "2026-04-22T104255Z-d037" (buffer-string)))))
+      (when (file-exists-p status-file)
+        (delete-file status-file)))))
+
+(ert-deftest regression/auto-workflow/force-stop-overwrites-stale-active-status-file ()
+  "Force stop should replace a stale active persisted snapshot with idle."
+  (let* ((status-file (make-temp-file "aw-force-stop-status" nil ".sexp"))
+         (gptel-auto-workflow-status-file status-file)
+         (gptel-auto-workflow--stats '(:phase "running" :total 4 :kept 1))
+         (gptel-auto-workflow--run-id "2026-04-22T104255Z-d037")
+         (gptel-auto-workflow--status-run-id "2026-04-22T104255Z-d037")
+         (gptel-auto-workflow--running t)
+         (gptel-auto-workflow--cron-job-running t))
+    (unwind-protect
+        (progn
+          (with-temp-file status-file
+            (insert "(:running t :kept 1 :total 4 :phase \"running\" :run-id \"2026-04-22T104255Z-d037\" :results \"var/tmp/experiments/2026-04-22T104255Z-d037/results.tsv\")\n"))
+          (cl-letf (((symbol-function 'gptel-auto-workflow--terminate-active-shell-processes)
+                     (lambda () nil))
+                    ((symbol-function 'my/gptel--reset-agent-task-state) (lambda () nil))
+                    ((symbol-function 'gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
+                     (lambda () nil))
+                    ((symbol-function 'gptel-mementum--reset-synthesis-state) (lambda () nil))
+                    ((symbol-function 'gptel-auto-experiment--reset-grade-state) (lambda () nil))
+                    ((symbol-function 'message) (lambda (&rest _) nil)))
+            (gptel-auto-workflow-force-stop))
+          (with-temp-buffer
+            (insert-file-contents status-file)
+            (should (string-match-p ":running nil" (buffer-string)))
+            (should (string-match-p ":phase \"idle\"" (buffer-string)))
+            (should-not (string-match-p "2026-04-22T104255Z-d037" (buffer-string)))))
       (when (file-exists-p status-file)
         (delete-file status-file)))))
 

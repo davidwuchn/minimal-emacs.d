@@ -9100,6 +9100,9 @@ Relative paths are resolved from the project root."
        (equal (plist-get status :run-id)
               gptel-auto-workflow--run-id)))
 
+(defvar gptel-auto-workflow--allow-placeholder-status-overwrite nil
+  "When non-nil, let placeholder idle snapshots replace active persisted status.")
+
 (defun gptel-auto-workflow--persist-status ()
   "Persist current workflow status for non-blocking cron health checks."
   (let* ((file (gptel-auto-workflow--status-file))
@@ -9108,14 +9111,15 @@ Relative paths are resolved from the project root."
          (existing-status (gptel-auto-workflow-read-persisted-status)))
     ;; Preserve the last active snapshot when an unrelated process only has an
     ;; idle placeholder view of workflow state. The shell wrapper already owns
-    ;; stale-active detection; this guard prevents bogus idle rewrites with
-    ;; synthetic run ids while a real run is still active elsewhere.
-    (when (and (gptel-auto-workflow--status-placeholder-p status)
-               (gptel-auto-workflow--status-active-p existing-status)
-               (not (gptel-auto-workflow--status-owned-by-current-run-p
-                     existing-status)))
-      (setq status existing-status))
-    (when dir
+     ;; stale-active detection; this guard prevents bogus idle rewrites with
+     ;; synthetic run ids while a real run is still active elsewhere.
+     (when (and (gptel-auto-workflow--status-placeholder-p status)
+                (not gptel-auto-workflow--allow-placeholder-status-overwrite)
+                (gptel-auto-workflow--status-active-p existing-status)
+                (not (gptel-auto-workflow--status-owned-by-current-run-p
+                      existing-status)))
+       (setq status existing-status))
+     (when dir
       (make-directory dir t))
     (with-temp-file file
       (let ((print-length nil)
@@ -9570,7 +9574,7 @@ Prevents workflow from hanging indefinitely due to callback failures."
                                  60))))
       (cond
        ((null stuck-minutes)
-        (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
+       (message "[auto-workflow] WATCHDOG: No progress time recorded, force-stopping")
         (gptel-auto-workflow--clear-runtime-subagent-provider-overrides)
         (setq gptel-auto-workflow--running nil
               gptel-auto-workflow--cron-job-running nil
@@ -9581,7 +9585,8 @@ Prevents workflow from hanging indefinitely due to callback failures."
               gptel-auto-workflow--current-target nil)
         (setq gptel-auto-workflow--stats
               (plist-put gptel-auto-workflow--stats :phase "idle"))
-        (gptel-auto-workflow--persist-status)
+        (let ((gptel-auto-workflow--allow-placeholder-status-overwrite t))
+          (gptel-auto-workflow--persist-status))
         (when gptel-auto-workflow--watchdog-timer
           (cancel-timer gptel-auto-workflow--watchdog-timer)
           (setq gptel-auto-workflow--watchdog-timer nil))
@@ -9600,7 +9605,8 @@ Prevents workflow from hanging indefinitely due to callback failures."
               gptel-auto-workflow--current-target nil)
         (setq gptel-auto-workflow--stats
               (plist-put gptel-auto-workflow--stats :phase "idle"))
-        (gptel-auto-workflow--persist-status)
+        (let ((gptel-auto-workflow--allow-placeholder-status-overwrite t))
+          (gptel-auto-workflow--persist-status))
         (when gptel-auto-workflow--watchdog-timer
           (cancel-timer gptel-auto-workflow--watchdog-timer)
           (setq gptel-auto-workflow--watchdog-timer nil))
@@ -9694,7 +9700,8 @@ Interactive command to recover from hung workflow state."
          gptel-auto-workflow--current-target nil)
   (setq gptel-auto-workflow--stats
         (plist-put gptel-auto-workflow--stats :phase "idle"))
-  (gptel-auto-workflow--persist-status)
+  (let ((gptel-auto-workflow--allow-placeholder-status-overwrite t))
+    (gptel-auto-workflow--persist-status))
   (when gptel-auto-workflow--watchdog-timer
     (cancel-timer gptel-auto-workflow--watchdog-timer)
     (setq gptel-auto-workflow--watchdog-timer nil))
