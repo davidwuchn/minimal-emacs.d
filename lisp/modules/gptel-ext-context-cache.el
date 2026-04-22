@@ -836,7 +836,7 @@ Note: OpenRouter fetch is NOT triggered here - use `my/gptel-refresh-context-win
                                        my/gptel--known-model-context-windows
                                        model-id))
      ((let ((cw (my/gptel--lookup-context-window-in-gptel-tables gptel-model)))
-        (when cw
+        (when (and cw (integerp cw))
           (puthash model-id cw my/gptel--context-window-cache))
         cw))
      ((let ((meta (my/gptel-get-model-metadata model-id)))
