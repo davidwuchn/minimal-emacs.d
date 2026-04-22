@@ -335,7 +335,7 @@ Truncates accumulated output to last
                                 (substring output (- limit)))
                       output)))
     (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
-            gptel-agent-loop-continuation-prompt
+            (or gptel-agent-loop-continuation-prompt "")
             truncated)))
 
 (defun gptel-agent-loop--summary-prompt-for (state)
