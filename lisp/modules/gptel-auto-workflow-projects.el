@@ -60,7 +60,8 @@ Customize this variable to add more projects.")
   "Root directory for mementum. Set per-project.")
 
 (defvar gptel-auto-workflow--project-root-override)
-(defvar gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal)
+(defvar gptel-auto-workflow--research-findings-cache
+  (make-hash-table :test 'equal)
   "Hash table caching research findings per project root.")
 
 (defvar gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal)
@@ -729,14 +730,12 @@ Without PROJECT-ROOT, clears cache for all projects."
     (dolist (project-root gptel-auto-workflow-projects)
       (let* ((findings (gethash project-root gptel-auto-workflow--research-findings-cache ""))
              (cache-file (expand-file-name "var/tmp/research-findings.md" project-root))
-             (file-exists (file-exists-p cache-file))
-             (file-size (if file-exists
-                            (nth 7 (file-attributes cache-file))
-                          0)))
+             (attrs (file-attributes cache-file))
+             (file-size (or (nth 7 attrs) 0)))
         (push (format "  %s:\n    In-memory: %d chars\n    File: %s (%d bytes)"
                       project-root
                       (length findings)
-                      (if file-exists "exists" "none")
+                      (if attrs "exists" "none")
                       file-size)
               status-lines)))
     (message "Research cache status:\n%s" (string-join (nreverse status-lines) "\n"))))

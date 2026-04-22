@@ -80,6 +80,9 @@ Keys include: :context-window, :pricing-input, :pricing-output,
   "Hash table caching context-window lookups from gptel model tables.
 Reduces repeated iterations through model tables.")
 
+(defvar my/gptel--token-estimate-cache (make-hash-table :test 'equal)
+  "Hash table caching token estimates for (chars . extension) pairs.")
+
 (defvar my/gptel--context-window-cache-last-refresh nil
   "Time (as a float) when the cache was last refreshed.")
 
@@ -414,18 +417,22 @@ Uses language-aware heuristics:
 For buffers with current buffer, analyzes content type."
   (if (not (and (numberp chars) (> chars 0)))
       0.0
-    (let ((ratio 3.5))
-      (when (and (buffer-live-p (current-buffer))
-                 (buffer-file-name))
-        (let ((ext (file-name-extension (buffer-file-name))))
-          (cond
-           ((member ext '("el" "clj" "cljs" "py" "js" "ts" "rs" "go" "java" "c" "cpp" "h"))
-            (setq ratio 3.0))
-           ((member ext '("md" "txt" "org" "rst" "adoc"))
-            (setq ratio 4.0))
-           ((member ext '("json" "yaml" "yml" "toml" "ini"))
-            (setq ratio 2.5)))))
-      (/ (float chars) ratio))))
+    (let* ((ext (and (buffer-live-p (current-buffer))
+                     (buffer-file-name)
+                     (file-name-extension (buffer-file-name))))
+           (cache-key (cons chars ext)))
+      (or (gethash cache-key my/gptel--token-estimate-cache)
+          (let* ((ratio (cond
+                         ((member ext '("el" "clj" "cljs" "py" "js" "ts" "rs" "go" "java" "c" "cpp" "h"))
+                          3.0)
+                         ((member ext '("md" "txt" "org" "rst" "adoc"))
+                          4.0)
+                         ((member ext '("json" "yaml" "yml" "toml" "ini"))
+                          2.5)
+                         (t 3.5)))
+                 (result (/ (float chars) ratio)))
+            (puthash cache-key result my/gptel--token-estimate-cache)
+            result)))))
 
 (defun my/gptel--estimate-tokens (chars)
   "Estimate total token count: text (CHARS) + images in context.
