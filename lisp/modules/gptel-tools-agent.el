@@ -2023,7 +2023,6 @@ subagent callback fired, and avoids reusing a deleted worktree as
       (condition-case err
           (funcall callback result)
         (error
-         (message "[gptel-tools] Callback error: %s" (error-message-string err))
          (signal (car err) (cdr err)))))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
