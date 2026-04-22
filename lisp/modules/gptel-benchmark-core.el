@@ -154,8 +154,8 @@ JSON parsing returns vectors for arrays; this normalizes to lists."
   "Get FIELD from OBJ, handling both plist and alist formats.
 FIELD should be a keyword like :score.
 For alist lookup, tries both keyword and symbol keys.
-Returns nil if OBJ is not a valid plist or alist."
-  (when (listp obj)
+Returns nil if OBJ is not a valid plist or alist, or if FIELD is nil."
+  (when (and (listp obj) field)
     (or (plist-get obj field)
         (cdr (assoc field obj))
         (let ((alist-key (gptel-benchmark--keyword-to-alist-key field)))
