@@ -14805,16 +14805,18 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
       (delete-directory dir-a t)
       (delete-directory dir-b t))))
 
-(ert-deftest regression/subagent/headless-task-launch-isolates-workflow-state ()
-  "Headless workflow subagents should not inherit live workflow state."
+(ert-deftest regression/subagent/headless-task-launch-prepares-isolated-workflow-state ()
+  "Headless workflow subagents should prepare isolated env for later persistence."
   (let ((captured-env nil)
         (callback-result nil))
     (cl-letf (((symbol-function 'my/gptel-agent--task-override)
                (lambda (cb agent-type description prompt)
-                 (setq captured-env (copy-sequence process-environment))
-                 (should (equal agent-type "executor"))
-                 (should (equal description "Isolate workflow env"))
-                 (should (equal prompt "Prompt body"))
+                  (setq captured-env
+                        (copy-sequence
+                         gptel-auto-workflow--pending-subagent-process-environment))
+                  (should (equal agent-type "executor"))
+                  (should (equal description "Isolate workflow env"))
+                  (should (equal prompt "Prompt body"))
                  (funcall cb "ok")))
               ((symbol-function 'message)
                (lambda (&rest _) nil)))
@@ -14955,6 +14957,47 @@ Uses cherry-pick instead of merge to avoid branch divergence issues."
                  (setq callback-result result))
                "executor"
                "Defer workflow env persistence"
+               "Prompt body")))
+          (should (equal callback-result "ok"))
+          (should-not
+           (cl-some (lambda (msg)
+                      (string-match-p "buffer-local while locally let-bound" msg))
+                    messages)))
+      (kill-buffer request-buf))))
+
+(ert-deftest regression/subagent/headless-task-launch-avoids-let-bound-env-warnings ()
+  "Headless launch should not warn when request setup localizes env vars."
+  (let ((callback-result nil)
+        (messages nil)
+        (request-buf (generate-new-buffer "*test-subagent-let-bound-env*")))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'my/gptel-agent--task-override)
+                     (lambda (cb _agent-type _description _prompt)
+                       (with-current-buffer request-buf
+                         (setq-local gptel-auto-workflow--subagent-process-environment
+                                     (copy-sequence
+                                      gptel-auto-workflow--pending-subagent-process-environment))
+                         (setq-local process-environment
+                                     (copy-sequence process-environment)))
+                       (funcall cb "ok")))
+                    ((symbol-function 'message)
+                     (lambda (fmt &rest args)
+                       (push (apply #'format fmt args) messages))))
+            (let ((gptel-auto-workflow--headless t)
+                  (gptel-auto-workflow-persistent-headless t)
+                  (gptel-auto-workflow--current-project "/tmp/project/")
+                  (process-environment
+                   (append '("AUTO_WORKFLOW_EMACS_SERVER=live-server"
+                             "AUTO_WORKFLOW_STATUS_FILE=/tmp/live-status.sexp"
+                             "AUTO_WORKFLOW_MESSAGES_FILE=/tmp/live-messages.txt"
+                             "AUTO_WORKFLOW_SNAPSHOT_PATHS_FILE=/tmp/live-snapshots.txt")
+                           process-environment)))
+              (my/gptel--call-gptel-agent-task
+               (lambda (result)
+                 (setq callback-result result))
+               "executor"
+               "Avoid let-bound env warnings"
                "Prompt body")))
           (should (equal callback-result "ok"))
           (should-not
