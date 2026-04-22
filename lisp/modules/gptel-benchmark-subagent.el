@@ -255,14 +255,18 @@ Returns list of plists: (:name :start :end :has-docstring :length)."
       (while (re-search-forward "^(defun\\s-+\\(\\S-+\\)\\s-*" nil t)
         (let* ((name (match-string 1))
                (start (match-beginning 0))
-               (has-docstring (save-excursion
-                                (forward-sexp)  ; skip args
-                                (skip-chars-forward " \t\n")
-                                (eq (char-after) ?\")))
-               (func-end (save-excursion
-                           (goto-char start)
-                           (forward-list)
-                           (point)))
+               (has-docstring (condition-case nil
+                                   (save-excursion
+                                     (forward-sexp)
+                                     (skip-chars-forward " \t\n")
+                                     (eq (char-after) ?\"))
+                                 (error nil)))
+               (func-end (condition-case nil
+                              (save-excursion
+                                (goto-char start)
+                                (forward-list)
+                                (point))
+                            (error (point-max))))
                (length (count-lines start func-end)))
           (push (list :name name
                       :start start
