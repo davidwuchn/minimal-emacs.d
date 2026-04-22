@@ -137,6 +137,7 @@ Each worktree gets its own isolated buffer for subagent overlays."
         (progn
           (with-current-buffer existing
             (setq-local default-directory root))
+          (puthash root existing gptel-auto-workflow--project-buffers)
           existing)
       ;; Create new buffer (or recreate if previous was killed)
       (let ((buf (get-buffer-create buf-name)))
