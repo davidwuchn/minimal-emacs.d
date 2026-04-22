@@ -9041,8 +9041,14 @@ Relative paths are resolved from the project root."
   :type 'integer
   :group 'gptel)
 
-(defun gptel-auto-workflow--status-file ()
-  "Return absolute path to the persisted workflow status snapshot."
+(defvar gptel-auto-workflow--persisted-status-file nil
+  "Sticky status snapshot path captured at workflow start.")
+
+(defvar gptel-auto-workflow--persisted-messages-file nil
+  "Sticky messages snapshot path captured at workflow start.")
+
+(defun gptel-auto-workflow--resolve-status-file ()
+  "Resolve the current workflow status snapshot path."
   (let* ((configured-file gptel-auto-workflow-status-file)
          (default-file "var/tmp/cron/auto-workflow-status.sexp")
          (env-file (getenv "AUTO_WORKFLOW_STATUS_FILE")))
@@ -9061,8 +9067,8 @@ Relative paths are resolved from the project root."
       (expand-file-name configured-file
                         (gptel-auto-workflow--default-dir))))))
 
-(defun gptel-auto-workflow--messages-file ()
-  "Return absolute path to the persisted workflow messages snapshot."
+(defun gptel-auto-workflow--resolve-messages-file ()
+  "Resolve the current workflow messages snapshot path."
   (let* ((configured-file gptel-auto-workflow-messages-file)
          (default-file "var/tmp/cron/auto-workflow-messages-tail.txt")
          (env-file (getenv "AUTO_WORKFLOW_MESSAGES_FILE")))
@@ -9080,6 +9086,28 @@ Relative paths are resolved from the project root."
      (t
       (expand-file-name configured-file
                         (gptel-auto-workflow--default-dir))))))
+
+(defun gptel-auto-workflow--capture-persisted-snapshot-files ()
+  "Capture sticky snapshot paths for the current workflow run."
+  (setq gptel-auto-workflow--persisted-status-file
+        (gptel-auto-workflow--resolve-status-file)
+        gptel-auto-workflow--persisted-messages-file
+        (gptel-auto-workflow--resolve-messages-file)))
+
+(defun gptel-auto-workflow--clear-persisted-snapshot-files ()
+  "Clear sticky snapshot paths after a workflow run finishes."
+  (setq gptel-auto-workflow--persisted-status-file nil
+        gptel-auto-workflow--persisted-messages-file nil))
+
+(defun gptel-auto-workflow--status-file ()
+  "Return absolute path to the persisted workflow status snapshot."
+  (or gptel-auto-workflow--persisted-status-file
+      (gptel-auto-workflow--resolve-status-file)))
+
+(defun gptel-auto-workflow--messages-file ()
+  "Return absolute path to the persisted workflow messages snapshot."
+  (or gptel-auto-workflow--persisted-messages-file
+      (gptel-auto-workflow--resolve-messages-file)))
 
 (defun gptel-auto-workflow--messages-chars ()
   "Return the configured trailing *Messages* snapshot size."
@@ -9652,6 +9680,7 @@ Prevents workflow from hanging indefinitely due to callback failures."
               (plist-put gptel-auto-workflow--stats :phase "idle"))
         (let ((gptel-auto-workflow--allow-placeholder-status-overwrite t))
           (gptel-auto-workflow--persist-status))
+        (gptel-auto-workflow--clear-persisted-snapshot-files)
         (when gptel-auto-workflow--watchdog-timer
           (cancel-timer gptel-auto-workflow--watchdog-timer)
           (setq gptel-auto-workflow--watchdog-timer nil))
@@ -9672,6 +9701,7 @@ Prevents workflow from hanging indefinitely due to callback failures."
               (plist-put gptel-auto-workflow--stats :phase "idle"))
         (let ((gptel-auto-workflow--allow-placeholder-status-overwrite t))
           (gptel-auto-workflow--persist-status))
+        (gptel-auto-workflow--clear-persisted-snapshot-files)
         (when gptel-auto-workflow--watchdog-timer
           (cancel-timer gptel-auto-workflow--watchdog-timer)
           (setq gptel-auto-workflow--watchdog-timer nil))
@@ -9769,6 +9799,7 @@ Interactive command to recover from hung workflow state."
         (plist-put gptel-auto-workflow--stats :phase "idle"))
   (let ((gptel-auto-workflow--allow-placeholder-status-overwrite t))
     (gptel-auto-workflow--persist-status))
+  (gptel-auto-workflow--clear-persisted-snapshot-files)
   (when gptel-auto-workflow--watchdog-timer
     (cancel-timer gptel-auto-workflow--watchdog-timer)
     (setq gptel-auto-workflow--watchdog-timer nil))
@@ -9940,6 +9971,7 @@ Usage:
           gptel-auto-workflow--running t
           gptel-auto-workflow--stats (list :phase "selecting" :total 0 :kept 0)
           gptel-auto-workflow--last-progress-time (current-time))
+    (gptel-auto-workflow--capture-persisted-snapshot-files)
     (gptel-auto-workflow--ensure-results-file gptel-auto-workflow--run-id)
     (unless gptel-auto-workflow--cron-job-running
       (gptel-auto-workflow--mark-messages-start))
@@ -10230,6 +10262,7 @@ into staging or main."
                                       "queued")
                                 "idle")))
       (gptel-auto-workflow--persist-status)
+      (gptel-auto-workflow--clear-persisted-snapshot-files)
       (clrhash gptel-auto-workflow--worktree-state))
     (when (> cleaned 0)
       (message "[auto-workflow] Cleaned %d stale items" cleaned))))
@@ -10314,8 +10347,11 @@ into staging or main."
                         (gptel-auto-workflow--report-finalization-error
                          "Completion callback failed" err))))
                    (condition-case err
-                       (gptel-auto-workflow--persist-messages-tail)
+                       (prog1
+                           (gptel-auto-workflow--persist-messages-tail)
+                         (gptel-auto-workflow--clear-persisted-snapshot-files))
                      (error
+                      (gptel-auto-workflow--clear-persisted-snapshot-files)
                       (gptel-auto-workflow--report-finalization-error
                        "Failed to persist completion messages" err))))))))))
     ;; Set project context for subagent routing

@@ -299,11 +299,57 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
             (should (string-prefix-p "copilot-auto-workflow-verify-" captured-server))
             (should-not (equal captured-server "copilot-auto-workflow"))))
       (delete-directory temp-root t)
-      (delete-directory ambient-runtime t)
-      (when (file-exists-p env-log)
-        (delete-file env-log))
-      (when (file-exists-p fake-emacs)
-        (delete-file fake-emacs)))))
+       (delete-directory ambient-runtime t)
+       (when (file-exists-p env-log)
+         (delete-file env-log))
+       (when (file-exists-p fake-emacs)
+         (delete-file fake-emacs)))))
+
+(ert-deftest regression/auto-workflow/persist-status-keeps-live-snapshot-paths-despite-subagent-env ()
+  "Live workflow snapshots should not be redirected by leaked subagent env vars."
+  (let* ((root (make-temp-file "aw-persist-root" t))
+         (live-status (expand-file-name "var/tmp/cron/auto-workflow-status.sexp" root))
+         (live-messages (expand-file-name "var/tmp/cron/auto-workflow-messages-tail.txt" root))
+         (redirect-status (expand-file-name "redirect/status.sexp" root))
+         (redirect-messages (expand-file-name "redirect/messages.txt" root))
+         (default-directory root)
+         (gptel-auto-workflow-status-file live-status)
+         (gptel-auto-workflow-messages-file live-messages)
+         (gptel-auto-workflow--persisted-status-file nil)
+         (gptel-auto-workflow--persisted-messages-file nil)
+         (gptel-auto-workflow--running t)
+         (gptel-auto-workflow--run-id "2026-04-22T164510Z-e0cb")
+         (gptel-auto-workflow--status-run-id "2026-04-22T164510Z-e0cb")
+         (gptel-auto-workflow--stats (list :phase "running" :total 4 :kept 1)))
+    (unwind-protect
+        (progn
+          (with-current-buffer (get-buffer-create "*Messages*")
+            (let ((inhibit-read-only t))
+              (goto-char (point-max))
+              (insert "\n")))
+          (gptel-auto-workflow--mark-messages-start)
+          (gptel-auto-workflow--append-messages-line
+           "[auto-workflow] redirected snapshot regression sentinel")
+          (gptel-auto-workflow--capture-persisted-snapshot-files)
+          (let ((process-environment
+                 (append
+                  (list (format "AUTO_WORKFLOW_STATUS_FILE=%s" redirect-status)
+                        (format "AUTO_WORKFLOW_MESSAGES_FILE=%s" redirect-messages))
+                  process-environment)))
+            (gptel-auto-workflow--persist-status))
+          (should (file-exists-p live-status))
+          (should (file-exists-p live-messages))
+          (should-not (file-exists-p redirect-status))
+          (should-not (file-exists-p redirect-messages))
+          (with-temp-buffer
+            (insert-file-contents live-status)
+            (should (string-match-p "2026-04-22T164510Z-e0cb" (buffer-string))))
+          (with-temp-buffer
+            (insert-file-contents live-messages)
+            (should (string-match-p "redirected snapshot regression sentinel"
+                                    (buffer-string)))))
+      (gptel-auto-workflow--clear-persisted-snapshot-files)
+      (delete-directory root t))))
 
 (ert-deftest regression/init-system/compile-angel-on-load-skips-noninteractive ()
   "Batch sessions should not enable compile-angel on-load hooks."
