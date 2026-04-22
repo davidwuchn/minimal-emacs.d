@@ -1125,6 +1125,9 @@ FSM-local snapshot so later tool dispatch matches the request payload."
 (defvar gptel-auto-workflow--defer-subagent-env-persistence nil
   "When non-nil, defer buffer-local subagent env persistence until launch ends.")
 
+(defvar gptel-auto-workflow--pending-subagent-process-environment nil
+  "Isolated env prepared for the current subagent launch before buffer persistence.")
+
 (defun my/gptel-agent--task-override (main-cb agent-type description prompt)
   "Call a gptel agent to do specific compound tasks.
 Like upstream `gptel-agent--task' but adds parent-buffer tracking-marker,
@@ -1946,9 +1949,7 @@ its async continuation layer in the worker daemon."
                 t)))
          (gptel-auto-workflow--defer-subagent-env-persistence
           (and isolated-env t))
-         (gptel-auto-workflow--subagent-process-environment isolated-env)
-         (process-environment
-          (or isolated-env process-environment))
+         (gptel-auto-workflow--pending-subagent-process-environment isolated-env)
          (task-runner nil))
     (when (and isolated-env
                my/gptel--current-agent-task-id)
