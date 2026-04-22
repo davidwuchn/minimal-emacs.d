@@ -342,7 +342,8 @@ Reduces duplication of `(or (plist-get ...) default-value)` patterns."
 (defun my/gptel--lookup-context-window-in-gptel-tables (model)
   "Look up context window for MODEL in gptel's built-in model tables.
 Returns the context window in tokens, or nil if not found.
-Handles both symbol and string model identifiers with case-insensitive fallback."
+Handles both symbol and string model identifiers with case-insensitive fallback.
+Caches results in `my/gptel--gptel-tables-cw-cache' for future lookups."
   (let* ((model (or model gptel-model))
          (model-sym (cond
                       ((symbolp model) model)
@@ -353,17 +354,22 @@ Handles both symbol and string model identifiers with case-insensitive fallback.
                       ((symbolp model) (symbol-name model))
                       (t nil))))
     (when (or model-sym model-str)
-      (cl-some
-       (lambda (var)
-         (let* ((table (symbol-value var))
-                (entry (or (and model-sym (assq model-sym table))
-                           (and model-str (assoc-string model-str table t)))))
-           (when entry
-             (let ((cw (my/gptel--normalize-context-window
-                        (plist-get (cdr entry) :context-window))))
-               (when (and (integerp cw) (> cw 0))
-                 cw)))))
-       (my/gptel--gptel-model-tables)))))
+      (let ((cache-key (or model-str (symbol-name model-sym))))
+        (or (gethash cache-key my/gptel--gptel-tables-cw-cache)
+            (let ((result (cl-some
+                           (lambda (var)
+                             (let* ((table (symbol-value var))
+                                    (entry (or (and model-sym (assq model-sym table))
+                                               (and model-str (assoc-string model-str table t)))))
+                               (when entry
+                                 (let ((cw (my/gptel--normalize-context-window
+                                            (plist-get (cdr entry) :context-window))))
+                                   (when (and (integerp cw) (> cw 0))
+                                     cw)))))
+                           (my/gptel--gptel-model-tables))))
+              (when result
+                (puthash cache-key result my/gptel--gptel-tables-cw-cache))
+              result))))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
