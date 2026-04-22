@@ -10166,17 +10166,23 @@ into staging or main."
                              run-in-context
                              (lambda ()
                                (setq all-results (append all-results results))
-                               (setq kept-count
-                                     (gptel-auto-workflow--kept-target-count all-results))
-                               (setq gptel-auto-workflow--stats
-                                     (plist-put gptel-auto-workflow--stats :kept kept-count))
-                               (gptel-auto-workflow--persist-status)
-                               (if gptel-auto-experiment--quota-exhausted
-                                   (progn
-                                     (message "[auto-workflow] Provider quota exhausted; stopping remaining targets")
-                                     (finish-run))
-                                 (run-next (cdr remaining-targets))))))))))
-                  (gptel-auto-experiment-loop target target-complete))))))
+                                (setq kept-count
+                                      (gptel-auto-workflow--kept-target-count all-results))
+                                (setq gptel-auto-workflow--stats
+                                      (plist-put gptel-auto-workflow--stats :kept kept-count))
+                                (gptel-auto-workflow--persist-status)
+                                (cond
+                                 (gptel-auto-experiment--quota-exhausted
+                                  (message "[auto-workflow] Provider quota exhausted; stopping remaining targets")
+                                  (finish-run))
+                                 ((and (> kept-count 0)
+                                       (gptel-auto-experiment--should-reduce-experiments-p))
+                                  (message "[auto-workflow] API pressure with %d kept target(s); stopping remaining targets"
+                                           kept-count)
+                                  (finish-run))
+                                 (t
+                                  (run-next (cdr remaining-targets)))))))))))
+                   (gptel-auto-experiment-loop target target-complete))))))
       (funcall run-in-context (lambda () (run-next targets))))))
 
 (defun gptel-auto-workflow-run (&optional targets)
