@@ -487,5 +487,69 @@
   "Empty name should return empty."
   (should (equal (test-normalize-tool-name "") "")))
 
+(ert-deftest sanitize/fuzzy/embedded-tool-name-recovery ()
+  "Embedded tool names inside parser noise should still be recoverable."
+  (require 'gptel-ext-tool-sanitize)
+  (let* ((todo-tool
+          (gptel--make-tool :name "TodoWrite"
+                            :function #'ignore
+                            :description "todo"
+                            :args nil))
+         (skill-tool
+          (gptel--make-tool :name "create_skill"
+                            :function #'ignore
+                            :description "skill"
+                            :args nil))
+         (match
+          (my/gptel--find-tool-fuzzy
+           "FOCUS\">gptel-agent-loop--handle-aborted-state</parameter>\n<parameter name=\"TodoWrite"
+           (list (cons "create_skill" skill-tool)
+                 (cons "TodoWrite" todo-tool)))))
+    (should (gptel-tool-p match))
+    (should (eq match todo-tool))))
+
+(ert-deftest sanitize/tool-calls/repairs-embedded-tool-name-from-global-registry ()
+  "Malformed tool names should recover from the global registry without cons-cell crashes."
+  (require 'gptel-ext-tool-sanitize)
+  (let* ((request-buffer (generate-new-buffer " *sanitize-recover*"))
+         (todo-tool
+          (gptel--make-tool :name "TodoWrite"
+                            :function #'ignore
+                            :description "todo"
+                            :args nil))
+         (edit-tool
+          (gptel--make-tool :name "Edit"
+                            :function #'ignore
+                            :description "edit"
+                            :args nil))
+         (skill-tool
+          (gptel--make-tool :name "create_skill"
+                            :function #'ignore
+                            :description "skill"
+                            :args nil))
+         (tool-call
+          (list :name "FOCUS\">gptel-agent-loop--handle-aborted-state</parameter>\n<parameter name=\"TodoWrite"
+                :args nil))
+         (info (list :tool-use (list tool-call)
+                     :tools (list edit-tool)
+                     :buffer request-buffer))
+         (fsm (gptel-make-fsm :info info))
+         (gptel--known-tools
+          `(("gptel-agent"
+             . (("create_skill" . ,skill-tool)
+                ("TodoWrite" . ,todo-tool)
+                ("Edit" . ,edit-tool))))))
+    (unwind-protect
+        (progn
+          (my/gptel--sanitize-tool-calls fsm)
+          (let* ((updated-info (gptel-fsm-info fsm))
+                 (updated-tool-use (plist-get updated-info :tool-use))
+                 (updated-tools (plist-get updated-info :tools)))
+            (should (equal "TodoWrite" (plist-get (car updated-tool-use) :name)))
+            (should (memq todo-tool updated-tools))
+            (should (cl-every #'gptel-tool-p updated-tools))))
+      (when (buffer-live-p request-buffer)
+        (kill-buffer request-buffer)))))
+
 (provide 'test-gptel-ext-tool-sanitize)
 ;;; test-gptel-ext-tool-sanitize.el ends here
