@@ -392,16 +392,16 @@ TARGETS is the analyzer result, STATIC-TARGETS is fallback list.
 Returns non-nil if error state was handled."
   (cond
    ((and gptel-auto-workflow--analyzer-quota-exhausted
-         (null targets))
+         (not targets))
     (message "[auto-workflow] Analyzer quota exhausted; using static targets")
     (funcall callback static-targets)
     t)
    ((and gptel-auto-workflow--analyzer-transient-failure
-         (null targets))
+         (not targets))
     (message "[auto-workflow] Analyzer transient failure; using static targets")
     (funcall callback static-targets)
     t)
-   ((null targets)
+   ((not targets)
     (message "[auto-workflow] Analyzer returned no targets; using static targets")
     (funcall callback static-targets)
     t)
