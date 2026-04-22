@@ -514,6 +514,12 @@ CALLBACK receives non-nil when approved and nil when rejected."
   "Format MESSAGE as a sandbox error string."
   (format "Error: %s" message))
 
+(defun gptel-sandbox--wrap-result (result)
+  "Wrap RESULT for callback, avoiding double-wrapping of error strings."
+  (if (and (stringp result) (string-prefix-p "Error: " result))
+      result
+    (gptel-sandbox--format-result result)))
+
 (defun gptel-sandbox--format-result (result)
   "Convert RESULT to string, preferring gptel--to-string when available."
   (if (fboundp 'gptel--to-string)
@@ -555,16 +561,16 @@ can consume lists, vectors, plists, and alists as readable data."
                      (apply (gptel-tool-function tool-spec)
                             (lambda (result)
                               (condition-case cb-err
-                                  (funcall callback (gptel-sandbox--format-result result))
+                                  (funcall callback (gptel-sandbox--wrap-result result))
                                 (error (funcall callback
-                                                (gptel-sandbox--format-result
+                                                (gptel-sandbox--wrap-result
                                                  (gptel-sandbox--format-error
                                                   (error-message-string cb-err)))))))
                             arg-values)
                    (let ((result (condition-case inner-err
                                      (apply (gptel-tool-function tool-spec) arg-values)
                                    (error (gptel-sandbox--format-error (error-message-string inner-err))))))
-                     (funcall callback (gptel-sandbox--format-result result)))))))
+                     (funcall callback (gptel-sandbox--wrap-result result)))))))
           (if (gptel-sandbox--confirm-required-p tool-spec arg-values)
               (gptel-sandbox--maybe-aggregate-confirm
                state
