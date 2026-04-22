@@ -2455,7 +2455,7 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should-not (string-match-p "^## Mandatory Focus Contract$" prompt)))))
 
 (ert-deftest regression/auto-experiment/build-prompt-adds-large-target-guidance ()
-  "Large targets should get advisory guidance without a forced recovery contract."
+  "Large first attempts should also get a hard focus contract."
   (cl-letf (((symbol-function 'gptel-auto-workflow--get-worktree-dir)
              (lambda (_target) "/tmp/worktree"))
             ((symbol-function 'shell-command-to-string)
@@ -2481,8 +2481,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should (string-match-p "This target is large" prompt))
       (should (string-match-p "FOCUS: my/gptel--invoke-callback-safely" prompt))
       (should (string-match-p "line 2 must be exactly `FOCUS: my/gptel--invoke-callback-safely`" prompt))
-      (should-not (string-match-p "^## Mandatory Focus Contract$" prompt))
-      (should-not (string-match-p "Follow this exact opening sequence" prompt)))))
+      (should (string-match-p "^## Mandatory Focus Contract$" prompt))
+      (should (string-match-p "This target is large and prone to inspection-thrash before the first edit" prompt))
+      (should (string-match-p "Follow this exact opening sequence" prompt)))))
 
 (ert-deftest regression/auto-experiment/build-prompt-adds-mandatory-focus-contract-for-medium-targets ()
   "Medium-large first attempts should get a hard focus contract before thrashing."

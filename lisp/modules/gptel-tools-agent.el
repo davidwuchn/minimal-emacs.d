@@ -6794,13 +6794,12 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
          (focused-target-p
            (and (numberp target-bytes)
                 (>= target-bytes gptel-auto-experiment-focused-target-byte-threshold)))
-         (large-target-p
-            (and (numberp target-bytes)
-                  (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
-         (preemptive-focus-contract-p
-          (and focused-target-p
-               (not large-target-p)
-               (not previous-results)))
+          (large-target-p
+             (and (numberp target-bytes)
+                   (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
+          (preemptive-focus-contract-p
+           (and focused-target-p
+                (not previous-results)))
          (focus-candidate
              (when focused-target-p
                (gptel-auto-experiment--select-large-target-focus target-full-path experiment-id)))
@@ -6841,11 +6840,12 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
          (mandatory-focus-contract
           (when (or recovery-p preemptive-focus-contract-p)
             (concat "## Mandatory Focus Contract\n"
-                    (cond
-                     (recovery-p
-                      "A previous attempt on this target already failed with inspection-thrash.\n")
-                     (preemptive-focus-contract-p
-                      "This target is medium-large and prone to inspection-thrash before the first edit.\n"))
+                     (cond
+                      (recovery-p
+                       "A previous attempt on this target already failed with inspection-thrash.\n")
+                      (preemptive-focus-contract-p
+                       (format "This target is %s and prone to inspection-thrash before the first edit.\n"
+                               (if large-target-p "large" "medium-large"))))
                     (when focused-target-p
                       (format "This target is %s (%d bytes). Broad file surveys are likely to fail.\n"
                               (if large-target-p "large" "medium-large")
