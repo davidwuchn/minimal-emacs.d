@@ -6789,22 +6789,27 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
          (recovery-p
           (gptel-auto-experiment--needs-inspection-thrash-recovery-p previous-results))
          (follow-up-focus-p
-          (and previous-results (not recovery-p)))
+           (and previous-results (not recovery-p)))
          (focused-target-p
-          (and (numberp target-bytes)
-               (>= target-bytes gptel-auto-experiment-focused-target-byte-threshold)))
-         (large-target-p
            (and (numberp target-bytes)
-                 (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
+                (>= target-bytes gptel-auto-experiment-focused-target-byte-threshold)))
+         (large-target-p
+            (and (numberp target-bytes)
+                  (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
+         (preemptive-focus-contract-p
+          (and focused-target-p
+               (not large-target-p)
+               (not previous-results)))
          (focus-candidate
-           (when focused-target-p
-             (gptel-auto-experiment--select-large-target-focus target-full-path experiment-id)))
-         (focused-target-guidance
-          (when (and focused-target-p
-                     (not large-target-p))
-            (concat "## Focused Target Guidance\n"
-                    (format "This target is medium-large (%d bytes). Start from one concrete function or variable before broader file surveys.\n"
-                            target-bytes)
+             (when focused-target-p
+               (gptel-auto-experiment--select-large-target-focus target-full-path experiment-id)))
+          (focused-target-guidance
+           (when (and focused-target-p
+                      (not preemptive-focus-contract-p)
+                      (not large-target-p))
+             (concat "## Focused Target Guidance\n"
+                     (format "This target is medium-large (%d bytes). Start from one concrete function or variable before broader file surveys.\n"
+                             target-bytes)
                     (when focus-candidate
                       (format "- Begin at `%s` or a direct caller/callee.\n"
                               (plist-get focus-candidate :name)))
@@ -6832,17 +6837,21 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
                      (plist-get focus-candidate :start-line)
                     (plist-get focus-candidate :end-line)
                     (plist-get focus-candidate :size-lines))))
-         (inspection-thrash-contract
-           (when recovery-p
-             (concat "## Mandatory Focus Contract\n"
-                     "A previous attempt on this target already failed with inspection-thrash.\n"
-                     (when focused-target-p
-                       (format "This target is %s (%d bytes). Broad file surveys are likely to fail.\n"
-                               (if large-target-p "large" "medium-large")
-                               target-bytes))
-                     "Follow this exact opening sequence:\n"
-                     (format "1. The second line after HYPOTHESIS must be exactly `%s`.\n"
-                             focus-line)
+         (mandatory-focus-contract
+          (when (or recovery-p preemptive-focus-contract-p)
+            (concat "## Mandatory Focus Contract\n"
+                    (cond
+                     (recovery-p
+                      "A previous attempt on this target already failed with inspection-thrash.\n")
+                     (preemptive-focus-contract-p
+                      "This target is medium-large and prone to inspection-thrash before the first edit.\n"))
+                    (when focused-target-p
+                      (format "This target is %s (%d bytes). Broad file surveys are likely to fail.\n"
+                              (if large-target-p "large" "medium-large")
+                              target-bytes))
+                    "Follow this exact opening sequence:\n"
+                    (format "1. The second line after HYPOTHESIS must be exactly `%s`.\n"
+                            focus-line)
                     "2. Do NOT use Code_Map on the whole file.\n"
                     "3. Use at most 3 read-only tool calls, all on that same symbol or its direct callers/callees.\n"
                     "4. Your next tool call after those reads must be a write-capable tool on that same symbol.\n"
@@ -6948,7 +6957,7 @@ Example HYPOTHESES:
               (or controller-focus "")
               (or focused-target-guidance "")
               (or large-target-guidance "")
-              (or inspection-thrash-contract "")
+              (or mandatory-focus-contract "")
               (or follow-up-focus-contract "")
              (or patterns "No previous experiments")
              (or suggestions "None")

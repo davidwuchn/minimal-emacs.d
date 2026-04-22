@@ -2438,8 +2438,8 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should-not (string-match-p "^## Mandatory Focus Contract$" prompt))
       (should-not (string-match-p "Follow this exact opening sequence" prompt)))))
 
-(ert-deftest regression/auto-experiment/build-prompt-adds-focused-guidance-for-medium-targets ()
-  "Medium-large targets should get first-attempt focus guidance before thrashing."
+(ert-deftest regression/auto-experiment/build-prompt-adds-mandatory-focus-contract-for-medium-targets ()
+  "Medium-large first attempts should get a hard focus contract before thrashing."
   (cl-letf (((symbol-function 'gptel-auto-workflow--get-worktree-dir)
              (lambda (_target) "/tmp/worktree"))
             ((symbol-function 'shell-command-to-string)
@@ -2461,13 +2461,15 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
                    "lisp/modules/gptel-ext-context-cache.el" 1 5 nil 0.4)))
       (should (string-match-p "Controller-Selected Starting Symbol" prompt))
       (should (string-match-p "Symbol: `my/gptel--lookup-context-window-in-gptel-tables`" prompt))
-      (should (string-match-p "Focused Target Guidance" prompt))
+      (should (string-match-p "^## Mandatory Focus Contract$" prompt))
+      (should (string-match-p "This target is medium-large and prone to inspection-thrash before the first edit" prompt))
       (should (string-match-p "This target is medium-large" prompt))
       (should (string-match-p "FOCUS: my/gptel--lookup-context-window-in-gptel-tables" prompt))
       (should (string-match-p "line 2 must be exactly `FOCUS: my/gptel--lookup-context-window-in-gptel-tables`" prompt))
+      (should (string-match-p "Follow this exact opening sequence" prompt))
       (should-not (string-match-p "Large Target Guidance" prompt))
-      (should-not (string-match-p "^## Mandatory Focus Contract$" prompt))
-      (should-not (string-match-p "Follow this exact opening sequence" prompt)))))
+      (should-not (string-match-p "^## Focused Target Guidance$" prompt))
+      (should-not (string-match-p "^## Follow-up Focus Contract$" prompt)))))
 
 (ert-deftest regression/auto-experiment/select-large-target-focus-ranks-and-rotates ()
   "Large-target focus selector should rank helpers and rotate by experiment."
