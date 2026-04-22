@@ -290,8 +290,9 @@ improving testability and reducing cognitive load."
                    ((null obj) nil)
                    ((gethash obj seen) nil)
                    ((my/gptel--fsm-p obj)
-                    (puthash obj t seen)
-                    (push obj result)))))
+                    (unless (gethash obj seen)
+                      (puthash obj t seen)
+                      (push obj result))))))
       (collect object)
       (nreverse result))))
 
