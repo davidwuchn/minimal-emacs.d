@@ -413,7 +413,7 @@ Uses language-aware heuristics:
 
 For buffers with current buffer, analyzes content type."
   (if (not (and (numberp chars) (> chars 0)))
-      0
+      0.0
     (let ((ratio 3.5))
       (when (and (buffer-live-p (current-buffer))
                  (buffer-file-name))
