@@ -477,6 +477,7 @@ Image tokens are counted from `gptel-context' if available."
   (when (file-readable-p my/gptel-context-window-cache-file)
     (condition-case err
         (progn
+          (clrhash my/gptel--context-window-cache)
           (setq my/gptel--context-window-cache-data nil
                 my/gptel--context-window-cache-last-refresh nil)
           (load my/gptel-context-window-cache-file nil t)
