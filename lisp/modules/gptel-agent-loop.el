@@ -563,8 +563,6 @@ REQUEST-PROMPT and USE-TOOLS are reused on retries."
                      (gptel-agent-loop--task-description state)
                      (gptel-agent-loop--task-retries state)
                      gptel-agent-loop-max-retries)
-            (when (timerp (gptel-agent-loop--task-timeout-timer state))
-              (cancel-timer (gptel-agent-loop--task-timeout-timer state)))
             (setf (gptel-agent-loop--task-timeout-timer state)
                   (gptel-agent-loop--make-timeout-timer state))
             (gptel-agent-loop--schedule-request state request-prompt use-tools 2.0))
@@ -758,12 +756,12 @@ Cache behavior:
                 (my/gptel--seed-fsm-tools child-fsm request-tools)))))))))
 
 (defun gptel-agent-loop--make-timeout-timer (state)
-  "Create timeout timer for STATE."
-  (let ((timeout gptel-agent-loop-timeout))
-    (when (and state
-               (gptel-agent-loop--task-p state)
-               (numberp timeout)
-               (> timeout 0))
+  "Create timeout timer for STATE, canceling any existing timer first."
+  (when (and state (gptel-agent-loop--task-p state) gptel-agent-loop-timeout)
+    (let ((existing-timer (gptel-agent-loop--task-timeout-timer state)))
+      (when (timerp existing-timer)
+        (cancel-timer existing-timer)))
+    (let ((timeout gptel-agent-loop-timeout))
       (run-with-timer
        timeout nil
        (lambda ()
