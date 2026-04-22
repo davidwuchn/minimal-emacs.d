@@ -342,6 +342,20 @@ status_can_use_persisted_active_snapshot() {
 
     case "$ACTION" in
         messages)
+            messages_snapshot_fresh && return 0
+            ;;
+        status)
+            status_snapshot_fresh && return 0
+            ;;
+        *)
+            if status_snapshot_fresh || messages_snapshot_fresh; then
+                return 0
+            fi
+            ;;
+    esac
+
+    case "$ACTION" in
+        messages)
             if messages_snapshot_fresh && ! daemon_socket_has_owner; then
                 return 0
             fi
