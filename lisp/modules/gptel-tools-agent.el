@@ -6749,7 +6749,9 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
                     "This is not the first attempt on this target. Do not resurvey the whole file.\n"
                     (format "The second line after HYPOTHESIS must be exactly `%s`.\n"
                             focus-line)
-                    "Use at most 5 read-only tool calls before the first write-capable edit.\n"
+                    "Do NOT use Code_Map on the whole file.\n"
+                    "Use at most 3 read-only tool calls, all on that same symbol or its direct callers/callees.\n"
+                    "Your next tool call after those reads must be a write-capable tool on that same symbol.\n"
                     "Prefer the symbol from the previous attempt, prior analysis, or a direct caller/callee.\n"
                     "Do not inspect a second subsystem before the first edit exists.\n\n"))))
     (format "You are running experiment %d of %d to optimize %s.

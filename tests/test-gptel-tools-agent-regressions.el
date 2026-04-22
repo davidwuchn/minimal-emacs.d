@@ -2403,7 +2403,9 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
       (should (string-match-p "^## Follow-up Focus Contract$" prompt))
       (should (string-match-p "This is not the first attempt on this target" prompt))
       (should (string-match-p "The second line after HYPOTHESIS must be exactly `FOCUS: <one concrete function or variable>`" prompt))
-      (should (string-match-p "Use at most 5 read-only tool calls before the first write-capable edit" prompt))
+      (should (string-match-p "Do NOT use Code_Map on the whole file" prompt))
+      (should (string-match-p "Use at most 3 read-only tool calls, all on that same symbol or its direct callers/callees" prompt))
+      (should (string-match-p "Your next tool call after those reads must be a write-capable tool on that same symbol" prompt))
       (should-not (string-match-p "^## Mandatory Focus Contract$" prompt)))))
 
 (ert-deftest regression/auto-experiment/build-prompt-adds-large-target-guidance ()
