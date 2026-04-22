@@ -2737,10 +2737,14 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
   "Default validation-retry hard timeout should leave headroom for active repairs."
   (should (= (+ gptel-auto-experiment-validation-retry-time-budget
                 gptel-auto-experiment-validation-retry-active-grace)
-             420))
+             600))
   (should (> (+ gptel-auto-experiment-validation-retry-time-budget
                 gptel-auto-experiment-validation-retry-active-grace)
-             360)))
+             540))
+  (should (< (+ gptel-auto-experiment-validation-retry-time-budget
+                gptel-auto-experiment-validation-retry-active-grace)
+             (+ gptel-auto-experiment-time-budget
+                gptel-auto-experiment-active-grace))))
 
 (ert-deftest regression/subagent/minimax-backend-max-time-keeps-provider-headroom ()
   "MiniMax backend should not undercut long-running executor requests."

@@ -2515,8 +2515,12 @@ time to apply and verify a focused fix."
   :safe #'integerp
   :group 'gptel-tools-agent)
 
-(defcustom gptel-auto-experiment-validation-retry-active-grace 180
-  "Extra wall-clock seconds active validation-retry calls may use beyond budget."
+(defcustom gptel-auto-experiment-validation-retry-active-grace 360
+  "Extra wall-clock seconds active validation-retry calls may use beyond budget.
+
+This leaves focused repair retries below full-experiment limits while giving
+large-file fixes enough active headroom to finish after they have already
+started producing edits."
   :type 'integer
   :safe #'integerp
   :group 'gptel-tools-agent)
@@ -2524,7 +2528,7 @@ time to apply and verify a focused fix."
 (defconst gptel-auto-workflow--legacy-validation-retry-active-grace 120
   "Previous default for `gptel-auto-experiment-validation-retry-active-grace'.")
 
-(defconst gptel-auto-workflow--current-validation-retry-active-grace 180
+(defconst gptel-auto-workflow--current-validation-retry-active-grace 360
   "Current runtime default for `gptel-auto-experiment-validation-retry-active-grace'.")
 
 (defcustom gptel-auto-experiment-delay-between 3
