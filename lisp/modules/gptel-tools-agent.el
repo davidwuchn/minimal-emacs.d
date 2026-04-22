@@ -2016,14 +2016,15 @@ subagent callback fired, and avoids reusing a deleted worktree as
                       (void-variable nil)))
                user-emacs-directory
                temporary-file-directory)
-              (and (stringp default-directory) default-directory)
+              (and (stringp default-directory)
+                   (file-directory-p default-directory)
+                   default-directory)
               temporary-file-directory)))
     (with-current-buffer safe-buffer
       (setq default-directory safe-default-directory)
       (condition-case err
           (funcall callback result)
         (error
-         (message "[gptel-tools] Callback error: %s" (error-message-string err))
          (signal (car err) (cdr err)))))))
 
 (defun my/gptel--agent-task-with-timeout (callback agent-type description prompt &optional files include-history include-diff)
@@ -9110,9 +9111,13 @@ Relative paths are resolved from the project root."
                                     gptel-auto-workflow--messages-start-pos)))
                          (t (point-min))))
              (tail-start (max (point-min) (- (point-max) max-chars))))
-        (write-region (max start-pos tail-start)
-                      (point-max)
-                      file nil 'silent)))))
+        (condition-case err
+            (write-region (max start-pos tail-start)
+                          (point-max)
+                          file nil 'silent)
+          (error
+           (message "[auto-workflow] Messages tail persist failed: %s"
+                    (error-message-string err))))))))
 
 (defun gptel-auto-workflow--status-plist ()
   "Return current workflow status as a plist."
@@ -9167,18 +9172,18 @@ Relative paths are resolved from the project root."
   "Persist current workflow status for non-blocking cron health checks."
   (let* ((file (gptel-auto-workflow--status-file))
          (dir (file-name-directory file))
-         (status (gptel-auto-workflow--status-plist))
-         (existing-status (gptel-auto-workflow-read-persisted-status)))
+         (status (gptel-auto-workflow--status-plist)))
     ;; Preserve the last active snapshot when an unrelated process only has an
     ;; idle placeholder view of workflow state. The shell wrapper already owns
      ;; stale-active detection; this guard prevents bogus idle rewrites with
      ;; synthetic run ids while a real run is still active elsewhere.
      (when (and (gptel-auto-workflow--status-placeholder-p status)
-                (not gptel-auto-workflow--allow-placeholder-status-overwrite)
-                (gptel-auto-workflow--status-active-p existing-status)
-                (not (gptel-auto-workflow--status-owned-by-current-run-p
-                      existing-status)))
-       (setq status existing-status))
+                (not gptel-auto-workflow--allow-placeholder-status-overwrite))
+       (let ((existing-status (gptel-auto-workflow-read-persisted-status)))
+         (when (and (gptel-auto-workflow--status-active-p existing-status)
+                    (not (gptel-auto-workflow--status-owned-by-current-run-p
+                          existing-status)))
+           (setq status existing-status))))
      (when dir
       (make-directory dir t))
     (with-temp-file file
@@ -9721,9 +9726,10 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
       (condition-case-unless-debug err
           (gptel-auto-workflow--persist-status)
         (error
-         (message "[auto-workflow] Status refresh failed: %s"
-                  (error-message-string err))
-         (gptel-auto-workflow--stop-status-refresh-timer)))
+         (ignore-errors
+           (message "[auto-workflow] Status refresh failed: %s"
+                    (error-message-string err))
+           (gptel-auto-workflow--stop-status-refresh-timer))))
     (gptel-auto-workflow--stop-status-refresh-timer)))
 
 (defun gptel-auto-workflow--start-status-refresh-timer ()
@@ -9732,6 +9738,7 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
                  gptel-auto-workflow--cron-job-running)
              (numberp gptel-auto-workflow-status-refresh-interval)
              (> gptel-auto-workflow-status-refresh-interval 0))
+    ;; Always cancel any existing timer before creating a new one
     (gptel-auto-workflow--stop-status-refresh-timer)
     (setq gptel-auto-workflow--status-refresh-timer
           (run-with-timer gptel-auto-workflow-status-refresh-interval

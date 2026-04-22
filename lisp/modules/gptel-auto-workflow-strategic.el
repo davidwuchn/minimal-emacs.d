@@ -254,7 +254,7 @@ CALLBACK receives list of target files."
          (analyzer-timeout (max (or my/gptel-agent-task-timeout 0)
                                 gptel-auto-workflow-analyzer-time-budget))
          (prompt (gptel-auto-workflow--build-analyzer-prompt
-                   context research-findings max-targets)))
+                  context research-findings max-targets)))
     (if (and gptel-auto-experiment-use-subagents
              (fboundp 'gptel-benchmark-call-subagent))
         (cl-labels
@@ -297,20 +297,20 @@ Returns updated targets list."
           (root-prefix (if (string-suffix-p "/" proj-root)
                            proj-root
                          (concat proj-root "/"))))
-       (if (and (file-exists-p abs-path)
-                (file-regular-p abs-path)
-                (string-prefix-p root-prefix abs-path)
-                (gptel-auto-workflow--target-in-root-repo-p abs-path proj-root))
-           (let ((rel-path (file-relative-name abs-path proj-root)))
-             (if (gptel-auto-workflow--skip-headless-target-p rel-path)
-                 (progn
-                   (message "[auto-workflow] Skipping self-hosting target in headless run: %s"
-                            rel-path)
-                   targets)
-                (if (member rel-path targets)
-                    targets
-                  (cons rel-path targets))))
-         targets)))))
+      (if (and (file-exists-p abs-path)
+               (file-regular-p abs-path)
+               (string-prefix-p root-prefix abs-path)
+               (gptel-auto-workflow--target-in-root-repo-p abs-path proj-root))
+          (let ((rel-path (file-relative-name abs-path proj-root)))
+            (if (gptel-auto-workflow--skip-headless-target-p rel-path)
+                (progn
+                  (message "[auto-workflow] Skipping self-hosting target in headless run: %s"
+                           rel-path)
+                  targets)
+              (if (member rel-path targets)
+                  targets
+                (cons rel-path targets))))
+        targets)))))
 
 (defun gptel-auto-workflow--normalize-response (response)
   "Normalize RESPONSE to a string.
@@ -425,12 +425,12 @@ Returns non-nil if error state was handled."
     (gptel-auto-workflow--normalize-target-candidate item))
    ((gptel-auto-workflow--json-object-p item)
     (gptel-auto-workflow--normalize-target-candidate
-     (or (cl-getf item 'file)
-         (cl-getf item "file")
-         (cl-getf item 'path)
-         (cl-getf item "path")
-         (cl-getf item 'target)
-         (cl-getf item "target"))))
+     (or (alist-get 'file item)
+         (cdr (assoc "file" item))
+         (alist-get 'path item)
+         (cdr (assoc "path" item))
+         (alist-get 'target item)
+         (cdr (assoc "target" item)))))
    (t nil)))
 
 (defun gptel-auto-workflow--nonempty-string-p (s)
@@ -458,12 +458,12 @@ Logs parsing failures for debugging."
                    (target-list
                     (cond
                      ((gptel-auto-workflow--json-object-p data)
-                      (or (cl-getf data 'targets)
-                          (cl-getf data "targets")
-                          (cl-getf data 'files)
-                          (cl-getf data "files")
-                          (cl-getf data 'paths)
-                          (cl-getf data "paths")
+                      (or (alist-get 'targets data)
+                          (cdr (assoc "targets" data))
+                          (alist-get 'files data)
+                          (cdr (assoc "files" data))
+                          (alist-get 'paths data)
+                          (cdr (assoc "paths" data))
                           (and (gptel-auto-workflow--json-target-file data)
                                (list data))))
                      ((listp data) data)))

@@ -120,7 +120,8 @@ BEHAVIOR: delay = min(max-delay, base-delay * backoff-factor^retries)
 EDGE CASE: Negative retries clamped to 0 to prevent sub-second delays.
 TEST: (my/gptel--retry-delay 0) => 4.0
 TEST: (my/gptel--retry-delay 3) => 30.0 (capped)"
-  (let ((r (max 0 (or retries 0))))
+  (let* ((r (if (numberp retries) retries 0))
+         (r (max 0 r)))
     (min my/gptel--retry-max-delay
          (* my/gptel--retry-base-delay
             (expt my/gptel--retry-backoff-factor r)))))

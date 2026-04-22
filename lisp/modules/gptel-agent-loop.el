@@ -764,7 +764,8 @@ Cache behavior:
       (run-with-timer
        timeout nil
        (lambda ()
-         (unless (gptel-agent-loop--task-finished state)
+         (when (and (not (gptel-agent-loop--task-finished state))
+                    (not (gptel-agent-loop--task-aborted state)))
            (setf (gptel-agent-loop--task-aborted state) t)
            (message "[RunAgent] Task '%s' timed out after %ds"
                     (gptel-agent-loop--task-description state)
