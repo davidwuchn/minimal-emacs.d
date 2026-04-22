@@ -9109,9 +9109,13 @@ Relative paths are resolved from the project root."
                                     gptel-auto-workflow--messages-start-pos)))
                          (t (point-min))))
              (tail-start (max (point-min) (- (point-max) max-chars))))
-        (write-region (max start-pos tail-start)
-                      (point-max)
-                      file nil 'silent)))))
+        (condition-case err
+            (write-region (max start-pos tail-start)
+                          (point-max)
+                          file nil 'silent)
+          (error
+           (message "[auto-workflow] Messages tail persist failed: %s"
+                    (error-message-string err))))))))
 
 (defun gptel-auto-workflow--status-plist ()
   "Return current workflow status as a plist."
