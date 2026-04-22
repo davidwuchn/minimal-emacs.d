@@ -4306,9 +4306,37 @@ the reviewer admits it could not verify the diff or locate the relevant file."
                (* blank)
                "UNVERIFIED")
            review-output)
-          (string-match-p "did not meet verification contract" review-output)
-          (string-match-p "cannot access the file directly" review-output)
-          (string-match-p "cannot locate the file" review-output)))))
+           (string-match-p "did not meet verification contract" review-output)
+           (string-match-p "cannot access the file directly" review-output)
+           (string-match-p "cannot locate the file" review-output)))))
+
+(defun gptel-auto-workflow--review-provider-chain-incomplete-p ()
+  "Return non-nil when reviewer provider failover still has retries worth trying.
+
+This keeps staging review alive long enough to rate-limit the current reviewer
+backend and actually try the next available fallback provider."
+  (let* ((preset (and (fboundp 'gptel-auto-experiment--current-subagent-preset)
+                      (gptel-auto-experiment--current-subagent-preset "reviewer")))
+         (backend (and (listp preset)
+                       (gptel-auto-workflow--preset-backend-name
+                        (plist-get preset :backend))))
+         (failures (or (and (stringp backend)
+                            (cdr (cl-assoc backend
+                                           gptel-auto-workflow--backend-failure-counts
+                                           :test #'string=)))
+                       0)))
+    (or (and (stringp backend)
+             (< failures gptel-auto-workflow-backend-rate-limit-failure-threshold))
+        (gptel-auto-experiment--remaining-provider-failover-candidate "reviewer"))))
+
+(defun gptel-auto-workflow--review-error-retry-allowed-p (review-output)
+  "Return non-nil when REVIEW-OUTPUT should get another transient retry."
+  (or (< gptel-auto-workflow--review-error-retry-count
+         gptel-auto-workflow--review-max-retries)
+      (and (stringp review-output)
+           (memq (car-safe (gptel-auto-experiment--categorize-error review-output))
+                 '(:api-rate-limit :api-error :timeout))
+           (gptel-auto-workflow--review-provider-chain-incomplete-p))))
 
 (defun gptel-auto-workflow--fix-output-indicates-already-fixed-p (fix-output)
   "Return non-nil when FIX-OUTPUT says the worktree already contains the fix."
@@ -5223,18 +5251,21 @@ When COMPLETION-CALLBACK is non-nil, call it with non-nil on success."
                disproven-undefined-blocker))
     (cond
      (review-error
-      (if (< gptel-auto-workflow--review-error-retry-count
-             gptel-auto-workflow--review-max-retries)
+      (if (gptel-auto-workflow--review-error-retry-allowed-p review-output)
           (progn
             (when (memq review-error-category '(:api-rate-limit :api-error :timeout))
               (when-let ((reviewer-preset
                           (gptel-auto-workflow--agent-base-preset "reviewer")))
                 (gptel-auto-workflow--activate-provider-failover
-                 "reviewer" reviewer-preset review-output)))
+                  "reviewer" reviewer-preset review-output)))
             (cl-incf gptel-auto-workflow--review-error-retry-count)
-            (message "[auto-workflow] Review failed transiently, retrying review (%d/%d)..."
+            (message "[auto-workflow] Review failed transiently, retrying review (%d/%d%s)..."
                      gptel-auto-workflow--review-error-retry-count
-                     gptel-auto-workflow--review-max-retries)
+                     gptel-auto-workflow--review-max-retries
+                     (if (> gptel-auto-workflow--review-error-retry-count
+                            gptel-auto-workflow--review-max-retries)
+                         ", provider failover"
+                       ""))
             (run-with-timer
              gptel-auto-experiment-retry-delay nil
              (lambda ()
