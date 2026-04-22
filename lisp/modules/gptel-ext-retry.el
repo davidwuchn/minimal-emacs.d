@@ -245,18 +245,17 @@ INFO is the request info plist containing :model, :backend, :data, and :buffer.
 
 Returns the number of messages repaired."
   (let* ((model (plist-get info :model))
-         (backend (plist-get info :backend))
          (reasoning-key (and (fboundp 'my/gptel--reasoning-key-for-model)
-                             (my/gptel--reasoning-key-for-model model backend)))
-         (data (plist-get info :data))
-         (messages (and data (plist-get data :messages)))
+                             (my/gptel--reasoning-key-for-model model)))
+         (messages (let ((data (plist-get info :data)))
+                     (and data (plist-get data :messages))))
          (gptel-buf (plist-get info :buffer))
          (reasoning-alist
           (and gptel-buf (buffer-live-p gptel-buf)
                (boundp 'my/gptel--tool-reasoning-alist)
                (buffer-local-value 'my/gptel--tool-reasoning-alist gptel-buf)))
          (repaired 0))
-    (when (and reasoning-key messages (> (length messages) 0)
+    (when (and reasoning-key messages
                (fboundp 'my/gptel--ensure-reasoning-on-messages))
       (setq repaired
             (my/gptel--ensure-reasoning-on-messages
