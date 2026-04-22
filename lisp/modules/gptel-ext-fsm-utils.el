@@ -288,7 +288,7 @@ improving testability and reducing cognitive load."
                     (setq obj (cdr obj)))
                   (cond
                    ((null obj) nil)
-                   ((gethash obj seen) nil)
+                   ((and (consp obj) (gethash obj seen)) nil)
                    ((my/gptel--fsm-p obj)
                     (unless (gethash obj seen)
                       (puthash obj t seen)
