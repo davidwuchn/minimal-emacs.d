@@ -10111,6 +10111,96 @@ failure."
        (delete-directory status-dir t)
         (delete-directory fake-bin t))))
 
+(ert-deftest regression/auto-workflow/cron-wrapper-hydrates-empty-submodule-dirs-before-daemon-start ()
+  "Wrapper auto-workflow should hydrate empty configured submodule dirs before daemon start."
+  (let* ((harness (make-temp-file "aw-hydrate-harness" nil ".py"))
+         (output-buffer (generate-new-buffer " *aw-hydrate-harness*")))
+    (unwind-protect
+        (progn
+          (with-temp-file harness
+            (insert
+             "#!/usr/bin/env python3\n"
+             "from pathlib import Path\n"
+             "import os, shutil, shlex, subprocess, tempfile, textwrap\n"
+             (format "src_root = Path(%S)\n" test-auto-workflow--repo-root)
+             "repo_root = Path(tempfile.mkdtemp(prefix='aw-cron-repro-'))\n"
+             "scripts_dir = repo_root / 'scripts'\n"
+             "gptel_dir = repo_root / 'packages' / 'gptel'\n"
+             "fake_bin = Path(tempfile.mkdtemp(prefix='aw-fake-bin-'))\n"
+             "git_log = Path(tempfile.mktemp(prefix='aw-git-log-'))\n"
+             "daemon_ready = Path(tempfile.mktemp(prefix='aw-daemon-ready-'))\n"
+             "status_file = repo_root / 'auto-workflow-status.sexp'\n"
+             "scripts_dir.mkdir(parents=True)\n"
+             "gptel_dir.mkdir(parents=True)\n"
+             "shutil.copy2(src_root / 'scripts' / 'run-auto-workflow-cron.sh', scripts_dir / 'run-auto-workflow-cron.sh')\n"
+             "os.chmod(scripts_dir / 'run-auto-workflow-cron.sh', 0o755)\n"
+             "(repo_root / '.gitmodules').write_text('[submodule \"packages/gptel\"]\\n\\tpath = packages/gptel\\n\\turl = https://example.invalid/gptel.git\\n')\n"
+             "(fake_bin / 'git').write_text(textwrap.dedent(f'''#!/usr/bin/env python3\n"
+             "from pathlib import Path\n"
+             "import sys\n"
+             "log_path = Path({str(git_log)!r})\n"
+             "args = sys.argv[1:]\n"
+             "cwd = Path.cwd()\n"
+             "if len(args) >= 2 and args[0] == '-C':\n"
+             "    cwd = Path(args[1])\n"
+             "    args = args[2:]\n"
+             "with log_path.open('a', encoding='utf-8') as handle:\n"
+             "    handle.write(str(cwd) + ' :: ' + ' '.join(args) + '\\\\n')\n"
+             "if args[:2] == ['rev-parse', '--git-common-dir']:\n"
+             "    print(str(cwd / '.git'))\n"
+             "elif len(args) >= 4 and args[0] == 'config' and args[1] == '--file' and args[3] == '--get-regexp':\n"
+             "    print('submodule.packages/gptel.path packages/gptel')\n"
+             "elif args[:2] == ['submodule', 'status']:\n"
+             "    pass\n"
+             "elif args[:2] == ['submodule', 'sync']:\n"
+             "    pass\n"
+             "elif args[:4] == ['submodule', 'update', '--init', '--recursive']:\n"
+             "    if '--' in args:\n"
+             "        for rel in args[args.index('--') + 1:]:\n"
+             "            target = cwd / rel\n"
+             "            target.mkdir(parents=True, exist_ok=True)\n"
+             "            (target / '.git').write_text('gitdir: /fake/modules/' + rel + '\\\\n', encoding='utf-8')\n"
+             "raise SystemExit(0)\n"
+             "'''))\n"
+             "os.chmod(fake_bin / 'git', 0o755)\n"
+             "(fake_bin / 'emacsclient').write_text(textwrap.dedent(f'''#!/usr/bin/env python3\n"
+             "from pathlib import Path\n"
+             "ready = Path({str(daemon_ready)!r})\n"
+             "if ready.exists():\n"
+             "    print('t')\n"
+             "    raise SystemExit(0)\n"
+             "raise SystemExit(1)\n"
+             "'''))\n"
+             "os.chmod(fake_bin / 'emacsclient', 0o755)\n"
+             "(fake_bin / 'emacs').write_text(textwrap.dedent(f'''#!/bin/sh\n"
+             "ready={shlex.quote(str(daemon_ready))}\n"
+             "gptel_git={shlex.quote(str(gptel_dir / '.git'))}\n"
+             "if [ ! -e \"$gptel_git\" ] && [ ! -L \"$gptel_git\" ]; then\n"
+             "  echo 'missing gptel checkout' >&2\n"
+             "  exit 1\n"
+             "fi\n"
+             ": > \"$ready\"\n"
+             "'''))\n"
+             "os.chmod(fake_bin / 'emacs', 0o755)\n"
+             "env = os.environ.copy()\n"
+             "env['PATH'] = f\"{fake_bin}:{env['PATH']}\"\n"
+             "env['AUTO_WORKFLOW_STATUS_FILE'] = str(status_file)\n"
+             "env['AUTO_WORKFLOW_EMACS_SERVER'] = 'fake-aw-hydrate'\n"
+             "proc = subprocess.run([str(scripts_dir / 'run-auto-workflow-cron.sh'), 'auto-workflow'], cwd=repo_root, env=env, text=True, capture_output=True)\n"
+             "print(git_log.read_text() if git_log.exists() else '')\n"
+             "ok = (proc.returncode == 0 and (gptel_dir / '.git').exists() and daemon_ready.exists() and 'submodule update --init --recursive -- packages/gptel' in (git_log.read_text() if git_log.exists() else ''))\n"
+             "raise SystemExit(0 if ok else 1)\n"))
+          (set-file-modes harness #o755)
+          (with-current-buffer output-buffer
+            (let ((exit-code (call-process "python3" nil t nil harness)))
+              (should (equal exit-code 0))
+              (should (string-match-p "submodule update --init --recursive -- packages/gptel"
+                                      (buffer-string))))))
+      (when (buffer-live-p output-buffer)
+        (kill-buffer output-buffer))
+      (when (file-exists-p harness)
+        (delete-file harness)))))
+
 (ert-deftest regression/auto-workflow/cron-wrapper-clears-stale-active-phase-without-running-flag ()
   "Wrapper status should reset stale active phases even when :running is already nil."
   (let* ((repo-root test-auto-workflow--repo-root)
