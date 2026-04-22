@@ -508,7 +508,7 @@ CALLBACK receives non-nil when approved and nil when rejected."
         (if (>= suffix-len limit)
             (format "%s" suffix)
           (let ((head-len (- limit suffix-len)))
-            (format "%s%s" (substring text 0 head-len) suffix)))))))
+            (format "%s%s" (substring text 0 (min head-len (length text))) suffix)))))))
 
 (defun gptel-sandbox--format-error (message)
   "Format MESSAGE as a sandbox error string."
