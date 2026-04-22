@@ -334,6 +334,64 @@ raise SystemExit(0 if probe.returncode == 0 else 1)
 PY
 }
 
+daemon_socket_owned_by_worker_daemon() {
+    local daemon_pid
+
+    daemon_pid="$(worker_daemon_pid || true)"
+    [ -n "$daemon_pid" ] || return 1
+
+    python3 - "$SERVER_NAME" "$daemon_pid" <<'PY'
+from pathlib import Path
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+server_name = sys.argv[1]
+daemon_pid = sys.argv[2]
+
+def candidate_socket_paths(name):
+    uid = os.getuid()
+    candidates = []
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir:
+        candidates.append(Path(runtime_dir) / "emacs" / name)
+    for base in filter(None, [os.environ.get("TMPDIR"), tempfile.gettempdir(), "/tmp"]):
+        candidates.append(Path(base) / f"emacs{uid}" / name)
+    deduped = []
+    seen = set()
+    for path in candidates:
+        key = str(path)
+        if key not in seen:
+            deduped.append(path)
+            seen.add(key)
+    return deduped
+
+socket_path = next((path for path in candidate_socket_paths(server_name) if path.exists()), None)
+if socket_path is None:
+    raise SystemExit(1)
+
+lsof = shutil.which("lsof")
+if not lsof:
+    raise SystemExit(1)
+
+try:
+    probe = subprocess.run(
+        [lsof, "-t", str(socket_path)],
+        capture_output=True,
+        text=True,
+        timeout=2,
+        check=False,
+    )
+except subprocess.TimeoutExpired:
+    raise SystemExit(1)
+
+owners = {line.strip() for line in probe.stdout.splitlines() if line.strip()}
+raise SystemExit(0 if daemon_pid in owners else 1)
+PY
+}
+
 status_can_use_persisted_active_snapshot() {
     local rc
 
@@ -342,13 +400,20 @@ status_can_use_persisted_active_snapshot() {
 
     case "$ACTION" in
         messages)
-            messages_snapshot_fresh && return 0
+            if messages_snapshot_fresh &&
+               ! daemon_socket_owned_by_worker_daemon; then
+                return 0
+            fi
             ;;
         status)
-            status_snapshot_fresh && return 0
+            if status_snapshot_fresh &&
+               ! daemon_socket_owned_by_worker_daemon; then
+                return 0
+            fi
             ;;
         *)
-            if status_snapshot_fresh || messages_snapshot_fresh; then
+            if { status_snapshot_fresh || messages_snapshot_fresh; } &&
+               ! daemon_socket_owned_by_worker_daemon; then
                 return 0
             fi
             ;;
