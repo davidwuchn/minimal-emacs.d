@@ -434,28 +434,32 @@ Returns plist with :completion-score, :efficiency-score, :constraint-score,
 
 (defun gptel-workflow--score-tools (run tools-cfg)
   "Score tool usage of RUN against TOOLS-CFG."
-  (let* ((used-tools (gptel-workflow--tool-names run))
-         (required (or (cdr (assq 'required tools-cfg)) '()))
-         (forbidden-before (cdr (assq 'forbidden_before_phase tools-cfg)))
-         (p1-forbidden (cdr (assq 'P1 forbidden-before)))
-         (total-score 0.0)
-         (count 0))
-    (when required
-      (let* ((found (cl-intersection required used-tools :test #'string=))
-             (score (/ (float (length found)) (max 1 (length required)))))
-        (cl-incf total-score score)
-        (cl-incf count)))
-    (when p1-forbidden
-      (let* ((p1-tools (if (gptel-workflow--phase-active-p run 'P1)
-                           used-tools
-                         nil))
-             (violations (cl-intersection p1-forbidden p1-tools :test #'string=))
-             (score (if violations 0.0 1.0)))
-        (cl-incf total-score score)
-        (cl-incf count)))
-    (if (> count 0)
-        (/ total-score count)
-      1.0)))
+  (cond
+   ((null run) 1.0)
+   ((null tools-cfg) 1.0)
+   (t
+    (let* ((used-tools (gptel-workflow--tool-names run))
+           (required (cdr (assq 'required tools-cfg)))
+           (forbidden-before (cdr (assq 'forbidden_before_phase tools-cfg)))
+           (p1-forbidden (and forbidden-before (cdr (assq 'P1 forbidden-before))))
+           (total-score 0.0)
+           (count 0))
+      (when required
+        (let* ((found (cl-intersection required used-tools :test #'string=))
+               (score (/ (float (length found)) (max 1 (length required)))))
+          (cl-incf total-score score)
+          (cl-incf count)))
+      (when p1-forbidden
+        (let* ((p1-tools (if (gptel-workflow--phase-active-p run 'P1)
+                             used-tools
+                           nil))
+               (violations (cl-intersection p1-forbidden p1-tools :test #'string=))
+               (score (if violations 0.0 1.0)))
+          (cl-incf total-score score)
+          (cl-incf count)))
+      (if (> count 0)
+          (/ total-score count)
+        1.0)))))
 
 (defun gptel-workflow--score-eight-keys (run eight-keys-cfg)
   "Score Eight Keys of RUN against EIGHT-KEYS-CFG."
