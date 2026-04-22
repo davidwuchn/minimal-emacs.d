@@ -7746,6 +7746,48 @@ Only successful executor output may take the local grader retry path."
      (gptel-auto-workflow--rate-limit-failover-candidates agent-type)
      gptel-auto-workflow--rate-limited-backends)))
 
+(defun gptel-auto-experiment--provider-chain-incomplete-p (&optional agent-type)
+  "Return non-nil when AGENT-TYPE still has provider retries worth trying.
+
+This covers both retries that should stay on the current backend and retries
+that should advance to the next failover candidate.  Defaults to the executor
+path used by experiment loops."
+  (let* ((resolved-agent-type (or agent-type "executor"))
+         (current-preset
+          (and (fboundp 'gptel-auto-experiment--current-subagent-preset)
+               (gptel-auto-experiment--current-subagent-preset
+                resolved-agent-type)))
+         (base-preset
+          (and (or (not (listp current-preset))
+                   (null (plist-get current-preset :backend)))
+               (fboundp 'gptel-auto-workflow--agent-base-preset)
+               (gptel-auto-workflow--agent-base-preset resolved-agent-type)))
+         (effective-preset
+          (cond
+           ((and (listp current-preset)
+                 (plist-get current-preset :backend))
+            current-preset)
+           ((and (listp base-preset)
+                 (fboundp 'gptel-auto-workflow--maybe-override-subagent-provider))
+            (gptel-auto-workflow--maybe-override-subagent-provider
+             resolved-agent-type base-preset))
+           (t base-preset)))
+         (backend
+          (and (listp effective-preset)
+               (fboundp 'gptel-auto-workflow--preset-backend-name)
+               (gptel-auto-workflow--preset-backend-name
+                (plist-get effective-preset :backend))))
+         (failures (or (and (stringp backend)
+                            (cdr (cl-assoc backend
+                                           gptel-auto-workflow--backend-failure-counts
+                                           :test #'string=)))
+                       0)))
+    (or (and (stringp backend)
+             (< failures
+                gptel-auto-workflow-backend-rate-limit-failure-threshold))
+        (gptel-auto-experiment--remaining-provider-failover-candidate
+         resolved-agent-type))))
+
 (defun gptel-auto-experiment--hard-quota-stops-run-p (agent-type error-output)
   "Return non-nil when ERROR-OUTPUT should stop the run for AGENT-TYPE.
 
@@ -7767,11 +7809,11 @@ the shared run-wide API counter or stopping the rest of the workflow."
   (when (memq error-category '(:api-rate-limit :api-error))
     (let* ((resolved-agent-type (or agent-type "executor"))
            (hard-quota (gptel-auto-experiment--hard-quota-exhausted-p error-source)))
-      (if escalate-run-pressure
-          (progn
-            (cl-incf gptel-auto-experiment--api-error-count)
-            (message "[auto-workflow] API error #%d: %s"
-                     gptel-auto-experiment--api-error-count error-category)
+       (if escalate-run-pressure
+           (progn
+             (cl-incf gptel-auto-experiment--api-error-count)
+             (message "[auto-workflow] API error #%d: %s"
+                      gptel-auto-experiment--api-error-count error-category)
             (when hard-quota
               (if-let ((remaining
                         (gptel-auto-experiment--remaining-provider-failover-candidate
@@ -7780,16 +7822,20 @@ the shared run-wide API counter or stopping the rest of the workflow."
                            resolved-agent-type
                            (car remaining)
                            (cdr remaining))
-                (setq gptel-auto-experiment--quota-exhausted t)
-                (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run")))
-            (when (>= gptel-auto-experiment--api-error-count
-                      gptel-auto-experiment--api-error-threshold)
-              (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
-                       target)))
-        (progn
-          (message "[auto-workflow] Local API pressure on %s for %s; keeping run-wide pressure unchanged"
-                   resolved-agent-type target)
-          (when hard-quota
+                 (setq gptel-auto-experiment--quota-exhausted t)
+                 (message "[auto-workflow] Provider quota exhausted; stopping remaining work for this run")))
+             (when (>= gptel-auto-experiment--api-error-count
+                       gptel-auto-experiment--api-error-threshold)
+               (if (gptel-auto-experiment--provider-chain-incomplete-p
+                    resolved-agent-type)
+                   (message "[auto-workflow] API pressure threshold reached for %s, but provider failover remains available for %s"
+                            target resolved-agent-type)
+                 (message "[auto-workflow] API pressure detected; reducing future experiments for %s"
+                          target))))
+         (progn
+           (message "[auto-workflow] Local API pressure on %s for %s; keeping run-wide pressure unchanged"
+                    resolved-agent-type target)
+           (when hard-quota
             (if-let ((remaining
                       (gptel-auto-experiment--remaining-provider-failover-candidate
                        resolved-agent-type)))
@@ -8035,9 +8081,14 @@ Also logs agent-output snippet for debugging when category is :unknown."
       (message "[auto-experiment] No error pattern found, snippet: %s" (my/gptel--sanitize-for-logging snippet))
       (cons :unknown "Unknown error")))))
 
-(defun gptel-auto-experiment--should-reduce-experiments-p ()
-  "Check if we should reduce experiment count due to API issues."
-  (>= gptel-auto-experiment--api-error-count gptel-auto-experiment--api-error-threshold))
+(defun gptel-auto-experiment--should-reduce-experiments-p (&optional agent-type)
+  "Return non-nil when API pressure should reduce experiment count.
+
+When AGENT-TYPE still has current-backend retries or a failover candidate left,
+the workflow keeps going instead of reducing experiment budgets prematurely."
+  (and (>= gptel-auto-experiment--api-error-count
+           gptel-auto-experiment--api-error-threshold)
+       (not (gptel-auto-experiment--provider-chain-incomplete-p agent-type))))
 
 (defun gptel-auto-experiment--adaptive-max-experiments (original-max)
   "Return adjusted experiment count based on API error rate."
@@ -8853,12 +8904,12 @@ Adapts max-experiments based on API error rate."
                       (message "[auto-workflow] Provider quota exhausted; stopping early for %s"
                                target)
                       (setq max-exp (min max-exp (1- exp-id))))
-                    (when (and (>= gptel-auto-experiment--api-error-count
-                                   gptel-auto-experiment--api-error-threshold)
+                    (when (and (gptel-auto-experiment--should-reduce-experiments-p
+                                "executor")
                                (< exp-id max-exp))
-                      (message "[auto-workflow] API pressure reached threshold (%d), stopping early for %s"
-                               gptel-auto-experiment--api-error-count target)
-                      (setq max-exp (1- exp-id)))
+                       (message "[auto-workflow] API pressure reached threshold (%d), stopping early for %s"
+                                gptel-auto-experiment--api-error-count target)
+                       (setq max-exp (1- exp-id)))
                     (if (or (> exp-id max-exp)
                             (>= no-improvement-count threshold))
                         (progn
