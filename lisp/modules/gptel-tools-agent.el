@@ -2005,7 +2005,7 @@ delete the request or file buffer that happened to be current when the
 subagent callback fired, and avoids reusing a deleted worktree as
 `default-directory'."
   (unless (functionp callback)
-    (signal 'wrong-type-argument (list #'functionp callback)))
+    (signal 'wrong-type-argument (list 'functionp callback)))
   (let* ((caller-default-directory default-directory)
          (safe-buffer (get-buffer-create " *gptel-callback*"))
          (safe-default-directory

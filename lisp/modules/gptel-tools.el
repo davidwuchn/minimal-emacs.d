@@ -279,15 +279,23 @@ START-LINE and END-LINE specify the line range to return."
            (let* ((lines (split-string text "\n"))
                   (total-lines (length lines))
                   (start (or start-line 1))
-                  (end (min (or end-line total-lines) total-lines))
-                  (page-count (max 1 (1+ (cl-count ?\f text)))))
-            (when (< start 1) (setq start 1))
-            (when (> start total-lines) (setq start total-lines))
-            (format "PDF: %s (%d pages, %d lines)\n\n%s"
-                    (file-name-nondirectory path)
-                    page-count
-                    total-lines
-                    (string-join (seq-subseq lines (1- start) end) "\n"))))))))
+                  (end (min (or end-line total-lines) total-lines)))
+             (cond
+              ((< start 1)
+               (format "Error: start-line %d is invalid (must be >= 1)" start-line))
+              ((> start total-lines)
+               (format "Error: start-line %d exceeds total lines (%d)" start-line total-lines))
+              ((> (or end-line 0) total-lines)
+               (format "Error: end-line %d exceeds total lines (%d)" end-line total-lines))
+              ((> start end)
+               (format "Error: start-line (%d) exceeds end-line (%d)" start-line end-line))
+              (t
+               (let ((page-count (max 1 (1+ (cl-count ?\f text)))))
+                 (format "PDF: %s (%d pages, %d lines)\n\n%s"
+                         (file-name-nondirectory path)
+                         page-count
+                         total-lines
+                         (string-join (seq-subseq lines (1- start) end) "\n")))))))))))
 
 (defun my/gptel-web-search-safe (tool-cb query &optional count)
   "Web search with error handling.
