@@ -27,6 +27,7 @@
 (defvar gptel-auto-workflow--current-project nil)
 (defvar gptel-auto-workflow--run-project-root nil)
 (defvar gptel-auto-workflow--project-root-override)
+(defvar gptel--request-alist)
 (defvar gptel-agent-loop--bypass nil)
 (defvar gptel-benchmark--subagent-files nil)
 
@@ -1770,6 +1771,58 @@ TIMESTAMP defaults to `current-time'."
   (unless (advice-member-p 'gptel-curl--get-args #'my/gptel--agent-task-note-curl-activity)
     (advice-add 'gptel-curl--get-args :before
                 #'my/gptel--agent-task-note-curl-activity)))
+
+(defun my/gptel--request-entry-fsm (process)
+  "Return the request FSM associated with PROCESS, unwrapping local entry shapes."
+  (when (bound-and-true-p gptel--request-alist)
+    (let ((entry (alist-get process gptel--request-alist)))
+      (or (and (fboundp 'my/gptel--coerce-fsm)
+               (my/gptel--coerce-fsm entry))
+          (car-safe entry)
+          entry))))
+
+(defun my/gptel--handle-deleted-process-buffer (process stage)
+  "Clean up PROCESS after STAGE finds its process buffer already deleted."
+  (let* ((fsm (my/gptel--request-entry-fsm process))
+         (proc-info (and fsm (ignore-errors (gptel-fsm-info fsm)))))
+    (when (listp proc-info)
+      (plist-put proc-info :error
+                 (format "Request buffer was deleted before %s completed." stage))
+      (plist-put proc-info :status "Request buffer deleted")
+      (with-demoted-errors "gptel callback error: %S"
+        (when-let ((proc-callback (plist-get proc-info :callback)))
+          (funcall proc-callback nil proc-info))))
+    (when (bound-and-true-p gptel--request-alist)
+      (setf (alist-get process gptel--request-alist nil 'remove) nil))
+    (when (process-live-p process)
+      (ignore-errors (delete-process process)))))
+
+(defun my/gptel-curl--sentinel (orig-fun process status)
+  "Around advice for `gptel-curl--sentinel' guarding deleted process buffers."
+  (let ((proc-buf (ignore-errors (process-buffer process))))
+    (if (buffer-live-p proc-buf)
+        (funcall orig-fun process status)
+      (my/gptel--handle-deleted-process-buffer process "curl sentinel"))))
+
+(defun my/gptel-curl--stream-cleanup (orig-fun process status)
+  "Around advice for `gptel-curl--stream-cleanup' guarding deleted buffers."
+  (let ((proc-buf (ignore-errors (process-buffer process))))
+    (if (buffer-live-p proc-buf)
+        (funcall orig-fun process status)
+      (my/gptel--handle-deleted-process-buffer process "curl stream cleanup"))))
+
+(defun my/gptel--install-request-entry-fixes ()
+  "Install local guards around gptel curl request cleanup."
+  (when (featurep 'gptel-request)
+    (unless (advice-member-p #'my/gptel-curl--sentinel 'gptel-curl--sentinel)
+      (advice-add 'gptel-curl--sentinel :around #'my/gptel-curl--sentinel))
+    (unless (advice-member-p #'my/gptel-curl--stream-cleanup 'gptel-curl--stream-cleanup)
+      (advice-add 'gptel-curl--stream-cleanup :around #'my/gptel-curl--stream-cleanup))))
+
+(with-eval-after-load 'gptel-request
+  (my/gptel--install-request-entry-fixes))
+(when (featurep 'gptel-request)
+  (my/gptel--install-request-entry-fixes))
 
 (defun my/gptel--register-agent-task-buffer (buffer)
   "Record BUFFER as the active request buffer for the current subagent task."
