@@ -4483,8 +4483,79 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
        :api-rate-limit
        "Error: Task executor could not finish task \"x\". Error details: (:code \"insufficient_quota\" :message \"month allocated quota exceeded.\" :param :null :type \"invalid_request_error\")"
        "executor"))
-    (should (= gptel-auto-experiment--api-error-count 1))
-    (should-not gptel-auto-experiment--quota-exhausted)))
+     (should (= gptel-auto-experiment--api-error-count 1))
+     (should-not gptel-auto-experiment--quota-exhausted)))
+
+(ert-deftest regression/auto-experiment/should-reduce-experiments-waits-for-executor-failover ()
+  "API pressure should not reduce experiments while executor failover remains."
+  (let ((gptel-auto-experiment--api-error-count 3)
+        (gptel-auto-experiment--api-error-threshold 3)
+        (gptel-auto-workflow-backend-rate-limit-failure-threshold 3)
+        (gptel-auto-workflow--backend-failure-counts '(("moonshot" . 3))))
+    (cl-letf (((symbol-function 'gptel-auto-experiment--current-subagent-preset)
+               (lambda (_agent)
+                 '(:backend "moonshot" :model "kimi-k2.6")))
+              ((symbol-function 'gptel-auto-experiment--remaining-provider-failover-candidate)
+               (lambda (_agent)
+                 '("DashScope" . "qwen3.6-plus"))))
+      (should-not (gptel-auto-experiment--should-reduce-experiments-p
+                   "executor")))))
+
+(ert-deftest regression/auto-experiment/should-reduce-experiments-when-executor-failover-exhausted ()
+  "API pressure should reduce experiments once executor failover is exhausted."
+  (let ((gptel-auto-experiment--api-error-count 3)
+        (gptel-auto-experiment--api-error-threshold 3)
+        (gptel-auto-workflow-backend-rate-limit-failure-threshold 3)
+        (gptel-auto-workflow--backend-failure-counts '(("moonshot" . 3))))
+    (cl-letf (((symbol-function 'gptel-auto-experiment--current-subagent-preset)
+               (lambda (_agent)
+                 '(:backend "moonshot" :model "kimi-k2.6")))
+              ((symbol-function 'gptel-auto-experiment--remaining-provider-failover-candidate)
+               (lambda (&rest _args) nil)))
+      (should (gptel-auto-experiment--should-reduce-experiments-p
+               "executor")))))
+
+(ert-deftest regression/auto-experiment/loop-does-not-stop-early-while-executor-failover-remains ()
+  "Experiment loop should still start when executor fallback remains available."
+  (let ((gptel-auto-experiment-max-per-target 3)
+        (gptel-auto-experiment-delay-between 0)
+        (gptel-auto-experiment-no-improvement-threshold 1)
+        (gptel-auto-experiment--api-error-count 3)
+        (gptel-auto-experiment--api-error-threshold 3)
+        (gptel-auto-workflow-backend-rate-limit-failure-threshold 3)
+        (gptel-auto-workflow--backend-failure-counts '(("moonshot" . 3)))
+        (calls 0)
+        final-results)
+    (cl-letf (((symbol-function 'gptel-auto-experiment-benchmark)
+               (lambda (&optional _skip)
+                 '(:passed t :eight-keys 0.4 :tests-passed t :nucleus-passed t)))
+              ((symbol-function 'gptel-auto-experiment--code-quality-score)
+               (lambda () 0.5))
+              ((symbol-function 'gptel-auto-experiment--adaptive-max-experiments)
+               (lambda (orig) orig))
+              ((symbol-function 'gptel-auto-experiment--current-subagent-preset)
+               (lambda (_agent)
+                 '(:backend "moonshot" :model "kimi-k2.6")))
+              ((symbol-function 'gptel-auto-experiment--remaining-provider-failover-candidate)
+               (lambda (_agent)
+                 '("DashScope" . "qwen3.6-plus")))
+              ((symbol-function 'gptel-auto-experiment--run-with-retry)
+               (lambda (_target exp-id _max-exp _baseline _baseline-code-quality _previous-results callback &optional _retry-count)
+                 (cl-incf calls)
+                 (funcall callback
+                          (list :target "lisp/modules/gptel-ext-context.el"
+                                :id exp-id
+                                :score-after 0.4
+                                :kept nil
+                                :agent-output "no-op"))))
+              ((symbol-function 'message)
+               (lambda (&rest _args) nil)))
+      (gptel-auto-experiment-loop
+       "lisp/modules/gptel-ext-context.el"
+       (lambda (results)
+         (setq final-results results))))
+    (should (= calls 1))
+    (should (= (length final-results) 1))))
 
 (ert-deftest regression/auto-experiment/note-api-pressure-can-stay-local ()
   "Grader-only API pressure should not mutate run-wide pressure counters."
