@@ -60,7 +60,8 @@ Customize this variable to add more projects.")
   "Root directory for mementum. Set per-project.")
 
 (defvar gptel-auto-workflow--project-root-override)
-(defvar gptel-auto-workflow--research-findings-cache (make-hash-table :test 'equal)
+(defvar gptel-auto-workflow--research-findings-cache
+  (make-hash-table :test 'equal)
   "Hash table caching research findings per project root.")
 
 (defvar gptel-auto-workflow--worktree-buffers (make-hash-table :test 'equal)
