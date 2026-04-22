@@ -237,7 +237,7 @@ good naming conventions, all under 20 lines, simple control flow."
     (if (= func-count 0)
         0.5
       (let* ((docstring-score (gptel-benchmark--docstring-coverage func-data))
-             (positive-score (gptel-benchmark--positive-patterns-score code))
+             (positive-score (gptel-benchmark--positive-patterns-score code func-data))
              (length-score (gptel-benchmark--function-length-score func-data))
              (complexity-score (gptel-benchmark--complexity-score code func-count)))
         (+ (* 0.20 docstring-score)
@@ -325,7 +325,7 @@ Returns 0.0-1.0 where 1.0 = simple code (≤2 branches per function avg)."
        ((<= avg-complexity 8.0) 0.3)
        (t 0.1)))))
 
-(defun gptel-benchmark--positive-patterns-score (code)
+(defun gptel-benchmark--positive-patterns-score (code &optional func-data)
   "Score positive patterns in CODE.
 Returns 0.0-1.0 where higher scores indicate better practices.
 
@@ -334,7 +334,8 @@ Positive patterns (weighted):
 - Naming conventions (30%): -- for internal, no my- prefix, proper predicates
 - Standard predicates (30%): null, stringp, listp, etc.
 
-This rewards code that follows Emacs Lisp best practices."
+This rewards code that follows Emacs Lisp best practices.
+FUNC-DATA may be passed to avoid redundant extraction."
   (let* ((error-handling-terms '("condition-case" "user-error" "error" "signal"
                                  "cl-assert" "cl-check-type" "assert"))
          (bad-naming '("my-" "foo-" "bar-" "baz-"))
@@ -344,7 +345,8 @@ This rewards code that follows Emacs Lisp best practices."
          (error-score 0.0)
          (naming-score 1.0)
          (predicate-score 0.0)
-         (func-count (max 1 (length (gptel-benchmark--extract-function-data code)))))
+         (func-count (max 1 (length (or func-data
+                                        (gptel-benchmark--extract-function-data code))))))
     (with-temp-buffer
       (insert code)
       (goto-char (point-min))
