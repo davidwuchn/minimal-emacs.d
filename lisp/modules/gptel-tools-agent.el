@@ -9170,18 +9170,18 @@ Relative paths are resolved from the project root."
   "Persist current workflow status for non-blocking cron health checks."
   (let* ((file (gptel-auto-workflow--status-file))
          (dir (file-name-directory file))
-         (status (gptel-auto-workflow--status-plist))
-         (existing-status (gptel-auto-workflow-read-persisted-status)))
+         (status (gptel-auto-workflow--status-plist)))
     ;; Preserve the last active snapshot when an unrelated process only has an
     ;; idle placeholder view of workflow state. The shell wrapper already owns
      ;; stale-active detection; this guard prevents bogus idle rewrites with
      ;; synthetic run ids while a real run is still active elsewhere.
      (when (and (gptel-auto-workflow--status-placeholder-p status)
-                (not gptel-auto-workflow--allow-placeholder-status-overwrite)
-                (gptel-auto-workflow--status-active-p existing-status)
-                (not (gptel-auto-workflow--status-owned-by-current-run-p
-                      existing-status)))
-       (setq status existing-status))
+                (not gptel-auto-workflow--allow-placeholder-status-overwrite))
+       (let ((existing-status (gptel-auto-workflow-read-persisted-status)))
+         (when (and (gptel-auto-workflow--status-active-p existing-status)
+                    (not (gptel-auto-workflow--status-owned-by-current-run-p
+                          existing-status)))
+           (setq status existing-status))))
      (when dir
       (make-directory dir t))
     (with-temp-file file
