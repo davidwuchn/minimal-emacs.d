@@ -6695,6 +6695,8 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
          (target-bytes (gptel-auto-experiment--target-byte-size target-full-path))
          (recovery-p
           (gptel-auto-experiment--needs-inspection-thrash-recovery-p previous-results))
+         (follow-up-focus-p
+          (and previous-results (not recovery-p)))
          (large-target-p
           (and (numberp target-bytes)
                (>= target-bytes gptel-auto-experiment-large-target-byte-threshold)))
@@ -6736,13 +6738,24 @@ Uses loaded skills and Eight Keys breakdown for focused improvements."
                     "2. Do NOT use Code_Map on the whole file.\n"
                     "3. Use at most 3 read-only tool calls, all on that same symbol or its direct callers/callees.\n"
                     "4. Your next tool call after those reads must be a write-capable tool on that same symbol.\n"
-                    "5. Do not inspect a second subsystem before the first edit exists.\n\n"))))
+                    "5. Do not inspect a second subsystem before the first edit exists.\n\n")))
+         (follow-up-focus-contract
+          (when follow-up-focus-p
+            (concat "## Follow-up Focus Contract\n"
+                    "This is not the first attempt on this target. Do not resurvey the whole file.\n"
+                    (format "The second line after HYPOTHESIS must be exactly `%s`.\n"
+                            focus-line)
+                    "Use at most 5 read-only tool calls before the first write-capable edit.\n"
+                    "Prefer the symbol from the previous attempt, prior analysis, or a direct caller/callee.\n"
+                    "Do not inspect a second subsystem before the first edit exists.\n\n"))))
     (format "You are running experiment %d of %d to optimize %s.
 
 ## Working Directory
 %s
 
 ## Target File (full path)
+%s
+
 %s
 
 %s
@@ -6790,8 +6803,8 @@ Make minimal, targeted changes to CODE, not documentation.
 
 ## Instructions
 1. FIRST LINE must be: HYPOTHESIS: [What CODE change and why]
-2. If a Controller-Selected Starting Symbol is present, line 2 must be exactly `%s`
-3. If a Mandatory Focus Contract is present, obey it exactly; otherwise start from one concrete function or variable and prefer focused Grep or narrow Read before broader Code_Map surveys
+2. If a Controller-Selected Starting Symbol or any Focus Contract is present, line 2 must be exactly `%s`
+3. If a Mandatory Focus Contract is present, obey it exactly; otherwise if a Follow-up Focus Contract is present, obey it before broader exploration; otherwise start from one concrete function or variable and prefer focused Grep or narrow Read before broader Code_Map surveys
 4. Read only focused line ranges from the target file using its full path; avoid reading the entire file unless absolutely necessary
 5. IDENTIFY a real code issue (bug, performance, duplication, missing validation)
 6. Implement the CODE change minimally using Edit tool
@@ -6820,10 +6833,11 @@ Example HYPOTHESES:
             experiment-id max-experiments target
             worktree-path
             target-full-path
-            (or controller-focus "")
-            (or large-target-guidance "")
-            (or inspection-thrash-contract "")
-            (or patterns "No previous experiments")
+             (or controller-focus "")
+             (or large-target-guidance "")
+             (or inspection-thrash-contract "")
+             (or follow-up-focus-contract "")
+             (or patterns "No previous experiments")
             (or suggestions "None")
             git-history
             (or baseline 0.5)

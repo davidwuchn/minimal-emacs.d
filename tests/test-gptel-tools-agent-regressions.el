@@ -2379,12 +2379,32 @@ COUNTER-FILE stores a simple incrementing counter so repeated calls stay unique.
     (let* ((previous-results
             (list (list :agent-output
                         "gptel: inspection-thrash aborted — 25 consecutive read-only inspections")) )
-           (prompt (gptel-auto-experiment-build-prompt
-                    "lisp/modules/gptel-tools-agent.el" 2 5 nil 0.4 previous-results)))
-      (should (string-match-p "Mandatory Focus Contract" prompt))
+            (prompt (gptel-auto-experiment-build-prompt
+                     "lisp/modules/gptel-tools-agent.el" 2 5 nil 0.4 previous-results)))
+      (should (string-match-p "^## Mandatory Focus Contract$" prompt))
       (should (string-match-p "A previous attempt on this target already failed with inspection-thrash" prompt))
       (should (string-match-p "FOCUS: <one concrete function or variable>" prompt))
+      (should-not (string-match-p "^## Follow-up Focus Contract$" prompt))
       (should (string-match-p "Do NOT use Code_Map on the whole file" prompt)))))
+
+(ert-deftest regression/auto-experiment/build-prompt-adds-follow-up-focus-contract ()
+  "Prompt should harden non-first attempts before they hit inspection-thrash."
+  (cl-letf (((symbol-function 'gptel-auto-workflow--get-worktree-dir)
+             (lambda (_target) "/tmp/worktree"))
+            ((symbol-function 'shell-command-to-string)
+             (lambda (_cmd) "abc123 recent history"))
+            ((symbol-function 'gptel-auto-experiment--eight-keys-scores)
+             (lambda () nil)))
+    (let* ((previous-results
+            (list (list :agent-output
+                        "Executor result for task: Experiment 1")) )
+           (prompt (gptel-auto-experiment-build-prompt
+                    "lisp/modules/gptel-ext-retry.el" 2 5 nil 0.4 previous-results)))
+      (should (string-match-p "^## Follow-up Focus Contract$" prompt))
+      (should (string-match-p "This is not the first attempt on this target" prompt))
+      (should (string-match-p "The second line after HYPOTHESIS must be exactly `FOCUS: <one concrete function or variable>`" prompt))
+      (should (string-match-p "Use at most 5 read-only tool calls before the first write-capable edit" prompt))
+      (should-not (string-match-p "^## Mandatory Focus Contract$" prompt)))))
 
 (ert-deftest regression/auto-experiment/build-prompt-adds-large-target-guidance ()
   "Large targets should get advisory guidance without a forced recovery contract."
