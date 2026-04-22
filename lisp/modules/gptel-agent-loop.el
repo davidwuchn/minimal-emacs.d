@@ -229,10 +229,14 @@ memory after long sessions or if tasks appear stuck."
   (when (eq gptel-agent-loop--state state)
     (setq gptel-agent-loop--state nil)))
 
+(defun gptel-agent-loop--safe-accumulated-output (state)
+  "Return STATE's accumulated output or empty string if nil."
+  (or (gptel-agent-loop--task-accumulated-output state) ""))
+
 (defun gptel-agent-loop--append-output (state text)
   "Append TEXT to STATE's accumulated output."
   (setf (gptel-agent-loop--task-accumulated-output state)
-        (concat (or (gptel-agent-loop--task-accumulated-output state) "")
+        (concat (gptel-agent-loop--safe-accumulated-output state)
                 text
                 (unless (string-suffix-p "\n" text) "\n"))))
 
@@ -245,7 +249,7 @@ memory after long sessions or if tasks appear stuck."
 (defun gptel-agent-loop--build-final-result (state tail)
   "Build final response text for STATE ending with TAIL."
   (concat (gptel-agent-loop--result-prefix state)
-          (or (gptel-agent-loop--task-accumulated-output state) "")
+          (gptel-agent-loop--safe-accumulated-output state)
           tail))
 
 (defun gptel-agent-loop--transient-error-p (error-data)
@@ -327,7 +331,7 @@ Guards against delivering to a killed parent buffer by checking
   "Build continuation prompt for STATE.
 Truncates accumulated output to last
 `gptel-agent-loop-continuation-context-limit' chars."
-  (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
+  (let* ((output (gptel-agent-loop--safe-accumulated-output state))
          (limit gptel-agent-loop-continuation-context-limit)
          (len (length output))
          (truncated (if (and (integerp limit) (> limit 0) (> len limit))
@@ -343,7 +347,7 @@ Truncates accumulated output to last
   (format "%s\n\nOriginal task:\n%s\n\nWork completed so far:\n%s"
           gptel-agent-loop-max-steps-prompt
           (gptel-agent-loop--task-prompt state)
-          (or (gptel-agent-loop--task-accumulated-output state) "")))
+          (gptel-agent-loop--safe-accumulated-output state)))
 
 (defconst gptel-agent-loop--completion-patterns
   '("all tasks.*complete"
