@@ -354,22 +354,21 @@ Caches results in `my/gptel--gptel-tables-cw-cache' for future lookups."
                       ((symbolp model) (symbol-name model))
                       (t nil))))
     (when (or model-sym model-str)
-      (let ((cache-key (or model-str (symbol-name model-sym))))
-        (or (gethash cache-key my/gptel--gptel-tables-cw-cache)
-            (let ((result (cl-some
-                           (lambda (var)
-                             (let* ((table (symbol-value var))
-                                    (entry (or (and model-sym (assq model-sym table))
-                                               (and model-str (assoc-string model-str table t)))))
-                               (when entry
-                                 (let ((cw (my/gptel--normalize-context-window
-                                            (plist-get (cdr entry) :context-window))))
-                                   (when (and (integerp cw) (> cw 0))
-                                     cw)))))
-                           (my/gptel--gptel-model-tables))))
-              (when result
-                (puthash cache-key result my/gptel--gptel-tables-cw-cache))
-              result))))))
+      (or (gethash model-str my/gptel--gptel-tables-cw-cache)
+          (let ((cw (cl-some
+                     (lambda (var)
+                       (let* ((table (symbol-value var))
+                              (entry (or (and model-sym (assq model-sym table))
+                                         (and model-str (assoc-string model-str table t)))))
+                         (when entry
+                           (let ((cw (my/gptel--normalize-context-window
+                                      (plist-get (cdr entry) :context-window))))
+                             (when (and (integerp cw) (> cw 0))
+                               cw)))))
+                     (my/gptel--gptel-model-tables))))
+            (when cw
+              (puthash model-str cw my/gptel--gptel-tables-cw-cache))
+            cw)))))
 (defun my/gptel--model-id-string (&optional model)
   "Return MODEL as a stable string id."
   (let ((m (or model gptel-model)))
