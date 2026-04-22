@@ -757,11 +757,15 @@ Cache behavior:
 
 (defun gptel-agent-loop--make-timeout-timer (state)
   "Create timeout timer for STATE, canceling any existing timer first."
-  (when (and state (gptel-agent-loop--task-p state) gptel-agent-loop-timeout)
+  (when (and state
+             (gptel-agent-loop--task-p state)
+             (numberp gptel-agent-loop-timeout)
+             (> gptel-agent-loop-timeout 0))
     (let ((existing-timer (gptel-agent-loop--task-timeout-timer state)))
       (when (timerp existing-timer)
         (cancel-timer existing-timer)))
-    (let ((timeout gptel-agent-loop-timeout))
+    (let* ((timeout gptel-agent-loop-timeout)
+           (description (gptel-agent-loop--task-description state)))
       (run-with-timer
        timeout nil
        (lambda ()
@@ -770,9 +774,9 @@ Cache behavior:
                     (not (gptel-agent-loop--task-finished state))
                     (not (gptel-agent-loop--task-aborted state)))
            (setf (gptel-agent-loop--task-aborted state) t)
-           (message "[RunAgent] Task '%s' timed out after %ds"
-                    (gptel-agent-loop--task-description state)
-                    timeout)
+           (message "[RunAgent] Task '%s' timed out after %s"
+                    description
+                    (if (floatp timeout) (format "%.1f" timeout) (format "%d" timeout)))
            (gptel-agent-loop--deliver-aborted state)))))))
 
 (defun gptel-agent-loop-task (main-cb agent-type description prompt)
