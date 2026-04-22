@@ -13079,9 +13079,64 @@ failure."
   (unwind-protect
       (progn
         (my/gptel--install-request-entry-fixes)
-        (should (advice-member-p #'my/gptel-curl--sentinel 'gptel-curl--sentinel))
-        (should (advice-member-p #'my/gptel-curl--stream-cleanup 'gptel-curl--stream-cleanup)))
+         (should (advice-member-p #'my/gptel-curl--sentinel 'gptel-curl--sentinel))
+         (should (advice-member-p #'my/gptel-curl--stream-cleanup 'gptel-curl--stream-cleanup)))
     (my/gptel--install-request-entry-fixes)))
+
+(ert-deftest regression/auto-workflow/request-entry-fixes-install ()
+  "Local curl guards should be installed when request support is loaded."
+  (require 'gptel-request nil t)
+  (my/gptel--install-request-entry-fixes)
+  (should (advice-member-p #'my/gptel-curl--sentinel 'gptel-curl--sentinel))
+  (should (advice-member-p #'my/gptel-curl--stream-cleanup 'gptel-curl--stream-cleanup)))
+
+(ert-deftest regression/auto-workflow/curl-sentinel-guard-handles-deleted-buffer ()
+  "Deleted process buffers should be handled without calling the upstream sentinel."
+  (let ((gptel--request-alist nil)
+        (callback-info nil)
+        (orig-called nil)
+        (process nil)
+        (proc-buf nil))
+    (unwind-protect
+        (let* ((fsm (gptel-make-fsm :table gptel-send--transitions
+                                    :handlers gptel-agent-request--handlers))
+               (info (list :callback (lambda (_resp info)
+                                       (setq callback-info info))
+                           :buffer (current-buffer)
+                           :position (point-marker)
+                           :tracking-marker (point-marker)
+                           :status nil
+                           :http-status nil
+                           :reasoning nil
+                           :tool-use nil
+                           :error nil)))
+          (setq proc-buf (generate-new-buffer " *test-gptel-curl-guard*"))
+          (setf (gptel-fsm-info fsm) info)
+          (setq process
+                (make-process :name "test-gptel-curl-guard"
+                              :buffer proc-buf
+                              :command '("sh" "-c" "exit 0")
+                              :connection-type 'pipe))
+          (set-process-query-on-exit-flag process nil)
+          (while (eq (process-status process) 'run)
+            (accept-process-output process 0.01))
+          (setf (alist-get process gptel--request-alist)
+                (cons fsm (lambda (&rest _) nil)))
+          (kill-buffer proc-buf)
+          (setq proc-buf nil)
+          (my/gptel-curl--sentinel
+           (lambda (&rest _args)
+             (setq orig-called t))
+           process "finished\n")
+          (should-not orig-called)
+          (should-not (alist-get process gptel--request-alist))
+          (should (string-match-p
+                   "Request buffer was deleted before curl sentinel completed"
+                   (or (plist-get callback-info :error) ""))))
+      (when (and process (process-live-p process))
+        (delete-process process))
+      (when (buffer-live-p proc-buf)
+        (kill-buffer proc-buf)))))
 
 (ert-deftest regression/auto-workflow/curl-sentinel-handles-deleted-process-buffer ()
   "Local curl sentinel should fail cleanly when the process buffer is already gone."
