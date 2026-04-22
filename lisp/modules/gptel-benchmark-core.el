@@ -272,14 +272,9 @@ Handles nil scores by treating them as 0.
 Returns TOTALS unchanged if SCORES-ALIST is nil."
   (if (null scores-alist)
       totals
-    (mapcar (lambda (pair)
-              (let ((score-type (car pair))
-                    (current (cdr pair)))
-                (cons score-type
-                      (gptel-benchmark--accumulate-score
-                       current
-                       (alist-get score-type scores-alist)))))
-            totals)))
+    (cl-loop for (score-type . current) in totals
+             for score = (or (alist-get score-type scores-alist) 0.0)
+             collect (cons score-type (+ current score)))))
 
 (defun gptel-benchmark--extract-score-types (scores)
   "Extract standard score types from SCORES plist or alist.
