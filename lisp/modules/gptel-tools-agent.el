@@ -2016,7 +2016,9 @@ subagent callback fired, and avoids reusing a deleted worktree as
                       (void-variable nil)))
                user-emacs-directory
                temporary-file-directory)
-              (and (stringp default-directory) default-directory)
+              (and (stringp default-directory)
+                   (file-directory-p default-directory)
+                   default-directory)
               temporary-file-directory)))
     (with-current-buffer safe-buffer
       (setq default-directory safe-default-directory)
