@@ -769,11 +769,13 @@ Cache behavior:
                     (gptel-agent-loop--task-p state)
                     (not (gptel-agent-loop--task-finished state))
                     (not (gptel-agent-loop--task-aborted state)))
-           (setf (gptel-agent-loop--task-aborted state) t)
-           (message "[RunAgent] Task '%s' timed out after %ds"
-                    (gptel-agent-loop--task-description state)
-                    timeout)
-           (gptel-agent-loop--deliver-aborted state)))))))
+           (let ((desc (gptel-agent-loop--task-description state))
+                 (parent-buf (gptel-agent-loop--task-parent-buffer state)))
+             (when (or (not parent-buf) (buffer-live-p parent-buf))
+               (setf (gptel-agent-loop--task-aborted state) t)
+               (message "[RunAgent] Task '%s' timed out after %ds"
+                        desc timeout)
+               (gptel-agent-loop--deliver-aborted state)))))))))
 
 (defun gptel-agent-loop-task (main-cb agent-type description prompt)
   "Call a RunAgent task with timeout, retry, and step limits.
