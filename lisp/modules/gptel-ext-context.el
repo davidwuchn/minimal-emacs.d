@@ -290,7 +290,8 @@ Auto-delegate: %s"
 (defun my/gptel--directive-text (sym)
   "Resolve directive SYM to a string.
 Returns nil if directive is missing or invalid, and logs a warning."
-  (let ((val (alist-get sym gptel-directives)))
+  (let ((val (and (boundp 'gptel-directives)
+                  (alist-get sym gptel-directives))))
     (cond
      ((functionp val) (funcall val))
      ((stringp val) val)
@@ -428,15 +429,16 @@ Hook for `gptel-post-response-functions'."
 (defun my/gptel--buffer-lines (buffer-string)
   "Return lines from BUFFER-STRING as a list.
 Helper function to avoid duplicate split-string calls."
-  (split-string buffer-string "\n"))
+  (and (stringp buffer-string) (split-string buffer-string "\n")))
 
 (defun my/gptel--extract-last-task-from-lines (lines)
   "Extract the most recent task/request from LINES.
 Returns a short description of what the user was asking for."
-  (let* ((user-lines (cl-remove-if-not
-                      (lambda (line)
-                        (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
-                      lines))
+  (let* ((user-lines (and (listp lines)
+                          (cl-remove-if-not
+                           (lambda (line)
+                             (string-match-p "^\\*\\*You\\*\\*:\\|^User:\\|^> " line))
+                           lines)))
          (last-user (car (last user-lines 3))))
     (if last-user
         (replace-regexp-in-string "^\\*\\*You\\*\\*:\\|^User:\\|^> " "" last-user)
