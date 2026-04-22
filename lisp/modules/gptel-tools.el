@@ -60,6 +60,8 @@ Use this to refresh presets or update buffers that depend on tool availability."
               (concat (format "Result:\n%S" result)
                       (and output (format "\n\nSTDOUT:\n%s" output))))
           ((error user-error)
+           (when (> (buffer-size standard-output) 0)
+             (setq output (with-current-buffer standard-output (buffer-string))))
            (concat (format "Error: %S: %S" (car err) (cdr err))
                    (and output (format "\n\nSTDOUT:\n%s" output)))))
       (kill-buffer standard-output))))
