@@ -9264,17 +9264,22 @@ When INCLUDE-MESSAGES-P is non-nil, also isolate messages and snapshot files."
             (cl-remove-if #'gptel-auto-workflow--isolated-state-env-entry-p
                           process-environment))))
 
-(defun gptel-auto-workflow--persist-subagent-process-environment (&optional buffer env)
-  "Persist isolated workflow ENV onto BUFFER for later async tool processes."
-  (let ((target (or buffer (current-buffer)))
-        (effective-env (or env gptel-auto-workflow--subagent-process-environment)))
-    (when (and (buffer-live-p target)
-               (listp effective-env))
-      (with-current-buffer target
-        (set (make-local-variable 'gptel-auto-workflow--subagent-process-environment)
-             (copy-sequence effective-env))
-        (set (make-local-variable 'process-environment)
-             (copy-sequence effective-env))))))
+ (defun gptel-auto-workflow--persist-subagent-process-environment (&optional buffer env)
+   "Persist isolated workflow ENV onto BUFFER for later async tool processes."
+   (let ((target (or buffer (current-buffer)))
+         (effective-env (or env gptel-auto-workflow--subagent-process-environment)))
+     (when (and (buffer-live-p target)
+                (listp effective-env))
+       (with-current-buffer target
+         (let ((copied-env (copy-sequence effective-env)))
+           (if (fboundp 'buffer-local-set-state)
+               (buffer-local-set-state
+                gptel-auto-workflow--subagent-process-environment (copy-sequence copied-env)
+                process-environment copied-env)
+             (set (make-local-variable 'gptel-auto-workflow--subagent-process-environment)
+                  (copy-sequence copied-env))
+             (set (make-local-variable 'process-environment)
+                  copied-env)))))))
 
 (defun gptel-auto-workflow--git-step-success-p (cmd action &optional timeout)
   "Run git CMD and report whether it succeeded.
