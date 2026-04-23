@@ -9216,12 +9216,17 @@ Relative paths are resolved from the project root."
            (setq status existing-status))))
      (when dir
       (make-directory dir t))
-    (with-temp-file file
-      (let ((print-length nil)
-            (print-level nil))
-         (prin1 status (current-buffer))
-         (insert "\n")))
-    (gptel-auto-workflow--persist-messages-tail)))
+    (condition-case err
+        (progn
+          (with-temp-file file
+            (let ((print-length nil)
+                  (print-level nil))
+              (prin1 status (current-buffer))
+              (insert "\n")))
+          (gptel-auto-workflow--persist-messages-tail))
+      (error
+       (message "[auto-workflow] Status persist failed: %s"
+                (error-message-string err))))))
 
 (defun gptel-auto-workflow--append-messages-line (text)
   "Append TEXT to *Messages* without going through `message'."
