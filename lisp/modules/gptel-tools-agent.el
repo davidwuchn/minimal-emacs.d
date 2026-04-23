@@ -2173,9 +2173,9 @@ Uses hash table keyed by task-id to support parallel execution."
                             agent-type (float-time (time-since start-time))
                             (if (stringp result) (length result) 0))
                    (funcall restore-origin-fsm child-fsm)
-                  (unwind-protect
-                      (my/gptel--invoke-callback-safely callback result)
-                    (remhash task-id my/gptel--agent-task-state)))))))))
+                   (unwind-protect
+                       (my/gptel--invoke-callback-safely callback result)
+                     (remhash task-id my/gptel--agent-task-state)))))))))
     (cl-labels
          ((finish-timeout (state timeout-seconds timeout-suffix
                                  &optional timeout-kind total-elapsed-seconds)
