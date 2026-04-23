@@ -11,6 +11,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'json)
+(require 'gptel-ext-retry)
 
 ;;; Customizations (match gptel-ext-retry.el)
 
@@ -21,18 +22,7 @@
 (defvar test-trim-min-bytes 0)
 (defvar test-reasoning-keep-turns 1)
 
-;;; Retry delay constants (match gptel-ext-retry.el)
-(defconst test-retry-base-delay 4.0)
-(defconst test-retry-backoff-factor 2.0)
-(defconst test-retry-max-delay 30.0)
-
-(defun test--retry-delay (retries)
-  "Compute exponential backoff delay matching `my/gptel--retry-delay'."
-  (let ((r (max 0 (or retries 0))))
-    (min test-retry-max-delay
-         (* test-retry-base-delay
-            (expt test-retry-backoff-factor r)))))
-
+;;; Model context sizes
 (defvar test-model-context-bytes
   '((kimi-k2\.5        . 400000)
     (kimi-for-coding    . 400000)
@@ -433,31 +423,31 @@
 
 (ert-deftest retry/backoff/delay-retry-0 ()
   "First retry should have 4s delay."
-  (should (= 4.0 (test--retry-delay 0))))
+  (should (= 4.0 (my/gptel--retry-delay 0))))
 
 (ert-deftest retry/backoff/delay-retry-1 ()
   "Second retry should have 8s delay."
-  (should (= 8.0 (test--retry-delay 1))))
+  (should (= 8.0 (my/gptel--retry-delay 1))))
 
 (ert-deftest retry/backoff/delay-retry-2 ()
   "Third retry should have 16s delay."
-  (should (= 16.0 (test--retry-delay 2))))
+  (should (= 16.0 (my/gptel--retry-delay 2))))
 
 (ert-deftest retry/backoff/delay-retry-3 ()
   "Fourth retry should cap at 30s."
-  (should (= 30.0 (test--retry-delay 3))))
+  (should (= 30.0 (my/gptel--retry-delay 3))))
 
 (ert-deftest retry/backoff/delay-retry-10 ()
   "High retry counts should cap at 30s."
-  (should (= 30.0 (test--retry-delay 10))))
+  (should (= 30.0 (my/gptel--retry-delay 10))))
 
 (ert-deftest retry/backoff/delay-negative-clamped ()
   "Negative retry counts should be clamped to 0."
-  (should (= 4.0 (test--retry-delay -1))))
+  (should (= 4.0 (my/gptel--retry-delay -1))))
 
 (ert-deftest retry/backoff/delay-nil-clamped ()
   "Nil retry count should be clamped to 0."
-  (should (= 4.0 (test--retry-delay nil))))
+  (should (= 4.0 (my/gptel--retry-delay nil))))
 
 ;;; Tests for curl timeout detection
 
