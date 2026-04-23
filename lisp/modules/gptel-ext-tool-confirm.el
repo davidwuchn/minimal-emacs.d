@@ -133,14 +133,17 @@ aggregate Programmatic previews."
 (defun my/gptel--programmatic-confirm-tool (tool-spec arg-values callback)
   "Confirm nested Programmatic TOOL-SPEC with ARG-VALUES, then run CALLBACK.
 CALLBACK receives non-nil for approval and nil for rejection."
-  (let ((tool-call (list tool-spec arg-values callback))
-        (info (list :buffer (current-buffer)
-                    :backend gptel-backend
-                    :position (point-marker)
-                    :tracking-marker (copy-marker (point) t)
-                    :programmatic-confirm t)))
-    (if (and (bound-and-true-p my/gptel-permitted-tools)
-             (my/gptel-tool-permitted-p (my/gptel--tool-spec-name tool-spec)))
+  (let* ((tool-name (my/gptel--tool-spec-name tool-spec))
+         (tool-call (list tool-spec arg-values callback))
+         (info (list :buffer (current-buffer)
+                     :backend gptel-backend
+                     :position (point-marker)
+                     :tracking-marker (copy-marker (point) t)
+                     :programmatic-confirm t)))
+    (if (and (stringp tool-name)
+             (not (string-empty-p tool-name))
+             (bound-and-true-p my/gptel-permitted-tools)
+             (my/gptel-tool-permitted-p tool-name))
         (funcall callback t)
       (if (or buffer-read-only
               (get-char-property (point) 'read-only))
