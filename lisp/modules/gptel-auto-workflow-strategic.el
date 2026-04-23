@@ -147,14 +147,15 @@ falls back to the user's Emacs configuration directory."
 
 (defun gptel-auto-workflow--target-in-root-repo-p (abs-path proj-root)
   "Return non-nil when ABS-PATH belongs to the same git repo as PROJ-ROOT."
-  (let ((project-git-root (locate-dominating-file proj-root ".git"))
-        (target-git-root (locate-dominating-file
-                          (file-name-directory (directory-file-name abs-path))
-                          ".git")))
-    (and project-git-root
-         target-git-root
-         (file-equal-p (expand-file-name project-git-root)
-                       (expand-file-name target-git-root)))))
+  (when (and (stringp abs-path) (stringp proj-root) (not (string-empty-p abs-path)))
+    (let ((project-git-root (locate-dominating-file proj-root ".git"))
+          (target-git-root (locate-dominating-file
+                            (file-name-directory (directory-file-name abs-path))
+                            ".git")))
+      (and project-git-root
+           target-git-root
+           (file-equal-p (expand-file-name project-git-root)
+                         (expand-file-name target-git-root))))))
 
 (defun gptel-auto-workflow--gather-context ()
   "Gather context for LLM target selection.
@@ -289,6 +290,7 @@ CALLBACK receives list of target files."
 Returns updated targets list."
   (cond
    ((not (stringp file)) targets)
+   ((not (and (stringp proj-root) (not (string-empty-p proj-root)))) targets)
    ((>= (length targets) max-targets) targets)
    (t
     (let ((abs-path (if (file-name-absolute-p file)
@@ -339,7 +341,7 @@ Otherwise, convert using princ representation."
 (defun gptel-auto-workflow--filter-valid-targets (candidates proj-root max-targets)
   "Filter CANDIDATES to valid target files.
 Returns list of validated relative paths, up to MAX-TARGETS."
-  (when (null max-targets)
+  (when (or (null max-targets) (not (integerp max-targets)) (<= max-targets 0))
     (setq max-targets most-positive-fixnum))
   (let ((candidates-list (if (listp candidates) candidates (list candidates)))
         (results '()))
