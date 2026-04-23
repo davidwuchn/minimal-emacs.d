@@ -123,22 +123,15 @@ EDGE CASE: Nil/unbound constants fall back to defaults (4.0, 2.0, 30.0).
 EDGE CASE: Calculation overflow clamped by max-delay cap.
 TEST: (my/gptel--retry-delay 0) => 4.0
 TEST: (my/gptel--retry-delay 3) => 30.0 (capped)"
-  (cond
-   ((not (numberp retries)) 4.0)
-   ((< retries 0) 4.0)
-   (t
-    (let* ((r (truncate retries))
-           (r (max 0 r))
-           (base-delay (if (numberp my/gptel--retry-base-delay)
-                           my/gptel--retry-base-delay 4.0))
-           (backoff-factor (if (numberp my/gptel--retry-backoff-factor)
-                               my/gptel--retry-backoff-factor 2.0))
-           (max-delay (if (numberp my/gptel--retry-max-delay)
-                          my/gptel--retry-max-delay 30.0))
-           (abs-max (abs max-delay))
-           (abs-base (abs base-delay))
-           (abs-backoff (abs backoff-factor)))
-      (max 0.1 (min abs-max (* abs-base (expt abs-backoff r))))))))
+  (let* ((r (if (numberp retries) (truncate retries) 0))
+         (r (max 0 r))
+         (base-delay (if (numberp my/gptel--retry-base-delay)
+                         my/gptel--retry-base-delay 4.0))
+         (backoff-factor (if (numberp my/gptel--retry-backoff-factor)
+                              my/gptel--retry-backoff-factor 2.0))
+         (max-delay (if (numberp my/gptel--retry-max-delay)
+                        my/gptel--retry-max-delay 30.0)))
+    (max 0.1 (min max-delay (* base-delay (expt backoff-factor r))))))
 
 (defconst my/gptel--unbounded-byte-limit 999999999
   "Unbounded byte limit for model-specific context limits.
