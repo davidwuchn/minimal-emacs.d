@@ -284,7 +284,9 @@ Auto-delegate: %s"
              model model-id
              (if cached (format "yes (%d)" cached) "no")
              chars (round tokens) (round text-tokens) (round image-tokens) image-count
-             (* 100 (/ (float tokens) window))
+             (if (and (integerp window) (plusp window))
+                 (* 100 (/ (float tokens) window))
+               0)
              delegate-status)))
 
 (defun my/gptel--directive-text (sym)
@@ -525,7 +527,10 @@ ORIG-FN is `gptel-request'. PROMPT and ARGS are passed through."
                  (window (my/gptel--context-window))
                  (callback (plist-get args :callback)))
             (message "[auto-delegate] Threshold exceeded: %d/%d tokens (%.0f%%)"
-                     (round tokens) (round window) (* 100 (/ (float tokens) window)))
+                     (round tokens) (round window)
+                     (if (and (integerp window) (plusp window))
+                         (* 100 (/ (float tokens) window))
+                       0))
             (my/gptel--do-auto-delegate prompt callback))
         (apply orig-fn prompt args)))))
 
