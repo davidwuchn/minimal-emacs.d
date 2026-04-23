@@ -1872,10 +1872,10 @@ TIMESTAMP defaults to `current-time'."
           (condition-case err
               (gptel-abort request-buf)
             (error
-             (let ((safe-msg (condition-case nil
-                                 (my/gptel--sanitize-for-logging
-                                  (error-message-string err) 160)
-                               (error "abort-error"))))
+             (let ((safe-msg (or (ignore-errors
+                                   (my/gptel--sanitize-for-logging
+                                    (error-message-string err) 160))
+                                 "[unavailable]")))
                (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
                         (buffer-name request-buf)
                         safe-msg)))))))))
