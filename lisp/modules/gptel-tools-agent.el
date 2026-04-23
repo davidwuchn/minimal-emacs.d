@@ -2012,9 +2012,9 @@ subagent callback fired, and avoids reusing a deleted worktree as
           (or (my/gptel--first-existing-directory
                caller-default-directory
                (and (buffer-live-p safe-buffer)
-                    (condition-case nil
+                    (condition-case err
                         (buffer-local-value 'default-directory safe-buffer)
-                      (void-variable nil)))
+                      (error nil)))
                user-emacs-directory
                temporary-file-directory)
               (and (stringp default-directory)
