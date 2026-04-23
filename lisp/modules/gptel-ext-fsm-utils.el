@@ -212,7 +212,7 @@ Returns FSM struct or nil if not found."
   (let ((seen (make-hash-table :test 'eq)))
     (cl-labels ((coerce (obj)
                   (cond
-                   ((gethash obj seen) nil)
+                   ((and (consp obj) (gethash obj seen)) nil)
                    ((consp obj)
                     (puthash obj t seen)
                     (or (coerce (car obj))
