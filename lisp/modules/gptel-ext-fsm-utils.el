@@ -211,18 +211,21 @@ forcing caller to handle the case explicitly.
 Returns FSM struct or nil if not found."
   (let ((seen (make-hash-table :test 'eq)))
     (cl-labels ((coerce (obj)
-                  (cond
-                   ((gethash obj seen) nil)
-                   ((consp obj)
-                    (puthash obj t seen)
-                    (or (coerce (car obj))
-                        (coerce (cdr obj))))
-                   ((my/gptel--fsm-p obj)
-                    (if (null context-id)
-                        obj
-                      (let ((id (my/gptel--fsm-get-id obj)))
-                        (when (and id (equal id context-id)) obj))))
-                   (t nil))))
+                  (let ((result nil))
+                    (while (and (consp obj) (not (gethash obj seen)) (not result))
+                      (puthash obj t seen)
+                      (setq result (coerce (car obj)))
+                      (setq obj (cdr obj)))
+                    (or result
+                        (cond
+                         ((gethash obj seen) nil)
+                         ((consp obj)
+                          (coerce obj))
+                         ((my/gptel--fsm-p obj)
+                          (if (null context-id)
+                              obj
+                            (let ((id (my/gptel--fsm-get-id obj)))
+                              (when (and id (equal id context-id)) obj)))))))))
       (coerce object))))
 
 (defun my/gptel--coerce-fsm-with-context (object)
