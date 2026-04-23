@@ -1876,9 +1876,10 @@ TIMESTAMP defaults to `current-time'."
                                    (my/gptel--sanitize-for-logging
                                     (error-message-string err) 160))
                                  "[unavailable]")))
-               (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
-                        (buffer-name request-buf)
-                        safe-msg)))))))))
+               (when (buffer-live-p request-buf)
+                 (message "[nucleus] Failed to abort stale subagent buffer %s: %s"
+                          (buffer-name request-buf)
+                          safe-msg))))))))))
 
 (defun my/gptel--normalize-agent-activity-dir (dir)
   "Return DIR as a canonical directory path with trailing slash, or nil."
