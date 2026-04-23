@@ -383,7 +383,10 @@ Returns t on success, signals error on failure."
                      (error "FSM registry invariant violated: invalid ID format in FSM→ID mapping: %s" id))
                    (let ((fsm-via-id (gethash id my/gptel--fsm-registry)))
                      (unless (eq fsm-via-id key)
-                       (error "FSM registry invariant violated: FSM→ID bidirectional mismatch for FSM %S (expected ID %S, got %S)" key id fsm-via-id)))))
+                       (error "FSM registry invariant violated: FSM→ID bidirectional mismatch for FSM %S (expected ID %S, got %S)" key id fsm-via-id)))
+                   ;; Track FSM usage count
+                   (let ((count (gethash key fsm-counts 0)))
+                     (puthash key (1+ count) fsm-counts))))
                 ;; Unknown key type is a corruption
                 (t
                  (error "FSM registry invariant violated: unknown key type %S" key))))
