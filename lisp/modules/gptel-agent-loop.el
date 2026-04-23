@@ -769,19 +769,20 @@ Cache behavior:
       (when (timerp existing-timer)
         (cancel-timer existing-timer)))
     (let* ((timeout gptel-agent-loop-timeout)
-           (description (gptel-agent-loop--task-description state)))
-      (run-with-timer
-       timeout nil
-       (lambda ()
-         (when (and state
-                    (gptel-agent-loop--task-p state)
-                    (not (gptel-agent-loop--task-finished state))
-                    (not (gptel-agent-loop--task-aborted state)))
-           (setf (gptel-agent-loop--task-aborted state) t)
-           (message "[RunAgent] Task '%s' timed out after %s"
-                    description
-                    (if (floatp timeout) (format "%.1f" timeout) (format "%d" timeout)))
-           (gptel-agent-loop--deliver-aborted state)))))))
+           (description (gptel-agent-loop--task-description state))
+           (timer (run-with-timer
+                   timeout nil
+                   (lambda ()
+                     (when (and state
+                                (gptel-agent-loop--task-p state)
+                                (not (gptel-agent-loop--task-finished state))
+                                (not (gptel-agent-loop--task-aborted state)))
+                       (setf (gptel-agent-loop--task-aborted state) t)
+                       (message "[RunAgent] Task '%s' timed out after %s"
+                                description
+                                (if (floatp timeout) (format "%.1f" timeout) (format "%d" timeout)))
+                       (gptel-agent-loop--deliver-aborted state))))))
+      timer)))
 
 (defun gptel-agent-loop-task (main-cb agent-type description prompt)
   "Call a RunAgent task with timeout, retry, and step limits.
