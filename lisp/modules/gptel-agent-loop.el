@@ -327,16 +327,19 @@ Guards against delivering to a killed parent buffer by checking
   "Build continuation prompt for STATE.
 Truncates accumulated output to last
 `gptel-agent-loop-continuation-context-limit' chars."
-  (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
-         (limit gptel-agent-loop-continuation-context-limit)
-         (len (length output))
-         (truncated (if (and (integerp limit) (> limit 0) (> len limit))
-                        (concat "...[earlier output truncated]\n"
-                                (substring output (- limit)))
-                      output)))
-    (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
-            (or gptel-agent-loop-continuation-prompt "")
-            truncated)))
+  (if (null state)
+      (format "%s\n\n[CONTINUATION - Recent work completed]\n\n"
+              (or gptel-agent-loop-continuation-prompt ""))
+    (let* ((output (or (gptel-agent-loop--task-accumulated-output state) ""))
+           (limit gptel-agent-loop-continuation-context-limit)
+           (len (length output))
+           (truncated (if (and (integerp limit) (> limit 0) (> len limit))
+                          (concat "...[earlier output truncated]\n"
+                                  (substring output (- limit)))
+                        output)))
+      (format "%s\n\n[CONTINUATION - Recent work completed]\n\n%s"
+              (or gptel-agent-loop-continuation-prompt "")
+              truncated))))
 
 (defun gptel-agent-loop--summary-prompt-for (state)
   "Build max-steps summary prompt for STATE."
