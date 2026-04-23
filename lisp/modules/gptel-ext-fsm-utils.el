@@ -271,10 +271,12 @@ BEHAVIOR: Returns empty list if no FSMs found.
 EDGE CASE: Nil object returns empty list.
 EDGE CASE: Single FSM returns list with one element.
 EDGE CASE: Deeply nested FSMs all collected.
+EDGE CASE: Dotted pairs (a . b) where b is cons are fully traversed.
 TEST: (my/gptel--collect-all-fsms nil) => ()
 TEST: (my/gptel--collect-all-fsms fsm) => (fsm)
 TEST: (my/gptel--collect-all-fsms '(fsm1 fsm2)) => (fsm1 fsm2)
 TEST: (my/gptel--collect-all-fsms '(a (b fsm) c)) => (fsm)
+TEST: (my/gptel--collect-all-fsms '(a . (b fsm))) => (fsma fsmb)
 
 BUILDS ON DISCOVERY: Need to collect all FSMs to detect
 nested subagent scenarios and select appropriate FSM.
