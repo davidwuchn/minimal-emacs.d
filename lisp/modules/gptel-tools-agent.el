@@ -3367,25 +3367,26 @@ NOTE: Staging branch is never deleted, only the worktree."
 
 (defun gptel-auto-workflow--checkout-git-common-dir-from-marker (checkout)
   "Return CHECKOUT's git-common-dir by reading its `.git' marker directly."
-  (let ((git-marker (expand-file-name ".git" checkout)))
-    (cond
-     ((file-directory-p git-marker)
-      git-marker)
-     ((file-regular-p git-marker)
-      (let ((git-dir
-             (with-temp-buffer
-               (insert-file-contents git-marker)
-               (goto-char (point-min))
-               (when (re-search-forward "^gitdir: \\(.+\\)$" nil t)
-                 (expand-file-name (string-trim (match-string 1)) checkout)))))
-        (when git-dir
-          (let ((commondir-file (expand-file-name "commondir" git-dir)))
-            (if (file-regular-p commondir-file)
-                (with-temp-buffer
-                  (insert-file-contents commondir-file)
-                  (expand-file-name (string-trim (buffer-string)) git-dir))
-              git-dir)))))
-     (t nil))))
+  (when (stringp checkout)
+    (let ((git-marker (expand-file-name ".git" checkout)))
+      (cond
+       ((file-directory-p git-marker)
+        git-marker)
+       ((file-regular-p git-marker)
+        (let ((git-dir
+               (with-temp-buffer
+                 (insert-file-contents git-marker)
+                 (goto-char (point-min))
+                 (when (re-search-forward "^gitdir: \\(.+\\)$" nil t)
+                   (expand-file-name (string-trim (match-string 1)) checkout)))))
+          (when git-dir
+            (let ((commondir-file (expand-file-name "commondir" git-dir)))
+              (if (file-regular-p commondir-file)
+                  (with-temp-buffer
+                    (insert-file-contents commondir-file)
+                    (expand-file-name (string-trim (buffer-string)) git-dir))
+                git-dir)))))
+       (t nil)))))
 
 (defun gptel-auto-workflow--submodule-checkout-git-dir-at-root (root path)
   "Return the absolute git-common-dir for submodule PATH checked out under ROOT."
