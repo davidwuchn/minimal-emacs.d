@@ -9756,8 +9756,8 @@ Emacs long enough for a queued watchdog check to fire immediately afterward."
 (defun gptel-auto-workflow--stop-status-refresh-timer ()
   "Cancel the active workflow status refresh timer, if any."
   (when (timerp gptel-auto-workflow--status-refresh-timer)
-    (cancel-timer gptel-auto-workflow--status-refresh-timer))
-  (setq gptel-auto-workflow--status-refresh-timer nil))
+    (cancel-timer gptel-auto-workflow--status-refresh-timer)
+    (setq gptel-auto-workflow--status-refresh-timer nil)))
 
 (defun gptel-auto-workflow--refresh-status-if-running ()
   "Refresh the persisted workflow snapshot while the workflow is active."
